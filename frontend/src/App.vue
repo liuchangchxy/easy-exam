@@ -20,8 +20,8 @@
           <div class="brand">
             <span class="brand-logo">🎯</span>
             <div>
-              <h1 class="brand-title">FnExam 飞牛刷题</h1>
-              <p class="brand-subtitle">极简高可用触屏刷题 · 飞牛 NAS 原生</p>
+              <h1 class="brand-title">EasyExam 易考宝</h1>
+              <p class="brand-subtitle">私有云刷题与错题消灭系统 · 极简低功耗</p>
             </div>
           </div>
           <button class="btn-import-header" @click="showImportModal = true">

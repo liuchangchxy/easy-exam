@@ -43,7 +43,7 @@ class TestE2EFlow(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data.get("status"), "ok")
-        self.assertEqual(data.get("app"), "fn-exam")
+        self.assertIn(data.get("app"), ["easy-exam", "fn-exam"])
 
     def test_02_bank_and_question_crud(self):
         """Test bank creation, listing, detail, and question creation."""

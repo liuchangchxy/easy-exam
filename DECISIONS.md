@@ -35,3 +35,13 @@
 - **对应 SPEC 章节**：SPEC.md 第 1~6 节与 `docs/superpowers/specs/2026-09-22-fn-exam-design.md`。
 - **影响范围**：系统全量模块（`backend/`, `frontend/`, `tests/`, `Dockerfile`, `docker-compose.yml`）。
 
+### [2026-09-23] 品牌合规化更名：全面更名为「易考宝」(EasyExam)
+- **触发背景**：用户反馈第三方应用不能以“飞牛”或“fnOS”作为应用主名称前缀，否则会因商标侵权或官方混淆导致无法上架飞牛应用中心（或第三方 NAS 应用市场）。
+- **核心决策**：
+  1. 应用中文名定名为「易考宝」，副标题为「私有云刷题与错题消灭系统」；
+  2. 英文服务标识、Docker 容器与镜像定为 `easy-exam` (`ailm32442/easy-exam:latest`)；
+  3. 保留对飞牛私有云 (fnOS) 兼容性声明，但主包名与主界面彻底去官方化；
+  4. 数据库向前兼容 `easyexam.db` 与 `fnexam.db`，自动兼容原有挂载数据文件。
+- **对应 SPEC 章节**：SPEC.md 第 1.1 节。
+- **影响范围**：`frontend/index.html`, `backend/main.py`, `backend/database.py`, `docker-compose.yml`, `Dockerfile`, `scripts/deploy_fnos.sh`, `tests/`。
+

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# FnExam (飞牛刷题系统) - fnOS 一键安装与更新自动化脚本
+# EasyExam (易考宝) - 私有云一键安装与更新自动化脚本
 # ==============================================================================
 set -e
 
@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${SCRIPT_DIR}"
 
 echo "========================================================"
-echo "🚀 正在为飞牛 NAS (fnOS) 部署 FnExam 极简题库系统..."
+echo "🚀 正在为私有云 NAS (fnOS) 部署 EasyExam (易考宝) 题库系统..."
 echo "========================================================"
 
 # 1. 确保数据持久化目录存在
@@ -38,7 +38,10 @@ fi
 echo "📦 使用 Docker 编排命令: ${COMPOSE_CMD}"
 
 # 4. 停止旧容器并构建/拉取最新服务
-echo "🔄 启动/更新 FnExam 容器..."
+echo "🔄 启动/更新 EasyExam 容器..."
+# 清理可能存在的旧项目容器 (fn-exam) 以防端口 3000 冲突
+docker stop fn-exam 2>/dev/null || true
+docker rm fn-exam 2>/dev/null || true
 ${COMPOSE_CMD} down --remove-orphans || true
 ${COMPOSE_CMD} up -d --build
 
@@ -50,7 +53,7 @@ HEALTH_URL="http://127.0.0.1:3000/api/health"
 
 while [ ${ATTEMPT} -lt ${MAX_ATTEMPTS} ]; do
     if curl -s -f "${HEALTH_URL}" &> /dev/null; then
-        echo "✅ FnExam 健康检查通过！"
+        echo "✅ EasyExam 健康检查通过！"
         break
     fi
     ATTEMPT=$((ATTEMPT + 1))
@@ -59,7 +62,7 @@ done
 
 if [ ${ATTEMPT} -ge ${MAX_ATTEMPTS} ]; then
     echo "⚠️ 容器已启动，但在 30 秒内未能通过健康检查，请检查容器日志:"
-    ${COMPOSE_CMD} logs --tail=50 fn-exam
+    ${COMPOSE_CMD} logs --tail=50 easy-exam
     exit 1
 fi
 
@@ -67,8 +70,8 @@ fi
 NAS_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
 
 echo "========================================================"
-echo "🎉 FnExam 已成功部署并运行在飞牛 NAS！"
+echo "🎉 EasyExam (易考宝) 已成功部署并运行！"
 echo "🌐 访问地址: http://${NAS_IP}:3000"
 echo "💾 数据持久化路径: ${DATA_DIR}"
-echo "📝 查看日志: ${COMPOSE_CMD} logs -f fn-exam"
+echo "📝 查看日志: ${COMPOSE_CMD} logs -f easy-exam"
 echo "========================================================"

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    FnExam (飞牛刷题系统) - Windows / 本地测试与部署脚本
+    EasyExam (易考宝) - Windows / 本地测试与部署脚本
 #>
 
 $ErrorActionPreference = "Stop"
@@ -10,7 +10,7 @@ $projectRoot = Split-Path -Parent $scriptDir
 Set-Location $projectRoot
 
 Write-Host "========================================================" -ForegroundColor Cyan
-Write-Host "🚀 正在部署 FnExam 极简题库系统..." -ForegroundColor Cyan
+Write-Host "🚀 正在部署 EasyExam (易考宝) 题库系统..." -ForegroundColor Cyan
 Write-Host "========================================================" -ForegroundColor Cyan
 
 # 1. 确保数据持久化目录存在
@@ -28,7 +28,7 @@ if (-not $dockerCmd) {
 }
 
 # 3. 停止旧容器并构建/拉取最新服务
-Write-Host "🔄 启动/更新 FnExam 容器..." -ForegroundColor Yellow
+Write-Host "🔄 启动/更新 EasyExam 容器..." -ForegroundColor Yellow
 try {
     docker compose down --remove-orphans
 } catch {
@@ -60,13 +60,13 @@ while ($attempt -lt $maxAttempts) {
 
 if (-not $healthy) {
     Write-Host "⚠️ 容器已启动，但在 30 秒内未能通过健康检查，请检查容器日志:" -ForegroundColor Red
-    docker compose logs --tail=50 fn-exam
+    docker compose logs --tail=50 easy-exam
     exit 1
 }
 
 Write-Host "========================================================" -ForegroundColor Green
-Write-Host "🎉 FnExam 已成功部署并运行！" -ForegroundColor Green
+Write-Host "🎉 EasyExam (易考宝) 已成功部署并运行！" -ForegroundColor Green
 Write-Host "🌐 访问地址: http://localhost:3000" -ForegroundColor Green
 Write-Host "💾 数据持久化路径: $dataDir" -ForegroundColor Green
-Write-Host "📝 查看日志: docker compose logs -f fn-exam" -ForegroundColor Green
+Write-Host "📝 查看日志: docker compose logs -f easy-exam" -ForegroundColor Green
 Write-Host "========================================================" -ForegroundColor Green

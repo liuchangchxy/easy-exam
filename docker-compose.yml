@@ -1,10 +1,10 @@
-name: fn-exam
+name: easy-exam
 
 services:
-  fn-exam:
-    image: ailm32442/fn-exam:latest
+  easy-exam:
+    image: ailm32442/easy-exam:latest
     build: .
-    container_name: fn-exam
+    container_name: easy-exam
     restart: unless-stopped
     ports:
       - "3000:3000"

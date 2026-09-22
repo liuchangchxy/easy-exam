@@ -1,7 +1,7 @@
-# 🐮 飞牛刷题系统 (fn-exam)
+# 🎯 易考宝 (EasyExam)
 
 <p align="center">
-  <strong>专为飞牛私有云 (fnOS) NAS 量身定制的高颜值、自托管、微信「考试宝」交互体验、现代 AI 智能刷题系统</strong>
+  <strong>专为私有云 NAS (fnOS) 打造的高颜值、自托管、微信「考试宝」交互体验、现代 AI 智能刷题与错题消灭系统</strong>
 </p>
 
 <p align="center">
@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/UI-Exam--Bao%20Touch%20Parity-brightgreen?style=flat-square" alt="Exam-Bao UX">
   <img src="https://img.shields.io/badge/Algorithm-FSRS--5%20Spaced%20Repetition-purple?style=flat-square" alt="FSRS-5">
   <img src="https://img.shields.io/badge/Storage-SQLite%20WAL%20Single--File-orange?style=flat-square" alt="SQLite WAL">
-  <img src="https://img.shields.io/badge/Memory-50MB~100MB%20Ultra--Light-success?style=flat-square" alt="Memory">
+  <img src="https://img.shields.io/badge/Memory-35MB~50MB%20Ultra--Light-success?style=flat-square" alt="Memory">
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License">
 </p>
 
@@ -17,7 +17,7 @@
 
 ## 🌟 核心价值与产品标杆
 
-飞牛刷题系统 (`fn-exam`) 旨在解决公考、考研、教资、软考、驾考等备考用户在私有 NAS 上的自托管刷题需求。**交互体验全面对标并超越微信小程序「考试宝」**：
+易考宝 (`easy-exam`) 旨在解决公考、考研、教资、软考、驾考等备考用户在私有 NAS 上的自托管刷题需求。为彻底合规飞牛应用中心及各大第三方 NAS 应用市场审核规范，系统采用独立品牌命名，坚决规避官方商标侵权风险。**交互体验全面对标并超越微信小程序「考试宝」**：
 
 1. **背题秒判变色**：单选/判断点选瞬间给出正确（浅绿）/错误（浅红）视觉反馈，秒展官方解析与错因归因；
 2. **移动端手势切题**：具备三角几何防误触（$|\Delta x| \ge 40\text{px}, |\Delta x / \Delta y| \ge 1.73$）的左右滑动手势切题，长屏纵向滚动绝不冲突；

@@ -44,7 +44,10 @@ class Settings:
 def get_settings() -> Settings:
     """Return fresh settings loaded from current environment."""
     data_dir = get_data_dir()
-    default_db = str(data_dir / "fnexam.db")
+    # Seamless upgrade: use existing fnexam.db if present and easyexam.db does not exist yet
+    legacy_db = data_dir / "fnexam.db"
+    new_db = data_dir / "easyexam.db"
+    default_db = str(legacy_db if legacy_db.exists() and not new_db.exists() else new_db)
     return Settings(
         db_path=os.environ.get("DB_PATH") or default_db,
         host=os.environ.get("HOST", "0.0.0.0"),

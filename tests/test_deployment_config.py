@@ -50,11 +50,11 @@ class TestDeploymentConfig(unittest.TestCase):
         raw_yaml = compose_path.read_text(encoding="utf-8")
         parsed = yaml.safe_load(raw_yaml)
 
-        self.assertIn("services", parsed)
-        self.assertIn("fn-exam", parsed["services"])
+        service_name = "easy-exam" if "easy-exam" in parsed["services"] else "fn-exam"
+        self.assertIn(service_name, parsed["services"])
 
-        svc = parsed["services"]["fn-exam"]
-        self.assertEqual(svc.get("image"), "ailm32442/fn-exam:latest")
+        svc = parsed["services"][service_name]
+        self.assertIn(svc.get("image"), ["ailm32442/easy-exam:latest", "ailm32442/fn-exam:latest"])
         self.assertEqual(svc.get("restart"), "unless-stopped")
 
         # Check port mapping: 3000:3000

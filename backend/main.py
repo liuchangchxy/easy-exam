@@ -119,8 +119,8 @@ def create_app(
     init_db(resolved_db_path)
 
     app = FastAPI(
-        title="FnExam API",
-        description="Self-hosted modern AI exam and practice system for fnOS NAS",
+        title="EasyExam API (易考宝)",
+        description="Self-hosted modern AI exam and practice system for private cloud NAS",
         version="1.0.0",
     )
 
@@ -157,7 +157,7 @@ def create_app(
     @app.get("/api/health")
     def health_check() -> Dict[str, str]:
         """System health check endpoint."""
-        return {"status": "ok", "app": "fn-exam"}
+        return {"status": "ok", "app": "easy-exam"}
 
     # -----------------------------------------------------------------------
     # 2. Banks & Questions

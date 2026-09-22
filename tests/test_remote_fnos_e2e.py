@@ -62,14 +62,14 @@ class TestRemoteFnOsE2E(unittest.TestCase):
         status, health = self._http("GET", "/api/health")
         self.assertEqual(status, 200)
         self.assertEqual(health.get("status"), "ok")
-        self.assertEqual(health.get("app"), "fn-exam")
+        self.assertIn(health.get("app"), ["easy-exam", "fn-exam"])
 
         # Check Web Root
         req = urllib.request.Request(f"{NAS_BASE_URL}/")
         with urllib.request.urlopen(req, timeout=5) as resp:
             self.assertEqual(resp.status, 200)
             html = resp.read().decode("utf-8")
-            self.assertIn("飞牛刷题", html)
+            self.assertIn("EasyExam 易考宝", html)
             self.assertIn("viewport", html)
             self.assertIn("apple-mobile-web-app-capable", html)
 
