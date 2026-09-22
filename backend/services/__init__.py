@@ -1,4 +1,9 @@
 """Services package for fn-exam."""
+from backend.services.ai_service import (
+    AIService,
+    build_tutor_prompt,
+    OFFLINE_FALLBACK_MESSAGE,
+)
 from backend.services.fsrs import FSRS5, FSRSResult, DEFAULT_W
 from backend.services.importer import (
     TextExamParser,
@@ -13,6 +18,9 @@ from backend.services.scoring import Scorer
 from backend.services.session_service import SessionService
 
 __all__ = [
+    "AIService",
+    "build_tutor_prompt",
+    "OFFLINE_FALLBACK_MESSAGE",
     "FSRS5",
     "FSRSResult",
     "DEFAULT_W",
