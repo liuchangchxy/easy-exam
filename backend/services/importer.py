@@ -48,8 +48,8 @@ ANSWER_PREFIX_RE = re.compile(
 
 EXPLANATION_PREFIX_RE = re.compile(
     r'^(?:'
-    r'【\s*(?:解析|分析|答案解析|试题解析|考点|Explanation|Analysis)\s*】|'
-    r'(?:解析|分析|答案解析|试题解析|考点|Explanation|Analysis)\s*[:：]|'
+    r'【\s*(?:解析|分析|答案解析|试题解析|Explanation|Analysis)\s*】|'
+    r'(?:解析|分析|答案解析|试题解析|Explanation|Analysis)\s*[:：]|'
     r'\b(?:Explanation|Analysis)\b\s*[:：]?'
     r')\s*(.*)$',
     re.IGNORECASE
