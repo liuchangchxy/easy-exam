@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Dict, Generator, List, Optional, Union
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -107,7 +107,10 @@ class TutorChatRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def create_app(db_path: Optional[str] = None) -> FastAPI:
+def create_app(
+    db_path: Optional[str] = None,
+    dist_dir: Optional[Union[str, Path]] = None,
+) -> FastAPI:
     """Create and configure the FnExam FastAPI application instance."""
     settings = get_settings()
     resolved_db_path = db_path if db_path is not None else settings.db_path
@@ -423,9 +426,9 @@ def create_app(db_path: Optional[str] = None) -> FastAPI:
     # -----------------------------------------------------------------------
     # Static Assets (Frontend mounting if built)
     # -----------------------------------------------------------------------
-    dist_dir = BASE_DIR / "frontend" / "dist"
-    if dist_dir.exists() and dist_dir.is_dir():
-        app.mount("/", StaticFiles(directory=str(dist_dir), html=True), name="static")
+    target_dist = Path(dist_dir) if dist_dir is not None else (BASE_DIR / "frontend" / "dist")
+    if target_dist.exists() and target_dist.is_dir():
+        app.mount("/", StaticFiles(directory=str(target_dist), html=True), name="static")
 
     return app
 
