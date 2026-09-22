@@ -259,7 +259,31 @@ B. 错
             self.assertIn("passing_score", report)
             self.assertIn("passed", report)
             self.assertIn("breakdown", report)
+            self.assertIn("tags_breakdown", report)
             self.assertIn("answered_questions", report)
+
+            # 11. 验证题库导出接口 (JSON, CSV, XLSX, MD)
+            for fmt in ["json", "csv", "xlsx", "markdown"]:
+                url = f"{NAS_BASE_URL}/api/banks/{bank_id}/export?format={fmt}"
+                req = urllib.request.Request(url, method="GET")
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    self.assertEqual(resp.status, 200, f"Remote export format {fmt} failed")
+                    body = resp.read()
+                    self.assertTrue(len(body) > 0, f"Export format {fmt} returned empty response")
+
+            # 12. 验证题目与选项乱序会话快照
+            status, shuffle_sess = self._http("POST", "/api/sessions", {
+                "bank_id": bank_id,
+                "mode": "PRACTICE",
+                "total_questions": 3,
+                "shuffle_questions": True,
+                "shuffle_options": True,
+            })
+            self.assertEqual(status, 200)
+            shuffle_id = shuffle_sess["id"]
+            status, snap_q = self._http("GET", f"/api/sessions/{shuffle_id}/questions")
+            self.assertEqual(status, 200)
+            self.assertEqual(len(snap_q), 3)
 
         finally:
             # 清理测试题库
