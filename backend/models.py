@@ -22,12 +22,18 @@ class SessionMode(str, Enum):
 
 class MistakeCause(str, Enum):
     """6-level mistake cause taxonomy for targeted training."""
-    READING_MISS = "READING_MISS"      # 审题粗心/漏看条件
-    CONCEPT_GAP = "CONCEPT_GAP"        # 概念模糊/知识盲区
-    LOGIC_TRAP = "LOGIC_TRAP"          # 逻辑陷阱/选项干扰
-    CALCULATION = "CALCULATION"        # 计算失误/推导演算
-    MEMORY_BLANK = "MEMORY_BLANK"      # 记忆遗忘/要点遗漏
-    GUESS_LUCK = "GUESS_LUCK"          # 蒙题猜测/侥幸做对
+    READING_MISS = "READING_MISS"              # 审题粗心/漏看条件
+    CONCEPT_GAP = "CONCEPT_GAP"                # 概念盲区/知识点未学过
+    METHOD_GAP = "METHOD_GAP"                  # 解法不熟/题型思路受阻
+    OPTION_TRAP = "OPTION_TRAP"                # 陷阱诱导/易混淆项蒙蔽
+    CALCULATION_ERROR = "CALCULATION_ERROR"    # 计算失误/手抖误点
+    CARELESSNESS = "CARELESSNESS"              # 其他手滑
+
+    # Backward compatibility aliases
+    LOGIC_TRAP = "OPTION_TRAP"
+    CALCULATION = "CALCULATION_ERROR"
+    MEMORY_BLANK = "CONCEPT_GAP"
+    GUESS_LUCK = "CARELESSNESS"
 
 
 class FSRSState(int, Enum):
