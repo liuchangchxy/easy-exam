@@ -407,6 +407,12 @@ D. 301 表示临时重定向
             self.assertEqual(fsrs_res.status_code, 200)
             self.assertEqual(fsrs_res.json()["mode"], "FSRS")
 
+            # Start ELIMINATION session with mistake_cause
+            elim_res = self.client.post("/api/sessions", json={"bank_id": bid, "mode": "ELIMINATION", "total_questions": 0, "mistake_cause": "CONCEPT_GAP"})
+            self.assertEqual(elim_res.status_code, 200)
+            self.assertEqual(elim_res.json()["mode"], "ELIMINATION")
+            self.assertEqual(elim_res.json()["mistake_cause"], "CONCEPT_GAP")
+
     def test_09_ai_tutor_sse_chat_offline_fallback(self):
         """Test POST /api/ai/tutor/chat graceful offline fallback when no LLM service is running."""
         payload = {

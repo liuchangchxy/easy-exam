@@ -71,6 +71,7 @@ class SessionCreateRequest(BaseModel):
     mode: str = "PRACTICE"  # PRACTICE, EXAM, ELIMINATION, FSRS
     total_questions: int = 0
     time_limit: int = 0
+    mistake_cause: Optional[str] = None
 
 
 class AnswerSubmitRequest(BaseModel):
@@ -284,6 +285,8 @@ def create_app(
             total_questions=total,
             time_limit=payload.time_limit,
         )
+        if payload.mistake_cause:
+            session["mistake_cause"] = payload.mistake_cause
         return session
 
     @app.get("/api/sessions/{session_id}")

@@ -343,6 +343,10 @@ const props = defineProps({
   initialTimeLimit: {
     type: Number,
     default: 0
+  },
+  mistakeCause: {
+    type: String,
+    default: ''
   }
 })
 
@@ -612,9 +616,15 @@ async function loadSessionData() {
     // 3. Filter questions for ELIMINATION and FSRS modes
     const isElimination = props.mode === 'ELIMINATION' || (sData && sData.mode === 'ELIMINATION') || mode.value === 'ELIMINATION'
     const isFsrs = props.mode === 'FSRS' || (sData && sData.mode === 'FSRS') || mode.value === 'FSRS'
+    const targetCause = props.mistakeCause || (sData && sData.mistake_cause) || ''
+
     if (isElimination) {
       try {
-        const mRes = await fetch(`/api/mistakes?bank_id=${props.bankId}`)
+        let url = `/api/mistakes?bank_id=${props.bankId}`
+        if (targetCause) {
+          url += `&cause=${encodeURIComponent(targetCause)}`
+        }
+        const mRes = await fetch(url)
         if (mRes.ok) {
           const mistakes = await mRes.json()
           const mistakeQIds = new Set(mistakes.map(m => m.question_id || m.id))

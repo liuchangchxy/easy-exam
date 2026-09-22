@@ -8,6 +8,7 @@
       :initial-mode="activeSession.mode"
       :mode="activeSession.mode"
       :initial-time-limit="activeSession.time_limit || 0"
+      :mistake-cause="activeSession.mistake_cause || ''"
       @back="exitSession"
       @session-completed="handleSessionCompleted"
     />
@@ -112,7 +113,7 @@
               <button
                 class="btn-mode btn-elimination"
                 :disabled="!bank.question_count"
-                @click="startSession(bank.id, 'ELIMINATION', 0)"
+                @click="openMistakeDrillModal(bank.id)"
               >
                 🎯 错题攻坚
               </button>
@@ -120,6 +121,37 @@
           </div>
         </div>
       </main>
+
+      <!-- Targeted Mistake Drill Modal -->
+      <div v-if="showMistakeDrillModal" class="modal-overlay" @click.self="showMistakeDrillModal = false">
+        <div class="mistake-drill-modal animate-slide-up">
+          <div class="modal-header">
+            <h3>🎯 错题靶向攻坚</h3>
+            <button class="btn-close" @click="showMistakeDrillModal = false">✕</button>
+          </div>
+          <div class="modal-body">
+            <p class="modal-desc">选择要专项攻坚的错因分类，定向歼灭薄弱题型：</p>
+            <div class="cause-options-grid">
+              <button
+                v-for="c in mistakeCauses"
+                :key="c.key"
+                class="cause-opt-btn"
+                :class="{ active: selectedMistakeCause === c.key }"
+                @click="selectedMistakeCause = c.key"
+              >
+                <span class="cause-opt-icon">{{ c.icon }}</span>
+                <span class="cause-opt-name">{{ c.label }}</span>
+              </button>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-cancel" @click="showMistakeDrillModal = false">取消</button>
+            <button class="btn-submit" @click="confirmStartMistakeDrill">
+              开始攻坚
+            </button>
+          </div>
+        </div>
+      </div>
 
       <!-- Import Questions Modal -->
       <div v-if="showImportModal" class="modal-overlay" @click.self="showImportModal = false">
@@ -195,6 +227,34 @@ const newBankName = ref('')
 const importFormat = ref('text')
 const importContent = ref('')
 const importing = ref(false)
+
+// Targeted mistake drill modal state
+const showMistakeDrillModal = ref(false)
+const selectedDrillBankId = ref('')
+const selectedMistakeCause = ref('')
+
+const mistakeCauses = [
+  { key: '', label: '全部待消灭错题', icon: '🎯' },
+  { key: 'READING_MISS', label: '审题粗心/漏看条件', icon: '🧐' },
+  { key: 'CONCEPT_GAP', label: '概念盲区/知识盲点', icon: '🧩' },
+  { key: 'METHOD_GAP', label: '解法不熟/思路受阻', icon: '💡' },
+  { key: 'OPTION_TRAP', label: '陷阱诱导/易混淆项', icon: '🪤' },
+  { key: 'CALCULATION_ERROR', label: '计算失误/手抖点错', icon: '🔢' },
+  { key: 'CARELESSNESS', label: '其他手滑', icon: '✋' },
+]
+
+function openMistakeDrillModal(bankId) {
+  selectedDrillBankId.value = bankId
+  selectedMistakeCause.value = ''
+  showMistakeDrillModal.value = true
+}
+
+function confirmStartMistakeDrill() {
+  const bankId = selectedDrillBankId.value
+  const cause = selectedMistakeCause.value
+  showMistakeDrillModal.value = false
+  startSession(bankId, 'ELIMINATION', 0, cause)
+}
 
 onMounted(async () => {
   await fetchBanks()
@@ -284,17 +344,21 @@ function handleDiscardDraft() {
   }
 }
 
-async function startSession(bankId, mode, timeLimit) {
+async function startSession(bankId, mode, timeLimit, mistakeCause = '') {
   try {
+    const payload = {
+      bank_id: bankId,
+      mode: mode,
+      total_questions: 0,
+      time_limit: timeLimit
+    }
+    if (mistakeCause) {
+      payload.mistake_cause = mistakeCause
+    }
     const res = await fetch('/api/sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        bank_id: bankId,
-        mode: mode,
-        total_questions: 0,
-        time_limit: timeLimit
-      })
+      body: JSON.stringify(payload)
     })
     if (res.ok) {
       activeSession.value = await res.json()
@@ -624,7 +688,8 @@ async function handleImportSubmit() {
   padding: 16px;
 }
 
-.import-modal {
+.import-modal,
+.mistake-drill-modal {
   background-color: #ffffff;
   border-radius: 16px;
   width: 100%;
@@ -633,6 +698,52 @@ async function handleImportSubmit() {
   flex-direction: column;
   overflow: hidden;
   box-shadow: var(--shadow-lg);
+}
+
+.mistake-drill-modal {
+  max-width: 460px;
+}
+
+.modal-desc {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.cause-options-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cause-opt-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background-color: #f8fafc;
+  text-align: left;
+  transition: all 0.15s ease;
+  font-size: 0.875rem;
+  color: var(--text-main);
+}
+
+.cause-opt-btn:hover {
+  background-color: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.cause-opt-btn.active {
+  background-color: #eff6ff;
+  border-color: var(--primary);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.cause-opt-icon {
+  font-size: 1.25rem;
 }
 
 .modal-header {
