@@ -48,3 +48,10 @@ Thumbs.db
 .antigravity/
 .system_generated/
 scratch/
+
+# Database & local data
+data/
+*.db
+*.db-wal
+*.db-shm
+
