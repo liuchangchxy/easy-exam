@@ -394,10 +394,18 @@ D. 301 表示临时重定向
         self.assertIn("breakdown", report)
 
     def test_08_fsrs_due_reviews_endpoint(self):
-        """Test GET /api/mistakes/due reviews endpoint."""
+        """Test GET /api/mistakes/due reviews endpoint and starting FSRS mode session."""
         res = self.client.get("/api/mistakes/due")
         self.assertEqual(res.status_code, 200)
         self.assertIsInstance(res.json(), list)
+
+        # Start FSRS mode session
+        banks = self.client.get("/api/banks").json()
+        if banks:
+            bid = banks[0]["id"]
+            fsrs_res = self.client.post("/api/sessions", json={"bank_id": bid, "mode": "FSRS", "total_questions": 0})
+            self.assertEqual(fsrs_res.status_code, 200)
+            self.assertEqual(fsrs_res.json()["mode"], "FSRS")
 
     def test_09_ai_tutor_sse_chat_offline_fallback(self):
         """Test POST /api/ai/tutor/chat graceful offline fallback when no LLM service is running."""

@@ -45,18 +45,27 @@
         </div>
       </div>
 
+      <!-- FSRS Due Reviews Banner -->
+      <div v-if="totalDueCount > 0" class="fsrs-due-banner animate-slide-up">
+        <div class="fsrs-banner-info">
+          <span class="fsrs-icon">🧠</span>
+          <div>
+            <strong>科学复习提醒</strong>
+            <p>今日共有 {{ totalDueCount }} 道错题到达最佳抗遗忘周期（FSRS 调度），建议及时温故！</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Main Content -->
       <main class="home-main">
         <div class="section-title-bar">
-          <h2 class="section-title">我的题库 ({{ banks.length }})</h2>
-          <button class="btn-refresh" @click="fetchBanks" :disabled="loading">
-            刷新
-          </button>
+          <h2 class="section-title">我的题库</h2>
+          <button class="btn-refresh" @click="fetchBanks">🔄 刷新</button>
         </div>
 
-        <div v-if="loading" class="loading-state">
+        <div v-if="loading" class="loading-container">
           <div class="spinner"></div>
-          <p>正在读取题库数据...</p>
+          <p>正在同步题库...</p>
         </div>
 
         <div v-else-if="banks.length === 0" class="empty-bank-card">
@@ -91,6 +100,14 @@
                 @click="startSession(bank.id, 'EXAM', 45)"
               >
                 ⏱️ 模拟考试
+              </button>
+              <button
+                class="btn-mode btn-fsrs"
+                :disabled="!bank.question_count"
+                @click="startSession(bank.id, 'FSRS', 0)"
+              >
+                🧠 科学复习
+                <span v-if="dueCounts[bank.id]" class="badge-due">{{ dueCounts[bank.id] }}</span>
               </button>
               <button
                 class="btn-mode btn-elimination"
@@ -168,6 +185,8 @@ const banks = ref([])
 const loading = ref(false)
 const activeSession = ref(null)
 const resumeDraft = ref(null)
+const dueCounts = ref({})
+const totalDueCount = ref(0)
 
 // Import modal state
 const showImportModal = ref(false)
@@ -179,8 +198,31 @@ const importing = ref(false)
 
 onMounted(async () => {
   await fetchBanks()
+  await fetchDueReviews()
   checkResumeDraft()
 })
+
+async function fetchDueReviews() {
+  try {
+    const res = await fetch('/api/mistakes/due')
+    if (res.ok) {
+      const dueList = await res.json()
+      const counts = {}
+      let total = 0
+      for (const item of dueList) {
+        const bid = item.bank_id
+        if (bid) {
+          counts[bid] = (counts[bid] || 0) + 1
+          total += 1
+        }
+      }
+      dueCounts.value = counts
+      totalDueCount.value = total
+    }
+  } catch (err) {
+    console.warn('Fetch due reviews failed:', err)
+  }
+}
 
 async function fetchBanks() {
   loading.value = true
@@ -265,6 +307,7 @@ async function startSession(bankId, mode, timeLimit) {
 function exitSession() {
   activeSession.value = null
   fetchBanks()
+  fetchDueReviews()
   checkResumeDraft()
 }
 
@@ -411,6 +454,27 @@ async function handleImportSubmit() {
   font-size: 0.8125rem;
 }
 
+/* FSRS Due Reviews Banner */
+.fsrs-due-banner {
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  border: 1px solid #c4b5fd;
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.fsrs-banner-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.875rem;
+  color: #5b21b6;
+}
+.fsrs-icon {
+  font-size: 1.6rem;
+}
+
 /* Bank Section */
 .section-title-bar {
   display: flex;
@@ -495,19 +559,23 @@ async function handleImportSubmit() {
 
 .bank-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
   margin-top: auto;
   padding-top: 8px;
 }
 
 .btn-mode {
-  padding: 8px 4px;
+  padding: 8px 6px;
   border-radius: 8px;
   font-size: 0.8125rem;
   font-weight: 600;
   text-align: center;
-  transition: background-color 0.15s;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
 }
 .btn-mode:disabled {
   opacity: 0.4;
@@ -521,6 +589,22 @@ async function handleImportSubmit() {
 .btn-exam {
   background-color: #fef3c7;
   color: #b45309;
+}
+.btn-fsrs {
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  color: #6d28d9;
+}
+.btn-fsrs:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ddd6fe 0%, #c4b5fd 100%);
+}
+.badge-due {
+  background-color: #ef4444;
+  color: #ffffff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  line-height: 1.2;
 }
 .btn-elimination {
   background-color: var(--danger-light);

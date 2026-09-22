@@ -54,7 +54,7 @@
         <span class="sync-text">{{ syncLabel }}</span>
       </div>
 
-      <div v-if="mode === 'PRACTICE' || mode === 'ELIMINATION'" class="auto-jump-toggle">
+      <div v-if="mode === 'PRACTICE' || mode === 'ELIMINATION' || mode === 'FSRS'" class="auto-jump-toggle">
         <label class="toggle-label">
           <input v-model="autoJumpNext" type="checkbox" class="toggle-checkbox" />
           <span class="toggle-switch"></span>
@@ -189,7 +189,11 @@
       </div>
 
       <div v-else class="empty-state">
-        <p>未找到题目</p>
+        <div class="empty-state-icon">{{ mode === 'FSRS' ? '🧠' : (mode === 'ELIMINATION' ? '🎯' : '📚') }}</div>
+        <p v-if="mode === 'FSRS'">太棒了！当前题库今日暂无到期复习题目，记忆保持良好！</p>
+        <p v-else-if="mode === 'ELIMINATION'">太棒了！该题库暂无待消灭错题，全部知识点已攻克！</p>
+        <p v-else>未找到题目</p>
+        <button class="btn-return-home" @click="handleBack">返回题库主页</button>
       </div>
     </main>
 
@@ -605,8 +609,9 @@ async function loadSessionData() {
       if (sData.is_completed) isCompleted.value = true
     }
 
-    // 3. Filter questions for ELIMINATION mode
+    // 3. Filter questions for ELIMINATION and FSRS modes
     const isElimination = props.mode === 'ELIMINATION' || (sData && sData.mode === 'ELIMINATION') || mode.value === 'ELIMINATION'
+    const isFsrs = props.mode === 'FSRS' || (sData && sData.mode === 'FSRS') || mode.value === 'FSRS'
     if (isElimination) {
       try {
         const mRes = await fetch(`/api/mistakes?bank_id=${props.bankId}`)
@@ -617,6 +622,17 @@ async function loadSessionData() {
         }
       } catch (err) {
         console.warn('Failed fetching active mistakes for elimination mode:', err)
+      }
+    } else if (isFsrs) {
+      try {
+        const dRes = await fetch(`/api/mistakes/due?bank_id=${props.bankId}`)
+        if (dRes.ok) {
+          const dueList = await dRes.json()
+          const dueQIds = new Set(dueList.map(m => m.question_id || m.id))
+          questions.value = questions.value.filter(q => dueQIds.has(q.id))
+        }
+      } catch (err) {
+        console.warn('Failed fetching due questions for FSRS mode:', err)
       }
     }
 
