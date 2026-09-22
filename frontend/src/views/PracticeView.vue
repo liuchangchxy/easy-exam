@@ -496,19 +496,26 @@ onUnmounted(() => {
   flushSync()
 })
 
-// Watch question switch to reset multi selection
-watch(currentQuestionIndex, (newIdx) => {
-  const q = questions.value[newIdx]
+// Multi selection sync helper
+function syncMultiSelectionForCurrent() {
+  const q = currentQuestion.value
   if (q && q.type === 'MULTI') {
     const existing = answers.value[q.id]
     if (Array.isArray(existing)) {
-      currentMultiAnswers.value = [...existing]
+      currentMultiAnswers.value = [...existing].map(c => String(c).trim().toUpperCase()).filter(Boolean).sort()
     } else if (typeof existing === 'string') {
-      currentMultiAnswers.value = existing.split('').filter(c => c.trim())
+      currentMultiAnswers.value = existing.trim().toUpperCase().split('').filter(Boolean).sort()
     } else {
       currentMultiAnswers.value = []
     }
+  } else {
+    currentMultiAnswers.value = []
   }
+}
+
+// Watch question switch to reset multi selection
+watch(currentQuestionIndex, () => {
+  syncMultiSelectionForCurrent()
 })
 
 // Methods
@@ -553,9 +560,11 @@ async function loadSessionData() {
   loading.value = true
   try {
     // 1. Fetch bank questions
+    let allQuestions = []
     const qRes = await fetch(`/api/banks/${props.bankId}/questions`)
     if (qRes.ok) {
-      questions.value = await qRes.json()
+      allQuestions = await qRes.json()
+      questions.value = allQuestions
     }
 
     // 2. Fetch remote session state
@@ -563,6 +572,14 @@ async function loadSessionData() {
     if (sRes.ok) {
       const sData = await sRes.json()
       mode.value = sData.mode || props.initialMode
+      // Filter and sort questions by session.question_ids if present
+      if (sData.question_ids && Array.isArray(sData.question_ids) && sData.question_ids.length > 0) {
+        const qMap = new Map(allQuestions.map(q => [q.id, q]))
+        const ordered = sData.question_ids.map(id => qMap.get(id)).filter(Boolean)
+        if (ordered.length > 0) {
+          questions.value = ordered
+        }
+      }
       if (sData.answers) answers.value = sData.answers
       if (sData.flags) flags.value = sData.flags
       if (sData.time_spent) elapsedSeconds.value = sData.time_spent
@@ -582,6 +599,24 @@ async function loadSessionData() {
         currentQuestionIndex.value = draft.currentIndex
       }
     }
+
+    // Ensure array multi-select answers are sorted and joined into uppercase strings during draft recovery
+    const normalized = { ...answers.value }
+    for (const [qId, ansVal] of Object.entries(normalized)) {
+      if (Array.isArray(ansVal)) {
+        normalized[qId] = ansVal
+          .map(c => String(c).trim().toUpperCase())
+          .filter(Boolean)
+          .sort()
+          .join('')
+      } else if (typeof ansVal === 'string') {
+        normalized[qId] = ansVal.trim().toUpperCase()
+      }
+    }
+    answers.value = normalized
+
+    // Sync multi-select state for the initial question if applicable
+    syncMultiSelectionForCurrent()
 
     // If practice mode and answers exist, populate results locally
     if (mode.value === 'PRACTICE') {
@@ -637,8 +672,9 @@ function submitMultiAnswer() {
   const q = currentQuestion.value
   if (!q || !currentMultiAnswers.value.length) return
 
-  const answerVal = currentMultiAnswers.value.join('')
-  answers.value[q.id] = currentMultiAnswers.value
+  const sortedAnswers = [...currentMultiAnswers.value].map(c => String(c).trim().toUpperCase()).filter(Boolean).sort()
+  const answerVal = sortedAnswers.join('')
+  answers.value[q.id] = answerVal
 
   if (mode.value === 'EXAM') {
     persistDraft()
@@ -818,8 +854,11 @@ function getOptionIcon(key) {
   const result = results.value[q.id]
   if (!result) return null
 
-  const isUserChoice = answers.value[q.id] === key
-  const isCorrectChoice = result.correct_answer === key || (q.type === 'MULTI' && String(result.correct_answer).includes(key))
+  const userAns = answers.value[q.id]
+  const isUserChoice = (q.type === 'MULTI')
+    ? (Array.isArray(userAns) ? userAns.includes(key) : String(userAns || '').toUpperCase().includes(key))
+    : (userAns === key)
+  const isCorrectChoice = result.correct_answer === key || (q.type === 'MULTI' && String(result.correct_answer).toUpperCase().includes(key))
 
   if (isUserChoice && result.is_correct) return '✓'
   if (isUserChoice && !result.is_correct) return '✕'

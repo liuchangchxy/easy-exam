@@ -11,24 +11,42 @@ from pathlib import Path
 
 # Base directories
 BASE_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_DATA_DIR = BASE_DIR / "data"
+
+
+def get_data_dir() -> Path:
+    """Return data directory, prioritizing DATA_DIR environment variable."""
+    custom_dir = os.environ.get("DATA_DIR")
+    if custom_dir:
+        return Path(custom_dir)
+    return BASE_DIR / "data"
+
+
+DEFAULT_DATA_DIR = get_data_dir()
 
 
 @dataclass
 class Settings:
     """Application runtime settings."""
-    db_path: str = os.environ.get("DB_PATH", str(DEFAULT_DATA_DIR / "fnexam.db"))
-    host: str = os.environ.get("HOST", "0.0.0.0")
-    port: int = int(os.environ.get("PORT", "3000"))
-    llm_base_url: str = os.environ.get("LLM_BASE_URL", "http://localhost:11434/v1")
-    llm_api_key: str = os.environ.get("LLM_API_KEY", "")
-    llm_model: str = os.environ.get("LLM_MODEL", "qwen2.5:7b")
+    db_path: str = ""
+    host: str = "0.0.0.0"
+    port: int = 3000
+    llm_base_url: str = "http://localhost:11434/v1"
+    llm_api_key: str = ""
+    llm_model: str = "qwen2.5:7b"
+
+    def __post_init__(self):
+        if not self.db_path:
+            self.db_path = os.environ.get("DB_PATH") or str(get_data_dir() / "fnexam.db")
+        if not os.environ.get("HOST") and self.host == "0.0.0.0":
+            self.host = os.environ.get("HOST", "0.0.0.0")
 
 
 def get_settings() -> Settings:
     """Return fresh settings loaded from current environment."""
+    data_dir = get_data_dir()
+    default_db = str(data_dir / "fnexam.db")
     return Settings(
-        db_path=os.environ.get("DB_PATH", str(DEFAULT_DATA_DIR / "fnexam.db")),
+        db_path=os.environ.get("DB_PATH") or default_db,
         host=os.environ.get("HOST", "0.0.0.0"),
         port=int(os.environ.get("PORT", "3000")),
         llm_base_url=os.environ.get("LLM_BASE_URL", "http://localhost:11434/v1"),

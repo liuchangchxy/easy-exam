@@ -1,0 +1,15 @@
+name: fn-exam
+
+services:
+  fn-exam:
+    image: ailm32442/fn-exam:latest
+    build: .
+    container_name: fn-exam
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PORT=3000
+      - LLM_BASE_URL=http://host.docker.internal:11434/v1
