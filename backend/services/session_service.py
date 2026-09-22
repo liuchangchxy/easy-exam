@@ -209,14 +209,18 @@ class SessionService:
         )
 
         mode_str = str(session.get("mode", "")).upper()
+        mistake_res = None
         if mode_str in ("PRACTICE", "ELIMINATION", "FSRS") and self.mistake_service is not None:
             bank_id = session.get("bank_id", "")
-            self.mistake_service.record_question_result(
+            mistake_res = self.mistake_service.record_question_result(
                 question_id=question_id,
                 bank_id=bank_id,
                 is_correct=is_correct,
                 cause=mistake_cause,
             )
+
+        is_cleared = bool(mistake_res.get("is_cleared", False)) if mistake_res else False
+        consecutive_correct = mistake_res.get("consecutive_correct", 0) if mistake_res else 0
 
         return {
             "session_id": session_id,
@@ -226,6 +230,8 @@ class SessionService:
             "score_ratio": score_ratio,
             "correct_answer": correct_answer,
             "explanation": explanation,
+            "is_cleared": is_cleared,
+            "consecutive_correct": consecutive_correct,
         }
 
     def sync_draft(

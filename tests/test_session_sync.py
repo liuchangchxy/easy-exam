@@ -320,6 +320,29 @@ class TestSessionService(unittest.TestCase):
         self.assertIsNotNone(mistake_fsrs)
         self.assertEqual(mistake_fsrs["mistake_cause"], "CONCEPT_GAP")
 
+    def test_submit_answer_returns_cleared_status_on_consecutive_correct(self):
+        """submit_answer returns is_cleared=True when answering correctly 2 consecutive times in practice/elimination."""
+        sess = self.service.start_session(self.bank_id, "PRACTICE", total_questions=3)
+        session_id = sess["id"]
+
+        # First answer wrong -> recorded as mistake
+        r1 = self.service.submit_answer(session_id, self.q1_id, "B")
+        self.assertFalse(r1["is_correct"])
+        self.assertFalse(r1["is_cleared"])
+        self.assertEqual(r1["consecutive_correct"], 0)
+
+        # Second answer right -> consecutive 1, not yet cleared
+        r2 = self.service.submit_answer(session_id, self.q1_id, "A")
+        self.assertTrue(r2["is_correct"])
+        self.assertFalse(r2["is_cleared"])
+        self.assertEqual(r2["consecutive_correct"], 1)
+
+        # Third answer right -> consecutive 2, eliminated! is_cleared=True
+        r3 = self.service.submit_answer(session_id, self.q1_id, "A")
+        self.assertTrue(r3["is_correct"])
+        self.assertTrue(r3["is_cleared"])
+        self.assertEqual(r3["consecutive_correct"], 2)
+
     def test_draft_synchronization(self):
         """Test merging client localStorage incremental drafts into database."""
         session = self.service.start_session(self.bank_id, "PRACTICE", total_questions=3)

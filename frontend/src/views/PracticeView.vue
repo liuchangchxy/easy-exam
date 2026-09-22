@@ -47,6 +47,15 @@
       </div>
     </transition>
 
+    <!-- Golden Kill Elimination Celebration Banner -->
+    <transition name="gold-sparkle">
+      <div v-if="showGoldenKill" class="golden-kill-banner animate-gold">
+        <span class="golden-kill-star">✨</span>
+        <span class="golden-kill-text">2连对斩杀！该错题已彻底消灭并移出错题本 🎯</span>
+        <span class="golden-kill-star">✨</span>
+      </div>
+    </transition>
+
     <!-- Auto-Jump Next & Mode Options Sub-bar -->
     <div v-if="questions.length" class="sub-bar">
       <div class="draft-indicator">
@@ -412,6 +421,19 @@ const comboStreak = ref(0)
 const showCombo = ref(false)
 let comboTimer = null
 
+// 300ms option click debounce lock & Golden kill state
+const isOptionLocked = ref(false)
+const showGoldenKill = ref(false)
+let goldenKillTimer = null
+
+function triggerGoldenKillCelebration() {
+  showGoldenKill.value = true
+  if (goldenKillTimer) clearTimeout(goldenKillTimer)
+  goldenKillTimer = setTimeout(() => {
+    showGoldenKill.value = false
+  }, 2500)
+}
+
 // Auto jump next toggle in practice mode
 const autoJumpNext = ref(true)
 
@@ -770,6 +792,12 @@ async function loadSessionData() {
 }
 
 function handleSelectOption(key) {
+  if (isOptionLocked.value) return
+  isOptionLocked.value = true
+  setTimeout(() => {
+    isOptionLocked.value = false
+  }, 300)
+
   const q = currentQuestion.value
   if (!q) return
 
@@ -833,6 +861,11 @@ async function submitAnswerToBackend(questionId, userAnswer) {
         is_correct: data.is_correct,
         correct_answer: data.correct_answer,
         explanation: data.explanation
+      }
+
+      // Golden kill 2-consecutive elimination celebration
+      if (data.is_cleared) {
+        triggerGoldenKillCelebration()
       }
 
       // Combo streak logic
@@ -998,7 +1031,8 @@ function getOptionIcon(key) {
 function isOptionDisabled(key) {
   const q = currentQuestion.value
   if (!q) return false
-  if ((mode.value === 'PRACTICE' || mode.value === 'ELIMINATION') && results.value[q.id]) {
+  if (isOptionLocked.value) return true
+  if ((mode.value === 'PRACTICE' || mode.value === 'ELIMINATION' || mode.value === 'FSRS') && results.value[q.id]) {
     return true
   }
   return false
@@ -1180,6 +1214,42 @@ function handleBack() {
   gap: 6px;
   box-shadow: 0 4px 6px rgba(239, 68, 68, 0.25);
   z-index: 20;
+}
+
+/* Golden Kill Banner */
+.golden-kill-banner {
+  background: linear-gradient(135deg, #d97706, #fbbf24, #f59e0b);
+  color: #78350f;
+  padding: 10px 18px;
+  text-align: center;
+  font-weight: 800;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.45);
+  border-bottom: 2px solid #f59e0b;
+  z-index: 21;
+}
+
+.animate-gold {
+  animation: goldPulse 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes goldPulse {
+  0% { transform: scale(1); filter: drop-shadow(0 0 2px rgba(251, 191, 36, 0.5)); }
+  100% { transform: scale(1.02); filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.9)); }
+}
+
+.gold-sparkle-enter-active,
+.gold-sparkle-leave-active {
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.gold-sparkle-enter-from,
+.gold-sparkle-leave-to {
+  opacity: 0;
+  transform: translateY(-20px) scale(0.9);
 }
 
 /* Sub-bar */
