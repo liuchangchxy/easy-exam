@@ -514,6 +514,79 @@ D. 301 表示临时重定向
         import_data = import_res.json()
         self.assertEqual(import_data["imported_count"], 1)
 
+    def test_12_bank_export_roundtrip(self):
+        """Test exporting bank to JSON, CSV, Text, and Excel, and re-importing without loss."""
+        # 1. Create a bank with multiple question types
+        b_res = self.client.post("/api/banks", json={"name": "导出测试题库"})
+        self.assertEqual(b_res.status_code, 200)
+        bank_id = b_res.json()["id"]
+
+        # Insert questions
+        self.client.post(
+            f"/api/banks/{bank_id}/questions",
+            json={
+                "stem": "导出测试单选题",
+                "type": "SINGLE",
+                "options": [{"key": "A", "content": "选项1"}, {"key": "B", "content": "选项2"}],
+                "answer": "A",
+                "explanation": "这是单选解析",
+                "difficulty": 2,
+                "tags": ["测试", "单选"],
+            },
+        )
+        self.client.post(
+            f"/api/banks/{bank_id}/questions",
+            json={
+                "stem": "导出测试判断题",
+                "type": "JUDGE",
+                "options": [{"key": "T", "content": "正确"}, {"key": "F", "content": "错误"}],
+                "answer": "T",
+                "explanation": "这是判断解析",
+                "difficulty": 3,
+                "tags": ["测试", "判断"],
+            },
+        )
+
+        # 2. Test JSON export
+        res_json = self.client.get(f"/api/banks/{bank_id}/export?format=json")
+        self.assertEqual(res_json.status_code, 200)
+        self.assertIn("application/json", res_json.headers["content-type"])
+        self.assertIn("Content-Disposition", res_json.headers)
+        data = res_json.json()
+        self.assertEqual(len(data), 2)
+        self.assertEqual(data[0]["stem"], "导出测试单选题")
+
+        # 3. Test CSV export
+        res_csv = self.client.get(f"/api/banks/{bank_id}/export?format=csv")
+        self.assertEqual(res_csv.status_code, 200)
+        self.assertIn("text/csv", res_csv.headers["content-type"])
+        csv_text = res_csv.text
+        self.assertIn("导出测试单选题", csv_text)
+
+        # 4. Test Text export
+        res_txt = self.client.get(f"/api/banks/{bank_id}/export?format=text")
+        self.assertEqual(res_txt.status_code, 200)
+        self.assertIn("text/plain", res_txt.headers["content-type"])
+        txt_content = res_txt.text
+        self.assertIn("导出测试单选题", txt_content)
+        self.assertIn("【答案】A", txt_content)
+
+        # 5. Test Excel export
+        res_excel = self.client.get(f"/api/banks/{bank_id}/export?format=excel")
+        self.assertEqual(res_excel.status_code, 200)
+        self.assertIn("application/vnd.openxmlformats", res_excel.headers["content-type"])
+        self.assertTrue(len(res_excel.content) > 100)
+
+        # 6. Re-import JSON exported content into a brand new bank
+        b2_res = self.client.post("/api/banks", json={"name": "恢复题库"})
+        b2_id = b2_res.json()["id"]
+        reimport_res = self.client.post(
+            f"/api/banks/{b2_id}/import",
+            json={"format": "json", "content": json.dumps(data)},
+        )
+        self.assertEqual(reimport_res.status_code, 200)
+        self.assertEqual(reimport_res.json()["imported_count"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

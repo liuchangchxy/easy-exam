@@ -16,7 +16,7 @@ from typing import Any, Dict, Generator, List, Optional, Union
 
 from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -35,6 +35,7 @@ from backend.services import (
     Scorer,
     SessionService,
     build_tutor_prompt,
+    export_bank_content,
     parse_csv_content,
     parse_excel_content,
     parse_json_content,
@@ -223,6 +224,33 @@ def create_app(
         if not bank:
             raise HTTPException(status_code=404, detail=f"Bank '{bank_id}' not found.")
         return question_repo.list_questions_by_bank(bank_id)
+
+    @app.get("/api/banks/{bank_id}/export")
+    def export_bank(
+        bank_id: str,
+        format: str = Query("json", description="Export format: json, csv, text, excel"),
+    ) -> Response:
+        """Export all questions from a bank into a downloadable file."""
+        import re
+        from urllib.parse import quote
+
+        bank = bank_repo.get_bank(bank_id)
+        if not bank:
+            raise HTTPException(status_code=404, detail=f"Bank '{bank_id}' not found.")
+
+        questions = question_repo.list_questions_by_bank(bank_id)
+        content, media_type, ext = export_bank_content(questions, format_str=format)
+
+        raw_name = bank.get("name") or "bank"
+        safe_name = re.sub(r'[\\/*?:"<>|]', '_', raw_name).strip()
+        filename = f"{safe_name}.{ext}"
+        encoded_filename = quote(filename)
+
+        headers = {
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        }
+        return Response(content=content, media_type=media_type, headers=headers)
 
     @app.post("/api/banks/{bank_id}/import")
     def import_questions(bank_id: str, payload: ImportRequest) -> Dict[str, Any]:

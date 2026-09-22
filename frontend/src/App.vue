@@ -94,7 +94,17 @@
           <div v-for="bank in banks" :key="bank.id" class="bank-card">
             <div class="bank-card-header">
               <span class="bank-category">{{ bank.category || '综合题库' }}</span>
-              <span class="bank-count">{{ bank.question_count || 0 }} 题</span>
+              <div class="bank-header-right">
+                <span class="bank-count">{{ bank.question_count || 0 }} 题</span>
+                <button
+                  class="btn-export-icon"
+                  title="导出/备份题库"
+                  :disabled="!bank.question_count"
+                  @click.stop="openExportModal(bank)"
+                >
+                  📤 导出
+                </button>
+              </div>
             </div>
             <h3 class="bank-name">{{ bank.name }}</h3>
             <p class="bank-desc">{{ bank.description || '暂无描述' }}</p>
@@ -161,6 +171,58 @@
             <button class="btn-submit" @click="confirmStartMistakeDrill">
               开始攻坚
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Export Bank Modal -->
+      <div v-if="showExportModal" class="modal-overlay" @click.self="showExportModal = false">
+        <div class="export-modal animate-slide-up">
+          <div class="modal-header">
+            <h3>📤 导出题库备份</h3>
+            <button class="btn-close" @click="showExportModal = false">✕</button>
+          </div>
+          <div class="modal-body">
+            <p class="modal-desc">
+              正在导出题库：<strong>{{ exportTargetBank?.name }}</strong> (共 {{ exportTargetBank?.question_count || 0 }} 题)
+            </p>
+            <div class="export-options">
+              <button class="export-opt-btn" @click="downloadBankExport('xlsx')">
+                <span class="export-opt-icon">📊</span>
+                <div class="export-opt-info">
+                  <strong>Excel 表格 (.xlsx)</strong>
+                  <span>通用电子表格，支持 Office / WPS 直接编辑</span>
+                </div>
+                <span class="btn-download-tag">下载</span>
+              </button>
+              <button class="export-opt-btn" @click="downloadBankExport('csv')">
+                <span class="export-opt-icon">📑</span>
+                <div class="export-opt-info">
+                  <strong>CSV 表格 (.csv)</strong>
+                  <span>通用纯文本表格，轻量无损，兼容各种工具</span>
+                </div>
+                <span class="btn-download-tag">下载</span>
+              </button>
+              <button class="export-opt-btn" @click="downloadBankExport('json')">
+                <span class="export-opt-icon">📦</span>
+                <div class="export-opt-info">
+                  <strong>JSON 完整备份 (.json)</strong>
+                  <span>包含所有结构化元数据、标签与解析，100% 完整复原</span>
+                </div>
+                <span class="btn-download-tag">下载</span>
+              </button>
+              <button class="export-opt-btn" @click="downloadBankExport('txt')">
+                <span class="export-opt-icon">📝</span>
+                <div class="export-opt-info">
+                  <strong>Markdown / 试卷纯文本 (.txt)</strong>
+                  <span>排版清晰，适合离线打印或手机快速浏览</span>
+                </div>
+                <span class="btn-download-tag">下载</span>
+              </button>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-cancel" @click="showExportModal = false">关闭</button>
           </div>
         </div>
       </div>
@@ -338,6 +400,28 @@ function confirmStartMistakeDrill() {
   const cause = selectedMistakeCause.value
   showMistakeDrillModal.value = false
   startSession(bankId, 'ELIMINATION', 0, cause)
+}
+
+// Export bank modal state
+const showExportModal = ref(false)
+const exportTargetBank = ref(null)
+
+function openExportModal(bank) {
+  exportTargetBank.value = bank
+  showExportModal.value = true
+}
+
+function downloadBankExport(format) {
+  if (!exportTargetBank.value) return
+  const bankId = exportTargetBank.value.id
+  const url = `/api/banks/${bankId}/export?format=${format}`
+  const link = document.createElement('a')
+  link.href = url
+  link.setAttribute('download', '')
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  showExportModal.value = false
 }
 
 onMounted(async () => {
@@ -742,9 +826,95 @@ async function handleImportSubmit() {
   padding: 2px 8px;
   border-radius: 4px;
 }
+.bank-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .bank-count {
   font-weight: 700;
   color: var(--primary);
+}
+.btn-export-icon {
+  padding: 2px 6px;
+  background-color: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-export-icon:hover:not(:disabled) {
+  background-color: var(--primary-light);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+.btn-export-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Export Modal */
+.export-modal {
+  background-color: #ffffff;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+.export-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.export-opt-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: #f8fafc;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+.export-opt-btn:hover {
+  background-color: #f0fdf4;
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+.export-opt-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+.export-opt-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+.export-opt-info strong {
+  font-size: 0.875rem;
+  color: var(--text-main);
+}
+.export-opt-info span {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.btn-download-tag {
+  padding: 4px 10px;
+  background-color: var(--primary-light);
+  color: var(--primary);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  flex-shrink: 0;
 }
 
 .bank-name {
