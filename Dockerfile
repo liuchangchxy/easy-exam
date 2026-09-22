@@ -7,7 +7,7 @@ WORKDIR /app/frontend
 
 # Install dependencies first for efficient layer caching
 COPY frontend/package*.json ./
-RUN npm install
+RUN npm config set registry https://registry.npmmirror.com && npm install
 
 # Build static production assets into dist/
 COPY frontend/ ./
@@ -22,7 +22,7 @@ WORKDIR /app
 
 # Install minimal production dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt || pip install --no-cache-dir -r requirements.txt
 
 # Copy backend source code and compiled frontend assets
 COPY backend/ /app/backend/
