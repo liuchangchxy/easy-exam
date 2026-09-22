@@ -198,6 +198,9 @@ class SessionRepository(BaseRepository):
         mode: Any,
         total_questions: int,
         time_limit: int = 0,
+        questions_json: str = "[]",
+        shuffle_questions: bool = False,
+        shuffle_options: bool = False,
     ) -> str:
         session_id = str(uuid.uuid4())
         mode_str = mode.value if hasattr(mode, "value") else str(mode)
@@ -207,11 +210,20 @@ class SessionRepository(BaseRepository):
                 INSERT INTO sessions (
                     id, bank_id, mode, total_questions, current_index,
                     answers_json, flags_json, time_spent, time_limit,
-                    is_completed, score
+                    is_completed, score, questions_json, shuffle_questions, shuffle_options
                 )
-                VALUES (?, ?, ?, ?, 0, '{}', '[]', 0, ?, 0, 0.0);
+                VALUES (?, ?, ?, ?, 0, '{}', '[]', 0, ?, 0, 0.0, ?, ?, ?);
                 """,
-                (session_id, bank_id, mode_str, total_questions, time_limit),
+                (
+                    session_id,
+                    bank_id,
+                    mode_str,
+                    total_questions,
+                    time_limit,
+                    questions_json,
+                    int(shuffle_questions),
+                    int(shuffle_options),
+                ),
             )
         return session_id
 

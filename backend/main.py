@@ -74,6 +74,8 @@ class SessionCreateRequest(BaseModel):
     total_questions: int = 0
     time_limit: int = 0
     mistake_cause: Optional[str] = None
+    shuffle_questions: bool = False
+    shuffle_options: bool = False
 
 
 class AnswerSubmitRequest(BaseModel):
@@ -340,9 +342,10 @@ def create_app(
             mode=payload.mode,
             total_questions=total,
             time_limit=payload.time_limit,
+            shuffle_questions=payload.shuffle_questions,
+            shuffle_options=payload.shuffle_options,
+            mistake_cause=payload.mistake_cause,
         )
-        if payload.mistake_cause:
-            session["mistake_cause"] = payload.mistake_cause
         return session
 
     @app.get("/api/sessions/{session_id}")
@@ -352,6 +355,17 @@ def create_app(
         if not session:
             raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
         return session
+
+    @app.get("/api/sessions/{session_id}/questions")
+    def get_session_questions(session_id: str) -> List[Dict[str, Any]]:
+        """Get the ordered/shuffled questions list for an active session."""
+        session = session_service.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found.")
+        questions = session.get("questions")
+        if not questions and session.get("bank_id"):
+            questions = question_repo.list_questions_by_bank(session["bank_id"])
+        return questions or []
 
     @app.post("/api/sessions/{session_id}/answer")
     def submit_answer(session_id: str, payload: AnswerSubmitRequest) -> Dict[str, Any]:

@@ -62,6 +62,9 @@ def init_db(db_path: str) -> None:
                     time_limit INTEGER DEFAULT 0,
                     is_completed BOOLEAN DEFAULT 0,
                     score REAL DEFAULT 0.0,
+                    questions_json TEXT DEFAULT '[]',
+                    shuffle_questions BOOLEAN DEFAULT 0,
+                    shuffle_options BOOLEAN DEFAULT 0,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(bank_id) REFERENCES banks(id) ON DELETE CASCADE
@@ -88,5 +91,15 @@ def init_db(db_path: str) -> None:
                 CREATE INDEX IF NOT EXISTS idx_mistakes_cleared ON mistake_records(is_cleared);
                 """
             )
+            # Safe schema migrations for existing databases
+            for migration in [
+                "ALTER TABLE sessions ADD COLUMN questions_json TEXT DEFAULT '[]';",
+                "ALTER TABLE sessions ADD COLUMN shuffle_questions BOOLEAN DEFAULT 0;",
+                "ALTER TABLE sessions ADD COLUMN shuffle_options BOOLEAN DEFAULT 0;",
+            ]:
+                try:
+                    conn.execute(migration)
+                except Exception:
+                    pass
     finally:
         conn.close()

@@ -60,7 +60,19 @@
       <!-- Main Content -->
       <main class="home-main">
         <div class="section-title-bar">
-          <h2 class="section-title">我的题库</h2>
+          <div class="section-title-left">
+            <h2 class="section-title">我的题库</h2>
+            <div class="shuffle-controls">
+              <label class="toggle-pill" :class="{ active: shuffleQuestions }">
+                <input v-model="shuffleQuestions" type="checkbox" />
+                <span>🔀 题目乱序</span>
+              </label>
+              <label class="toggle-pill" :class="{ active: shuffleOptions }">
+                <input v-model="shuffleOptions" type="checkbox" />
+                <span>🔀 选项乱序</span>
+              </label>
+            </div>
+          </div>
           <button class="btn-refresh" @click="fetchBanks">🔄 刷新</button>
         </div>
 
@@ -260,6 +272,8 @@ const activeSession = ref(null)
 const resumeDraft = ref(null)
 const dueCounts = ref({})
 const totalDueCount = ref(0)
+const shuffleQuestions = ref(false)
+const shuffleOptions = ref(false)
 
 // Import modal state
 const showImportModal = ref(false)
@@ -420,7 +434,9 @@ async function startSession(bankId, mode, timeLimit, mistakeCause = '') {
       bank_id: bankId,
       mode: mode,
       total_questions: 0,
-      time_limit: timeLimit
+      time_limit: timeLimit,
+      shuffle_questions: shuffleQuestions.value,
+      shuffle_options: shuffleOptions.value
     }
     if (mistakeCause) {
       payload.mistake_cause = mistakeCause
@@ -628,11 +644,49 @@ async function handleImportSubmit() {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.section-title-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 .section-title {
   font-size: 1.125rem;
   font-weight: 700;
   color: var(--text-main);
+  margin: 0;
+}
+.shuffle-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background-color: #f1f5f9;
+  border: 1px solid var(--border);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+.toggle-pill input {
+  display: none;
+}
+.toggle-pill.active {
+  background-color: #ecfdf5;
+  border-color: #10b981;
+  color: #065f46;
+  font-weight: 600;
 }
 .btn-refresh {
   font-size: 0.8125rem;

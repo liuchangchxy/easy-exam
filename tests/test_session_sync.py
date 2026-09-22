@@ -413,6 +413,44 @@ class TestSessionService(unittest.TestCase):
         self.assertEqual(db_session["is_completed"], 1)
         self.assertEqual(db_session["score"], 1.5)
 
+    def test_shuffle_options_and_questions(self):
+        """Test random question ordering and option shuffling with automatic answer remapping."""
+        # Test unit method shuffle_question_options
+        raw_q = {
+            "id": "test_q",
+            "type": "SINGLE",
+            "options": [
+                {"key": "A", "content": "选项一"},
+                {"key": "B", "content": "选项二(正解)"},
+                {"key": "C", "content": "选项三"},
+                {"key": "D", "content": "选项四"},
+            ],
+            "answer": "B",
+        }
+        shuffled = SessionService.shuffle_question_options(raw_q)
+        # Find which option in shuffled has '选项二(正解)'
+        matched = next(o for o in shuffled["options"] if o["content"] == "选项二(正解)")
+        # The new answer MUST match this option's key
+        self.assertEqual(shuffled["answer"], matched["key"])
+
+        # Test session start with shuffle_options=True
+        session = self.service.start_session(
+            self.bank_id,
+            "PRACTICE",
+            total_questions=3,
+            shuffle_options=True,
+            shuffle_questions=True,
+        )
+        self.assertTrue(len(session["questions"]) > 0)
+        session_id = session["id"]
+
+        for q in session["questions"]:
+            q_id = q["id"]
+            correct_ans = q["answer"]
+            # Submit the remapped answer
+            res = self.service.submit_answer(session_id, q_id, correct_ans)
+            self.assertTrue(res["is_correct"], f"Expected correct for remapped answer {correct_ans}")
+
 
 if __name__ == "__main__":
     unittest.main()

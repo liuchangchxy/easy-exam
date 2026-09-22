@@ -585,11 +585,26 @@ function startTimer() {
 async function loadSessionData() {
   loading.value = true
   try {
-    // 1. Fetch bank questions
+    // 1. Fetch questions directly for this session (preserves shuffle/order snapshot)
+    let sessionQuestions = []
+    try {
+      const sqRes = await fetch(`/api/sessions/${props.sessionId}/questions`)
+      if (sqRes.ok) {
+        sessionQuestions = await sqRes.json()
+      }
+    } catch (e) {
+      console.warn('Failed to fetch session questions:', e)
+    }
+
     let allQuestions = []
     const qRes = await fetch(`/api/banks/${props.bankId}/questions`)
     if (qRes.ok) {
       allQuestions = await qRes.json()
+    }
+
+    if (sessionQuestions && sessionQuestions.length > 0) {
+      questions.value = sessionQuestions
+    } else {
       questions.value = allQuestions
     }
 
@@ -600,7 +615,7 @@ async function loadSessionData() {
       sData = await sRes.json()
       mode.value = sData.mode || props.mode || props.initialMode
       // Filter and sort questions by session.question_ids if present
-      if (sData.question_ids && Array.isArray(sData.question_ids) && sData.question_ids.length > 0) {
+      if (sData.question_ids && Array.isArray(sData.question_ids) && sData.question_ids.length > 0 && (!sessionQuestions || sessionQuestions.length === 0)) {
         const qMap = new Map(allQuestions.map(q => [q.id, q]))
         const ordered = sData.question_ids.map(id => qMap.get(id)).filter(Boolean)
         if (ordered.length > 0) {

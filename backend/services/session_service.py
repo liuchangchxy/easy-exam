@@ -21,19 +21,111 @@ class SessionService:
         self.question_repo = question_repo
         self.mistake_service = mistake_service
 
+    @staticmethod
+    def shuffle_question_options(question: Dict[str, Any]) -> Dict[str, Any]:
+        """Shuffle options of a single/multi choice question and remap correct answer."""
+        import random
+        import re
+        q_type = str(question.get("type", "")).upper()
+        if q_type not in ("SINGLE", "MULTI"):
+            return dict(question)
+
+        raw_options = question.get("options") or []
+        if len(raw_options) <= 1:
+            return dict(question)
+
+        # Normalize options format: [(key, content)]
+        options_list = []
+        for idx, opt in enumerate(raw_options):
+            if isinstance(opt, dict):
+                k = str(opt.get("key", chr(65 + idx))).upper().strip()
+                c = opt.get("content", opt.get("text", ""))
+            else:
+                k = chr(65 + idx)
+                c = str(opt)
+            options_list.append((k, c))
+
+        old_answer = str(question.get("answer", "")).upper().strip()
+        old_correct_keys = set(re.findall(r'[A-H]', old_answer)) if old_answer else set()
+
+        # Find the contents that correspond to correct keys
+        correct_contents = set()
+        for k, c in options_list:
+            if k in old_correct_keys:
+                correct_contents.add(c)
+
+        # Shuffle the option contents
+        shuffled_contents = [c for _, c in options_list]
+        random.shuffle(shuffled_contents)
+
+        # Re-assign keys A, B, C, D...
+        new_options = []
+        new_correct_keys = []
+        for idx, c in enumerate(shuffled_contents):
+            new_k = chr(65 + idx)
+            new_options.append({"key": new_k, "content": c})
+            if c in correct_contents:
+                new_correct_keys.append(new_k)
+
+        new_correct_keys.sort()
+        new_answer = "".join(new_correct_keys) if new_correct_keys else old_answer
+
+        shuffled_q = dict(question)
+        shuffled_q["options"] = new_options
+        shuffled_q["answer"] = new_answer
+        shuffled_q["original_answer"] = old_answer
+        return shuffled_q
+
     def start_session(
         self,
         bank_id: str,
         mode: Union[str, SessionMode],
-        total_questions: int,
+        total_questions: int = 0,
         time_limit: int = 0,
+        shuffle_questions: bool = False,
+        shuffle_options: bool = False,
+        mistake_cause: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Start a new practice or exam session and return the initial session dictionary."""
+        """Start a new practice or exam session with optional question/option shuffling."""
+        import random
+        questions = []
+        if self.question_repo is not None:
+            questions = list(self.question_repo.list_questions_by_bank(bank_id))
+            mode_str = mode.value if hasattr(mode, "value") else str(mode).upper()
+
+            if mode_str == "ELIMINATION" and self.mistake_service is not None and self.mistake_service.mistake_repo is not None:
+                mistakes = self.mistake_service.mistake_repo.get_mistakes(bank_id=bank_id, only_uncleared=True)
+                if mistake_cause:
+                    mistakes = [m for m in mistakes if m.get("mistake_cause") == mistake_cause]
+                mistake_qids = {m["question_id"] for m in mistakes}
+                if mistake_qids:
+                    questions = [q for q in questions if q.get("id") in mistake_qids]
+            elif mode_str == "FSRS" and self.mistake_service is not None:
+                dues = self.mistake_service.get_due_reviews(bank_id)
+                due_qids = {m["question_id"] for m in dues}
+                if due_qids:
+                    questions = [q for q in questions if q.get("id") in due_qids]
+
+            if shuffle_questions and questions:
+                random.shuffle(questions)
+
+            if total_questions > 0 and len(questions) > total_questions:
+                questions = questions[:total_questions]
+
+            if shuffle_options and questions:
+                questions = [self.shuffle_question_options(q) for q in questions]
+
+        questions_json = json.dumps(questions, ensure_ascii=False)
+        total = len(questions) if questions else total_questions
+
         session_id = self.session_repo.create_session(
             bank_id=bank_id,
             mode=mode,
-            total_questions=total_questions,
+            total_questions=total,
             time_limit=time_limit,
+            questions_json=questions_json,
+            shuffle_questions=shuffle_questions,
+            shuffle_options=shuffle_options,
         )
         session = self.session_repo.get_session(session_id)
         if not session:
@@ -42,16 +134,23 @@ class SessionService:
         session["answers"] = json.loads(session.get("answers_json") or "{}")
         session["flags"] = json.loads(session.get("flags_json") or "[]")
         session["is_completed"] = bool(session.get("is_completed", 0))
+        session["questions"] = questions
+        session["question_ids"] = [q["id"] for q in questions if isinstance(q, dict) and "id" in q]
+        if mistake_cause:
+            session["mistake_cause"] = mistake_cause
         return session
 
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieve session with deserialized answers and flags."""
+        """Retrieve session with deserialized answers, flags, and questions."""
         session = self.session_repo.get_session(session_id)
         if not session:
             return None
         session["answers"] = json.loads(session.get("answers_json") or "{}")
         session["flags"] = json.loads(session.get("flags_json") or "[]")
         session["is_completed"] = bool(session.get("is_completed", 0))
+        qs = json.loads(session.get("questions_json") or "[]")
+        session["questions"] = qs
+        session["question_ids"] = [q["id"] for q in qs if isinstance(q, dict) and "id" in q]
         return session
 
     def submit_answer(
@@ -62,13 +161,7 @@ class SessionService:
         time_spent_delta: int = 0,
         mistake_cause: Optional[Union[str, MistakeCause]] = None,
     ) -> Dict[str, Any]:
-        """Submit and evaluate an answer for a question in a session.
-
-        - Instant scoring via Scorer
-        - Persists answer into session repository
-        - If mode in (PRACTICE, ELIMINATION, FSRS) and mistake_service is provided, records mistake / success
-        - Returns evaluation result including is_correct, score_ratio, correct_answer, explanation
-        """
+        """Submit and evaluate an answer for a question in a session."""
         session = self.session_repo.get_session(session_id)
         if not session:
             raise ValueError(f"Session '{session_id}' not found.")
@@ -77,7 +170,14 @@ class SessionService:
         correct_answer = ""
         explanation = ""
 
-        if self.question_repo is not None:
+        session_qs = json.loads(session.get("questions_json") or "[]")
+        matched_q = next((q for q in session_qs if isinstance(q, dict) and q.get("id") == question_id), None)
+
+        if matched_q:
+            q_type = matched_q.get("type", "SINGLE")
+            correct_answer = matched_q.get("answer", "")
+            explanation = matched_q.get("explanation", "")
+        elif self.question_repo is not None:
             q = self.question_repo.get_question(question_id)
             if q:
                 q_type = q.get("type", "SINGLE")
