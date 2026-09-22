@@ -12,7 +12,7 @@
           {{ modeLabel }}
         </span>
         <span class="progress-indicator">
-          {{ currentQuestionIndex + 1 }} / {{ questions.length || 0 }}
+          {{ questions.length ? currentQuestionIndex + 1 : 0 }} / {{ questions.length || 0 }}
         </span>
       </div>
 
@@ -48,13 +48,13 @@
     </transition>
 
     <!-- Auto-Jump Next & Mode Options Sub-bar -->
-    <div class="sub-bar">
+    <div v-if="questions.length" class="sub-bar">
       <div class="draft-indicator">
         <span class="dot-sync" :class="'sync-' + syncStatus"></span>
         <span class="sync-text">{{ syncLabel }}</span>
       </div>
 
-      <div v-if="mode === 'PRACTICE'" class="auto-jump-toggle">
+      <div v-if="mode === 'PRACTICE' || mode === 'ELIMINATION'" class="auto-jump-toggle">
         <label class="toggle-label">
           <input v-model="autoJumpNext" type="checkbox" class="toggle-checkbox" />
           <span class="toggle-switch"></span>
@@ -174,13 +174,27 @@
         </transition>
       </div>
 
+      <!-- Friendly banner when there are no active mistakes in elimination mode -->
+      <div
+        v-else-if="(props.mode === 'ELIMINATION' || mode === 'ELIMINATION') && !questions.length"
+        class="elimination-empty-container"
+      >
+        <div class="elimination-empty-banner">
+          <h3 class="banner-title">🎉 恭喜！当前题库没有待消灭的错题！</h3>
+          <p class="banner-subtitle">太棒了！当前题库的所有错题均已消灭，继续保持！</p>
+          <button class="btn-elimination-back" @click="handleBack">
+            ‹ 返回题库
+          </button>
+        </div>
+      </div>
+
       <div v-else class="empty-state">
         <p>未找到题目</p>
       </div>
     </main>
 
     <!-- Bottom Action Bar -->
-    <footer class="bottom-bar">
+    <footer v-if="questions.length" class="bottom-bar">
       <button
         class="nav-step-btn"
         :disabled="currentQuestionIndex <= 0"
@@ -318,6 +332,10 @@ const props = defineProps({
     type: String,
     default: 'PRACTICE'
   },
+  mode: {
+    type: String,
+    default: ''
+  },
   initialTimeLimit: {
     type: Number,
     default: 0
@@ -328,7 +346,7 @@ const emit = defineEmits(['back', 'session-completed'])
 
 // Main state
 const loading = ref(true)
-const mode = ref(props.initialMode)
+const mode = ref(props.mode || props.initialMode)
 const questions = ref([])
 const currentQuestionIndex = ref(0)
 const answers = ref({})
@@ -568,10 +586,11 @@ async function loadSessionData() {
     }
 
     // 2. Fetch remote session state
+    let sData = null
     const sRes = await fetch(`/api/sessions/${props.sessionId}`)
     if (sRes.ok) {
-      const sData = await sRes.json()
-      mode.value = sData.mode || props.initialMode
+      sData = await sRes.json()
+      mode.value = sData.mode || props.mode || props.initialMode
       // Filter and sort questions by session.question_ids if present
       if (sData.question_ids && Array.isArray(sData.question_ids) && sData.question_ids.length > 0) {
         const qMap = new Map(allQuestions.map(q => [q.id, q]))
@@ -586,7 +605,22 @@ async function loadSessionData() {
       if (sData.is_completed) isCompleted.value = true
     }
 
-    // 3. Load & merge zero-loss localStorage draft
+    // 3. Filter questions for ELIMINATION mode
+    const isElimination = props.mode === 'ELIMINATION' || (sData && sData.mode === 'ELIMINATION') || mode.value === 'ELIMINATION'
+    if (isElimination) {
+      try {
+        const mRes = await fetch(`/api/mistakes?bank_id=${props.bankId}`)
+        if (mRes.ok) {
+          const mistakes = await mRes.json()
+          const mistakeQIds = new Set(mistakes.map(m => m.question_id || m.id))
+          questions.value = questions.value.filter(q => mistakeQIds.has(q.id))
+        }
+      } catch (err) {
+        console.warn('Failed fetching active mistakes for elimination mode:', err)
+      }
+    }
+
+    // 4. Load & merge zero-loss localStorage draft
     const draft = loadLocal()
     if (draft) {
       if (draft.answers) {
@@ -595,8 +629,14 @@ async function loadSessionData() {
       if (draft.flags) {
         flags.value = draft.flags
       }
-      if (typeof draft.currentIndex === 'number' && draft.currentIndex < questions.value.length) {
+      if (typeof draft.currentIndex === 'number' && questions.value.length > 0 && draft.currentIndex < questions.value.length) {
         currentQuestionIndex.value = draft.currentIndex
+      } else {
+        currentQuestionIndex.value = 0
+      }
+    } else {
+      if (currentQuestionIndex.value >= questions.value.length) {
+        currentQuestionIndex.value = 0
       }
     }
 
@@ -618,8 +658,8 @@ async function loadSessionData() {
     // Sync multi-select state for the initial question if applicable
     syncMultiSelectionForCurrent()
 
-    // If practice mode and answers exist, populate results locally
-    if (mode.value === 'PRACTICE') {
+    // If practice or elimination mode and answers exist, populate results locally
+    if (mode.value === 'PRACTICE' || mode.value === 'ELIMINATION') {
       for (const q of questions.value) {
         if (answers.value[q.id] !== undefined) {
           // If question has standard answer, reconstruct result
@@ -869,7 +909,7 @@ function getOptionIcon(key) {
 function isOptionDisabled(key) {
   const q = currentQuestion.value
   if (!q) return false
-  if (mode.value === 'PRACTICE' && results.value[q.id]) {
+  if ((mode.value === 'PRACTICE' || mode.value === 'ELIMINATION') && results.value[q.id]) {
     return true
   }
   return false
@@ -1577,5 +1617,86 @@ function handleBack() {
 }
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+.elimination-empty-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 380px;
+  padding: 32px 20px;
+  width: 100%;
+}
+
+.elimination-empty-banner {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border: 1.5px solid #a7f3d0;
+  border-radius: 16px;
+  padding: 36px 24px;
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.15);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  animation: slideUp 0.35s ease-out;
+}
+
+.banner-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #065f46;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.banner-subtitle {
+  font-size: 0.9375rem;
+  color: #047857;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.btn-elimination-back {
+  margin-top: 10px;
+  padding: 10px 24px;
+  background-color: #059669;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+}
+
+.btn-elimination-back:hover {
+  background-color: #047857;
+  transform: translateY(-1px);
+}
+
+@media (prefers-color-scheme: dark) {
+  .elimination-empty-banner {
+    background: linear-gradient(135deg, #064e3b 0%, #022c22 100%);
+    border-color: #047857;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+  }
+  .banner-title {
+    color: #6ee7b7;
+  }
+  .banner-subtitle {
+    color: #a7f3d0;
+  }
+  .btn-elimination-back {
+    background-color: #10b981;
+    color: #022c22;
+  }
+  .btn-elimination-back:hover {
+    background-color: #34d399;
+  }
 }
 </style>

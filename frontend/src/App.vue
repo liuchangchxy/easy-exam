@@ -6,6 +6,7 @@
       :session-id="activeSession.id"
       :bank-id="activeSession.bank_id"
       :initial-mode="activeSession.mode"
+      :mode="activeSession.mode"
       :initial-time-limit="activeSession.time_limit || 0"
       @back="exitSession"
       @session-completed="handleSessionCompleted"

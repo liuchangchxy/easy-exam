@@ -292,6 +292,34 @@ class TestSessionService(unittest.TestCase):
         mistake = self.mistake_repo.get_mistake(self.q3_id)
         self.assertIsNone(mistake)
 
+    def test_submit_answer_elimination_and_fsrs_modes_invoke_mistake_service(self):
+        """In ELIMINATION and FSRS modes, mistake service is invoked during submissions."""
+        # ELIMINATION mode
+        sess_elim = self.service.start_session(self.bank_id, "ELIMINATION", total_questions=3)
+        res_elim = self.service.submit_answer(
+            session_id=sess_elim["id"],
+            question_id=self.q1_id,
+            user_answer="B",
+            mistake_cause="READING_MISS",
+        )
+        self.assertFalse(res_elim["is_correct"])
+        mistake_elim = self.mistake_repo.get_mistake(self.q1_id)
+        self.assertIsNotNone(mistake_elim)
+        self.assertEqual(mistake_elim["mistake_cause"], "READING_MISS")
+
+        # FSRS mode
+        sess_fsrs = self.service.start_session(self.bank_id, "FSRS", total_questions=3)
+        res_fsrs = self.service.submit_answer(
+            session_id=sess_fsrs["id"],
+            question_id=self.q3_id,
+            user_answer="F",
+            mistake_cause="CONCEPT_GAP",
+        )
+        self.assertFalse(res_fsrs["is_correct"])
+        mistake_fsrs = self.mistake_repo.get_mistake(self.q3_id)
+        self.assertIsNotNone(mistake_fsrs)
+        self.assertEqual(mistake_fsrs["mistake_cause"], "CONCEPT_GAP")
+
     def test_draft_synchronization(self):
         """Test merging client localStorage incremental drafts into database."""
         session = self.service.start_session(self.bank_id, "PRACTICE", total_questions=3)

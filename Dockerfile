@@ -42,7 +42,7 @@ EXPOSE 3000
 
 # Container healthcheck probe against FastAPI /api/health endpoint
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:3000/api/health', timeout=3).getcode() == 200 else 1)"
+    CMD python -c "import urllib.request, sys, os; sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\", \"3000\")}/api/health', timeout=3).getcode() == 200 else 1)"
 
 # Start application server with uvicorn
 CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "3000"]

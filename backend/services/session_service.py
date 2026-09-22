@@ -66,7 +66,7 @@ class SessionService:
 
         - Instant scoring via Scorer
         - Persists answer into session repository
-        - If mode == PRACTICE and mistake_service is provided, records mistake / success
+        - If mode in (PRACTICE, ELIMINATION, FSRS) and mistake_service is provided, records mistake / success
         - Returns evaluation result including is_correct, score_ratio, correct_answer, explanation
         """
         session = self.session_repo.get_session(session_id)
@@ -109,7 +109,7 @@ class SessionService:
         )
 
         mode_str = str(session.get("mode", "")).upper()
-        if mode_str == "PRACTICE" and self.mistake_service is not None:
+        if mode_str in ("PRACTICE", "ELIMINATION", "FSRS") and self.mistake_service is not None:
             bank_id = session.get("bank_id", "")
             self.mistake_service.record_question_result(
                 question_id=question_id,
