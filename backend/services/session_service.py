@@ -361,6 +361,29 @@ class SessionService:
         final_score = round(total_score, 2)
         self.session_repo.complete_session(session_id, score=final_score)
 
+        # Knowledge points (tags) breakdown
+        tags_breakdown: Dict[str, Dict[str, Any]] = {}
+        for qid, ans_val in answers.items():
+            q = q_map.get(qid)
+            if not q and self.question_repo:
+                q = self.question_repo.get_question(qid)
+            if q and q.get("tags"):
+                raw_tags = q.get("tags")
+                tag_list = raw_tags if isinstance(raw_tags, list) else [str(raw_tags)]
+                is_cor = bool(ans_val.get("is_correct", False)) if isinstance(ans_val, dict) else False
+                for t in tag_list:
+                    t_str = str(t).strip()
+                    if not t_str:
+                        continue
+                    if t_str not in tags_breakdown:
+                        tags_breakdown[t_str] = {"total": 0, "correct": 0, "accuracy": 0.0}
+                    tags_breakdown[t_str]["total"] += 1
+                    if is_cor:
+                        tags_breakdown[t_str]["correct"] += 1
+
+        for t_info in tags_breakdown.values():
+            t_info["accuracy"] = round((t_info["correct"] / max(1, t_info["total"])) * 100, 1)
+
         # Max score: total_questions * 1.0 (or at least final_score)
         max_possible_score = float(total_questions) if total_questions > 0 else max(final_score, 1.0)
         passing_score = round(max_possible_score * 0.6, 1)
@@ -390,6 +413,7 @@ class SessionService:
             "passed": passed,
             "accuracy": accuracy,
             "breakdown": breakdown,
+            "tags_breakdown": tags_breakdown,
             "time_spent": updated.get("time_spent", 0),
             "answers": answers,
             "flags": flags,

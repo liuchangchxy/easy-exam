@@ -280,9 +280,28 @@
           </div>
         </div>
 
-        <!-- Breakdown table -->
+        <!-- Breakdown table & Visual Bars -->
         <div v-if="report.breakdown && Object.keys(report.breakdown).length" class="report-breakdown">
-          <h4 class="breakdown-title">题型得分详情</h4>
+          <h4 class="breakdown-title">📊 题型正确率与得分分布</h4>
+          <div class="visual-chart-container">
+            <div v-for="(b, t) in report.breakdown" :key="t" class="chart-row">
+              <div class="chart-label-group">
+                <span class="chart-type-name">{{ typeLabel(t) }}</span>
+                <span class="chart-count-meta">{{ b.correct }} / {{ b.total }} 题 ({{ b.score }}分)</span>
+              </div>
+              <div class="chart-bar-wrapper">
+                <div
+                  class="chart-bar-fill"
+                  :style="{ width: `${b.total ? Math.round((b.correct / b.total) * 100) : 0}%` }"
+                  :class="getBarColorClass(b.total ? (b.correct / b.total) : 0)"
+                ></div>
+              </div>
+              <span class="chart-percentage">
+                {{ b.total ? Math.round((b.correct / b.total) * 100) : 0 }}%
+              </span>
+            </div>
+          </div>
+
           <table class="breakdown-table">
             <thead>
               <tr>
@@ -301,6 +320,29 @@
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Knowledge Points (Tags) Breakdown Visual Chart -->
+        <div v-if="report.tags_breakdown && Object.keys(report.tags_breakdown).length" class="report-breakdown tags-breakdown-section">
+          <h4 class="breakdown-title">🧠 知识点能力雷达与薄弱点</h4>
+          <div class="visual-chart-container">
+            <div v-for="(info, tag) in report.tags_breakdown" :key="tag" class="chart-row">
+              <div class="chart-label-group">
+                <span class="chart-type-name tag-name" :title="tag">{{ tag }}</span>
+                <span class="chart-count-meta">{{ info.correct }} / {{ info.total }} 题</span>
+              </div>
+              <div class="chart-bar-wrapper">
+                <div
+                  class="chart-bar-fill"
+                  :style="{ width: `${info.total ? Math.round((info.correct / info.total) * 100) : 0}%` }"
+                  :class="getBarColorClass(info.total ? (info.correct / info.total) : 0)"
+                ></div>
+              </div>
+              <span class="chart-percentage">
+                {{ info.total ? Math.round((info.correct / info.total) * 100) : 0 }}%
+              </span>
+            </div>
+          </div>
         </div>
 
         <div class="report-actions">
@@ -566,6 +608,12 @@ function typeLabel(type) {
     ESSAY: '问答题'
   }
   return map[type] || '题目'
+}
+
+function getBarColorClass(ratio) {
+  if (ratio >= 0.8) return 'bar-high'
+  if (ratio >= 0.6) return 'bar-mid'
+  return 'bar-low'
 }
 
 function startTimer() {
@@ -1598,6 +1646,71 @@ function handleBack() {
   font-size: 0.875rem;
   font-weight: 700;
   color: var(--text-main);
+}
+.visual-chart-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background-color: #f8fafc;
+  padding: 12px;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+}
+.chart-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 45px;
+  align-items: center;
+  gap: 10px;
+}
+.chart-label-group {
+  display: flex;
+  flex-direction: column;
+}
+.chart-type-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+.chart-type-name.tag-name {
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chart-count-meta {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+.chart-bar-wrapper {
+  background-color: #e2e8f0;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  position: relative;
+}
+.chart-bar-fill {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.bar-high {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+.bar-mid {
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+}
+.bar-low {
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+.chart-percentage {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text-main);
+  text-align: right;
+}
+.tags-breakdown-section {
+  margin-top: 10px;
 }
 .breakdown-table {
   width: 100%;

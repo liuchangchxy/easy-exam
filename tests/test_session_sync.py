@@ -407,6 +407,8 @@ class TestSessionService(unittest.TestCase):
         self.assertIn("breakdown", summary)
         self.assertIn("SINGLE", summary["breakdown"])
         self.assertIn("MULTI", summary["breakdown"])
+        self.assertIn("tags_breakdown", summary)
+        self.assertIsInstance(summary["tags_breakdown"], dict)
 
         # Verify DB is marked completed
         db_session = self.session_repo.get_session(session_id)
