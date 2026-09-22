@@ -255,6 +255,11 @@ B. 错
             self.assertTrue(report.get("is_completed"))
             self.assertIn("score", report)
             self.assertIn("accuracy", report)
+            self.assertIn("total_score", report)
+            self.assertIn("passing_score", report)
+            self.assertIn("passed", report)
+            self.assertIn("breakdown", report)
+            self.assertIn("answered_questions", report)
 
         finally:
             # 清理测试题库

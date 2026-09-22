@@ -399,6 +399,15 @@ class TestSessionService(unittest.TestCase):
         # Accuracy: 2 / 3 * 100 = 66.67%
         self.assertAlmostEqual(summary["accuracy"], 66.67, places=2)
 
+        # Assert enhanced report contract fields
+        self.assertEqual(summary["answered_questions"], 3)
+        self.assertEqual(summary["total_score"], 3.0)
+        self.assertEqual(summary["passing_score"], 1.8)
+        self.assertFalse(summary["passed"])  # 1.5 < 1.8
+        self.assertIn("breakdown", summary)
+        self.assertIn("SINGLE", summary["breakdown"])
+        self.assertIn("MULTI", summary["breakdown"])
+
         # Verify DB is marked completed
         db_session = self.session_repo.get_session(session_id)
         self.assertEqual(db_session["is_completed"], 1)

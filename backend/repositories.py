@@ -165,6 +165,8 @@ class QuestionRepository(BaseRepository):
             )
             return [self._deserialize_question(row) for row in cursor.fetchall()]
 
+    get_by_bank = list_questions_by_bank
+
     def delete_question(self, q_id: str) -> bool:
         with self._conn() as conn:
             cursor = conn.execute(

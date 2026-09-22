@@ -387,6 +387,11 @@ D. 301 表示临时重定向
         self.assertEqual(report["correct_count"], 1)
         self.assertEqual(report["score"], 1.0)
         self.assertEqual(report["accuracy"], 50.0)
+        self.assertEqual(report["total_score"], 2.0)
+        self.assertEqual(report["passing_score"], 1.2)
+        self.assertFalse(report["passed"])  # 1.0 < 1.2
+        self.assertEqual(report["answered_questions"], 2)
+        self.assertIn("breakdown", report)
 
     def test_08_fsrs_due_reviews_endpoint(self):
         """Test GET /api/mistakes/due reviews endpoint."""

@@ -213,8 +213,29 @@ class SessionService:
 
         total_score = 0.0
         correct_count = 0
+        breakdown: Dict[str, Dict[str, Any]] = {}
+
+        # Pre-fetch questions for bank to compute type breakdown
+        bank_id = session.get("bank_id")
+        bank_questions = self.question_repo.get_by_bank(bank_id) if (self.question_repo and bank_id) else []
+        q_map = {q["id"]: q for q in bank_questions}
+
+        # Initialize breakdown from bank questions if available
+        for q in bank_questions:
+            q_type = q.get("type", "SINGLE")
+            if q_type not in breakdown:
+                breakdown[q_type] = {"total": 0, "correct": 0, "score": 0.0}
+            breakdown[q_type]["total"] += 1
 
         for qid, ans_val in answers.items():
+            q = q_map.get(qid)
+            if not q and self.question_repo:
+                q = self.question_repo.get_question(qid)
+            q_type = q.get("type", "SINGLE") if q else "SINGLE"
+
+            if q_type not in breakdown:
+                breakdown[q_type] = {"total": 1, "correct": 0, "score": 0.0}
+
             if isinstance(ans_val, dict) and "score_ratio" in ans_val:
                 s_ratio = float(ans_val.get("score_ratio", 0.0))
                 is_cor = bool(ans_val.get("is_correct", False))
@@ -224,23 +245,26 @@ class SessionService:
                     if isinstance(ans_val, str)
                     else (ans_val.get("answer") or ans_val.get("user_answer") or "")
                 )
-                if self.question_repo:
-                    q = self.question_repo.get_question(qid)
-                    if q:
-                        is_cor, s_ratio = Scorer.evaluate(
-                            q.get("type", "SINGLE"), user_ans, q.get("answer", "")
-                        )
-                    else:
-                        is_cor, s_ratio = False, 0.0
+                if q:
+                    is_cor, s_ratio = Scorer.evaluate(
+                        q.get("type", "SINGLE"), user_ans, q.get("answer", "")
+                    )
                 else:
                     is_cor, s_ratio = False, 0.0
 
             total_score += s_ratio
+            breakdown[q_type]["score"] = round(breakdown[q_type]["score"] + s_ratio, 2)
             if is_cor:
                 correct_count += 1
+                breakdown[q_type]["correct"] += 1
 
         final_score = round(total_score, 2)
         self.session_repo.complete_session(session_id, score=final_score)
+
+        # Max score: total_questions * 1.0 (or at least final_score)
+        max_possible_score = float(total_questions) if total_questions > 0 else max(final_score, 1.0)
+        passing_score = round(max_possible_score * 0.6, 1)
+        passed = final_score >= passing_score
 
         accuracy = (
             round((correct_count / total_questions * 100.0), 2)
@@ -258,9 +282,14 @@ class SessionService:
             "is_completed": True,
             "total_questions": total_questions,
             "answered_count": len(answers),
+            "answered_questions": len(answers),
             "correct_count": correct_count,
             "score": final_score,
+            "total_score": round(max_possible_score, 1),
+            "passing_score": passing_score,
+            "passed": passed,
             "accuracy": accuracy,
+            "breakdown": breakdown,
             "time_spent": updated.get("time_spent", 0),
             "answers": answers,
             "flags": flags,

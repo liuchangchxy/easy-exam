@@ -253,7 +253,7 @@
           <h2 class="report-title">{{ report.passed ? '恭喜通过本次考核！' : '考核完成，继续努力！' }}</h2>
           <p class="report-subtitle">
             得分: <strong class="report-score-num">{{ report.score }}</strong> / {{ report.total_score }} 分
-            (正确率: {{ (report.accuracy * 100).toFixed(1) }}%)
+            (正确率: {{ (report.accuracy <= 1 ? report.accuracy * 100 : report.accuracy).toFixed(1) }}%)
           </p>
         </div>
 
