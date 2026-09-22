@@ -46,11 +46,30 @@
 ## 三、本地测试运行命令
 
 ```bash
-# Python 项目示例
+# 运行全量测试套件 (82 个用例)
 python -m unittest discover -s tests -p "test_*.py" -v
-# 或
-pytest tests/ -v
 
-# Node.js 项目示例 (按项目实际情况替换)
-# npm test
+# 运行特定模块测试
+python -m unittest tests/test_database.py
+python -m unittest tests/test_fsrs_engine.py
+python -m unittest tests/test_session_sync.py
+python -m unittest tests/test_importer.py
+python -m unittest tests/test_ai_service.py
+python -m unittest tests/test_e2e_flow.py
+python -m unittest tests/test_frontend_integration.py
+python -m unittest tests/test_deployment_config.py
 ```
+
+## 四、全量测试套件清单 (Test Manifest)
+
+| 测试文件 | 覆盖领域与测试要点 |
+| :--- | :--- |
+| `tests/test_database.py` | SQLite WAL 模式、忙超时、级联外键、四大仓储 CRUD、并发读写安全 |
+| `tests/test_fsrs_engine.py` | 纯 Python FSRS-5 算法状态流转、6 级错因分类、连续 2 次答对斩杀出库 |
+| `tests/test_session_sync.py` | 单选/多选/判断评分器（支持多选部分分 0.5）、localStorage 草稿合并与会话生命周期 |
+| `tests/test_importer.py` | 正则状态机纯文本/Markdown 试题切分、容错 CSV 别名映射、标准 JSON 导入器 |
+| `tests/test_ai_service.py` | 题境感知 System Prompt 装配、OpenAI/Ollama 流式与非流式调用、网络离线优雅降级 |
+| `tests/test_e2e_flow.py` | 真实物理 SQLite 单文件全生命周期集成测试（10 个复杂端到端场景） |
+| `tests/test_frontend_integration.py` | FastAPI 根路径静态托管 Vue 3 编译产物 (`frontend/dist`) 与 PWA 元标签检验 |
+| `tests/test_deployment_config.py` | Dockerfile 多阶段构建语法、Compose 编排有效性、生产无冗余臃肿依赖断言 |
+
