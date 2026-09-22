@@ -7,9 +7,11 @@ from backend.services.importer import (
     TextExamParser,
     CsvExamParser,
     JsonExamParser,
+    ExcelExamParser,
     parse_markdown_text,
     parse_csv_content,
     parse_json_content,
+    parse_excel_content,
 )
 
 
@@ -337,6 +339,113 @@ class TestJsonExamParser(unittest.TestCase):
         res = parse_json_content(json.dumps(payload))
         self.assertEqual(len(res), 1)
         self.assertEqual(res[0]["answer"], "A")
+
+
+class TestExcelExamParser(unittest.TestCase):
+    """Test Excel (.xlsx) file ingestion and column mapping."""
+
+    def test_excel_parsing_with_openpyxl(self):
+        """Verify creating an Excel workbook in-memory and parsing it correctly."""
+        import io
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "题库"
+
+        # Headers
+        ws.append([
+            "题干", "题型", "选项A", "选项B", "选项C", "选项D",
+            "正确答案", "解析", "难度", "标签"
+        ])
+
+        # Single choice question
+        ws.append([
+            "Python 中哪个关键字用于定义函数？",
+            "单选",
+            "def",
+            "func",
+            "function",
+            "define",
+            "A",
+            "Python 使用 def 关键字定义函数。",
+            "2",
+            "Python, 基础语法"
+        ])
+
+        # Multi choice question
+        ws.append([
+            "下列哪些是 Python 的可变数据类型？",
+            "多选题",
+            "列表 (list)",
+            "字典 (dict)",
+            "元组 (tuple)",
+            "集合 (set)",
+            "ABD",
+            "列表、字典、集合是可变类型，元组是不可变类型。",
+            "3",
+            "Python, 数据结构"
+        ])
+
+        # Judge question
+        ws.append([
+            "Python 中的字符串是可变对象。",
+            "判断题",
+            "",
+            "",
+            "",
+            "",
+            "错误",
+            "Python 字符串是不可变对象。",
+            "2",
+            "Python, 字符串"
+        ])
+
+        bio = io.BytesIO()
+        wb.save(bio)
+        wb.close()
+        bio.seek(0)
+
+        questions = parse_excel_content(bio.getvalue())
+        self.assertEqual(len(questions), 3)
+
+        # Question 1: Single choice
+        q1 = questions[0]
+        self.assertEqual(q1["stem"], "Python 中哪个关键字用于定义函数？")
+        self.assertEqual(q1["type"], "SINGLE")
+        self.assertEqual(q1["answer"], "A")
+        self.assertEqual(len(q1["options"]), 4)
+        self.assertEqual(q1["options"][0]["content"], "def")
+        self.assertEqual(q1["difficulty"], 2)
+        self.assertIn("基础语法", q1["tags"])
+
+        # Question 2: Multi choice
+        q2 = questions[1]
+        self.assertEqual(q2["stem"], "下列哪些是 Python 的可变数据类型？")
+        self.assertEqual(q2["type"], "MULTI")
+        self.assertEqual(q2["answer"], "ABD")
+        self.assertEqual(len(q2["options"]), 4)
+
+        # Question 3: Judge
+        q3 = questions[2]
+        self.assertEqual(q3["stem"], "Python 中的字符串是可变对象。")
+        self.assertEqual(q3["type"], "JUDGE")
+        self.assertEqual(q3["answer"], "F")
+        self.assertEqual(len(q3["options"]), 0)
+
+    def test_excel_empty_handling(self):
+        """Verify empty workbook returns empty list."""
+        import io
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        bio = io.BytesIO()
+        wb.save(bio)
+        wb.close()
+        bio.seek(0)
+
+        questions = parse_excel_content(bio.getvalue())
+        self.assertEqual(questions, [])
 
 
 if __name__ == "__main__":

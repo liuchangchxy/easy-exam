@@ -177,7 +177,44 @@
               <input v-model="newBankName" type="text" placeholder="例如：软件工程历年真题" class="form-input" />
             </div>
 
+            <!-- Direct File Upload Zone -->
             <div class="form-group">
+              <label>上传题库文件 (Excel / CSV / JSON / TXT):</label>
+              <div
+                class="file-upload-zone"
+                :class="{ 'has-file': !!selectedFile }"
+                @click="triggerFileInput"
+                @dragover.prevent
+                @drop.prevent="handleFileDrop"
+              >
+                <input
+                  ref="fileInputRef"
+                  type="file"
+                  accept=".xlsx,.xls,.csv,.json,.txt,.md"
+                  style="display: none"
+                  @change="handleFileSelect"
+                />
+                <div v-if="!selectedFile" class="upload-placeholder">
+                  <span class="upload-icon">📁</span>
+                  <p class="upload-text">点击或拖拽上传 <strong>.xlsx / .xls / .csv / .json / .txt</strong></p>
+                  <span class="upload-hint">支持普通 Excel 表格，自动识别题干、选项、答案与解析</span>
+                </div>
+                <div v-else class="upload-selected">
+                  <span class="upload-icon">📊</span>
+                  <div class="file-info">
+                    <strong>{{ selectedFile.name }}</strong>
+                    <span>({{ (selectedFile.size / 1024).toFixed(1) }} KB)</span>
+                  </div>
+                  <button type="button" class="btn-remove-file" @click.stop="clearSelectedFile">✕ 移除</button>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="!selectedFile" class="divider-text">
+              <span>或手动粘贴题目文本</span>
+            </div>
+
+            <div v-if="!selectedFile" class="form-group">
               <label>导入格式:</label>
               <div class="format-radios">
                 <label><input v-model="importFormat" type="radio" value="text" /> 纯文本 / Markdown</label>
@@ -186,11 +223,11 @@
               </div>
             </div>
 
-            <div class="form-group">
+            <div v-if="!selectedFile" class="form-group">
               <label>粘贴题目内容:</label>
               <textarea
                 v-model="importContent"
-                rows="8"
+                rows="6"
                 class="form-textarea"
                 placeholder="例如：&#10;1. 计算机网络的拓扑结构不包括下列哪项？&#10;A. 星型拓扑&#10;B. 总线拓扑&#10;C. 宇宙拓扑&#10;D. 环型拓扑&#10;【答案】C&#10;【解析】计算机网络拓扑包含星型、总线、环型、树型、网状等，不包含宇宙拓扑。"
               ></textarea>
@@ -199,7 +236,11 @@
 
           <div class="modal-footer">
             <button class="btn-cancel" @click="showImportModal = false">取消</button>
-            <button class="btn-primary" :disabled="importing || !importContent.trim()" @click="handleImportSubmit">
+            <button
+              class="btn-primary"
+              :disabled="importing || (!selectedFile && !importContent.trim())"
+              @click="handleImportSubmit"
+            >
               {{ importing ? '正在解析导入...' : '开始导入' }}
             </button>
           </div>
@@ -227,6 +268,35 @@ const newBankName = ref('')
 const importFormat = ref('text')
 const importContent = ref('')
 const importing = ref(false)
+const fileInputRef = ref(null)
+const selectedFile = ref(null)
+
+function triggerFileInput() {
+  if (fileInputRef.value) {
+    fileInputRef.value.click()
+  }
+}
+
+function handleFileSelect(e) {
+  const file = e.target.files?.[0]
+  if (file) {
+    selectedFile.value = file
+  }
+}
+
+function handleFileDrop(e) {
+  const file = e.dataTransfer.files?.[0]
+  if (file) {
+    selectedFile.value = file
+  }
+}
+
+function clearSelectedFile() {
+  selectedFile.value = null
+  if (fileInputRef.value) {
+    fileInputRef.value.value = ''
+  }
+}
 
 // Targeted mistake drill modal state
 const showMistakeDrillModal = ref(false)
@@ -385,7 +455,10 @@ async function handleImportSubmit() {
     let targetBankId = importBankId.value
 
     if (targetBankId === '__NEW__') {
-      const name = newBankName.value.trim() || '新建题库 ' + new Date().toLocaleDateString()
+      const defaultName = selectedFile.value
+        ? selectedFile.value.name.replace(/\.[^/.]+$/, '')
+        : '新建题库 ' + new Date().toLocaleDateString()
+      const name = newBankName.value.trim() || defaultName
       const bRes = await fetch('/api/banks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -396,20 +469,31 @@ async function handleImportSubmit() {
       targetBankId = newBank.id
     }
 
-    const impRes = await fetch(`/api/banks/${targetBankId}/import`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        format: importFormat.value,
-        content: importContent.value
+    let impRes
+    if (selectedFile.value) {
+      const formData = new FormData()
+      formData.append('file', selectedFile.value)
+      impRes = await fetch(`/api/banks/${targetBankId}/upload`, {
+        method: 'POST',
+        body: formData
       })
-    })
+    } else {
+      impRes = await fetch(`/api/banks/${targetBankId}/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          format: importFormat.value,
+          content: importContent.value
+        })
+      })
+    }
 
     if (impRes.ok) {
       const data = await impRes.json()
       alert(`导入成功！共计录入 ${data.imported_count} 道题目。`)
       showImportModal.value = false
       importContent.value = ''
+      clearSelectedFile()
       await fetchBanks()
     } else {
       const err = await impRes.json()
@@ -822,5 +906,80 @@ async function handleImportSubmit() {
 }
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+.file-upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  padding: 18px 12px;
+  text-align: center;
+  background-color: #f8fafc;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.file-upload-zone:hover,
+.file-upload-zone.has-file {
+  border-color: var(--primary);
+  background-color: #f0fdf4;
+}
+.upload-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.upload-icon {
+  font-size: 1.75rem;
+}
+.upload-text {
+  font-size: 0.875rem;
+  color: var(--text-main);
+  margin: 0;
+}
+.upload-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.upload-selected {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.file-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  font-size: 0.875rem;
+}
+.file-info span {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.btn-remove-file {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  color: #ef4444;
+  background: #fee2e2;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+}
+.divider-text {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 4px 0;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+.divider-text::before,
+.divider-text::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px dashed var(--border);
+}
+.divider-text span {
+  padding: 0 10px;
 }
 </style>

@@ -257,9 +257,9 @@ CREATE TABLE practice_records (
     3. 会话标题与答题卡提示当前专项攻坚主题。
   - **验收标准**：用户可选择“只刷掉入陷阱的题”或“只刷概念盲区题”，练习中仅出现该类别的错题。
 
-- [ ] **Task 4: 【P1-3】Excel (.xlsx) 标准表格直接上传与解析支持**
+- [x] **Task 4: 【P1-3】Excel (.xlsx) 标准表格直接上传与解析支持** (已完成 - 2026-09-23)
   - **业务规则**：
-    1. 后端在 `requirements.txt` 中引入轻量 `openpyxl`，在 `importer.py` 中新增 `ExcelExamParser`，复用 CSV 的智能中文列映射逻辑（题干、答案、解析、A~H 选项列）；
+    1. 后端在 `requirements.txt` 中引入轻量 `openpyxl` 与 `python-multipart`，在 `importer.py` 中新增 `ExcelExamParser`，复用 CSV 的智能中文列映射逻辑（题干、答案、解析、A~H 选项列）；
     2. 前端导入弹窗支持 `.xlsx` 文件拖拽或选择上传，后端自动流式读取入库。
   - **验收标准**：用户直接上传普通 `.xlsx` 格式的题库表格，系统正确解析出题干、选项、答案并成功入库。
 

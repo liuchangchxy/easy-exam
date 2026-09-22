@@ -473,6 +473,47 @@ D. 301 表示临时重定向
             self.assertIn("的四大", body)
             self.assertIn("必要条件", body)
 
+    def test_11_excel_and_file_upload_import(self):
+        """Test Excel (.xlsx) file upload and base64 import endpoints."""
+        import base64
+        import io
+        import openpyxl
+
+        # 1. Create a new bank
+        res = self.client.post("/api/banks", json={"name": "Excel导入测试题库"})
+        self.assertEqual(res.status_code, 200)
+        bank_id = res.json()["id"]
+
+        # 2. Build Excel in-memory
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["题干", "题型", "选项A", "选项B", "正确答案", "解析"])
+        ws.append(["1+1等于几？", "单选", "2", "3", "A", "基础算术"])
+        bio = io.BytesIO()
+        wb.save(bio)
+        wb.close()
+        excel_bytes = bio.getvalue()
+
+        # 3. Test direct file upload endpoint
+        upload_res = self.client.post(
+            f"/api/banks/{bank_id}/upload",
+            files={"file": ("test_math.xlsx", excel_bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        )
+        self.assertEqual(upload_res.status_code, 200)
+        upload_data = upload_res.json()
+        self.assertEqual(upload_data["imported_count"], 1)
+        self.assertEqual(upload_data["questions"][0]["stem"], "1+1等于几？")
+
+        # 4. Test base64 import via /api/banks/{bank_id}/import
+        b64_str = base64.b64encode(excel_bytes).decode("utf-8")
+        import_res = self.client.post(
+            f"/api/banks/{bank_id}/import",
+            json={"format": "excel", "content": b64_str},
+        )
+        self.assertEqual(import_res.status_code, 200)
+        import_data = import_res.json()
+        self.assertEqual(import_data["imported_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

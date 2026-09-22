@@ -8,12 +8,13 @@ Assembles all domain services and repositories:
 - Contextual AI tutor SSE streaming with offline fallback
 """
 from contextlib import asynccontextmanager
+import base64
 import json
 import os
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Union
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -35,6 +36,7 @@ from backend.services import (
     SessionService,
     build_tutor_prompt,
     parse_csv_content,
+    parse_excel_content,
     parse_json_content,
     parse_markdown_text,
 )
@@ -222,7 +224,7 @@ def create_app(
 
     @app.post("/api/banks/{bank_id}/import")
     def import_questions(bank_id: str, payload: ImportRequest) -> Dict[str, Any]:
-        """Import questions into a bank from text, markdown, CSV, or JSON."""
+        """Import questions into a bank from text, markdown, CSV, JSON, or Excel (base64)."""
         bank = bank_repo.get_bank(bank_id)
         if not bank:
             raise HTTPException(status_code=404, detail=f"Bank '{bank_id}' not found.")
@@ -237,11 +239,65 @@ def create_app(
                 parsed = parse_json_content(payload.content)
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=str(e))
+        elif fmt in ("excel", "xlsx", "xls"):
+            b64_str = payload.content
+            if "," in b64_str:
+                b64_str = b64_str.split(",", 1)[1]
+            try:
+                raw_bytes = base64.b64decode(b64_str)
+                parsed = parse_excel_content(raw_bytes)
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Failed to parse Excel content: {str(e)}")
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unsupported format '{payload.format}'. Supported: text, csv, json.",
+                detail=f"Unsupported format '{payload.format}'. Supported: text, csv, json, excel.",
             )
+
+        created_questions: List[Dict[str, Any]] = []
+        for item in parsed:
+            q_id = question_repo.create_question(
+                bank_id=bank_id,
+                q_type=item.get("type", "SINGLE"),
+                stem=item.get("stem", ""),
+                options=item.get("options", []),
+                answer=item.get("answer", ""),
+                explanation=item.get("explanation", ""),
+                difficulty=item.get("difficulty", 3),
+                tags=item.get("tags", []),
+            )
+            q = question_repo.get_question(q_id)
+            if q:
+                created_questions.append(q)
+
+        return {
+            "imported_count": len(created_questions),
+            "questions": created_questions,
+        }
+
+    @app.post("/api/banks/{bank_id}/upload")
+    async def upload_questions_file(bank_id: str, file: UploadFile = File(...)) -> Dict[str, Any]:
+        """Upload and import question bank file (.xlsx, .xls, .csv, .json, .txt, .md)."""
+        bank = bank_repo.get_bank(bank_id)
+        if not bank:
+            raise HTTPException(status_code=404, detail=f"Bank '{bank_id}' not found.")
+
+        file_bytes = await file.read()
+        filename = (file.filename or "").lower()
+
+        try:
+            if filename.endswith(".xlsx") or filename.endswith(".xls"):
+                parsed = parse_excel_content(file_bytes)
+            elif filename.endswith(".csv"):
+                parsed = parse_csv_content(file_bytes)
+            elif filename.endswith(".json"):
+                text_content = file_bytes.decode("utf-8", errors="replace")
+                parsed = parse_json_content(text_content)
+            else:
+                text_content = file_bytes.decode("utf-8", errors="replace")
+                parsed = parse_markdown_text(text_content)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"File parse error: {str(e)}")
 
         created_questions: List[Dict[str, Any]] = []
         for item in parsed:

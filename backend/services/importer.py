@@ -3,9 +3,11 @@
 Implements robust parsers for plain text/Markdown (regex state machine),
 CSV (flexible column aliases and encoding tolerance), and JSON.
 """
+import base64
 import csv
 import io
 import json
+import os
 import re
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -561,6 +563,142 @@ class JsonExamParser:
         return questions
 
 
+class ExcelExamParser:
+    """Excel (.xlsx/.xls) parser reusing Chinese column mapping from CsvExamParser."""
+
+    @classmethod
+    def parse(cls, excel_input: Union[bytes, io.BytesIO, str]) -> List[Dict[str, Any]]:
+        """Parse Excel (.xlsx) file bytes, base64, or file path into question dicts."""
+        if not excel_input:
+            return []
+
+        try:
+            import openpyxl
+        except ImportError:
+            raise RuntimeError("openpyxl is not installed. Please install openpyxl to parse Excel files.")
+
+        if isinstance(excel_input, str):
+            if os.path.exists(excel_input):
+                with open(excel_input, "rb") as f:
+                    file_bytes = f.read()
+            else:
+                # Handle base64 string
+                b64_data = excel_input
+                if "," in b64_data:
+                    b64_data = b64_data.split(",", 1)[1]
+                try:
+                    file_bytes = base64.b64decode(b64_data)
+                except Exception:
+                    file_bytes = excel_input.encode("utf-8")
+        elif isinstance(excel_input, io.BytesIO):
+            file_bytes = excel_input.getvalue()
+        else:
+            file_bytes = excel_input
+
+        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True, read_only=True)
+        sheet = wb.active
+        if sheet is None:
+            return []
+
+        rows_iter = sheet.iter_rows(values_only=True)
+        try:
+            header_row = next(rows_iter)
+        except StopIteration:
+            return []
+
+        if not header_row:
+            return []
+
+        headers = [str(cell).strip() if cell is not None else "" for cell in header_row]
+        header_map = {col.lower(): col for col in headers if col}
+
+        stem_col = CsvExamParser._find_column(header_map, CsvExamParser.STEM_ALIASES)
+        type_col = CsvExamParser._find_column(header_map, CsvExamParser.TYPE_ALIASES)
+        answer_col = CsvExamParser._find_column(header_map, CsvExamParser.ANSWER_ALIASES)
+        exp_col = CsvExamParser._find_column(header_map, CsvExamParser.EXPLANATION_ALIASES)
+        diff_col = CsvExamParser._find_column(header_map, CsvExamParser.DIFFICULTY_ALIASES)
+        tags_col = CsvExamParser._find_column(header_map, CsvExamParser.TAGS_ALIASES)
+
+        questions: List[Dict[str, Any]] = []
+
+        for row in rows_iter:
+            if not row or not any(row):
+                continue
+            row_dict = {}
+            for col_idx, h in enumerate(headers):
+                if h and col_idx < len(row):
+                    val = row[col_idx]
+                    row_dict[h] = "" if val is None else str(val).strip()
+
+            stem = (row_dict.get(stem_col) or "").strip() if stem_col else ""
+            if not stem:
+                continue
+
+            raw_type = (row_dict.get(type_col) or "").strip() if type_col else ""
+            raw_answer = (row_dict.get(answer_col) or "").strip() if answer_col else ""
+            explanation = (row_dict.get(exp_col) or "").strip() if exp_col else ""
+
+            difficulty = 3
+            if diff_col and row_dict.get(diff_col):
+                try:
+                    difficulty = int(float(row_dict[diff_col]))
+                except (ValueError, TypeError):
+                    difficulty = 3
+
+            tags = []
+            if tags_col and row_dict.get(tags_col):
+                val = row_dict[tags_col]
+                if val:
+                    tags = [t.strip() for t in re.split(r'[,，、;；\s]+', val) if t.strip()]
+
+            # Extract options: A, B, C, D... or separate option columns
+            options: List[Dict[str, str]] = []
+            for letter in ["A", "B", "C", "D", "E", "F", "G", "H"]:
+                col_found = None
+                for col_name in row_dict.keys():
+                    c_clean = col_name.strip()
+                    if c_clean.upper() in (letter, f"选项{letter}", f"OPTION_{letter}", f"OPT_{letter}"):
+                        col_found = col_name
+                        break
+                if col_found and row_dict.get(col_found):
+                    opt_content = row_dict[col_found].strip()
+                    opt_content = re.sub(r'^[A-Ha-h][.．、:\s]\s*', '', opt_content)
+                    options.append({"key": letter, "content": opt_content})
+
+            if not options:
+                opts_col = None
+                for col_name in row_dict.keys():
+                    if col_name.strip() in ("options", "选项", "选项内容"):
+                        opts_col = col_name
+                        break
+                if opts_col and row_dict.get(opts_col):
+                    opts_text = row_dict[opts_col]
+                    for opt_chunk in re.split(r'[\r\n|｜]+', opts_text):
+                        opt_chunk = opt_chunk.strip()
+                        if not opt_chunk:
+                            continue
+                        m = OPT_START_RE.match(opt_chunk)
+                        if m:
+                            k = (m.group(1) or m.group(2) or m.group(3)).upper()
+                            c = m.group(4).strip()
+                            options.append({"key": k, "content": c})
+
+            q_type, norm_answer = infer_type_and_answer(raw_type, raw_answer, options, stem)
+
+            questions.append({
+                "stem": stem,
+                "type": q_type,
+                "options": options,
+                "answer": norm_answer,
+                "explanation": explanation,
+                "difficulty": difficulty,
+                "tags": tags,
+            })
+
+        wb.close()
+        return questions
+
+
 # Functional aliases for convenience
 def parse_markdown_text(text: str) -> List[Dict[str, Any]]:
     """Parse Markdown/text exam bank content."""
@@ -575,3 +713,8 @@ def parse_csv_content(csv_input: Union[str, bytes]) -> List[Dict[str, Any]]:
 def parse_json_content(json_text: str) -> List[Dict[str, Any]]:
     """Parse JSON exam bank content."""
     return JsonExamParser.parse(json_text)
+
+
+def parse_excel_content(excel_input: Union[bytes, io.BytesIO, str]) -> List[Dict[str, Any]]:
+    """Parse Excel (.xlsx/.xls) exam bank content."""
+    return ExcelExamParser.parse(excel_input)

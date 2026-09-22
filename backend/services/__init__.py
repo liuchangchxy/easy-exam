@@ -9,9 +9,11 @@ from backend.services.importer import (
     TextExamParser,
     CsvExamParser,
     JsonExamParser,
+    ExcelExamParser,
     parse_markdown_text,
     parse_csv_content,
     parse_json_content,
+    parse_excel_content,
 )
 from backend.services.mistake_service import MistakeService, TAXONOMY_CAUSES
 from backend.services.scoring import Scorer
@@ -31,8 +33,10 @@ __all__ = [
     "TextExamParser",
     "CsvExamParser",
     "JsonExamParser",
+    "ExcelExamParser",
     "parse_markdown_text",
     "parse_csv_content",
     "parse_json_content",
+    "parse_excel_content",
 ]
 
