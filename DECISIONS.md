@@ -45,3 +45,125 @@
 - **对应 SPEC 章节**：SPEC.md 第 1.1 节。
 - **影响范围**：`frontend/index.html`, `backend/main.py`, `backend/database.py`, `docker-compose.yml`, `Dockerfile`, `scripts/deploy_fnos.sh`, `tests/`。
 
+### [2026-09-23] 需求主线重评估：从竞品拼接改为题目学习档案
+- **触发背景**：源码调查发现原文档把多个项目能力并列拼接，AI 助教回答未持久化，多选部分得分与“已掌握”语义混用，且“考试宝”借鉴边界不清。
+- **核心决策**：以题目版本为中心组织作答、错因、解释版本、联网证据、FSRS 和斩杀题库；考试宝只借鉴可观察的产品逻辑，不复制页面或闭源实现；AI/联网/用户解释全部版本化保存，标准答案独立维护。
+- **对应 SPEC 章节**：SPEC.md 第 1~8 节。
+- **影响范围**：需求文档、后续数据模型、AI 助教、判分器、错题/FSRS、模考、同步和权限模块；本次仅更新文档，未修改业务源码。
+
+### [2026-09-23] 大题库与 AI 边界确认
+- **触发背景**：用户进一步明确目标是考公等大题库提分系统，而不是独立 AI 聊天或必须依赖复杂配置的 RAG 产品。
+- **核心决策**：采用“考试体系 + 可复用题库”、章节树 + 多知识点标签、动态提分推荐和可调整学习计划；AI 作为横向可选能力嵌入具体题目流程；无 AI、无考试蓝图时核心刷题仍可用；不可解析文档直接拒绝上传。
+- **对应 SPEC 章节**：SPEC.md 第 2、5、8 节。
+- **影响范围**：题库组织、学习诊断、推荐计划、AI 检索、导入校验和降级行为；本次仅更新文档，未修改业务源码。
+
+### [2026-09-23] 判分与掌握状态拆分
+- **触发背景**：旧实现把多选少选的部分得分标记为 `is_correct=true`，会错误触发错题连续答对清除。
+- **核心决策**：新增 `mastery_status`（`CORRECT`、`PARTIAL`、`INCORRECT`、`UNANSWERED`）；部分得分仍计入分数，但只有 `CORRECT` 才进入掌握/错题清除链路；保留 `Scorer.evaluate` 二元接口兼容既有调用方。
+- **影响范围**：`backend/services/scoring.py`、`backend/services/session_service.py`、`backend/main.py` 及后续报告统计；旧测试中把部分得分视为正确的断言需要按新需求复核。
+
+### [2026-09-23] 模块化单体架构开始切换
+- **触发背景**：旧实现把路由、业务服务、SQL 和前端状态集中在少数文件，无法支持用户隔离、题目版本和解释版本。
+- **核心决策**：建立 `backend/app` 模块化单体，采用版本化 SQLite migration、自建 Repository、`/api/v1` 路由和用户级学习记录；旧入口保留为回归基线，不再承载新功能。
+- **影响范围**：认证、题库/题目版本、作答尝试、错题、学习摘要、导入、AI 解释版本和新前端视图；部署入口切换到 `backend.app.main:app`。
+
+### [2026-09-23] 旧原型实现收拢到 legacy 兼容区
+- **触发背景**：新生产入口已经切换，但旧 `main.py`、Repository、数据库和服务实现仍散落在 `backend/` 根目录，容易被误当成主线继续扩展。
+- **核心决策**：将旧实现移动到 `backend/legacy/`；根目录仅保留导出兼容模块，供旧回归测试和迁移工具使用；新功能只能进入 `backend/app`。
+- **影响范围**：生产 Docker 不依赖旧入口；旧测试继续可运行；后续可以逐步删除兼容导出而不影响新 API。
+
+### [2026-09-23] 分离错题事实与学习掌握状态
+- **触发背景**：仅使用 `learning_records` 同时承载错题列表和掌握统计，会让首次答对、部分得分和清除状态混在一起，无法审计真实错题事实。
+- **核心决策**：新增版本化迁移 `mistake_records`；作答事务同时更新错题事实、掌握状态和 FSRS。首次答对不进入错题列表，答错后可按连续完全正确次数清除。
+- **影响范围**：刷题写入、错题列表、FSRS 到期列表、旧库迁移与迁移校验。
+
+### [2026-09-23] 导入任务可审计化
+- **触发背景**：导入表已存在但导入流程没有记录预检失败或成功结果，无法解释用户上传为何被拒绝或是否完整落盘。
+- **核心决策**：每次文本、CSV、JSON、PDF 导入创建 `import_jobs`，以 `PENDING` → `IMPORTED` / `PRECHECK_FAILED` / `FAILED` 记录生命周期；解析失败不创建题目。
+- **影响范围**：导入应用服务、PDF 可识别性预检、迁移后审计和后续前端导入历史。
+
+### [2026-09-23] 题目跨题库复制使用新身份
+- **触发背景**：同一题目内容进入不同题库时，如果复用题目主键，会把两个题库的作答、错题和 FSRS 状态错误地绑定在一起。
+- **核心决策**：复制接口复制当前题目版本内容，但生成新的 `questions` 与 `question_versions` 身份；目标题库的学习状态从空白开始。
+- **影响范围**：题库题目管理、权限校验和用户学习数据隔离。
+
+### [2026-09-24] 模考结果延迟到交卷阶段计算
+- **触发背景**：普通刷题可以即时反馈，但模考提交前泄露正确性会破坏考试体验；旧报告依赖会话 JSON 汇总，不能可靠统计未作答和题型/知识点。
+- **核心决策**：模考提交只保存作答并返回 `feedback_available=false`；交卷从 `answer_attempts` 重算，绑定启动时蓝图版本，并在最终报告应用负分规则。
+- **影响范围**：模考路由、会话字段、报告统计和蓝图迁移。
+
+### [2026-09-24] 推荐与趋势以可解释离线规则为主
+- **触发背景**：大题库提分不能依赖 AI 黑盒；原推荐只返回已有学习记录，漏掉新题，也没有用户调节入口。
+- **核心决策**：推荐覆盖新题、薄弱题和 FSRS 到期题，返回原因并支持开关、数量和题型过滤；趋势从真实作答计算覆盖率、近期窗口和长期基线。
+- **影响范围**：学习 Repository、领域排序、学习 API、前端学习视图；AI 离线不影响这些能力。
+
+### [2026-09-24] 联网核查和导入预检显式记录不确定性
+- **触发背景**：联网结果和重复导入如果没有版本/预检状态，用户无法区分“没有证据”和“确有依据”，也可能意外重复写题。
+- **核心决策**：WEB 核查保存独立解释与证据列表，离线返回 `UNAVAILABLE`；导入先返回重复项，必须选择策略后落盘，同时支持 XLSX。
+- **影响范围**：AI 解释 Repository、搜索适配器、导入应用服务、导入审计和前端 API。
+
+### [2026-09-24] 主观题作答与客观正确率语义隔离
+- **触发背景**：主观题由于缺乏客观标准答案，直接统计到会话客观正确率分母中会导致客观题正确率失真被稀释。
+- **核心决策**：会话客观正确率计算严格按照客观题分母统计；主观题作答完整留痕，但客观正确率仅计算客观题；交卷前模考报告严禁泄露任何答案与解析。
+- **影响范围**：`backend/app/application/practice_service.py`、`frontend/src/domain/exam.js`、`tests/test_scoring_semantics.py`。
+
+### [2026-09-24] 闭环专项复习、模考幂等防护与真实 Chrome 物理 E2E 验收
+- **触发背景**：审查发现 FSRS 到期复习与错题专项刷题未限定目标集合、斩杀题复习漏透传 `bank_id`、错因前端修改未持久化、模考提交缺乏幂等与交卷防护、旧库迁移使用弱默认密码且无首次强制改密、缺乏真实浏览器 E2E 验证。
+- **核心决策**：
+  1. 专项刷题（`MISTAKE`、`FSRS`、`ELIMINATION`）服务端强制题目集合限定，支持指定 `question_ids` 过滤，题目集为空时显式抛错；
+  2. 练习与 FSRS 评级接口打通（`fsrs_rating` 校验评级一致性，错误强制 Again）；前端错题卡片提供错因下拉持久化接口；
+  3. 斩杀题库列表透传真实 `bank_id`，卡片与工具栏提供“查漏补缺练习”启动入口，错答即时移出斩杀；
+  4. 模考提交与交卷增加幂等防护，已交卷会话严禁再次提交 attempt；
+  5. 旧库迁移生成高强度随机临时密码并标记 `must_change_password=1`，提供首次强制改密流；未转换孤儿题记入审计并在验证脚本中进行全量多表校验；
+  6. 搭建 Playwright + Google Chrome 物理端到端自动化测试套件（覆盖注册登录、题库创建、答题与判分、斩杀与复原、错因持久化、专项刷题、FSRS 评级、模考与诊断报告等全部 9 大核心主链路），杜绝纯 Mock 假绿。
+- **对应 SPEC 章节**：SPEC.md §3.2, §4.1, §4.2, §4.3, §6。
+- **影响范围**：`backend/app/application/practice_service.py`、`backend/app/api/routes/`、`frontend/src/views/`、`scripts/migrate_legacy_db.py`、`frontend/tests/browser_e2e.test.js`。
+
+### [2026-09-24] 闭环 FSRS 评级更新、专项防绕过、强改密阻断与 E2E 端口实例防串连
+- **触发背景**：第二轮审查指出：相同答案再次提交携带新 rating 时底库未更新 `fsrs_rating` 与卡片调度；`start_session` 只要收到 `question_ids` 即可绕过专项队列；`must_change_password` 未在 API 依赖层面阻断业务请求且密码长度与路由声明不一致（6 位 vs 8 位）；批量入口漏掉薄弱到期题且跨题库传参静默丢失；E2E 硬编码端口可能误连残存进程。
+- **核心决策**：
+  1. `practice_repository.py` 的 `save_attempt` 支持在相同答案再次提交带有新 rating 时更新 `fsrs_rating`、错因，并重新调用 FSRS 算法更新 `fsrs_cards`；
+  2. `practice_service.py` 的 `start_session` 先根据 `mode` 锁定专项候选题目池，再与传入的 `question_ids` 求交集，若结果为空抛出 400，从根源杜绝越权绕过；
+  3. `dependencies.py` 的 `current_user` 针对 `must_change_password=1` 的用户强制拦截所有非免检路由并返回 403 `MUST_CHANGE_PASSWORD`；Pydantic 与服务层统一密码策略为至少 8 位；前端 `App.vue` 增加全屏强制改密拦截组件；
+  4. `MistakesView.vue` 并发加载 `listDueMistakes`（完整覆盖无错题记录但标记薄弱的到期题），增加题库筛选下拉框，批量复习严格按目标题库打包题目，杜绝跨题库静默丢失；
+  5. E2E 真实浏览器测试引入系统闲置端口动态探测与 `INSTANCE_TOKEN` 双向握手校验，杜绝测试串连外部残存服务；E2E 场景补充物理核对非默认 FSRS 评级 4 真实落盘、薄弱标记到期复习与首次登录强制改密阻断全链路。
+- **对应 SPEC 章节**：SPEC.md §4.1, §4.2, §4.3, §4.4。
+- **影响范围**：`backend/app/application/practice_service.py`、`backend/app/infrastructure/db/repositories/practice_repository.py`、`backend/app/dependencies.py`、`backend/app/api/routes/auth.py`、`backend/app/api/routes/system.py`、`frontend/src/App.vue`、`frontend/src/views/MistakesView.vue`、`frontend/tests/browser_e2e.test.js`、`frontend/tests/exam.test.js`。
+
+### [2026-09-24] 历史作答无快照安全策略：防虚假基准伪造与已调度卡片防二次叠加
+- **触发背景**：审查进一步指出，存量升级与旧库迁移若直接将“当前 FSRS 卡片”回填为历史作答的 `card_snapshot_json`，会伪造作答前快照；若旧作答此前已触发过调度，用户后续修改评分时会以当前卡片为基线再次调度，导致二次叠加调度。
+- **核心决策**：
+  1. 数据库升级脚本（`connection.py`）与旧库迁移脚本（`migrate_legacy_db.py`）严禁把当前卡片作为历史快照回填，历史存量作答真实保持 `card_snapshot_json = NULL`；
+  2. `practice_repository.py` 严格区分两类存量无快照记录：
+     - 若作答记录在历史上已完成过 FSRS 调度（`existing["fsrs_rating"]` 已存在或卡片 `last_review_at` 与作答时间吻合），用户修改评分时仅更新作答记录本身的 `fsrs_rating`，严禁在卡片上二次叠加调度，亦严禁重置为新卡，彻底冻结并保护卡片已有复习状态；
+     - 若作答记录在历史上从未调度过（`fsrs_rating` 为空且卡片未被其更新），用户首次评级时方以当前卡片为基准初次调度，并即刻回填基准快照；
+  3. 完善双向专项测试：既覆盖“未调度旧作答首次评级正常流转”，又严格覆盖“已调度旧作答修改评级卡片冻结防二次叠加”。
+- **对应 SPEC 章节**：SPEC.md §4.2。
+- **影响范围**：`backend/app/infrastructure/db/connection.py`、`backend/app/infrastructure/db/repositories/practice_repository.py`、`scripts/migrate_legacy_db.py`、`tests/test_v1_architecture.py`、`tests/test_legacy_migration.py`。
+
+### [2026-09-24] AntiGravity 文档分工、需求追踪与外部源码复用审计
+- **触发背景**：代码实现交由 AntiGravity 后，单独一份 SPEC 或一句提示词不足以保证它区分已确认需求、当前代码事实、外部源码复用与待实施工作；README 还把候选参考能力写成了“已经吸收”，旧计划引用重构前路径。
+- **核心决策**：`SPEC.md` 只记录已确认产品要求；实现状态放入需求追踪矩阵；第三方源码与许可选择集中记录在开源审计；一次只按用户点名的分阶段计划执行；长期代理规则放 `AGENTS.md`，协作过程/报告模板放专门 workflow 与 AntiGravity skill。
+- **源码复用原则**：适配且许可兼容时优先选择性复用成熟代码；按仓库、commit、源文件、目标文件和 NOTICE 义务留痕；行为参考不可表述为代码移植；AGPL/GPL、无许可及含混许可代码未获决定前不直接复制进本 MIT 项目。
+- **影响范围**：`AGENTS.md`、`SPEC.md`、`README.md`、`TESTING.md`、`docs/REQUIREMENTS_TRACEABILITY.md`、`docs/research/OSS_REUSE_AUDIT.md`、`docs/ANTIGRAVITY_WORKFLOW.md` 与各批次 implementation plan。
+
+### [2026-09-24] 题库批量导入单事务原子性与表格列映射预览（复用 Exameow 算法与 EXAM-MASTER 事务模式）
+- **触发背景**：批量导入此前为每道题单独提交事务，中途失败会导致部分题目残留；表格导入仅支持极少别名，无法自适应复杂表头或提供用户手动列映射预览修正。
+- **核心决策**：
+  1. 在 `question_repository.py` 引入 `batch_create_or_update_questions` 单一数据库事务，与 `import_service.py` 统一批处理；中途任何写入失败整体回滚，0 题目残留，`import_jobs` 准确审计为 `FAILED`；
+  2. 移植 Exameow（Apache-2.0）的表头别名识别、组合选项分隔符提取、前缀剥离与难度归一化算法至 `spreadsheet_importer.py`，并在代码头保留 Apache-2.0 归属；统一在 Python 后端解析以防多端重复解析器；
+  3. 提供 `POST /api/v1/imports/banks/{bank_id}/preview-file` 接口与前端 `ImportView.vue` 可视化列映射面板，允许用户先预览前 5 行采样数据、检查缺失字段并手动修正各列绑定后再确认导入；
+  4. 真实浏览器 E2E 全流程覆盖“列映射预览 -> 用户确认导入 -> 重复题预检拦截”。
+- **对应 SPEC 章节**：SPEC.md §5, §8。
+- **影响范围**：`backend/app/infrastructure/importers/spreadsheet_importer.py`、`backend/app/infrastructure/db/repositories/question_repository.py`、`backend/app/application/import_service.py`、`backend/app/api/routes/imports.py`、`frontend/src/views/ImportView.vue`、`frontend/src/api/imports.js`、`frontend/tests/browser_e2e.test.js`、`tests/test_v1_import.py`、`tests/test_v1_pdf_import.py`。
+
+### [2026-09-24] 文档体系按通用底座与领域扩展重新分层
+- **触发背景**：本地已经积累了大量 EasyExam 实战规则，但通用 Vibe Coding Starter 的数据安全、可靠性、Multi-Agent、模板和 SDD Skill 没有形成统一入口；文档之间存在规则重复，容易把实现状态、产品需求和测试证据混在一起。
+- **核心决策**：采用“入口宪法（AGENTS）—产品真理源（SPEC）—执行证据（追踪矩阵/TESTING）—决策与研究（DECISIONS/research）—按需扩展（optional/templates）”五层结构。通用规则进入可复制底座，EasyExam 的迁移、FSRS、幂等、导入和领域红线保留在本地扩展，不把领域细节泛化进 Starter。
+- **影响范围**：`AGENTS.md`、`README.md`、`TESTING.md`、`SPEC.md` 的维护约定、`docs/REQUIREMENTS_TRACEABILITY.md`、`docs/ANTIGRAVITY_WORKFLOW.md`、`docs/optional/`、`docs/templates/`、`.agents/skills/sdd-implementation/`。
+
+### [2026-09-24] 学习计划中未分级题目的难度筛选
+- **触发背景**：题库中可能存在未显式标注难度的题目，用户确认了在学习计划按难度筛选时的处理规则。
+- **核心决策**：难度筛选只使用题目显式标注的 1–5 级；未分级题在未启用具体难度筛选时仍可参与推荐，启用具体难度筛选时排除。不得按默认中等处理，也不得根据单用户或跨用户作答表现推断题目难度。
+- **对应 SPEC 章节**：`SPEC.md` §8。
+- **影响范围**：学习推荐/筛选逻辑、相关测试和用户可见筛选状态。

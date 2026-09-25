@@ -39,8 +39,8 @@ class TestDeploymentConfig(unittest.TestCase):
 
         # Healthcheck & CMD
         self.assertIn("HEALTHCHECK", content)
-        self.assertIn("/api/health", content)
-        self.assertIn("backend.main:app", content)
+        self.assertIn("/api/v1/health", content)
+        self.assertIn("backend.app.main:app", content)
 
     def test_docker_compose_fnos_compatibility(self):
         """docker-compose.yml must be valid YAML with fnOS volume mapping and Ollama endpoint."""
@@ -129,17 +129,13 @@ class TestDeploymentConfig(unittest.TestCase):
                 f"db_path {settings.db_path} does not use custom DATA_DIR {custom_data}",
             )
 
-    def test_practice_view_polish_fixes_present(self):
-        """PracticeView.vue must implement question_ids ordering and multi-choice draft sorting."""
-        view_path = BASE_DIR / "frontend" / "src" / "views" / "PracticeView.vue"
-        self.assertTrue(view_path.is_file(), f"PracticeView.vue missing at {view_path}")
-
+    def test_practice_view_v1_is_active(self):
+        """The active practice view uses the modular v1 API client."""
+        view_path = BASE_DIR / "frontend" / "src" / "views" / "PracticeViewV1.vue"
+        self.assertTrue(view_path.is_file(), f"PracticeViewV1.vue missing at {view_path}")
         view_content = view_path.read_text(encoding="utf-8")
-        self.assertIn("question_ids", view_content, "question_ids sorting/filtering logic missing in PracticeView.vue")
-        self.assertTrue(
-            "Array.isArray" in view_content and "sort" in view_content,
-            "Multi-choice array sorting logic missing in PracticeView.vue",
-        )
+        self.assertIn("submitAttempt", view_content)
+        self.assertIn("getSessionQuestions", view_content)
 
 
 if __name__ == "__main__":

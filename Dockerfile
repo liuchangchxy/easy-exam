@@ -26,6 +26,8 @@ RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r re
 
 # Copy backend source code and compiled frontend assets
 COPY backend/ /app/backend/
+COPY scripts/ /app/scripts/
+COPY licenses/ /app/licenses/
 COPY --from=frontend-builder /app/frontend/dist/ /app/frontend/dist/
 
 # Runtime environment settings
@@ -40,9 +42,9 @@ VOLUME /app/data
 # HTTP service port
 EXPOSE 3000
 
-# Container healthcheck probe against FastAPI /api/health endpoint
+# Container healthcheck probe against the versioned application endpoint
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request, sys, os; sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\", \"3000\")}/api/health', timeout=3).getcode() == 200 else 1)"
+    CMD python -c "import urllib.request, sys, os; sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\", \"3000\")}/api/v1/health', timeout=3).getcode() == 200 else 1)"
 
 # Start application server with uvicorn
-CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "3000"]
+CMD ["python", "-m", "uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "3000"]

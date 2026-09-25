@@ -1,75 +1,92 @@
-# 工程规范与防退化（Regression）防线守则 (TESTING.md)
+# 测试与交付证据规范
 
-本项目为保证 Vibe Coding 过程中的系统稳定与需求准确对齐，杜绝“代码改来改去、修复了 A 破坏了 B”的现象，全体开发与 AI 协作必须严格遵守以下工程红线：
+本文规定如何证明代码行为，不能替代 [SPEC.md](SPEC.md) 的产品规则，也不能把未运行的测试写成已通过。
 
----
+## 1. 四条硬门禁
 
-## 一、四大铁律（Engineering Gates）
+1. **缺陷即测试**：修复缺陷前先增加或定位能复现它的回归测试。
+2. **契约优先**：输入、权限、状态转换和失败原因必须明确；不能用静默容错掩盖数据错误。
+3. **根因全局治理**：修一处后搜索同类实现，检查事务、用户隔离、幂等、离线降级和前端使用链路。
+4. **证据分层**：测试报告必须写明测试层级、命令、pass/fail/skipped/未运行；低层证据不能冒充高层验收。
 
-### 1. 缺陷即测试（Defect-Driven Testing）
-* **原则**：任何被确认的 Bug 或需求调整，**严禁直接修改业务代码**。
-* **标准流程**：
-  1. **先写失败测试**：在测试套件中编写针对该 Bug 或新规则的测试用例；
-  2. **验证必报错**：确保该测试在现有代码下**必定红灯报错**；
-  3. **修改业务代码**：调整实现逻辑，直至该测试变绿；
-  4. **终身防退化**：**该测试用例永久保留**，纳入日常全量自动化回归跑道。
+## 2. 测试层级
 
-### 2. 契约防线与禁止静默容错（Contract & Fail-Fast）
-* **原则**：拒绝“宽松容错导致的静默死锁或数据漂移”。
-* **契约断言**：前后端字段、配置键名、函数返回结构必须通过测试强校验对齐。
+| 层级 | 证明什么 | 不能证明什么 |
+|---|---|---|
+| 纯函数/领域单测 | 算法、判分、状态转换 | API、数据库、真实用户流程 |
+| API/Repository 集成测试 | 服务端路由、持久化和事务 | 浏览器交互、真实部署链路 |
+| 前端 Node/契约测试 | 前端领域模型、组件契约 | 浏览器渲染、真实后端 |
+| 真实浏览器 E2E | 用户界面到真实后端的物理链路 | 生产环境全部规模与网络条件 |
+| 构建/静态检查 | 编译、打包、格式和空白 | 业务行为正确 |
 
-### 3. 根因全局治理与防头痛医头 (Root Cause Analysis - RCA)
-* **原则**：排查并修复缺陷时，必须顺藤摸瓜对项目中所有同类逻辑进行全局检索，一次性彻底清除同类隐患，严禁只改孤立单行。
+涉及前端交互、持久化、迁移、导入、登录或关键学习状态时，必须显式执行对应的真实链路测试；不能把 Mock 测试称为 E2E。
 
-### 4. 双层自动化门禁（CI Gates）
-* **本地门禁（Pre-Commit Hook）**：位于 `.git/hooks/pre-commit`。每次在执行 `git commit` 前自动运行全量测试，测试未全绿则本地直接拒绝提交。
-* **远端门禁（GitHub Actions CI）**：位于 `templates/ci.yml`。每次向主分支推送或提交 PR 时，在干净 runner 环境上自动执行全量测试，红灯严禁合入。
-
----
-
-## 二、收敛交付标准 (Definition of Done - DoD)
-
-为防止“无限对抗审查导致精神内耗、修不彻底”，确立科学的交付收敛判定准则：
-
-1. **Bug 严重度台阶分级**：
-   - **P0 致命级**：数据丢失损坏、主流程死锁崩溃 ➔ **必须清零**；
-   - **P1 严重级**：核心业务功能与 SPEC 不符、乱码 ➔ **必须修复**；
-   - **P2 次要级**：极端网络抖动容错、文案优化 ➔ **记入待办，不阻断交付**；
-   - **P3 洁癖级**：理论假想风险、微小代码格式 ➔ **直接忽略，严禁内耗**。
-2. **交付绿灯条件**：
-   - 所有 P0 / P1 问题已清零；
-   - 自动化测试套件（含端到端测试）100% 通过且 `skipped=0`；
-   - 达到上述条件即可果断确认验收通过并上线交付！
-
----
-
-## 三、本地测试运行命令
+## 3. 当前命令
 
 ```bash
-# 运行全量测试套件 (82 个用例)
-python -m unittest discover -s tests -p "test_*.py" -v
+# 后端全量测试
+python -m unittest discover -s tests -v
 
-# 运行特定模块测试
-python -m unittest tests/test_database.py
-python -m unittest tests/test_fsrs_engine.py
-python -m unittest tests/test_session_sync.py
-python -m unittest tests/test_importer.py
-python -m unittest tests/test_ai_service.py
-python -m unittest tests/test_e2e_flow.py
-python -m unittest tests/test_frontend_integration.py
-python -m unittest tests/test_deployment_config.py
+# 前端单元/契约测试
+npm --prefix frontend run test:unit
+
+# 真实浏览器 E2E
+npm --prefix frontend run test:e2e
+
+# 生产构建
+npm --prefix frontend run build
+
+# 文档/补丁空白检查
+python scripts/check_whitespace.py
+git diff --check
 ```
 
-## 四、全量测试套件清单 (Test Manifest)
+如果命令因环境未执行，报告为“未运行”；如果存在 skipped，报告实际数量并说明原因，不得宣称全绿。
 
-| 测试文件 | 覆盖领域与测试要点 |
-| :--- | :--- |
-| `tests/test_database.py` | SQLite WAL 模式、忙超时、级联外键、四大仓储 CRUD、并发读写安全 |
-| `tests/test_fsrs_engine.py` | 纯 Python FSRS-5 算法状态流转、6 级错因分类、连续 2 次答对斩杀出库 |
-| `tests/test_session_sync.py` | 单选/多选/判断评分器（支持多选部分分 0.5）、localStorage 草稿合并与会话生命周期 |
-| `tests/test_importer.py` | 正则状态机纯文本/Markdown 试题切分、容错 CSV 别名映射、标准 JSON 导入器 |
-| `tests/test_ai_service.py` | 题境感知 System Prompt 装配、OpenAI/Ollama 流式与非流式调用、网络离线优雅降级 |
-| `tests/test_e2e_flow.py` | 真实物理 SQLite 单文件全生命周期集成测试（10 个复杂端到端场景） |
-| `tests/test_frontend_integration.py` | FastAPI 根路径静态托管 Vue 3 编译产物 (`frontend/dist`) 与 PWA 元标签检验 |
-| `tests/test_deployment_config.py` | Dockerfile 多阶段构建语法、Compose 编排有效性、生产无冗余臃肿依赖断言 |
+## 4. EasyExam 关键回归面
+
+- 判分：多选部分得分不等于完全正确或已掌握；主观题不进入客观正确率。
+- 会话：模考不提前泄露答案；提交和交卷可幂等重试；终结状态拒绝后续写入。
+- 专项：错题、FSRS 到期、斩杀模式均由服务端限定目标题目集合。
+- FSRS：Again/Hard/Good/Easy、作答前快照、两步交互等价性和历史无快照迁移保护。
+- 导入：预检、重复策略、PDF 结构拒绝、单事务原子性、失败无半批数据。
+- 迁移：强制改密、孤儿题目 `unconverted`、题库/题目/会话/作答/错题全量核对。
+- 前端：登录、导入、刷题、错题、FSRS、斩杀、模考报告和离线降级的真实浏览器路径。
+
+## 5. Definition of Done
+
+只有同时满足以下条件，才能把一个批次报告为完成：
+
+- 对应 SPEC 条目已在追踪矩阵中登记源码、测试和运行证据。
+- 新增缺陷已有回归测试；既有测试未被删除或放宽。
+- 相关测试命令实际运行，失败和 skipped 数量已报告。
+- 关键用户链路按需求范围完成真实 E2E；若环境限制未运行，必须标记缺口。
+- P0/P1 缺陷清零；P2/P3 已记录且没有被伪装成完成。
+- `git diff --check` 和文档空白检查通过。
+
+## 6. 测试清单索引
+
+具体文件以当前工作树为准，常见入口包括：
+
+| 文件 | 覆盖 |
+|---|---|
+| `tests/test_v1_architecture.py` | v1 API、认证、刷题/模考、学习状态和解释 |
+| `tests/test_v1_import.py`、`tests/test_v1_pdf_import.py` | 表格/文本/PDF 导入和拒绝 |
+| `tests/test_v1_learning.py` | 趋势、掌握、FSRS、推荐 |
+| `tests/test_legacy_migration.py` | 旧库迁移和校验 |
+| `tests/test_scoring_semantics.py` | 判分语义 |
+| `frontend/tests/browser_e2e.test.js` | Playwright 真实浏览器链路 |
+
+## 7. 最终交付验收运行证据（2026-09-25）
+
+| 测试层级与环节 | 执行命令 | 实际运行结果 | 状态 |
+|---|---|---|---|
+| 后端全量测试 | `python -m unittest discover -s tests` | 182 passed, 0 failed, 0 errors, 0 skipped (78.9s) | 通过 |
+| 前端单元测试 | `npm --prefix frontend run test:unit` | 5 passed, 0 failed, 0 skipped (10.2ms) | 通过 |
+| 前端生产构建 | `npm --prefix frontend run build` | Vite 打包成功 (dist/index.html, dist/assets/*)，exit code 0 | 通过 |
+| 代码格式与补丁检查 | `git diff --check` | 0 errors (仅 CRLF 正常警告)，exit code 0 | 通过 |
+| Chrome 真实端到端 E2E | `for ($i = 1; $i -le 10; $i++) { npm --prefix frontend run test:e2e }` | 连续 10 轮测试全部通过；每轮均严格为 13 passed, 0 failed, 0 skipped，总耗时 ~14s/轮，连续 10 次 exit code 0 | 通过 |
+| 容器构建与真实运行 | `docker build -t easy-exam:delivery-check .` 及临时容器端口启动 | 镜像构建成功；临时目录挂载启动成功；`/api/v1/health` HTTP 200；`/` HTTP 200 (HTML)；Docker Healthcheck 探针正常返回 healthy；容器日志无报错；验证后已清理临时容器和数据 | 通过 |
+| 外部真实商业搜索服务 | N/A | 本地未配置商业搜索引擎生产 API Key，代码已验证 `UNAVAILABLE` 优雅降级行为，真实外部在线搜索标记为【未验证（外部依赖）】 | 未验证 |
+| 真实 fnOS 物理机部署 | N/A | 已验证 Docker 容器 Alpine 运行时与数据持久卷挂载，但未在真实物理 NAS (fnOS) 机器上安装实测，标记为【未验证（物理环境）】 | 未验证 |
 

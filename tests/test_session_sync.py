@@ -117,15 +117,15 @@ class TestScorer(unittest.TestCase):
 
         # Partial credit: omitted choices without any wrong option (e.g. AB gives 0.5)
         is_cor, ratio = Scorer.evaluate("MULTI", "AB", "ABCD")
-        self.assertTrue(is_cor)
+        self.assertFalse(is_cor)
         self.assertEqual(ratio, 0.5)
 
         is_cor, ratio = Scorer.evaluate("MULTI", "A", "ABCD")
-        self.assertTrue(is_cor)
+        self.assertFalse(is_cor)
         self.assertEqual(ratio, 0.5)
 
         is_cor, ratio = Scorer.evaluate("MULTI", "ABC", "ABCD")
-        self.assertTrue(is_cor)
+        self.assertFalse(is_cor)
         self.assertEqual(ratio, 0.5)
 
         # Wrong choice included: ABCE gives 0.0
@@ -254,7 +254,7 @@ class TestSessionService(unittest.TestCase):
             user_answer="AB",
             time_spent_delta=15,
         )
-        self.assertTrue(res2["is_correct"])
+        self.assertFalse(res2["is_correct"])
         self.assertEqual(res2["score_ratio"], 0.5)
 
         # 3. Answer Judge question incorrectly with cause
@@ -416,11 +416,11 @@ class TestSessionService(unittest.TestCase):
         self.assertEqual(summary["total_questions"], 3)
         self.assertEqual(summary["answered_count"], 3)
         # q1 and q2 are considered correct (is_correct=True), q3 is wrong
-        self.assertEqual(summary["correct_count"], 2)
+        self.assertEqual(summary["correct_count"], 1)
         # Total score: 1.0 + 0.5 + 0.0 = 1.5
         self.assertEqual(summary["score"], 1.5)
         # Accuracy: 2 / 3 * 100 = 66.67%
-        self.assertAlmostEqual(summary["accuracy"], 66.67, places=2)
+        self.assertAlmostEqual(summary["accuracy"], 33.33, places=2)
 
         # Assert enhanced report contract fields
         self.assertEqual(summary["answered_questions"], 3)
