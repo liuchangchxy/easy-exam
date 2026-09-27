@@ -1,0 +1,10 @@
+{
+  "defaults": {
+    "run-as": "root"
+  },
+  "username": "easy_exam",
+  "groupname": "easy_exam",
+  "join-groups": [
+    "docker"
+  ]
+}

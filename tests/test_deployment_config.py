@@ -77,6 +77,29 @@ class TestDeploymentConfig(unittest.TestCase):
 
         self.assertEqual(str(env.get("PORT")), "3000")
         self.assertIn("host.docker.internal:11434/v1", env.get("LLM_BASE_URL", ""))
+        self.assertEqual(env.get("EASYEXAM_SECRET_KEY"), "${EASYEXAM_SECRET_KEY}")
+
+    def test_deployment_secret_key_exposure_and_no_committed_secrets(self):
+        """Verify Compose exposes EASYEXAM_SECRET_KEY as variable, and no actual secrets are committed."""
+        compose_path = BASE_DIR / "docker-compose.yml"
+        fpk_compose_path = BASE_DIR / "fpk" / "easy-exam" / "app" / "docker" / "docker-compose.yaml"
+
+        compose_text = compose_path.read_text(encoding="utf-8")
+        fpk_compose_text = fpk_compose_path.read_text(encoding="utf-8")
+
+        # Must bind EASYEXAM_SECRET_KEY via environment variable substitution
+        self.assertIn("EASYEXAM_SECRET_KEY=${EASYEXAM_SECRET_KEY}", compose_text)
+        self.assertIn("EASYEXAM_SECRET_KEY=${EASYEXAM_SECRET_KEY}", fpk_compose_text)
+
+        # Must NOT contain hardcoded/fixed default secrets
+        forbidden = [
+            "easyexam-secure-vault-default-key-v1",
+            "easyexam-ci-secret",
+            "sk-",
+        ]
+        for secret in forbidden:
+            self.assertNotIn(secret, compose_text)
+            self.assertNotIn(secret, fpk_compose_text)
 
     def test_requirements_minimal_and_clean(self):
         """requirements.txt must contain only minimal production packages without bloat."""
@@ -105,12 +128,12 @@ class TestDeploymentConfig(unittest.TestCase):
         self.assertTrue(sh_content.startswith("#!"), "deploy_fnos.sh must have shebang")
         self.assertIn("docker", sh_content)
         self.assertIn("3000", sh_content)
-        self.assertIn("/api/health", sh_content)
+        self.assertIn("/api/v1/health", sh_content)
 
         ps1_content = ps1_path.read_text(encoding="utf-8")
         self.assertIn("docker", ps1_content)
         self.assertIn("3000", ps1_content)
-        self.assertIn("/api/health", ps1_content)
+        self.assertIn("/api/v1/health", ps1_content)
 
     def test_backend_config_data_dir_env(self):
         """When DATA_DIR is configured, default DB path resolves to $DATA_DIR/fnexam.db."""

@@ -14,6 +14,8 @@ class StartSessionPayload(BaseModel):
     total_questions: int = 0
     time_limit: int = 0
     question_ids: list[str] | None = None
+    config: dict | None = None
+    record_mistakes: bool | None = None
 
 
 class AttemptPayload(BaseModel):
@@ -34,12 +36,19 @@ class FlagPayload(BaseModel):
     question_id: str
 
 
+@router.get("/sessions/active")
+def list_active_sessions(request: Request, mode: str | None = None, user=Depends(current_user)):
+    return request.app.state.services.practice.list_active_sessions(user["id"], mode)
+
+
 @router.post("/sessions", status_code=201)
 def start_session(payload: StartSessionPayload, request: Request, user=Depends(current_user)):
     try:
         return request.app.state.services.practice.start_session(
             user["id"], payload.bank_id, payload.mode, payload.total_questions, payload.time_limit,
             question_ids=payload.question_ids,
+            config=payload.config,
+            record_mistakes=payload.record_mistakes,
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -103,3 +112,16 @@ def complete_session(session_id: str, request: Request, user=Depends(current_use
         return request.app.state.services.practice.complete_session(user["id"], session_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/sessions/{session_id}/abandon")
+def abandon_session(session_id: str, request: Request, user=Depends(current_user)):
+    try:
+        return request.app.state.services.practice.abandon_session(user["id"], session_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/sessions/abandon-all")
+def abandon_all_sessions(request: Request, user=Depends(current_user)):
+    return request.app.state.services.practice.abandon_all_sessions(user["id"])

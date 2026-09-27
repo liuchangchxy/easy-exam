@@ -19,6 +19,17 @@ class ExamRepository:
             row = conn.execute("SELECT * FROM exam_profiles WHERE id = ? AND user_id = ?", (profile_id, user_id)).fetchone()
             return dict(row) if row else None
 
+    def list_profiles(self, user_id: str) -> list[dict]:
+        with transaction(self.db_path) as conn:
+            rows = conn.execute("SELECT * FROM exam_profiles WHERE user_id = ? ORDER BY created_at DESC", (user_id,)).fetchall()
+            results = []
+            for r in rows:
+                p = dict(r)
+                bp = self.latest_blueprint(user_id, p["id"])
+                p["latest_blueprint"] = bp
+                results.append(p)
+            return results
+
     def save_blueprint(self, user_id: str, profile_id: str, blueprint: dict) -> dict:
         with transaction(self.db_path) as conn:
             profile = conn.execute("SELECT id FROM exam_profiles WHERE id = ? AND user_id = ?", (profile_id, user_id)).fetchone()

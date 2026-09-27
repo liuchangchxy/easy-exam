@@ -14,24 +14,29 @@ def rank_recommendation(record: dict[str, Any]) -> dict[str, Any]:
     is_cleared = bool(record.get("is_cleared"))
     is_due = bool(record.get("is_due"))
     is_weak_flagged = bool(record.get("is_weak_flagged"))
-
+    is_weak = is_weak_flagged or (not is_cleared and mistakes > 0 and mastery in {"WEAK", "PARTIAL"})
     if is_weak_flagged:
         reason = "标记薄弱"
+        category = "WEAK"
         priority = 90
     elif not is_cleared and mistakes > 0 and mastery in {"WEAK", "PARTIAL"}:
         reason = "错题待复习"
+        category = "WEAK"
         priority = 100 + min(mistakes, 20)
     elif is_due:
         reason = "复习到期"
+        category = "DUE"
         priority = 80
     elif not record.get("last_attempt_at"):
         reason = "新题覆盖"
+        category = "NEW"
         priority = 50
     else:
         reason = "巩固练习"
+        category = "CONSOLIDATE"
         priority = 20
 
-    return {**record, "priority": priority, "reason": reason}
+    return {**record, "priority": priority, "reason": reason, "category": category}
 
 
 def build_recommendations(
@@ -71,13 +76,18 @@ def build_recommendations(
 
     ranked = [rank_recommendation(record) for record in filtered_records]
 
-    # 3. Category switches
+    # 3. Category switches (EE-016: use structured category and exhaustive flags)
     if not include_new:
-        ranked = [item for item in ranked if item["reason"] != "新题覆盖"]
+        ranked = [item for item in ranked if item.get("category") != "NEW" and item["reason"] != "新题覆盖"]
     if not include_weak:
-        ranked = [item for item in ranked if item["reason"] != "错题待复习"]
+        ranked = [
+            item for item in ranked
+            if item.get("category") != "WEAK"
+            and not item.get("is_weak_flagged")
+            and item["reason"] not in {"错题待复习", "标记薄弱"}
+        ]
     if not include_due:
-        ranked = [item for item in ranked if item["reason"] != "复习到期"]
+        ranked = [item for item in ranked if item.get("category") != "DUE" and item["reason"] != "复习到期"]
 
     # 4. Sorting by priority desc, last_attempt_at, question_id
     ranked.sort(key=lambda item: (-item["priority"], item.get("last_attempt_at") or "", item["question_id"]))

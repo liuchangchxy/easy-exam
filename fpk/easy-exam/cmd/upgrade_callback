@@ -1,0 +1,15 @@
+#!/bin/bash
+set -eu
+
+# Load offline bundled image if provided in new package version
+IMAGE_DIR="${TRIM_APPDEST:-/var/apps/easy-exam/target}/images"
+if [ -d "$IMAGE_DIR" ]; then
+  for img in "$IMAGE_DIR"/*.tar "$IMAGE_DIR"/*.tar.gz; do
+    if [ -f "$img" ]; then
+      echo "Loading updated docker image from $img..."
+      docker load -i "$img" || true
+    fi
+  done
+fi
+
+exit 0

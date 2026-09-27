@@ -22,6 +22,29 @@ class ExamSessionPayload(BaseModel):
     total_questions: int = 0
     time_limit: int = 0
     profile_id: str | None = None
+    config: dict | None = None
+    record_mistakes: bool | None = None
+
+
+@router.get("/profiles")
+def list_profiles(request: Request, user=Depends(current_user)):
+    return request.app.state.services.exams.list_profiles(user["id"])
+
+
+@router.get("/profiles/{profile_id}")
+def get_profile(profile_id: str, request: Request, user=Depends(current_user)):
+    profile = request.app.state.services.exams.get_profile(profile_id, user["id"])
+    if not profile:
+        raise HTTPException(status_code=404, detail="exam profile not found")
+    return profile
+
+
+@router.get("/profiles/{profile_id}/blueprint")
+def get_blueprint(profile_id: str, request: Request, user=Depends(current_user)):
+    blueprint = request.app.state.services.exams.latest_blueprint(user["id"], profile_id)
+    if not blueprint:
+        raise HTTPException(status_code=404, detail="exam blueprint not found")
+    return blueprint
 
 
 @router.post("/profiles", status_code=201)
@@ -49,6 +72,8 @@ def start_exam(payload: ExamSessionPayload, request: Request, user=Depends(curre
         return request.app.state.services.practice.start_session(
             user["id"], payload.bank_id, "EXAM", payload.total_questions, payload.time_limit,
             payload.profile_id, blueprint_id,
+            config=payload.config,
+            record_mistakes=payload.record_mistakes,
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

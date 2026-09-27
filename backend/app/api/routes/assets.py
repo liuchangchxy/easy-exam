@@ -44,3 +44,19 @@ async def upload_asset(
 @router.get("")
 def list_assets(request: Request, question_id: str | None = None, user=Depends(current_user)):
     return request.app.state.services.assets.list_for_user(user["id"], question_id)
+
+
+@router.get("/{asset_id}")
+def get_asset(asset_id: str, request: Request, user=Depends(current_user)):
+    asset = request.app.state.services.assets.get_for_user(user["id"], asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="资料不存在或无权访问")
+    return asset
+
+
+@router.delete("/{asset_id}", status_code=204)
+def delete_asset(asset_id: str, request: Request, user=Depends(current_user)):
+    deleted = request.app.state.services.assets.delete(user["id"], asset_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="资料不存在或无权删除")
+    return None

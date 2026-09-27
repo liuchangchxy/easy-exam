@@ -1,0 +1,42 @@
+#!/bin/bash
+set -eu
+
+CONTAINER_NAME="easy-exam-fpk"
+COMPOSE_FILE="${TRIM_APPDEST:-/var/apps/easy-exam/target}/docker/docker-compose.yaml"
+ENV_FILE="${TRIM_PKGVAR:-/var/apps/easy-exam/var}/.env"
+
+# Load persistent EASYEXAM_SECRET_KEY from package variable volume if present
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  . "$ENV_FILE"
+  set +a
+fi
+
+case "${1:-}" in
+  start)
+    if [ -f "$COMPOSE_FILE" ]; then
+      docker compose -f "$COMPOSE_FILE" up -d
+    elif docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
+      docker start "$CONTAINER_NAME"
+    fi
+    exit 0
+    ;;
+  stop)
+    if [ -f "$COMPOSE_FILE" ]; then
+      docker compose -f "$COMPOSE_FILE" stop
+    elif docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
+      docker stop "$CONTAINER_NAME"
+    fi
+    exit 0
+    ;;
+  status)
+    if docker inspect --format '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null | grep -qx true; then
+      exit 0
+    else
+      exit 3
+    fi
+    ;;
+  *)
+    exit 1
+    ;;
+esac

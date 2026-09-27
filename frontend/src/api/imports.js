@@ -42,3 +42,25 @@ export async function uploadImport(token, bankId, file, duplicateStrategy = 'pro
   }
   return response.json()
 }
+
+export async function previewPdfImport(token, bankId, file) {
+  const form = new FormData()
+  form.append('file', file)
+  const response = await fetch(`/api/v1/imports/banks/${bankId}/pdf-preview`, {
+    method: 'POST', headers: authHeaders(token), body: form,
+  })
+  if (!response.ok) {
+    const body = await response.json()
+    const error = new Error(typeof body.detail === 'string' ? body.detail : body.detail?.reason || response.statusText)
+    error.status = response.status
+    error.detail = body.detail
+    throw error
+  }
+  return response.json()
+}
+
+export const confirmPdfImport = (token, bankId, payload) => request(`/imports/banks/${bankId}/pdf-confirm`, {
+  method: 'POST',
+  headers: authHeaders(token),
+  body: JSON.stringify(payload),
+})

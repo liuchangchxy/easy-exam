@@ -21,6 +21,36 @@ class VerifyPayload(BaseModel):
     query: str = ""
 
 
+class AiConfigPayload(BaseModel):
+    ai_provider: str = "openai"
+    ai_api_base: str = "https://api.openai.com/v1"
+    ai_model: str = "gpt-4o-mini"
+    ai_api_key: str | None = None
+    search_provider: str = "open-webSearch"
+    search_api_key: str | None = None
+    search_api_base: str = "http://localhost:8000/v1/search"
+
+
+@router.get("/config")
+def get_ai_config(request: Request, user=Depends(current_user)):
+    try:
+        return request.app.state.services.ai.get_user_ai_config(user["id"])
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.put("/config")
+def update_ai_config(payload: AiConfigPayload, request: Request, user=Depends(current_user)):
+    try:
+        return request.app.state.services.ai.save_user_ai_config(user["id"], payload.model_dump())
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/questions/{question_id}/answers", status_code=201)
 def save_answer(question_id: str, payload: AnswerPayload, request: Request, user=Depends(current_user)):
     try:
@@ -99,5 +129,66 @@ def list_conversation_messages(conversation_id: str, request: Request, user=Depe
 def get_message_thread(message_id: str, request: Request, user=Depends(current_user)):
     try:
         return request.app.state.services.ai.get_message_thread(user["id"], message_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+class VariantGeneratePayload(BaseModel):
+    original_question_id: str
+    target_bank_id: str
+    prompt_hint: str = ""
+
+
+class DraftAcceptPayload(BaseModel):
+    modifications: dict | None = None
+
+
+@router.post("/variants", status_code=201)
+def generate_variant(payload: VariantGeneratePayload, request: Request, user=Depends(current_user)):
+    try:
+        return request.app.state.services.ai.generate_variant_draft(
+            user_id=user["id"],
+            original_question_id=payload.original_question_id,
+            target_bank_id=payload.target_bank_id,
+            prompt_hint=payload.prompt_hint,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/drafts")
+def list_drafts(status: str = "DRAFT", request: Request = None, user=Depends(current_user)):
+    return request.app.state.services.ai.list_variant_drafts(user["id"], status)
+
+
+@router.get("/drafts/{draft_id}")
+def get_draft(draft_id: str, request: Request, user=Depends(current_user)):
+    try:
+        return request.app.state.services.ai.get_variant_draft(user["id"], draft_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/drafts/{draft_id}/accept", status_code=200)
+def accept_draft(draft_id: str, payload: DraftAcceptPayload, request: Request, user=Depends(current_user)):
+    try:
+        return request.app.state.services.ai.accept_variant_draft(
+            user_id=user["id"],
+            draft_id=draft_id,
+            modifications=payload.modifications,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/drafts/{draft_id}", status_code=200)
+@router.post("/drafts/{draft_id}/discard", status_code=200)
+def discard_draft(draft_id: str, request: Request, user=Depends(current_user)):
+    try:
+        return request.app.state.services.ai.discard_variant_draft(user["id"], draft_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

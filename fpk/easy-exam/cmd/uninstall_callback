@@ -1,0 +1,4 @@
+#!/bin/bash
+set -eu
+# User data under $TRIM_PKGVAR is preserved by default to protect user questions and exams.
+exit 0

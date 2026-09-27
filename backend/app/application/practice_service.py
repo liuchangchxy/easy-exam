@@ -18,6 +18,8 @@ class PracticeService:
         exam_profile_id: str | None = None,
         blueprint_id: str | None = None,
         question_ids: list[str] | None = None,
+        config: dict | None = None,
+        record_mistakes: bool | None = None,
     ) -> dict:
         if self.banks and not self.banks.get_for_user(bank_id, user_id):
             raise LookupError("question bank not found")
@@ -34,6 +36,13 @@ class PracticeService:
         else:
             candidate_questions = self.questions.list_for_bank(bank_id, user_id)
 
+        # EE-001: Dynamic exam blueprint assembly and section-based question selection
+        if blueprint_id and self.exams:
+            saved_bp = self.exams.get_blueprint(user_id, blueprint_id)
+            if saved_bp and saved_bp.get("blueprint"):
+                from backend.app.domain.exams.blueprint import select_questions_by_blueprint
+                candidate_questions = select_questions_by_blueprint(candidate_questions, saved_bp["blueprint"], total_questions)
+
         if question_ids is not None:
             allowed_map = {q["id"]: q for q in candidate_questions}
             questions = [allowed_map[qid] for qid in question_ids if qid in allowed_map]
@@ -43,11 +52,50 @@ class PracticeService:
         if not questions and (mode in ("MISTAKE", "FSRS", "ELIMINATION") or question_ids is not None):
             raise ValueError(f"当前题库没有符合条件的题目")
 
-        selected = questions[:total_questions] if total_questions > 0 else questions
+        selected = questions if blueprint_id else (questions[:total_questions] if total_questions > 0 else questions)
         question_refs = [{"question_id": item["id"], "version_id": item["version_id"]} for item in selected]
+
+        session_config = dict(config or {})
+        if record_mistakes is not None:
+            session_config["record_mistakes"] = record_mistakes
+
         return self.practices.create_session(
-            user_id, bank_id, mode, len(selected), time_limit, exam_profile_id, blueprint_id, question_refs
+            user_id, bank_id, mode, len(selected), time_limit, exam_profile_id, blueprint_id, question_refs,
+            config=session_config,
         )
+
+    def list_active_sessions(self, user_id: str, mode: str | None = None) -> list[dict]:
+        import json
+        raw = self.practices.list_active_sessions(user_id, mode)
+        sessions = []
+        for s in raw:
+            answers = json.loads(s.get("answers_json") or "{}")
+            questions = json.loads(s.get("questions_json") or "[]")
+            bank = self.banks.get_for_user(s["bank_id"], user_id) if self.banks else None
+            sessions.append({
+                "id": s["id"],
+                "bank_id": s["bank_id"],
+                "bank_name": bank.get("name") if bank else "未知题库",
+                "mode": s["mode"],
+                "total_questions": s["total_questions"] or len(questions),
+                "answered_count": len(answers),
+                "time_spent": s.get("time_spent", 0),
+                "time_limit": s.get("time_limit", 0),
+                "current_index": s.get("current_index", 0),
+                "created_at": s.get("created_at"),
+                "updated_at": s.get("updated_at"),
+            })
+        return sessions
+
+    def abandon_session(self, user_id: str, session_id: str) -> dict:
+        success = self.practices.abandon_session(session_id, user_id)
+        if not success:
+            raise LookupError("practice session not found or already completed")
+        return {"status": "abandoned", "session_id": session_id}
+
+    def abandon_all_sessions(self, user_id: str) -> dict:
+        count = self.practices.abandon_all_sessions(user_id)
+        return {"status": "abandoned_all", "count": count}
 
     def submit_attempt(
         self,

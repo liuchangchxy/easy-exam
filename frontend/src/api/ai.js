@@ -45,3 +45,38 @@ export const getMessageThread = (token, messageId) => request(`/ai/messages/${me
   headers: authHeaders(token),
 })
 
+export const generateVariant = (token, payload) => request('/ai/variants', {
+  method: 'POST',
+  headers: authHeaders(token),
+  body: JSON.stringify(payload),
+})
+
+export const listDrafts = (token, status = 'DRAFT') => request(`/ai/drafts?status=${status}`, {
+  headers: authHeaders(token),
+})
+
+export const getDraft = (token, draftId) => request(`/ai/drafts/${draftId}`, {
+  headers: authHeaders(token),
+})
+
+export const acceptDraft = (token, draftId, modifications = null) => request(`/ai/drafts/${draftId}/accept`, {
+  method: 'POST',
+  headers: authHeaders(token),
+  body: JSON.stringify({ modifications }),
+})
+
+export const discardDraft = (token, draftId) => request(`/ai/drafts/${draftId}/discard`, {
+  method: 'POST',
+  headers: authHeaders(token),
+})
+
+export const getAiConfig = (token) => request('/ai/config', {
+  headers: authHeaders(token),
+})
+
+export const updateAiConfig = (token, payload) => request('/ai/config', {
+  method: 'PUT',
+  headers: authHeaders(token),
+  body: JSON.stringify(payload),
+})
+

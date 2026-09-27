@@ -46,7 +46,7 @@ class LearningService:
         chapter: str | None = None,
         new_ratio: float | None = None,
     ) -> dict:
-        limit = min(100, max(1, (minutes_per_day // 2) * days))
+        limit = min(500, max(1, (minutes_per_day // 2) * days))
         records = self.practices.recommendation_candidates(user_id, bank_id)
         recommendations = build_recommendations(
             records,

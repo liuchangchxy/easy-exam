@@ -88,3 +88,40 @@ async def import_file(bank_id: str, request: Request, duplicate_strategy: str = 
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"文件导入处理失败：{exc}") from exc
+
+
+class PdfConfirmPayload(BaseModel):
+    draft_id: str
+    questions: list[dict]
+    duplicate_strategy: str = "skip"
+
+
+@router.post("/banks/{bank_id}/pdf-preview")
+async def preview_pdf_file(bank_id: str, request: Request, file: UploadFile = File(...), user=Depends(current_user)):
+    if not file.filename:
+        raise HTTPException(status_code=422, detail="缺少文件名")
+    content = await file.read()
+    try:
+        return request.app.state.services.importer.preview_pdf(user["id"], bank_id, file.filename, content)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"PDF 解析失败：{exc}") from exc
+
+
+@router.post("/banks/{bank_id}/pdf-confirm", status_code=201)
+def confirm_pdf_import(bank_id: str, payload: PdfConfirmPayload, request: Request, user=Depends(current_user)):
+    try:
+        return request.app.state.services.importer.confirm_pdf_draft(
+            user["id"], bank_id, payload.draft_id, payload.questions, payload.duplicate_strategy
+        )
+    except DuplicateImportError as exc:
+        raise HTTPException(status_code=409, detail=exc.preview) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"PDF 确认入库失败：{exc}") from exc

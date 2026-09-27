@@ -68,7 +68,7 @@ python scripts/checkpoint.py save "变更说明"
 | `DECISIONS.md` | 已确认的重要架构/业务决策及影响 |
 | `docs/superpowers/plans/` | 单批次、可独立验收的实施计划 |
 | `docs/research/` | OSS 代码级审计与总体吸收路线 |
-| `docs/optional/` | 数据安全、可靠性、多 Agent 等按需规范 |
+| `docs/optional/` | 数据安全、可靠性、多 Agent、向导多步流转等按需规范 |
 | `docs/EASYEXAM_GUARDRAILS.md` | 本地真实项目沉淀的领域级避坑和验收护栏 |
 | `docs/templates/` | 新项目或新批次可复制的空白模板 |
 | `docs/ANTIGRAVITY_WORKFLOW.md` | AntiGravity 的完整执行工序与报告格式 |
@@ -86,3 +86,6 @@ python scripts/checkpoint.py save "变更说明"
 5. OSS 调研必须基于代码、固定 commit 和许可证，不凭 Star 数量判断。
 6. 复杂流程按需启用，不能让流程成本超过任务本身。
 7. 验收前先冻结范围与有限验收清单；逐轮复核必须按同一清单检查，不得每轮追加新的完成门槛。只有可复现的 P0/P1 缺陷或原清单明确要求的条件才能阻止验收；P2/P3、可选增强和环境未就绪项应单列为遗留/未核验，不得借此反复宣称整体未完成。
+8. SPA 入口必须保持零缓存：入口文件（HTML）在 Web 服务侧必须强制配置 `no-cache, no-store, must-revalidate`，避免客户端强缓存导致构建产物哈希更新被彻底架空。
+9. 分步向导严禁阻断导航：多步流转中，单步未完成或未通过校验只作状态标记，禁止阻断跳过或前进；步骤切换必须自动保存草稿并幂等还原，禁止切换节点清空状态。
+10. 移动端首屏物理预算：触屏端必须显式剔除桌面特化提示（如键盘快捷键指南），顶栏必须单行紧凑折叠，核心触发源与即时反馈必须在首屏内零滚动可见。

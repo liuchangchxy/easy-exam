@@ -48,10 +48,18 @@ Thumbs.db
 .antigravity/
 .system_generated/
 scratch/
+.agent/
+.playwright-cli/
+screenshots/
+/ui-live.png
 
 # Database & local data
 data/
 *.db
 *.db-wal
 *.db-shm
+
+# FPK build artifacts & tools
+.tools/
+*.fpk
 

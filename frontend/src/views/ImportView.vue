@@ -19,6 +19,12 @@
         </button>
       </div>
 
+      <div v-if="isPdf && !pdfPreview" class="preview-actions">
+        <button type="button" class="preview-btn" :disabled="loading || !bankId || !file" @click="inspectPdf">
+          {{ loading ? '正在解析 PDF…' : '预览与校对 PDF（含人工校正）' }}
+        </button>
+      </div>
+
       <!-- Exameow-style Column Mapping Preview Panel -->
       <section v-if="spreadsheetPreview" class="column-mapping-panel">
         <h3>表格列映射预览</h3>
@@ -148,6 +154,77 @@
         </div>
       </section>
 
+      <!-- EE-021: PDF 人工校正草稿面板 -->
+      <section v-if="pdfPreview" class="column-mapping-panel pdf-correction-panel" style="margin-top: 1rem; border: 1px solid #cbd5e1; border-radius: 8px; padding: 1.25rem; background: #ffffff;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <h3>PDF 题目校对预览</h3>
+          <span :style="{ fontSize: '0.8rem', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 'bold', background: pdfPreview.confidence === 'HIGH' ? '#dcfce7' : '#fef3c7', color: pdfPreview.confidence === 'HIGH' ? '#166534' : '#92400e' }">
+            {{ pdfPreview.confidence === 'HIGH' ? '解析置信度：高' : '解析置信度：较低（格式存在歧义，请人工核校）' }}
+          </span>
+        </div>
+        <p class="mapping-hint" style="color: #64748b; font-size: 0.85rem; margin-bottom: 1rem;">
+          共提取出 {{ pdfCandidates.length }} 道候选题目。您可在入库前手动编辑、拆分、合并或剔除题目：
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <div v-for="(cand, cIdx) in pdfCandidates" :key="cIdx" style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 1rem; background: #f8fafc;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <span style="font-weight: 600; font-size: 0.9rem;">第 {{ cIdx + 1 }} 题</span>
+              <div style="display: flex; gap: 0.5rem;">
+                <button v-if="cIdx > 0" type="button" class="action-link-btn" style="font-size: 0.75rem;" @click="mergeWithPrev(cIdx)">合并至上一题</button>
+                <button type="button" class="action-link-btn" style="font-size: 0.75rem;" @click="splitCandidate(cIdx)">在此拆分</button>
+                <button type="button" class="action-link-btn" style="font-size: 0.75rem; color: #ef4444;" @click="removeCandidate(cIdx)">删除</button>
+              </div>
+            </div>
+
+            <div v-if="cand.is_uncertain" style="padding: 0.4rem 0.6rem; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 4px; font-size: 0.8rem; color: #b45309; margin-bottom: 0.5rem;">
+              ⚠️ 校对提示：{{ cand.uncertain_reason }}
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.5rem;">
+              <label style="font-size: 0.8rem;">题型：
+                <select v-model="cand.type" style="width: 100%; margin-top: 0.2rem;">
+                  <option value="SINGLE">单选题</option>
+                  <option value="MULTI">多选题</option>
+                  <option value="JUDGE">判断题</option>
+                  <option value="QA">简答/问答题</option>
+                </select>
+              </label>
+              <label style="font-size: 0.8rem;">正确答案：
+                <input v-model="cand.answer" placeholder="如 A / AB / 正确 / 错误" style="width: 100%; margin-top: 0.2rem;" />
+              </label>
+            </div>
+
+            <label style="font-size: 0.8rem; display: block; margin-bottom: 0.5rem;">题干：
+              <textarea v-model="cand.stem" rows="2" style="width: 100%; margin-top: 0.2rem;"></textarea>
+            </label>
+
+            <div v-if="cand.type === 'SINGLE' || cand.type === 'MULTI'" style="margin-bottom: 0.5rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.8rem; font-weight: 500;">选项列表：</span>
+                <button type="button" class="action-link-btn" style="font-size: 0.75rem;" @click="addCandidateOption(cand)">+ 增加选项</button>
+              </div>
+              <div v-for="(opt, optIdx) in cand.options" :key="optIdx" style="display: flex; gap: 0.4rem; margin-top: 0.25rem;">
+                <input v-model="opt.key" style="width: 3rem;" placeholder="A" />
+                <input v-model="opt.content" style="flex: 1;" placeholder="选项文本" />
+                <button type="button" style="color: #ef4444; border: none; background: none; cursor: pointer;" @click="cand.options.splice(optIdx, 1)">×</button>
+              </div>
+            </div>
+
+            <label style="font-size: 0.8rem; display: block;">解析：
+              <input v-model="cand.explanation" placeholder="题目解析（可选）" style="width: 100%; margin-top: 0.2rem;" />
+            </label>
+          </div>
+        </div>
+
+        <div class="preview-actions" style="margin-top: 1rem; display: flex; gap: 0.75rem;">
+          <button type="button" class="primary" :disabled="loading || !pdfCandidates.length" @click="confirmPdfImportAction">
+            {{ loading ? '入库中…' : '确认校对并导入题库' }}
+          </button>
+          <button type="button" @click="pdfPreview = null">取消校对</button>
+        </div>
+      </section>
+
       <p v-if="duplicatePreview" class="warning">检测到 {{ duplicatePreview.duplicates?.length || 0 }} 道重复题。请选择如何处理后再次导入。</p>
       <label v-if="duplicatePreview">重复题处理
         <select v-model="duplicateStrategy">
@@ -170,7 +247,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { listBanks } from '../api/banks'
-import { previewFileImport, uploadImport } from '../api/imports'
+import { previewFileImport, uploadImport, previewPdfImport, confirmPdfImport } from '../api/imports'
 
 const props = defineProps({ token: { type: String, required: true } })
 defineEmits(['back'])
@@ -183,6 +260,8 @@ const result = ref(null)
 const duplicatePreview = ref(null)
 const duplicateStrategy = ref('skip')
 const spreadsheetPreview = ref(null)
+const pdfPreview = ref(null)
+const pdfCandidates = ref([])
 const currentMapping = ref({
   stem: null,
   answer: null,
@@ -198,6 +277,11 @@ const currentMapping = ref({
 const isSpreadsheet = computed(() => {
   const name = file.value?.name?.toLowerCase() || ''
   return name.endsWith('.xlsx') || name.endsWith('.csv')
+})
+
+const isPdf = computed(() => {
+  const name = file.value?.name?.toLowerCase() || ''
+  return name.endsWith('.pdf')
 })
 
 const optionSlots = ref(Array(8).fill(''))
@@ -228,6 +312,8 @@ function selectFile(event) {
   result.value = null
   duplicatePreview.value = null
   spreadsheetPreview.value = null
+  pdfPreview.value = null
+  pdfCandidates.value = []
   optionSlots.value = Array(8).fill('')
   error.value = ''
 }
@@ -257,6 +343,86 @@ async function inspectSpreadsheet() {
       }
       syncOptionsFromSlots()
     }
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    loading.value = false
+  }
+}
+
+async function inspectPdf() {
+  if (!file.value || !bankId.value) return
+  loading.value = true
+  error.value = ''
+  try {
+    const prev = await previewPdfImport(props.token, bankId.value, file.value)
+    pdfPreview.value = prev
+    pdfCandidates.value = JSON.parse(JSON.stringify(prev.candidates || []))
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    loading.value = false
+  }
+}
+
+function mergeWithPrev(idx) {
+  if (idx <= 0) return
+  const current = pdfCandidates.value[idx]
+  const prev = pdfCandidates.value[idx - 1]
+  prev.stem += '\n' + current.stem
+  if (current.options && current.options.length) {
+    prev.options = [...(prev.options || []), ...current.options]
+  }
+  if (!prev.answer && current.answer) {
+    prev.answer = current.answer
+  }
+  if (current.explanation) {
+    prev.explanation = (prev.explanation ? prev.explanation + '\n' : '') + current.explanation
+  }
+  pdfCandidates.value.splice(idx, 1)
+}
+
+function splitCandidate(idx) {
+  const item = pdfCandidates.value[idx]
+  const half = Math.floor(item.stem.length / 2)
+  const newStem = item.stem.slice(half).trim() || '拆分题目'
+  item.stem = item.stem.slice(0, half).trim()
+  pdfCandidates.value.splice(idx + 1, 0, {
+    candidate_id: pdfCandidates.value.length + 1,
+    type: item.type,
+    stem: newStem,
+    options: [],
+    answer: '',
+    explanation: '',
+    difficulty: item.difficulty || 3,
+    tags: item.tags || [],
+    is_uncertain: true,
+    uncertain_reason: '手动拆分题目，请核准题干与答案',
+  })
+}
+
+function removeCandidate(idx) {
+  pdfCandidates.value.splice(idx, 1)
+}
+
+function addCandidateOption(cand) {
+  if (!cand.options) cand.options = []
+  const nextKey = String.fromCharCode(65 + cand.options.length)
+  cand.options.push({ key: nextKey, content: '' })
+}
+
+async function confirmPdfImportAction() {
+  if (!pdfPreview.value || !pdfCandidates.value.length) return
+  loading.value = true
+  error.value = ''
+  try {
+    result.value = await confirmPdfImport(props.token, bankId.value, {
+      draft_id: pdfPreview.value.draft_id,
+      questions: pdfCandidates.value,
+      duplicate_strategy: 'skip',
+    })
+    pdfPreview.value = null
+    pdfCandidates.value = []
   } catch (err) {
     error.value = err.message
   } finally {
@@ -301,50 +467,112 @@ async function submit() {
 </script>
 
 <style scoped>
+.import-page {
+  width: min(100% - 2rem, 74rem);
+  margin: 1.5rem auto;
+}
+
+.import-form {
+  display: grid;
+  gap: 1.25rem;
+  max-width: 48rem;
+  background: var(--bg-card);
+  padding: 1.75rem;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+}
+
+.import-form label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.import-form select,
+.import-form input[type="file"] {
+  width: 100%;
+}
+
 .preview-actions {
-  margin: 10px 0;
+  margin: 0.5rem 0;
 }
+
 .preview-btn {
-  background-color: #4a5568;
+  background: var(--bg-muted);
+  color: var(--text-main);
+  border: 1px solid var(--border-strong);
 }
+
+.preview-btn:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
 .column-mapping-panel {
-  background: #f7fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 16px;
-  margin: 16px 0;
+  background: var(--bg-page);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  margin: 0.5rem 0;
 }
+
+.column-mapping-panel h3 {
+  font-size: 1.05rem;
+  margin-bottom: 0.35rem;
+}
+
 .mapping-hint {
-  font-size: 0.88rem;
-  color: #4a5568;
-  margin-bottom: 12px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
 }
+
 .mapping-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1rem;
 }
+
 .missing-warning {
-  margin-bottom: 12px;
+  margin-bottom: 0.75rem;
 }
+
 .sample-table-container {
   overflow-x: auto;
-  max-height: 200px;
-  margin-top: 12px;
+  max-height: 15rem;
+  margin-top: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
 }
+
 .sample-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.82rem;
+  font-size: 0.8125rem;
 }
-.sample-table th, .sample-table td {
-  border: 1px solid #cbd5e0;
-  padding: 4px 8px;
+
+.sample-table th,
+.sample-table td {
+  border: 1px solid var(--border);
+  padding: 0.45rem 0.75rem;
   text-align: left;
   white-space: nowrap;
 }
+
 .sample-table th {
-  background: #edf2f7;
+  background: var(--bg-muted);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .import-page {
+    width: min(100% - 1rem, 74rem);
+    margin: 0.75rem auto;
+  }
+  .import-form {
+    padding: 1.25rem;
+  }
 }
 </style>

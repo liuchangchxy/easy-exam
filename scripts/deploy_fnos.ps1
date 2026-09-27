@@ -20,6 +20,24 @@ if (-not (Test-Path $dataDir)) {
     New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
 }
 
+# 2. 确保持久化密钥配置 (.env)
+$envFile = Join-Path $projectRoot ".env"
+if (Test-Path $envFile) {
+    Write-Host "🔑 加载已存在的 .env 配置..." -ForegroundColor Yellow
+    Get-Content $envFile | ForEach-Object {
+        if ($_ -match '^\s*([^#=]+)\s*=\s*(.*)$') {
+            [System.Environment]::SetEnvironmentVariable($matches[1].Trim(), $matches[2].Trim())
+        }
+    }
+}
+if (-not $env:EASYEXAM_SECRET_KEY) {
+    Write-Host "🔑 正在为首次部署生成持久化主密钥 (.env)..." -ForegroundColor Yellow
+    $generatedKey = [System.Guid]::NewGuid().ToString("N") + [System.Guid]::NewGuid().ToString("N")
+    "EASYEXAM_SECRET_KEY=$generatedKey" | Set-Content $envFile -Encoding utf8
+    $env:EASYEXAM_SECRET_KEY = $generatedKey
+    Write-Host "⚠️ 已在 .env 中生成并保存主密钥。容器更新或重建时请务必保持此密钥不变！" -ForegroundColor Yellow
+}
+
 # 2. 检查 Docker 运行环境
 $dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
 if (-not $dockerCmd) {
@@ -38,11 +56,11 @@ try {
 docker compose up -d --build
 
 # 4. 等待服务就绪与健康检查
-Write-Host "⏳ 等待应用容器启动与健康检查 (/api/health)..." -ForegroundColor Yellow
+Write-Host "⏳ 等待应用容器启动与健康检查 (/api/v1/health)..." -ForegroundColor Yellow
 $maxAttempts = 30
 $attempt = 0
 $healthy = $false
-$healthUrl = "http://127.0.0.1:3000/api/health"
+$healthUrl = "http://127.0.0.1:3000/api/v1/health"
 
 while ($attempt -lt $maxAttempts) {
     try {

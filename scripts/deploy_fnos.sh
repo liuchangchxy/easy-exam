@@ -19,6 +19,41 @@ if [ ! -d "${DATA_DIR}" ]; then
 fi
 chmod 755 "${DATA_DIR}" || true
 
+# 2. 确保持久化密钥配置 (.env)
+ENV_FILE="${SCRIPT_DIR}/.env"
+if [ -f "${ENV_FILE}" ]; then
+    echo "🔑 加载已存在的 .env 配置..."
+    set -a
+    . "${ENV_FILE}"
+    set +a
+fi
+
+if [ -z "${EASYEXAM_SECRET_KEY:-}" ]; then
+    echo "🔑 正在为首次部署生成持久化主密钥 (${ENV_FILE})..."
+    GENERATED_KEY=""
+    if command -v python3 >/dev/null 2>&1; then
+        GENERATED_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))" 2>/dev/null || true)
+    fi
+    if [ -z "$GENERATED_KEY" ] && command -v openssl >/dev/null 2>&1; then
+        GENERATED_KEY=$(openssl rand -hex 32 2>/dev/null || true)
+    fi
+    if [ -z "$GENERATED_KEY" ] && [ -r /dev/urandom ]; then
+        if command -v od >/dev/null 2>&1; then
+            GENERATED_KEY=$(od -vN 32 -An -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' || true)
+        elif command -v xxd >/dev/null 2>&1; then
+            GENERATED_KEY=$(head -c 32 /dev/urandom 2>/dev/null | xxd -p -c 32 || true)
+        fi
+    fi
+    if [ -z "$GENERATED_KEY" ] || [ "${#GENERATED_KEY}" -lt 64 ]; then
+        echo "❌ 错误: 无法生成密码学安全密钥，密码学随机源不可用！" >&2
+        exit 1
+    fi
+    echo "EASYEXAM_SECRET_KEY=${GENERATED_KEY}" >> "${ENV_FILE}"
+    chmod 600 "${ENV_FILE}" || true
+    export EASYEXAM_SECRET_KEY="${GENERATED_KEY}"
+    echo "⚠️ 已在 .env 中生成并保存主密钥。容器更新或重建时请务必保持此密钥不变！"
+fi
+
 # 2. 检查 Docker 运行环境
 if ! command -v docker &> /dev/null; then
     echo "❌ 错误: 未检测到 Docker 命令，请先在飞牛应用中心安装 Docker 服务！"
@@ -46,10 +81,10 @@ ${COMPOSE_CMD} down --remove-orphans || true
 ${COMPOSE_CMD} up -d --build
 
 # 5. 等待服务就绪与健康检查
-echo "⏳ 等待应用容器启动与健康检查 (/api/health)..."
+echo "⏳ 等待应用容器启动与健康检查 (/api/v1/health)..."
 MAX_ATTEMPTS=30
 ATTEMPT=0
-HEALTH_URL="http://127.0.0.1:3000/api/health"
+HEALTH_URL="http://127.0.0.1:3000/api/v1/health"
 
 while [ ${ATTEMPT} -lt ${MAX_ATTEMPTS} ]; do
     if curl -s -f "${HEALTH_URL}" &> /dev/null; then

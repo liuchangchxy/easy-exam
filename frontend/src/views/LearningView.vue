@@ -121,18 +121,30 @@
                 <option :value="0.0">纯复习 0%</option>
               </select>
             </label>
-            <button
-              v-if="store.recommendations.value?.length"
-              type="button"
-              class="primary btn-start-rec"
-              @click="startRecommendedPractice"
-            >开始推荐刷题 ({{ store.recommendations.value.length }} 题)</button>
+            <label class="ctrl-select bank-filter-ctrl">
+              <select id="select-rec-bank" v-model="selectedBankId" @change="onBankChange">
+                <option value="">全部题库</option>
+                <option v-for="b in banks" :key="b.id" :value="b.id">{{ b.name }}</option>
+              </select>
+            </label>
+            <div v-if="recsByBank.length" class="rec-actions">
+              <button
+                v-for="group in recsByBank"
+                :key="group.bank_id"
+                type="button"
+                class="primary btn-start-rec"
+                @click="startRecommendedPractice(group)"
+              >
+                {{ recsByBank.length > 1 ? `开始【${group.bank_name}】推荐刷题 (${group.items.length} 题)` : `开始推荐刷题 (${group.items.length} 题)` }}
+              </button>
+            </div>
           </div>
         </div>
 
         <ul v-if="store.recommendations.value?.length" class="rec-list">
           <li v-for="item in store.recommendations.value" :key="item.question_id" class="rec-item">
             <span class="rec-reason">{{ item.reason }}</span>
+            <span v-if="!selectedBankId" class="badge-bank">{{ getBankName(item.bank_id) }}</span>
             <span class="rec-stem">{{ item.stem }}</span>
             <small class="muted">{{ item.type }}</small>
           </li>
@@ -142,29 +154,108 @@
 
       <!-- 智能学习计划 -->
       <section class="bank-card plan-controls">
-        <h2>学习计划定制</h2>
-        <div class="plan-form">
-          <label>每天刷题时长（分钟）：
-            <input v-model.number="minutesPerDay" type="number" min="5" max="600" />
-          </label>
-          <label>计划周期：
-            <select v-model.number="days">
-              <option :value="1">1 天计划</option>
-              <option :value="3">3 天计划</option>
-              <option :value="7">7 天计划</option>
+        <div class="plan-header-title">
+          <div>
+            <h2>智能学习计划定制</h2>
+            <p class="plan-desc">根据遗忘曲线与薄弱图谱，科学平摊复习负荷，告别盲目刷题</p>
+          </div>
+          <div v-if="store.plan.value" class="plan-summary-badge">
+            <span>总计 <strong>{{ store.plan.value.question_count || 0 }}</strong> 题</span>
+            <span class="sep">·</span>
+            <span>预计 <strong>{{ store.plan.value.planned_minutes || 0 }}</strong> 分钟</span>
+            <span class="sep">·</span>
+            <span>日均 <strong>{{ Math.round((store.plan.value.question_count || 0) / (days || 1)) }}</strong> 题</span>
+          </div>
+        </div>
+
+        <div class="plan-form-grid">
+          <label class="form-item">
+            <span class="label-text">目标题库：</span>
+            <select v-model="planBankId" @change="updatePlan">
+              <option value="">全部已选关联题库</option>
+              <option v-for="b in banks" :key="b.id" :value="b.id">{{ b.name }}</option>
             </select>
           </label>
-          <button type="button" class="primary" @click="load">更新计划</button>
+          <label class="form-item">
+            <span class="label-text">计划周期：</span>
+            <select v-model.number="days" @change="updatePlan">
+              <option :value="1">1 天冲刺（考前急救）</option>
+              <option :value="3">3 天突击（周末攻坚）</option>
+              <option :value="7">7 天巩固（单周闭环）</option>
+              <option :value="14">14 天进阶（双周强化）</option>
+              <option :value="21">21 天提升（习惯养成）</option>
+              <option :value="30">30 天突破（全真覆盖）</option>
+            </select>
+          </label>
+          <label class="form-item">
+            <span class="label-text">每日时长：</span>
+            <select v-model.number="minutesPerDay" @change="updatePlan">
+              <option :value="15">15 分钟（碎片速刷）</option>
+              <option :value="30">30 分钟（标准训练）</option>
+              <option :value="45">45 分钟（深度攻坚）</option>
+              <option :value="60">60 分钟（高强突破）</option>
+              <option :value="90">90 分钟（全速冲关）</option>
+            </select>
+          </label>
+          <div class="form-actions">
+            <button type="button" class="primary btn-regen-plan" :disabled="planLoading" @click="updatePlan">
+              {{ planLoading ? '正在智能排布…' : '🔄 重新排布计划' }}
+            </button>
+          </div>
         </div>
-        <p class="plan-meta">{{ store.plan.value?.question_count || 0 }} 题 · 预计 {{ store.plan.value?.planned_minutes || 0 }} 分钟</p>
-        <div v-for="day in store.plan.value?.days || []" :key="day.day_number" class="day-plan">
-          <h3>第 {{ day.day_number }} 天 ({{ day.estimated_minutes ?? day.total_minutes ?? 0 }} 分钟)</h3>
-          <ul>
-            <li v-for="item in day.items" :key="item.question_id">
-              <strong>{{ item.reason }}</strong>：{{ item.stem }}（{{ item.estimated_minutes }} 分钟）
-            </li>
-          </ul>
+
+        <div v-if="store.plan.value?.days?.length" class="days-container">
+          <div
+            v-for="day in store.plan.value.days"
+            :key="day.day_number"
+            class="day-card"
+            :class="{ 'day-empty': !day.question_count }"
+          >
+            <div class="day-card-header">
+              <div class="day-info">
+                <span class="day-badge">第 {{ day.day_number }} 天</span>
+                <h4>{{ day.title }}</h4>
+                <span v-if="day.focus" class="day-focus-pill">{{ day.focus }}</span>
+              </div>
+              <div class="day-meta">
+                <span class="day-stats">{{ day.question_count }} 题 · 约 {{ day.estimated_minutes }} 分钟</span>
+                <button
+                  type="button"
+                  class="primary btn-start-day"
+                  :disabled="!day.question_ids?.length"
+                  @click="startDayPlan(day)"
+                >
+                  🚀 开始第 {{ day.day_number }} 天 ({{ day.question_count }} 题)
+                </button>
+              </div>
+            </div>
+
+            <p class="day-focus-desc">{{ day.focus_description }}</p>
+
+            <!-- 题目清单折叠展开 -->
+            <div v-if="day.items?.length" class="day-items-section">
+              <button
+                type="button"
+                class="btn-toggle-items"
+                @click="toggleDayExpand(day.day_number)"
+              >
+                {{ isDayExpanded(day.day_number) ? '收起题目明细 ▲' : `展开题目清单 (${day.items.length} 题) ▼` }}
+              </button>
+
+              <ul v-if="isDayExpanded(day.day_number)" class="day-item-list">
+                <li v-for="(it, idx) in day.items" :key="idx" class="day-item-row">
+                  <span class="item-reason-tag">{{ it.reason }}</span>
+                  <span class="item-stem">{{ it.stem }}</span>
+                  <span class="item-duration">{{ it.estimated_minutes }} 分钟</span>
+                </li>
+              </ul>
+            </div>
+            <div v-else class="day-empty-tip">
+              <span>🎉 今日无待复习任务，已达到抗遗忘目标或推荐库已学完。</span>
+            </div>
+          </div>
         </div>
+        <p v-else class="muted">暂未生成学习计划，点击上方按钮排布。</p>
       </section>
     </template>
   </main>
@@ -173,12 +264,18 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useLearningStore } from '../stores/learningStore'
+import { listBanks } from '../api/banks'
 import { startSession } from '../api/practice'
 
 const props = defineProps({ token: { type: String, required: true } })
 const emit = defineEmits(['back', 'start-session'])
 
 const store = useLearningStore()
+const banks = ref([])
+const selectedBankId = ref('')
+const planBankId = ref('')
+const planLoading = ref(false)
+const expandedDays = ref({})
 const minutesPerDay = ref(30)
 const days = ref(7)
 
@@ -188,6 +285,24 @@ const filterDue = ref(true)
 const filterType = ref('')
 const filterDifficulty = ref('')
 const filterNewRatio = ref(0.5)
+
+function getBankName(bankId) {
+  const b = banks.value.find(item => item.id === bankId)
+  return b ? b.name : '未知题库'
+}
+
+const recsByBank = computed(() => {
+  const map = {}
+  const list = store.recommendations.value || []
+  for (const item of list) {
+    const bid = item.bank_id || 'unknown'
+    if (!map[bid]) {
+      map[bid] = { bank_id: bid, bank_name: getBankName(bid), items: [] }
+    }
+    map[bid].items.push(item)
+  }
+  return Object.values(map)
+})
 
 const trendText = computed(() => {
   const recentRate = store.trends.value?.recent?.correct_rate || 0
@@ -206,8 +321,12 @@ const trendClass = computed(() => {
   return recentRate >= baseRate ? 'trend-up' : 'trend-down'
 })
 
+function onBankChange() {
+  load()
+}
+
 function load() {
-  store.load(props.token, '', minutesPerDay.value, days.value)
+  store.load(props.token, selectedBankId.value, minutesPerDay.value, days.value)
 }
 
 function applyFilters() {
@@ -223,17 +342,19 @@ function applyFilters() {
   if (filterDifficulty.value !== '') {
     options.difficulty = Number(filterDifficulty.value)
   }
-  store.reloadRecommendations(props.token, '', options)
+  store.reloadRecommendations(props.token, selectedBankId.value, options)
 }
 
-async function startRecommendedPractice() {
-  const recs = store.recommendations.value || []
-  if (!recs.length) return
-  const qIds = recs.map(r => r.question_id)
-  const bankId = recs[0].bank_id || ''
+async function startRecommendedPractice(group) {
+  const items = group ? group.items : (store.recommendations.value || [])
+  if (!items.length) return
+  const targetBankId = group ? group.bank_id : (selectedBankId.value || items[0].bank_id)
+  const bankItems = items.filter(r => r.bank_id === targetBankId)
+  if (!bankItems.length) return
+  const qIds = bankItems.map(r => r.question_id)
   try {
     const sess = await startSession(props.token, {
-      bank_id: bankId,
+      bank_id: targetBankId,
       mode: 'PRACTICE',
       question_ids: qIds,
     })
@@ -243,43 +364,489 @@ async function startRecommendedPractice() {
   }
 }
 
-onMounted(load)
+function isDayExpanded(dayNum) {
+  return Boolean(expandedDays.value[dayNum])
+}
+
+function toggleDayExpand(dayNum) {
+  expandedDays.value[dayNum] = !expandedDays.value[dayNum]
+}
+
+async function updatePlan() {
+  planLoading.value = true
+  try {
+    const targetBank = planBankId.value || selectedBankId.value
+    await store.reloadStudyPlan(props.token, targetBank, minutesPerDay.value, days.value)
+  } finally {
+    planLoading.value = false
+  }
+}
+
+async function startDayPlan(day) {
+  if (!day.question_ids || !day.question_ids.length) {
+    alert('该日程没有分配题目')
+    return
+  }
+  const targetBankId = day.bank_id || planBankId.value || selectedBankId.value || banks.value[0]?.id
+  if (!targetBankId) {
+    alert('请选择题库后再开始刷题')
+    return
+  }
+  try {
+    const sess = await startSession(props.token, {
+      bank_id: targetBankId,
+      mode: 'PRACTICE',
+      question_ids: day.question_ids,
+    })
+    emit('start-session', sess)
+  } catch (err) {
+    alert(`启动日程练习失败：${err.detail || err.message}`)
+  }
+}
+
+onMounted(async () => {
+  try {
+    banks.value = await listBanks(props.token)
+  } catch (e) {
+    console.error('加载题库列表失败', e)
+  }
+  load()
+})
 </script>
 
 <style scoped>
-.learning-page { width: min(100% - 2rem, 76rem); margin: 1.25rem auto; display: grid; gap: 1.25rem; }
-.metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 1rem; }
-.stat-box { display: grid; gap: 0.35rem; padding: 1.25rem; }
-.stat-box strong { font-size: 1.6rem; color: var(--primary); }
-.stat-box small { color: var(--text-muted); font-size: 0.85rem; }
-.stat-box p { font-size: 0.85rem; color: var(--text-muted); margin: 0; }
-.comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-top: 1rem; }
-.comp-col { padding: 1rem; border-radius: 0.75rem; border: 1px solid var(--border); background: var(--bg-page); }
-.comp-col h3 { font-size: 1rem; margin-bottom: 0.75rem; }
-.comp-col ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; }
-.comp-col li { display: flex; justify-content: space-between; font-size: 0.95rem; }
-.trend-up { color: var(--success); }
-.trend-down { color: var(--danger); }
-.weak-list { list-style: none; padding: 0; margin: 1rem 0 0 0; display: grid; gap: 0.5rem; }
-.weak-item { display: flex; align-items: center; gap: 1rem; padding: 0.65rem 1rem; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--bg-page); }
-.rank-num { width: 1.5rem; height: 1.5rem; display: grid; place-items: center; border-radius: 50%; background: #fee2e2; color: #b91c1c; font-weight: 700; font-size: 0.85rem; }
-.point-name { flex: 1; font-weight: 600; }
-.mistake-count { color: var(--danger); font-size: 0.85rem; }
-.rec-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; }
-.rec-controls { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
-.ctrl-check { display: flex; gap: 0.35rem; align-items: center; font-size: 0.85rem; cursor: pointer; }
-.ctrl-select select { padding: 0.35rem 0.65rem; border-radius: 0.4rem; border: 1px solid var(--border); }
-.rec-list { list-style: none; padding: 0; margin: 1rem 0 0 0; display: grid; gap: 0.5rem; }
-.rec-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.65rem 0.9rem; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--bg-page); }
-.rec-reason { font-size: 0.75rem; font-weight: 600; padding: 0.2rem 0.5rem; border-radius: 0.35rem; background: var(--primary); color: white; }
-.rec-stem { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.plan-form { display: flex; gap: 1rem; align-items: center; margin: 1rem 0; flex-wrap: wrap; }
-.plan-form label { display: flex; align-items: center; gap: 0.5rem; }
-.plan-form input, .plan-form select { padding: 0.45rem 0.65rem; border-radius: 0.4rem; border: 1px solid var(--border); }
-.day-plan { margin-top: 1rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--bg-page); }
-.day-plan h3 { font-size: 0.95rem; margin-bottom: 0.5rem; }
-.day-plan ul { margin-left: 1rem; }
+.learning-page {
+  width: min(100% - 2rem, 76rem);
+  margin: 1.5rem auto;
+  display: grid;
+  gap: 1.5rem;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1.25rem;
+}
+
+.stat-box {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1.35rem;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+}
+
+.stat-box strong {
+  font-size: 1.85rem;
+  color: var(--primary);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.stat-box small {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.stat-box p {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.comparison-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.comp-col {
+  padding: 1.25rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-page);
+}
+
+.comp-col h3 {
+  font-size: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.comp-col ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.comp-col li {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.925rem;
+}
+
+.trend-up {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.trend-down {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.weak-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.weak-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-page);
+}
+
+.rank-num {
+  width: 1.6rem;
+  height: 1.6rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--danger-light);
+  color: var(--danger);
+  font-weight: 700;
+  font-size: 0.8125rem;
+}
+
+.point-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.mistake-count {
+  color: var(--danger);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.rec-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.rec-controls {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ctrl-check {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  font-size: 0.875rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ctrl-select select {
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  font-size: 0.85rem;
+}
+
+.rec-list {
+  list-style: none;
+  padding: 0;
+  margin: 1.25rem 0 0 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.rec-item {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-page);
+}
+
+.rec-reason {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: white;
+  white-space: nowrap;
+}
+
+.rec-stem {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.925rem;
+}
+
+.plan-header-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.plan-desc {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+.plan-summary-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.85rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 9999px;
+  font-size: 0.85rem;
+  color: #1e40af;
+}
+
+.plan-summary-badge .sep {
+  color: #93c5fd;
+}
+
+.plan-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)) auto;
+  gap: 1rem;
+  align-items: flex-end;
+  padding: 1.25rem;
+  background: var(--bg-page);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 1.5rem;
+}
+
+.form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.form-item select {
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  font-size: 0.9rem;
+}
+
+.form-actions {
+  display: flex;
+  align-items: flex-end;
+}
+
+.btn-regen-plan {
+  padding: 0.52rem 1.15rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.days-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.day-card {
+  padding: 1.25rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.2s;
+}
+
+.day-card:hover {
+  border-color: var(--primary-border);
+}
+
+.day-card.day-empty {
+  opacity: 0.75;
+  background: #f8fafc;
+}
+
+.day-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.day-info {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.day-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: white;
+}
+
+.day-info h4 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--text-main);
+}
+
+.day-focus-pill {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  background: #f3e8ff;
+  border: 1px solid #d8b4fe;
+  color: #7e22ce;
+}
+
+.day-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.day-stats {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.btn-start-day {
+  padding: 0.45rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  white-space: nowrap;
+}
+
+.day-focus-desc {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0.5rem 0 0.75rem 0;
+}
+
+.day-items-section {
+  margin-top: 0.5rem;
+  border-top: 1px dashed var(--border);
+  padding-top: 0.65rem;
+}
+
+.btn-toggle-items {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.825rem;
+  color: var(--primary);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.btn-toggle-items:hover {
+  color: var(--primary-hover);
+}
+
+.day-item-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.65rem 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.day-item-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.45rem 0.65rem;
+  background: var(--bg-page);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+}
+
+.item-reason-tag {
+  font-size: 0.725rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.item-stem {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-duration {
+  font-size: 0.775rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.day-empty-tip {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+
 @media (max-width: 640px) {
-  .comparison-grid { grid-template-columns: 1fr; }
+  .learning-page {
+    width: min(100% - 1rem, 76rem);
+    margin: 0.75rem auto;
+  }
+  .comparison-grid {
+    grid-template-columns: 1fr;
+  }
+  .rec-controls {
+    width: 100%;
+  }
 }
 </style>

@@ -23,6 +23,10 @@ class TestV1Learning(unittest.TestCase):
             due = client.get(f"/api/v1/mistakes/due?bank_id={bank['id']}", headers=headers).json()
             self.assertEqual(due[0]["question_id"], question["id"])
 
+            # EE-016: include_weak=false MUST exclude manually flagged weak question
+            filtered = client.get(f"/api/v1/learning/recommendations?bank_id={bank['id']}&include_weak=false", headers=headers).json()
+            self.assertEqual(len(filtered), 0)
+
     def test_plan_respects_time_budget_and_includes_explained_actions(self):
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))

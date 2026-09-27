@@ -22,6 +22,7 @@ class QuestionPayload(BaseModel):
     explanation: str = ""
     difficulty: int | None = None
     tags: List[str] = Field(default_factory=list)
+    chapter_id: str | None = None
 
 
 class MemberPayload(BaseModel):
@@ -93,6 +94,27 @@ def add_member(bank_id: str, payload: MemberPayload, request: Request, user=Depe
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.get("/{bank_id}/members")
+def list_members(bank_id: str, request: Request, user=Depends(current_user)):
+    try:
+        return request.app.state.services.banks.list_members(bank_id, user["id"])
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+@router.delete("/{bank_id}/members/{member_user_id}", status_code=204)
+def remove_member(bank_id: str, member_user_id: str, request: Request, user=Depends(current_user)):
+    try:
+        removed = request.app.state.services.banks.remove_member(bank_id, user["id"], member_user_id)
+        if not removed:
+            raise HTTPException(status_code=404, detail="member not found")
+        return None
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/{bank_id}/chapters", status_code=201)
 def create_chapter(bank_id: str, payload: ChapterPayload, request: Request, user=Depends(current_user)):
     try:
@@ -117,3 +139,28 @@ def create_tag(bank_id: str, payload: TagPayload, request: Request, user=Depends
 @router.get("/{bank_id}/tags")
 def list_tags(bank_id: str, request: Request, user=Depends(current_user)):
     return request.app.state.services.banks.list_tags(bank_id, user["id"])
+
+
+@router.get("/{bank_id}/export")
+def export_bank(bank_id: str, format: str = "json", request: Request = None, user=Depends(current_user)):
+    from fastapi.responses import Response
+    from backend.legacy.services.exporter import export_to_json, export_to_csv, export_to_text, export_to_excel
+
+    bank = request.app.state.services.banks.get_for_user(bank_id, user["id"])
+    if not bank:
+        raise HTTPException(status_code=404, detail="bank not found")
+    questions = request.app.state.services.questions.list_for_bank(bank_id, user["id"])
+    fmt = (format or "json").lower()
+
+    if fmt == "csv":
+        content = export_to_csv(questions)
+        return Response(content=content.encode("utf-8-sig"), media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=bank_{bank_id}.csv"})
+    elif fmt in ("txt", "text", "md"):
+        content = export_to_text(questions)
+        return Response(content=content.encode("utf-8"), media_type="text/plain; charset=utf-8", headers={"Content-Disposition": f"attachment; filename=bank_{bank_id}.txt"})
+    elif fmt in ("xlsx", "excel"):
+        content = export_to_excel(questions)
+        return Response(content=content, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=bank_{bank_id}.xlsx"})
+    else:
+        content = export_to_json(questions)
+        return Response(content=content.encode("utf-8"), media_type="application/json; charset=utf-8", headers={"Content-Disposition": f"attachment; filename=bank_{bank_id}.json"})

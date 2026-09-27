@@ -31,3 +31,8 @@ export const uploadAssetFile = (token, file, assetType = 'NOTE', questionId = ''
     return res.json()
   })
 }
+
+export const deleteAsset = (token, assetId) => request(`/assets/${assetId}`, {
+  method: 'DELETE',
+  headers: authHeaders(token),
+})

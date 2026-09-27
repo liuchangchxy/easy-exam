@@ -309,6 +309,77 @@ MIGRATIONS = {
     );
     CREATE INDEX idx_question_conflicts_unresolved ON question_conflicts(question_id, is_resolved);
     """,
+    15: """
+    -- Exam & practice session runtime config (EE-002: record_mistakes, etc.)
+    ALTER TABLE practice_sessions ADD COLUMN config_json TEXT NOT NULL DEFAULT '{}';
+    """,
+    16: """
+    -- Question entities, tags linking, and AI variant drafts (EE-005, EE-007)
+    ALTER TABLE question_versions ADD COLUMN chapter_id TEXT REFERENCES chapters(id) ON DELETE SET NULL;
+    CREATE TABLE question_tag_items (
+        question_version_id TEXT NOT NULL REFERENCES question_versions(id) ON DELETE CASCADE,
+        tag_id TEXT NOT NULL REFERENCES knowledge_tags(id) ON DELETE CASCADE,
+        PRIMARY KEY(question_version_id, tag_id)
+    );
+    CREATE INDEX idx_qti_tag ON question_tag_items(tag_id);
+    CREATE TABLE ai_question_drafts (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        original_question_id TEXT REFERENCES questions(id) ON DELETE SET NULL,
+        target_bank_id TEXT NOT NULL REFERENCES question_banks(id) ON DELETE CASCADE,
+        stem TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'SINGLE',
+        options_json TEXT NOT NULL DEFAULT '[]',
+        answer TEXT NOT NULL DEFAULT '',
+        explanation TEXT NOT NULL DEFAULT '',
+        difficulty INTEGER NOT NULL DEFAULT 3,
+        tags_json TEXT NOT NULL DEFAULT '[]',
+        status TEXT NOT NULL DEFAULT 'DRAFT' CHECK(status IN ('DRAFT', 'ACCEPTED', 'DISCARDED')),
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX idx_ai_drafts_user ON ai_question_drafts(user_id, status);
+    """,
+    17: """
+    -- Audit logs for historical re-grading and critical changes (EE-006)
+    CREATE TABLE audit_logs (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        action TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        details_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX idx_audit_logs_user_action ON audit_logs(user_id, action);
+    CREATE INDEX idx_audit_logs_entity ON audit_logs(entity_type, entity_id);
+
+    -- Persistent AI & Search user configuration with secret protection (EE-009)
+    CREATE TABLE user_ai_configs (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        ai_provider TEXT NOT NULL DEFAULT 'openai',
+        ai_api_base TEXT NOT NULL DEFAULT 'https://api.openai.com/v1',
+        ai_model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+        ai_api_key TEXT NOT NULL DEFAULT '',
+        search_provider TEXT NOT NULL DEFAULT 'open-webSearch',
+        search_api_key TEXT NOT NULL DEFAULT '',
+        search_api_base TEXT NOT NULL DEFAULT 'http://localhost:8000/v1/search',
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Ambiguous/uncertain PDF parsing candidate drafts for manual correction (EE-021)
+    CREATE TABLE pdf_import_drafts (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        bank_id TEXT NOT NULL REFERENCES question_banks(id) ON DELETE CASCADE,
+        filename TEXT NOT NULL,
+        candidate_questions_json TEXT NOT NULL DEFAULT '[]',
+        status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'CONFIRMED', 'DISCARDED')),
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX idx_pdf_drafts_user_bank ON pdf_import_drafts(user_id, bank_id, status);
+    """,
 }
 
 

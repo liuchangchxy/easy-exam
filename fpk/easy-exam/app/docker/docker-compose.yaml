@@ -1,0 +1,15 @@
+services:
+  easy-exam:
+    image: ailm32442/easy-exam:1.0.1
+    container_name: easy-exam-fpk
+    pull_policy: if_not_present
+    restart: unless-stopped
+    ports:
+      - "${service_port:-${TRIM_SERVICE_PORT:-3000}}:3000"
+    volumes:
+      - "${TRIM_PKGVAR:-/var/apps/easy-exam/var}:/app/data"
+    environment:
+      - PORT=3000
+      - DATA_DIR=/app/data
+      - LLM_BASE_URL=http://host.docker.internal:11434/v1
+      - EASYEXAM_SECRET_KEY=${EASYEXAM_SECRET_KEY}

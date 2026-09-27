@@ -36,3 +36,20 @@ export const toggleFlag = (token, sessionId, questionId) => request(`/practice/s
   headers: authHeaders(token),
   body: JSON.stringify({ question_id: questionId }),
 })
+
+export const listActiveSessions = (token, mode = null) => {
+  const query = mode ? `?mode=${encodeURIComponent(mode)}` : ''
+  return request(`/practice/sessions/active${query}`, {
+    headers: authHeaders(token),
+  })
+}
+
+export const abandonSession = (token, sessionId) => request(`/practice/sessions/${sessionId}/abandon`, {
+  method: 'POST',
+  headers: authHeaders(token),
+})
+
+export const abandonAllSessions = (token) => request('/practice/sessions/abandon-all', {
+  method: 'POST',
+  headers: authHeaders(token),
+})

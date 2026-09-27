@@ -63,6 +63,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
         PYTHONPATH: repoRoot,
         DB_PATH: tempDbPath,
         INSTANCE_TOKEN: instanceToken,
+        EASYEXAM_SECRET_KEY: process.env.EASYEXAM_SECRET_KEY || 'easyexam-e2e-secret-key-32bytes-ci!!',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     }
@@ -256,7 +257,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       } else if (stem.includes('软件测试')) {
         targetKey = wrong ? 'A' : 'B'
       }
-      const opt = page.locator('label.option').filter({ hasText: `${targetKey}.` })
+      const opt = page.locator('label.option').filter({ has: page.locator(`.key-cap:text-is("${targetKey}")`) })
       await opt.click()
       await page.click('button:has-text("提交答案")')
       await page.waitForSelector('.result-card', { timeout: 8000 })

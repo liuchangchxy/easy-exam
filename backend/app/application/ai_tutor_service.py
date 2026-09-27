@@ -1,10 +1,87 @@
+import json
+from typing import Any, Dict, List, Optional
+
+
 class AiTutorService:
-    def __init__(self, answers, questions, provider=None, web_search=None, conversations=None):
+    def __init__(self, answers, questions, provider=None, web_search=None, conversations=None, assets=None, drafts=None, ai_configs=None):
         self.answers = answers
         self.questions = questions
         self.provider = provider
         self.web_search = web_search
         self.conversations = conversations
+        self.assets = assets
+        self.drafts = drafts
+        self.ai_configs = ai_configs
+
+    def get_user_ai_config(self, user_id: str) -> dict:
+        if self.ai_configs:
+            return self.ai_configs.get_config(user_id, mask_secrets=True)
+        return {
+            "ai_provider": "openai",
+            "ai_api_base": "https://api.openai.com/v1",
+            "ai_model": "gpt-4o-mini",
+            "ai_api_key": "",
+            "search_provider": "open-webSearch",
+            "search_api_key": "",
+            "search_api_base": "http://localhost:8000/v1/search",
+            "is_configured": False,
+        }
+
+    def save_user_ai_config(self, user_id: str, payload: dict) -> dict:
+        if self.ai_configs:
+            return self.ai_configs.save_config(user_id, payload)
+        return self.get_user_ai_config(user_id)
+
+    def _get_provider_for_user(self, user_id: str):
+        if self.ai_configs:
+            cfg = self.ai_configs.get_config(user_id, mask_secrets=False)
+            if cfg.get("ai_api_key") or ("localhost" in cfg.get("ai_api_base", "")):
+                from backend.legacy.services.ai_service import AIService
+                from backend.app.infrastructure.ai.provider import CompatibleAiProvider
+                return CompatibleAiProvider(AIService(
+                    api_key=cfg.get("ai_api_key"),
+                    base_url=cfg.get("ai_api_base"),
+                    model=cfg.get("ai_model"),
+                ))
+        from backend.app.infrastructure.ai.provider import CompatibleAiProvider
+        return self.provider or CompatibleAiProvider()
+
+    def _get_search_for_user(self, user_id: str):
+        if self.web_search:
+            return self.web_search
+        if self.ai_configs:
+            cfg = self.ai_configs.get_config(user_id, mask_secrets=False)
+            if cfg.get("search_provider") == "open-webSearch":
+                from backend.app.infrastructure.ai.web_search import OpenWebSearchAdapter
+                return OpenWebSearchAdapter(endpoint_url=cfg.get("search_api_base"))
+            elif cfg.get("search_provider") == "offline":
+                from backend.app.infrastructure.ai.web_search import OfflineWebSearch
+                return OfflineWebSearch()
+        from backend.app.infrastructure.ai.web_search import OfflineWebSearch
+        return OfflineWebSearch()
+
+    def _inject_assets_context(self, user_id: str, question: dict, base_prompt_msgs: list[dict[str, str]]) -> tuple[list[dict[str, str]], list[str]]:
+        if not self.assets:
+            return base_prompt_msgs, []
+        relevant = self.assets.find_relevant(user_id, question_id=question.get("id"), tags=question.get("tags"))
+        if not relevant:
+            return base_prompt_msgs, []
+
+        asset_lines = []
+        referenced_ids = []
+        for a in relevant:
+            referenced_ids.append(a["id"])
+            asset_lines.append(f"- [资料ID: {a['id']}] [{a['asset_type']}] {a['content']}")
+        assets_text = "\n".join(asset_lines)
+
+        new_msgs = []
+        for msg in base_prompt_msgs:
+            if msg["role"] == "system":
+                enriched = msg["content"] + f"\n\n【用户个人参考资料（严格隔离自用户知识库）】\n{assets_text}\n请在辅导时结合上述个人资料进行解答与点拨，并指明依据。"
+                new_msgs.append({"role": "system", "content": enriched})
+            else:
+                new_msgs.append(msg)
+        return new_msgs, referenced_ids
 
     def save_candidate(self, user_id: str, question_id: str, content: str, source: str = "AI", provider: str | None = None) -> dict:
         question = self.questions.get_for_user(question_id, user_id)
@@ -24,17 +101,20 @@ class AiTutorService:
         question = self.questions.get_for_user(question_id, user_id)
         if not question:
             raise LookupError("question not found")
-        from backend.app.infrastructure.ai.provider import CompatibleAiProvider, build_tutor_prompt
-        provider = self.provider or CompatibleAiProvider()
-        content = provider.chat_complete(build_tutor_prompt(question, query, history))
-        return self.answers.create(user_id, question, content, "AI", getattr(provider, "model", None))
+        from backend.app.infrastructure.ai.provider import build_tutor_prompt
+        provider = self._get_provider_for_user(user_id)
+        base_prompt = build_tutor_prompt(question, query, history)
+        prompt_msgs, referenced_assets = self._inject_assets_context(user_id, question, base_prompt)
+        content = provider.chat_complete(prompt_msgs)
+        ans = self.answers.create(user_id, question, content, "AI", getattr(provider, "model", None))
+        ans["referenced_assets"] = referenced_assets
+        return ans
 
     def request_web_verification(self, user_id: str, question_id: str, query: str = "") -> dict:
         question = self.questions.get_for_user(question_id, user_id)
         if not question:
             raise LookupError("question not found")
-        from backend.app.infrastructure.ai.web_search import OfflineWebSearch
-        search = self.web_search or OfflineWebSearch()
+        search = self._get_search_for_user(user_id)
         result = search.search(query.strip() or question["stem"])
         content = result.get("message") or "已取得联网核查结果，请查看来源证据。"
         if result.get("results"):
@@ -53,11 +133,6 @@ class AiTutorService:
         conversation_id: str | None = None,
         parent_message_id: str | None = None,
     ) -> dict:
-        """Adapted from MiaowTest (commit 803dadc, MIT License).
-
-        Appends user message, calls AI provider with question context and message thread history,
-        and saves assistant message in sequence with parent_message_id reference.
-        """
         if not self.conversations:
             raise RuntimeError("AiConversationRepository is not configured")
         question = self.questions.get_for_user(question_id, user_id)
@@ -82,7 +157,6 @@ class AiTutorService:
             status="success",
         )
 
-        # Build history for provider prompt
         if parent_message_id:
             thread = self.conversations.get_message_thread(parent_message_id, user_id)
             history = [{"role": m["role"], "content": m["content"]} for m in thread]
@@ -90,9 +164,10 @@ class AiTutorService:
             all_msgs = self.conversations.list_messages(conversation_id, user_id)
             history = [{"role": m["role"], "content": m["content"]} for m in all_msgs if m["id"] != user_msg["id"]]
 
-        from backend.app.infrastructure.ai.provider import CompatibleAiProvider, build_tutor_prompt
-        provider = self.provider or CompatibleAiProvider()
-        prompt_msgs = build_tutor_prompt(question, content, history)
+        from backend.app.infrastructure.ai.provider import build_tutor_prompt
+        provider = self._get_provider_for_user(user_id)
+        base_prompt = build_tutor_prompt(question, content, history)
+        prompt_msgs, referenced_assets = self._inject_assets_context(user_id, question, base_prompt)
         assistant_content = provider.chat_complete(prompt_msgs)
 
         assistant_msg = self.conversations.append_message(
@@ -103,6 +178,7 @@ class AiTutorService:
             parent_message_id=user_msg["id"],
             status="success",
         )
+        assistant_msg["referenced_assets"] = referenced_assets
 
         return {
             "conversation": conv,
@@ -124,3 +200,104 @@ class AiTutorService:
         if not self.conversations:
             raise LookupError("conversation repository not configured")
         return self.conversations.get_message_thread(message_id, user_id)
+
+    # --- EE-005 AI Variant Draft Workflow ---
+
+    def generate_variant_draft(
+        self,
+        user_id: str,
+        original_question_id: str,
+        target_bank_id: str,
+        prompt_hint: str = "",
+    ) -> dict:
+        if not self.drafts:
+            raise RuntimeError("AiDraftRepository is not configured")
+        original = self.questions.get_for_user(original_question_id, user_id)
+        if not original:
+            raise LookupError("original question not found")
+
+        from backend.app.infrastructure.ai.provider import CompatibleAiProvider
+        provider = self.provider or CompatibleAiProvider()
+
+        variant_prompt = [
+            {
+                "role": "system",
+                "content": (
+                    "你是一位严谨的出题专家。请基于给出的原题生成一道考查相同知识点的变式题。"
+                    "要求输出纯 JSON 对象，格式包含：stem (题干字符串), type (SINGLE 或 MULTIPLE 或 JUDGE 或 QA), "
+                    "options (选项列表，格式如 [{'key': 'A', 'text': '...'}, {'key': 'B', 'text': '...'}]), "
+                    "answer (正确答案), explanation (详细解析), difficulty (1-5 整数), tags (字符串标签列表)。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"原题题干: {original.get('stem')}\n原题选项: {json.dumps(original.get('options') or [], ensure_ascii=False)}\n原题答案: {original.get('answer')}\n原题解析: {original.get('explanation')}\n出题要求: {prompt_hint or '生成考点相同的变式题'}",
+            },
+        ]
+
+        raw_output = provider.chat_complete(variant_prompt)
+        draft_payload = None
+        try:
+            cleaned = raw_output.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+            draft_payload = json.loads(cleaned)
+        except Exception:
+            draft_payload = {
+                "stem": f"【变式】{original.get('stem')}",
+                "type": original.get("type", "SINGLE"),
+                "options": original.get("options", []),
+                "answer": original.get("answer", ""),
+                "explanation": f"基于原题考点的变式题解析：{original.get('explanation', '')}",
+                "difficulty": original.get("difficulty", 3),
+                "tags": original.get("tags", []),
+            }
+
+        return self.drafts.create_draft(user_id, original_question_id, target_bank_id, draft_payload)
+
+    def list_variant_drafts(self, user_id: str, status: str = "DRAFT") -> list[dict]:
+        if not self.drafts:
+            return []
+        return self.drafts.list_drafts(user_id, status)
+
+    def get_variant_draft(self, user_id: str, draft_id: str) -> dict:
+        if not self.drafts:
+            raise LookupError("AiDraftRepository is not configured")
+        draft = self.drafts.get_draft(user_id, draft_id)
+        if not draft:
+            raise LookupError("draft not found")
+        return draft
+
+    def accept_variant_draft(self, user_id: str, draft_id: str, modifications: Optional[dict] = None) -> dict:
+        if not self.drafts:
+            raise LookupError("AiDraftRepository is not configured")
+        draft = self.drafts.get_draft(user_id, draft_id)
+        if not draft or draft.get("status") != "DRAFT":
+            raise LookupError("draft not found or already processed")
+
+        payload = {
+            "stem": (modifications.get("stem") if modifications and "stem" in modifications else draft["stem"]),
+            "type": (modifications.get("type") if modifications and "type" in modifications else draft["type"]),
+            "options": (modifications.get("options") if modifications and "options" in modifications else draft["options"]),
+            "answer": (modifications.get("answer") if modifications and "answer" in modifications else draft["answer"]),
+            "explanation": (modifications.get("explanation") if modifications and "explanation" in modifications else draft["explanation"]),
+            "difficulty": (modifications.get("difficulty") if modifications and "difficulty" in modifications else draft["difficulty"]),
+            "tags": (modifications.get("tags") if modifications and "tags" in modifications else draft["tags"]),
+        }
+
+        # Create question into target bank
+        official_question = self.questions.create_versioned_question(user_id, draft["target_bank_id"], payload)
+        self.drafts.update_status(user_id, draft_id, "ACCEPTED")
+        return {
+            "status": "ACCEPTED",
+            "draft_id": draft_id,
+            "question": official_question,
+        }
+
+    def discard_variant_draft(self, user_id: str, draft_id: str) -> dict:
+        if not self.drafts:
+            raise LookupError("AiDraftRepository is not configured")
+        updated = self.drafts.update_status(user_id, draft_id, "DISCARDED")
+        if not updated:
+            raise LookupError("draft not found")
+        return {"status": "DISCARDED", "draft_id": draft_id}

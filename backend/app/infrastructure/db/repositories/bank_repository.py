@@ -62,6 +62,29 @@ class BankRepository:
             conn.execute("INSERT INTO question_bank_members(bank_id, user_id, role) VALUES (?, ?, ?) ON CONFLICT(bank_id, user_id) DO UPDATE SET role = excluded.role", (bank_id, target[0], role))
             return {"bank_id": bank_id, "user_id": target[0], "username": username.strip().lower(), "role": role}
 
+    def list_members(self, bank_id: str, user_id: str) -> list[dict]:
+        with transaction(self.db_path) as conn:
+            if not conn.execute("SELECT 1 FROM question_bank_members WHERE bank_id = ? AND user_id = ?", (bank_id, user_id)).fetchone():
+                raise PermissionError("access denied")
+            rows = conn.execute(
+                """SELECT m.bank_id, m.user_id, u.username, m.role
+                   FROM question_bank_members m
+                   JOIN users u ON u.id = m.user_id
+                   WHERE m.bank_id = ? ORDER BY m.role ASC""",
+                (bank_id,),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def remove_member(self, bank_id: str, owner_id: str, target_user_id: str) -> bool:
+        with transaction(self.db_path) as conn:
+            owner = conn.execute("SELECT role FROM question_bank_members WHERE bank_id = ? AND user_id = ?", (bank_id, owner_id)).fetchone()
+            if not owner or owner[0] != "ADMIN":
+                raise PermissionError("only bank admin can remove members")
+            if owner_id == target_user_id:
+                raise ValueError("cannot remove owner/self")
+            res = conn.execute("DELETE FROM question_bank_members WHERE bank_id = ? AND user_id = ?", (bank_id, target_user_id))
+            return res.rowcount > 0
+
     def create_chapter(self, bank_id: str, user_id: str, name: str, parent_id: str | None = None) -> dict:
         chapter_id = str(uuid.uuid4())
         with transaction(self.db_path) as conn:

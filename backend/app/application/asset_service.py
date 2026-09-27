@@ -13,6 +13,12 @@ class AssetService:
     def list_for_user(self, user_id: str, question_id: Optional[str] = None) -> List[Dict[str, Any]]:
         return self.assets_repo.list_for_user(user_id, question_id)
 
+    def get_for_user(self, user_id: str, asset_id: str) -> Optional[Dict[str, Any]]:
+        return self.assets_repo.get_for_user(user_id, asset_id)
+
+    def delete(self, user_id: str, asset_id: str) -> bool:
+        return self.assets_repo.delete(user_id, asset_id)
+
     def create_from_file(
         self,
         user_id: str,

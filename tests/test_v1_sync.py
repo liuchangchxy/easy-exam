@@ -208,3 +208,31 @@ class TestV1Sync(unittest.TestCase):
         # Conflict is now marked resolved
         after_conflict = self.client.get(f"/api/v1/questions/{self.question_id}/conflict", headers=self.auth).json()
         self.assertFalse(after_conflict["has_conflict"])
+
+    def test_abandon_active_session_and_abandon_all(self):
+        """Active unfinished sessions can be individually abandoned or batch abandoned."""
+        # Create 3 active sessions
+        sess1 = self.client.post("/api/v1/practice/sessions", headers=self.auth, json={"bank_id": self.bank_id, "mode": "PRACTICE"}).json()
+        sess2 = self.client.post("/api/v1/practice/sessions", headers=self.auth, json={"bank_id": self.bank_id, "mode": "PRACTICE"}).json()
+        sess3 = self.client.post("/api/v1/practice/sessions", headers=self.auth, json={"bank_id": self.bank_id, "mode": "PRACTICE"}).json()
+
+        active = self.client.get("/api/v1/practice/sessions/active", headers=self.auth).json()
+        self.assertEqual(len(active), 3)
+
+        # Abandon individual session 1
+        res = self.client.post(f"/api/v1/practice/sessions/{sess1['id']}/abandon", headers=self.auth)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["status"], "abandoned")
+
+        active_after = self.client.get("/api/v1/practice/sessions/active", headers=self.auth).json()
+        self.assertEqual(len(active_after), 2)
+        active_ids = [s["id"] for s in active_after]
+        self.assertNotIn(sess1["id"], active_ids)
+
+        # Abandon all remaining sessions
+        res_all = self.client.post("/api/v1/practice/sessions/abandon-all", headers=self.auth)
+        self.assertEqual(res_all.status_code, 200)
+        self.assertEqual(res_all.json()["count"], 2)
+
+        active_empty = self.client.get("/api/v1/practice/sessions/active", headers=self.auth).json()
+        self.assertEqual(len(active_empty), 0)

@@ -33,6 +33,12 @@ def create_app(db_path: str | None = None, dist_dir: str | Path | None = None) -
     exams_repo = ExamRepository(resolved)
     assets_repo = AssetRepository(resolved)
     import_jobs = ImportJobRepository(resolved)
+    from backend.app.infrastructure.db.repositories.ai_draft_repository import AiDraftRepository
+    ai_drafts = AiDraftRepository(resolved)
+    from backend.app.infrastructure.db.repositories.ai_config_repository import AiConfigRepository
+    ai_configs = AiConfigRepository(resolved)
+    from backend.app.infrastructure.ai.web_search import OpenWebSearchAdapter
+    web_search = OpenWebSearchAdapter(os.environ.get("OPEN_WEBSEARCH_URL"))
     services = type("Services", (), {})()
     services.users = users
     services.user_sessions = user_sessions
@@ -43,8 +49,18 @@ def create_app(db_path: str | None = None, dist_dir: str | Path | None = None) -
     from backend.app.application.practice_service import PracticeService
     services.practice = PracticeService(practices, question_repo, bank_repo, exams_repo)
     from backend.app.application.ai_tutor_service import AiTutorService
-    services.ai = AiTutorService(ai_answers, question_repo, conversations=ai_conversations)
+    services.ai = AiTutorService(
+        ai_answers,
+        question_repo,
+        conversations=ai_conversations,
+        web_search=web_search,
+        assets=assets_repo,
+        drafts=ai_drafts,
+        ai_configs=ai_configs,
+    )
     services.ai_conversations = ai_conversations
+    services.ai_drafts = ai_drafts
+    services.ai_configs = ai_configs
     from backend.app.application.import_service import ImportService
     services.importer = ImportService(bank_repo, question_repo, import_jobs)
     from backend.app.application.learning_service import LearningService
@@ -56,6 +72,17 @@ def create_app(db_path: str | None = None, dist_dir: str | Path | None = None) -
 
     app = FastAPI(title="EasyExam API", version="1.0.0")
     app.state.services = services
+
+    @app.middleware("http")
+    async def add_no_cache_for_html(request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        if path == "/" or path == "/index.html" or path.endswith(".html"):
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
+
     app.include_router(system.router, prefix="/api/v1")
     app.include_router(auth.router, prefix="/api/v1")
     app.include_router(banks.router, prefix="/api/v1")

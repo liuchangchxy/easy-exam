@@ -22,16 +22,18 @@ class PracticeRepository:
         exam_profile_id: str | None = None,
         blueprint_id: str | None = None,
         question_refs: list[dict] | None = None,
+        config: dict | None = None,
     ) -> dict:
         session_id = str(uuid.uuid4())
         with transaction(self.db_path) as conn:
             conn.execute(
                 """INSERT INTO practice_sessions(
                     id, user_id, bank_id, mode, total_questions, time_limit,
-                    exam_profile_id, blueprint_id, questions_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    exam_profile_id, blueprint_id, questions_json, config_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (session_id, user_id, bank_id, mode, total_questions, time_limit,
-                 exam_profile_id, blueprint_id, json.dumps(question_refs or [], ensure_ascii=False)),
+                 exam_profile_id, blueprint_id, json.dumps(question_refs or [], ensure_ascii=False),
+                 json.dumps(config or {}, ensure_ascii=False)),
             )
         return self.get_session(session_id, user_id)
 
@@ -39,6 +41,33 @@ class PracticeRepository:
         with transaction(self.db_path) as conn:
             row = conn.execute("SELECT * FROM practice_sessions WHERE id = ? AND user_id = ?", (session_id, user_id)).fetchone()
             return dict(row) if row else None
+
+    def list_active_sessions(self, user_id: str, mode: str | None = None) -> list[dict]:
+        with transaction(self.db_path) as conn:
+            query = "SELECT * FROM practice_sessions WHERE user_id = ? AND is_completed = 0"
+            params = [user_id]
+            if mode:
+                query += " AND mode = ?"
+                params.append(mode)
+            query += " ORDER BY updated_at DESC"
+            rows = conn.execute(query, tuple(params)).fetchall()
+            return [dict(r) for r in rows]
+
+    def abandon_session(self, session_id: str, user_id: str) -> bool:
+        with transaction(self.db_path) as conn:
+            cur = conn.execute(
+                "UPDATE practice_sessions SET is_completed = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ? AND is_completed = 0",
+                (session_id, user_id),
+            )
+            return cur.rowcount > 0
+
+    def abandon_all_sessions(self, user_id: str) -> int:
+        with transaction(self.db_path) as conn:
+            cur = conn.execute(
+                "UPDATE practice_sessions SET is_completed = 1, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND is_completed = 0",
+                (user_id,),
+            )
+            return cur.rowcount
 
     def save_attempt(
         self,
@@ -203,7 +232,20 @@ class PracticeRepository:
                      last_attempt_at=excluded.last_attempt_at""",
                 (user_id, question["id"], mistakes, consecutive, result["mastery_status"], cleared),
             )
-            if mistakes > 0:
+            # EE-002: Respect record_mistakes configuration for EXAM mode (default True)
+            record_mistakes = True
+            if session.get("mode") == "EXAM":
+                cfg = json.loads(session.get("config_json") or "{}")
+                if "record_mistakes" in cfg:
+                    record_mistakes = bool(cfg["record_mistakes"])
+                elif session.get("blueprint_id"):
+                    bp_row = conn.execute("SELECT blueprint_json FROM exam_blueprints WHERE id = ?", (session["blueprint_id"],)).fetchone()
+                    if bp_row:
+                        bp_dict = json.loads(bp_row[0] or "{}")
+                        if "record_mistakes" in bp_dict:
+                            record_mistakes = bool(bp_dict["record_mistakes"])
+
+            if mistakes > 0 and record_mistakes:
                 conn.execute(
                 """INSERT INTO mistake_records(
                     user_id, question_id, bank_id, mistake_count,

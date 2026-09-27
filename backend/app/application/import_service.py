@@ -1,6 +1,8 @@
 import json
 from typing import Any, Dict, List, Optional
+import uuid
 
+from backend.app.infrastructure.db.connection import transaction
 from backend.app.infrastructure.importers.text_importer import parse_csv_content, parse_json_content, parse_markdown_text
 from backend.app.infrastructure.importers.pdf_importer import parse_pdf_questions
 from backend.app.infrastructure.importers.spreadsheet_importer import (
@@ -66,6 +68,7 @@ class ImportService:
         items: list[dict],
         duplicates: list[dict],
         duplicate_strategy: str,
+        conn=None,
     ) -> dict:
         if duplicates and duplicate_strategy not in {"skip", "new", "merge"}:
             preview = {
@@ -74,7 +77,13 @@ class ImportService:
                 "question_count": len(items),
                 "duplicates": duplicates,
             }
-            self._finish(user_id, job, "PRECHECK_FAILED", reason=preview["reason"])
+            if conn is None:
+                self._finish(user_id, job, "PRECHECK_FAILED", reason=preview["reason"])
+            elif job:
+                conn.execute(
+                    "UPDATE import_jobs SET status = 'PRECHECK_FAILED', reason = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (preview["reason"], job["id"]),
+                )
             raise DuplicateImportError(preview)
 
         duplicate_by_index = {item["index"]: item for item in duplicates}
@@ -89,15 +98,33 @@ class ImportService:
                 operations.append({"op": "create", "payload": item})
 
         try:
-            created = self.questions.batch_create_or_update_questions(user_id, bank_id, operations) if operations else []
+            created = self.questions.batch_create_or_update_questions(user_id, bank_id, operations, conn=conn) if operations else []
         except ValueError as exc:
-            self._finish(user_id, job, "PRECHECK_FAILED", reason=str(exc))
+            if conn is None:
+                self._finish(user_id, job, "PRECHECK_FAILED", reason=str(exc))
+            elif job:
+                conn.execute(
+                    "UPDATE import_jobs SET status = 'PRECHECK_FAILED', reason = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (str(exc), job["id"]),
+                )
             raise
         except Exception as exc:
-            self._finish(user_id, job, "FAILED", reason=str(exc))
+            if conn is None:
+                self._finish(user_id, job, "FAILED", reason=str(exc))
+            elif job:
+                conn.execute(
+                    "UPDATE import_jobs SET status = 'FAILED', reason = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (str(exc), job["id"]),
+                )
             raise
 
-        self._finish(user_id, job, "IMPORTED", len(created))
+        if conn is None:
+            self._finish(user_id, job, "IMPORTED", len(created))
+        elif job:
+            conn.execute(
+                "UPDATE import_jobs SET status = 'IMPORTED', imported_count = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (len(created), job["id"]),
+            )
         return {
             "bank_id": bank_id,
             "job_id": job["id"] if job else None,
@@ -216,6 +243,75 @@ class ImportService:
         res = self._persist_items(user_id, bank_id, job, items, duplicates, duplicate_strategy)
         res["format"] = "pdf"
         return res
+
+    def preview_pdf(self, user_id: str, bank_id: str, filename: str, content: bytes) -> dict:
+        if not self.banks.get_for_user(bank_id, user_id):
+            raise LookupError("bank not found")
+        from backend.app.infrastructure.importers.pdf_importer import extract_pdf_candidates
+        parsed = extract_pdf_candidates(content)
+        candidates = parsed["questions"]
+        if not candidates:
+            raise ValueError("PDF 未能识别出任何题目内容")
+
+        draft_id = str(uuid.uuid4())
+        with transaction(self.questions.db_path) as conn:
+            conn.execute(
+                """INSERT INTO pdf_import_drafts(id, user_id, bank_id, filename, candidate_questions_json, status)
+                   VALUES (?, ?, ?, ?, ?, 'PENDING')""",
+                (draft_id, user_id, bank_id, filename, json.dumps(candidates, ensure_ascii=False)),
+            )
+
+        duplicates = self._find_duplicates(user_id, bank_id, candidates)
+        return {
+            "draft_id": draft_id,
+            "filename": filename,
+            "confidence": parsed["confidence"],
+            "text_snippet": parsed["text_snippet"],
+            "question_count": len(candidates),
+            "candidates": candidates,
+            "duplicates": duplicates,
+        }
+
+    def confirm_pdf_draft(self, user_id: str, bank_id: str, draft_id: str, questions: list[dict], duplicate_strategy: str = "skip") -> dict:
+        if not self.banks.get_for_user(bank_id, user_id):
+            raise LookupError("bank not found")
+        if not questions:
+            raise ValueError("提交的题目列表不能为空")
+
+        with transaction(self.questions.db_path) as conn:
+            # Atomic CAS transition: ensures only one worker/call can confirm this pending draft
+            cursor = conn.execute(
+                """UPDATE pdf_import_drafts
+                   SET status = 'CONFIRMED', updated_at = CURRENT_TIMESTAMP
+                   WHERE id = ? AND user_id = ? AND bank_id = ? AND status = 'PENDING'""",
+                (draft_id, user_id, bank_id),
+            )
+            if cursor.rowcount == 0:
+                draft_row = conn.execute(
+                    "SELECT status FROM pdf_import_drafts WHERE id = ? AND user_id = ? AND bank_id = ?",
+                    (draft_id, user_id, bank_id),
+                ).fetchone()
+                if not draft_row:
+                    raise LookupError("未找到对应的 PDF 校对草稿")
+                raise ValueError("该校对草稿已完成导入或已作废")
+
+            draft_filename = conn.execute(
+                "SELECT filename FROM pdf_import_drafts WHERE id = ?", (draft_id,)
+            ).fetchone()[0]
+
+            job_id = str(uuid.uuid4())
+            conn.execute(
+                "INSERT INTO import_jobs(id, user_id, bank_id, filename, format, status) VALUES (?, ?, ?, ?, 'pdf', 'PENDING')",
+                (job_id, user_id, bank_id, draft_filename),
+            )
+            job = {"id": job_id}
+
+            duplicates = self._find_duplicates(user_id, bank_id, questions)
+            res = self._persist_items(user_id, bank_id, job, questions, duplicates, duplicate_strategy, conn=conn)
+            res["format"] = "pdf"
+            res["draft_id"] = draft_id
+            res["status"] = "IMPORTED"
+            return res
 
     def import_file(
         self,

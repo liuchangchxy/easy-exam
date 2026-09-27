@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -12,11 +13,18 @@ from backend.app.main import create_app
 
 class TestV1Architecture(unittest.TestCase):
     def setUp(self):
+        self._orig_secret = os.environ.get("EASYEXAM_SECRET_KEY")
+        os.environ["EASYEXAM_SECRET_KEY"] = "easyexam-ci-secret-32bytes-passphrase!!"
         self.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.db_path = str(Path(self.temp_dir.name) / "easyexam-v1.db")
-        self.client = TestClient(create_app(self.db_path))
+        self.app = create_app(self.db_path)
+        self.client = TestClient(self.app)
 
     def tearDown(self):
+        if self._orig_secret is not None:
+            os.environ["EASYEXAM_SECRET_KEY"] = self._orig_secret
+        else:
+            os.environ.pop("EASYEXAM_SECRET_KEY", None)
         try:
             self.temp_dir.cleanup()
         except Exception:
@@ -30,6 +38,7 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(body["status"], "ok")
         self.assertEqual(body["app"], "easy-exam")
         self.assertEqual(body["version"], "v1")
+        self.assertIn("commit_sha", body)
         self.assertIn("instance_token", body)
 
     def test_register_login_and_current_user_are_isolated(self):
@@ -1062,9 +1071,798 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(card["state"], 2)
         self.assertEqual(card["last_review_at"], attempt_time)
 
+    def test_exam_record_mistakes_strategy_switchable(self):
+        # EE-002: Test that record_mistakes can be switched off in mock exam
+        self.client.post("/api/v1/auth/register", json={"username": "mistake_user", "password": "REDACTED_TEST_PASSWORD"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "mistake_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "模考错题策略库"}).json()
+        q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题1", "type": "SINGLE", "answer": "A"}).json()
+        q2 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题2", "type": "SINGLE", "answer": "B"}).json()
+
+        # 1. 模考 session 指定 record_mistakes = False
+        sess_no_record = self.client.post("/api/v1/exams/sessions", headers=headers, json={
+            "bank_id": bank["id"],
+            "total_questions": 2,
+            "record_mistakes": False,
+        }).json()
+        self.client.post(f"/api/v1/practice/sessions/{sess_no_record['id']}/attempts", headers=headers, json={
+            "question_id": q1["id"],
+            "user_answer": "C",  # Wrong answer
+        })
+        mistakes_after_first = self.client.get("/api/v1/mistakes", headers=headers).json()
+        self.assertEqual(len(mistakes_after_first), 0, "When record_mistakes is False, wrong answer must not enter mistake records")
+
+        # 2. 模考 session 指定 record_mistakes = True (默认行为)
+        sess_record = self.client.post("/api/v1/exams/sessions", headers=headers, json={
+            "bank_id": bank["id"],
+            "total_questions": 2,
+            "record_mistakes": True,
+        }).json()
+        self.client.post(f"/api/v1/practice/sessions/{sess_record['id']}/attempts", headers=headers, json={
+            "question_id": q2["id"],
+            "user_answer": "C",  # Wrong answer
+        })
+        mistakes_after_second = self.client.get("/api/v1/mistakes", headers=headers).json()
+        self.assertEqual(len(mistakes_after_second), 1, "When record_mistakes is True, wrong answer must enter mistake records")
+        self.assertEqual(mistakes_after_second[0]["question_id"], q2["id"])
+
+    def test_exam_blueprint_dynamic_question_selection(self):
+        # EE-001: Test dynamic question selection by blueprint sections (type, count, etc.)
+        self.client.post("/api/v1/auth/register", json={"username": "blueprint_user", "password": "REDACTED_TEST_PASSWORD"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "blueprint_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "蓝图组卷测试库"}).json()
+
+        # Add 2 JUDGE, 3 SINGLE, 1 MULTI
+        self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "判断1", "type": "JUDGE", "answer": "T"})
+        self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "判断2", "type": "JUDGE", "answer": "F"})
+        self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "单选1", "type": "SINGLE", "answer": "A"})
+        self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "单选2", "type": "SINGLE", "answer": "B"})
+        self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "单选3", "type": "SINGLE", "answer": "C"})
+        self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "多选1", "type": "MULTI", "answer": "AB"})
+
+        # Create Profile with Blueprint: 1 JUDGE, 2 SINGLE
+        profile = self.client.post("/api/v1/exams/profiles", headers=headers, json={"name": "专项模拟档案"}).json()
+        bp = self.client.post(f"/api/v1/exams/profiles/{profile['id']}/blueprint", headers=headers, json={
+            "blueprint": {
+                "sections": [
+                    {"name": "判断题部分", "type": "JUDGE", "count": 1},
+                    {"name": "单选题部分", "type": "SINGLE", "count": 2},
+                ]
+            }
+        }).json()
+
+        # Start exam session with profile_id
+        session = self.client.post("/api/v1/exams/sessions", headers=headers, json={
+            "bank_id": bank["id"],
+            "profile_id": profile["id"],
+        }).json()
+
+        sess_detail = self.client.get(f"/api/v1/practice/sessions/{session['id']}", headers=headers).json()
+        questions = sess_detail["questions"]
+        self.assertEqual(len(questions), 3, "Blueprint should select exactly 3 questions (1 JUDGE, 2 SINGLE)")
+        judge_count = sum(1 for q in questions if q["type"] == "JUDGE")
+        single_count = sum(1 for q in questions if q["type"] == "SINGLE")
+        self.assertEqual(judge_count, 1)
+        self.assertEqual(single_count, 2)
+
+    def test_exam_profiles_and_blueprint_listing_apis(self):
+        # EE-010: Test GET profiles and latest blueprint
+        self.client.post("/api/v1/auth/register", json={"username": "prof_user", "password": "REDACTED_TEST_PASSWORD"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "prof_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        p1 = self.client.post("/api/v1/exams/profiles", headers=headers, json={"name": "档案A", "description": "描述A"}).json()
+        self.client.post(f"/api/v1/exams/profiles/{p1['id']}/blueprint", headers=headers, json={"blueprint": {"negative_mark": 0.5}}).json()
+
+        list_resp = self.client.get("/api/v1/exams/profiles", headers=headers)
+        self.assertEqual(list_resp.status_code, 200)
+        self.assertGreaterEqual(len(list_resp.json()), 1)
+        first = list_resp.json()[0]
+        self.assertEqual(first["name"], "档案A")
+        self.assertIsNotNone(first.get("latest_blueprint"))
+
+        bp_resp = self.client.get(f"/api/v1/exams/profiles/{p1['id']}/blueprint", headers=headers)
+        self.assertEqual(bp_resp.status_code, 200)
+        self.assertEqual(bp_resp.json()["blueprint"]["negative_mark"], 0.5)
+
+    def test_list_active_sessions_returns_incomplete_sessions(self):
+        # EE-019: Test GET /api/v1/practice/sessions/active returns incomplete sessions
+        self.client.post("/api/v1/auth/register", json={"username": "active_user", "password": "REDACTED_TEST_PASSWORD"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "active_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "未完成会话测试库"}).json()
+        self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题A", "answer": "A"}).json()
+
+        # Start a session
+        sess = self.client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
+
+        # Check active sessions
+        active_list = self.client.get("/api/v1/practice/sessions/active", headers=headers)
+        self.assertEqual(active_list.status_code, 200)
+        self.assertEqual(len(active_list.json()), 1)
+        self.assertEqual(active_list.json()[0]["id"], sess["id"])
+
+        # Complete the session
+        self.client.post(f"/api/v1/practice/sessions/{sess['id']}/complete", headers=headers)
+
+        # Active list should now be empty
+        active_after = self.client.get("/api/v1/practice/sessions/active", headers=headers)
+        self.assertEqual(active_after.status_code, 200)
+        self.assertEqual(len(active_after.json()), 0)
+
+    def test_bank_export_supports_multiple_formats(self):
+        # EE-008: Test V1 bank export route supporting JSON, CSV, and text
+        self.client.post("/api/v1/auth/register", json={"username": "export_user", "password": "REDACTED_TEST_PASSWORD"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "export_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "导出测试题库"}).json()
+        self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={
+            "stem": "导出题目1", "type": "SINGLE", "answer": "A", "options": [{"key": "A", "text": "甲"}]
+        })
+
+        # JSON export
+        res_json = self.client.get(f"/api/v1/banks/{bank['id']}/export?format=json", headers=headers)
+        self.assertEqual(res_json.status_code, 200)
+        self.assertIn("导出题目1", res_json.text)
+
+        # CSV export
+        res_csv = self.client.get(f"/api/v1/banks/{bank['id']}/export?format=csv", headers=headers)
+        self.assertEqual(res_csv.status_code, 200)
+        self.assertEqual(res_csv.headers["content-type"], "text/csv; charset=utf-8")
+        self.assertIn("导出题目1", res_csv.text)
+
+        # TXT export
+        res_txt = self.client.get(f"/api/v1/banks/{bank['id']}/export?format=txt", headers=headers)
+        self.assertEqual(res_txt.status_code, 200)
+        self.assertIn("导出题目1", res_txt.text)
+
+    def test_personal_assets_rag_retrieval_and_isolation(self):
+        # EE-003: User assets RAG retrieval, prompt injection, and isolation
+        self.client.post("/api/v1/auth/register", json={"username": "rag_alice", "password": "REDACTED_TEST_PASSWORD"})
+        token_a = self.client.post("/api/v1/auth/login", json={"username": "rag_alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        headers_a = {"Authorization": f"Bearer {token_a}"}
+
+        self.client.post("/api/v1/auth/register", json={"username": "rag_bob", "password": "REDACTED_TEST_PASSWORD"})
+        token_b = self.client.post("/api/v1/auth/login", json={"username": "rag_bob", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        headers_b = {"Authorization": f"Bearer {token_b}"}
+
+        # Alice creates a question and a personal note linked to it
+        bank = self.client.post("/api/v1/banks", headers=headers_a, json={"name": "Alice Bank"}).json()
+        q = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers_a, json={
+            "stem": "光合作用的光反应场所是哪里？",
+            "type": "SINGLE",
+            "options": [{"key": "A", "text": "类囊体薄膜"}, {"key": "B", "text": "叶绿体基质"}],
+            "answer": "A",
+            "explanation": "光反应在类囊体薄膜上进行",
+        }).json()
+
+        # Alice adds a personal asset for this question
+        note_res = self.client.post("/api/v1/assets", headers=headers_a, json={
+            "asset_type": "NOTE",
+            "content": "我的易错速记：光反应类囊体，暗反应在基质！",
+            "question_id": q["id"],
+        })
+        self.assertEqual(note_res.status_code, 201)
+        alice_asset_id = note_res.json()["id"]
+
+        # Bob adds an unrelated note
+        self.client.post("/api/v1/assets", headers=headers_b, json={
+            "asset_type": "NOTE",
+            "content": "Bob 的完全无关笔记",
+            "question_id": None,
+        })
+
+        # Alice asks AI tutor for explanation
+        gen_res = self.client.post(f"/api/v1/ai/questions/{q['id']}/generate", headers=headers_a, json={
+            "query": "请帮我讲解这道题"
+        })
+        self.assertEqual(gen_res.status_code, 201)
+        data = gen_res.json()
+        # Ensure Alice's asset is referenced and Bob's is strictly excluded
+        self.assertIn("referenced_assets", data)
+        self.assertIn(alice_asset_id, data["referenced_assets"])
+
+        # Create another question with NO assets -> Graceful fallback
+        q2 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers_a, json={
+            "stem": "无资料关联的题目", "type": "SINGLE", "answer": "A"
+        }).json()
+        gen_res2 = self.client.post(f"/api/v1/ai/questions/{q2['id']}/generate", headers=headers_a, json={})
+        self.assertEqual(gen_res2.status_code, 201)
+        self.assertEqual(gen_res2.json()["referenced_assets"], [])
+
+    def test_web_search_adapter_injection_and_evidence(self):
+        # EE-004: OpenWebSearchAdapter is injected and evidence is preserved in answers list
+        self.client.post("/api/v1/auth/register", json={"username": "web_search_user", "password": "REDACTED_TEST_PASSWORD"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "web_search_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "Search Bank"}).json()
+        q = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={
+            "stem": "Python 3.12 的新特性有哪些？", "type": "QA", "answer": "PEP 701等"
+        }).json()
+
+        # Call verify-web
+        verify_res = self.client.post(f"/api/v1/ai/questions/{q['id']}/verify-web", headers=headers, json={
+            "query": "Python 3.12 features"
+        })
+        self.assertEqual(verify_res.status_code, 201)
+        ans = verify_res.json()
+        self.assertEqual(ans["source"], "WEB")
+        self.assertIn("verification_status", ans)
+
+        # Retrieve explanations list
+        answers = self.client.get(f"/api/v1/ai/questions/{q['id']}/answers", headers=headers).json()
+        self.assertTrue(len(answers) >= 1)
+        self.assertEqual(answers[0]["source"], "WEB")
+
+    def test_ai_variant_draft_full_lifecycle(self):
+        # EE-005: AI variant draft lifecycle (generate -> draft -> accept / discard)
+        self.client.post("/api/v1/auth/register", json={"username": "variant_user", "password": "REDACTED_TEST_PASSWORD"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "variant_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "AI Variant Bank"}).json()
+        q = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={
+            "stem": "已知直角三角形两直角边长为3和4，求斜边长？",
+            "type": "SINGLE",
+            "options": [{"key": "A", "text": "5"}, {"key": "B", "text": "6"}],
+            "answer": "A",
+            "explanation": "勾股定理 3^2 + 4^2 = 5^2",
+        }).json()
+
+        # Generate variant draft
+        draft_res = self.client.post("/api/v1/ai/variants", headers=headers, json={
+            "original_question_id": q["id"],
+            "target_bank_id": bank["id"],
+            "prompt_hint": "考查勾股定理，改成边长为6和8",
+        })
+        self.assertEqual(draft_res.status_code, 201)
+        draft = draft_res.json()
+        self.assertEqual(draft["status"], "DRAFT")
+        draft_id = draft["id"]
+
+        # List drafts
+        drafts = self.client.get("/api/v1/ai/drafts", headers=headers).json()
+        self.assertTrue(any(d["id"] == draft_id for d in drafts))
+
+        # Official bank questions count should still be 1 (draft is NOT in official bank)
+        bank_detail = self.client.get(f"/api/v1/banks/{bank['id']}", headers=headers).json()
+        self.assertEqual(bank_detail["question_count"], 1)
+
+        # Accept draft with optional modification
+        accept_res = self.client.post(f"/api/v1/ai/drafts/{draft_id}/accept", headers=headers, json={
+            "modifications": {
+                "stem": "已知直角三角形两直角边长为6和8，求斜边长？",
+                "answer": "10",
+                "options": [{"key": "A", "text": "10"}, {"key": "B", "text": "12"}],
+            }
+        })
+        self.assertEqual(accept_res.status_code, 200)
+        self.assertEqual(accept_res.json()["status"], "ACCEPTED")
+
+        # Official bank questions count should now be 2
+        bank_detail2 = self.client.get(f"/api/v1/banks/{bank['id']}", headers=headers).json()
+        self.assertEqual(bank_detail2["question_count"], 2)
+
+        # Generate a second draft and discard it
+        draft_res2 = self.client.post("/api/v1/ai/variants", headers=headers, json={
+            "original_question_id": q["id"],
+            "target_bank_id": bank["id"],
+        })
+        draft2_id = draft_res2.json()["id"]
+        discard_res = self.client.post(f"/api/v1/ai/drafts/{draft2_id}/discard", headers=headers)
+        self.assertEqual(discard_res.status_code, 200)
+        self.assertEqual(discard_res.json()["status"], "DISCARDED")
+
+    def test_personal_assets_deletion_and_retrieval(self):
+        # EE-012: Personal asset retrieval and deletion
+        self.client.post("/api/v1/auth/register", json={"username": "asset_mgr_user", "password": "REDACTED_TEST_PASSWORD"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "asset_mgr_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        created = self.client.post("/api/v1/assets", headers=headers, json={
+            "asset_type": "SUMMARY",
+            "content": "操作系统进程调度总结",
+        }).json()
+        asset_id = created["id"]
+
+        # Get by id
+        get_res = self.client.get(f"/api/v1/assets/{asset_id}", headers=headers)
+        self.assertEqual(get_res.status_code, 200)
+        self.assertEqual(get_res.json()["content"], "操作系统进程调度总结")
+
+        # Delete
+        del_res = self.client.delete(f"/api/v1/assets/{asset_id}", headers=headers)
+        self.assertEqual(del_res.status_code, 204)
+
+        # Get again returns 404
+        get_again = self.client.get(f"/api/v1/assets/{asset_id}", headers=headers)
+        self.assertEqual(get_again.status_code, 404)
+
+    def test_blueprint_selection_with_chapter_and_graceful_fallback(self):
+        # EE-001: Dynamic question selection by blueprint sections with chapter matching and fallback
+        self.client.post("/api/v1/auth/register", json={"username": "bp_chap_user", "password": "REDACTED_TEST_PASSWORD"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "bp_chap_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "章节组卷题库"}).json()
+
+        # Create two chapters in DB
+        import sqlite3
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("INSERT INTO chapters (id, bank_id, name, sort_order) VALUES ('chap_01', ?, '第一章 计算机体系', 1)", (bank["id"],))
+            conn.execute("INSERT INTO chapters (id, bank_id, name, sort_order) VALUES ('chap_02', ?, '第二章 操作系统', 2)", (bank["id"],))
+            conn.commit()
+
+        # Add 2 questions in chap_01, 1 question in chap_02
+        q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={
+            "stem": "体系结构题1", "type": "SINGLE", "answer": "A", "chapter_id": "chap_01"
+        }).json()
+        q2 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={
+            "stem": "体系结构题2", "type": "SINGLE", "answer": "B", "chapter_id": "chap_01"
+        }).json()
+        q3 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={
+            "stem": "操作系统题1", "type": "SINGLE", "answer": "C", "chapter_id": "chap_02"
+        }).json()
+
+        # Verify list_for_bank returns chapter_id
+        bank_qs = self.client.get(f"/api/v1/banks/{bank['id']}/questions", headers=headers).json()
+        self.assertEqual(len(bank_qs), 3)
+        chap1_qs = [q for q in bank_qs if q.get("chapter_id") == "chap_01"]
+        self.assertEqual(len(chap1_qs), 2)
+
+        # Create blueprint requesting chap_01 specifically
+        profile = self.client.post("/api/v1/exams/profiles", headers=headers, json={"name": "体系结构专卷"}).json()
+        self.client.post(f"/api/v1/exams/profiles/{profile['id']}/blueprint", headers=headers, json={
+            "blueprint": {
+                "sections": [
+                    {"name": "第一章单选", "type": "SINGLE", "count": 2, "chapter_id": "chap_01"}
+                ]
+            }
+        })
+
+        session = self.client.post("/api/v1/exams/sessions", headers=headers, json={
+            "bank_id": bank["id"],
+            "profile_id": profile["id"],
+        }).json()
+
+        sess_detail = self.client.get(f"/api/v1/practice/sessions/{session['id']}", headers=headers).json()
+        sess_qs = sess_detail["questions"]
+        self.assertEqual(len(sess_qs), 2)
+        for q in sess_qs:
+            self.assertEqual(q.get("chapter_id"), "chap_01")
+
+        # Graceful fallback: section asks for 5 questions from chap_01, but only 2 exist;
+        # Should gracefully return 3 questions total (2 from chap_01 + 1 fallback from bank) without crashing.
+        profile_fallback = self.client.post("/api/v1/exams/profiles", headers=headers, json={"name": "超额抽选题卷"}).json()
+        self.client.post(f"/api/v1/exams/profiles/{profile_fallback['id']}/blueprint", headers=headers, json={
+            "blueprint": {
+                "sections": [
+                    {"name": "超额部分", "type": "SINGLE", "count": 5, "chapter_id": "chap_01"}
+                ]
+            }
+        })
+        sess_fallback = self.client.post("/api/v1/exams/sessions", headers=headers, json={
+            "bank_id": bank["id"],
+            "profile_id": profile_fallback["id"],
+        }).json()
+        detail_fb = self.client.get(f"/api/v1/practice/sessions/{sess_fallback['id']}", headers=headers).json()
+        self.assertEqual(len(detail_fb["questions"]), 3)
+
+    def test_copy_to_bank_preserves_chapter_and_knowledge_tags(self):
+        # EE-007, EE-020: Question copy across banks preserves chapter name and tags
+        self.client.post("/api/v1/auth/register", json={"username": "copy_user", "password": "REDACTED_TEST_PASSWORD"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "copy_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        bank_a = self.client.post("/api/v1/banks", headers=headers, json={"name": "源题库A"}).json()
+        bank_b = self.client.post("/api/v1/banks", headers=headers, json={"name": "目标题库B"}).json()
+
+        # Add chapter to bank_a
+        import sqlite3
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("INSERT INTO chapters (id, bank_id, name, sort_order) VALUES ('chap_src', ?, '软件工程基础', 1)", (bank_a["id"],))
+            conn.commit()
+
+        # Create question with chapter_id and tags in bank_a
+        q_src = self.client.post(f"/api/v1/banks/{bank_a['id']}/questions", headers=headers, json={
+            "stem": "瀑布模型的核心特征是什么？",
+            "type": "SINGLE",
+            "options": [{"key": "A", "text": "阶段间具有顺序性和依赖性"}, {"key": "B", "text": "敏捷迭代"}],
+            "answer": "A",
+            "explanation": "瀑布模型严格划分阶段",
+            "chapter_id": "chap_src",
+            "tags": ["高频考点", "软件过程模型"],
+        }).json()
+
+        # Copy to bank_b
+        copy_res = self.client.post(f"/api/v1/banks/{bank_b['id']}/questions/{q_src['id']}/copy", headers=headers)
+        self.assertEqual(copy_res.status_code, 201)
+        copied_q = copy_res.json()
+
+        # Target bank questions should contain copied question
+        self.assertEqual(copied_q["bank_id"], bank_b["id"])
+        self.assertEqual(copied_q["stem"], "瀑布模型的核心特征是什么？")
+        self.assertEqual(copied_q["tags"], ["高频考点", "软件过程模型"])
+        self.assertIsNotNone(copied_q["chapter_id"])
+
+        # Check target bank's chapter table has matching chapter name
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute("SELECT name FROM chapters WHERE id = ? AND bank_id = ?", (copied_q["chapter_id"], bank_b["id"])).fetchone()
+            self.assertIsNotNone(row)
+            self.assertEqual(row[0], "软件工程基础")
+
+    def test_bank_members_listing_and_removal(self):
+        # EE-020: Bank member management (list members, add member, remove member)
+        self.client.post("/api/v1/auth/register", json={"username": "owner_user", "password": "REDACTED_TEST_PASSWORD"})
+        token_owner = self.client.post("/api/v1/auth/login", json={"username": "owner_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        headers_owner = {"Authorization": f"Bearer {token_owner}"}
+
+        self.client.post("/api/v1/auth/register", json={"username": "member_bob", "password": "REDACTED_TEST_PASSWORD"})
+        token_bob = self.client.post("/api/v1/auth/login", json={"username": "member_bob", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+
+        bank = self.client.post("/api/v1/banks", headers=headers_owner, json={"name": "协作共享题库"}).json()
+
+        # Add member_bob as EDITOR
+        add_res = self.client.post(f"/api/v1/banks/{bank['id']}/members", headers=headers_owner, json={
+            "username": "member_bob",
+            "role": "EDITOR",
+        })
+        self.assertEqual(add_res.status_code, 201)
+
+        # List members
+        members_res = self.client.get(f"/api/v1/banks/{bank['id']}/members", headers=headers_owner)
+        self.assertEqual(members_res.status_code, 200)
+        members = members_res.json()
+        self.assertEqual(len(members), 2)
+        bob_entry = next((m for m in members if m["username"] == "member_bob"), None)
+        self.assertIsNotNone(bob_entry)
+        self.assertEqual(bob_entry["role"], "EDITOR")
+
+        # Owner removes member_bob
+        del_res = self.client.delete(f"/api/v1/banks/{bank['id']}/members/{bob_entry['user_id']}", headers=headers_owner)
+        self.assertEqual(del_res.status_code, 204)
+
+        # Verify members list now only has owner
+        members_after = self.client.get(f"/api/v1/banks/{bank['id']}/members", headers=headers_owner).json()
+        self.assertEqual(len(members_after), 1)
+        self.assertEqual(members_after[0]["username"], "owner_user")
+
+    def test_controllable_historical_regrading_ee006(self):
+        # EE-006: Controllable historical re-grading
+        self.client.post("/api/v1/auth/register", json={"username": "teacher", "password": "REDACTED_TEST_PASSWORD"})
+        token_t = self.client.post("/api/v1/auth/login", json={"username": "teacher", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        headers_t = {"Authorization": f"Bearer {token_t}"}
+
+        bank = self.client.post("/api/v1/banks", headers=headers_t, json={"name": "重判测试题库"}).json()
+        q = self.client.post(
+            f"/api/v1/banks/{bank['id']}/questions",
+            headers=headers_t,
+            json={"stem": "太阳从哪里升起？", "type": "SINGLE", "options": [{"key": "A", "content": "西边"}, {"key": "B", "content": "东边"}], "answer": "A"},
+        ).json()
+
+        # Student answers "B"
+        self.client.post("/api/v1/auth/register", json={"username": "student", "password": "REDACTED_TEST_PASSWORD"})
+        token_s = self.client.post("/api/v1/auth/login", json={"username": "student", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        headers_s = {"Authorization": f"Bearer {token_s}"}
+        # Add student as member
+        self.client.post(f"/api/v1/banks/{bank['id']}/members", headers=headers_t, json={"username": "student", "role": "MEMBER"})
+
+        session = self.client.post(
+            "/api/v1/practice/sessions",
+            headers=headers_s,
+            json={"bank_id": bank["id"], "mode": "PRACTICE"},
+        ).json()
+
+        att = self.client.post(
+            f"/api/v1/practice/sessions/{session['id']}/attempts",
+            headers=headers_s,
+            json={"question_id": q["id"], "user_answer": "B"},
+        ).json()
+        self.assertEqual(att["correctness"], "INCORRECT")
+
+        # Now teacher fixes answer from "A" to "B" with regrade_history=True
+        updated_q = self.client.put(
+            f"/api/v1/questions/{q['id']}",
+            headers=headers_t,
+            json={
+                "stem": "太阳从哪里升起？",
+                "type": "SINGLE",
+                "options": [{"key": "A", "content": "西边"}, {"key": "B", "content": "东边"}],
+                "answer": "B",
+                "regrade_history": True,
+                "apply_fsrs": True,
+            },
+        )
+        self.assertEqual(updated_q.status_code, 200)
+
+        # Check attempt is now CORRECT and score_ratio is 1.0
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            attempt_row = conn.execute("SELECT * FROM answer_attempts WHERE id = ?", (att["id"],)).fetchone()
+            self.assertEqual(attempt_row["correctness"], "CORRECT")
+            self.assertEqual(attempt_row["score_ratio"], 1.0)
+
+            # Check audit log
+            audit = conn.execute("SELECT * FROM audit_logs WHERE entity_id = ? AND action = 'QUESTION_REGRADED'", (q["id"],)).fetchone()
+            self.assertIsNotNone(audit)
+
+        # Atomic transaction rollback verification:
+        # Pre-capture all tables to verify complete atomicity
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            versions_before = conn.execute("SELECT version_number, stem, answer FROM question_versions WHERE question_id = ? ORDER BY version_number", (q["id"],)).fetchall()
+            attempts_before = conn.execute("SELECT id, correctness, score_ratio FROM answer_attempts WHERE question_id = ?", (q["id"],)).fetchall()
+            cards_before = conn.execute("SELECT * FROM fsrs_cards WHERE question_id = ?", (q["id"],)).fetchall()
+            mistakes_before = conn.execute("SELECT * FROM mistake_records WHERE question_id = ?", (q["id"],)).fetchall()
+            audits_before = conn.execute("SELECT id, entity_id, action FROM audit_logs WHERE entity_id = ?", (q["id"],)).fetchall()
+
+        # If an unhandled error occurs during regrading, question_versions insert MUST rollback completely
+        teacher_id = self.client.get("/api/v1/auth/me", headers=headers_t).json()["id"]
+        from unittest.mock import patch
+        with patch.object(self.app.state.services.questions, "_execute_regrade_on_conn", side_effect=RuntimeError("Simulated regrade crash")):
+            with self.assertRaises(RuntimeError):
+                self.app.state.services.questions.create_next_version(
+                    user_id=teacher_id,
+                    question_id=q["id"],
+                    payload={
+                        "stem": "太阳从哪里升起？（版本3将失败回滚）",
+                        "type": "SINGLE",
+                        "options": [{"key": "A", "content": "西边"}, {"key": "B", "content": "东边"}],
+                        "answer": "A",
+                        "regrade_history": True,
+                    },
+                )
+
+        # Verify 100% clean rollback across question versions, attempts, FSRS cards, mistakes, and audit logs
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            versions_after = conn.execute("SELECT version_number, stem, answer FROM question_versions WHERE question_id = ? ORDER BY version_number", (q["id"],)).fetchall()
+            attempts_after = conn.execute("SELECT id, correctness, score_ratio FROM answer_attempts WHERE question_id = ?", (q["id"],)).fetchall()
+            cards_after = conn.execute("SELECT * FROM fsrs_cards WHERE question_id = ?", (q["id"],)).fetchall()
+            mistakes_after = conn.execute("SELECT * FROM mistake_records WHERE question_id = ?", (q["id"],)).fetchall()
+            audits_after = conn.execute("SELECT id, entity_id, action FROM audit_logs WHERE entity_id = ?", (q["id"],)).fetchall()
+
+            self.assertEqual([dict(r) for r in versions_after], [dict(r) for r in versions_before])
+            self.assertEqual([dict(r) for r in attempts_after], [dict(r) for r in attempts_before])
+            self.assertEqual([dict(r) for r in cards_after], [dict(r) for r in cards_before])
+            self.assertEqual([dict(r) for r in mistakes_after], [dict(r) for r in mistakes_before])
+            self.assertEqual([dict(r) for r in audits_after], [dict(r) for r in audits_before])
+
+        # Verify version remains 2, and stem is NOT updated
+        current_q = self.client.get(f"/api/v1/questions/{q['id']}", headers=headers_t).json()
+        self.assertEqual(current_q["version_number"], 2)
+        self.assertEqual(current_q["answer"], "B")
+        self.assertNotIn("版本3将失败回滚", current_q["stem"])
+
+    def test_persistent_ai_and_search_config_ee009(self):
+        # EE-009: Persistent configuration with secret protection
+        from backend.app.infrastructure.db.repositories.ai_config_repository import (
+            encrypt_secret,
+            decrypt_secret,
+        )
+
+        self.client.post("/api/v1/auth/register", json={"username": "ai_user", "password": "REDACTED_TEST_PASSWORD"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "ai_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # 1. Missing secret key: reject encryption and refuse with clear error
+        orig_key = os.environ.pop("EASYEXAM_SECRET_KEY", None)
+        orig_fallback = os.environ.pop("SECRET_KEY", None)
+        try:
+            with self.assertRaises(RuntimeError) as cm:
+                encrypt_secret("test-unencrypted-key")
+            self.assertIn("EASYEXAM_SECRET_KEY", str(cm.exception))
+
+            with self.assertRaises(RuntimeError) as cm2:
+                decrypt_secret("enc:test_corrupted_or_valid")
+            self.assertIn("EASYEXAM_SECRET_KEY", str(cm2.exception))
+
+            fail_res = self.client.put(
+                "/api/v1/ai/config",
+                headers=headers,
+                json={
+                    "ai_provider": "openai",
+                    "ai_api_key": "sk-attempt-without-key",
+                },
+            )
+            self.assertEqual(fail_res.status_code, 500)
+            self.assertIn("EASYEXAM_SECRET_KEY", fail_res.json()["detail"])
+        finally:
+            os.environ["EASYEXAM_SECRET_KEY"] = "easyexam-ci-secret-32bytes-passphrase!!"
+            if orig_fallback is not None:
+                os.environ["SECRET_KEY"] = orig_fallback
+
+        # 2. Default config
+        cfg = self.client.get("/api/v1/ai/config", headers=headers).json()
+        self.assertFalse(cfg["is_configured"])
+
+        # 3. Update config with sensitive key
+        update_res = self.client.put(
+            "/api/v1/ai/config",
+            headers=headers,
+            json={
+                "ai_provider": "ollama",
+                "ai_api_base": "http://localhost:11434/v1",
+                "ai_model": "qwen2.5:7b",
+                "ai_api_key": "sk-real-super-secret-key-123456",
+                "search_provider": "open-webSearch",
+                "search_api_base": "http://localhost:8000/v1/search",
+            },
+        )
+        self.assertEqual(update_res.status_code, 200)
+        self.assertIn("******", update_res.json()["ai_api_key"])
+        self.assertNotIn("real-super-secret", update_res.json()["ai_api_key"])
+
+        # 4. GET config returns masked key
+        get_res = self.client.get("/api/v1/ai/config", headers=headers).json()
+        self.assertTrue(get_res["is_configured"])
+        self.assertIn("******", get_res["ai_api_key"])
+
+        # 5. Updating without changing key retains ciphertext in database
+        self.client.put(
+            "/api/v1/ai/config",
+            headers=headers,
+            json={
+                "ai_provider": "ollama",
+                "ai_api_base": "http://localhost:11434/v1",
+                "ai_model": "qwen2.5:14b",
+                "ai_api_key": get_res["ai_api_key"],
+            },
+        )
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute("SELECT ai_api_key, ai_model, id FROM user_ai_configs u JOIN users s ON s.id = u.user_id WHERE s.username = 'ai_user'").fetchone()
+            # SQLite physical column MUST be encrypted (enc:...) and must NEVER contain the raw plaintext
+            self.assertTrue(row[0].startswith("enc:"))
+            self.assertNotIn("sk-real-super-secret-key-123456", row[0])
+            self.assertEqual(row[1], "qwen2.5:14b")
+            user_db_id = row[2]
+            stored_cipher = row[0]
+
+        # 6. Verify internal service access can decrypt real key for AI inference
+        self.assertEqual(decrypt_secret(stored_cipher), "sk-real-super-secret-key-123456")
+        unmasked = self.app.state.services.ai_configs.get_config(user_db_id, mask_secrets=False)
+        self.assertEqual(unmasked["ai_api_key"], "sk-real-super-secret-key-123456")
+
+        # 7. Seamless backward compatibility & lossless upgrade of legacy plaintext keys
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE user_ai_configs SET ai_api_key = 'sk-legacy-unencrypted-key' WHERE user_id = ?",
+                (user_db_id,),
+            )
+        # Reading config automatically upgrades DB row to enc:... without dropping key
+        upgraded_conf = self.app.state.services.ai_configs.get_config(user_db_id, mask_secrets=False)
+        self.assertEqual(upgraded_conf["ai_api_key"], "sk-legacy-unencrypted-key")
+        with sqlite3.connect(self.db_path) as conn:
+            raw_after = conn.execute("SELECT ai_api_key FROM user_ai_configs WHERE user_id = ?", (user_db_id,)).fetchone()[0]
+            self.assertTrue(raw_after.startswith("enc:"))
+            self.assertNotIn("sk-legacy-unencrypted-key", raw_after)
+            self.assertEqual(decrypt_secret(raw_after), "sk-legacy-unencrypted-key")
+
+        # 8. Diagnosable failure on wrong key: do NOT silently swallow into empty string
+        os.environ["EASYEXAM_SECRET_KEY"] = "completely-different-wrong-key-32b!!"
+        try:
+            with self.assertRaises(ValueError) as err_cm:
+                decrypt_secret(raw_after)
+            self.assertIn("key mismatch or corrupted ciphertext", str(err_cm.exception))
+        finally:
+            os.environ["EASYEXAM_SECRET_KEY"] = "easyexam-ci-secret-32bytes-passphrase!!"
+
+    def test_ambiguous_pdf_preview_and_manual_correction_ee021(self):
+        # EE-021: Ambiguous PDF parsing enters manual correction workflow
+        self.client.post("/api/v1/auth/register", json={"username": "pdf_user", "password": "REDACTED_TEST_PASSWORD"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "pdf_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "PDF题库"}).json()
+
+        # Build a minimal valid PDF with lenient/ambiguous question text
+        from pypdf import PdfWriter
+        from reportlab.pdfgen import canvas
+        import io
+        buf = io.BytesIO()
+        c = canvas.Canvas(buf)
+        c.drawString(100, 750, "1. 计算机网络的拓扑结构有哪些？")
+        c.drawString(100, 730, "A. 星型拓扑")
+        c.drawString(100, 710, "B. 总线型拓扑")
+        c.drawString(100, 690, "参考答案：AB")
+        c.drawString(100, 670, "解析：两者均为基本拓扑结构。")
+        c.save()
+        pdf_bytes = buf.getvalue()
+
+        # 1. Preview PDF
+        files = {"file": ("test_exam.pdf", pdf_bytes, "application/pdf")}
+        prev_res = self.client.post(f"/api/v1/imports/banks/{bank['id']}/pdf-preview", headers=headers, files=files)
+        self.assertEqual(prev_res.status_code, 200)
+        prev_data = prev_res.json()
+        self.assertIn("draft_id", prev_data)
+        self.assertGreater(len(prev_data["candidates"]), 0)
+
+        # 2. Modify candidate in manual correction step
+        candidates = prev_data["candidates"]
+        candidates[0]["stem"] = "【校对核准】" + candidates[0]["stem"]
+
+        # 3. Confirm import into bank (Atomic single transaction with draft status update)
+        confirm_res = self.client.post(
+            f"/api/v1/imports/banks/{bank['id']}/pdf-confirm",
+            headers=headers,
+            json={
+                "draft_id": prev_data["draft_id"],
+                "questions": candidates,
+                "duplicate_strategy": "skip",
+            },
+        )
+        self.assertEqual(confirm_res.status_code, 201)
+        self.assertEqual(confirm_res.json()["status"], "IMPORTED")
+        # Ensure imported_count matches the submitted candidate questions count
+        self.assertEqual(confirm_res.json()["imported_count"], len(candidates))
+
+        # Verify question exists in bank with corrected stem
+        q_list = self.client.get(f"/api/v1/banks/{bank['id']}/questions", headers=headers).json()
+        self.assertEqual(len(q_list), len(candidates))
+        self.assertTrue(q_list[0]["stem"].startswith("【校对核准】"))
+
+        # Verify draft status is CONFIRMED in DB
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute("SELECT status FROM pdf_import_drafts WHERE id = ?", (prev_data["draft_id"],)).fetchone()
+            self.assertEqual(row[0], "CONFIRMED")
+
+        # 4. Sequential duplicate prevention: second attempt on same draft_id MUST be rejected
+        dup_res = self.client.post(
+            f"/api/v1/imports/banks/{bank['id']}/pdf-confirm",
+            headers=headers,
+            json={
+                "draft_id": prev_data["draft_id"],
+                "questions": candidates,
+                "duplicate_strategy": "skip",
+            },
+        )
+        self.assertIn(dup_res.status_code, (400, 422))
+        self.assertIn("已完成导入或已作废", dup_res.json()["detail"])
+
+        # 5. True concurrent confirmation race condition test (CAS verification)
+        prev2_res = self.client.post(f"/api/v1/imports/banks/{bank['id']}/pdf-preview", headers=headers, files=files)
+        self.assertEqual(prev2_res.status_code, 200)
+        draft2_id = prev2_res.json()["draft_id"]
+        cands2 = prev2_res.json()["candidates"]
+        cands2[0]["stem"] = "【并发CAS测试】" + cands2[0]["stem"]
+
+        import threading
+        results = []
+        errors = []
+
+        def worker():
+            try:
+                r = self.client.post(
+                    f"/api/v1/imports/banks/{bank['id']}/pdf-confirm",
+                    headers=headers,
+                    json={
+                        "draft_id": draft2_id,
+                        "questions": cands2,
+                        "duplicate_strategy": "new",
+                    },
+                )
+                results.append((r.status_code, r.json()))
+            except Exception as e:
+                errors.append(e)
+
+        t1 = threading.Thread(target=worker)
+        t2 = threading.Thread(target=worker)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        self.assertEqual(len(errors), 0)
+        self.assertEqual(len(results), 2)
+        status_codes = [r[0] for r in results]
+        # Exactly one thread MUST succeed with 201, and one MUST fail with 400 or 422
+        self.assertEqual(status_codes.count(201), 1)
+        self.assertTrue(any(code in (400, 422) for code in status_codes))
+
+        # Check total questions in bank: 1 from first import + 1 from concurrent test = 2
+        final_q_list = self.client.get(f"/api/v1/banks/{bank['id']}/questions", headers=headers).json()
+        self.assertEqual(len(final_q_list), len(candidates) + len(cands2))
+
 
 if __name__ == "__main__":
     unittest.main()
-
-
 

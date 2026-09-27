@@ -1,16 +1,18 @@
 <template>
-  <main class="exam-page">
+  <main class="exam-page" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
     <header class="exam-header">
-      <button type="button" @click="$emit('back')">返回</button>
-      <div>
+      <button type="button" class="btn-back" @click="$emit('back')">← 返回</button>
+      <div class="exam-header-center" @click="showMobileSheet = true">
         <h1>模拟考试</h1>
-        <p>{{ session ? `已作答 ${answeredCount} / ${questions.length}` : '正在载入考试…' }}</p>
+        <p>{{ session ? `已作答 ${answeredCount} / ${questions.length} 📑` : '正在载入…' }}</p>
       </div>
       <div class="exam-clock" data-testid="exam-timer" role="timer" aria-live="off">
         {{ session?.time_limit ? formatRemainingTime(remainingSeconds) : '不限时' }}
       </div>
+      <button type="button" class="secondary-btn btn-exam-sheet-trigger mobile-only-btn" @click="showMobileSheet = true">答题卡</button>
       <button type="button" class="primary" :disabled="loading || isSubmitting || Boolean(report)" @click="showSubmitConfirm = true">交卷</button>
     </header>
+
 
     <p v-if="error" class="exam-error" role="alert">{{ error }}</p>
     <p v-if="loading" class="exam-loading">正在恢复考试进度…</p>
@@ -84,14 +86,20 @@
           <div class="question-meta"><span>第 {{ currentIndex + 1 }} 题 / {{ questions.length }}</span><span>{{ question.type }}</span></div>
           <h2>{{ question.stem }}</h2>
           <div v-if="question.options?.length" class="exam-options">
-            <label v-for="option in question.options" :key="option.key" class="exam-option">
+            <label
+              v-for="option in question.options"
+              :key="option.key"
+              class="exam-option"
+              :class="{ selected: isOptionSelected(option.key) }"
+            >
+              <kbd class="key-cap" :title="`按键盘 ${option.key} 键直接选择`">{{ option.key }}</kbd>
               <input
                 :type="question.type === 'MULTI' ? 'checkbox' : 'radio'"
                 :name="`question-${question.id}`"
                 :checked="isOptionSelected(option.key)"
                 @change="selectOption(option.key, $event.target.checked)"
               />
-              <span>{{ option.key }}. {{ option.content }}</span>
+              <span class="option-content-text">{{ option.content }}</span>
             </label>
           </div>
           <label v-else class="exam-text-answer">
@@ -105,12 +113,19 @@
           </label>
 
           <div class="exam-question-actions">
-            <button type="button" data-testid="exam-flag-toggle" :aria-pressed="isFlagged" @click="toggleCurrentFlag">
+            <button type="button" data-testid="exam-flag-toggle" :aria-pressed="isFlagged" @click="toggleCurrentFlag" title="快捷键：F">
               {{ isFlagged ? '取消待复查' : '标记待复查' }}
+              <kbd class="hotkey-badge">F</kbd>
             </button>
             <div>
-              <button type="button" :disabled="currentIndex === 0" @click="goTo(currentIndex - 1)">上一题</button>
-              <button type="button" :disabled="currentIndex >= questions.length - 1" @click="goTo(currentIndex + 1)">下一题</button>
+              <button type="button" :disabled="currentIndex === 0" @click="goTo(currentIndex - 1)" title="快捷键：← 或 K">
+                上一题
+                <kbd class="hotkey-badge">←</kbd>
+              </button>
+              <button type="button" :disabled="currentIndex >= questions.length - 1" @click="goTo(currentIndex + 1)" title="快捷键：Space 或 →">
+                下一题
+                <kbd class="hotkey-badge">→</kbd>
+              </button>
             </div>
           </div>
         </section>
@@ -118,6 +133,12 @@
         <aside class="exam-answer-sheet" data-testid="exam-answer-sheet" aria-label="答题卡">
           <h2>答题卡</h2>
           <p>{{ answeredCount }} 题已答 · {{ flaggedCount }} 题待复查</p>
+          <div class="sheet-legend">
+            <span class="legend-item"><span class="legend-badge answered">✔</span> 已答</span>
+            <span class="legend-item"><span class="legend-badge flagged">🚩</span> 待复查</span>
+            <span class="legend-item"><span class="legend-badge current">●</span> 当前</span>
+            <span class="legend-item"><span class="legend-badge">○</span> 未答</span>
+          </div>
           <div class="answer-grid">
             <button
               v-for="(item, index) in questions"
@@ -133,10 +154,47 @@
     </template>
     <p v-else-if="!loading" class="exam-loading">本次考试没有可用题目。</p>
 
-    <div v-if="showSubmitConfirm" class="exam-confirm-backdrop">
+    <!-- 移动端答题卡抽屉 -->
+    <div v-if="showMobileSheet" class="exam-sheet-modal-backdrop" @click.self="showMobileSheet = false">
+      <div class="exam-sheet-modal-drawer">
+        <div class="exam-sheet-drawer-header">
+          <h3>答题卡 (已答 {{ answeredCount }} / {{ questions.length }})</h3>
+          <button type="button" class="btn-close-sheet" @click="showMobileSheet = false">✕</button>
+        </div>
+        <div class="sheet-legend">
+          <span class="legend-item"><span class="legend-badge answered">✔</span> 已答</span>
+          <span class="legend-item"><span class="legend-badge flagged">🚩</span> 待查</span>
+          <span class="legend-item"><span class="legend-badge current">●</span> 当前</span>
+          <span class="legend-item"><span class="legend-badge">○</span> 未答</span>
+        </div>
+        <div class="answer-grid">
+          <button
+            v-for="(item, index) in questions"
+            :key="item.id"
+            type="button"
+            :class="answerButtonClass(item.id, index)"
+            @click="goTo(index); showMobileSheet = false"
+          >{{ index + 1 }}</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showSubmitConfirm" class="exam-confirm-backdrop" @click.self="showSubmitConfirm = false">
       <section class="exam-confirm-dialog" data-testid="exam-submit-confirm" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
         <h2 id="confirm-title">确认交卷？</h2>
-        <p>还有 {{ questions.length - answeredCount }} 题未答，{{ flaggedCount }} 题待复查。</p>
+        <p>
+          还有
+          <button
+            v-if="questions.length - answeredCount > 0"
+            type="button"
+            class="btn-link-jump"
+            title="点击跳转至首个未作答题目"
+            @click="jumpToFirstUnanswered"
+          >
+            <strong>{{ questions.length - answeredCount }} 题未答 (点击定位首题)</strong>
+          </button>
+          <span v-else>0 题未答</span>，{{ flaggedCount }} 题待复查。
+        </p>
         <div class="exam-question-actions">
           <button type="button" :disabled="isSubmitting" @click="showSubmitConfirm = false">继续作答</button>
           <button type="button" class="primary" :disabled="isSubmitting" @click="submitExam(false)">{{ isSubmitting ? '正在交卷…' : '确认交卷' }}</button>
@@ -149,7 +207,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { completeSession, getSession, getSessionQuestions, submitAttempt, syncDraft, toggleFlag } from '../../api/practice'
-import { calculateAccuracy, examAnswerState, formatQuestionTypeName, formatRemainingTime, normalizeExamAnswer } from '../../domain/exam'
+import { calculateAccuracy, examAnswerState, findFirstUnansweredIndex, formatQuestionTypeName, formatRemainingTime, isSwipeGestureValid, normalizeExamAnswer } from '../../domain/exam'
 
 const props = defineProps({ token: { type: String, required: true }, sessionId: { type: String, required: true } })
 defineEmits(['back'])
@@ -162,6 +220,27 @@ const elapsedSeconds = ref(0)
 const report = ref(null)
 const loading = ref(true)
 const error = ref('')
+const showMobileSheet = ref(false)
+
+let touchStartX = 0
+let touchStartY = 0
+function handleTouchStart(e) {
+  if (!e.touches || e.touches.length !== 1) return
+  touchStartX = e.touches[0].clientX
+  touchStartY = e.touches[0].clientY
+}
+function handleTouchEnd(e) {
+  if (!e.changedTouches || e.changedTouches.length !== 1) return
+  const touchEndX = e.changedTouches[0].clientX
+  const touchEndY = e.changedTouches[0].clientY
+  const gesture = isSwipeGestureValid(touchStartX, touchStartY, touchEndX, touchEndY)
+  if (gesture === 'prev' && currentIndex.value > 0) {
+    goTo(currentIndex.value - 1)
+  } else if (gesture === 'next' && currentIndex.value < questions.value.length - 1) {
+    goTo(currentIndex.value + 1)
+  }
+}
+
 const isSubmitting = ref(false)
 const showSubmitConfirm = ref(false)
 let tickHandle
@@ -287,7 +366,80 @@ function tick() {
   else if (elapsedSeconds.value % 10 === 0) void persistDraft()
 }
 
+function jumpToFirstUnanswered() {
+  const idx = findFirstUnansweredIndex(questions.value, answers.value)
+  if (idx >= 0) {
+    goTo(idx)
+    showSubmitConfirm.value = false
+  }
+}
+
+function handleKeyDown(e) {
+  const targetTag = e.target?.tagName?.toLowerCase()
+  if (targetTag === 'input' || targetTag === 'textarea' || targetTag === 'select') {
+    return
+  }
+
+  const key = e.key.toUpperCase()
+
+  // 1. Select options via A, B, C, D... or 1, 2, 3, 4...
+  if (question.value?.options?.length && !report.value) {
+    const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+    let optKey = null
+    if (letters.includes(key)) {
+      optKey = key
+    } else if (['1', '2', '3', '4', '5', '6', '7', '8'].includes(e.key)) {
+      const idx = parseInt(e.key, 10) - 1
+      if (idx >= 0 && idx < question.value.options.length) {
+        optKey = question.value.options[idx].key
+      }
+    }
+    if (optKey) {
+      const exists = question.value.options.some(o => o.key === optKey)
+      if (exists) {
+        e.preventDefault()
+        const currentSelected = isOptionSelected(optKey)
+        selectOption(optKey, !currentSelected)
+        return
+      }
+    }
+  }
+
+  // 2. Next on Space, ArrowRight, J
+  if (e.key === ' ' || e.key === 'ArrowRight' || key === 'J') {
+    if (currentIndex.value < questions.value.length - 1) {
+      e.preventDefault()
+      goTo(currentIndex.value + 1)
+      return
+    }
+  }
+
+  // 3. Prev on ArrowLeft, K
+  if (e.key === 'ArrowLeft' || key === 'K') {
+    if (currentIndex.value > 0) {
+      e.preventDefault()
+      goTo(currentIndex.value - 1)
+      return
+    }
+  }
+
+  // 4. Toggle flag on F
+  if (key === 'F') {
+    e.preventDefault()
+    toggleCurrentFlag()
+    return
+  }
+
+  // 5. Esc closes confirm modal
+  if (e.key === 'Escape' && showSubmitConfirm.value) {
+    e.preventDefault()
+    showSubmitConfirm.value = false
+    return
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener('keydown', handleKeyDown)
   try {
     session.value = await getSession(props.token, props.sessionId)
     questions.value = await getSessionQuestions(props.token, props.sessionId)
@@ -309,6 +461,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeyDown)
   clearInterval(tickHandle)
   clearTimeout(draftHandle)
   if (session.value && !report.value) void persistDraft()
@@ -358,12 +511,69 @@ onBeforeUnmount(() => {
 .exam-confirm-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 1rem; background: rgb(15 23 42 / 0.48); }
 .exam-confirm-dialog { width: min(100%, 28rem); padding: 1.5rem; border-radius: 1rem; background: var(--bg-card); box-shadow: var(--shadow-lg); }
 .exam-confirm-dialog p { margin-top: 0.5rem; color: var(--text-muted); }
+.btn-back { padding: 0.4rem 0.65rem; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--bg-card); cursor: pointer; }
+.btn-exam-sheet-trigger { cursor: pointer; font-size: 0.85rem; padding: 0.4rem 0.65rem; }
+.mobile-only-btn { display: none !important; }
+.exam-header-center { cursor: pointer; }
+
+/* Exam Mobile Sheet Modal Drawer */
+.exam-sheet-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+}
+.exam-sheet-modal-drawer {
+  background: var(--bg-card);
+  width: 100%;
+  max-width: 42rem;
+  max-height: 80vh;
+  border-radius: 1rem 1rem 0 0;
+  box-shadow: var(--shadow-xl);
+  display: flex;
+  flex-direction: column;
+  padding: 1.15rem 1.25rem;
+  overflow-y: auto;
+  animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.exam-sheet-drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.85rem;
+}
+.btn-close-sheet {
+  border: none;
+  background: var(--bg-muted);
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 50%;
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
 @media (max-width: 760px) {
+  .exam-page { width: 100%; margin: 0; padding: 0.35rem 0.5rem 2rem; }
   .exam-layout { grid-template-columns: 1fr; }
-  .exam-answer-sheet { order: -1; }
+  .exam-answer-sheet { display: none !important; } /* Hide stuck-at-bottom sheet on mobile, use modal drawer */
+  .exam-header { grid-template-columns: auto 1fr auto auto; gap: 0.4rem; padding: 0.5rem 0.65rem; }
+  .exam-header h1 { font-size: 1rem; }
+  .exam-header p { font-size: 0.75rem; }
+  .exam-clock { min-width: 4rem; padding: 0.35rem 0.5rem; font-size: 0.825rem; }
+  .mobile-only-btn { display: inline-flex !important; }
+  .exam-question-card { padding: 0.85rem; border-radius: var(--radius-md); }
+  .exam-question-card h2 { font-size: 1.05rem; margin-bottom: 0.85rem; line-height: 1.45; }
+  .exam-options { gap: 0.5rem; }
+  .exam-option { padding: 0.6rem 0.75rem; border-radius: var(--radius-md); }
+  .key-cap { min-width: 1.5rem; height: 1.5rem; font-size: 0.8rem; }
+  .hotkey-badge { display: none !important; }
   .answer-grid { grid-template-columns: repeat(8, minmax(2rem, 1fr)); }
   .report-summary { grid-template-columns: repeat(2, 1fr); }
-  .exam-header { grid-template-columns: auto 1fr auto; }
-  .exam-header .primary { grid-column: 1 / -1; }
+  .exam-header .primary { font-size: 0.85rem; padding: 0.4rem 0.65rem; }
 }
 </style>

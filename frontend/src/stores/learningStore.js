@@ -39,6 +39,14 @@ export function useLearningStore() {
     }
   }
 
-  return { summary, trends, recommendations, mistakes, plan, loading, error, load, reloadRecommendations }
-}
+  async function reloadStudyPlan(token, bankId = '', minutesPerDay = 30, days = 7) {
+    try {
+      const params = { ...(bankId ? { bank_id: bankId } : {}), minutes_per_day: minutesPerDay, days }
+      plan.value = await getStudyPlan(token, params)
+    } catch (err) {
+      error.value = err.detail || err.message
+    }
+  }
 
+  return { summary, trends, recommendations, mistakes, plan, loading, error, load, reloadRecommendations, reloadStudyPlan }
+}

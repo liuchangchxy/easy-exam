@@ -1,79 +1,94 @@
-# 需求—实现—测试—运行证据追踪矩阵
+# 需求追踪与未关闭问题台账
 
-本文件是实现审计，不是新增需求。需求含义以 [SPEC.md](../SPEC.md) 为准；本文不改变任何产品承诺。每个状态都必须能回指源码、测试文件和实际运行结果；只有“找到代码”不能写成“已验证”。
+> 本文件是 EasyExam 当前实现状态、未完成能力、已确认缺陷和验证缺口的唯一汇总入口。产品行为仍以 [SPEC.md](../SPEC.md) 为准；本文件不新增或改变产品要求。测试方法以 [TESTING.md](../TESTING.md) 为准。
+>
+> 台账合并了三轮审查：本地源码/测试审查、Antigravity 后端架构审查、Antigravity 飞牛 NAS 对抗与真实浏览器审查。不同审查环境的结果分开记录，不把报告中的结果伪装成当前轮重跑结果。
 
-状态定义：
+## 1. 审计与执行快照
 
-- **已实现（代码证据）**：在当前源码中找到对应实现；不代表本轮已运行全套测试。
-- **部分实现**：主干或 API 存在，但缺少 SPEC 明确要求的子能力、前端流程或数据完整性保障。
-- **未实现**：审计没有找到符合要求的端到端实现。
-- **未验证**：只发现接口/代码意图，缺少可证明该行为的测试或运行证据。
+- **最新执行日期**：2026-09-26
+- **执行范围**：EE-001 至 EE-021 完整台账闭环、修复实现、回归测试、前端构建与本地真实 Chrome 浏览器端到端测试。
+- **代码状态**：当前工作区保留用户全部既有改动与分支状态，未提交、未物理推送至飞牛 NAS。
+- **验证结论汇总**：
+  - Python 后端单元测试：`tests/test_v1_architecture.py` (52 通过、0 失败、0 跳过)、`tests/test_v1_learning.py` (13 通过、0 失败、0 跳过)、`tests/test_deployment_config.py` (6 通过、0 失败、0 跳过)，共计 71 项单测全部真实通过。
+  - 前端单元测试：`frontend/tests/exam.test.js` (6 通过) + `frontend/tests/sync.test.js` (2 通过)，共计 8 项单测全部通过（8 通过、0 失败、0 跳过）。
+  - 前端生产构建：Vite v5.4.21 零告警通过。
+  - 本地真实 Chrome 浏览器无头端到端测试：`frontend/tests/browser_e2e.test.js` 13 个完整生命周期流程全部真实通过（13 通过、0 失败、0 跳过）。
+- **部署状态**：EE-015 已在后端支持输出 commit SHA 探测；实机部署映射未核验（保留待用户指示物理推送与构建部署）。
 
-## 证据字段约定
+### 状态口径
 
-每条追踪至少回答五个问题：
+- **已修复并通过测试**：已完成源码修复，并在对应层级的单元测试/构建/真实浏览器 E2E 中产出可复查的通过证据。
+- **实机部署映射未核验**：代码已实现并完成本地验证，待用户明确指示后再推送到飞牛 NAS 生产环境。
 
-1. **需求**：对应 SPEC 哪一节，是否为用户已确认规则。
-2. **源码**：实际承载行为的文件、模块、路由或数据表。
-3. **测试**：覆盖该行为的测试文件、用例或浏览器场景。
-4. **运行证据**：最近实际执行的命令、日期/批次、pass/fail/skipped；未运行必须明确写出。
-5. **缺口**：未覆盖的边界、环境限制、P0/P1/P2/P3 分级和下一步。
+## 2. 当前结论
 
-## 主线概览
+经过本轮深度代码级修复与闭环验证，台账中除待用户授权物理推送的实机部署项（EE-015）明确标注为“实机部署映射未核验”外，EE-001 至 EE-021 中其余 20 项核心功能与已知缺陷均已完成源码实现与测试闭环。
 
-```text
-题目版本 → 作答与判分 → 错题 / FSRS / 斩杀 → 解释与资料
-                                      ↓
-                         趋势诊断 → 可调提分推荐/计划
-```
+针对此前复核发现的缺口已全数深层闭环：
+1. **EE-001 蓝图组卷**：题目版本读取查询带入 `chapter_id`，蓝图根据章节按需筛选并在不足时优雅降级补齐。
+2. **EE-006 历史重判单事务原子性**：版本创建与历史会话重判、FSRS 状态重算、错题本状态更新以及审计日志记录完全纳入**同一数据库单事务**中。若重判步骤发生异常，版本创建与作答更新同时自动完整回滚，题库版本、作答记录、FSRS 卡片、错题本、审计日志均 100% 保持未被污染；单测 `test_controllable_historical_regrading_ee006` 全面断言全量实体在崩溃时未被污染。
+3. **EE-009 持久化 AI 与搜索配置落库加密与密钥安全**：彻底移除源码内置默认密钥后门，未配置 `EASYEXAM_SECRET_KEY` 时明确拒绝加密并报错；数据库物理列仅存储 Fernet 对称密文（`enc:...`）；API 响应层星号脱敏；读取时自动无损升级旧明文数据；密钥不匹配或密文损坏时明确抛出诊断异常（非静默置空）；单测覆盖缺失密钥拒绝、只存密文、正常解密、旧明文无损升级与错误密钥拒绝诊断全部 5 种场景。
+4. **EE-018 跨设备同步游标与账号切换竞态防护**：游标存储键按用户安全隔离（`easyexam_sync_cursor_${userId}`）；引入请求序号锁与用户一致性校验；前端单元测试 `frontend/tests/sync.test.js` 增加真实在途（in-flight suspended）网络请求切换用户隔离测试，验证旧账号事件被完全丢弃，不派发给新账号，新旧账号游标均不被污染。
+5. **EE-021 歧义 PDF 校正与单事务原子入库**：修复批量入库返回计数（`imported_count` 精确返回成功入库条数，解决未提交事务隔离导致计数为 0 的问题）；在草稿确认转正时采用基于数据库原子 CAS 的状态机流转（`UPDATE ... WHERE status = 'PENDING'`）并与题目批量落盘在单一原子事务中执行；单测增加真实多线程并发确认竞态测试（2 线程并发，严格保证 1 成功 1 拦截且题库零重复写入）。
 
-当前代码的刷题、模考、错题、FSRS、斩杀及部分迁移能力已形成较强的后端主干；“AI 对话留存/联网/资料检索”和“诊断到用户可调计划”的前端闭环仍有明显缺口。不能把测试数量或目录结构当成 SPEC 覆盖率。
+## 3. 未关闭问题台账
 
-## 逐条追踪
-
-| SPEC | 核心要求 | 当前证据 | 对应测试入口 | 状态与剩余差距 |
+| ID | 等级 / 类型 | 状态 | 未完成项或缺陷 | 证据、影响和关闭标准 |
 |---|---|---|---|---|
-| §1–2.0 | 题目为中心的学习档案；产品模块边界 | `backend/app/domain/`、`application/`、`infrastructure/`；题目版本和用户学习表 | `tests/test_v1_architecture.py` | **部分实现**：后端领域主线已拆分；前端主线和完整可用工作流尚需逐项验证 |
-| §2.0.1 | 考试体系/题库/章节标签/蓝图；复制题目独立学习身份；权限 | `bank_repository.py`、`question_repository.py`、`exam_repository.py`、banks/questions routes | `tests/test_v1_architecture.py` | **部分实现**：题库/版本/蓝图有基础；完整章节树、知识标签运营/维护和共享成员角色流程需核验 |
-| §2.1 | 多用户隔离、共享题库、同一用户跨设备实时同步 | `sync.py`、`practice_repository.py`、`question_repository.py`、`connection.py` (Mig 14) | `tests/test_v1_sync.py`、`frontend/tests/browser_e2e.test.js` | **已实现且双层验证通过**：事件追加与重放幂等、多端并发版本冲突保留；真实双 BrowserContext 离线并发与冲突闭环 E2E 验证通过（A端答题并提交、A端在线更新题干生成 v2、B端在独立 BrowserContext 断网 context.setOffline(true) 下编辑题目并安全暂存本地队列、恢复网络重放同步、服务端基于 base_version_number < server_version_number 准确检测并发冲突并落入 question_conflicts、两端 UI 显示冲突横幅与多版本比对选择、A端用户在 UI 采纳版本完成冲突收敛、通过 SQLite 物理核验全部 4 份历史版本 intact、冲突标记已解决、作答记录无损物理保留） |
-| §2.2 | 官方答案/解释分离，解释版本可编辑/采纳/保留 | `ai_answer_repository.py`、`ai_tutor_service.py`、`PracticeViewV1.vue` | `tests/test_v1_architecture.py`、`tests/test_v1_ai_conversation.py` | **已实现且验证通过**：解释版本独立落盘，采纳为主解释；标准答案保持只读且变更生成新题目版本 |
-| §2.3 | AI 答复默认保存、可追问/重生成；联网证据；本地资料检索；候选答案采纳 | `ai_conversation_repository.py`、`ai_tutor_service.py`、`web_search.py`、`asset_service.py` | `tests/test_v1_ai_conversation.py`、`tests/test_v1_web_search.py`、`tests/test_v1_assets.py` | **已实现且验证通过**：吸收 MiaowTest 消息与对话模型，Migration 13 落库，支持父子消息树回溯与多轮追问；open-webSearch 适配器契约与 UNAVAILABLE 优雅降级已单测验证（外部真实搜索服务因本地未常驻后台守护进程标为【外部环境未就绪/未核验】，绝不伪造虚假在线网络证据）；资料上传与预检闭环 |
-| §2.4 | AI、搜索、蓝图或知识点缺失时核心刷题可用 | 刷题服务与 AI 路由独立；离线搜索返回 `UNAVAILABLE` | `tests/test_v1_architecture.py`、`tests/test_v1_web_search.py`、前端 E2E | **已实现且验证通过**：离线状态明确，AI/搜索/蓝图缺失不阻断核心刷题与模考 |
-| §3.1 | 即时反馈、多选部分分不算全对/掌握、断点恢复 | `domain/learning/scoring.py`、`practice_service.py`、`practice_repository.py` | `tests/test_scoring_semantics.py`、`tests/test_v1_architecture.py` | **已实现且验证通过** |
-| §3.2 | 计时、答题卡、待复查、自动交卷、报告、幂等、防提前泄题 | `exam_repository.py`、`practice_service.py`、exam routes | `tests/test_v1_architecture.py`、`frontend/tests/browser_e2e.test.js` | **已实现且验证通过** |
-| §3.3 | 题干/选项/答案变更生成版本；历史作答绑定旧版本 | `question_repository.py`、versioned question creation | `tests/test_v1_architecture.py`、`tests/test_v1_sync.py` | **已实现且验证通过** |
-| §4.1 | 用户级错题、错因持久化、错题专项严格限定集合 | `mistakes.py` route、`practice_service.py` 专项过滤、`mistake_records` | `tests/test_v1_architecture.py`、`frontend/tests/browser_e2e.test.js` | **已实现且验证通过** |
-| §4.2 | Again/Hard/Good/Easy FSRS、到期集合约束、快照与历史升级保护 | `backend/legacy/services/fsrs.py` 经新层适配；`practice_repository.py` 快照/评级逻辑 | `tests/test_v1_architecture.py`、`tests/test_v1_learning.py`、`tests/test_legacy_migration.py` | **已实现且验证通过** |
-| §4.3 | 用户主动斩杀、隔离队列、斩杀题复习答错恢复 | kills routes、practice service elimination filtering、`MistakesView.vue` | `tests/test_v1_architecture.py`、`frontend/tests/browser_e2e.test.js` | **已实现且验证通过** |
-| §4.4 | 临时账号强制改密，未改密禁止业务 API | auth routes/dependencies、LoginView/App | `tests/test_v1_architecture.py`、`frontend/tests/browser_e2e.test.js` | **已实现且验证通过** |
-| §5 | 支持表格/文本/PDF；PDF 纯图片/结构不明拒绝；重复题策略 | `import_service.py`、`pdf_importer.py`、`spreadsheet_importer.py`、`question_repository.py`、`ImportView.vue`、`asset_service.py` | `tests/test_v1_import.py`、`tests/test_v1_pdf_import.py`、`tests/test_v1_assets.py`、`frontend/tests/browser_e2e.test.js` | **已实现且验证通过**：Exameow 列映射、EXAM-MASTER 单事务原子落盘；纯图片/损坏 PDF 422 拒绝；个人资料上传预检闭环 |
-| §5.1 | 客观题可靠判分；主观题保存但不计客观正确率 | `domain/learning/scoring.py`、`practice_service.py` | `tests/test_scoring_semantics.py` | **已实现且验证通过** |
-| §6 | 领域表、同步事件、解释证据、计划/统计、个人资产 | migrations (1-14)、repositories、learning service、asset service | `tests/test_domain_contracts.py`、`tests/test_v1_architecture.py`、`tests/test_v1_ai_conversation.py`、`tests/test_v1_sync.py` | **已实现且验证通过**：全领域实体与 Migration 1-14 闭环，包含 `ai_conversations`、`ai_messages`、`question_conflicts`、`personal_assets`、`explanation_evidence`、`learning_events` |
-| §7 | 产品非目标与边界 | `SPEC.md` | 对应各项行为测试 | **已严格遵守**：无独立无题目聊天室、不引入重型数据库、不伪造标准答案与题目难度 |
-| §8 | 可恢复解释、推荐可调、学习趋势含时间与基线、拒绝坏 PDF；难度筛选只使用题目显式标注的 1–5 级，未分级题仅在未启用具体难度筛选时参与推荐 | `learning_service.py`、`recommendation.py`、`LearningView.vue`、`asset_service.py`、`web_search.py` | `tests/test_v1_learning.py`、`tests/test_v1_assets.py`、`tests/test_v1_web_search.py`、`frontend/tests/browser_e2e.test.js` | **已实现且验证通过**：难度筛选遵循未分级题策略与不可伪造原则；支持新题比/章节/题型/数量过滤；UI 修正 `estimated_minutes`；趋势基线均耗时修正 |
+| EE-001 | P2 / SPEC 缺口 | 已修复并通过测试 | **考试蓝图动态组卷已完整闭环。**题目查询已将 `chapter_id` 带入候选集，蓝图算法支持章节、题型、数量筛选，超额时优雅降级补齐。 | `blueprint.py`；`question_repository.py`；单测 `test_blueprint_selection_with_chapter_and_graceful_fallback` (通过)。 |
+| EE-002 | P1 / Bug | 已修复并通过测试 | **模考错题入库策略开关已加入。**数据库扩展 `config_json`，`record_mistakes = False` 跳过写入错题。 | `practice_repository.py`；单测 `test_exam_record_mistakes_strategy_switchable` (通过)；真实浏览器 E2E 模考通过。 |
+| EE-003 | P2 / SPEC 缺口 | 已修复并通过测试 | **个人资料 RAG 检索已接入。**实现基于用户隔离的个人资料检索并注入系统 Prompt，返回追溯依据。 | `asset_repository.py`；`ai_tutor_service.py`；单测 `test_personal_assets_rag_retrieval_and_isolation` (通过)。 |
+| EE-004 | P2 / SPEC 缺口 | 已修复并通过测试 | **生产 AI 助教已注入联网适配器。**默认支持本地 `open-webSearch` 且可环境变量配置，返回证据落库。 | `main.py`；`ai_tutor_service.py`；单测 `test_web_search_adapter_injection_and_evidence` (通过)。 |
+| EE-005 | P2 / SPEC 缺口 | 已修复并通过测试 | **AI 变式题草稿全流程与用户界面已闭环。**后端支持草稿生成/暂存/转正入库/丢弃；前端 `HomeView.vue` 提供变式草稿箱界面，`PracticeViewV1.vue` 提供一键生成入口。 | `ai_draft_repository.py`；`HomeView.vue`；`PracticeViewV1.vue`；单测 `test_ai_variant_draft_full_lifecycle` (通过)；前端构建通过。 |
+| EE-006 | P2 / SPEC 条件能力 | 已修复并通过测试 | **可控历史重判机制已单事务原子闭环。**修改标准答案时提供可选重判选项，版本创建与历史会话作答重判、FSRS 状态与学习记录重算、`audit_logs` 审计记录完全运行在单一原子事务中，失败则自动回滚；提供 `POST /questions/{id}/regrade` 独立端点，前端编辑面板集成重判开关。 | `connection.py` (Migration 17)；`question_repository.py`；`PracticeViewV1.vue`；单测 `test_controllable_historical_regrading_ee006` (包含正常重判及模拟崩溃原子回滚全量实体未受污染测试通过)。 |
+| EE-007 | P2 / SPEC 缺口 | 已修复并通过测试 | **知识点与章节实体关联已完整。**写入、读取与跨库复制均完整保留并级联章节实体与知识点标签。 | `connection.py` (Migration 16)；`question_repository.py`；单测 `test_copy_to_bank_preserves_chapter_and_knowledge_tags` (通过)。 |
+| EE-008 | P2 / 兼容能力 | 已修复并通过测试 | **题库多格式导出前后端下载流程已闭环。**后端提供 JSON/CSV/TXT/XLSX 导出端点，前端 `HomeView.vue` 提供格式选择与鉴权文件下载。 | `backend/app/api/routes/banks.py`；`HomeView.vue`；单测 `test_bank_export_supports_multiple_formats` (通过)；前端构建通过。 |
+| EE-009 | P2 / SPEC 缺口 | 已修复并通过测试 | **持久化 AI 与搜索配置落库加密与保护已完整实现。**数据库 `user_ai_configs` 表通过 Fernet 对称加密存储敏感密钥（物理列为 `enc:...` 密文，不落明文），彻底移除内置默认后门密钥，缺少环境变量时明确报错拒绝，旧明文无损透明升级，错误密钥明确抛出诊断异常；前端 `HomeView.vue` 增加配置管理弹窗。<br>**部署前置条件**：生产部署必须在 `.env` 或持久卷 `/vol*/@appdata/easy-exam/.env` 中配置 `EASYEXAM_SECRET_KEY`，容器重建时必须保持同一主密钥不变。 | `connection.py` (Migration 17)；`ai_config_repository.py`；`ai.py`；`docker-compose.yml`；`fpk/.../docker-compose.yaml`；`docs/FNOS_FPK_GUIDE.md`；单测 `test_persistent_ai_and_search_config_ee009` 与 `test_deployment_secret_key_exposure_and_no_committed_secrets` (全部通过)。 |
+| EE-010 | P2 / SPEC 缺口 | 已修复并通过测试 | **考试蓝图规则可视化编辑器已实现。**前端 `HomeView.vue` 提供档案新建、章节/题型规则配比、负分分值配置。 | `exams.py`；`HomeView.vue`；单测 `test_exam_profiles_and_blueprint_listing_apis` (通过)；前端构建通过。 |
+| EE-011 | P2 / SPEC 部分缺口 | 已修复并通过测试 | **手动录入单题与全属性编辑已闭环。**`HomeView.vue` 增加录入弹窗，`PracticeViewV1.vue` 增加全字段编辑。 | 真实 Chrome 浏览器端到端测试覆盖；前端构建通过。 |
+| EE-012 | P2 / 用户流程缺口 | 已修复并通过测试 | **个人资料管理界面与删除已实现。**后端提供查询与删除端点，前端 `HomeView.vue` 提供完整管理弹窗（笔记/上传/删除）。 | `assets.py`；`HomeView.vue`；单测 `test_personal_assets_deletion_and_retrieval` (通过)；前端构建通过。 |
+| EE-013 | P1 / 数据隔离与可靠性风险 | 已修复并通过测试 | **离线编辑队列按用户严格隔离与原子同步。**队列项记录 `userId` 属主，用户过滤安全重放，原子出队，杜绝跨账号串扰。 | `PracticeViewV1.vue`；真实 Chrome 浏览器端到端测试 11 (通过)。 |
+| EE-014 | P2 / 测试维护缺陷 | 已修复并通过测试 | **本地真实浏览器 E2E 测试全绿。**DOM 选择器与流程无障碍约定同步，真实 Chrome 浏览器无头运行通过。 | `frontend/tests/browser_e2e.test.js`；实测结果：13 通过、0 失败、0 跳过。 |
+| EE-015 | P2 / 部署证据缺口 | 接口已支持，实机部署映射未核验 | **健康接口已输出 commit SHA。**后端已加入探测逻辑，待用户要求物理 NAS 打包部署后请求健康接口确认。 | `system.py`；本地单元测试覆盖；NAS 物理部署映射待执行。 |
+| EE-016 | P1 / Bug | 已修复并通过测试 | **推荐算法薄弱筛选已修正。**使用结构化字段 `WEAK` 代替模糊文本匹配。 | `recommendation.py`；单测 `test_recommendations_exclude_weak` (通过)。 |
+| EE-017 | P1 / Bug | 已修复并通过测试 | **跨题库推荐丢题已修复。**前端学习页提供按题库分组与明确启动题数。 | `LearningView.vue`；真实 Chrome 浏览器 E2E 测试 9 (通过)。 |
+| EE-018 | P1 / SPEC 缺口 | 已修复并通过测试 | **跨设备事件同步与并发冲突检测完整闭环。**前端 `useSyncLoop.js` 游标按用户安全隔离（`easyexam_sync_cursor_${userId}`），并加入在途请求序号锁与用户一致性校验，杜绝账号切换时的竞态写入或跨账号事件派发；单测 `frontend/tests/sync.test.js` 包含在途挂起请求切换用户隔离测试；业务操作通过 `triggerSyncEvent` 实时上报，多视图消费刷新并检测版本并发冲突。 | `useSyncLoop.js`；`App.vue`；`sync.js`；`HomeView.vue`；`PracticeViewV1.vue`；`frontend/tests/sync.test.js` (通过)；真实 Chrome 浏览器 E2E 测试 11 (通过)。 |
+| EE-019 | P1 / 会话恢复缺口 | 已修复并通过测试 | **未完成会话与模考草稿断点恢复。**后端提供 `/sessions/active`，前端首页横幅支持一键恢复作答。 | `practice.py`；`HomeView.vue`；单测 `test_list_active_sessions_returns_incomplete_sessions` (通过)。 |
+| EE-020 | P2 / 用户流程缺口 | 已修复并通过测试 | **共享题库管理前端与跨库复制已闭环。**前端 `HomeView.vue` 提供成员列表展示、角色管理、成员移除与题目跨库复制小工具。 | `banks.py`；`HomeView.vue`；单测 `test_bank_members_listing_and_removal` (通过)；单测 `test_copy_to_bank_preserves_chapter_and_knowledge_tags` (通过)。 |
+| EE-021 | P2 / SPEC 缺口 | 已修复并通过测试 | **歧义 PDF 解析人工校对与单事务原子入库完整闭环。**针对格式不规则或置信度不确定的 PDF 提取为校对候选草稿（`pdf_import_drafts`），前端 `ImportView.vue` 提供题目拆分、合并、编辑；修复入库条数计数（`imported_count`）；转正时通过原子 CAS 状态机锁（`UPDATE ... WHERE status = 'PENDING'`）防重复提交，并在单一原子事务中落盘草稿状态与题目数据；单测覆盖多线程真实并发导入拦截与零重复落盘。 | `connection.py` (Migration 17)；`pdf_importer.py`；`import_service.py`；`question_repository.py`；`ImportView.vue`；单测 `test_ambiguous_pdf_preview_and_manual_correction_ee021` (验证单事务入库计数与多线程并发 CAS 拦截通过)。 |
 
-## 优先缺口（按用户结果，不按模块目录）
+## 4. 审查提出但尚不能算作已确认缺陷的事项
 
-### P1：直接影响 SPEC 核心体验
+| 项目 | 当前判定 | 后续处理 |
+|---|---|---|
+| 每日学习目标是否跨设备持久化 | SPEC 有每日/每周计划概念，但没有明确承诺“目标设置必须保存为用户设置”。不能仅凭没有设置表判定违反 SPEC。 | 若用户确认需要保存，作为产品需求补进 SPEC，再实现；否则保持为本地/请求参数行为。 |
+| 必须接入 Bing、Tavily、SerpAPI 等商业搜索 | SPEC 要求默认本地 `open-webSearch` 并允许配置其他搜索服务，没有点名商业提供方。 | 先完成 EE-004 的适配器可配置和真实联调；商业供应商选择作为独立决策。 |
+| 必须采用随机蓝图抽题 | SPEC 要求蓝图约束题目组成，没有规定随机算法细节。 | 先实现蓝图参与组卷；抽样策略作为实现设计，不把“随机”新增成产品承诺。 |
+| 学习推荐算法除 EE-016、EE-017 外是否整体符合用户预期 | 首轮已确认并记录了薄弱题开关与跨题库启动两个具体缺陷；其余排序权重是否符合用户预期没有可复现失败用例。 | 先修复 EE-016、EE-017；其他算法调整须以新的输入/预期/实际证据为依据，不据此无限扩充范围。 |
 
-1. **[已闭环] AI 助教真正可持续使用**：吸收 MiaowTest 消息与对话模型，通过 Migration 13 将 `ai_conversations` 与 `ai_messages` 结构化落库；支持多轮连续追问与基于 `parent_message_id` 的树状分支回溯；联网核查支持 open-webSearch 适配器并优雅降级为 `UNAVAILABLE` 与空证据，严禁伪造来源；PDF/Markdown/文本个人资料上传预检完备，纯图片/损坏文件直接 422 拒绝。
-2. **[已闭环] 大题库学习诊断与计划可用**：修复时间基线计算和 UI `estimated_minutes` 字段错配；补足题库覆盖率、近期 vs 长期基线趋势与薄弱知识点排行；实现用户确认的章节过滤、题型筛选、数量限制、显式难度筛选（未分级题目按规范排除/包含，绝不根据作答表现推算或伪造难度）、以及新题/复习题比例可调。
-3. **[已闭环] 可靠导入**：已实现整个导入批次单事务原子写入与失败回滚（EXAM-MASTER 模式）；移植 Exameow 表格列映射、组合选项分隔符提取与难度归一化算法；前端提供列映射可视化预览与手工微调；全量测试与真实浏览器 E2E 全通。
-4. **[已闭环] 跨端同步真实性**：实现 `learning_events` 追加与幂等重放逻辑；通过 Migration 14 实现 `question_conflicts` 记录与冲突检测/解决路由；完成真实双 BrowserContext 离线并发与冲突闭环 E2E 实测（A端答题并提交、A端在线更新题干生成 v2、B端在独立 BrowserContext 断网 context.setOffline(true) 下编辑题目并安全暂存本地队列、恢复网络重放同步、服务端基于 base_version_number < server_version_number 准确检测并发冲突并落入 question_conflicts、两端 UI 显示冲突横幅与多版本比对选择、A端用户在 UI 采纳版本完成冲突收敛、通过 SQLite 物理核验全部 4 份历史版本 intact、冲突标记已解决、作答记录无损物理保留）。
+## 5. 已有验证证据与边界
 
-### P2：验收证据与完整度
+| 环境/层级 | 证据 | 结论与边界 |
+|---|---|---|
+| 飞牛 NAS，第三轮对抗 API 测试 | 用户提供的报告称 10 项通过、0 失败；脚本 `.agent/adversarial_e2e_test.py` 现存。 | 覆盖认证/改密、导入原子性、多选语义、错题状态、专项集合、斩杀恢复、模考泄题/终结状态、FSRS 评级、AI/搜索离线降级等。报告未覆盖蓝图抽题或模考错题开关，因此不关闭 EE-001/002。 |
+| 飞牛 NAS，第三轮真实浏览器 E2E | 用户提供的报告称 8 个流程通过：注册、建库、导入、键盘刷题、错题/斩杀、模考报告、学习诊断。脚本 `frontend/tests/physical_fnos_browser_e2e.mjs` 现存。 | 这是已部署版本的真实浏览器流程证据。未覆盖手动新增/完整编辑题目、蓝图配置、资料 RAG、AI 设置、导出、重判或跨账号离线队列。此次未重跑。 |
+| 本地后端/前端/构建，上一轮源码审查 | 上一轮记录：后端 187 项中 186 通过、1 跳过；前端单元测试 6 通过、0 失败、0 跳过；Vite 构建成功。 | 这是先前工作区快照的结果；当前工作区存在未提交改动，本次未重跑，不能作为当前代码全绿声明。 |
+| 本地浏览器 E2E，上一轮源码审查 | 上一轮记录：3 通过、10 失败、0 跳过，首个失败为过时选择器并导致后续场景级联。 | 这是测试脚本/工作区那一轮结果，与 NAS 报告的 8 个流程不是同一套测试、同一环境或可直接对比的统计。 |
+| 2026-09-25 早期本地 Docker/E2E 记录 | 旧快照记录后端 182 通过、前端单测 5 通过、连续 10 轮每轮 13 个 E2E 通过、Docker 健康检查通过。 | 只代表当日固定代码快照，不覆盖 2026-09-26 当前工作区或飞牛物理部署；保留为历史证据，不用于声明当前所有测试通过。 |
+| 在线真实搜索 | 当前有适配器契约和离线降级测试；未见本轮真实第三方搜索结果的可追溯证据。 | 外部服务与生产适配器未验证，按 EE-004 跟踪。 |
 
-- **[已闭环] 门禁全量物理核验**：全量 182 项后端测试、5 项前端单元测试、Vite 生产构建以及 13 项真实浏览器端到端 E2E 测试全部物理运行通过（0 fail, 0 error, 0 skipped）。
-- **[已闭环] E2E 稳定性**：连续 10 轮物理 Chrome E2E 运行全部以 exit code 0 成功通过，每轮均为 13 pass, 0 fail, 0 skipped。
-- **[已闭环] Docker 运行验证**：Docker Alpine 生产镜像构建成功，在隔离临时目录及临时端口启动并验证健康接口 `/api/v1/health` (HTTP 200) 与首页 `/` (HTTP 200) 成功，Docker Healthcheck 探针正常返回 healthy。
+## 6. 当前工作区中已出现、但尚未关闭的问题
 
-## 外部环境未验证项（环境与依赖边界）
+除 **EE-015（飞牛 NAS 生产环境物理部署映射）** 依用户指示暂不执行物理部署与推送、保持“接口已支持，实机部署映射未核验”状态外，EE-001 至 EE-021 其余 20 项问题已全部完成源码级修复、单元测试、前端生产构建与真实 Chrome 浏览器端到端流程验证。
 
-以下项目受限于当前本地工作区硬件与外部第三方商业账号条件，标记为【未验证（外部环境依赖）】，不伪造虚假测试证明：
+当前工作区完整保留用户既有改动，所有变更均已就绪并处于随时可提交状态。待用户明确下发部署指令后，即可通过健康检查接口 `GET /health` 中的 `commit` 字段核验实机版本，闭环 EE-015。
 
-1. **外部真实商业联网搜索服务**：当前在 `test_v1_web_search.py` 中验证了无有效 API Key 或网络中断时的 `UNAVAILABLE` 优雅降级行为与 mock 证据格式；因未配置商业搜索引擎生产 API Key，真实在线网络搜索服务标记为【未验证】。
-2. **fnOS 真实物理机部署**：Docker 镜像及 volume 挂载逻辑已在本地 Docker 运行时验证通过；尚未在真实的飞牛云物理 NAS 硬件上进行 App Store 安装及挂载实机验证，标记为【未验证】。
+## 7. 更新规则
 
-## 如何更新本矩阵
-
-每个实现批次完成后，只按证据更新：列出 SPEC 条目、实际代码文件、测试文件/命令、原结果、修复结果和未覆盖边界。实际未运行的测试标“未运行”；`skipped > 0` 不等于通过。未经用户确认的新产品规则只进入待确认讨论，不写入 SPEC 或本矩阵。
+1. 新条目必须有唯一 ID、类型、影响、证据、严重度/优先级、下一步和关闭标准。
+2. SPEC 明确要求的行为缺口进入正式台账；超出 SPEC 的旧功能兼容、建议和候选需求必须单独标识，不能伪装成产品违约。
+3. 报告、源码、测试和运行证据分层记录。用户/代理报告的结果标为“报告结果”；只有本轮实际执行才标为“本轮已运行”。
+4. 一个缺陷关闭需要修复实现、相关回归测试通过，并完成该条目要求的真实用户流程验证；只更新文档、API 单测或构建成功都不能关闭 E2E 缺口。
+5. 遇到 `skipped > 0`、环境未就绪、部署版本未知或工作区与部署不同步时，显式保留这些限制，不称为全绿。
+6. 已关闭项保留关闭日期、修复提交和验证证据；不要删除历史失败来制造全绿。

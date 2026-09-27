@@ -35,7 +35,7 @@
   <LearningView v-else-if="page === 'learning'" :token="auth.token.value" @back="page = 'home'" @start-session="handleStartFromLearning" />
   <MistakesView v-else-if="page === 'mistakes'" :token="auth.token.value" @back="page = 'home'" @start-session="handleStartFromMistakes" />
   <ImportView v-else-if="page === 'import'" :token="auth.token.value" @back="page = 'home'" />
-  <HomeView v-else :token="auth.token.value" :user="auth.user.value" @start="start" @mock-exam="startExam" @learning="page = 'learning'" @mistakes="page = 'mistakes'" @import="page = 'import'" @logout="auth.logout" />
+  <HomeView v-else :token="auth.token.value" :user="auth.user.value" @start="start" @mock-exam="startExam" @resume-session="handleResumeSession" @learning="page = 'learning'" @mistakes="page = 'mistakes'" @import="page = 'import'" @logout="auth.logout" />
 </template>
 
 <script setup>
@@ -48,10 +48,12 @@ import MistakesView from './views/MistakesView.vue'
 import ImportView from './views/ImportView.vue'
 import ExamView from './features/exam/ExamView.vue'
 import { useAuthStore } from './stores/authStore'
+import { useSyncLoop } from './composables/useSyncLoop'
 import { startSession } from './api/practice'
 import { changePassword } from './api/auth'
 
 const auth = useAuthStore()
+useSyncLoop(auth.token, auth.user)
 const activeSession = ref(null)
 const activeExam = ref(null)
 const page = ref('home')
@@ -112,6 +114,14 @@ function handleStartFromMistakes(session) {
 function handleStartFromLearning(session) {
   previousPage.value = 'learning'
   activeSession.value = session
+}
+function handleResumeSession(session) {
+  if (session.mode === 'EXAM') {
+    activeExam.value = session
+  } else {
+    previousPage.value = 'home'
+    activeSession.value = session
+  }
 }
 function handleBackFromPractice() {
   activeSession.value = null

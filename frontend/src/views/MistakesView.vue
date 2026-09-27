@@ -27,15 +27,72 @@
       </div>
 
       <template v-if="currentTab === 'mistakes'">
-        <button type="button" class="primary" :disabled="filteredDueReviews.length === 0 || startingSession" @click="startDueFsrs">
+        <!-- 到期复习按钮组 -->
+        <template v-if="!selectedBankId && dueReviewsByBank.length > 1">
+          <button
+            v-for="g in dueReviewsByBank"
+            :key="'due-' + g.bank_id"
+            type="button"
+            class="primary btn-compact"
+            :disabled="startingSession"
+            @click="startDueFsrs(g)"
+          >
+            {{ startingSession ? '正在启动…' : `FSRS 到期 · ${g.bank_name} (${g.items.length})` }}
+          </button>
+        </template>
+        <button
+          v-else
+          type="button"
+          class="primary"
+          :disabled="filteredDueReviews.length === 0 || startingSession"
+          @click="startDueFsrs()"
+        >
           {{ startingSession ? '正在启动…' : `FSRS 到期复习 (${filteredDueReviews.length})` }}
         </button>
-        <button type="button" :disabled="filteredMistakes.length === 0 || startingSession" @click="startMistakesPractice()">
+
+        <!-- 错题专项按钮组 -->
+        <template v-if="!selectedBankId && mistakesByBank.length > 1">
+          <button
+            v-for="g in mistakesByBank"
+            :key="'mistake-' + g.bank_id"
+            type="button"
+            class="btn-compact"
+            :disabled="startingSession"
+            @click="startMistakesPractice(null, g)"
+          >
+            {{ startingSession ? '正在启动…' : `错题刷题 · ${g.bank_name} (${g.items.length})` }}
+          </button>
+        </template>
+        <button
+          v-else
+          type="button"
+          :disabled="filteredMistakes.length === 0 || startingSession"
+          @click="startMistakesPractice()"
+        >
           错题专项刷题 ({{ filteredMistakes.length }})
         </button>
       </template>
+
       <template v-else>
-        <button type="button" class="primary" :disabled="filteredKilled.length === 0 || startingSession" @click="startEliminationPractice()">
+        <template v-if="!selectedBankId && killedByBank.length > 1">
+          <button
+            v-for="g in killedByBank"
+            :key="'kill-' + g.bank_id"
+            type="button"
+            class="primary btn-compact"
+            :disabled="startingSession"
+            @click="startEliminationPractice(null, g)"
+          >
+            {{ startingSession ? '正在启动…' : `查漏补缺 · ${g.bank_name} (${g.items.length})` }}
+          </button>
+        </template>
+        <button
+          v-else
+          type="button"
+          class="primary"
+          :disabled="filteredKilled.length === 0 || startingSession"
+          @click="startEliminationPractice()"
+        >
           {{ startingSession ? '正在启动…' : `开始查漏补缺 (${filteredKilled.length})` }}
         </button>
       </template>
@@ -174,6 +231,36 @@ const weakOnlyDueReviews = computed(() => {
   return filteredDueReviews.value.filter(d => !mistakeQidSet.has(d.question_id))
 })
 
+const mistakesByBank = computed(() => {
+  const map = {}
+  for (const item of filteredMistakes.value) {
+    const bid = item.bank_id || 'unknown'
+    if (!map[bid]) map[bid] = { bank_id: bid, bank_name: getBankName(bid), items: [] }
+    map[bid].items.push(item)
+  }
+  return Object.values(map)
+})
+
+const dueReviewsByBank = computed(() => {
+  const map = {}
+  for (const item of filteredDueReviews.value) {
+    const bid = item.bank_id || 'unknown'
+    if (!map[bid]) map[bid] = { bank_id: bid, bank_name: getBankName(bid), items: [] }
+    map[bid].items.push(item)
+  }
+  return Object.values(map)
+})
+
+const killedByBank = computed(() => {
+  const map = {}
+  for (const item of filteredKilled.value) {
+    const bid = item.bank_id || 'unknown'
+    if (!map[bid]) map[bid] = { bank_id: bid, bank_name: getBankName(bid), items: [] }
+    map[bid].items.push(item)
+  }
+  return Object.values(map)
+})
+
 function getBankName(bankId) {
   const b = banks.value.find(item => item.id === bankId)
   return b ? b.name : '未知题库'
@@ -235,14 +322,12 @@ async function updateMistakeCause(item, cause) {
   }
 }
 
-async function startDueFsrs() {
-  const items = filteredDueReviews.value
-  if (items.length === 0) return
-  // 取所选题库，或首题的题库
-  const targetBankId = selectedBankId.value || items[0]?.bank_id
+async function startDueFsrs(group) {
+  const items = group ? group.items : filteredDueReviews.value
+  if (!items || items.length === 0) return
+  const targetBankId = group ? group.bank_id : (selectedBankId.value || items[0]?.bank_id)
   if (!targetBankId) return
 
-  // 严格只打包 targetBankId 下的题目，杜绝跨题库静默丢失！
   const bankItems = items.filter(i => i.bank_id === targetBankId)
   if (bankItems.length === 0) return
 
@@ -279,14 +364,15 @@ async function startSingleFsrs(item) {
   }
 }
 
-async function startMistakesPractice(record) {
-  if (filteredMistakes.value.length === 0 && !record) return
-  const targetBankId = record?.bank_id || selectedBankId.value || filteredMistakes.value[0]?.bank_id
+async function startMistakesPractice(record, group) {
+  const items = group ? group.items : filteredMistakes.value
+  if (!record && (!items || items.length === 0)) return
+  const targetBankId = record?.bank_id || (group ? group.bank_id : (selectedBankId.value || items[0]?.bank_id))
   if (!targetBankId) return
 
   startingSession.value = true
   try {
-    const bankItems = record ? [record] : filteredMistakes.value.filter(m => m.bank_id === targetBankId)
+    const bankItems = record ? [record] : items.filter(m => m.bank_id === targetBankId)
     const questionIds = bankItems.map(m => m.question_id)
     const session = await startSession(props.token, {
       bank_id: targetBankId,
@@ -301,9 +387,10 @@ async function startMistakesPractice(record) {
   }
 }
 
-async function startEliminationPractice(record) {
-  if (filteredKilled.value.length === 0 && !record) return
-  const targetBankId = record?.bank_id || selectedBankId.value || filteredKilled.value[0]?.bank_id
+async function startEliminationPractice(record, group) {
+  const items = group ? group.items : filteredKilled.value
+  if (!record && (!items || items.length === 0)) return
+  const targetBankId = record?.bank_id || (group ? group.bank_id : (selectedBankId.value || items[0]?.bank_id))
   if (!targetBankId) {
     error.value = '未找到该题所属的题库信息，无法启动查漏补缺练习。'
     return
@@ -311,7 +398,7 @@ async function startEliminationPractice(record) {
 
   startingSession.value = true
   try {
-    const bankItems = record ? [record] : filteredKilled.value.filter(k => k.bank_id === targetBankId)
+    const bankItems = record ? [record] : items.filter(k => k.bank_id === targetBankId)
     const questionIds = bankItems.map(k => k.question_id)
     const session = await startSession(props.token, {
       bank_id: targetBankId,
@@ -330,25 +417,181 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-.mistakes-page { width: min(100% - 2rem, 76rem); margin: 1.25rem auto; }
-.view-tabs { display: flex; gap: 0.5rem; }
-.view-tabs button { padding: 0.5rem 0.9rem; border-radius: 0.5rem; border: 1px solid var(--border); background: var(--bg-page); cursor: pointer; }
-.view-tabs button.active { background: var(--primary); color: white; border-color: var(--primary); }
-.mistake-toolbar { display: flex; gap: 0.75rem; margin: 1rem 0; flex-wrap: wrap; align-items: center; }
-.bank-selector { display: flex; align-items: center; gap: 0.4rem; font-size: 0.875rem; color: #475569; }
-.bank-selector select { padding: 0.45rem 0.65rem; border-radius: 0.4rem; border: 1px solid var(--border); font-size: 0.85rem; }
-.section-title { margin: 1.5rem 0 0.75rem; font-size: 1.1rem; color: #1e293b; }
-.card-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; gap: 0.4rem; flex-wrap: wrap; }
-.badge { font-size: 0.8rem; padding: 0.2rem 0.5rem; border-radius: 0.35rem; background: var(--bg-page); border: 1px solid var(--border); }
-.badge-bank { font-size: 0.75rem; padding: 0.15rem 0.45rem; border-radius: 0.35rem; background: #f1f5f9; color: #475569; }
-.badge-due { font-size: 0.8rem; padding: 0.2rem 0.5rem; border-radius: 0.35rem; }
-.badge-due.due { background: #fee2e2; color: #b91c1c; font-weight: 600; }
-.due-highlight { border-left: 4px solid #f59e0b; }
-.mistake-detail { margin: 0.75rem 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
-.cause-label { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; }
-.cause-label select { padding: 0.3rem 0.5rem; border-radius: 0.35rem; border: 1px solid var(--border); }
-.card-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
-.card-actions button { cursor: pointer; }
-.kill-btn { color: #dc2626; border-color: #fca5a5; }
-.kill-btn:hover { background: #fee2e2; }
+.mistakes-page {
+  width: min(100% - 2rem, 76rem);
+  margin: 1.5rem auto;
+}
+
+.view-tabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.view-tabs button {
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.view-tabs button.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+  box-shadow: var(--shadow-xs);
+}
+
+.mistake-toolbar {
+  display: flex;
+  gap: 0.75rem;
+  margin: 1.25rem 0;
+  flex-wrap: wrap;
+  align-items: center;
+  background: var(--bg-card);
+  padding: 0.85rem 1.15rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+}
+
+.bank-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.bank-selector select {
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  font-size: 0.875rem;
+}
+
+.btn-compact {
+  padding: 0.45rem 0.75rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+
+.section-title {
+  margin: 1.5rem 0 0.85rem;
+  font-size: 1.15rem;
+  color: var(--text-main);
+  letter-spacing: -0.01em;
+}
+
+.card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.65rem;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+}
+
+.badge-bank {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: #f1f5f9;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.badge-due {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+  color: var(--text-muted);
+}
+
+.badge-due.due {
+  background: var(--danger-light);
+  color: var(--danger);
+  border: 1px solid var(--danger-border);
+  font-weight: 600;
+}
+
+.due-highlight {
+  border-left: 4px solid var(--warning);
+}
+
+.mistake-detail {
+  margin: 0.75rem 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.cause-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.cause-label select {
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  font-size: 0.8125rem;
+}
+
+.card-actions {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.card-actions button {
+  cursor: pointer;
+}
+
+.kill-btn {
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+
+.kill-btn:hover:not(:disabled) {
+  background: var(--danger-light);
+  border-color: var(--danger);
+}
+
+@media (max-width: 640px) {
+  .mistakes-page {
+    width: min(100% - 1rem, 76rem);
+    margin: 0.75rem auto;
+  }
+  .mistake-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .bank-selector {
+    width: 100%;
+  }
+  .bank-selector select {
+    flex: 1;
+  }
+}
 </style>

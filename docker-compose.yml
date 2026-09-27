@@ -13,3 +13,4 @@ services:
     environment:
       - PORT=3000
       - LLM_BASE_URL=http://host.docker.internal:11434/v1
+      - EASYEXAM_SECRET_KEY=${EASYEXAM_SECRET_KEY}

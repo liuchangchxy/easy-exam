@@ -23,3 +23,9 @@ export const resolveQuestionConflict = (token, questionId, adoptVersionNumber) =
   headers: authHeaders(token),
   body: JSON.stringify({ adopt_version_number: adoptVersionNumber }),
 })
+
+export const regradeQuestion = (token, questionId, payload = { apply_fsrs: true }) => request(`/questions/${questionId}/regrade`, {
+  method: 'POST',
+  headers: authHeaders(token),
+  body: JSON.stringify(payload),
+})

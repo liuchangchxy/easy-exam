@@ -1,0 +1,44 @@
+#!/bin/bash
+set -eu
+
+# 1. Initialize persistent .env with generated EASYEXAM_SECRET_KEY if not already present
+VAR_DIR="${TRIM_PKGVAR:-/var/apps/easy-exam/var}"
+ENV_FILE="${VAR_DIR}/.env"
+if [ ! -f "$ENV_FILE" ]; then
+  mkdir -p "$VAR_DIR"
+  GENERATED_KEY=""
+  if command -v python3 >/dev/null 2>&1; then
+    GENERATED_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))" 2>/dev/null || true)
+  fi
+  if [ -z "$GENERATED_KEY" ] && command -v openssl >/dev/null 2>&1; then
+    GENERATED_KEY=$(openssl rand -hex 32 2>/dev/null || true)
+  fi
+  if [ -z "$GENERATED_KEY" ] && [ -r /dev/urandom ]; then
+    if command -v od >/dev/null 2>&1; then
+      GENERATED_KEY=$(od -vN 32 -An -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' || true)
+    elif command -v xxd >/dev/null 2>&1; then
+      GENERATED_KEY=$(head -c 32 /dev/urandom 2>/dev/null | xxd -p -c 32 || true)
+    fi
+  fi
+
+  if [ -z "$GENERATED_KEY" ] || [ "${#GENERATED_KEY}" -lt 64 ]; then
+    echo "ERROR: Failed to generate cryptographically secure EASYEXAM_SECRET_KEY. Cryptographic random source unavailable." >&2
+    exit 1
+  fi
+
+  echo "EASYEXAM_SECRET_KEY=${GENERATED_KEY}" > "$ENV_FILE"
+  chmod 600 "$ENV_FILE" || true
+fi
+
+# 2. Load offline bundled image if provided in package
+IMAGE_DIR="${TRIM_APPDEST:-/var/apps/easy-exam/target}/images"
+if [ -d "$IMAGE_DIR" ]; then
+  for img in "$IMAGE_DIR"/*.tar "$IMAGE_DIR"/*.tar.gz; do
+    if [ -f "$img" ]; then
+      echo "Loading bundled docker image from $img..."
+      docker load -i "$img" || true
+    fi
+  done
+fi
+
+exit 0

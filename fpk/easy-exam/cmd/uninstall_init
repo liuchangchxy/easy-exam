@@ -1,0 +1,11 @@
+#!/bin/bash
+set -eu
+
+# Stop and remove container on uninstall, leaving persistent data intact
+if docker ps -a --format '{{.Names}}' | grep -qx "easy-exam-fpk"; then
+  docker stop easy-exam-fpk || true
+  docker rm easy-exam-fpk || true
+fi
+
+exit 0
+
