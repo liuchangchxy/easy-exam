@@ -71,3 +71,20 @@
 - 浏览器截图核验：编写 Playwright 脚本捕获关键页面（桌面 1280x800 和手机 375x812）真实截图并检查。
 - 端到端测试：`npm --prefix frontend run test:e2e`
 - 空白与 git 差异检查：`python scripts/check_whitespace.py` 与 `git diff --check`
+
+
+---
+
+## 完成状态（2026-09-27 复核）
+
+第 4 节验证门禁的实际复核结果：
+
+| 门禁 | 2026-09-27 实测 | 状态 |
+|---|---|---|
+| `npm --prefix frontend run test:unit` | 11 passed, 0 failed, 0 skipped | 通过 |
+| `npm --prefix frontend run build` | Vite v5.4.21，43 modules transformed，exit code 0 | 通过 |
+| 浏览器截图核验（桌面 1280x800 / 手机 375x812） | `docs/screenshots/` 下 12 张桌面 + 多组移动端截图；`capture_mobile.mjs` 按 390x844 采集并输出 `metrics.json` | 通过 |
+| `npm --prefix frontend run test:e2e` | 13 passed, 0 failed, 0 skipped | 通过 |
+| `python scripts/check_whitespace.py` / `git diff --check` | 0 errors | 通过 |
+
+设计系统目标（Design Tokens、按钮/表单/卡片栅格规范、8 个视图对齐、全交互状态、375px+ 响应式）已落地；`style.css` 产物约 63 kB（gzip 约 11 kB，体积逐次浮动）。

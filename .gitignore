@@ -53,6 +53,10 @@ scratch/
 screenshots/
 /ui-live.png
 
+# Visual smoke scratch (headless Chrome profiles)
+.vsprof-*/
+.decoy-*/
+
 # Database & local data
 data/
 *.db

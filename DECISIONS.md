@@ -167,3 +167,49 @@
 - **核心决策**：难度筛选只使用题目显式标注的 1–5 级；未分级题在未启用具体难度筛选时仍可参与推荐，启用具体难度筛选时排除。不得按默认中等处理，也不得根据单用户或跨用户作答表现推断题目难度。
 - **对应 SPEC 章节**：`SPEC.md` §8。
 - **影响范围**：学习推荐/筛选逻辑、相关测试和用户可见筛选状态。
+
+### [2026-09-27] FPK 离线镜像必须在 install_init/upgrade_init 阶段加载
+
+- **触发背景**：`easy-exam-1.0.1` / `1.0.2` 在 fnOS 应用中心手动安装时每次都在最后一步回滚，报 `easy-exam Error pull access denied for ailm32442/easy-exam`。排查发现应用中心会在 `install_init` / `install_callback` 之前就用包内 `target/` 把 docker project 拉起来；此时本地 daemon 尚无随包镜像，compose 按 `pull_policy: if_not_present` 回退拉取从未发布的 Docker Hub tag，被拒后整体回滚。此前 `1.0.1` 曾成功一次，是因为 `1.0.0` 时期 `docker load` 的同名镜像仍残留在本地。
+- **核心决策**：
+  1. 把 `docker load` 随包镜像的逻辑前移到 `cmd/install_init` 与 `cmd/upgrade_init`——这是能抢在 compose 之前的最早钩子；遍历 `TRIM_APPDEST/images`、`TRIM_PKGINST_TEMP_DIR[/app]/images`、`TRIM_TEMP_TPKFILE[/app]/images` 全部暂存位置，加载失败只告警不退出（避免 setup 环境缺 docker 时阻断安装）。
+  2. `cmd/main start` 在 `docker compose up` 前再加载一次 `target/images`；`install_callback` / `upgrade_callback` 保留加载逻辑作兜底。
+  3. 版本号单一来源定为 `fpk/easy-exam/manifest` 的 `version`，`app/docker/docker-compose.yaml` 的镜像 tag 与随包镜像 tag 必须同步推进，由 `tests/test_fpk_packaging.py` 强制校验。
+- **对应 SPEC 章节**：无（平台部署约束，不改变产品行为）。
+- **影响范围**：`fpk/easy-exam/cmd/install_init`、`cmd/upgrade_init`、`cmd/main`、`app/docker/docker-compose.yaml`、`manifest`、`docs/FNOS_FPK_GUIDE.md`（新增 3.3 节）。
+- **验证**：fnOS 6.18 实机（`192.168.x.x`）安装成功不再回滚；容器起于 3000 端口，`/api/v1/health` 200；`stop`/`start` 后已注册账号仍可登录，`var/.env` 主密钥 md5 不变。
+
+### [2026-09-27] 移动端顶栏保留换行而非强制单行
+
+- **触发背景**：`2026-09-25-ergonomics-ui-overhaul.md` 与 `AGENTS.md` 避坑第 10 条要求触屏端顶栏"单行紧凑折叠"。2026-09-27 实测 390x844 视口下 `.compact-header` 高度为 82.8px，仍为两行。
+- **核心决策**：保留 `.compact-header { flex-wrap: wrap !important }` 的两行布局，不强制单行。原因是顶栏在移动端需同时容纳"返回 + 标题 + 题型徽标 + 进度徽标 + 交卷 + 提示 + ⋯"，强制单行会把按钮压缩到不足 42px 的触控目标下限，违反工效学整改的核心目标（可达性与防误触）。折中结果：顶栏由 175.8px 降至 82.8px，题干与全部选项落在首屏内（`capture_mobile.mjs` 实测），底栏 57px；"单行"这一具体形式未满足，但首屏信息密度与触控达标这两个真实目标达成。
+- **对应 SPEC 章节**：无（交互工效学，不改变产品行为）。
+- **影响范围**：`frontend/src/views/PracticeViewV1.vue`（`.compact-header` 移动端样式）、`frontend/tests/capture_mobile.mjs`（度量口径）、`docs/superpowers/plans/2026-09-25-ergonomics-ui-overhaul.md`（DoD 复核）。
+- **遗留**：`AGENTS.md` 避坑第 10 条的"顶栏必须单行紧凑折叠"与实际实现不一致。保留该条款为方向性目标，但验收时以"顶栏高度不侵占首屏核心内容 + 触控目标 ≥42px"为实际判据，不单独以行数判定。
+
+### [2026-09-27] 从 vibe-coding-starter 吸收四条通用工程规则
+
+- **触发背景**：对比 `vibe-coding-starter` 模板项目（独立通读，非文件树 diff）与易考宝现有规范，发现四条易考宝缺失的通用规则；其中两条直接对应本项目已发生的真实事故。
+- **核心决策**：
+  1. **移植 `tests/visual_smoke/`**（白屏判据 + 四道正身信号）。保留正身信号层，导航层按本项目实际改写——易考宝 SPA **没有 URL 路由**（`App.vue` 用响应式 state 切视图），starter 原版的 `#/route` 遍历在此无效。逃生门保留为 `--allow-missing-host` flag 而非拆闸门。已完成红色实证：一个有内容的网关占位页（纯颜色判据会放行）被正身信号正确拒绝。
+  2. **TESTING 铁律 6「门禁即证据」**：一条没红过的门禁视为不存在；新增门禁必须附变异实证。直接对应本项目 `mobile_interaction_suite.mjs` 中那条自引入起就不可能通过的断言。
+  3. **TESTING 铁律 5「规范即测试」**：把"以后还会有人犯"的规范写成扫源码的终身守卫；守卫自带红/绿样本自证；白名单按内容签名匹配而非行号。
+  4. **RCA 动手前先 census**：清单类任务先全仓重扫，审计抽样结论视为下限。
+  5. **AGENTS 裁定清单（Rulings）**：授权整段自动流程时收尾必须披露 `裁定 → 判错的代价`，禁止静默裁定。
+  6. **AGENTS UI 模糊评价五维清单**：把"丑/难看"转成改/不改选择题。
+- **不吸收**：`templates/ci.yml`（本项目已有且更完整）、`scripts/setup-hooks.py`（已装且逐字节同源）、AGENTS 避坑 9–12（AntiGravity-OSS 专有场景，本项目 §2 覆盖更严谨）、`EXECUTION/REVIEWING/ARCHITECTURE`（本项目已有且 `REVIEWING.md` 更强）。
+- **顺带修复上游**：starter 的 `scripts/checkpoint.py` 有两个真 bug（`restore` 用 `git checkout <sha> -- .` 会遗留新增文件；"安全 stash"从不告知也不恢复），已在 starter 仓库修复并补 `tests/test_checkpoint.py`，两测试均经红色实证。
+- **对应 SPEC 章节**：无（工程规范，不改变产品行为）。
+- **影响范围**：`tests/visual_smoke/`、`TESTING.md`、`AGENTS.md`、`DECISIONS.md`。
+
+### [2026-09-27] 文档体系自洽性修复：顶栏规则去硬化、skipped 口径、移动端门禁转真
+
+- **触发背景**：用户追问"文档体系是否真的自洽"。逐项实测后确认**不自洽**，发现 5 处实质矛盾（此前"文档门禁全清"只证明了链接可解析与空白干净，不能推出自洽）。
+- **核心决策**：
+  1. **顶栏规则去硬化**：`AGENTS.md` 避坑第 10 条原写"必须严格单行（≤44px）"，实测两行为 82.8px。溯源发现上游 starter 原文是**"建议 ≤ 44px"**，传入本项目时被硬化成强制值，且"单行"只是达成"首屏密度"的手段。现改为：目标 ≤44px 为方向性建议，验收以「不折行撑高侵占首屏核心内容」+「触控目标 ≥42px」为准；元素过多致单行必然压垮触控目标时，取触控可达性。`TESTING.md` 铁律 5 同步对齐。
+  2. **skipped 口径分层**（新增避坑第 16 条）：**环境性跳过**（外部不可达、无凭证）不阻断收敛判定但须逐项登记；**断言性跳过**（目标用例未真正执行）仍阻断。此前 `AGENTS.md`/`TESTING.md` 笼统要求 `skipped=0`，与当前 `skipped=1` 之间缺一条缝。
+  3. **移动端门禁转为真门禁**：`mobile_interaction_suite.mjs` 实为**三处叠加的脚本缺陷**（进度文案匹配错、前进按钮假设错、滑动用鼠标事件而处理器读 touch 事件），非产品缺陷。全部修复并完成红色实证（故意偏移期望值 → 断言变红 → 还原全绿），11 项检查全通过。按铁律 7，此前它根本"不算门禁"。
+  4. **文档地图补全与纠错**：修复 3 处不可定位路径（`.fpk` 反引号误解析、两个 AntiGravity 提示词缺 `docs/` 前缀）；补录 `specs/` 与 `templates/ci.yml`，并标注后者**当前未激活**（无 `.github/`，从未运行）。
+  5. **清除单次实测数字**：`2026-09-25-frontend-ui-redesign.md` 中的 `62.68 kB` 精确字节值改为量级（此前已在 `TESTING.md` 处理同类问题，此处遗漏）。
+- **对应 SPEC 章节**：无（工程规范与测试门禁，不改变产品行为）。
+- **影响范围**：`AGENTS.md`、`TESTING.md`、`README.md`、`docs/REQUIREMENTS_TRACEABILITY.md`、`docs/superpowers/plans/2026-09-25-frontend-ui-redesign.md`、`frontend/tests/mobile_interaction_suite.mjs`。

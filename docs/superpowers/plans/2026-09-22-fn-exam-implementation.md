@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.11/FastAPI, SQLite 3 (WAL mode), Vue 3 + Vite + Tailwind CSS, OpenAI SDK (兼容 Ollama/Cloud LLM), openpyxl/csv.
 
-**Spec:** [docs/superpowers/specs/2026-09-22-fn-exam-design.md](file:///c:/Users/chang/Desktop/code/%E9%A3%9E%E7%89%9B%E5%88%B7%E9%A2%98%E8%BD%AF%E4%BB%B6/docs/superpowers/specs/2026-09-22-fn-exam-design.md) 及 [SPEC.md](file:///c:/Users/chang/Desktop/code/%E9%A3%9E%E7%89%9B%E5%88%B7%E9%A2%98%E8%BD%AF%E4%BB%B6/SPEC.md)
+**Spec:** [docs/superpowers/specs/2026-09-22-fn-exam-design.md](../../../docs/superpowers/specs/2026-09-22-fn-exam-design.md) 及 [SPEC.md](../../../SPEC.md)
 
 ---
 
@@ -152,7 +152,7 @@ class TestFSRSEngine(unittest.TestCase):
     def test_mistake_two_consecutive_correct_kills_error(self):
         service = MistakeService()
         record = {"consecutive_correct": 0, "is_cleared": False}
-        
+
         # 第一次答对
         rec1 = service.evaluate_answer(record, is_correct=True)
         self.assertEqual(rec1["consecutive_correct"], 1)
@@ -215,7 +215,7 @@ class TestScoringAndSession(unittest.TestCase):
         is_cor, ratio = Scorer.evaluate("SINGLE", "A", "A")
         self.assertTrue(is_cor)
         self.assertEqual(ratio, 1.0)
-        
+
         is_cor, ratio = Scorer.evaluate("SINGLE", "B", "A")
         self.assertFalse(is_cor)
         self.assertEqual(ratio, 0.0)
@@ -226,12 +226,12 @@ class TestScoringAndSession(unittest.TestCase):
         is_cor, ratio = Scorer.evaluate("MULTI", "ABCD", "ABCD")
         self.assertTrue(is_cor)
         self.assertEqual(ratio, 1.0)
-        
+
         # 漏选给部分分 (0.5)
         is_cor, ratio = Scorer.evaluate("MULTI", "AB", "ABCD")
         self.assertTrue(is_cor)
         self.assertEqual(ratio, 0.5)
-        
+
         # 错选一项即 0 分
         is_cor, ratio = Scorer.evaluate("MULTI", "ABCE", "ABCD")
         self.assertFalse(is_cor)

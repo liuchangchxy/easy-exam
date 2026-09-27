@@ -6,10 +6,11 @@
 
 1. [AGENTS.md](AGENTS.md)：协作宪法、复杂度开关和工程红线。
 2. [SPEC.md](SPEC.md)：已经确认的产品行为，不是完成报告。
-3. [TESTING.md](TESTING.md)：测试层级、命令和证据口径。
+3. [TESTING.md](TESTING.md)：测试层级、命令和证据口径。**当前状态与未关闭缺口以第 7 节为准。**
 4. [docs/REQUIREMENTS_TRACEABILITY.md](docs/REQUIREMENTS_TRACEABILITY.md)：源码、测试、运行证据和缺口。
 5. [docs/ANTIGRAVITY_WORKFLOW.md](docs/ANTIGRAVITY_WORKFLOW.md)：跨文件批次或 OSS 工作的完整工序。
-6. [docs/superpowers/plans/](docs/superpowers/plans/)：已确认的叶子计划。
+6. [docs/FNOS_FPK_GUIDE.md](docs/FNOS_FPK_GUIDE.md)：fnOS 打包、安装与运维手册。
+7. [docs/superpowers/plans/](docs/superpowers/plans/)：已确认的叶子计划。
 
 ## 产品主线
 
@@ -25,6 +26,12 @@
 ## 当前状态怎么看
 
 产品目标以 `SPEC.md` 为准；实现完成度只看追踪矩阵中的源码、测试和运行证据。目录存在、接口存在或单元测试通过，都不能单独证明用户链路完成。
+
+截至 2026-09-27（HEAD `48bfa85`），EE-001 至 EE-021 台账项已全部闭环，FPK `1.0.2` 已在 fnOS 6.18 实机完成安装与重启保留验证。
+
+本轮本地复跑：后端 205 通过 / 0 失败 / 1 跳过（**环境性跳过**：远程 fnOS 不可达，不阻断收敛），前端单测 11 通过，Chrome E2E 13 通过，**移动端交互 E2E 11 项全通过**，视觉冒烟通过，构建成功。
+
+**仍未结清的验证缺口**：远程实机 API E2E 未运行（环境不可达）、外部商业搜索服务未联调。二者均属环境性缺口，按 `AGENTS.md` 避坑第 16 条逐项登记即可，但不得据此宣称"测试全绿"。明细见 [TESTING.md 第 7 节](TESTING.md)。
 
 开源候选的固定 commit、许可证和实际采用方式见 [OSS_REUSE_AUDIT.md](docs/research/OSS_REUSE_AUDIT.md)，总体路线见 [OSS_REUSE_ROADMAP.md](docs/research/OSS_REUSE_ROADMAP.md)。
 

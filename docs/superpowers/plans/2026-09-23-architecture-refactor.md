@@ -10,7 +10,7 @@
 
 **Tech Stack:** Python 3.12+, FastAPI, SQLite 3 (WAL mode), Pydantic v2, Vue 3, Vite, Node.js.
 
-**Spec:** [SPEC.md](file:///c:/Users/chang/Desktop/code/飞牛刷题软件/SPEC.md)
+**Spec:** [SPEC.md](../../../SPEC.md)
 
 ## Global Constraints
 

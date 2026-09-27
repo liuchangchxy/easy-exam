@@ -2,6 +2,8 @@
 
 本文档记录 EasyExam 在飞牛私有云（fnOS）平台上的 `.fpk` 原生手动安装包设计、构建与实机部署规范。
 
+> **当前版本基线**：`manifest` 版本 `1.0.2`（2026-09-27）。版本号只有一个来源——`fpk/easy-exam/manifest` 的 `version` 字段；`app/docker/docker-compose.yaml` 的镜像 tag 必须与之逐字一致，由 `tests/test_fpk_packaging.py` 强制校验。打包产物文件名同样由该字段派生。
+
 ---
 
 ## 1. 应用规范与元数据
@@ -9,7 +11,7 @@
 | 项目 | 参数 / 设定 | 说明 |
 | :--- | :--- | :--- |
 | **应用标识 (appname)** | `easy-exam` | fnOS 内部唯一标识 |
-| **版本号 (version)** | `1.0.0` | 固定版本号，严禁使用 `latest` |
+| **版本号 (version)** | `1.0.2` | 以 `fpk/easy-exam/manifest` 为唯一来源；严禁使用 `latest`。Any 升级时必须同时推进 manifest、compose 镜像 tag 与随包镜像 tag |
 | **服务端口 (port)** | `3000` | 容器映射 `3000:3000` |
 | **数据持久化 (volume)** | `${TRIM_PKGVAR:-/var/apps/easy-exam/var}:/app/data` | 自动映射到 fnOS 存储卷（如 `/vol4/@appdata/easy-exam`） |
 | **健康检查 (healthcheck)** | `http://127.0.0.1:3000/api/v1/health` | HTTP 200 返回 `{"status":"ok","app":"easy-exam","version":"v1"}` |
@@ -38,14 +40,16 @@ fpk/easy-exam/
 │       ├── config                # fnOS 桌面应用启动与 iframe 配置
 │       └── images/               # 桌面快捷方式图标 (icon_64.png, icon_256.png)
 └── cmd/
-    ├── install_init              # 安装前检查
-    ├── install_callback          # 安装后自动加载离线镜像 (docker load)
-    ├── upgrade_init              # 升级前预检
-    ├── upgrade_callback          # 升级后重新加载镜像
+    ├── install_init              # 安装前：最早钩子，从暂存目录 docker load 随包镜像
+    ├── install_callback          # 安装后：初始化持久化 .env 主密钥 + 兜底加载镜像
+    ├── upgrade_init              # 升级前：与 install_init 同源加载新版本镜像
+    ├── upgrade_callback          # 升级后：重新加载镜像
     ├── uninstall_init            # 卸载前停止并清理容器（保留数据卷）
-    ├── uninstall_callback        # 卸载后资源清理
-    └── main                      # 应用状态检查与启动引导脚本
+    ├── uninstall_callback        # 卸载后资源清理（数据默认保留）
+    └── main                      # 应用状态检查与启动引导脚本（start 时先加载镜像再 compose up）
 ```
+
+> `cmd/install_init` 与 `cmd/upgrade_init` 的镜像加载不是冗余保险，而是**唯一能满足平台启停时序的位置**，原因见第 3 节。
 
 ---
 
@@ -61,8 +65,8 @@ fpk/easy-exam/
 ```bash
 python scripts/build_fpk.py --bundle-image
 ```
-- 输出文件：`dist/easy-exam-1.0.0.fpk`（约 30MB）
-- 内置镜像：`ailm32442/easy-exam:1.0.0`
+- 输出文件：`dist/easy-exam-<manifest 版本>.fpk`（当前为 `dist/easy-exam-1.0.2.fpk`，约 30MB）
+- 内置镜像：`ailm32442/easy-exam:<manifest 版本>`（当前 `ailm32442/easy-exam:1.0.2`）
 
 ### 3.2 构建轻量在线包
 仅打包配置和编排描述文件，NAS 在安装时从镜像源拉取：
@@ -70,7 +74,48 @@ python scripts/build_fpk.py --bundle-image
 ```bash
 python scripts/build_fpk.py --thin
 ```
-- 输出文件：`dist/easy-exam-1.0.0.fpk`（约 8KB）
+- 输出文件：`dist/easy-exam-<manifest 版本>.fpk`（当前为 `dist/easy-exam-1.0.2.fpk`，约 8KB）
+
+### 3.3 离线镜像加载时序约束（安装/升级必读）
+
+这一节记录 2026-09-27 定位并修复的实机故障（commit `48bfa85`）。它不是可选的优化，而是决定 `.fpk` 能否安装成功的硬约束。
+
+#### 故障现象
+
+在 fnOS 应用中心手动安装 `easy-exam-1.0.1` / `1.0.2` 时，每次安装都在最后一步**回滚**，报错：
+
+```text
+easy-exam Error pull access denied for ailm32442/easy-exam
+```
+
+#### 根因
+
+fnOS 应用中心在 `install_init` / `install_callback` 之前，就已经用包内的 `target/` 把 docker project 拉起来了。此时如果本地 Docker daemon 里还没有随包镜像，`docker compose up` 就会按 `pull_policy: if_not_present` 回退去 Docker Hub 拉取 `ailm32442/easy-exam:<version>`——而该 tag 从未发布到 Docker Hub，拉取被拒后整个安装流程回滚。
+
+这解释了此前的诡异现象：`1.0.1` 曾成功装过一次（因为 `1.0.0` 时期 `docker load` 过的同名镜像还残留在本地），此后再装必失败。
+
+#### 修复
+
+把镜像加载挪到**能抢在 compose 之前的最早钩子**，并覆盖包在安装过程中可能出现过的所有暂存位置：
+
+| 钩子 | 作用 |
+| :--- | :--- |
+| `cmd/install_init` | 从 `TRIM_APPDEST/images`、`TRIM_PKGINST_TEMP_DIR[/app]/images`、`TRIM_TEMP_TPKFILE[/app]/images` 逐个 `docker load`；失败只告警不退出，避免 setup 环境缺 docker 时阻断安装 |
+| `cmd/upgrade_init` | 与 `install_init` 同源处理，保证升级时新版本镜像先就位 |
+| `cmd/main start` | `docker compose up` 之前再加载一次 `target/images`，兜住手工 `start` 的场景 |
+| `cmd/install_callback` / `cmd/upgrade_callback` | 保留加载逻辑作为兜底 |
+
+#### 验证结论（实机）
+
+- 设备：fnOS 6.18，`192.168.x.x`
+- `appcenter-cli install-fpk` 安装成功，不再回滚
+- 容器 `easy-exam-fpk` 正常起在 3000 端口，`/api/v1/health` 返回 200
+- `stop` + `start` 重启后，已注册账号仍可登录，`var/.env` 主密钥 md5 不变
+
+#### 维护约束
+
+- 升级版本时，**随包镜像 tag、`app/docker/docker-compose.yaml` 的 `image`、`manifest` 的 `version` 三者必须同时推进**，否则本地镜像与 compose 期望的 tag 对不上，会重新触发上面的拉取回滚。
+- 不要把镜像加载逻辑从 `install_init` / `upgrade_init` 中移除或"优化"为只在 callback 中执行。
 
 ---
 
@@ -79,7 +124,7 @@ python scripts/build_fpk.py --thin
 ### 4.1 方法一：fnOS 桌面手动安装（用户常用）
 1. 登录 fnOS 桌面，打开 **应用中心 (App Center)**。
 2. 点击右上角设置菜单中的 **手动安装**。
-3. 选择构建生成的 `dist/easy-exam-1.0.0.fpk` 文件并点击下一步。
+3. 选择构建生成的 `dist/easy-exam-1.0.2.fpk` 文件并点击下一步。
 4. 安装完成后，桌面上将出现 **EasyExam 易考宝** 应用图标。
 5. 点击图标即可通过内置窗口或新标签页访问 `http://<NAS_IP>:3000`。
 
@@ -88,10 +133,10 @@ python scripts/build_fpk.py --thin
 
 ```bash
 # 复制安装包到 NAS
-scp dist/easy-exam-1.0.0.fpk <user>@<nas_ip>:/tmp/easy-exam-1.0.0.fpk
+scp dist/easy-exam-1.0.2.fpk <user>@<nas_ip>:/tmp/easy-exam-1.0.2.fpk
 
 # 执行安装
-sudo appcenter-cli install-fpk /tmp/easy-exam-1.0.0.fpk
+sudo appcenter-cli install-fpk /tmp/easy-exam-1.0.2.fpk
 
 # 启动应用
 sudo appcenter-cli start easy-exam

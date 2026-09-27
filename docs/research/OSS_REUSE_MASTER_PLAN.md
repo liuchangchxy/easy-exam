@@ -88,12 +88,12 @@ flowchart TD
 ### 3.1 已闭环项：A0 可靠导入与原子事务（Exameow 移植 + EXAM-MASTER 模式）
 - **Exameow 源码适配移植**：
   - 源：`heshengtao/exameow@70e0d70`（Apache-2.0），`frontend/src/utils/importParser.ts`。
-  - 目标：[spreadsheet_importer.py](file:///c:/Users/chang/Desktop/code/飞牛刷题软件/backend/app/infrastructure/importers/spreadsheet_importer.py#L1-L60)（包含 Apache-2.0 归属头声明，保留原作者版权）；
-  - 测试：[test_v1_import.py](file:///c:/Users/chang/Desktop/code/飞牛刷题软件/tests/test_v1_import.py)（单测覆盖 A–H 选项列、组合选项提取、稀疏列自动识别；浏览器 E2E 覆盖列映射预览与手工修正）。
+  - 目标：[spreadsheet_importer.py](../../backend/app/infrastructure/importers/spreadsheet_importer.py#L1-L60)（包含 Apache-2.0 归属头声明，保留原作者版权）；
+  - 测试：[test_v1_import.py](../../tests/test_v1_import.py)（单测覆盖 A–H 选项列、组合选项提取、稀疏列自动识别；浏览器 E2E 覆盖列映射预览与手工修正）。
 - **EXAM-MASTER 事务模式参考**：
   - 源：`CiE-XinYuChen/EXAM-MASTER@b7e59fe`（MIT），`db.py`。
-  - 目标：[question_repository.py](file:///c:/Users/chang/Desktop/code/飞牛刷题软件/backend/app/infrastructure/db/repositories/question_repository.py#L50-L114) 与 [import_service.py](file:///c:/Users/chang/Desktop/code/飞牛刷题软件/backend/app/application/import_service.py#L20-L100)（单事务批量提交，未复制 Flask 代码）；
-  - 测试：[test_v1_import.py](file:///c:/Users/chang/Desktop/code/飞牛刷题软件/tests/test_v1_import.py#L200-L240)（真实 SQLite 触发器中途中断测试，验证中途失败无题目残留）。
+  - 目标：[question_repository.py](../../backend/app/infrastructure/db/repositories/question_repository.py#L50-L114) 与 [import_service.py](../../backend/app/application/import_service.py#L20-L100)（单事务批量提交，未复制 Flask 代码）；
+  - 测试：[test_v1_import.py](../../tests/test_v1_import.py#L200-L240)（真实 SQLite 触发器中途中断测试，验证中途失败无题目残留）。
 
 ### 3.2 已闭环项：A1 MiaowTest 对话与追问模型适配
 - **开源对象**：[MiaowTest](https://github.com/qijun1900/miaowtest) `commit 803dadc`（MIT）。

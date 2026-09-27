@@ -19,8 +19,8 @@
 ## 2. Implementation Tasks
 
 - [x] **Task 1: Unit & Regression Tests for Core Engine Improvements**
-  - Added domain functions `formatVerdictTitle`, `findNextUnansweredIndex`, `isSwipeGestureValid` in [exam.js](file:///c:/Users/chang/Desktop/code/飞牛刷题软件/frontend/src/domain/exam.js).
-  - Added 3 suites of unit tests in [exam.test.js](file:///c:/Users/chang/Desktop/code/飞牛刷题软件/frontend/tests/exam.test.js); 11/11 tests pass.
+  - Added domain functions `formatVerdictTitle`, `findNextUnansweredIndex`, `isSwipeGestureValid` in [exam.js](../../../frontend/src/domain/exam.js).
+  - Added 3 suites of unit tests in [exam.test.js](../../../frontend/tests/exam.test.js); 11/11 tests pass.
 
 - [x] **Task 2: Fix Auth Persistence & Mobile Reconnect (`frontend/src/stores/authStore.js`, `frontend/src/views/LoginView.vue`)**
   - Distinguish 401 from transient network/offline errors in `loadCurrentUser()`.

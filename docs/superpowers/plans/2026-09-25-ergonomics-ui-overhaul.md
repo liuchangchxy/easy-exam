@@ -26,3 +26,21 @@
 - `npm --prefix frontend run build` 产物正常构建无警告；
 - 键盘操作在浏览器中实现全程无需鼠标操作；
 - 移动端 375px/390px 下题干位于首屏核心视野，无误触交卷风险。
+
+
+---
+
+## 完成状态（2026-09-27 复核）
+
+第 2 节列出的 5 项工效学整改要点均已在 `PracticeViewV1.vue` / `ExamView.vue` / `HomeView.vue` / `style.css` 中实现，并被后续 `2026-09-27-mobile-ux-and-core-practice-refactor` 批次继续收敛（顶栏 44px 单行、桌面快捷键提示在触屏端剔除、答题卡底部抽屉、左右滑动切题）。
+
+验收 DoD 的复核结果：
+
+| DoD 条目 | 2026-09-27 实测 | 状态 |
+|---|---|---|
+| `npm --prefix frontend run test` 全绿 | 11 passed, 0 failed, 0 skipped | 通过 |
+| `npm --prefix frontend run build` 无警告 | Vite v5.4.21，43 modules，exit code 0 | 通过 |
+| 键盘盲操全程免鼠标 | `browser_e2e.test.js` 含键盘刷题场景，13 passed | 通过 |
+| 375/390px 首屏可见且无误触交卷 | `capture_mobile.mjs` 实测 390x844：顶栏 82.8px（两行）、题干与 4 个选项全部落在首屏内、底栏 57px；`.compact-header` 仍为 `flex-wrap: wrap` | **部分通过** |
+
+**未完全达标项**：计划要求"顶栏单行"与消除"175.8px 顶栏"，当前实测顶栏 **82.8px 且为两行**（`.compact-header` 的 `flex-wrap: wrap !important` 使第二行容纳"交卷/提示/⋯"按钮组）。相比整改前的 175.8px 已大幅压缩、首屏信息密度目标达成，但"严格单行"未满足，记为未达标而非已通过。

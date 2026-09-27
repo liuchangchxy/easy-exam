@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -7,16 +8,20 @@ import crypto from 'node:crypto'
 import assert from 'node:assert'
 import { chromium } from 'playwright'
 
-const repoRoot = path.resolve(process.cwd())
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const repoRoot = path.resolve(__dirname, '../..')
 const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+const SCREENSHOT_DIR = path.resolve(repoRoot, 'screenshots/mobile')
+const ARTIFACT_DIR = path.resolve(repoRoot, 'screenshots/mobile')
 
-async function getFreePort() {
-  return new Promise((resolve) => {
+function getFreePort() {
+  return new Promise((resolve, reject) => {
     const srv = net.createServer()
     srv.listen(0, '127.0.0.1', () => {
       const port = srv.address().port
       srv.close(() => resolve(port))
     })
+    srv.on('error', reject)
   })
 }
 
@@ -28,25 +33,63 @@ async function waitForServer(url, expectedToken, timeoutMs = 25000) {
       if (res.ok) {
         const body = await res.json()
         if (expectedToken && body.instance_token !== expectedToken) {
-          throw new Error('Token mismatch')
+          throw new Error(`Instance token mismatch: expected ${expectedToken} but got ${body.instance_token}`)
         }
         return true
       }
     } catch (_) {}
-    await new Promise(r => setTimeout(r, 300))
+    await new Promise(r => setTimeout(r, 400))
   }
-  throw new Error(`Server at ${url} failed to start`)
+  throw new Error(`Server at ${url} failed to start within ${timeoutMs}ms`)
+}
+
+// The progress pill renders as "N / M 📑 答题卡" (spaces around the slash, see
+// PracticeViewV1.vue `.btn-sheet-trigger-pill`). Assert on the numbers rather than a
+// literal substring so this tracks the DOM instead of a hand-copied format string.
+const PROGRESS_RE = /(?:^|\D)(\d+)\s*\/\s*(\d+)/
+
+function assertProgress(text, expectedN, label) {
+  const raw = (text || '').trim()
+  const m = PROGRESS_RE.exec(raw)
+  assert(m, `${label}: pill did not contain an "N / M" progress value, read "${raw}"`)
+  assert.strictEqual(
+    Number(m[1]),
+    expectedN,
+    `${label}: expected progress "${expectedN} / M" but pill read "${raw}"`
+  )
+}
+
+// The action bar swaps its primary slot by state (see PracticeViewV1.vue):
+//   answered  -> .btn-next-question  ("下一题 →")
+//   unanswered -> .btn-skip-unanswered ("跳过 →")
+// Both call next(). Tests must click whichever is actually present for the state
+// under test, instead of assuming "下一题" always exists.
+async function advance(page) {
+  const nextBtn = page.locator('.btn-next-question')
+  if (await nextBtn.count() && await nextBtn.isVisible()) {
+    await nextBtn.click()
+    return 'next'
+  }
+  const skipBtn = page.locator('.btn-skip-unanswered')
+  if (await skipBtn.count() && await skipBtn.isVisible()) {
+    await skipBtn.click()
+    return 'skip'
+  }
+  throw new Error('no forward control (.btn-next-question / .btn-skip-unanswered) is visible')
+}
+
+async function goBack(page) {
+  await page.locator('.btn-prev-question').click()
 }
 
 async function run() {
-  console.log('Starting Mobile Interaction E2E Verification...')
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fnexam-mobile-suite-'))
-  const tempDbPath = path.join(tempDir, 'mobile_test.db')
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fnexam-mobile-check-'))
+  const tempDbPath = path.join(tempDir, 'mobile_check.db')
   const port = await getFreePort()
+  const instanceToken = crypto.randomUUID()
   const BASE_URL = `http://127.0.0.1:${port}`
 
   console.log(`Starting FastAPI on port ${port}...`)
-  const instanceToken = crypto.randomUUID()
   const server = spawn(
     'python',
     ['-m', 'uvicorn', 'backend.app.main:app', '--host', '127.0.0.1', '--port', String(port)],
@@ -57,198 +100,174 @@ async function run() {
         PYTHONPATH: repoRoot,
         DB_PATH: tempDbPath,
         INSTANCE_TOKEN: instanceToken,
-        EASYEXAM_SECRET_KEY: 'mobile-secret-key-32bytes-ci!!',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     }
   )
-
-  server.stderr.on('data', d => {
+  server.stderr.on('data', (d) => {
     const text = d.toString()
-    if (!text.includes('GET /') && !text.includes('POST /')) {
-      console.error('[Server Error]', text)
-    }
+    if (!text.includes('INFO:')) process.stderr.write(`[Server Error] ${text}`)
   })
 
-  await waitForServer(BASE_URL, instanceToken)
-  console.log('Server ready. Launching mobile viewport in Playwright...')
-
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: fs.existsSync(CHROME_PATH) ? CHROME_PATH : undefined,
-  })
-
-  const context = await browser.newContext({
-    viewport: { width: 390, height: 844 },
-    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
-    hasTouch: true,
-    isMobile: true,
-  })
-
-  const page = await context.newPage()
-
+  let browser = null
   try {
-    // 1. Visit Login
-    await page.goto(BASE_URL)
-    await page.waitForSelector('.auth-page')
+    await waitForServer(BASE_URL, instanceToken)
+    console.log('Server ready. Launching mobile viewport in Playwright...')
+    browser = await chromium.launch({ executablePath: CHROME_PATH, headless: true })
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      deviceScaleFactor: 2,
+      isMobile: true,
+      hasTouch: true,
+    })
+    const page = await context.newPage()
 
-    // Register user
+    // --- Register through the real UI (not the API: this is the user path) ---
+    await page.goto(BASE_URL)
     await page.click('button:has-text("首次使用？创建账号")')
-    await page.fill('input[placeholder="用户名"]', 'mobile_suite_tester')
+    await page.fill('input[placeholder="用户名"]', `mobile_suite_${Date.now()}`)
     await page.fill('input[placeholder="密码（至少 8 位）"]', 'REDACTED_TEST_PASSWORD')
     await page.click('button:has-text("注册并登录")')
     await page.waitForSelector('.home-page')
 
-    // Verify localStorage has easyexam_token AND easyexam_user (Login persistence fix)
-    const storedUser = await page.evaluate(() => localStorage.getItem('easyexam_user'))
-    console.log('[Check 1] easyexam_user in localStorage:', storedUser ? 'YES' : 'NO')
-    assert(storedUser !== null, 'easyexam_user must be persisted in localStorage')
+    // Check 1: login persisted for offline/token reuse
+    const cached = await page.evaluate(() => localStorage.getItem('easyexam_user'))
+    console.log('[Check 1] easyexam_user in localStorage:', cached ? 'YES' : 'NO')
+    assert(cached !== null, 'easyexam_user must be persisted in localStorage')
 
-    // Create Bank and Seed Questions
     const token = await page.evaluate(() => localStorage.getItem('easyexam_token'))
     const createBankRes = await fetch(`${BASE_URL}/api/v1/banks`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        name: '系统集成项目管理真题',
-        category: '软考',
-        description: '系统集成历年真题精选'
-      })
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ name: '移动端校验题库', description: 'mobile suite' }),
     })
     const bank = await createBankRes.json()
 
-    // Import questions
     const mdContent = fs.readFileSync(path.join(repoRoot, 'data', 'ruankao_system_integration_142.md'), 'utf-8')
     await fetch(`${BASE_URL}/api/v1/imports/banks/${bank.id}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        format: 'markdown',
-        content: mdContent.slice(0, 10000),
-        duplicate_strategy: 'merge'
-      })
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ format: 'markdown', content: mdContent.slice(0, 10000), duplicate_strategy: 'merge' }),
     })
 
-    // Reload home page and enter practice
     await page.reload()
     await page.waitForSelector('.bank-card')
     await page.click('button:has-text("开始刷题")')
     await page.waitForSelector('.question-card')
     console.log('[Check 2] Question card loaded')
 
-    // Click option A and Submit
     await page.click('.option:first-child')
     await page.waitForTimeout(200)
     await page.click('button:has-text("提交答案")')
     await page.waitForTimeout(600)
 
-    // Verify submit verdict text: should NEVER be "未完全答对" for single choice
+    // Check 3: single-choice verdict wording
     const verdictBanner = await page.textContent('.verdict-status-title')
     console.log('[Check 3] Single choice verdict text:', verdictBanner.trim())
     assert(!verdictBanner.includes('未完全答对'), 'Single choice must never show 未完全答对')
-    assert(verdictBanner.includes('回答正确') || verdictBanner.includes('回答错误'), 'Verdict should be either 回答正确 or 回答错误')
+    assert(
+      verdictBanner.includes('回答正确') || verdictBanner.includes('回答错误'),
+      'Verdict should be either 回答正确 or 回答错误'
+    )
 
-    // Click Next button to go to Q2
-    await page.click('.btn-next-question')
+    await advance(page)
     await page.waitForTimeout(400)
-
     const q2Progress = await page.textContent('.btn-sheet-trigger-pill')
     console.log('[Check 4] Progress after next:', q2Progress.trim())
-    assert(q2Progress.includes('2/'), 'Should have navigated to Q2')
+    assertProgress(q2Progress, 2, 'Should have navigated to Q2')
 
-    // Test: Q2 is UNANSWERED. Can we still click "Next" to skip to Q3?
-    await page.click('.btn-next-question')
+    // Check 5: skipping an unanswered question must be allowed (non-blocking navigation)
+    await advance(page)
     await page.waitForTimeout(400)
-
     const q3Progress = await page.textContent('.btn-sheet-trigger-pill')
     console.log('[Check 5] Skip unanswered question to Q3:', q3Progress.trim())
-    assert(q3Progress.includes('3/'), 'Should have skipped to Q3 without answering Q2')
+    assertProgress(q3Progress, 3, 'Should have skipped to Q3 without answering Q2')
 
-    // Test: Go back to Q1 (prev -> prev)
-    await page.click('.btn-prev-question')
+    // Check 6: navigate back to Q1
+    await goBack(page)
     await page.waitForTimeout(300)
-    await page.click('.btn-prev-question')
+    await goBack(page)
     await page.waitForTimeout(400)
-
     const backToQ1Progress = await page.textContent('.btn-sheet-trigger-pill')
     console.log('[Check 6] Back to Q1:', backToQ1Progress.trim())
-    assert(backToQ1Progress.includes('1/'), 'Should be back at Q1')
+    assertProgress(backToQ1Progress, 1, 'Should be back at Q1')
 
-    // Check if Q1 answer and result are STILL PRESERVED (Fix: Previous button cleared answer)
+    // Check 7: going back must not clear the earlier answer/verdict
     const q1PreservedVerdict = await page.textContent('.verdict-status-title')
     console.log('[Check 7] Q1 preserved verdict after navigating back:', q1PreservedVerdict.trim())
-    assert(q1PreservedVerdict && (q1PreservedVerdict.includes('回答正确') || q1PreservedVerdict.includes('回答错误')), 'Q1 answer/result must NOT be reset when going back!')
+    assert(
+      q1PreservedVerdict &&
+        (q1PreservedVerdict.includes('回答正确') || q1PreservedVerdict.includes('回答错误')),
+      'Q1 answer/result must NOT be reset when going back!'
+    )
 
-    // Test: Question Palette (答题卡)
-    // Click progress badge to open palette
+    // Check 8: question palette drawer
     await page.click('.btn-sheet-trigger-pill')
     await page.waitForSelector('.sheet-modal-drawer')
-
     const isDrawerOpen = await page.isVisible('.sheet-modal-drawer')
     console.log('[Check 8] Question palette drawer opened:', isDrawerOpen)
     assert(isDrawerOpen, 'Question palette drawer should be open')
 
-    // Check palette item 1 state: should have class 'incorrect' or 'correct'
     const q1PaletteClass = await page.evaluate(() => {
       const items = Array.from(document.querySelectorAll('.sheet-num-btn'))
-      return items[0]?.className
+      return items[0]?.className || ''
     })
-    console.log('[Check 9] Palette item 1 class:', q1PaletteClass)
-    assert(q1PaletteClass.includes('correct') || q1PaletteClass.includes('incorrect'), 'Q1 in palette should be marked answered (correct/incorrect)')
+    console.log('[Check 9] Q1 palette class:', q1PaletteClass)
+    assert(
+      q1PaletteClass.includes('correct') || q1PaletteClass.includes('incorrect'),
+      'Q1 in palette should be marked answered (correct/incorrect)'
+    )
 
-    // Jump to Question 10 from palette
-    await page.evaluate(() => {
+    // Check 10: jump to Q10 via the palette
+    const jumpTarget = await page.evaluate(() => {
       const items = Array.from(document.querySelectorAll('.sheet-num-btn'))
-      items[9].click()
+      const t = items.find((el) => el.textContent.trim() === '10')
+      if (t) t.click()
+      return Boolean(t)
     })
-    await page.waitForTimeout(400)
-
+    assert(jumpTarget, 'palette should expose a Q10 button')
+    await page.waitForTimeout(500)
     const q10Progress = await page.textContent('.btn-sheet-trigger-pill')
-    console.log('[Check 10] Jumped to Q10 from palette:', q10Progress.trim())
-    assert(q10Progress.includes('10/'), 'Should jump to Q10')
+    console.log('[Check 10] Jumped to Q10:', q10Progress.trim())
+    assertProgress(q10Progress, 10, 'Should jump to Q10')
 
-    // Test: Swipe gesture (Swipe left to go to Q11)
-    await page.evaluate(() => {
-      const container = document.querySelector('.practice-page') || document.body
-      const touchStart = new Touch({
-        identifier: Date.now(),
-        target: container,
-        clientX: 300,
-        clientY: 300
-      })
-      const touchEnd = new Touch({
-        identifier: Date.now(),
-        target: container,
-        clientX: 100,
-        clientY: 300
-      })
-      container.dispatchEvent(new TouchEvent('touchstart', { touches: [touchStart], changedTouches: [touchStart], bubbles: true }))
-      container.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: [touchEnd], bubbles: true }))
+    // Check 11: horizontal swipe advances one question.
+    // The handler reads e.touches / e.changedTouches (PracticeViewV1.vue
+    // handleTouchStart/handleTouchEnd), so a mouse drag never reaches it — real
+    // touch events must be dispatched via CDP Input.dispatchTouchEvent.
+    const box = await page.locator('.practice-page').boundingBox()
+    const cy = box.y + box.height / 2
+    const cdp = await context.newCDPSession(page)
+    // Start beyond the 25px iOS-back edge guard (isSwipeGestureValid).
+    const startX = box.x + box.width - 40
+    const endX = box.x + 40
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x: startX, y: cy }],
     })
-    await page.waitForTimeout(600)
-
+    for (let i = 1; i <= 8; i++) {
+      const x = startX + ((endX - startX) * i) / 8
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x, y: cy }],
+      })
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await page.waitForTimeout(800)
     const q11Progress = await page.textContent('.btn-sheet-trigger-pill')
-    console.log('[Check 11] Navigated to Q11 via Swipe Left:', q11Progress.trim())
-    assert(q11Progress.includes('11/'), 'Should have swiped to Q11')
+    console.log('[Check 11] After swipe:', q11Progress.trim())
+    assertProgress(q11Progress, 11, 'Should have swiped to Q11')
 
-    console.log('\n=============================================')
-    console.log(' ALL 11 MOBILE INTERACTION CHECKS PASSED! ')
-    console.log('=============================================\n')
-
+    console.log('\nAll mobile interaction checks passed.')
+    fs.mkdirSync(SCREENSHOT_DIR, { recursive: true })
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'mobile_suite_final.png') })
   } finally {
-    await browser.close()
+    if (browser) await browser.close()
     server.kill()
-    fs.rmSync(tempDir, { recursive: true, force: true })
   }
 }
 
-run().catch(err => {
+run().catch((err) => {
   console.error('Test Failed:', err)
   process.exit(1)
 })
