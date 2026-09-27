@@ -12,8 +12,8 @@ class TestV1PdfImport(unittest.TestCase):
     def test_image_only_pdf_is_rejected_with_reason(self):
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             bank = client.post("/api/v1/banks", headers={"Authorization": f"Bearer {token}"}, json={"name": "PDF题库"}).json()
             document = fitz.open()
             document.new_page().insert_text((72, 72), "")
@@ -31,8 +31,8 @@ class TestV1PdfImport(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = str(Path(tmp) / "pdf_dup.sqlite")
             client = TestClient(create_app(db_path))
-            client.post("/api/v1/auth/register", json={"username": "bob", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "bob", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "bob", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "bob", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "PDF重复预检题库"}).json()
 
@@ -86,8 +86,8 @@ class TestV1PdfImport(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = str(Path(tmp) / "db.sqlite")
             client = TestClient(create_app(db_path))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "坏PDF题库"}).json()
 
@@ -115,8 +115,8 @@ class TestV1PdfImport(unittest.TestCase):
         """PDF with extractable text but unrecognizable question structure must be rejected."""
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "无结构PDF"}).json()
 
@@ -138,8 +138,8 @@ class TestV1PdfImport(unittest.TestCase):
         """Unsupported file extensions like .docx or .bin must be rejected with 422."""
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "不支持文件题库"}).json()
 

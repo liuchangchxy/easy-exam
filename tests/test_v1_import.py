@@ -14,8 +14,8 @@ class TestV1Import(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "表格题库"}).json()
             workbook = Workbook()
@@ -35,8 +35,8 @@ class TestV1Import(unittest.TestCase):
     def test_duplicate_import_requires_explicit_strategy_then_can_skip(self):
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "重复预检"}).json()
             payload = {"format": "text", "content": "1. 1+1=?\nA. 1\nB. 2\n【答案】B"}
@@ -59,8 +59,8 @@ class TestV1Import(unittest.TestCase):
     def test_text_import_creates_versioned_questions(self):
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "导入题库"}).json()
             response = client.post(
@@ -79,8 +79,8 @@ class TestV1Import(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "映射题库"}).json()
 
@@ -132,8 +132,8 @@ class TestV1Import(unittest.TestCase):
         import json
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "组合选项题库"}).json()
 
@@ -189,8 +189,8 @@ class TestV1Import(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = str(Path(tmp) / "db.sqlite")
             client = TestClient(create_app(db_path))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "原子回滚测试"}).json()
 
@@ -247,8 +247,8 @@ class TestV1Import(unittest.TestCase):
         """Preview of a spreadsheet with valid headers but 0 data rows must be rejected with accepted=False."""
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "空表题库"}).json()
 
@@ -268,8 +268,8 @@ class TestV1Import(unittest.TestCase):
         """Test duplicate strategies 'new' and 'merge'."""
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "策略题库"}).json()
 
@@ -301,8 +301,8 @@ class TestV1Import(unittest.TestCase):
         """Test that manual mapping supports 8 options (A through H) completely."""
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "八选项题库"}).json()
 
@@ -344,8 +344,8 @@ class TestV1Import(unittest.TestCase):
         """Test that mapping sparse options (e.g. only B and E, or B/E/H) preserves their keys without renumbering to A/B/C."""
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "稀疏题库"}).json()
 

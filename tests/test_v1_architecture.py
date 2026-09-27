@@ -64,28 +64,28 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(me.json()["username"], "alice")
 
     def test_question_banks_are_visible_only_to_members(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        self.client.post("/api/v1/auth/register", json={"username": "bob", "password": "REDACTED_TEST_PASSWORD"})
-        alice_token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
-        bob_token = self.client.post("/api/v1/auth/login", json={"username": "bob", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        self.client.post("/api/v1/auth/register", json={"username": "bob", "password": "password-123456"})
+        alice_token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
+        bob_token = self.client.post("/api/v1/auth/login", json={"username": "bob", "password": "password-123456"}).json()["token"]
         self.client.post("/api/v1/banks", headers={"Authorization": f"Bearer {alice_token}"}, json={"name": "Alice 私有题库"})
         bob_banks = self.client.get("/api/v1/banks", headers={"Authorization": f"Bearer {bob_token}"})
         self.assertEqual(bob_banks.status_code, 200)
         self.assertEqual(bob_banks.json(), [])
 
     def test_bank_admin_can_share_bank_with_member(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        self.client.post("/api/v1/auth/register", json={"username": "bob", "password": "REDACTED_TEST_PASSWORD"})
-        alice = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
-        bob = self.client.post("/api/v1/auth/login", json={"username": "bob", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        self.client.post("/api/v1/auth/register", json={"username": "bob", "password": "password-123456"})
+        alice = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
+        bob = self.client.post("/api/v1/auth/login", json={"username": "bob", "password": "password-123456"}).json()["token"]
         bank = self.client.post("/api/v1/banks", headers={"Authorization": f"Bearer {alice}"}, json={"name": "共享题库"}).json()
         member = self.client.post(f"/api/v1/banks/{bank['id']}/members", headers={"Authorization": f"Bearer {alice}"}, json={"username": "bob", "role": "MEMBER"})
         self.assertEqual(member.status_code, 201)
         self.assertEqual(len(self.client.get("/api/v1/banks", headers={"Authorization": f"Bearer {bob}"}).json()), 1)
 
     def test_wrong_attempt_enters_private_mistake_list(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "错题题库"}).json()
         question = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "答案？", "answer": "A"}).json()
@@ -100,8 +100,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(summary.json()["weak_questions"], 1)
 
     def test_update_mistake_cause_persists_to_records_and_attempts(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "错题题库"}).json()
         question = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "答案？", "answer": "A"}).json()
@@ -116,8 +116,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(mistakes[0]["mistake_cause"], "CONCEPT")
 
     def test_mistake_and_fsrs_sessions_are_strictly_scoped_to_target_questions(self):
-        self.client.post("/api/v1/auth/register", json={"username": "bob-scoped", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "bob-scoped", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "bob-scoped", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "bob-scoped", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "专项题库"}).json()
         q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题1", "answer": "A"}).json()
@@ -147,8 +147,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual([q["id"] for q in scoped_qs], [q2["id"]])
 
     def test_killed_list_includes_bank_id_and_can_launch_elimination_session(self):
-        self.client.post("/api/v1/auth/register", json={"username": "carol-kill", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "carol-kill", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "carol-kill", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "carol-kill", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "斩杀题库测试"}).json()
         q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "斩杀题目", "answer": "A"}).json()
@@ -169,8 +169,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(session["total_questions"], 1)
 
     def test_submit_attempt_with_fsrs_rating_updates_card_and_rejects_inconsistent_rating(self):
-        self.client.post("/api/v1/auth/register", json={"username": "dave-fsrs", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "dave-fsrs", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "dave-fsrs", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "dave-fsrs", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "FSRS题库"}).json()
         q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "FSRS题", "answer": "A"}).json()
@@ -210,8 +210,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(good_res.json()["fsrs_rating"], 3)
 
     def test_submitting_rating_on_existing_attempt_updates_rating_and_reschedules_fsrs(self):
-        self.client.post("/api/v1/auth/register", json={"username": "frank-rating", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "frank-rating", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "frank-rating", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "frank-rating", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "评级更新题库"}).json()
         q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "评级更新题", "answer": "A"}).json()
@@ -245,8 +245,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(res3.json()["fsrs_rating"], 3)
 
     def test_exam_submission_is_idempotent_and_completed_session_rejects_further_attempts(self):
-        self.client.post("/api/v1/auth/register", json={"username": "eve-idempotent", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "eve-idempotent", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "eve-idempotent", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "eve-idempotent", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "幂等测试题库"}).json()
         q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "幂等题", "answer": "A"}).json()
@@ -290,31 +290,31 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(comp2.status_code, 200)
 
     def test_change_password_flow(self):
-        self.client.post("/api/v1/auth/register", json={"username": "frank-pwd", "password": "old-REDACTED_TEST_PASSWORD"})
-        login_res = self.client.post("/api/v1/auth/login", json={"username": "frank-pwd", "password": "old-REDACTED_TEST_PASSWORD"}).json()
+        self.client.post("/api/v1/auth/register", json={"username": "frank-pwd", "password": "old-password-123456"})
+        login_res = self.client.post("/api/v1/auth/login", json={"username": "frank-pwd", "password": "old-password-123456"}).json()
         token = login_res["token"]
         self.assertFalse(login_res["user"]["must_change_password"])
 
         headers = {"Authorization": f"Bearer {token}"}
         # Change password with wrong old password fails
-        bad_change = self.client.post("/api/v1/auth/change-password", headers=headers, json={"old_password": "wrong", "new_password": "new-REDACTED_TEST_PASSWORD"})
+        bad_change = self.client.post("/api/v1/auth/change-password", headers=headers, json={"old_password": "wrong", "new_password": "new-password-123456"})
         self.assertEqual(bad_change.status_code, 400)
 
         # Change password with correct old password succeeds
-        good_change = self.client.post("/api/v1/auth/change-password", headers=headers, json={"old_password": "old-REDACTED_TEST_PASSWORD", "new_password": "new-REDACTED_TEST_PASSWORD"})
+        good_change = self.client.post("/api/v1/auth/change-password", headers=headers, json={"old_password": "old-password-123456", "new_password": "new-password-123456"})
         self.assertEqual(good_change.status_code, 200)
 
         # Login with old password fails
-        old_login = self.client.post("/api/v1/auth/login", json={"username": "frank-pwd", "password": "old-REDACTED_TEST_PASSWORD"})
+        old_login = self.client.post("/api/v1/auth/login", json={"username": "frank-pwd", "password": "old-password-123456"})
         self.assertEqual(old_login.status_code, 401)
 
         # Login with new password succeeds
-        new_login = self.client.post("/api/v1/auth/login", json={"username": "frank-pwd", "password": "new-REDACTED_TEST_PASSWORD"})
+        new_login = self.client.post("/api/v1/auth/login", json={"username": "frank-pwd", "password": "new-password-123456"})
         self.assertEqual(new_login.status_code, 200)
 
     def test_exam_profile_blueprint_and_exam_session_are_versioned(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         profile = self.client.post("/api/v1/exams/profiles", headers=headers, json={"name": "公考"})
         self.assertEqual(profile.status_code, 201)
@@ -329,8 +329,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(session.status_code, 404)
 
     def test_exam_session_persists_selected_blueprint_version(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         profile = self.client.post("/api/v1/exams/profiles", headers=headers, json={"name": "蓝图绑定"}).json()
         blueprint = self.client.post(
@@ -349,8 +349,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(session.json()["blueprint_id"], blueprint["id"])
 
     def test_exam_blueprint_negative_mark_applies_only_at_final_report(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         profile = self.client.post("/api/v1/exams/profiles", headers=headers, json={"name": "负分规则"}).json()
         self.client.post(
@@ -371,8 +371,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(report.json()["score"], -0.25)
 
     def test_exam_session_does_not_leak_answers_or_explanations_before_completion(self):
-        self.client.post("/api/v1/auth/register", json={"username": "exam_student", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "exam_student", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "exam_student", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "exam_student", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "保密考试题库"}).json()
         q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "第一题", "type": "SINGLE", "answer": "B", "explanation": "机密解析1", "tags": ["常识"]}).json()
@@ -418,8 +418,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(report["answers"][q1["id"]]["explanation"], "机密解析1")
 
     def test_kill_is_explicit_and_wrong_answer_restores_question(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "斩杀题库"}).json()
         question = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A"}).json()
@@ -439,8 +439,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(self.client.get("/api/v1/kills", headers=headers).json(), [])
 
     def test_sync_events_are_append_only_and_idempotent(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         event = {"id": "device-a-1", "event_type": "NOTE_UPDATED", "aggregate_type": "question", "aggregate_id": "q1", "payload": {"text": "版本 A"}}
         first = self.client.post("/api/v1/sync/events", headers=headers, json={"events": [event]})
@@ -452,8 +452,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(len(events), 1)
 
     def test_draft_sync_merges_answers_and_prevents_empty_overwrites_and_reports_conflicts(self):
-        self.client.post("/api/v1/auth/register", json={"username": "sync_user", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "sync_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "sync_user", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "sync_user", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "同步题库"}).json()
         q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题1", "answer": "A"}).json()
@@ -490,8 +490,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertIn("mistake_records", tables)
 
     def test_bank_chapters_and_knowledge_tags_are_scoped_to_bank(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "分类题库"}).json()
         chapter = self.client.post(f"/api/v1/banks/{bank['id']}/chapters", headers=headers, json={"name": "第一章"})
@@ -502,8 +502,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(self.client.get(f"/api/v1/banks/{bank['id']}/tags", headers=headers).json()[0]["name"], "网络")
 
     def test_personal_assets_are_private_and_queryable(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         response = self.client.post("/api/v1/assets", headers=headers, json={"asset_type": "NOTE", "content": "记住这个公式"})
         self.assertEqual(response.status_code, 201)
@@ -512,11 +512,11 @@ class TestV1Architecture(unittest.TestCase):
     def test_question_bank_and_question_version_are_created_for_current_user(self):
         self.client.post(
             "/api/v1/auth/register",
-            json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"},
+            json={"username": "alice", "password": "password-123456"},
         )
         login = self.client.post(
             "/api/v1/auth/login",
-            json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"},
+            json={"username": "alice", "password": "password-123456"},
         )
         headers = {"Authorization": f"Bearer {login.json()['token']}"}
 
@@ -545,11 +545,11 @@ class TestV1Architecture(unittest.TestCase):
     def test_practice_attempt_persists_partial_score_without_mastery(self):
         self.client.post(
             "/api/v1/auth/register",
-            json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"},
+            json={"username": "alice", "password": "password-123456"},
         )
         login = self.client.post(
             "/api/v1/auth/login",
-            json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"},
+            json={"username": "alice", "password": "password-123456"},
         )
         headers = {"Authorization": f"Bearer {login.json()['token']}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "多选题库"}).json()
@@ -582,8 +582,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertFalse(attempt.json()["is_correct"])
 
     def test_ai_answer_versions_are_saved_and_personal_adoption_is_separate(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        login = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        login = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"})
         headers = {"Authorization": f"Bearer {login.json()['token']}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "AI题库"}).json()
         question = self.client.post(
@@ -610,8 +610,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(self.client.get(f"/api/v1/ai/questions/{question['id']}/answers", headers=headers).json()[0]["id"], candidate.json()["id"])
 
     def test_ai_generation_is_optional_and_offline_answer_is_still_saved(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "AI离线题库"}).json()
         question = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A"}).json()
@@ -621,8 +621,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertTrue(generated.json()["content"])
 
     def test_web_verification_saves_a_separate_explanation_and_evidence_state(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "联网核查"}).json()
         question = self.client.post(
@@ -641,8 +641,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(self.client.get(f"/api/v1/ai/questions/{question['id']}/answers", headers=headers).json()[0]["source"], "WEB")
 
     def test_question_edit_creates_new_version_and_old_version_remains_queryable(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "版本题库"}).json()
         question = self.client.post(
@@ -661,8 +661,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual([item["version_number"] for item in versions.json()], [1, 2])
 
     def test_practice_session_freezes_question_versions_at_start(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "会话题目快照"}).json()
         question = self.client.post(
@@ -685,8 +685,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(attempt.json()["correctness"], "CORRECT")
 
     def test_copying_a_question_creates_an_independent_learning_identity(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         source_bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "源题库"}).json()
         target_bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "目标题库"}).json()
@@ -704,8 +704,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(copied.json()["stem"], source_question["stem"])
 
     def test_exam_hides_feedback_until_submit_and_report_recomputes_attempts(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "模考题库"}).json()
         first = self.client.post(
@@ -741,8 +741,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(body["tag_stats"]["判断"]["incorrect"], 1)
 
     def test_exam_question_and_session_reads_do_not_leak_answers_before_submission(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "保密模考"}).json()
         question = self.client.post(
@@ -770,8 +770,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertNotIn("correctness", session_payload["answers"][question["id"]])
 
     def test_scoped_modes_reject_arbitrary_question_ids_outside_scoped_queues(self):
-        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "专项防绕过题库"}).json()
         q1 = self.client.post(
@@ -892,15 +892,15 @@ class TestV1Architecture(unittest.TestCase):
         import sqlite3
 
         # 用户 A：单步一次性提交 rating=4
-        self.client.post("/api/v1/auth/register", json={"username": "user_single_step", "password": "REDACTED_TEST_PASSWORD"})
-        token_a = self.client.post("/api/v1/auth/login", json={"username": "user_single_step", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "user_single_step", "password": "password-123456"})
+        token_a = self.client.post("/api/v1/auth/login", json={"username": "user_single_step", "password": "password-123456"}).json()["token"]
         headers_a = {"Authorization": f"Bearer {token_a}"}
         bank_a = self.client.post("/api/v1/banks", headers=headers_a, json={"name": "题库A"}).json()
         q_a = self.client.post(f"/api/v1/banks/{bank_a['id']}/questions", headers=headers_a, json={"stem": "测试题A", "answer": "A"}).json()
 
         # 用户 B：两步流程（先提交答案，再提交 rating=4）
-        self.client.post("/api/v1/auth/register", json={"username": "user_two_step", "password": "REDACTED_TEST_PASSWORD"})
-        token_b = self.client.post("/api/v1/auth/login", json={"username": "user_two_step", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "user_two_step", "password": "password-123456"})
+        token_b = self.client.post("/api/v1/auth/login", json={"username": "user_two_step", "password": "password-123456"}).json()["token"]
         headers_b = {"Authorization": f"Bearer {token_b}"}
         bank_b = self.client.post("/api/v1/banks", headers=headers_b, json={"name": "题库B"}).json()
         q_b = self.client.post(f"/api/v1/banks/{bank_b['id']}/questions", headers=headers_b, json={"stem": "测试题B", "answer": "A"}).json()
@@ -953,8 +953,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(card_a["stability"], card_b["stability"])
 
     def test_legacy_attempt_without_snapshot_preserves_and_updates_existing_fsrs_card(self):
-        self.client.post("/api/v1/auth/register", json={"username": "legacy_user", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "legacy_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "legacy_user", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "legacy_user", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         user_id = self.client.get("/api/v1/auth/me", headers=headers).json()["id"]
 
@@ -1011,8 +1011,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(card["state"], 2)
 
     def test_legacy_attempt_already_scheduled_preserves_card_without_double_scheduling_when_rating_changed(self):
-        self.client.post("/api/v1/auth/register", json={"username": "legacy_sched_user", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "legacy_sched_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "legacy_sched_user", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "legacy_sched_user", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         user_id = self.client.get("/api/v1/auth/me", headers=headers).json()["id"]
 
@@ -1073,8 +1073,8 @@ class TestV1Architecture(unittest.TestCase):
 
     def test_exam_record_mistakes_strategy_switchable(self):
         # EE-002: Test that record_mistakes can be switched off in mock exam
-        self.client.post("/api/v1/auth/register", json={"username": "mistake_user", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "mistake_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "mistake_user", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "mistake_user", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "模考错题策略库"}).json()
         q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题1", "type": "SINGLE", "answer": "A"}).json()
@@ -1109,8 +1109,8 @@ class TestV1Architecture(unittest.TestCase):
 
     def test_exam_blueprint_dynamic_question_selection(self):
         # EE-001: Test dynamic question selection by blueprint sections (type, count, etc.)
-        self.client.post("/api/v1/auth/register", json={"username": "blueprint_user", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "blueprint_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "blueprint_user", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "blueprint_user", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "蓝图组卷测试库"}).json()
 
@@ -1149,8 +1149,8 @@ class TestV1Architecture(unittest.TestCase):
 
     def test_exam_profiles_and_blueprint_listing_apis(self):
         # EE-010: Test GET profiles and latest blueprint
-        self.client.post("/api/v1/auth/register", json={"username": "prof_user", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "prof_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "prof_user", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "prof_user", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         p1 = self.client.post("/api/v1/exams/profiles", headers=headers, json={"name": "档案A", "description": "描述A"}).json()
         self.client.post(f"/api/v1/exams/profiles/{p1['id']}/blueprint", headers=headers, json={"blueprint": {"negative_mark": 0.5}}).json()
@@ -1168,8 +1168,8 @@ class TestV1Architecture(unittest.TestCase):
 
     def test_list_active_sessions_returns_incomplete_sessions(self):
         # EE-019: Test GET /api/v1/practice/sessions/active returns incomplete sessions
-        self.client.post("/api/v1/auth/register", json={"username": "active_user", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "active_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "active_user", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "active_user", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "未完成会话测试库"}).json()
         self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题A", "answer": "A"}).json()
@@ -1193,8 +1193,8 @@ class TestV1Architecture(unittest.TestCase):
 
     def test_bank_export_supports_multiple_formats(self):
         # EE-008: Test V1 bank export route supporting JSON, CSV, and text
-        self.client.post("/api/v1/auth/register", json={"username": "export_user", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "export_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "export_user", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "export_user", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "导出测试题库"}).json()
         self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={
@@ -1219,12 +1219,12 @@ class TestV1Architecture(unittest.TestCase):
 
     def test_personal_assets_rag_retrieval_and_isolation(self):
         # EE-003: User assets RAG retrieval, prompt injection, and isolation
-        self.client.post("/api/v1/auth/register", json={"username": "rag_alice", "password": "REDACTED_TEST_PASSWORD"})
-        token_a = self.client.post("/api/v1/auth/login", json={"username": "rag_alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "rag_alice", "password": "password-123456"})
+        token_a = self.client.post("/api/v1/auth/login", json={"username": "rag_alice", "password": "password-123456"}).json()["token"]
         headers_a = {"Authorization": f"Bearer {token_a}"}
 
-        self.client.post("/api/v1/auth/register", json={"username": "rag_bob", "password": "REDACTED_TEST_PASSWORD"})
-        token_b = self.client.post("/api/v1/auth/login", json={"username": "rag_bob", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "rag_bob", "password": "password-123456"})
+        token_b = self.client.post("/api/v1/auth/login", json={"username": "rag_bob", "password": "password-123456"}).json()["token"]
         headers_b = {"Authorization": f"Bearer {token_b}"}
 
         # Alice creates a question and a personal note linked to it
@@ -1273,8 +1273,8 @@ class TestV1Architecture(unittest.TestCase):
 
     def test_web_search_adapter_injection_and_evidence(self):
         # EE-004: OpenWebSearchAdapter is injected and evidence is preserved in answers list
-        self.client.post("/api/v1/auth/register", json={"username": "web_search_user", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "web_search_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "web_search_user", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "web_search_user", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "Search Bank"}).json()
         q = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={
@@ -1297,8 +1297,8 @@ class TestV1Architecture(unittest.TestCase):
 
     def test_ai_variant_draft_full_lifecycle(self):
         # EE-005: AI variant draft lifecycle (generate -> draft -> accept / discard)
-        self.client.post("/api/v1/auth/register", json={"username": "variant_user", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "variant_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "variant_user", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "variant_user", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "AI Variant Bank"}).json()
         q = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={
@@ -1355,8 +1355,8 @@ class TestV1Architecture(unittest.TestCase):
 
     def test_personal_assets_deletion_and_retrieval(self):
         # EE-012: Personal asset retrieval and deletion
-        self.client.post("/api/v1/auth/register", json={"username": "asset_mgr_user", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "asset_mgr_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "asset_mgr_user", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "asset_mgr_user", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
 
         created = self.client.post("/api/v1/assets", headers=headers, json={
@@ -1380,8 +1380,8 @@ class TestV1Architecture(unittest.TestCase):
 
     def test_blueprint_selection_with_chapter_and_graceful_fallback(self):
         # EE-001: Dynamic question selection by blueprint sections with chapter matching and fallback
-        self.client.post("/api/v1/auth/register", json={"username": "bp_chap_user", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "bp_chap_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "bp_chap_user", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "bp_chap_user", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "章节组卷题库"}).json()
 
@@ -1449,8 +1449,8 @@ class TestV1Architecture(unittest.TestCase):
 
     def test_copy_to_bank_preserves_chapter_and_knowledge_tags(self):
         # EE-007, EE-020: Question copy across banks preserves chapter name and tags
-        self.client.post("/api/v1/auth/register", json={"username": "copy_user", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "copy_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "copy_user", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "copy_user", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
 
         bank_a = self.client.post("/api/v1/banks", headers=headers, json={"name": "源题库A"}).json()
@@ -1492,12 +1492,12 @@ class TestV1Architecture(unittest.TestCase):
 
     def test_bank_members_listing_and_removal(self):
         # EE-020: Bank member management (list members, add member, remove member)
-        self.client.post("/api/v1/auth/register", json={"username": "owner_user", "password": "REDACTED_TEST_PASSWORD"})
-        token_owner = self.client.post("/api/v1/auth/login", json={"username": "owner_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "owner_user", "password": "password-123456"})
+        token_owner = self.client.post("/api/v1/auth/login", json={"username": "owner_user", "password": "password-123456"}).json()["token"]
         headers_owner = {"Authorization": f"Bearer {token_owner}"}
 
-        self.client.post("/api/v1/auth/register", json={"username": "member_bob", "password": "REDACTED_TEST_PASSWORD"})
-        token_bob = self.client.post("/api/v1/auth/login", json={"username": "member_bob", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "member_bob", "password": "password-123456"})
+        token_bob = self.client.post("/api/v1/auth/login", json={"username": "member_bob", "password": "password-123456"}).json()["token"]
 
         bank = self.client.post("/api/v1/banks", headers=headers_owner, json={"name": "协作共享题库"}).json()
 
@@ -1528,8 +1528,8 @@ class TestV1Architecture(unittest.TestCase):
 
     def test_controllable_historical_regrading_ee006(self):
         # EE-006: Controllable historical re-grading
-        self.client.post("/api/v1/auth/register", json={"username": "teacher", "password": "REDACTED_TEST_PASSWORD"})
-        token_t = self.client.post("/api/v1/auth/login", json={"username": "teacher", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "teacher", "password": "password-123456"})
+        token_t = self.client.post("/api/v1/auth/login", json={"username": "teacher", "password": "password-123456"}).json()["token"]
         headers_t = {"Authorization": f"Bearer {token_t}"}
 
         bank = self.client.post("/api/v1/banks", headers=headers_t, json={"name": "重判测试题库"}).json()
@@ -1540,8 +1540,8 @@ class TestV1Architecture(unittest.TestCase):
         ).json()
 
         # Student answers "B"
-        self.client.post("/api/v1/auth/register", json={"username": "student", "password": "REDACTED_TEST_PASSWORD"})
-        token_s = self.client.post("/api/v1/auth/login", json={"username": "student", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "student", "password": "password-123456"})
+        token_s = self.client.post("/api/v1/auth/login", json={"username": "student", "password": "password-123456"}).json()["token"]
         headers_s = {"Authorization": f"Bearer {token_s}"}
         # Add student as member
         self.client.post(f"/api/v1/banks/{bank['id']}/members", headers=headers_t, json={"username": "student", "role": "MEMBER"})
@@ -1640,8 +1640,8 @@ class TestV1Architecture(unittest.TestCase):
             decrypt_secret,
         )
 
-        self.client.post("/api/v1/auth/register", json={"username": "ai_user", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "ai_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "ai_user", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "ai_user", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
 
         # 1. Missing secret key: reject encryption and refuse with clear error
@@ -1748,8 +1748,8 @@ class TestV1Architecture(unittest.TestCase):
 
     def test_ambiguous_pdf_preview_and_manual_correction_ee021(self):
         # EE-021: Ambiguous PDF parsing enters manual correction workflow
-        self.client.post("/api/v1/auth/register", json={"username": "pdf_user", "password": "REDACTED_TEST_PASSWORD"})
-        token = self.client.post("/api/v1/auth/login", json={"username": "pdf_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+        self.client.post("/api/v1/auth/register", json={"username": "pdf_user", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "pdf_user", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
 
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "PDF题库"}).json()

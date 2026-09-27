@@ -11,8 +11,8 @@ class TestV1Learning(unittest.TestCase):
     def test_user_flagged_weak_question_enters_recommendations_and_due_queue(self):
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "标记薄弱"}).json()
             question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "薄弱题", "answer": "A"}).json()
@@ -30,8 +30,8 @@ class TestV1Learning(unittest.TestCase):
     def test_plan_respects_time_budget_and_includes_explained_actions(self):
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "计划题库"}).json()
             questions = [
@@ -52,8 +52,8 @@ class TestV1Learning(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "db.sqlite"
             client = TestClient(create_app(str(db_path)))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "FSRS 评级"}).json()
             question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A"}).json()
@@ -83,8 +83,8 @@ class TestV1Learning(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "db.sqlite"
             client = TestClient(create_app(str(db_path)))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "FSRS 新题"}).json()
             question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A"}).json()
@@ -100,8 +100,8 @@ class TestV1Learning(unittest.TestCase):
     def test_learning_trends_report_coverage_and_recent_baseline(self):
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "趋势题库"}).json()
             first = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "一", "answer": "A"}).json()
@@ -122,8 +122,8 @@ class TestV1Learning(unittest.TestCase):
     def test_learning_trends_includes_weak_points_review_completion_and_time_trends(self):
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "trend_user", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "trend_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "trend_user", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "trend_user", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "全维趋势题库"}).json()
             q1 = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "法律题", "answer": "A", "tags": ["民法"]}).json()
@@ -143,8 +143,8 @@ class TestV1Learning(unittest.TestCase):
     def test_recommendation_includes_unseen_questions_and_supports_limit(self):
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "新题推荐"}).json()
             question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "新题", "answer": "A"}).json()
@@ -162,8 +162,8 @@ class TestV1Learning(unittest.TestCase):
     def test_first_correct_answer_is_not_reported_as_a_mistake(self):
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "正确题库"}).json()
             question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A"}).json()
@@ -179,8 +179,8 @@ class TestV1Learning(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "db.sqlite"
             client = TestClient(create_app(str(db_path)))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "错题结构"}).json()
             question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A"}).json()
@@ -207,8 +207,8 @@ class TestV1Learning(unittest.TestCase):
     def test_recommendation_returns_reasoned_actions_from_private_learning_state(self):
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "alice", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "推荐题库"}).json()
             question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A", "tags": ["网络"]}).json()
@@ -227,8 +227,8 @@ class TestV1Learning(unittest.TestCase):
         """
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "diff_user", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "diff_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "diff_user", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "diff_user", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "难度题库"}).json()
 
@@ -266,8 +266,8 @@ class TestV1Learning(unittest.TestCase):
     def test_recommendation_supports_chapter_and_new_ratio(self):
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "chap_user", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "chap_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "chap_user", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "chap_user", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "章节比例题库"}).json()
 
@@ -300,8 +300,8 @@ class TestV1Learning(unittest.TestCase):
     def test_plan_contract_contains_estimated_minutes_for_frontend(self):
         with tempfile.TemporaryDirectory() as tmp:
             client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
-            client.post("/api/v1/auth/register", json={"username": "plan_user", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "plan_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "plan_user", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "plan_user", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "契约题库"}).json()
             client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题1", "answer": "A"}).json()

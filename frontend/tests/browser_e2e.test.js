@@ -102,7 +102,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       // Switch to register
       await page.click('button:has-text("首次使用？创建账号")')
       await page.fill('input[placeholder="用户名"]', 'e2e_student')
-      await page.fill('input[placeholder="密码（至少 8 位）"]', 'REDACTED_TEST_PASSWORD')
+      await page.fill('input[placeholder="密码（至少 8 位）"]', 'password-123456')
       await page.click('button:has-text("注册并登录")')
 
       // Wait for HomeView
@@ -617,7 +617,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       await pageB.goto(BASE_URL)
       await pageB.waitForSelector('.auth-page')
       await pageB.fill('input[placeholder="用户名"]', 'e2e_student')
-      await pageB.fill('input[placeholder="密码（至少 8 位）"]', 'REDACTED_TEST_PASSWORD')
+      await pageB.fill('input[placeholder="密码（至少 8 位）"]', 'password-123456')
       await pageB.click('button:has-text("登录")')
       await pageB.waitForSelector('.home-page', { timeout: 8000 })
       console.log('✓ Device B logged in concurrently in independent BrowserContext.')

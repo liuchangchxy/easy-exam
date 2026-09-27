@@ -104,7 +104,7 @@ async function run() {
     // Register user
     await page.click('button:has-text("首次使用？创建账号")')
     await page.fill('input[placeholder="用户名"]', 'mobile_tester')
-    await page.fill('input[placeholder="密码（至少 8 位）"]', 'REDACTED_TEST_PASSWORD')
+    await page.fill('input[placeholder="密码（至少 8 位）"]', 'password-123456')
     await page.click('button:has-text("注册并登录")')
     await page.waitForSelector('.home-page')
 

@@ -46,8 +46,8 @@ class TestScoringSemantics(unittest.TestCase):
             client = TestClient(create_app(db_path))
 
             # Register & login
-            client.post("/api/v1/auth/register", json={"username": "scorer_user", "password": "REDACTED_TEST_PASSWORD"})
-            token = client.post("/api/v1/auth/login", json={"username": "scorer_user", "password": "REDACTED_TEST_PASSWORD"}).json()["token"]
+            client.post("/api/v1/auth/register", json={"username": "scorer_user", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "scorer_user", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
 
             # Create bank
