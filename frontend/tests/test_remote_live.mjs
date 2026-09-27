@@ -1,6 +1,12 @@
 import { chromium } from 'playwright';
 import path from 'path';
 
+// Point at your own deployed instance:
+//   FNOS_BASE_URL=http://<NAS_IP>:3000 FNOS_ADMIN_USER=... FNOS_ADMIN_PASSWORD=... node frontend/tests/test_remote_live.mjs
+const NAS_URL = process.env.FNOS_BASE_URL || 'http://192.168.1.100:3000'
+const ADMIN_USER = process.env.FNOS_ADMIN_USER || 'admin'
+const ADMIN_PASSWORD = process.env.FNOS_ADMIN_PASSWORD || ''
+
 async function testRemote() {
   const browser = await chromium.launch({
     executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -14,13 +20,13 @@ async function testRemote() {
   });
   const page = await context.newPage();
 
-  console.log('Visiting remote http://192.168.x.x:3000 ...');
-  await page.goto('http://192.168.x.x:3000', { waitUntil: 'networkidle' });
+  console.log(`Visiting remote ${NAS_URL} ...`);
+  await page.goto(NAS_URL, { waitUntil: 'networkidle' });
   await page.screenshot({ path: 'screenshots/mobile/remote_login.png' });
 
   // Login as admin
-  await page.fill('input[placeholder="用户名"]', 'admin');
-  await page.fill('input[placeholder="密码（至少 8 位）"]', 'REDACTED_ADMIN_PASSWORD');
+  await page.fill('input[placeholder="用户名"]', ADMIN_USER);
+  await page.fill('input[placeholder="密码（至少 8 位）"]', ADMIN_PASSWORD);
   await page.click('button:has-text("登录")');
   await page.waitForTimeout(1000);
   await page.screenshot({ path: 'screenshots/mobile/remote_home.png' });

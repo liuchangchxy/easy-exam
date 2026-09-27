@@ -4,7 +4,9 @@ import path from 'node:path'
 import os from 'node:os'
 import { chromium } from 'playwright'
 
-const NAS_URL = 'http://192.168.x.x:3000'
+// Point at your own deployed instance:
+//   FNOS_BASE_URL=http://<NAS_IP>:3000 node frontend/tests/physical_fnos_browser_e2e.mjs
+const NAS_URL = process.env.FNOS_BASE_URL || 'http://192.168.1.100:3000'
 const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 
 async function runBrowserE2E() {
@@ -32,7 +34,7 @@ async function runBrowserE2E() {
 
     // 2. Register new test user
     const username = `fn_e2e_${Date.now()}`
-    const password = 'Password123!'
+    const password = process.env.FNOS_ADMIN_PASSWORD || 'Password123!'
     console.log(`[STEP 2] Registering user: ${username}...`)
 
     // Clear storage to ensure fresh login page

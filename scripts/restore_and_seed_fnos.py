@@ -1,6 +1,7 @@
 import sys
 import uuid
 from pathlib import Path
+import os
 import sqlite3
 
 from backend.app.infrastructure.db.connection import migrate
@@ -22,10 +23,20 @@ question_repo = QuestionRepository(db_path)
 import_jobs = ImportJobRepository(db_path)
 importer = ImportService(bank_repo, question_repo, import_jobs)
 
-# Preset accounts
+# Preset accounts. Seed passwords come from the environment; there are no
+# committed defaults, so a real deployment's credentials never land in git.
+#   FNOS_ADMIN_PASSWORD=... FNOS_SEED_PASSWORD=... python scripts/restore_and_seed_fnos.py
+_admin_password = os.environ.get("FNOS_ADMIN_PASSWORD")
+_seed_password = os.environ.get("FNOS_SEED_PASSWORD")
+if not _admin_password or not _seed_password:
+    raise SystemExit(
+        "Set FNOS_ADMIN_PASSWORD and FNOS_SEED_PASSWORD before seeding "
+        "(no committed defaults by design)."
+    )
+
 accounts_to_ensure = [
-    ("admin", "REDACTED_ADMIN_PASSWORD"),
-    ("chang", "REDACTED_TEST_PASSWORD"),
+    ("admin", _admin_password),
+    ("chang", _seed_password),
 ]
 
 target_users = []

@@ -1,6 +1,6 @@
 """Physical Live End-to-End Test Suite against the deployed fnOS NAS instance.
 
-Target URL: http://192.168.x.x:3000
+Target URL: $FNOS_BASE_URL (default http://<NAS_IP>:3000)
 Validates full real-world physical workflows over HTTP without mocks:
 1. Healthcheck & static PWA web shell
 2. Bank creation & details
@@ -13,12 +13,14 @@ Validates full real-world physical workflows over HTTP without mocks:
 """
 
 import json
+import os
 import time
 import unittest
 import urllib.request
 import urllib.error
 
-NAS_BASE_URL = "http://192.168.x.x:3000"
+# Point at your own deployed instance: export FNOS_BASE_URL=http://<NAS_IP>:3000
+NAS_BASE_URL = os.environ.get("FNOS_BASE_URL", "http://192.168.1.100:3000")
 
 
 class TestRemoteFnOsE2E(unittest.TestCase):
