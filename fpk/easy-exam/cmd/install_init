@@ -1,3 +1,32 @@
 #!/bin/bash
 set -eu
+
+# fnOS brings the docker project up as part of the install flow itself, before
+# install_callback ever runs. If the bundled image is not already in the local
+# Docker daemon at that moment, the App Center's compose step falls back to
+# pulling "ailm32442/easy-exam:<version>" from Docker Hub, which does not host
+# this image, so every install rolls back. The offline image therefore has to be
+# loaded here, in the earliest hook, from wherever the package has been staged.
+load_bundled_images() {
+  for dir in "$@"; do
+    if [ -z "$dir" ] || [ ! -d "$dir" ]; then
+      continue
+    fi
+    for img in "$dir"/*.tar "$dir"/*.tar.gz; do
+      if [ ! -f "$img" ]; then
+        continue
+      fi
+      echo "install_init: loading bundled docker image from $img"
+      docker load -i "$img" || echo "install_init: WARNING failed to load $img" >&2
+    done
+  done
+}
+
+load_bundled_images \
+  "${TRIM_APPDEST:-}/images" \
+  "${TRIM_PKGINST_TEMP_DIR:-}/images" \
+  "${TRIM_PKGINST_TEMP_DIR:-}/app/images" \
+  "${TRIM_TEMP_TPKFILE:-}/images" \
+  "${TRIM_TEMP_TPKFILE:-}/app/images"
+
 exit 0

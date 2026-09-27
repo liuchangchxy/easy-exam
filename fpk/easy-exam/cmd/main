@@ -5,6 +5,20 @@ CONTAINER_NAME="easy-exam-fpk"
 COMPOSE_FILE="${TRIM_APPDEST:-/var/apps/easy-exam/target}/docker/docker-compose.yaml"
 ENV_FILE="${TRIM_PKGVAR:-/var/apps/easy-exam/var}/.env"
 
+# Load offline bundled image before Compose starts, so an image-less install never
+# falls back to pulling a registry tag that does not exist.
+load_bundled_images() {
+  IMAGE_DIR="${TRIM_APPDEST:-/var/apps/easy-exam/target}/images"
+  if [ -d "$IMAGE_DIR" ]; then
+    for img in "$IMAGE_DIR"/*.tar "$IMAGE_DIR"/*.tar.gz; do
+      if [ -f "$img" ]; then
+        echo "Loading bundled docker image from $img..."
+        docker load -i "$img" || true
+      fi
+    done
+  fi
+}
+
 # Load persistent EASYEXAM_SECRET_KEY from package variable volume if present
 if [ -f "$ENV_FILE" ]; then
   set -a
@@ -14,6 +28,7 @@ fi
 
 case "${1:-}" in
   start)
+    load_bundled_images
     if [ -f "$COMPOSE_FILE" ]; then
       docker compose -f "$COMPOSE_FILE" up -d
     elif docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then

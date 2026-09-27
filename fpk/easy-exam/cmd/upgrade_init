@@ -1,3 +1,26 @@
 #!/bin/bash
 set -eu
+
+# Same ordering constraint as install_init: fnOS may bring the docker project up
+# during the upgrade flow before upgrade_callback runs, so the bundled image of
+# the new version must be present in the local daemon as early as possible.
+for dir in \
+  "${TRIM_APPDEST:-}/images" \
+  "${TRIM_PKGINST_TEMP_DIR:-}/images" \
+  "${TRIM_PKGINST_TEMP_DIR:-}/app/images" \
+  "${TRIM_TEMP_TPKFILE:-}/images" \
+  "${TRIM_TEMP_TPKFILE:-}/app/images"
+do
+  if [ -z "$dir" ] || [ ! -d "$dir" ]; then
+    continue
+  fi
+  for img in "$dir"/*.tar "$dir"/*.tar.gz; do
+    if [ ! -f "$img" ]; then
+      continue
+    fi
+    echo "upgrade_init: loading bundled docker image from $img"
+    docker load -i "$img" || echo "upgrade_init: WARNING failed to load $img" >&2
+  done
+done
+
 exit 0
