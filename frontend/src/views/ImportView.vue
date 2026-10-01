@@ -1,6 +1,11 @@
 <template>
   <main class="import-page">
-    <header class="page-header"><button @click="$emit('back')">返回</button><h1>导入题目</h1></header>
+    <header class="page-header import-header">
+      <div class="header-left">
+        <button type="button" class="btn-back" @click="$emit('back')">← {{ t('common.back') }}</button>
+        <h1>{{ t('imports.title') }}</h1>
+      </div>
+    </header>
     <form class="bank-card import-form" @submit.prevent="submit">
       <label>目标题库
         <select v-model="bankId" required>
@@ -8,10 +13,25 @@
           <option v-for="bank in banks" :key="bank.id" :value="bank.id">{{ bank.name }}</option>
         </select>
       </label>
-      <label>题目文件
-        <input type="file" accept=".xlsx,.csv,.json,.txt,.md,.markdown,.pdf" required @change="selectFile" />
-      </label>
-      <p class="muted">支持 XLSX、CSV、JSON、文本/Markdown 和可提取文本的 PDF。纯图片 PDF 会被拒绝。</p>
+      <div class="file-upload-card">
+        <div class="file-card-inner">
+          <span class="file-upload-icon">
+            <LinearIcon name="inbox" size="24" />
+          </span>
+          <div class="file-card-text">
+            <strong>选择或上传题目文件</strong>
+            <small>支持 XLSX、CSV、JSON、Markdown/TXT 和可提取文本的 PDF</small>
+          </div>
+        </div>
+        <input type="file" accept=".xlsx,.csv,.json,.txt,.md,.markdown,.pdf" required @change="selectFile" class="file-styled-input" />
+        <div class="file-format-tags">
+          <span class="format-tag">.xlsx</span>
+          <span class="format-tag">.csv</span>
+          <span class="format-tag">.json</span>
+          <span class="format-tag">.md / .txt</span>
+          <span class="format-tag">.pdf</span>
+        </div>
+      </div>
 
       <div v-if="isSpreadsheet && !spreadsheetPreview" class="preview-actions">
         <button type="button" class="preview-btn" :disabled="loading || !bankId || !file" @click="inspectSpreadsheet">
@@ -155,29 +175,29 @@
       </section>
 
       <!-- EE-021: PDF 人工校正草稿面板 -->
-      <section v-if="pdfPreview" class="column-mapping-panel pdf-correction-panel" style="margin-top: 1rem; border: 1px solid #cbd5e1; border-radius: 8px; padding: 1.25rem; background: #ffffff;">
+      <section v-if="pdfPreview" class="column-mapping-panel pdf-correction-panel" style="margin-top: 1rem; border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; background: var(--bg-card);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-          <h3>PDF 题目校对预览</h3>
-          <span :style="{ fontSize: '0.8rem', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 'bold', background: pdfPreview.confidence === 'HIGH' ? '#dcfce7' : '#fef3c7', color: pdfPreview.confidence === 'HIGH' ? '#166534' : '#92400e' }">
+          <h3 style="color: var(--text-main);">PDF 题目校对预览</h3>
+          <span :style="{ fontSize: '0.8rem', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 'bold', background: pdfPreview.confidence === 'HIGH' ? 'var(--success-light)' : 'var(--warning-light)', color: pdfPreview.confidence === 'HIGH' ? 'var(--success)' : 'var(--warning)' }">
             {{ pdfPreview.confidence === 'HIGH' ? '解析置信度：高' : '解析置信度：较低（格式存在歧义，请人工核校）' }}
           </span>
         </div>
-        <p class="mapping-hint" style="color: #64748b; font-size: 0.85rem; margin-bottom: 1rem;">
+        <p class="mapping-hint" style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
           共提取出 {{ pdfCandidates.length }} 道候选题目。您可在入库前手动编辑、拆分、合并或剔除题目：
         </p>
 
         <div style="display: flex; flex-direction: column; gap: 1rem;">
-          <div v-for="(cand, cIdx) in pdfCandidates" :key="cIdx" style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 1rem; background: #f8fafc;">
+          <div v-for="(cand, cIdx) in pdfCandidates" :key="cIdx" style="border: 1px solid var(--border); border-radius: 8px; padding: 1rem; background: var(--bg-subtle);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-              <span style="font-weight: 600; font-size: 0.9rem;">第 {{ cIdx + 1 }} 题</span>
+              <span style="font-weight: 600; font-size: 0.9rem; color: var(--text-main);">第 {{ cIdx + 1 }} 题</span>
               <div style="display: flex; gap: 0.5rem;">
                 <button v-if="cIdx > 0" type="button" class="action-link-btn" style="font-size: 0.75rem;" @click="mergeWithPrev(cIdx)">合并至上一题</button>
                 <button type="button" class="action-link-btn" style="font-size: 0.75rem;" @click="splitCandidate(cIdx)">在此拆分</button>
-                <button type="button" class="action-link-btn" style="font-size: 0.75rem; color: #ef4444;" @click="removeCandidate(cIdx)">删除</button>
+                <button type="button" class="action-link-btn" style="font-size: 0.75rem; color: var(--danger);" @click="removeCandidate(cIdx)">删除</button>
               </div>
             </div>
 
-            <div v-if="cand.is_uncertain" style="padding: 0.4rem 0.6rem; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 4px; font-size: 0.8rem; color: #b45309; margin-bottom: 0.5rem;">
+            <div v-if="cand.is_uncertain" style="padding: 0.4rem 0.6rem; background: var(--warning-light); border: 1px solid var(--warning-border); border-radius: 4px; font-size: 0.8rem; color: var(--warning); margin-bottom: 0.5rem;">
               ⚠️ 校对提示：{{ cand.uncertain_reason }}
             </div>
 
@@ -207,7 +227,7 @@
               <div v-for="(opt, optIdx) in cand.options" :key="optIdx" style="display: flex; gap: 0.4rem; margin-top: 0.25rem;">
                 <input v-model="opt.key" style="width: 3rem;" placeholder="A" />
                 <input v-model="opt.content" style="flex: 1;" placeholder="选项文本" />
-                <button type="button" style="color: #ef4444; border: none; background: none; cursor: pointer;" @click="cand.options.splice(optIdx, 1)">×</button>
+                <button type="button" style="color: var(--danger); border: none; background: none; cursor: pointer;" @click="cand.options.splice(optIdx, 1)">×</button>
               </div>
             </div>
 
@@ -237,7 +257,7 @@
       <p v-if="error" class="error">{{ error }}</p>
       <p v-if="result" class="success">导入完成：新增/更新 {{ result.imported_count }} 题，任务 {{ result.job_id }}</p>
 
-      <button type="submit" :disabled="loading || !bankId || !file">
+      <button type="submit" class="primary btn-submit-import" :disabled="loading || !bankId || !file">
         {{ loading ? '正在处理…' : duplicatePreview ? '确认重复处理并导入' : spreadsheetPreview ? '确认列映射并导入' : '检查并导入' }}
       </button>
     </form>
@@ -246,8 +266,12 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import LinearIcon from '../components/LinearIcon.vue'
 import { listBanks } from '../api/banks'
 import { previewFileImport, uploadImport, previewPdfImport, confirmPdfImport } from '../api/imports'
+import { useLocale } from '../composables/useLocale.js'
+
+const { t } = useLocale()
 
 const props = defineProps({ token: { type: String, required: true } })
 defineEmits(['back'])
@@ -472,14 +496,89 @@ async function submit() {
   margin: 1.5rem auto;
 }
 
+.import-header {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.import-header .header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
 .import-form {
   display: grid;
   gap: 1.25rem;
   max-width: 48rem;
   background: var(--bg-card);
-  padding: 1.75rem;
+  padding: 2rem;
   border-radius: var(--radius-xl);
   border: 1px solid var(--border);
+  margin: 0 auto;
+}
+
+.file-upload-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1.5rem;
+  border: 2px dashed var(--primary-border);
+  background: var(--primary-light);
+  border-radius: var(--radius-lg);
+  transition: all 0.2s ease;
+}
+
+.file-card-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.file-upload-icon {
+  font-size: 2rem;
+}
+
+.file-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.file-card-text strong {
+  font-size: 0.95rem;
+  color: var(--text-main);
+}
+
+.file-card-text small {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.file-styled-input {
+  width: 100%;
+  padding: 0.45rem;
+  background: var(--bg-card);
+  color: var(--text-main);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.file-format-tags {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.format-tag {
+  font-size: 0.725rem;
+  padding: 0.15rem 0.45rem;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-weight: 600;
+  border-radius: 4px;
 }
 
 .import-form label {
@@ -490,9 +589,16 @@ async function submit() {
   color: var(--text-main);
 }
 
-.import-form select,
-.import-form input[type="file"] {
+.import-form select {
   width: 100%;
+}
+
+.btn-submit-import {
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  margin-top: 0.5rem;
 }
 
 .preview-actions {
@@ -506,7 +612,7 @@ async function submit() {
 }
 
 .preview-btn:hover:not(:disabled) {
-  background: #e2e8f0;
+  background: var(--bg-subtle);
 }
 
 .column-mapping-panel {

@@ -7,9 +7,9 @@ import crypto from 'node:crypto'
 import { chromium } from 'playwright'
 
 const repoRoot = path.resolve(process.cwd())
-const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
-const ARTIFACT_DIR = 'C:\\Users\\chang\\.gemini\\antigravity\\brain\\767e6073-da89-477b-a7e0-6c0676dd27d6'
+const CHROME_PATH = process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 const SCREENSHOT_DIR = path.join(repoRoot, 'screenshots', 'mobile')
+const ARTIFACT_DIR = process.env.ARTIFACT_DIR || SCREENSHOT_DIR
 
 if (!fs.existsSync(SCREENSHOT_DIR)) {
   fs.mkdirSync(SCREENSHOT_DIR, { recursive: true })

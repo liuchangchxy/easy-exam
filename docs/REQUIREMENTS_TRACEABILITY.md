@@ -103,3 +103,58 @@ EE-001 至 EE-021 **全部 21 项**已完成源码级修复、单元测试、前
 4. 一个缺陷关闭需要修复实现、相关回归测试通过，并完成该条目要求的真实用户流程验证；只更新文档、API 单测或构建成功都不能关闭 E2E 缺口。
 5. 遇到 `skipped > 0`、环境未就绪、部署版本未知或工作区与部署不同步时，显式保留这些限制，不称为全绿。
 6. 已关闭项保留关闭日期、修复提交和验证证据；不要删除历史失败来制造全绿。
+
+## 8. 2026-09-30 对抗审查与修复批次
+
+本节基于当前工作区 HEAD `582345c` 和当时未提交的文件状态复核；保留此前工作区改动，不以本节覆盖历史部署或历史测试快照。此次审查要求至少 30 项，但只将有源码位置的可复核事项纳入候选；其中“需要动态验证”不计为已确认缺陷。
+
+### 本批已修复与闭环（对抗性审查 14 处不一致与缺口）
+
+| ID | 等级 | 问题与修复 | 证据/验证 |
+|---|---|---|---|
+| ADV-001 | P2 / 推荐算法 | 推荐候选集遗漏 `chapter_id`；现在在 `recommendation_candidates` 中联结查询带入 `qv.chapter_id`。 | `practice_repository.py:recommendation_candidates`；`test_adv_001_recommendation_includes_chapter_id` (先红后绿)。 |
+| ADV-002 | P1 / 会话语义 | 模考单题作答推进了 FSRS 卡片且在 `record_mistakes=False` 时仍记录错题；现在在 `save_attempt` 中在模考模式下禁止 FSRS 调度，并严格遵循 `record_mistakes` 配置。 | `practice_repository.py:save_attempt`；`test_adv_002_exam_attempt_does_not_advance_fsrs_and_honors_mistake_switch` (先红后绿)。 |
+| ADV-003 | P1 / 并发与幂等 | 作答服务层完成状态检查与仓储事务落盘之间存在竞态；现在 `save_attempt` 在写入事务中重新校验会话属主与完成状态。 | `practice_service.py:submit_attempt` + `practice_repository.py:save_attempt`；现有终态幂等测试与新增终态作答回归。 |
+| ADV-004 | P1 / 安全泄题 | 模考进行中可能通过普通题目详情或列表接口读取标准答案和解析；现在 `QuestionRepository.get_for_user` 与 `list_for_bank` 动态检测用户活动模考，自动脱敏答案与解析。 | `question_repository.py:_get_active_exam_question_ids`；`test_adv_004_exam_active_desensitizes_questions` (先红后绿)。 |
+| ADV-005 | P1 / 会话超时 | 服务端未对模考时间做硬性拒绝校验；现在 `practice_service.py` 增加 `_check_exam_timeout`（限时 + 60s 宽限），超时拒绝提交与草稿同步（返回 409）。 | `practice_service.py:_check_exam_timeout`；`test_adv_005_exam_timeout_server_enforcement` (先红后绿)。 |
+| ADV-006 | P1 / 数据导入 | 表格导入难度归一化缺失 0（未分级）离散映射且缺失时错误默认；现在保留 1~5 离散整数，无法识别或缺失规范映射为 0。 | `spreadsheet_importer.py:normalize_difficulty`；`test_adv_006_spreadsheet_discrete_difficulty_mapping` (先红后绿)。 |
+| ADV-007 | P2 / 统计准确性 | 弱项统计按历史全部 question_versions 聚合导致旧版本重复影响排名；现在在 `trends` 的 `weak_rows` 查询中限定 `MAX(version_number)`。 | `practice_repository.py:trends`；`test_adv_007_learning_weak_points_latest_version_only` (先红后绿)。 |
+| ADV-008 | P2 / 统计准确性 | 到期复习统计未排除已淘汰斩杀题目；现在在 `trends` 查询中与 `list_due_reviews` 逻辑统一（排除 `status='MASTERED'` 并关联有效错题/薄弱项）。 | `practice_repository.py:trends`；`test_adv_008_learning_due_reviews_excludes_eliminated` (先红后绿)。 |
+| ADV-009 | P2 / 统计准确性 | 学习完成率分子混入非 FSRS 复习模式的作答；现在在 `trends` 的 `reviews_done` 查询中严格限定 `s.mode = 'FSRS'`。 | `practice_repository.py:trends`；`test_adv_009_learning_completion_rate_mode_filtered` (先红后绿)。 |
+| ADV-010 | P2 / 统计准确性 | 客观正确率基线与近期统计混入主观题；现在在 `trends` 的 `recent` 与 `baseline` 查询中显式排除主观题型 `('ESSAY', 'SHORT_ANSWER', 'SUBJECTIVE')`。 | `practice_repository.py:trends`；`test_adv_010_objective_accuracy_excludes_subjective` (先红后绿)。 |
+| ADV-019 | P2 / 题库权限与完整性 | 题库章节与标签缺少修改与删除 REST 路由，且缺少父级层级归属和循环引用校验；现在补充 `update_chapter`、`delete_chapter`、`update_tag`、`delete_tag` 及其路由端点，并加入循环父级检查。 | `bank_repository.py`；`backend/app/api/routes/banks.py`；`test_adv_019_chapter_tag_crud_and_parent_validation` (先红后绿)。 |
+| ADV-021 | P1 / 导入置信度 | PDF 提取置信度不确定的题目可能绕过人工校对草稿箱直接批量入库；现在 `parse_pdf_questions` 当 `confidence == 'UNCERTAIN'` 时严格拒绝直接入库。 | `pdf_importer.py:parse_pdf_questions`；`test_adv_021_uncertain_pdf_must_use_draft_box` (先红后绿)。 |
+| ADV-024 | P2 / 数据防篡改 | 会话草稿 answers、flags 允许越界非法题目 ID 注入，`current_index` 负数越界，`time_spent` 负数或无界；现在在 `update_draft` 与 `toggle_flag` 中限定只接受会话快照内的题目，并对游标和耗时施加边界约束。 | `practice_repository.py:update_draft/toggle_flag`；`test_adv_024_draft_and_flag_boundary_guards` (先红后绿)。 |
+| ADV-032 | P2 / 服务端依赖解耦 | `backend/legacy/services` 与 `backend/services` 存在循环导出风险；现在统一使用相对导入与显式名称导出，根除动态导入异常。 | `backend/legacy/services/__init__.py`；`backend/services/__init__.py`；全量发现测试通过。 |
+
+本轮目标用例：12 项专项对抗测试先红后绿全数通过（`tests/test_adversarial_review_fixes.py`）。
+
+### 第二轮深度对抗审查与加固（ADV2-001 ~ ADV2-007）
+
+| ID | 等级 | 问题与修复 | 证据/验证 |
+|---|---|---|---|
+| ADV2-001 | P1 / 安全泄题 | 模考进行中 `QuestionRepository.list_versions` 未脱敏标准答案与解析，考生可绕过 `get_for_user` 获取答案；现在 `list_versions` 动态检测活动模考并统一脱敏 `answer` 和 `explanation`。 | `question_repository.py:list_versions`；`test_adv2_001_list_versions_desensitizes_during_exam` (先红后绿)。 |
+| ADV2-002 | P1 / 权限越权 | 题目版本演化（`create_next_version`）、历史重判（`regrade_question_history`）与冲突解决（`resolve_conflict`）仅校验题库成员资格，未限制角色，导致只读普通成员 `MEMBER` 具备编辑与重判越权；现统一严格限定 `m.role IN ('ADMIN', 'EDITOR')`。 | `question_repository.py`；`test_adv2_002_member_cannot_modify_or_regrade_or_resolve` (先红后绿)。 |
+| ADV2-003 | P1 / 会话生命周期 | `PracticeService.review_answer` 为单题创建 FSRS 复习会话并提交 attempt 后未调用 `complete_session`，导致数据库遗留未完结僵尸会话；现提交作答后立即完成并关闭该单题会话。 | `practice_service.py:review_answer`；`test_adv2_003_review_answer_closes_session` (先红后绿)。 |
+| ADV2-004 | P2 / 多租户隔离 | 题目斩杀 `kill` 接收任意题目 ID 未校验题库成员资格，`list_killed` 未联结 `question_bank_members`，允许跨租户嗅探题干与题型；现增加成员资格鉴权（未授权拒绝 403）并限定仅列出所属题库斩杀题目。 | `practice_repository.py:kill/list_killed`；`test_adv2_004_kill_requires_bank_membership_and_prevents_leak` (先红后绿)。 |
+| ADV2-005 | P2 / 统计准确性 | 刷题摘要 `PracticeRepository.summary` 在计算总尝试次数时未排除主观题，稀释客观题正确率；现显式排除主观题型 `UPPER(qv.type) NOT IN ('ESSAY', 'SHORT_ANSWER', 'SUBJECTIVE')` 并限定租户所属题库。 | `practice_repository.py:summary`；`test_adv2_005_summary_excludes_subjective` (先红后绿)。 |
+| ADV2-006 | P3 / 跨平台兼容 | Windows 环境下 `subprocess.run(text=True)` 未显式指定 UTF-8 编码，可能受系统本地代码页（如 GBK）干扰；现统一显式指定 `encoding="utf-8", errors="replace"`。 | `backend/app/api/routes/system.py`；`scripts/setup-hooks.py`；代码静态审计。 |
+| ADV2-007 | P3 / 交付版本对齐 | `frontend/package.json` 中的 `version` 遗留在 `1.0.0`，与 `manifest` 和 `docker-compose.yaml` 的 `1.0.8` 产生漂移；现推进同步至 `1.0.8`。 | `frontend/package.json`；前端测试与构建验证通过。 |
+
+**最新全套验证结果（2026-09-30 深度加固后实跑）**：
+- 专项对抗测试套件：`python -m unittest tests/test_adversarial_review_fixes.py -v` → **17 项全通过**（含 5 项 ADV2 新增变异实证用例）。
+- 后端全量测试：`python -m unittest discover -s tests -v` → **224 通过、0 失败、0 错误、1 跳过**（118.2s），唯一跳过项为 `test_remote_fnos_e2e.py`（远程 fnOS 外部环境性跳过）。
+- 前端单元/契约测试：`npm --prefix frontend run test:unit` → **14 通过、0 失败、0 跳过** (208ms)。
+- 本地真实 Chrome 浏览器 E2E：`npm --prefix frontend run test:e2e` → **13 通过、0 失败、0 跳过** (14.3s)。
+- 移动端交互 E2E：`node frontend/tests/mobile_interaction_suite.mjs` → **11 项全部通过**。
+- 视觉冒烟：`node tests/visual_smoke/run.mjs` → 四道正身信号通过。
+- 前端生产构建：`npm --prefix frontend run build` → Vite v5.4.21 成功（exit code 0）。
+- 代码与空白检查：`git diff --check` → 0 错误。
+
+
+
+
+**2026-09-30 FPK 测试包交付**：按当前工作区 `fpk/easy-exam/manifest` 与 Compose 的 `1.0.8` 构建传统 Docker archive 格式的离线 FPK：`dist/fpk-test-20260930/easy-exam-1.0.8.fpk`。验证：FPK 打包测试 8/8 通过；包内 MD5 与 manifest 一致、镜像 tag 为 `ailm32442/easy-exam:1.0.8`、平台 `linux/amd64`；临时容器 health 返回 `ok`；包已上传至 NAS `/tmp/easy-exam-1.0.8-test-20260930.fpk`，两端 SHA-256 均为 `a627918055c8e88cadee297d32cadf1e0ea00cbb25ab6a3f304f19ea8a696d36`。首次对已安装的 1.0.7 直接执行 `install-fpk` 只返回“已安装”，复核确认它没有替换现有版本。随后创建并验证持久目录备份 `/tmp/easy-exam-pre-1.0.8-20260930.tar.gz`（权限 600，SHA-256 `09c8c0b7c164a90bcc2f81ed950958b848332a0c996f91e6484d75f955739ef8`），按该 FPK 的卸载钩子保留 `/vol4/@appdata/easy-exam` 后重新安装并启动。**fnOS 实机验收通过**：应用中心显示 1.0.8 running，容器镜像 tag 为 `ailm32442/easy-exam:1.0.8` 且镜像配置摘要与包内 Docker archive 一致，health 200，数据库 `integrity_check=ok`；users/banks/questions/versions/sessions/attempts/mistakes 数量分别为 9/5/145/145/24/29/14，升级前后相同；`.env` 哈希与备份相同。health 的 `commit_sha` 仍为 `unknown`，因此以本次 FPK SHA-256 和镜像摘要关联构建，不声称 Git commit 追溯。
+**2026-09-30 方向 A 主题改造（本地源码验证）**：新增浅色默认与本地持久化的深色切换，主题入口覆盖侧栏/移动导航、登录、沉浸式练习与模考；核心内容页统一使用温纸白与松绿语义色。证据：`frontend/tests/theme.test.js` 5/5；`npm --prefix frontend run test:unit` 19/19（现有 `useSyncLoop` 生命周期告警仍在）；`npm --prefix frontend run build` 成功；真实 Chrome `npm --prefix frontend run test:e2e` 13/13、0 skipped。真实浏览器多视口截图位于 `screenshots/current_source_full_review_20260930_1719/direction-a-final/`（桌面 1280、手机 375/390）；深色判题反馈专图 `desktop-09-practice-result-dark.png`。这批证据不代表 fnOS 部署验证。
+
+**2026-09-30 EasyExam 1.0.9 FPK 打包与上传**：版本号同步为 1.0.9（manifest、前端 package、Compose 镜像标签），构建 Linux/AMD64 镜像 `ailm32442/easy-exam:1.0.9` 并制作离线包 `dist/fpk-1.0.9/easy-exam-1.0.9.fpk`（38,149,504 bytes）。验证：FPK 打包测试 8/8；后端 unittest 224 通过、0 失败、1 环境性跳过（远程测试固定地址 `192.168.1.100` 不可达）；前端单元 19/19、真实 Chrome E2E 13/13、构建成功。包 SHA-256 `8f57442cfae95a9038e6a64511f232069817f878289d1dfd35aad781e23548d9`，本机与 NAS 一致；已上传至 NAS `nas:/tmp/easy-exam-1.0.9-test-20260930.fpk`。上传后应用中心仍显示 1.0.8 running；本次未安装或替换运行版本，fnOS 实机运行验收尚未进行。

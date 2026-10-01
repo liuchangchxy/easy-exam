@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from backend.models import MistakeCause, FSRSState
 from backend.repositories import MistakeRepository
-from backend.services.fsrs import FSRS5
+from backend.legacy.services.fsrs import FSRS5
 
 # 6-level mistake cause taxonomy
 TAXONOMY_CAUSES = {

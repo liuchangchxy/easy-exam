@@ -244,6 +244,34 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(res3.status_code, 201)
         self.assertEqual(res3.json()["fsrs_rating"], 3)
 
+    def test_completed_session_rejects_draft_sync_and_flag_changes(self):
+        self.client.post("/api/v1/auth/register", json={"username": "terminal-guard", "password": "password-123456"})
+        token = self.client.post("/api/v1/auth/login", json={"username": "terminal-guard", "password": "password-123456"}).json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "终态保护"}).json()
+        question = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "终态题", "answer": "A"}).json()
+        session = self.client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
+        self.assertEqual(self.client.post(f"/api/v1/practice/sessions/{session['id']}/complete", headers=headers).status_code, 200)
+        attempt = self.client.post(f"/api/v1/practice/sessions/{session['id']}/attempts", headers=headers, json={"question_id": question["id"], "user_answer": "A"})
+        draft = self.client.post(f"/api/v1/practice/sessions/{session['id']}/sync", headers=headers, json={"current_index": 9, "answers": {question["id"]: "B"}})
+        flag = self.client.post(f"/api/v1/practice/sessions/{session['id']}/toggle-flag", headers=headers, json={"question_id": question["id"]})
+        self.assertEqual(attempt.status_code, 422)
+        self.assertEqual(draft.status_code, 409)
+        self.assertEqual(flag.status_code, 409)
+
+    def test_member_cannot_create_bank_chapters_or_tags(self):
+        self.client.post("/api/v1/auth/register", json={"username": "bank-owner", "password": "password-123456"})
+        self.client.post("/api/v1/auth/register", json={"username": "bank-member", "password": "password-123456"})
+        owner = self.client.post("/api/v1/auth/login", json={"username": "bank-owner", "password": "password-123456"}).json()["token"]
+        member = self.client.post("/api/v1/auth/login", json={"username": "bank-member", "password": "password-123456"}).json()["token"]
+        owner_headers = {"Authorization": f"Bearer {owner}"}
+        member_headers = {"Authorization": f"Bearer {member}"}
+        bank = self.client.post("/api/v1/banks", headers=owner_headers, json={"name": "只读成员题库"}).json()
+        self.client.post(f"/api/v1/banks/{bank['id']}/members", headers=owner_headers, json={"username": "bank-member", "role": "MEMBER"})
+        chapter = self.client.post(f"/api/v1/banks/{bank['id']}/chapters", headers=member_headers, json={"name": "越权章节"})
+        tag = self.client.post(f"/api/v1/banks/{bank['id']}/tags", headers=member_headers, json={"name": "越权标签"})
+        self.assertEqual(chapter.status_code, 403)
+        self.assertEqual(tag.status_code, 403)
     def test_exam_submission_is_idempotent_and_completed_session_rejects_further_attempts(self):
         self.client.post("/api/v1/auth/register", json={"username": "eve-idempotent", "password": "password-123456"})
         token = self.client.post("/api/v1/auth/login", json={"username": "eve-idempotent", "password": "password-123456"}).json()["token"]

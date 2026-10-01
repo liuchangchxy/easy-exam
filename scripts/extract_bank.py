@@ -2,7 +2,14 @@ import json
 import re
 from pathlib import Path
 
-content_file = Path(r"C:\Users\chang\.gemini\antigravity\brain\c1929d04-e9dc-410a-9a96-0025c98068ff\.system_generated\steps\571\content.md")
+import os
+import sys
+
+content_path = os.environ.get("EXTRACT_CONTENT_PATH") or (sys.argv[1] if len(sys.argv) > 1 else "content.md")
+content_file = Path(content_path)
+if not content_file.exists():
+    print(f"Extraction file not found: {content_file}")
+    sys.exit(0)
 text = content_file.read_text(encoding="utf-8")
 
 matches = list(re.finditer(r'\{\s*"id":\s*"[^"]+",\s*"noteId":', text))

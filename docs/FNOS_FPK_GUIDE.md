@@ -2,7 +2,7 @@
 
 本文档记录 EasyExam 在飞牛私有云（fnOS）平台上的 `.fpk` 原生手动安装包设计、构建与实机部署规范。
 
-> **当前版本基线**：`manifest` 版本 `1.0.2`（2026-09-27）。版本号只有一个来源——`fpk/easy-exam/manifest` 的 `version` 字段；`app/docker/docker-compose.yaml` 的镜像 tag 必须与之逐字一致，由 `tests/test_fpk_packaging.py` 强制校验。打包产物文件名同样由该字段派生。
+> **当前版本基线**：`manifest` 版本 `1.0.5`（2026-09-27）。版本号只有一个来源——`fpk/easy-exam/manifest` 的 `version` 字段；`app/docker/docker-compose.yaml` 的镜像 tag 必须与之逐字一致，由 `tests/test_fpk_packaging.py` 强制校验。打包产物文件名同样由该字段派生。
 
 ---
 
@@ -11,7 +11,7 @@
 | 项目 | 参数 / 设定 | 说明 |
 | :--- | :--- | :--- |
 | **应用标识 (appname)** | `easy-exam` | fnOS 内部唯一标识 |
-| **版本号 (version)** | `1.0.2` | 以 `fpk/easy-exam/manifest` 为唯一来源；严禁使用 `latest`。Any 升级时必须同时推进 manifest、compose 镜像 tag 与随包镜像 tag |
+| **版本号 (version)** | `1.0.5` | 以 `fpk/easy-exam/manifest` 为唯一来源；严禁使用 `latest`。Any 升级时必须同时推进 manifest、compose 镜像 tag 与随包镜像 tag |
 | **服务端口 (port)** | `3000` | 容器映射 `3000:3000` |
 | **数据持久化 (volume)** | `${TRIM_PKGVAR:-/var/apps/easy-exam/var}:/app/data` | 自动映射到 fnOS 存储卷（如 `/vol4/@appdata/easy-exam`） |
 | **健康检查 (healthcheck)** | `http://127.0.0.1:3000/api/v1/health` | HTTP 200 返回 `{"status":"ok","app":"easy-exam","version":"v1"}` |

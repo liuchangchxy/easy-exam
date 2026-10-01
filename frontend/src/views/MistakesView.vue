@@ -1,15 +1,17 @@
 <template>
   <main class="mistakes-page">
-    <header class="page-header">
-      <button type="button" @click="$emit('back')">返回</button>
-      <div>
-        <h1>{{ currentTab === 'mistakes' ? '错题与 FSRS 复习' : '斩杀题库 (已消灭)' }}</h1>
-        <p v-if="currentTab === 'mistakes'">
-          {{ selectedBankName ? `【${selectedBankName}】` : '全部题库 · ' }}共 {{ filteredMistakes.length }} 道错题 · {{ filteredDueReviews.length }} 道到期待复习
-        </p>
-        <p v-else>
-          {{ selectedBankName ? `【${selectedBankName}】` : '全部题库 · ' }}共 {{ filteredKilled.length }} 道已斩杀题目
-        </p>
+    <header class="page-header mistakes-header">
+      <div class="header-left">
+        <button type="button" class="btn-back" @click="$emit('back')">← {{ t('common.back') }}</button>
+        <div>
+          <h1>{{ currentTab === 'mistakes' ? t('mistakes.title') : t('mistakes.subtitle') }}</h1>
+          <p v-if="currentTab === 'mistakes'">
+            {{ selectedBankName ? `【${selectedBankName}】` : '全部题库 · ' }}共 {{ filteredMistakes.length }} 道错题 · {{ filteredDueReviews.length }} 道到期待复习
+          </p>
+          <p v-else>
+            {{ selectedBankName ? `【${selectedBankName}】` : '全部题库 · ' }}共 {{ filteredKilled.length }} 道已斩杀题目
+          </p>
+        </div>
       </div>
       <nav class="view-tabs">
         <button type="button" :class="{ active: currentTab === 'mistakes' }" @click="switchTab('mistakes')">错题复习</button>
@@ -105,7 +107,9 @@
     <template v-else-if="currentTab === 'mistakes'">
       <!-- 到期卡片高亮区（若包含薄弱标记题） -->
       <section v-if="weakOnlyDueReviews.length > 0" class="due-section">
-        <h3 class="section-title">📌 薄弱标记到期待复习 ({{ weakOnlyDueReviews.length }})</h3>
+        <h3 class="section-title">
+          <LinearIcon name="target" size="14" /> 薄弱标记到期待复习 ({{ weakOnlyDueReviews.length }})
+        </h3>
         <div class="bank-grid">
           <article v-for="item in weakOnlyDueReviews" :key="'weak-' + item.question_id" class="bank-card mistake-card due-highlight">
             <div class="card-meta">
@@ -126,7 +130,9 @@
       </section>
 
       <section class="mistakes-section">
-        <h3 v-if="weakOnlyDueReviews.length > 0" class="section-title">📝 错题记录 ({{ filteredMistakes.length }})</h3>
+        <h3 v-if="weakOnlyDueReviews.length > 0" class="section-title">
+          <LinearIcon name="draft" size="14" /> 错题记录 ({{ filteredMistakes.length }})
+        </h3>
         <div class="bank-grid">
           <article v-for="item in filteredMistakes" :key="item.question_id" class="bank-card mistake-card">
             <div class="card-meta">
@@ -152,7 +158,14 @@
             </div>
           </article>
         </div>
-        <p v-if="!filteredMistakes.length && !weakOnlyDueReviews.length">暂无待复习错题，继续保持！</p>
+        <div v-if="!filteredMistakes.length && !weakOnlyDueReviews.length" class="empty-state-card">
+          <span class="empty-icon">
+            <LinearIcon name="check" size="24" />
+          </span>
+          <h3>暂无待复习错题</h3>
+          <p>当前题库没有未掌握的错题或到期复习题目，状态极佳！</p>
+          <button type="button" class="primary" @click="$emit('back')">去刷刷题</button>
+        </div>
       </section>
     </template>
 
@@ -170,17 +183,26 @@
           <button type="button" @click="handleUnkill(item.question_id)">恢复 (解除斩杀)</button>
         </div>
       </article>
-      <p v-if="!filteredKilled.length">暂无已斩杀题目。做熟的题目可主动斩杀归档。</p>
+      <div v-if="!filteredKilled.length" class="empty-state-card">
+        <span class="empty-icon"><LinearIcon name="zap" size="28" /></span>
+        <h3>暂无已斩杀题目</h3>
+        <p>在练习过程中对已经完全掌握的熟练题目点击“斩杀”，可归档至此并免除普通轮询。</p>
+        <button type="button" class="primary" @click="$emit('back')">返回题库开始练习</button>
+      </div>
     </section>
   </main>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import LinearIcon from '../components/LinearIcon.vue'
 import { listDueMistakes, listMistakes, updateMistakeCause as updateMistakeCauseApi } from '../api/mistakes'
 import { listKills, killQuestion, unkillQuestion } from '../api/kills'
 import { listBanks } from '../api/banks'
 import { startSession } from '../api/practice'
+import { useLocale } from '../composables/useLocale.js'
+
+const { t } = useLocale()
 
 const props = defineProps({ token: { type: String, required: true } })
 const emit = defineEmits(['back', 'start-session'])
@@ -423,25 +445,61 @@ onMounted(loadData)
 }
 
 .view-tabs {
-  display: flex;
-  gap: 0.5rem;
+  display: inline-flex;
+  background: var(--bg-muted);
+  padding: 0.25rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  gap: 0.25rem;
 }
 
 .view-tabs button {
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.95rem;
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-strong);
-  background: var(--bg-card);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
   cursor: pointer;
   font-weight: 500;
+  font-size: 0.875rem;
   transition: all 0.15s ease;
 }
 
 .view-tabs button.active {
-  background: var(--primary);
-  color: white;
-  border-color: var(--primary);
-  box-shadow: var(--shadow-xs);
+  background: var(--bg-card);
+  color: var(--primary);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.empty-state-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem;
+  background: var(--bg-card);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-xl);
+  text-align: center;
+  margin-top: 1rem;
+}
+
+.empty-state-box .empty-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.empty-state-box h3 {
+  font-size: 1.15rem;
+  color: var(--text-main);
+  margin-bottom: 0.35rem;
+}
+
+.empty-state-box p {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  max-width: 24rem;
 }
 
 .mistake-toolbar {
@@ -508,7 +566,7 @@ onMounted(loadData)
   font-size: 0.75rem;
   padding: 0.15rem 0.5rem;
   border-radius: var(--radius-sm);
-  background: #f1f5f9;
+  background: var(--bg-subtle);
   color: var(--text-muted);
   border: 1px solid var(--border);
 }
@@ -576,6 +634,46 @@ onMounted(loadData)
 .kill-btn:hover:not(:disabled) {
   background: var(--danger-light);
   border-color: var(--danger);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.empty-state-card {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3.5rem 1.5rem;
+  background: var(--bg-card);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-xl);
+  text-align: center;
+  gap: 0.75rem;
+  max-width: 32rem;
+  margin: 2rem auto;
+}
+
+.empty-state-card .empty-icon {
+  font-size: 2.75rem;
+}
+
+.empty-state-card h3 {
+  font-size: 1.25rem;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.empty-state-card p {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  max-width: 24rem;
+  line-height: 1.5;
+  margin: 0 0 0.5rem 0;
 }
 
 @media (max-width: 640px) {

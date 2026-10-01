@@ -38,6 +38,10 @@
 ## 3. 当前命令
 
 ```bash
+# 代码与门禁安全检查
+python scripts/scan_hardcoded_paths.py
+python scripts/guard_test_tampering.py
+
 # 后端全量测试
 python -m unittest discover -s tests -v
 

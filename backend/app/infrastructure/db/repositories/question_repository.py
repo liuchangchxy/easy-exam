@@ -161,6 +161,21 @@ class QuestionRepository:
                 results.append(q)
         return results
 
+    def _get_active_exam_question_ids(self, c, user_id: str) -> set:
+        rows = c.execute(
+            "SELECT questions_json FROM practice_sessions WHERE user_id = ? AND mode = 'EXAM' AND is_completed = 0",
+            (user_id,),
+        ).fetchall()
+        exam_qids = set()
+        for r in rows:
+            if r[0]:
+                try:
+                    for item in json.loads(r[0]):
+                        exam_qids.add(item.get("question_id"))
+                except Exception:
+                    pass
+        return exam_qids
+
     def get_for_user(self, question_id: str, user_id: str, conn=None) -> dict | None:
         def _query(c):
             row = c.execute(
@@ -181,6 +196,9 @@ class QuestionRepository:
             result = dict(row)
             result["options"] = json.loads(result.pop("options_json"))
             result["tags"] = json.loads(result.pop("tags_json"))
+            if result["id"] in self._get_active_exam_question_ids(c, user_id):
+                result["answer"] = ""
+                result["explanation"] = ""
             return result
 
         if conn is not None:
@@ -232,10 +250,14 @@ class QuestionRepository:
                 (user_id, user_id, bank_id),
             ).fetchall()
             result = []
+            active_qids = self._get_active_exam_question_ids(conn, user_id)
             for row in rows:
                 item = dict(row)
                 item["options"] = json.loads(item.pop("options_json"))
                 item["tags"] = json.loads(item.pop("tags_json"))
+                if item["id"] in active_qids:
+                    item["answer"] = ""
+                    item["explanation"] = ""
                 result.append(item)
             return result
 
@@ -268,7 +290,7 @@ class QuestionRepository:
         with transaction(self.db_path) as conn:
             access = conn.execute(
                 """SELECT i.bank_id FROM bank_question_items i
-                   JOIN question_bank_members m ON m.bank_id = i.bank_id AND m.user_id = ?
+                   JOIN question_bank_members m ON m.bank_id = i.bank_id AND m.user_id = ? AND m.role IN ('ADMIN', 'EDITOR')
                    WHERE i.question_id = ? LIMIT 1""",
                 (user_id, question_id),
             ).fetchone()
@@ -327,7 +349,7 @@ class QuestionRepository:
         with transaction(self.db_path) as conn:
             access = conn.execute(
                 """SELECT i.bank_id FROM bank_question_items i
-                   JOIN question_bank_members m ON m.bank_id = i.bank_id AND m.user_id = ?
+                   JOIN question_bank_members m ON m.bank_id = i.bank_id AND m.user_id = ? AND m.role IN ('ADMIN', 'EDITOR')
                    WHERE i.question_id = ? LIMIT 1""",
                 (user_id, question_id),
             ).fetchone()
@@ -566,7 +588,7 @@ class QuestionRepository:
         with transaction(self.db_path) as conn:
             access = conn.execute(
                 """SELECT i.bank_id FROM bank_question_items i
-                   JOIN question_bank_members m ON m.bank_id = i.bank_id AND m.user_id = ?
+                   JOIN question_bank_members m ON m.bank_id = i.bank_id AND m.user_id = ? AND m.role IN ('ADMIN', 'EDITOR')
                    WHERE i.question_id = ? LIMIT 1""",
                 (user_id, question_id),
             ).fetchone()
@@ -669,10 +691,15 @@ class QuestionRepository:
                    WHERE qv.question_id = ? ORDER BY qv.version_number ASC""",
                 (user_id, question_id),
             ).fetchall()
+            active_qids = self._get_active_exam_question_ids(conn, user_id)
+            is_active_exam = question_id in active_qids
             values = []
             for row in rows:
                 value = dict(row)
                 value["options"] = json.loads(value.pop("options_json"))
                 value["tags"] = json.loads(value.pop("tags_json"))
+                if is_active_exam:
+                    value["answer"] = ""
+                    value["explanation"] = ""
                 values.append(value)
             return values

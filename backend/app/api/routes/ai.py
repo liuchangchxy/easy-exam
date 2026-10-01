@@ -64,7 +64,14 @@ def save_answer(question_id: str, payload: AnswerPayload, request: Request, user
 @router.post("/questions/{question_id}/generate", status_code=201)
 def generate_answer(question_id: str, payload: GeneratePayload, request: Request, user=Depends(current_user)):
     try:
-        return request.app.state.services.ai.generate_answer(user["id"], question_id, payload.query, payload.history)
+        lang = request.headers.get("Accept-Language", "zh-CN")
+        return request.app.state.services.ai.generate_answer(
+            user["id"],
+            question_id,
+            payload.query,
+            payload.history,
+            target_lang=lang,
+        )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -99,12 +106,14 @@ class ChatMessagePayload(BaseModel):
 @router.post("/questions/{question_id}/messages", status_code=201)
 def send_chat_message(question_id: str, payload: ChatMessagePayload, request: Request, user=Depends(current_user)):
     try:
+        lang = request.headers.get("Accept-Language", "zh-CN")
         return request.app.state.services.ai.send_chat_message(
             user_id=user["id"],
             question_id=question_id,
             content=payload.content,
             conversation_id=payload.conversation_id,
             parent_message_id=payload.parent_message_id,
+            target_lang=lang,
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

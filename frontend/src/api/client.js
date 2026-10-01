@@ -1,3 +1,5 @@
+import { resolveInitialLocale } from '../design/localePreference.js'
+
 const API_PREFIX = '/api/v1'
 
 export class ApiError extends Error {
@@ -9,10 +11,12 @@ export class ApiError extends Error {
 }
 
 export async function request(path, options = {}) {
+  const currentLang = resolveInitialLocale()
   const response = await fetch(`${API_PREFIX}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      'Accept-Language': currentLang === 'en-US' ? 'en-US,en;q=0.9' : 'zh-CN,zh;q=0.9',
       ...(options.headers || {}),
     },
   })

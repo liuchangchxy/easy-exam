@@ -81,6 +81,14 @@ class PracticeRepository:
     ) -> dict:
         attempt_id = str(uuid.uuid4())
         with transaction(self.db_path) as conn:
+            current_session = conn.execute(
+                "SELECT user_id, is_completed FROM practice_sessions WHERE id = ?",
+                (session["id"],),
+            ).fetchone()
+            if not current_session or current_session["user_id"] != user_id:
+                raise LookupError("practice session not found")
+            if current_session["is_completed"]:
+                raise ValueError("session already completed")
             existing = conn.execute(
                 """SELECT id, user_answer_json, correctness, mastery_status, score_ratio, fsrs_rating, card_snapshot_json, created_at
                    FROM answer_attempts
@@ -210,31 +218,10 @@ class PracticeRepository:
             else:
                 mistakes = 0
                 consecutive = 0
-            if result["correctness"] == "CORRECT":
-                consecutive += 1
-                cleared = int(consecutive >= 2)
-            elif result["correctness"] in {"INCORRECT", "PARTIAL"}:
-                consecutive = 0
-                mistakes += 1
-                cleared = 0
-                conn.execute("DELETE FROM kill_records WHERE user_id = ? AND question_id = ?", (user_id, question["id"]))
-            else:
-                cleared = int(previous["is_cleared"]) if previous else 0
-            mistake_cleared = int(cleared or mistakes == 0)
-            conn.execute(
-                """INSERT INTO learning_records(user_id, question_id, mistake_count, consecutive_correct, mastery_status, is_cleared, last_attempt_at)
-                   VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                   ON CONFLICT(user_id, question_id) DO UPDATE SET
-                     mistake_count=excluded.mistake_count,
-                     consecutive_correct=excluded.consecutive_correct,
-                     mastery_status=excluded.mastery_status,
-                     is_cleared=excluded.is_cleared,
-                     last_attempt_at=excluded.last_attempt_at""",
-                (user_id, question["id"], mistakes, consecutive, result["mastery_status"], cleared),
-            )
+            is_exam = session.get("mode") == "EXAM"
             # EE-002: Respect record_mistakes configuration for EXAM mode (default True)
             record_mistakes = True
-            if session.get("mode") == "EXAM":
+            if is_exam:
                 cfg = json.loads(session.get("config_json") or "{}")
                 if "record_mistakes" in cfg:
                     record_mistakes = bool(cfg["record_mistakes"])
@@ -244,6 +231,33 @@ class PracticeRepository:
                         bp_dict = json.loads(bp_row[0] or "{}")
                         if "record_mistakes" in bp_dict:
                             record_mistakes = bool(bp_dict["record_mistakes"])
+
+            if result["correctness"] == "CORRECT":
+                consecutive += 1
+                cleared = int(consecutive >= 2)
+            elif result["correctness"] in {"INCORRECT", "PARTIAL"}:
+                consecutive = 0
+                if not is_exam or record_mistakes:
+                    mistakes += 1
+                cleared = 0
+                if not is_exam or record_mistakes:
+                    conn.execute("DELETE FROM kill_records WHERE user_id = ? AND question_id = ?", (user_id, question["id"]))
+            else:
+                cleared = int(previous["is_cleared"]) if previous else 0
+            mistake_cleared = int(cleared or mistakes == 0)
+
+            if not is_exam or record_mistakes:
+                conn.execute(
+                    """INSERT INTO learning_records(user_id, question_id, mistake_count, consecutive_correct, mastery_status, is_cleared, last_attempt_at)
+                       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                       ON CONFLICT(user_id, question_id) DO UPDATE SET
+                         mistake_count=excluded.mistake_count,
+                         consecutive_correct=excluded.consecutive_correct,
+                         mastery_status=excluded.mastery_status,
+                         is_cleared=excluded.is_cleared,
+                         last_attempt_at=excluded.last_attempt_at""",
+                    (user_id, question["id"], mistakes, consecutive, result["mastery_status"], cleared),
+                )
 
             if mistakes > 0 and record_mistakes:
                 conn.execute(
@@ -261,12 +275,13 @@ class PracticeRepository:
                     updated_at=CURRENT_TIMESTAMP""",
                     (user_id, question["id"], session["bank_id"], mistakes, consecutive, mistake_cleared, mistake_cause),
                 )
-            if fsrs_rating is None:
-                if result["correctness"] in {"INCORRECT", "PARTIAL"}:
-                    fsrs_rating = 1
-                elif result["correctness"] == "CORRECT" and previous and int(previous["mistake_count"]) > 0:
-                    fsrs_rating = 3
-            if result.get("is_objective", True) and fsrs_rating is not None:
+            if not is_exam:
+                if fsrs_rating is None:
+                    if result["correctness"] in {"INCORRECT", "PARTIAL"}:
+                        fsrs_rating = 1
+                    elif result["correctness"] == "CORRECT" and previous and int(previous["mistake_count"]) > 0:
+                        fsrs_rating = 3
+            if not is_exam and result.get("is_objective", True) and fsrs_rating is not None:
                 current_card = before_card
                 elapsed_days = 0.0
                 stability = float(current_card["stability"]) if current_card else 0.0
@@ -328,10 +343,17 @@ class PracticeRepository:
             row = conn.execute("SELECT * FROM practice_sessions WHERE id = ? AND user_id = ?", (session_id, user_id)).fetchone()
             if not row:
                 return None
+            if row["is_completed"]:
+                raise ValueError("session already completed")
             current = dict(row)
+            session_questions = json.loads(current.get("questions_json") or "[]")
+            allowed_qids = {item["question_id"] for item in session_questions} if session_questions else set()
+
             merged_answers = json.loads(current.get("answers_json") or "{}")
             if answers:
                 for q_id, incoming_val in answers.items():
+                    if allowed_qids and q_id not in allowed_qids:
+                        continue
                     existing_val = merged_answers.get(q_id)
                     existing_raw = _raw(existing_val)
                     incoming_raw = _raw(incoming_val)
@@ -347,13 +369,21 @@ class PracticeRepository:
 
             merged_flags = json.loads(current.get("flags_json") or "[]")
             if flags is not None:
-                merged_flags = list(dict.fromkeys(list(merged_flags) + list(flags)))
+                valid_flags = [f for f in flags if not allowed_qids or f in allowed_qids]
+                merged_flags = list(dict.fromkeys(list(merged_flags) + valid_flags))
 
-            merged_time = max(int(current.get("time_spent") or 0), int(time_spent or 0)) if time_spent is not None else current["time_spent"]
+            if current_index is not None:
+                max_idx = max(0, len(session_questions) - 1) if session_questions else 0
+                final_index = max(0, min(int(current_index), max_idx))
+            else:
+                final_index = current["current_index"]
+
+            safe_time = max(0, int(time_spent or 0)) if time_spent is not None else None
+            merged_time = max(int(current.get("time_spent") or 0), safe_time) if safe_time is not None else current["time_spent"]
 
             conn.execute(
                 "UPDATE practice_sessions SET current_index = ?, answers_json = ?, flags_json = ?, time_spent = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (current_index if current_index is not None else current["current_index"], json.dumps(merged_answers, ensure_ascii=False), json.dumps(merged_flags, ensure_ascii=False), merged_time, session_id),
+                (final_index, json.dumps(merged_answers, ensure_ascii=False), json.dumps(merged_flags, ensure_ascii=False), merged_time, session_id),
             )
         session = self.get_session(session_id, user_id)
         if session:
@@ -363,9 +393,16 @@ class PracticeRepository:
 
     def toggle_flag(self, user_id: str, session_id: str, question_id: str) -> list[str] | None:
         with transaction(self.db_path) as conn:
-            row = conn.execute("SELECT flags_json FROM practice_sessions WHERE id = ? AND user_id = ?", (session_id, user_id)).fetchone()
+            row = conn.execute("SELECT flags_json, is_completed, questions_json FROM practice_sessions WHERE id = ? AND user_id = ?", (session_id, user_id)).fetchone()
             if not row:
                 return None
+            if row["is_completed"]:
+                raise ValueError("session already completed")
+            session_questions = json.loads(row["questions_json"] or "[]")
+            allowed_qids = {item["question_id"] for item in session_questions} if session_questions else set()
+            if allowed_qids and question_id not in allowed_qids:
+                raise LookupError("question not in this session")
+
             flags = json.loads(row[0] or "[]")
             if question_id in flags:
                 flags.remove(question_id)
@@ -495,7 +532,16 @@ class PracticeRepository:
 
     def summary(self, user_id: str) -> dict:
         with transaction(self.db_path) as conn:
-            totals = conn.execute("SELECT COUNT(*) AS attempts, COALESCE(SUM(score_ratio), 0) AS score, SUM(CASE WHEN correctness = 'CORRECT' THEN 1 ELSE 0 END) AS correct FROM answer_attempts WHERE user_id = ?", (user_id,)).fetchone()
+            totals = conn.execute(
+                """SELECT COUNT(*) AS attempts,
+                          COALESCE(SUM(a.score_ratio), 0) AS score,
+                          SUM(CASE WHEN a.correctness = 'CORRECT' THEN 1 ELSE 0 END) AS correct
+                   FROM answer_attempts a
+                   JOIN question_bank_members m ON m.bank_id = a.bank_id AND m.user_id = a.user_id
+                   JOIN question_versions qv ON qv.id = a.question_version_id
+                   WHERE a.user_id = ? AND UPPER(qv.type) NOT IN ('ESSAY', 'SHORT_ANSWER', 'SUBJECTIVE')""",
+                (user_id,),
+            ).fetchone()
             questions = conn.execute("SELECT COUNT(*) FROM learning_records WHERE user_id = ?", (user_id,)).fetchone()[0]
             weak = conn.execute("SELECT COUNT(*) FROM learning_records WHERE user_id = ? AND mastery_status IN ('WEAK', 'PARTIAL') AND is_cleared = 0", (user_id,)).fetchone()[0]
             return {
@@ -527,7 +573,8 @@ class PracticeRepository:
                           COALESCE(SUM(CASE WHEN a.correctness = 'CORRECT' THEN 1 ELSE 0 END), 0) AS correct
                    FROM answer_attempts a
                    JOIN question_bank_members m ON m.bank_id = a.bank_id AND m.user_id = a.user_id
-                   WHERE a.user_id = ?""" + attempt_bank_filter + " AND a.created_at >= datetime('now', ?)" ,
+                   JOIN question_versions qv ON qv.id = a.question_version_id
+                   WHERE a.user_id = ? AND UPPER(qv.type) NOT IN ('ESSAY', 'SHORT_ANSWER', 'SUBJECTIVE')""" + attempt_bank_filter + " AND a.created_at >= datetime('now', ?)" ,
                 [*params, f"-{window_days} days"],
             ).fetchone()
             baseline = conn.execute(
@@ -538,7 +585,8 @@ class PracticeRepository:
                           COALESCE(SUM(CASE WHEN a.correctness = 'CORRECT' THEN 1 ELSE 0 END), 0) AS correct
                    FROM answer_attempts a
                    JOIN question_bank_members m ON m.bank_id = a.bank_id AND m.user_id = a.user_id
-                   WHERE a.user_id = ?""" + attempt_bank_filter + " AND a.created_at < datetime('now', ?)" ,
+                   JOIN question_versions qv ON qv.id = a.question_version_id
+                   WHERE a.user_id = ? AND UPPER(qv.type) NOT IN ('ESSAY', 'SHORT_ANSWER', 'SUBJECTIVE')""" + attempt_bank_filter + " AND a.created_at < datetime('now', ?)" ,
                 [*params, f"-{window_days} days"],
             ).fetchone()
             due_filter = " AND i.bank_id = ?" if bank_id else ""
@@ -546,7 +594,12 @@ class PracticeRepository:
                 """SELECT COUNT(*) FROM fsrs_cards f
                    JOIN bank_question_items i ON i.question_id = f.question_id
                    JOIN question_bank_members m ON m.bank_id = i.bank_id AND m.user_id = f.user_id
-                   WHERE f.user_id = ? AND datetime(replace(f.due_at, 'T', ' ')) <= CURRENT_TIMESTAMP""" + due_filter,
+                   LEFT JOIN kill_records k ON k.user_id = f.user_id AND k.question_id = f.question_id
+                   LEFT JOIN mistake_records mr ON mr.user_id = f.user_id AND mr.question_id = f.question_id
+                   LEFT JOIN weak_question_flags w ON w.user_id = f.user_id AND w.question_id = f.question_id
+                   WHERE f.user_id = ? AND k.question_id IS NULL
+                     AND datetime(replace(f.due_at, 'T', ' ')) <= CURRENT_TIMESTAMP
+                     AND (w.question_id IS NOT NULL OR (mr.question_id IS NOT NULL AND mr.is_cleared = 0))""" + due_filter,
                 [user_id, *bank_params],
             ).fetchone()[0]
 
@@ -580,7 +633,8 @@ class PracticeRepository:
                    FROM mistake_records m
                    JOIN question_bank_members mb ON mb.bank_id = m.bank_id AND mb.user_id = m.user_id
                    JOIN question_versions qv ON qv.question_id = m.question_id
-                   WHERE m.user_id = ? AND m.is_cleared = 0""" + weak_bank_filter,
+                   WHERE m.user_id = ? AND m.is_cleared = 0
+                     AND qv.version_number = (SELECT MAX(version_number) FROM question_versions WHERE question_id = m.question_id)""" + weak_bank_filter,
                 [user_id, *bank_params],
             ).fetchall()
 
@@ -597,8 +651,9 @@ class PracticeRepository:
 
             reviews_done = conn.execute(
                 """SELECT COUNT(*) FROM answer_attempts a
+                   JOIN practice_sessions s ON s.id = a.session_id
                    WHERE a.user_id = ? AND a.created_at >= datetime('now', ?)
-                   AND a.fsrs_rating IS NOT NULL""" + attempt_bank_filter,
+                   AND a.fsrs_rating IS NOT NULL AND s.mode = 'FSRS'""" + attempt_bank_filter,
                 [user_id, f"-{window_days} days", *bank_params],
             ).fetchone()[0]
             total_review_needed = int(reviews_done) + int(due)
@@ -629,7 +684,7 @@ class PracticeRepository:
                          COALESCE(l.consecutive_correct, 0) AS consecutive_correct,
                          COALESCE(l.mastery_status, 'UNSEEN') AS mastery_status,
                          COALESCE(l.is_cleared, 0) AS is_cleared, l.last_attempt_at,
-                         qv.stem, qv.type, qv.tags_json, qv.difficulty,
+                         qv.stem, qv.type, qv.tags_json, qv.difficulty, qv.chapter_id,
                          f.due_at, CASE WHEN w.question_id IS NULL THEN 0 ELSE 1 END AS is_weak_flagged,
                          CASE WHEN f.due_at IS NOT NULL
                                    AND datetime(replace(f.due_at, 'T', ' ')) <= CURRENT_TIMESTAMP
@@ -667,6 +722,7 @@ class PracticeRepository:
                 item = dict(row)
                 item["tags"] = json.loads(item.pop("tags_json") or "[]")
                 item["difficulty"] = int(item.get("difficulty") or 0)
+                item["chapter_id"] = item.get("chapter_id")
                 item["is_cleared"] = bool(item["is_cleared"])
                 item["is_due"] = bool(item["is_due"])
                 item["is_weak_flagged"] = bool(item["is_weak_flagged"])
@@ -675,6 +731,14 @@ class PracticeRepository:
 
     def kill(self, user_id: str, question_id: str) -> None:
         with transaction(self.db_path) as conn:
+            access = conn.execute(
+                """SELECT i.bank_id FROM bank_question_items i
+                   JOIN question_bank_members m ON m.bank_id = i.bank_id AND m.user_id = ?
+                   WHERE i.question_id = ? LIMIT 1""",
+                (user_id, question_id),
+            ).fetchone()
+            if not access:
+                raise PermissionError("user cannot access this question bank")
             conn.execute("INSERT OR REPLACE INTO kill_records(user_id, question_id) VALUES (?, ?)", (user_id, question_id))
 
     def unkill(self, user_id: str, question_id: str) -> None:
@@ -685,10 +749,13 @@ class PracticeRepository:
         with transaction(self.db_path) as conn:
             rows = conn.execute(
                 """SELECT k.user_id, k.question_id, k.killed_at, qv.stem, qv.type,
-                          COALESCE((SELECT bank_id FROM bank_question_items WHERE question_id = k.question_id LIMIT 1), '') AS bank_id
-                   FROM kill_records k JOIN question_versions qv ON qv.question_id = k.question_id
+                          i.bank_id
+                   FROM kill_records k
+                   JOIN bank_question_items i ON i.question_id = k.question_id
+                   JOIN question_bank_members m ON m.bank_id = i.bank_id AND m.user_id = ?
+                   JOIN question_versions qv ON qv.question_id = k.question_id
                    WHERE k.user_id = ? AND qv.version_number = (SELECT MAX(version_number) FROM question_versions WHERE question_id = k.question_id)
-                   ORDER BY k.killed_at DESC""", (user_id,)).fetchall()
+                   ORDER BY k.killed_at DESC""", (user_id, user_id)).fetchall()
             return [dict(row) for row in rows]
 
     def append_events(self, user_id: str, events: list[dict]) -> int:

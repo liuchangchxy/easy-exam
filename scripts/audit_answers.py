@@ -1,7 +1,13 @@
 import json
 import re
 
-path = r"C:\Users\chang\.gemini\antigravity\brain\c1929d04-e9dc-410a-9a96-0025c98068ff\.system_generated\steps\571\content.md"
+import os
+import sys
+
+path = os.environ.get("AUDIT_CONTENT_PATH") or (sys.argv[1] if len(sys.argv) > 1 else "content.md")
+if not os.path.exists(path):
+    print(f"Audit file not found: {path}")
+    sys.exit(0)
 text = open(path, encoding="utf-8").read()
 
 matches = list(re.finditer(r'\{\s*"id":\s*"[^"]+",\s*"noteId":', text))

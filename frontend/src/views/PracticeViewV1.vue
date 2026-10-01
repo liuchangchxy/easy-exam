@@ -7,14 +7,16 @@
           <h1 class="practice-title">{{ session?.mode === 'ELIMINATION' ? '斩杀查漏补缺' : session?.mode === 'FSRS' ? 'FSRS 复习' : '练习刷题' }}</h1>
           <span v-if="question" class="badge-type-pill">{{ formatType(question.type) }}</span>
           <button v-if="question" type="button" class="badge-index-pill btn-sheet-trigger-pill" @click="showSheetModal = true" title="点击打开答题卡">
-            <small>{{ index + 1 }} / {{ questions.length }}</small> 📑 答题卡
+            <small>{{ index + 1 }} / {{ questions.length }}</small> <LinearIcon name="layers" size="13" /> 答题卡
           </button>
         </div>
       </div>
       <div class="header-actions">
+        <ThemeToggle compact />
+        <LocaleToggle compact />
         <!-- 桌面端平铺操作 -->
         <button type="button" class="secondary-btn btn-help-guide desktop-only-btn" @click="showHelpTip = !showHelpTip" title="操作与快捷键指南">
-          💡 操作指南
+          <LinearIcon name="zap" size="13" /> 操作指南
         </button>
         <button type="button" class="btn-flag desktop-only-btn" :class="{ active: isWeak }" @click="toggleWeak">
           {{ isWeak ? '已标薄弱' : '标记薄弱' }}
@@ -25,25 +27,28 @@
         <button type="button" class="btn-edit-question desktop-only-btn" @click="toggleEditQuestion">
           {{ isEditingQuestion ? '取消编辑' : '编辑题目' }}
         </button>
-        <button type="button" class="primary btn-header-complete" @click="complete">交卷</button>
+        <button type="button" class="primary btn-header-complete desktop-only-btn" @click="complete">交卷</button>
 
         <!-- 移动端右上角“更多 ⋯”菜单 -->
         <div class="mobile-more-wrapper mobile-only-inline">
           <button type="button" class="btn-help-mobile" @click="showHelpTip = !showHelpTip" title="操作指南">
-            💡
+            <LinearIcon name="zap" size="13" />
           </button>
           <button type="button" class="btn-more-menu" @click="showMoreMenu = !showMoreMenu" aria-label="更多操作">
             ⋯
           </button>
           <div v-if="showMoreMenu" class="mobile-dropdown-menu" @click="showMoreMenu = false">
             <button type="button" class="dropdown-item" :class="{ active: isWeak }" @click="toggleWeak">
-              {{ isWeak ? '★ 取消薄弱' : '☆ 标记薄弱' }}
+              {{ isWeak ? '取消薄弱' : '标记薄弱' }}
             </button>
             <button type="button" class="dropdown-item text-danger" @click="handleKill">
-              ⚡ 斩杀此题
+              斩杀此题
             </button>
             <button type="button" class="dropdown-item" @click="toggleEditQuestion">
-              ✎ {{ isEditingQuestion ? '取消编辑' : '编辑题目' }}
+              {{ isEditingQuestion ? '取消编辑' : '编辑题目' }}
+            </button>
+            <button type="button" class="dropdown-item text-danger" @click="complete">
+              提前交卷
             </button>
           </div>
         </div>
@@ -54,12 +59,12 @@
     <div v-if="showHelpTip" class="help-tip-backdrop" @click.self="showHelpTip = false">
       <div class="help-tip-dialog" role="dialog" aria-modal="true">
         <div class="help-tip-header">
-          <h3>💡 刷题操作与快捷键指南</h3>
+          <h3><LinearIcon name="zap" size="15" /> 刷题操作与快捷键指南</h3>
           <button type="button" class="btn-close-tip" @click="showHelpTip = false">✕</button>
         </div>
         <div class="help-tip-body">
           <div class="tip-section">
-            <strong>⌨️ 键盘盲操快捷键</strong>
+            <strong><LinearIcon name="compass" size="14" /> 键盘盲操快捷键</strong>
             <ul>
               <li><kbd>A</kbd> / <kbd>B</kbd> / <kbd>C</kbd> / <kbd>D</kbd>：直接选中对应选项</li>
               <li><kbd>Enter ↵</kbd>：提交作答（或交卷）</li>
@@ -70,12 +75,12 @@
             </ul>
           </div>
           <div class="tip-section">
-            <strong>📱 移动端手势</strong>
+            <strong><LinearIcon name="maximize" size="14" /> 移动端手势</strong>
             <p>题目卡片区域支持左滑下一题、右滑上一题（已自动排除文本输入区防误触）。</p>
           </div>
           <div class="tip-section">
-            <strong>📑 快速答题卡</strong>
-            <p>随时点击顶栏的 <strong>“{{ index + 1 }}/{{ questions.length }} 📑 答题卡”</strong> 即可呼出全卷面板并直达未做题。</p>
+            <strong><LinearIcon name="layers" size="14" /> 快速答题卡</strong>
+            <p>随时点击顶栏的 <strong>“{{ index + 1 }}/{{ questions.length }} 答题卡”</strong> 即可呼出全卷面板并直达未做题。</p>
           </div>
         </div>
       </div>
@@ -115,6 +120,63 @@
             @click="goTo(qIdx)"
           >
             {{ qIdx + 1 }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 练习完成交卷结果报告卡片 (优雅模态框) -->
+    <div v-if="practiceReport" class="sheet-modal-backdrop" data-testid="practice-report-modal">
+      <div class="practice-result-card-modal">
+        <div class="result-card-badge"><LinearIcon name="check" size="14" /> 练习已完成</div>
+        <h2>作答成果报告</h2>
+        <div class="result-stats-grid">
+          <div class="result-stat-box">
+            <small>得分</small>
+            <strong class="text-primary">{{ practiceReport.score }}</strong>
+          </div>
+          <div class="result-stat-box">
+            <small>正确率</small>
+            <strong :class="practiceReport.accuracy >= 80 ? 'text-success' : practiceReport.accuracy >= 60 ? 'text-warning' : 'text-danger'">
+              {{ practiceReport.accuracy }}%
+            </strong>
+          </div>
+          <div class="result-stat-box">
+            <small>作答题数</small>
+            <strong>{{ practiceReport.answered_count }} / {{ practiceReport.total_questions }}</strong>
+          </div>
+          <div class="result-stat-box">
+            <small>用时</small>
+            <strong>{{ formatRemainingTime ? formatRemainingTime(practiceReport.time_spent || 0) : `${practiceReport.time_spent || 0}秒` }}</strong>
+          </div>
+        </div>
+        <div class="result-counts-bar">
+          <span class="count-tag text-success">✓ 正确 {{ practiceReport.correct_count }}</span>
+          <span v-if="practiceReport.partial_count" class="count-tag text-warning">◒ 部分分 {{ practiceReport.partial_count }}</span>
+          <span class="count-tag text-danger">✗ 错误 {{ practiceReport.incorrect_count }}</span>
+          <span class="count-tag text-muted">○ 未答 {{ practiceReport.unanswered_count }}</span>
+        </div>
+        <div class="result-card-actions">
+          <button type="button" class="primary" @click="$emit('back')">返回题库</button>
+          <button type="button" class="secondary-btn" @click="handleRestartPractice">完成并离开</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 交卷前未答题目确认提示弹窗 -->
+    <div v-if="showCompleteConfirmModal" class="sheet-modal-backdrop" @click.self="showCompleteConfirmModal = false">
+      <div class="confirm-submit-dialog">
+        <h3>确认提前交卷？</h3>
+        <p v-if="questions.length - answeredCount > 0" class="confirm-warning-desc">
+          您还有 <strong class="text-danger">{{ questions.length - answeredCount }}</strong> 道题目尚未作答，提前交卷未作答题目将按 0 分结算。
+        </p>
+        <p v-else class="confirm-info-desc">
+          全卷 {{ questions.length }} 题已全部作答完毕，确认立即提交并结算成果？
+        </p>
+        <div class="confirm-dialog-actions">
+          <button type="button" class="secondary-btn" @click="showCompleteConfirmModal = false">继续做题</button>
+          <button type="button" class="primary" :disabled="completing" @click="handleConfirmComplete">
+            {{ completing ? '正在交卷…' : '确认交卷' }}
           </button>
         </div>
       </div>
@@ -169,7 +231,7 @@
             </div>
             <div v-for="(opt, oIdx) in editOptions" :key="oIdx" class="option-edit-row">
               <input v-model="opt.key" class="opt-key-input" placeholder="标识" style="width: 3.5rem;" />
-              <input v-model="opt.text" class="opt-text-input" placeholder="选项内容" style="flex: 1;" />
+              <input v-model="opt.content" class="opt-text-input" placeholder="选项内容" style="flex: 1;" />
               <button type="button" class="btn-del-option" @click="removeOption(oIdx)">删除</button>
             </div>
           </div>
@@ -181,7 +243,7 @@
             <span>标签（逗号分隔）：</span>
             <input v-model="editTags" class="input-edit-tags" placeholder="如：重点, 逻辑推理" />
           </label>
-          <div class="edit-regrade-option" style="margin: 0.5rem 0; padding: 0.5rem; background: var(--bg-secondary, #f8fafc); border-radius: 6px;">
+          <div class="edit-regrade-option" style="margin: 0.5rem 0; padding: 0.5rem; background: var(--bg-page); border-radius: 6px;">
             <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer;">
               <input type="checkbox" v-model="editRegradeHistory" class="checkbox-regrade-history" />
               <span>可控历史重判：修改标准答案后，同步重判历史作答并重算 FSRS 状态与学习记录</span>
@@ -237,7 +299,7 @@
       </div>
 
       <div :key="question.id" class="question-slide-wrapper" :class="slideTransition">
-          <div class="practice-split-grid">
+          <div class="practice-split-grid" :class="{ 'has-result': Boolean(result) }">
             <div class="practice-split-left">
               <div class="stem-box">
                 <h2>{{ question.stem }}</h2>
@@ -286,7 +348,9 @@
               <!-- 紧凑即时判分结果摘要条 (无需向下滚动即可直观看到对错与标准答案) -->
               <div v-if="result" class="quick-verdict-bar" :class="result.correctness.toLowerCase()">
                 <div class="verdict-status-title">
-                  <span class="verdict-icon">{{ result.correctness === 'CORRECT' ? '🎉' : result.correctness === 'PARTIAL' ? '⚠️' : '❌' }}</span>
+                  <span class="verdict-icon">
+                    <LinearIcon :name="result.correctness === 'CORRECT' ? 'check' : 'x'" size="15" />
+                  </span>
                   <strong>{{ formatVerdictTitle(question.type, result.correctness, result.is_objective) }}</strong>
                 </div>
                 <div class="verdict-text-inline">
@@ -310,7 +374,7 @@
 
                 <!-- FSRS 记忆评级交互区 (驱动下次复习时间) -->
                 <div v-if="session?.mode === 'FSRS' || session?.mode === 'MISTAKE'" class="fsrs-rating-box">
-                  <h4>FSRS 记忆评级 (驱动下次复习时间，快捷键 1-4)：</h4>
+                  <h4>{{ t('practice.fsrs_rating_title') }} (1-4)：</h4>
                   <div class="fsrs-buttons">
                     <button
                       type="button"
@@ -318,7 +382,7 @@
                       :class="{ selected: selectedFsrsRating === 1 }"
                       @click="submitRating(1)"
                     >
-                      1 - 重来 (Again)
+                      1 - {{ t('practice.fsrs_again') }} (+10m)
                     </button>
                     <button
                       type="button"
@@ -327,7 +391,7 @@
                       :class="{ selected: selectedFsrsRating === 2 }"
                       @click="submitRating(2)"
                     >
-                      2 - 困难 (Hard)
+                      2 - {{ t('practice.fsrs_hard') }} (+1d)
                     </button>
                     <button
                       type="button"
@@ -336,7 +400,7 @@
                       :class="{ selected: selectedFsrsRating === 3 }"
                       @click="submitRating(3)"
                     >
-                      3 - 良好 (Good)
+                      3 - {{ t('practice.fsrs_good') }} (+3d)
                     </button>
                     <button
                       type="button"
@@ -345,7 +409,7 @@
                       :class="{ selected: selectedFsrsRating === 4 }"
                       @click="submitRating(4)"
                     >
-                      4 - 简单 (Easy)
+                      4 - {{ t('practice.fsrs_easy') }} (+7d)
                     </button>
                   </div>
                   <p v-if="fsrsRatingStatus" class="fsrs-status">{{ fsrsRatingStatus }}</p>
@@ -359,7 +423,9 @@
                 <!-- AI 助教入口卡片 (位于官方解析下方，阅读解析后可直接展开提问) -->
                 <div class="ai-assistant-entry-block">
                   <div class="ai-entry-meta">
-                    <span class="ai-badge">🤖 AI 深度助教</span>
+                    <span class="ai-badge">
+                      <LinearIcon name="cpu" size="13" /> AI 深度助教
+                    </span>
                     <span class="ai-desc">考点深度剖析 · 联网证据核查 · 变式题拓展</span>
                   </div>
                   <button
@@ -368,14 +434,16 @@
                     :class="{ active: showAiPanel }"
                     @click="toggleAiPanel"
                   >
-                    {{ showAiPanel ? '收起助教 ▲' : '🤖 向 AI 助教提问 / 展开解析 ▼' }}
+                    <LinearIcon name="cpu" size="13" /> {{ showAiPanel ? '收起助教 ▲' : '向 AI 助教提问 / 展开解析 ▼' }}
                   </button>
                 </div>
               </section>
 
               <!-- 桌面端未判分时的专注作答状态卡 -->
               <div v-else class="practice-answering-placeholder desktop-only-block">
-                <div class="placeholder-icon">✍️</div>
+                <div class="placeholder-icon">
+                  <LinearIcon name="command" size="22" />
+                </div>
                 <div class="placeholder-content">
                   <h4>专注作答中</h4>
                   <p>请在左侧选择或输入你的答案。</p>
@@ -561,7 +629,7 @@
           @click="complete"
           title="快捷键：Enter"
         >
-          <span>查看报告并交卷 🎉</span>
+          <span>查看报告并交卷</span>
         </button>
       </template>
     </div>
@@ -573,6 +641,10 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import LinearIcon from '../components/LinearIcon.vue'
+import ThemeToggle from '../components/ThemeToggle.vue'
+import LocaleToggle from '../components/LocaleToggle.vue'
+import { useLocale } from '../composables/useLocale.js'
 import { useAuthStore } from '../stores/authStore'
 import { getSession, getSessionQuestions, submitAttempt, completeSession } from '../api/practice'
 import { getQuestion, listQuestionVersions, updateQuestion, getQuestionConflict, resolveQuestionConflict, regradeQuestion } from '../api/questions'
@@ -581,11 +653,13 @@ import { markWeak, unmarkWeak } from '../api/learning'
 import { killQuestion } from '../api/kills'
 import { triggerSyncEvent } from '../api/sync'
 import { formatVerdictTitle, findNextUnansweredIndex, isSwipeGestureValid } from '../domain/exam.js'
+import { hydrateSessionPractice, normalizeQuestionOptions, shouldResetQuestionForm } from '../domain/practice.js'
 
 const props = defineProps({ token: { type: String, required: true }, sessionId: { type: String, required: true } })
 const emit = defineEmits(['back', 'completed'])
 
 const auth = useAuthStore()
+const { t } = useLocale()
 
 function getOfflineQueueKey() {
   const uid = auth.user?.value?.id || auth.user?.value?.username || 'user'
@@ -606,6 +680,7 @@ const slideTransition = ref('slide-next')
 const selectedFsrsRating = ref(null)
 const fsrsRatingStatus = ref('')
 const loading = ref(true)
+const submitting = ref(false)
 const answerVersions = ref([])
 const chatMessages = ref([])
 const activeConversationId = ref(null)
@@ -665,16 +740,17 @@ function isOptionSelected(key) {
 }
 
 function formatType(type) {
+  const norm = String(type || '').toUpperCase()
   const map = {
-    SINGLE: '单选题',
-    MULTI: '多选题',
-    JUDGE: '判断题',
-    FILL: '填空题',
-    ESSAY: '主观题',
-    SHORT_ANSWER: '简答题',
-    SUBJECTIVE: '论述题',
+    SINGLE: t('practice.question_type_single'),
+    MULTI: t('practice.question_type_multiple'),
+    JUDGE: t('practice.question_type_judge'),
+    FILL: t('practice.question_type_qa'),
+    ESSAY: t('practice.question_type_qa'),
+    SHORT_ANSWER: t('practice.question_type_qa'),
+    SUBJECTIVE: t('practice.question_type_qa'),
   }
-  return map[String(type || '').toUpperCase()] || String(type || '')
+  return map[norm] || String(type || '')
 }
 
 function formatSource(source) {
@@ -780,6 +856,19 @@ onMounted(async () => {
   try {
     session.value = await getSession(props.token, props.sessionId)
     questions.value = await getSessionQuestions(props.token, props.sessionId)
+    if (session.value) {
+      const hydrated = hydrateSessionPractice(session.value, questions.value?.length || 0)
+      index.value = hydrated.currentIndex
+      sessionAnswers.value = hydrated.sessionAnswers
+      const currentSaved = sessionAnswers.value[question.value?.id]
+      if (currentSaved) {
+        answer.value = Array.isArray(currentSaved.answer) ? [...currentSaved.answer] : (currentSaved.answer ?? '')
+        textAnswer.value = currentSaved.textAnswer ?? ''
+        result.value = currentSaved.result ?? null
+        showAiPanel.value = currentSaved.showAiPanel ?? false
+        selectedFsrsRating.value = currentSaved.selectedFsrsRating ?? null
+      }
+    }
     await syncOfflineEdits()
   } finally {
     loading.value = false
@@ -794,8 +883,15 @@ onUnmounted(() => {
 
 watch(question, async (current, oldQuestion) => {
   if (current) {
-    const isDifferentQuestion = !oldQuestion || current.id !== oldQuestion.id
+    const isDifferentQuestion = shouldResetQuestionForm(current, oldQuestion)
     if (isDifferentQuestion) {
+      isEditingQuestion.value = false
+      editStem.value = ''
+      editType.value = 'SINGLE'
+      editOptions.value = []
+      editAnswer.value = ''
+      editExplanation.value = ''
+      editTags.value = ''
       const saved = sessionAnswers.value[current.id]
       if (saved) {
         answer.value = Array.isArray(saved.answer) ? [...saved.answer] : (saved.answer ?? '')
@@ -867,19 +963,26 @@ async function submitRating(rating) {
 }
 
 async function submit() {
-  if (!hasAnswer.value) return
-  result.value = await submitAttempt(props.token, props.sessionId, {
-    question_id: question.value.id,
-    user_answer: normalizedAnswer(),
-  })
-  saveCurrentQuestionState()
-  triggerSyncEvent('PRACTICE_ATTEMPT', 'SESSION', props.sessionId, { question_id: question.value.id })
-  if (result.value?.correctness === 'INCORRECT' && (session.value?.mode === 'FSRS' || session.value?.mode === 'MISTAKE')) {
-    selectedFsrsRating.value = 1
-    fsrsRatingStatus.value = '答错已自动记录为 Again (重来)'
-    if (sessionAnswers.value[question.value.id]) {
-      sessionAnswers.value[question.value.id].selectedFsrsRating = 1
+  if (!hasAnswer.value || !question.value) return
+  submitting.value = true
+  try {
+    result.value = await submitAttempt(props.token, props.sessionId, {
+      question_id: question.value.id,
+      user_answer: normalizedAnswer(),
+    })
+    saveCurrentQuestionState()
+    triggerSyncEvent('PRACTICE_ATTEMPT', 'SESSION', props.sessionId, { question_id: question.value.id })
+    if (result.value?.correctness === 'INCORRECT' && (session.value?.mode === 'FSRS' || session.value?.mode === 'MISTAKE')) {
+      selectedFsrsRating.value = 1
+      fsrsRatingStatus.value = '答错已自动记录为 Again (重来)'
+      if (sessionAnswers.value[question.value.id]) {
+        sessionAnswers.value[question.value.id].selectedFsrsRating = 1
+      }
     }
+  } catch (err) {
+    alert(`作答提交失败：${err.detail || err.message || '网络连接异常'}`)
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -1162,7 +1265,7 @@ function toggleEditQuestion() {
   if (isEditingQuestion.value) {
     editStem.value = question.value.stem || ''
     editType.value = question.value.type || 'SINGLE'
-    editOptions.value = (question.value.options || []).map(o => ({ ...o }))
+    editOptions.value = normalizeQuestionOptions(question.value.options)
     editAnswer.value = question.value.answer || ''
     editExplanation.value = question.value.explanation || ''
     editDifficulty.value = question.value.difficulty ?? 3
@@ -1173,7 +1276,7 @@ function toggleEditQuestion() {
 function addOption() {
   const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
   const nextKey = letters[editOptions.value.length] || `Option${editOptions.value.length + 1}`
-  editOptions.value.push({ key: nextKey, text: '' })
+  editOptions.value.push({ key: nextKey, content: '' })
 }
 
 function removeOption(idx) {
@@ -1188,7 +1291,7 @@ async function saveQuestionEdit() {
   const payload = {
     stem: editStem.value.trim(),
     type: editType.value,
-    options: editOptions.value,
+    options: normalizeQuestionOptions(editOptions.value),
     answer: editAnswer.value.trim(),
     explanation: editExplanation.value.trim(),
     difficulty: Number(editDifficulty.value) || 3,
@@ -1306,21 +1409,39 @@ async function handleAdoptQuestionVersion(targetVer) {
   }
 }
 
-async function complete() {
+const showCompleteConfirmModal = ref(false)
+const practiceReport = ref(null)
+const completing = ref(false)
+
+function complete() {
   const total = questions.value.length
   const answered = answeredCount.value
   const unanswered = Math.max(0, total - answered)
-  let confirmMsg = '确定要结束本次练习并交卷吗？'
   if (unanswered > 0) {
-    confirmMsg = `您还有 ${unanswered} 道题目尚未作答，确定现在提前交卷吗？`
+    showCompleteConfirmModal.value = true
+  } else {
+    handleConfirmComplete()
   }
-  if (!window.confirm(confirmMsg)) return
-  const report = await completeSession(props.token, props.sessionId)
-  window.alert(`本次练习结束！得分：${report.score}，正确率：${report.accuracy}%`)
-  emit('completed', report)
-  emit('back')
 }
 
+async function handleConfirmComplete() {
+  completing.value = true
+  try {
+    const report = await completeSession(props.token, props.sessionId)
+    practiceReport.value = report
+    showCompleteConfirmModal.value = false
+    emit('completed', report)
+  } catch (err) {
+    alert(`交卷失败：${err.detail || err.message}`)
+  } finally {
+    completing.value = false
+  }
+}
+
+function handleRestartPractice() {
+  practiceReport.value = null
+  emit('back')
+}
 </script>
 
 <style scoped>
@@ -1379,7 +1500,7 @@ async function complete() {
 .help-tip-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.5);
+  background: color-mix(in srgb, var(--text-main) 44%, transparent);
   backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
@@ -1389,11 +1510,12 @@ async function complete() {
 }
 
 .help-tip-dialog {
-  background: #ffffff;
+  background: var(--bg-card);
+  color: var(--text-main);
   border-radius: 12px;
   padding: 1.5rem;
   width: min(100%, 30rem);
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-xl);
   animation: tipPopIn 0.18s ease-out;
 }
 
@@ -1406,7 +1528,7 @@ async function complete() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border);
   padding-bottom: 0.65rem;
   margin-bottom: 1rem;
 }
@@ -1414,14 +1536,14 @@ async function complete() {
 .help-tip-header h3 {
   margin: 0;
   font-size: 1.05rem;
-  color: #0f172a;
+  color: var(--text-main);
 }
 
 .btn-close-tip {
   border: none;
   background: none;
   font-size: 1.25rem;
-  color: #64748b;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 0.2rem 0.4rem;
   border-radius: 4px;
@@ -1434,7 +1556,7 @@ async function complete() {
 .tip-section strong {
   display: block;
   font-size: 0.875rem;
-  color: #1e293b;
+  color: var(--text-main);
   margin-bottom: 0.35rem;
 }
 
@@ -1442,14 +1564,14 @@ async function complete() {
   margin: 0;
   padding-left: 1.25rem;
   font-size: 0.825rem;
-  color: #475569;
+  color: var(--text-muted);
   line-height: 1.6;
 }
 
 .tip-section p {
   margin: 0;
   font-size: 0.825rem;
-  color: #475569;
+  color: var(--text-muted);
   line-height: 1.5;
 }
 
@@ -1459,8 +1581,8 @@ async function complete() {
 }
 
 .btn-help-mobile {
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
   border-radius: 6px;
   padding: 0.3rem 0.5rem;
   font-size: 0.95rem;
@@ -1472,8 +1594,8 @@ async function complete() {
 .ai-assistant-entry-block {
   margin-top: 1rem;
   padding: 0.75rem 1rem;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  background: var(--success-light);
+  border: 1px solid var(--success-border);
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -1491,45 +1613,45 @@ async function complete() {
 .ai-badge {
   font-weight: 600;
   font-size: 0.875rem;
-  color: #166534;
+  color: var(--success);
 }
 
 .ai-desc {
   font-size: 0.785rem;
-  color: #15803d;
+  color: var(--success-hover);
 }
 
 .btn-toggle-ai-card {
   padding: 0.4rem 0.85rem;
   font-size: 0.825rem;
   font-weight: 500;
-  background: #ffffff;
-  border: 1px solid #86efac;
-  color: #166534;
+  background: var(--bg-card);
+  border: 1px solid var(--success-border);
+  color: var(--success);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .btn-toggle-ai-card:hover {
-  background: #dcfce7;
+  background: var(--success-light);
 }
 
 .btn-toggle-ai-card.active {
-  background: #166534;
-  color: #ffffff;
+  background: var(--success);
+  color: var(--on-primary);
 }
 
 /* 专注作答状态占位卡 */
 .practice-answering-placeholder {
   padding: 2.25rem 1.25rem;
-  background: #f8fafc;
-  border: 1px dashed #cbd5e1;
+  background: var(--bg-page);
+  border: 1px dashed var(--border-strong);
   border-radius: 8px;
   display: flex;
   align-items: flex-start;
   gap: 0.85rem;
-  color: #64748b;
+  color: var(--text-muted);
 }
 
 .placeholder-icon {
@@ -1540,7 +1662,7 @@ async function complete() {
 .placeholder-content h4 {
   margin: 0 0 0.35rem 0;
   font-size: 0.95rem;
-  color: #1e293b;
+  color: var(--text-main);
 }
 
 .placeholder-content p {
@@ -1550,16 +1672,44 @@ async function complete() {
 }
 
 .compact-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
   gap: 0.75rem;
   margin-bottom: 0.85rem;
-  padding: 0.4rem 0.75rem;
+  padding: 0.45rem 1rem;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  min-height: 48px;
+}
+
+.compact-header > .header-left-bar,
+.compact-header .header-left-bar {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 0.65rem !important;
+  flex: 0 1 auto !important;
+  min-width: 0;
+}
+
+.header-titles {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+}
+
+.practice-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-main);
+  white-space: nowrap;
 }
 
 .header-meta-group {
@@ -1572,12 +1722,13 @@ async function complete() {
 .badge-type-pill {
   display: inline-flex;
   align-items: center;
-  padding: 0.2rem 0.6rem;
-  border-radius: 9999px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  color: #1d4ed8;
-  font-size: 0.775rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--linear-bg-subtle);
+  border: 1px solid var(--border-strong);
+  color: var(--linear-cyan);
+  font-family: var(--linear-mono);
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -1585,31 +1736,47 @@ async function complete() {
 .badge-index-pill {
   display: inline-flex;
   align-items: center;
-  padding: 0.2rem 0.6rem;
-  border-radius: 9999px;
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  color: #475569;
-  font-size: 0.775rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--linear-bg-subtle);
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+  font-family: var(--linear-mono);
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
 .badge-conflict-warning {
   padding: 0.2rem 0.5rem;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #dc2626;
+  background: var(--danger-light);
+  border: 1px solid var(--danger-border);
+  color: var(--danger);
   border-radius: var(--radius-sm);
   font-size: 0.75rem;
   cursor: pointer;
   font-weight: 600;
 }
 
+.compact-header > .header-actions,
+.compact-header .header-actions,
 .header-actions {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  flex-wrap: wrap;
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 0.45rem !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  flex: 0 0 auto !important;
+}
+
+.header-actions .btn-header-complete {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--primary);
+  font-weight: 600;
+  padding: 0 1rem;
+}
+.header-actions .btn-header-complete:hover:not(:disabled) {
+  background: var(--primary-hover);
 }
 
 .btn-flag.active {
@@ -1629,51 +1796,62 @@ async function complete() {
 }
 
 .question-card {
-  padding: 1.75rem;
+  padding: 1.5rem;
   border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   background: var(--bg-card);
   box-shadow: var(--shadow-sm);
 }
 
 .stem-box h2 {
-  font-size: 1.25rem;
-  line-height: 1.6;
-  margin-bottom: 1.5rem;
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  margin-bottom: 1.25rem;
   white-space: pre-wrap;
   color: var(--text-main);
+  font-weight: 500;
 }
 
 .options-group {
   display: grid;
-  gap: 0.85rem;
-  margin-bottom: 1.5rem;
+  gap: 0.65rem;
+  margin-bottom: 1.25rem;
 }
 
 .option {
   display: flex;
   gap: 0.85rem;
-  align-items: flex-start;
-  padding: 0.95rem 1.15rem;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-lg);
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   background: var(--bg-card);
   cursor: pointer;
-  transition: all 0.15s ease;
-  font-size: 0.95rem;
+  transition: all 0.1s cubic-bezier(0.16, 1, 0.3, 1);
+  font-size: 0.9375rem;
   line-height: 1.5;
 }
 
+.option .option-text-content {
+  color: var(--text-main);
+}
+
 .option:hover {
-  border-color: var(--primary-border);
-  background: var(--primary-light);
+  border-color: var(--border-strong);
+  background: var(--bg-muted);
 }
 
 .option.selected {
   border-color: var(--primary);
-  background: #eff6ff;
-  color: #1e3a8a;
+  background: var(--primary-light);
+  color: var(--text-main);
   box-shadow: 0 0 0 1px var(--primary);
+}
+
+.option.selected .key-cap {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--primary);
 }
 
 .option input {
@@ -1702,9 +1880,23 @@ async function complete() {
 @media (min-width: 1024px) {
   .practice-split-grid {
     display: grid;
-    grid-template-columns: 1.15fr 0.85fr;
+    grid-template-columns: 1fr;
+    max-width: 52rem;
+    margin: 0 auto;
+    width: 100%;
     gap: 1.5rem;
     align-items: start;
+    transition: max-width 0.2s ease;
+  }
+
+  .practice-split-grid.has-result {
+    grid-template-columns: 1.15fr 0.85fr;
+    max-width: none;
+    margin: 0;
+  }
+
+  .practice-split-grid:not(.has-result) .practice-split-right {
+    display: none;
   }
 
   .practice-split-right {
@@ -1731,7 +1923,7 @@ async function complete() {
 
 .practice-side-guide {
   padding: 1.25rem;
-  background: #f8fafc;
+  background: var(--bg-page);
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-lg);
   color: var(--text-muted);
@@ -1761,21 +1953,21 @@ async function complete() {
 }
 
 .quick-verdict-bar.correct {
-  background: #f0fdf4;
-  border-color: #86efac;
-  color: #166534;
+  background: var(--success-light);
+  border-color: var(--success-border);
+  color: var(--success);
 }
 
 .quick-verdict-bar.incorrect {
-  background: #fef2f2;
-  border-color: #fca5a5;
-  color: #991b1b;
+  background: var(--danger-light);
+  border-color: var(--danger-border);
+  color: var(--danger);
 }
 
 .quick-verdict-bar.partial {
-  background: #fffbeb;
-  border-color: #fde68a;
-  color: #92400e;
+  background: var(--warning-light);
+  border-color: var(--warning-border);
+  color: var(--warning);
 }
 
 .verdict-status-title {
@@ -1793,21 +1985,31 @@ async function complete() {
 }
 
 .text-correct {
-  color: #16a34a;
+  color: var(--success);
 }
 
 .text-danger {
-  color: #dc2626;
+  color: var(--danger);
 }
 
 .option.option-correct {
-  border-color: #22c55e;
-  background: #f0fdf4;
+  border-color: var(--success);
+  background: var(--success-light);
+  color: var(--text-main);
 }
 
 .option.option-wrong {
-  border-color: #ef4444;
-  background: #fef2f2;
+  border-color: var(--danger);
+  background: var(--danger-light);
+  color: var(--text-main);
+}
+
+:global(:root[data-theme="dark"]) .option.option-correct {
+  background: color-mix(in srgb, var(--success) 18%, var(--bg-card));
+}
+
+:global(:root[data-theme="dark"]) .option.option-wrong {
+  background: color-mix(in srgb, var(--danger) 18%, var(--bg-card));
 }
 
 .inline-verdict-badge {
@@ -1815,17 +2017,20 @@ async function complete() {
   font-size: 0.75rem;
   font-weight: 600;
   padding: 0.15rem 0.45rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
+  font-family: var(--linear-mono);
 }
 
 .inline-verdict-badge.correct {
-  background: #dcfce7;
-  color: #15803d;
+  background: var(--success-light);
+  color: var(--success);
+  border: 1px solid var(--success-border);
 }
 
 .inline-verdict-badge.wrong {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: var(--danger-light);
+  color: var(--danger);
+  border: 1px solid var(--danger-border);
 }
 
 
@@ -1969,9 +2174,9 @@ async function complete() {
 .ai-panel {
   margin-top: 1.5rem;
   padding: 1.35rem;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--primary-border);
   border-radius: var(--radius-lg);
-  background: #f8faff;
+  background: var(--bg-card);
 }
 
 .ai-toolbar {
@@ -2118,14 +2323,14 @@ async function complete() {
 }
 
 .chat-bubble.user {
-  background: #eff6ff;
-  border-color: #bfdbfe;
+  background: var(--primary-light);
+  border-color: var(--primary-border);
   margin-left: 1.5rem;
 }
 
 .chat-bubble.assistant {
   background: var(--bg-card);
-  border-color: #cbd5e1;
+  border-color: var(--border);
   margin-right: 1.5rem;
 }
 
@@ -2170,8 +2375,8 @@ async function complete() {
 .btn-conflict-toggle {
   padding: 0.35rem 0.75rem;
   border: 1px solid var(--warning);
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--warning-light);
+  color: var(--warning);
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 0.85rem;
@@ -2211,8 +2416,8 @@ async function complete() {
 
 .badge-current {
   font-size: 0.75rem;
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--primary-light);
+  color: var(--primary);
   padding: 0.1rem 0.4rem;
   border-radius: var(--radius-sm);
   font-weight: 600;
@@ -2251,7 +2456,7 @@ async function complete() {
 .btn-sync-offline {
   padding: 0.3rem 0.65rem;
   border: 1px solid var(--danger);
-  background: #fff;
+  background: var(--bg-card);
   color: var(--danger);
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -2317,7 +2522,7 @@ async function complete() {
   transition: all 0.15s ease;
 }
 .btn-sheet-trigger-pill:hover {
-  background: #dbeafe;
+  background: var(--primary-light);
 }
 
 .mobile-more-wrapper {
@@ -2372,11 +2577,11 @@ async function complete() {
   background: var(--bg-muted);
 }
 
-/* Question Sheet Drawer (答题卡) */
+/* Question Sheet Drawer (答题卡) & Modals */
 .sheet-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.45);
+  background: color-mix(in srgb, var(--text-main) 44%, transparent);
   backdrop-filter: blur(2px);
   z-index: 100;
   display: flex;
@@ -2398,9 +2603,166 @@ async function complete() {
   animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+@media (min-width: 768px) {
+  .sheet-modal-backdrop {
+    align-items: center;
+    padding: 1.5rem;
+  }
+
+  .sheet-modal-drawer {
+    margin: auto;
+    border-radius: var(--radius-xl);
+    max-height: 75vh;
+    animation: modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+/* 练习结算结果卡片模态框 */
+.practice-result-card-modal {
+  background: var(--bg-card);
+  width: 100%;
+  max-width: 28rem;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  padding: 2rem 1.75rem 1.5rem;
+  text-align: center;
+  margin: auto;
+  border: 1px solid var(--border);
+  animation: modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.result-card-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: var(--success-light);
+  color: var(--success);
+  border: 1px solid var(--success-border);
+  border-radius: 9999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.practice-result-card-modal h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0 0 1.25rem 0;
+  color: var(--text-main);
+}
+
+.result-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.result-stat-box {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.result-stat-box small {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.result-stat-box strong {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.result-counts-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-bottom: 1.5rem;
+  padding: 0.5rem;
+  background: var(--bg-muted);
+  border-radius: var(--radius-md);
+}
+
+.count-tag {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.result-card-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.result-card-actions button {
+  flex: 1;
+  padding: 0.7rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+/* 确认提前交卷对话框 */
+.confirm-submit-dialog {
+  background: var(--bg-card);
+  width: 100%;
+  max-width: 26rem;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  padding: 1.75rem;
+  margin: auto;
+  border: 1px solid var(--border);
+  animation: modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.confirm-submit-dialog h3 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.confirm-warning-desc,
+.confirm-info-desc {
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin-bottom: 1.5rem;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.confirm-dialog-actions button {
+  padding: 0.6rem 1.15rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
 @keyframes slideUp {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
+}
+
+@keyframes modalScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .sheet-drawer-header {
@@ -2509,17 +2871,17 @@ async function complete() {
 .sheet-num-btn.correct {
   background: var(--success);
   border-color: var(--success-hover);
-  color: #fff;
+  color: var(--on-primary);
 }
 .sheet-num-btn.incorrect {
   background: var(--danger);
   border-color: var(--danger-hover);
-  color: #fff;
+  color: var(--on-primary);
 }
 .sheet-num-btn.partial {
   background: var(--warning);
   border-color: var(--warning-hover);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 /* ==========================================================================
@@ -2544,7 +2906,9 @@ async function complete() {
     min-height: 44px !important;
     border-radius: var(--radius-md) !important;
     box-sizing: border-box !important;
-    flex-wrap: wrap !important;
+    flex-wrap: nowrap !important;
+    justify-content: space-between !important;
+    align-items: center !important;
   }
 
   .header-left-bar {
@@ -2611,7 +2975,19 @@ async function complete() {
     border-radius: var(--radius-sm) !important;
   }
 
-  .desktop-only-btn {
+  .desktop-only-btn,
+  .desktop-only-block,
+  .practice-answering-placeholder {
+    display: none !important;
+  }
+
+  /* 消除移动端重复的判分结果头部（已有 quick-verdict-bar 呈现完整判分） */
+  .result-card .result-header {
+    display: none !important;
+  }
+
+  /* 移动端去除原生 radio/checkbox，使用精美字母键位圆角徽章 */
+  .option input {
     display: none !important;
   }
 
@@ -2622,7 +2998,7 @@ async function complete() {
     display: inline-flex !important;
   }
 
-  /* 消除桌面端键盘提示框在手机端的 120px 空间占用 */
+  /* 消除桌面端键盘提示框在手机端的空间占用 */
   .practice-side-guide,
   .practice-tips {
     display: none !important;

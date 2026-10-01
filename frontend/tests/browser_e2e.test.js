@@ -295,6 +295,8 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
 
       // Complete session
       await page.click('header button:has-text("交卷")')
+      await page.waitForSelector('[data-testid="practice-report-modal"]')
+      await page.click('[data-testid="practice-report-modal"] button:has-text("返回题库")')
       await page.waitForSelector('.home-page')
       console.log('✓ Completed practice session with wrong answer, question kill, and completion.')
     })
@@ -780,6 +782,42 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       const storedToken = await page.evaluate(() => localStorage.getItem('easyexam_token'))
       assert.equal(storedToken, null)
       console.log('✓ Final logout cleanly cleared localStorage.')
+    })
+
+    await t.test('13. Root-Level Bilingual & Theme Toggle Real Browser E2E Lifecycle', async () => {
+      // 1. Verify default html lang
+      const initLang = await page.evaluate(() => document.documentElement.getAttribute('lang'))
+      assert.ok(initLang === 'zh-CN' || initLang === null)
+
+      // 2. Click LocaleToggle
+      await page.click('.locale-toggle')
+      const enLang = await page.evaluate(() => document.documentElement.getAttribute('lang'))
+      assert.equal(enLang, 'en-US')
+      const storedLocale = await page.evaluate(() => localStorage.getItem('easyexam_locale'))
+      assert.equal(storedLocale, 'en-US')
+      console.log('✓ Switched to en-US in real browser and updated <html lang="en-US">.')
+
+      // 3. Reload page to verify zero-flash persistence
+      await page.reload()
+      await page.waitForSelector('.auth-page')
+      const reloadedLang = await page.evaluate(() => document.documentElement.getAttribute('lang'))
+      assert.equal(reloadedLang, 'en-US')
+      console.log('✓ Reloaded page: en-US persisted with zero flash.')
+
+      // 4. Toggle theme to dark
+      await page.click('.theme-toggle:not(.locale-toggle)')
+      const darkTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
+      assert.equal(darkTheme, 'dark')
+      console.log('✓ Switched theme to dark in real browser.')
+
+      // 5. Restore back to default
+      await page.click('.locale-toggle')
+      const restoredLang = await page.evaluate(() => document.documentElement.getAttribute('lang'))
+      assert.equal(restoredLang, 'zh-CN')
+      await page.click('.theme-toggle:not(.locale-toggle)')
+      const restoredTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
+      assert.equal(restoredTheme, 'light')
+      console.log('✓ Restored locale and theme to clean baseline.')
     })
   } finally {
     if (browser) {

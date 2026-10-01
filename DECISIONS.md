@@ -18,6 +18,43 @@
 
 ## 历史决策流
 
+### [2026-09-30] 第二轮对抗性审查与安全漏洞加固 (ADV2-001 ~ ADV2-007)
+- **触发背景**：对全项目进行第二轮深度对抗性审查（涵盖模考旁路版本泄露、只读成员越权写入/重判/解冲突、FSRS 僵尸会话泄漏、多租户题目斩杀嗅探、刷题摘要统计口径以及跨平台与版本对齐）。
+- **核心决策**：
+  1. **版本列表模考动态脱敏**：在 `QuestionRepository.list_versions` 中接入 `_get_active_exam_question_ids`，杜绝考生通过历史版本列表端点窃取正在进行的模考题目标准答案与官方解析；
+  2. **严格收紧题目版本与历史重判权限**：`create_next_version`、`regrade_question_history` 和 `resolve_conflict` 统一要求题库角色为 `ADMIN` 或 `EDITOR`，杜绝只读普通成员 `MEMBER` 越权修改题目、重判全库作答或解决冲突；
+  3. **单题复习会话闭环完结**：`PracticeService.review_answer` 在单题作答提交后立即调用 `complete_session` 关闭会话，杜绝产生未关闭的僵尸会话；
+  4. **斩杀多租户鉴权与信息隔离**：`kill` 必须校验当前用户对目标题目所属题库的成员资格，`list_killed` 限定仅列出当前用户有权访问的题库内的题目，杜绝非授权租户嗅探私有题目的题干和题型；
+  5. **刷题摘要剥离主观题**：`summary` 查询显式排除主观题型 `UPPER(qv.type) NOT IN ('ESSAY', 'SHORT_ANSWER', 'SUBJECTIVE')` 并限定租户所属题库，防止非客观作答稀释正确率；
+  6. **Windows 平台子进程 UTF-8 声明**：`system.py` 与 `setup-hooks.py` 中的 `subprocess.run(text=True)` 统一补齐 `encoding="utf-8", errors="replace"`；
+  7. **前端包版本同步**：`frontend/package.json` 中的版本号由 `1.0.0` 推进同步至 `1.0.8`，彻底消除交付清单间的版本漂移。
+- **对应 SPEC 章节**：SPEC.md 第 2.1、2.2、3.1、3.2、5 节。
+- **影响范围**：`backend/app/infrastructure/db/repositories/question_repository.py`, `backend/app/infrastructure/db/repositories/practice_repository.py`, `backend/app/application/practice_service.py`, `backend/app/api/routes/system.py`, `scripts/setup-hooks.py`, `frontend/package.json`。
+
+### [2026-09-30] 全面修复对抗性审查 14 处规范不一致与安全/数据完整性缺陷
+- **触发背景**：对需求文档（SPEC.md）与既有代码进行深度对抗性静态与动态审计，审查出模考防泄题、会话超时硬判定、FSRS/错题开关语义隔离、导入难度与置信度归一化、学习指标计算口径、题库元数据完整性与草稿防篡改等 14 处不一致与缺口。
+- **核心决策**：
+  1. **模考防作弊动态脱敏**：在 `QuestionRepository` 查询层检查当前用户是否存在活跃未完成模考会话，若是则动态清空标准答案与官方解析，防止通过普通题目详情或列表接口泄题；
+  2. **模考 FSRS 与错题隔离**：模考会话单题提交禁止推进 `fsrs_cards` 复习调度，并严格遵循会话 `record_mistakes` 开关；
+  3. **服务端硬限时**：`PracticeService` 引入 `_check_exam_timeout` 校验（限时 + 60s 宽限），超时严格拒绝作答与草稿同步（HTTP 409），终结纯前端倒计时漏洞；
+  4. **导入健壮性**：表格导入修复 1~5 难度离散映射，缺失/无法识别规范映射为 0（未分级）；PDF 导入对 `UNCERTAIN` 置信度题目强制拒绝直接批量入库，收敛至校对草稿箱；
+  5. **学习趋势指标科学收敛**：弱项统计限定题目最新版本号 `MAX(version_number)`；到期复习统计排除已斩杀题目；学习完成率仅统计 `s.mode = 'FSRS'`；客观正确率基线完全剥离主观题；
+  6. **题库元数据安全与完整性**：章节与标签补全修改与删除 REST 路由，施加 ADMIN/EDITOR 权限校验与循环父级检查；
+  7. **草稿防篡改**：会话草稿严格校验只接受会话快照内题目 ID，并限制 `current_index` 与 `time_spent` 合法范围。
+- **对应 SPEC 章节**：SPEC.md 第 2.2、3.2、4.1、5、8 节。
+- **影响范围**：`backend/app/infrastructure/db/repositories/*`, `backend/app/application/practice_service.py`, `backend/app/infrastructure/importers/*`, `backend/app/api/routes/banks.py`, `backend/legacy/services/__init__.py`。
+
+### [2026-09-28] 前端全站视觉与交互深度重构：落地工作台侧边栏、Cmd+K 指令面板、全仓去 Emoji (v1.0.7)
+- **触发背景**：用户反馈单纯的 CSS 颜色替换仅是“换了个主题”，要求深入底层 DOM、宏观信息架构与组件触感进行真正的结构性重新设计。
+- **核心决策**：
+  1. **全局工作台 Shell**：新增左侧高密度工作台侧边栏 (`AppSidebar.vue`) 与移动端底部沉浸条 (`MobileNav.vue`)，集成全局 `Ctrl/Cmd + K` 快捷指令面板 (`CommandPalette.vue`)；
+  2. **去 Emoji 化与专业矢量系统**：引入内联矢量线框图标组件 (`LinearIcon.vue`)，彻底清除页面玩具感 Emoji，建立统一 1.8 细线微质感；
+  3. **资产大厅重塑**：未完成会话改造成类终端恢复 HUD，题库展示升级为高密度资产列表与健康度指示；
+  4. **做题与模考沉浸式工作台**：选项注入 `120ms` 物理阻尼与微发光按压反馈，FSRS 评级标注记忆留存预测间隔（`+10m`, `+1d`, `+3d`, `+7d`）；
+  5. **门禁与实机交付**：13 项 Playwright 真 Chrome E2E 测试全绿，版本号推进至 `1.0.7` 并成功安装上线飞牛 NAS。
+- **对应 SPEC 章节**：SPEC.md 界面与交互规范。
+- **影响范围**：`frontend/src/components/*`, `frontend/src/views/*`, `frontend/src/features/exam/*`, `frontend/src/style.css`, `fpk/easy-exam/*`。
+
 ### [2026-09-22] 仓库脚手架初始化
 - **触发背景**：创建 Vibe Coding Starter 通用规范模板。
 - **核心决策**：确立 SDD（规范驱动）+ 双层门禁 + 自进化避坑清单为核心工作流。
@@ -213,3 +250,16 @@
   5. **清除单次实测数字**：`2026-09-25-frontend-ui-redesign.md` 中的 `62.68 kB` 精确字节值改为量级（此前已在 `TESTING.md` 处理同类问题，此处遗漏）。
 - **对应 SPEC 章节**：无（工程规范与测试门禁，不改变产品行为）。
 - **影响范围**：`AGENTS.md`、`TESTING.md`、`README.md`、`docs/REQUIREMENTS_TRACEABILITY.md`、`docs/superpowers/plans/2026-09-25-frontend-ui-redesign.md`、`frontend/tests/mobile_interaction_suite.mjs`。
+
+### [2026-10-01] 吸收母版 Starter 门禁规范、根级全栈国际化 (i18n) 与 AI 多语言穿透
+
+- **触发背景**：从 `vibe-coding-starter` 模板项目吸收通用工程规范与资产，强化自动化测试防篡改审计、硬编码物理绝对路径扫描门禁、社区资产（FAQ/赞助双语化），并在易考宝落地端到端全栈国际化及 AI 助教语言穿透能力。
+- **核心决策**：
+  1. **工程门禁与防偷懒防御**：引入 `scripts/guard_test_tampering.py`（对 assert/expect 关键字删除修改做 pre-commit 物理审计）与 `scripts/scan_hardcoded_paths.py`（扫描并禁止写死盘符与用户物理路径）；在 `scripts/setup-hooks.py` 中跨平台级联守卫、前端单元测试及后端单元测试。
+  2. **根级全栈国际化 (i18n)**：前端建立轻量响应式国际化体系（`useLocale`、`localePreference`、`zh-CN.js`、`en-US.js`），支持双向键值与动态插槽严格对齐测试（`locale.test.js`）；API 请求层（`client.js`）自动向后端透传 `Accept-Language` 请求头。
+  3. **AI 助教多语言穿透**：FastAPI 后端路由（`routes/ai.py`）、应用层（`ai_tutor_service.py`）及服务层（`ai_service.py`）解析并穿透 `target_lang` 参数，根据语言自动切换英文/中文 System Prompt、核心指导原则与结构化输出板块。
+  4. **真实浏览器 E2E 闭环**：在 `browser_e2e.test.js` 中新增第 13 场景（Scenario 13），在独立 Chrome 实例中完整验证根节点 `lang` 属性更新、localStorage 持久化、页面重载零闪烁、主题切换联动与基线还原。
+  5. **fnOS 应用包 (FPK) 自动化构建**：打包脚本 `scripts/build_fpk.py` 成功将更新后的前端产物及元数据构建为 `dist/easy-exam-1.0.9.fpk`。
+- **对应 SPEC 章节**：SPEC.md §6, §8。
+- **影响范围**：`scripts/`、`tests/test_guard_checks.py`、`frontend/src/locales/`、`frontend/src/composables/`、`frontend/src/design/`、`frontend/src/components/`、`backend/app/api/routes/ai.py`、`backend/legacy/services/ai_service.py`、`frontend/tests/browser_e2e.test.js`、`DECISIONS.md`、`SPEC.md`。
+

@@ -61,6 +61,17 @@ class TestAIService(unittest.TestCase):
         self.assertEqual(user_msg["role"], "user")
         self.assertEqual(user_msg["content"], "请分析我选错的原因，并给出解题关键点")
 
+    def test_build_tutor_prompt_multilingual_english(self):
+        """Prompt should switch persona, headers, and default query to English when target_lang starts with 'en'."""
+        messages = build_tutor_prompt(self.sample_context, target_lang="en-US")
+        sys_msg = messages[0]["content"]
+        self.assertIn("AI Exam Tutor", sys_msg)
+        self.assertIn("【Question Stem】", sys_msg)
+        self.assertIn("【Standard Answer】", sys_msg)
+        self.assertIn("【Tutoring Directives】", sys_msg)
+        user_msg = messages[-1]["content"]
+        self.assertIn("analyze my error", user_msg)
+
     def test_build_tutor_prompt_custom_query(self):
         """Custom user_query should override default user message."""
         messages = build_tutor_prompt(

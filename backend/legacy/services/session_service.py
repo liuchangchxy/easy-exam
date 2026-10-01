@@ -4,8 +4,8 @@ from typing import Any, Dict, List, Optional, Union
 
 from backend.models import MistakeCause, SessionMode
 from backend.repositories import QuestionRepository, SessionRepository
-from backend.services.mistake_service import MistakeService
-from backend.services.scoring import Scorer
+from backend.legacy.services.mistake_service import MistakeService
+from backend.legacy.services.scoring import Scorer
 
 
 class SessionService:

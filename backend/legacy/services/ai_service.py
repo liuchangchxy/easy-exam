@@ -22,6 +22,12 @@ DEFAULT_SYSTEM_PERSONA = (
     "请根据以下题目上下文，深入剖析学生作答出现偏差的根本原因，分析干扰项的迷惑之处，阐明正确答案的解题思路与核心知识点，并引导学生举一反三。"
 )
 
+DEFAULT_SYSTEM_PERSONA_EN = (
+    "You are a professional, patient, and analytical AI Exam Tutor. "
+    "Your mission is to guide the student through question analysis, dissecting misconceptions, "
+    "explaining why distractors are incorrect, and elucidating the solution path and core principles in clear English."
+)
+
 
 def _format_options(options: Any) -> str:
     """Format question options into a neat string representation."""
@@ -53,6 +59,7 @@ def build_tutor_prompt(
     question_context: dict[str, Any],
     user_query: Optional[str] = None,
     history: Optional[list[dict[str, str]]] = None,
+    target_lang: str = "zh-CN",
 ) -> list[dict[str, str]]:
     """Build OpenAI/Ollama compatible message list injected with full question context.
 
@@ -71,20 +78,38 @@ def build_tutor_prompt(
     explanation = str(question_context.get("explanation") or "").strip() or "暂无解析"
     mistake_cause = str(question_context.get("mistake_cause") or "").strip() or "未标记"
 
-    system_content = (
-        f"{DEFAULT_SYSTEM_PERSONA}\n\n"
-        f"【题干】\n{stem}\n\n"
-        f"【选项】\n{opts_str}\n\n"
-        f"【用户作答】\n{user_answer}\n\n"
-        f"【正确答案】\n{correct_answer}\n\n"
-        f"【题目解析】\n{explanation}\n\n"
-        f"【用户错因标签】\n{mistake_cause}\n\n"
-        f"【辅导要求】\n"
-        f"1. 精准定位学生的薄弱环节与思维偏差；\n"
-        f"2. 详细剖析干扰项的逻辑陷阱；\n"
-        f"3. 讲解正确答案的严密推导过程与关键考点；\n"
-        f"4. 条理清晰、亲切鼓舞，给出同类题目的避坑解题方法。"
-    )
+    is_english = bool(target_lang and str(target_lang).lower().startswith("en"))
+
+    if is_english:
+        system_content = (
+            f"{DEFAULT_SYSTEM_PERSONA_EN}\n\n"
+            f"【Question Stem】\n{stem}\n\n"
+            f"【Options】\n{opts_str}\n\n"
+            f"【User Answer】\n{user_answer}\n\n"
+            f"【Standard Answer】\n{correct_answer}\n\n"
+            f"【Official Explanation】\n{explanation}\n\n"
+            f"【Mistake Category】\n{mistake_cause}\n\n"
+            f"【Tutoring Directives】\n"
+            f"1. Pinpoint the student's core misconception in English;\n"
+            f"2. Detail why distractors are invalid;\n"
+            f"3. Explain the rigorous solution process and underlying concepts;\n"
+            f"4. Provide actionable exam-taking techniques for similar problems."
+        )
+    else:
+        system_content = (
+            f"{DEFAULT_SYSTEM_PERSONA}\n\n"
+            f"【题干】\n{stem}\n\n"
+            f"【选项】\n{opts_str}\n\n"
+            f"【用户作答】\n{user_answer}\n\n"
+            f"【正确答案】\n{correct_answer}\n\n"
+            f"【题目解析】\n{explanation}\n\n"
+            f"【用户错因标签】\n{mistake_cause}\n\n"
+            f"【辅导要求】\n"
+            f"1. 精准定位学生的薄弱环节与思维偏差；\n"
+            f"2. 详细剖析干扰项的逻辑陷阱；\n"
+            f"3. 讲解正确答案的严密推导过程与关键考点；\n"
+            f"4. 条理清晰、亲切鼓舞，给出同类题目的避坑解题方法。"
+        )
 
     messages: list[dict[str, str]] = [{"role": "system", "content": system_content}]
 
@@ -93,11 +118,13 @@ def build_tutor_prompt(
             if isinstance(h, dict) and "role" in h and "content" in h:
                 messages.append({"role": str(h["role"]), "content": str(h["content"])})
 
-    final_query = (
-        user_query.strip()
-        if (user_query and user_query.strip())
-        else "请分析我选错的原因，并给出解题关键点"
-    )
+    if user_query and user_query.strip():
+        final_query = user_query.strip()
+    elif is_english:
+        final_query = "Please analyze my error and explain the key concepts."
+    else:
+        final_query = "请分析我选错的原因，并给出解题关键点"
+
     messages.append({"role": "user", "content": final_query})
 
     return messages

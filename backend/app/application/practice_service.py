@@ -97,6 +97,25 @@ class PracticeService:
         count = self.practices.abandon_all_sessions(user_id)
         return {"status": "abandoned_all", "count": count}
 
+    def _check_exam_timeout(self, session: dict):
+        if session.get("mode") == "EXAM" and int(session.get("time_limit") or 0) > 0:
+            created_at_str = session.get("created_at")
+            if created_at_str:
+                from datetime import datetime, timezone
+                try:
+                    created_dt = datetime.fromisoformat(str(created_at_str).replace("Z", "+00:00"))
+                    if created_dt.tzinfo is None:
+                        created_dt = created_dt.replace(tzinfo=timezone.utc)
+                    now_dt = datetime.now(timezone.utc)
+                    elapsed_sec = (now_dt - created_dt).total_seconds()
+                    limit_sec = int(session["time_limit"]) * 60
+                    if elapsed_sec > limit_sec + 60:
+                        raise ValueError("模考时间已到，已超时，请交卷")
+                except ValueError:
+                    raise
+                except Exception:
+                    pass
+
     def submit_attempt(
         self,
         user_id: str,
@@ -111,6 +130,7 @@ class PracticeService:
             raise LookupError("practice session not found")
         if session.get("is_completed"):
             raise ValueError("session already completed")
+        self._check_exam_timeout(session)
         snapshot = __import__("json").loads(session.get("questions_json") or "[]")
         version_ref = next((item for item in snapshot if item["question_id"] == question_id), None)
         if not version_ref:
@@ -155,7 +175,9 @@ class PracticeService:
             1,
             question_refs=[{"question_id": question["id"], "version_id": question["version_id"]}],
         )
-        return self.submit_attempt(user_id, session["id"], question_id, user_answer, rating, mistake_cause)
+        attempt_res = self.submit_attempt(user_id, session["id"], question_id, user_answer, rating, mistake_cause)
+        self.complete_session(user_id, session["id"])
+        return attempt_res
 
     def update_mistake_cause(self, user_id: str, question_id: str, mistake_cause: str) -> dict:
         return self.practices.update_mistake_cause(user_id, question_id, mistake_cause)
@@ -189,6 +211,9 @@ class PracticeService:
         return session
 
     def sync_draft(self, user_id: str, session_id: str, payload: dict) -> dict:
+        sess = self.practices.get_session(session_id, user_id)
+        if sess:
+            self._check_exam_timeout(sess)
         updated = self.practices.update_draft(user_id, session_id, payload.get("current_index"), payload.get("answers"), payload.get("flags"), payload.get("time_spent"))
         if not updated:
             raise LookupError("practice session not found")
@@ -198,6 +223,9 @@ class PracticeService:
         return session
 
     def toggle_flag(self, user_id: str, session_id: str, question_id: str) -> list[str]:
+        sess = self.practices.get_session(session_id, user_id)
+        if sess:
+            self._check_exam_timeout(sess)
         flags = self.practices.toggle_flag(user_id, session_id, question_id)
         if flags is None:
             raise LookupError("practice session not found")

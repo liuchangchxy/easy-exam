@@ -10,7 +10,7 @@ def health():
     if not git_sha:
         try:
             import subprocess
-            res = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, timeout=1.0)
+            res = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=1.0)
             if res.returncode == 0:
                 git_sha = res.stdout.strip()
         except Exception:

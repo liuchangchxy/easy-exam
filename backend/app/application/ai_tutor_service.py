@@ -97,13 +97,13 @@ class AiTutorService:
             raise LookupError("answer not found")
         return answer
 
-    def generate_answer(self, user_id: str, question_id: str, query: str = "", history=None) -> dict:
+    def generate_answer(self, user_id: str, question_id: str, query: str = "", history=None, target_lang: str = "zh-CN") -> dict:
         question = self.questions.get_for_user(question_id, user_id)
         if not question:
             raise LookupError("question not found")
         from backend.app.infrastructure.ai.provider import build_tutor_prompt
         provider = self._get_provider_for_user(user_id)
-        base_prompt = build_tutor_prompt(question, query, history)
+        base_prompt = build_tutor_prompt(question, query, history, target_lang=target_lang)
         prompt_msgs, referenced_assets = self._inject_assets_context(user_id, question, base_prompt)
         content = provider.chat_complete(prompt_msgs)
         ans = self.answers.create(user_id, question, content, "AI", getattr(provider, "model", None))
@@ -132,6 +132,7 @@ class AiTutorService:
         content: str,
         conversation_id: str | None = None,
         parent_message_id: str | None = None,
+        target_lang: str = "zh-CN",
     ) -> dict:
         if not self.conversations:
             raise RuntimeError("AiConversationRepository is not configured")
@@ -166,7 +167,7 @@ class AiTutorService:
 
         from backend.app.infrastructure.ai.provider import build_tutor_prompt
         provider = self._get_provider_for_user(user_id)
-        base_prompt = build_tutor_prompt(question, content, history)
+        base_prompt = build_tutor_prompt(question, content, history, target_lang=target_lang)
         prompt_msgs, referenced_assets = self._inject_assets_context(user_id, question, base_prompt)
         assistant_content = provider.chat_complete(prompt_msgs)
 

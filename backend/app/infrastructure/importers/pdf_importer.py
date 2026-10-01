@@ -8,8 +8,10 @@ from backend.app.infrastructure.importers.text_importer import parse_markdown_te
 
 def parse_pdf_questions(content: bytes) -> list[dict[str, Any]]:
     result = extract_pdf_candidates(content)
-    if result["confidence"] == "UNCERTAIN" and not result["questions"]:
-        raise ValueError("PDF 文本存在，但未识别出题号、选项和答案结构")
+    if result["confidence"] == "UNCERTAIN":
+        if not result["questions"]:
+            raise ValueError("PDF 文本存在，但未识别出题号、选项和答案结构")
+        raise ValueError("PDF 题目结构解析存在不确定性（置信度不足），请使用校对草稿箱预览并人工确认入库")
     return result["questions"]
 
 

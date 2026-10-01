@@ -88,10 +88,51 @@ class BankRepository:
     def create_chapter(self, bank_id: str, user_id: str, name: str, parent_id: str | None = None) -> dict:
         chapter_id = str(uuid.uuid4())
         with transaction(self.db_path) as conn:
-            if not conn.execute("SELECT 1 FROM question_bank_members WHERE bank_id = ? AND user_id = ?", (bank_id, user_id)).fetchone():
+            member = conn.execute("SELECT role FROM question_bank_members WHERE bank_id = ? AND user_id = ?", (bank_id, user_id)).fetchone()
+            if not member or member[0] not in ("ADMIN", "EDITOR"):
                 raise PermissionError("user cannot edit this bank")
+            if parent_id:
+                p_row = conn.execute("SELECT 1 FROM chapters WHERE id = ? AND bank_id = ?", (parent_id, bank_id)).fetchone()
+                if not p_row:
+                    raise ValueError("parent chapter not found in this bank")
             conn.execute("INSERT INTO chapters(id, bank_id, parent_id, name, sort_order) VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM chapters WHERE bank_id = ?))", (chapter_id, bank_id, parent_id, name, bank_id))
             return dict(conn.execute("SELECT * FROM chapters WHERE id = ?", (chapter_id,)).fetchone())
+
+    def update_chapter(self, bank_id: str, user_id: str, chapter_id: str, name: str, parent_id: str | None = None) -> dict:
+        with transaction(self.db_path) as conn:
+            member = conn.execute("SELECT role FROM question_bank_members WHERE bank_id = ? AND user_id = ?", (bank_id, user_id)).fetchone()
+            if not member or member[0] not in ("ADMIN", "EDITOR"):
+                raise PermissionError("user cannot edit this bank")
+            ch_row = conn.execute("SELECT * FROM chapters WHERE id = ? AND bank_id = ?", (chapter_id, bank_id)).fetchone()
+            if not ch_row:
+                raise LookupError("chapter not found in this bank")
+            if parent_id:
+                if parent_id == chapter_id:
+                    raise ValueError("chapter cannot be its own parent")
+                p_row = conn.execute("SELECT parent_id FROM chapters WHERE id = ? AND bank_id = ?", (parent_id, bank_id)).fetchone()
+                if not p_row:
+                    raise ValueError("parent chapter not found in this bank")
+                curr = parent_id
+                visited = {chapter_id}
+                while curr:
+                    if curr in visited:
+                        raise ValueError("circular chapter hierarchy detected")
+                    visited.add(curr)
+                    next_p = conn.execute("SELECT parent_id FROM chapters WHERE id = ?", (curr,)).fetchone()
+                    curr = next_p[0] if next_p else None
+            conn.execute("UPDATE chapters SET name = ?, parent_id = ? WHERE id = ? AND bank_id = ?", (name, parent_id, chapter_id, bank_id))
+            return dict(conn.execute("SELECT * FROM chapters WHERE id = ?", (chapter_id,)).fetchone())
+
+    def delete_chapter(self, bank_id: str, user_id: str, chapter_id: str) -> bool:
+        with transaction(self.db_path) as conn:
+            member = conn.execute("SELECT role FROM question_bank_members WHERE bank_id = ? AND user_id = ?", (bank_id, user_id)).fetchone()
+            if not member or member[0] not in ("ADMIN", "EDITOR"):
+                raise PermissionError("user cannot edit this bank")
+            parent_id = conn.execute("SELECT parent_id FROM chapters WHERE id = ? AND bank_id = ?", (chapter_id, bank_id)).fetchone()
+            p_val = parent_id[0] if parent_id else None
+            conn.execute("UPDATE chapters SET parent_id = ? WHERE parent_id = ? AND bank_id = ?", (p_val, chapter_id, bank_id))
+            cur = conn.execute("DELETE FROM chapters WHERE id = ? AND bank_id = ?", (chapter_id, bank_id))
+            return cur.rowcount > 0
 
     def list_chapters(self, bank_id: str, user_id: str) -> list[dict]:
         with transaction(self.db_path) as conn:
@@ -100,12 +141,36 @@ class BankRepository:
             return [dict(row) for row in conn.execute("SELECT * FROM chapters WHERE bank_id = ? ORDER BY sort_order", (bank_id,)).fetchall()]
 
     def create_tag(self, bank_id: str, user_id: str, name: str) -> dict:
-        tag_id = str(uuid.uuid4())
+        tag_name = name.strip()
         with transaction(self.db_path) as conn:
-            if not conn.execute("SELECT 1 FROM question_bank_members WHERE bank_id = ? AND user_id = ?", (bank_id, user_id)).fetchone():
+            member = conn.execute("SELECT role FROM question_bank_members WHERE bank_id = ? AND user_id = ?", (bank_id, user_id)).fetchone()
+            if not member or member[0] not in ("ADMIN", "EDITOR"):
                 raise PermissionError("user cannot edit this bank")
-            conn.execute("INSERT INTO knowledge_tags(id, bank_id, name) VALUES (?, ?, ?)", (tag_id, bank_id, name.strip()))
+            existing = conn.execute("SELECT * FROM knowledge_tags WHERE bank_id = ? AND name = ?", (bank_id, tag_name)).fetchone()
+            if existing:
+                return dict(existing)
+            tag_id = str(uuid.uuid4())
+            conn.execute("INSERT INTO knowledge_tags(id, bank_id, name) VALUES (?, ?, ?)", (tag_id, bank_id, tag_name))
             return dict(conn.execute("SELECT * FROM knowledge_tags WHERE id = ?", (tag_id,)).fetchone())
+
+    def update_tag(self, bank_id: str, user_id: str, tag_id: str, name: str) -> dict:
+        tag_name = name.strip()
+        with transaction(self.db_path) as conn:
+            member = conn.execute("SELECT role FROM question_bank_members WHERE bank_id = ? AND user_id = ?", (bank_id, user_id)).fetchone()
+            if not member or member[0] not in ("ADMIN", "EDITOR"):
+                raise PermissionError("user cannot edit this bank")
+            cur = conn.execute("UPDATE knowledge_tags SET name = ? WHERE id = ? AND bank_id = ?", (tag_name, tag_id, bank_id))
+            if cur.rowcount == 0:
+                raise LookupError("tag not found")
+            return dict(conn.execute("SELECT * FROM knowledge_tags WHERE id = ?", (tag_id,)).fetchone())
+
+    def delete_tag(self, bank_id: str, user_id: str, tag_id: str) -> bool:
+        with transaction(self.db_path) as conn:
+            member = conn.execute("SELECT role FROM question_bank_members WHERE bank_id = ? AND user_id = ?", (bank_id, user_id)).fetchone()
+            if not member or member[0] not in ("ADMIN", "EDITOR"):
+                raise PermissionError("user cannot edit this bank")
+            cur = conn.execute("DELETE FROM knowledge_tags WHERE id = ? AND bank_id = ?", (tag_id, bank_id))
+            return cur.rowcount > 0
 
     def list_tags(self, bank_id: str, user_id: str) -> list[dict]:
         with transaction(self.db_path) as conn:

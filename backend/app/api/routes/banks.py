@@ -128,6 +128,27 @@ def list_chapters(bank_id: str, request: Request, user=Depends(current_user)):
     return request.app.state.services.banks.list_chapters(bank_id, user["id"])
 
 
+@router.put("/{bank_id}/chapters/{chapter_id}")
+def update_chapter(bank_id: str, chapter_id: str, payload: ChapterPayload, request: Request, user=Depends(current_user)):
+    try:
+        return request.app.state.services.banks.update_chapter(bank_id, user["id"], chapter_id, payload.name, payload.parent_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.delete("/{bank_id}/chapters/{chapter_id}", status_code=204)
+def delete_chapter(bank_id: str, chapter_id: str, request: Request, user=Depends(current_user)):
+    try:
+        deleted = request.app.state.services.banks.delete_chapter(bank_id, user["id"], chapter_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="chapter not found")
+        return None
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
 @router.post("/{bank_id}/tags", status_code=201)
 def create_tag(bank_id: str, payload: TagPayload, request: Request, user=Depends(current_user)):
     try:
@@ -139,6 +160,28 @@ def create_tag(bank_id: str, payload: TagPayload, request: Request, user=Depends
 @router.get("/{bank_id}/tags")
 def list_tags(bank_id: str, request: Request, user=Depends(current_user)):
     return request.app.state.services.banks.list_tags(bank_id, user["id"])
+
+
+@router.put("/{bank_id}/tags/{tag_id}")
+def update_tag(bank_id: str, tag_id: str, payload: TagPayload, request: Request, user=Depends(current_user)):
+    try:
+        return request.app.state.services.banks.update_tag(bank_id, user["id"], tag_id, payload.name)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.delete("/{bank_id}/tags/{tag_id}", status_code=204)
+def delete_tag(bank_id: str, tag_id: str, request: Request, user=Depends(current_user)):
+    try:
+        deleted = request.app.state.services.banks.delete_tag(bank_id, user["id"], tag_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="tag not found")
+        return None
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
 
 
 @router.get("/{bank_id}/export")

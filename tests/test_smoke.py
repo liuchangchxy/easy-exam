@@ -45,6 +45,31 @@ class TestSmoke(unittest.TestCase):
         specs_dir = self.root / "specs"
         self.assertTrue(specs_dir.is_dir(), "specs/ directory must exist.")
 
+    def test_sponsor_and_faq_exist(self):
+        """Verify SPONSOR.md and FAQ.md exist in project root."""
+        self.assertTrue((self.root / "SPONSOR.md").exists(), "SPONSOR.md must exist.")
+        self.assertTrue((self.root / "SPONSOR.zh-CN.md").exists(), "SPONSOR.zh-CN.md must exist.")
+        self.assertTrue((self.root / "FAQ.md").exists(), "FAQ.md must exist.")
+        self.assertTrue((self.root / "FAQ.zh-CN.md").exists(), "FAQ.zh-CN.md must exist.")
+
+    def test_guard_scripts_exist(self):
+        """Verify anti-tampering and path scan guard scripts exist."""
+        self.assertTrue((self.root / "scripts" / "guard_test_tampering.py").exists(), "scripts/guard_test_tampering.py must exist.")
+        self.assertTrue((self.root / "scripts" / "scan_hardcoded_paths.py").exists(), "scripts/scan_hardcoded_paths.py must exist.")
+
+    def test_no_hardcoded_paths_in_repo(self):
+        """Verify zero hardcoded absolute paths exist in codebase."""
+        import subprocess
+        import sys
+        res = subprocess.run(
+            [sys.executable, str(self.root / "scripts" / "scan_hardcoded_paths.py")],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace"
+        )
+        self.assertEqual(res.returncode, 0, f"Hardcoded path scan failed: {res.stderr}\n{res.stdout}")
+
 
 if __name__ == "__main__":
     unittest.main()

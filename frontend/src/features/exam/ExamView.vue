@@ -1,16 +1,17 @@
 <template>
   <main class="exam-page" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
-    <header class="exam-header">
-      <button type="button" class="btn-back" @click="$emit('back')">← 返回</button>
-      <div class="exam-header-center" @click="showMobileSheet = true">
-        <h1>模拟考试</h1>
-        <p>{{ session ? `已作答 ${answeredCount} / ${questions.length} 📑` : '正在载入…' }}</p>
+    <header class="exam-header" :class="{ 'report-header': Boolean(report) }">
+      <button type="button" class="btn-back" @click="$emit('back')">← 返回题库</button>
+      <div class="exam-header-center" @click="!report && (showMobileSheet = true)">
+        <h1>{{ report ? '考试成绩单' : '模拟考试' }}</h1>
+        <p v-if="!report">{{ session ? `已作答 ${answeredCount} / ${questions.length}` : '正在载入…' }}</p>
       </div>
-      <div class="exam-clock" data-testid="exam-timer" role="timer" aria-live="off">
+      <div v-if="!report" class="exam-clock" data-testid="exam-timer" role="timer" aria-live="off">
         {{ session?.time_limit ? formatRemainingTime(remainingSeconds) : '不限时' }}
       </div>
-      <button type="button" class="secondary-btn btn-exam-sheet-trigger mobile-only-btn" @click="showMobileSheet = true">答题卡</button>
-      <button type="button" class="primary" :disabled="loading || isSubmitting || Boolean(report)" @click="showSubmitConfirm = true">交卷</button>
+      <ThemeToggle compact />
+      <LocaleToggle compact />
+      <button v-if="!report" type="button" class="primary" :disabled="loading || isSubmitting || Boolean(report)" @click="showSubmitConfirm = true">{{ t('exam.submit_exam') }}</button>
     </header>
 
 
@@ -83,7 +84,7 @@
     <template v-else-if="question">
       <div class="exam-layout">
         <section class="exam-question-card">
-          <div class="question-meta"><span>第 {{ currentIndex + 1 }} 题 / {{ questions.length }}</span><span>{{ question.type }}</span></div>
+          <div class="question-meta"><span>第 {{ currentIndex + 1 }} 题 / {{ questions.length }}</span><span class="badge-type">{{ formatQuestionTypeName(question.type) }}</span></div>
           <h2>{{ question.stem }}</h2>
           <div v-if="question.options?.length" class="exam-options">
             <label
@@ -112,20 +113,25 @@
             />
           </label>
 
-          <div class="exam-question-actions">
-            <button type="button" data-testid="exam-flag-toggle" :aria-pressed="isFlagged" @click="toggleCurrentFlag" title="快捷键：F">
-              {{ isFlagged ? '取消待复查' : '标记待复查' }}
-              <kbd class="hotkey-badge">F</kbd>
-            </button>
-            <div>
-              <button type="button" :disabled="currentIndex === 0" @click="goTo(currentIndex - 1)" title="快捷键：← 或 K">
-                上一题
-                <kbd class="hotkey-badge">←</kbd>
+          <div class="exam-question-actions exam-fixed-action-bar">
+            <div class="exam-actions-inner">
+              <button type="button" class="btn-flag-toggle" data-testid="exam-flag-toggle" :aria-pressed="isFlagged" @click="toggleCurrentFlag" title="快捷键：F">
+                <span class="flag-icon">
+                  <LinearIcon name="target" size="13" />
+                </span>
+                <span>{{ isFlagged ? '取消待复查' : '标记待复查' }}</span>
+                <kbd class="hotkey-badge">F</kbd>
               </button>
-              <button type="button" :disabled="currentIndex >= questions.length - 1" @click="goTo(currentIndex + 1)" title="快捷键：Space 或 →">
-                下一题
-                <kbd class="hotkey-badge">→</kbd>
-              </button>
+              <div class="exam-nav-btns">
+                <button type="button" class="btn-exam-nav" :disabled="currentIndex === 0" @click="goTo(currentIndex - 1)" title="快捷键：← 或 K">
+                  上一题
+                  <kbd class="hotkey-badge">←</kbd>
+                </button>
+                <button type="button" class="btn-exam-nav primary" :disabled="currentIndex >= questions.length - 1" @click="goTo(currentIndex + 1)" title="快捷键：Space 或 →">
+                  下一题
+                  <kbd class="hotkey-badge">→</kbd>
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -135,7 +141,7 @@
           <p>{{ answeredCount }} 题已答 · {{ flaggedCount }} 题待复查</p>
           <div class="sheet-legend">
             <span class="legend-item"><span class="legend-badge answered">✔</span> 已答</span>
-            <span class="legend-item"><span class="legend-badge flagged">🚩</span> 待复查</span>
+            <span class="legend-item"><span class="legend-badge flagged"><LinearIcon name="target" size="10" /></span> 待复查</span>
             <span class="legend-item"><span class="legend-badge current">●</span> 当前</span>
             <span class="legend-item"><span class="legend-badge">○</span> 未答</span>
           </div>
@@ -163,7 +169,7 @@
         </div>
         <div class="sheet-legend">
           <span class="legend-item"><span class="legend-badge answered">✔</span> 已答</span>
-          <span class="legend-item"><span class="legend-badge flagged">🚩</span> 待查</span>
+          <span class="legend-item"><span class="legend-badge flagged"><LinearIcon name="target" size="10" /></span> 待查</span>
           <span class="legend-item"><span class="legend-badge current">●</span> 当前</span>
           <span class="legend-item"><span class="legend-badge">○</span> 未答</span>
         </div>
@@ -206,8 +212,14 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import LinearIcon from '../../components/LinearIcon.vue'
+import ThemeToggle from '../../components/ThemeToggle.vue'
+import LocaleToggle from '../../components/LocaleToggle.vue'
+import { useLocale } from '../../composables/useLocale.js'
 import { completeSession, getSession, getSessionQuestions, submitAttempt, syncDraft, toggleFlag } from '../../api/practice'
 import { calculateAccuracy, examAnswerState, findFirstUnansweredIndex, formatQuestionTypeName, formatRemainingTime, isSwipeGestureValid, normalizeExamAnswer } from '../../domain/exam'
+
+const { t } = useLocale()
 
 const props = defineProps({ token: { type: String, required: true }, sessionId: { type: String, required: true } })
 defineEmits(['back'])
@@ -469,30 +481,163 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.exam-page { width: min(100% - 2rem, 76rem); margin: 1.25rem auto; }
+.exam-page {
+  width: min(100% - 2rem, 76rem);
+  margin: 1.25rem auto;
+  padding-bottom: 5.5rem;
+}
 .exam-header { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+.exam-header.report-header { display: flex; justify-content: flex-start; gap: 1.25rem; }
 .exam-header h1 { font-size: 1.25rem; }
 .exam-header p, .exam-answer-sheet p, .question-meta { color: var(--text-muted); }
 .exam-clock { min-width: 5.5rem; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 0.65rem; background: var(--bg-card); text-align: center; font-variant-numeric: tabular-nums; font-weight: 700; }
 .exam-clock.warning { color: var(--danger); }
-.exam-layout { display: grid; grid-template-columns: minmax(0, 1fr) 17rem; gap: 1rem; align-items: start; }
-.exam-question-card, .exam-answer-sheet, .exam-report { padding: 1.25rem; border: 1px solid var(--border); border-radius: 1rem; background: var(--bg-card); box-shadow: var(--shadow-sm); }
+.exam-layout { display: grid; grid-template-columns: minmax(0, 1fr) 17rem; gap: 1.25rem; align-items: start; }
+.exam-question-card { padding: 1.5rem; border: 1px solid var(--border); border-radius: 1rem; background: var(--bg-card); box-shadow: var(--shadow-sm); }
+.exam-report {
+  padding: 2rem 1.75rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+  max-width: 52rem;
+  margin: 0 auto;
+}
+.exam-answer-sheet {
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100vh - 7.5rem);
+  overflow-y: auto;
+}
 .question-meta { display: flex; justify-content: space-between; margin-bottom: 1rem; }
 .exam-question-card h2 { margin-bottom: 1.25rem; font-size: 1.2rem; white-space: pre-wrap; }
 .exam-options { display: grid; gap: 0.65rem; }
-.exam-option { display: flex; gap: 0.7rem; align-items: flex-start; padding: 0.8rem; border: 1px solid var(--border); border-radius: 0.7rem; cursor: pointer; }
-.exam-option input { margin-top: 0.3rem; }
+.exam-option {
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--linear-bg-surface);
+  cursor: pointer;
+  transition: all 0.1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.exam-option:hover {
+  border-color: var(--border-strong);
+  background: var(--linear-bg-hover);
+}
+.exam-option.selected {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--text-main);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+.exam-option.selected .key-cap {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--primary);
+}
+.exam-option input { margin: 0; accent-color: var(--primary); }
 .exam-text-answer { display: grid; gap: 0.5rem; }
-.exam-text-answer textarea { width: 100%; min-height: 4rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.7rem; resize: vertical; }
-.exam-question-actions { display: flex; justify-content: space-between; gap: 0.75rem; margin-top: 1.25rem; }
-.exam-question-actions > div { display: flex; gap: 0.5rem; }
+.exam-text-answer textarea { width: 100%; min-height: 4rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-md); resize: vertical; }
+
+.exam-fixed-action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: color-mix(in srgb, var(--bg-card) 94%, transparent);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 16px color-mix(in srgb, var(--text-main) 16%, transparent);
+  padding: 0.65rem 1.25rem;
+  z-index: 50;
+}
+
+.exam-actions-inner {
+  width: min(100%, 76rem);
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.btn-flag-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-flag-toggle[aria-pressed="true"] {
+  background: var(--warning-light);
+  border-color: var(--warning);
+  color: var(--warning-hover);
+}
+
+.exam-nav-btns {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.btn-exam-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1.1rem;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-exam-nav:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.btn-exam-nav.primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+}
+
+.btn-exam-nav.primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.btn-exam-nav:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .exam-answer-sheet h2, .exam-answer-sheet p { margin-bottom: 0.5rem; }
 .answer-grid { display: grid; grid-template-columns: repeat(5, minmax(2.2rem, 1fr)); gap: 0.45rem; margin-top: 1rem; }
 .answer-grid button { min-height: 2.3rem; border: 1px solid var(--border); border-radius: 0.55rem; background: var(--bg-page); }
 .answer-grid button.answered { border-color: var(--success); background: var(--success-light); }
 .answer-grid button.flagged { box-shadow: inset 0 -3px var(--warning); }
 .answer-grid button.current { outline: 2px solid var(--primary); outline-offset: 1px; }
-.primary { padding: 0.65rem 0.9rem; border-radius: 0.6rem; background: var(--primary); color: white; }
+.primary { padding: 0.65rem 0.9rem; border-radius: 0.6rem; background: var(--primary); color: var(--on-primary); }
 .primary:disabled { opacity: 0.55; cursor: wait; }
 .exam-error { margin: 0.75rem 0; color: var(--danger); }
 .exam-loading { padding: 2rem; text-align: center; color: var(--text-muted); }
@@ -508,7 +653,7 @@ onBeforeUnmount(() => {
 .stats-table th { background: var(--bg-page); font-weight: 600; }
 .exam-review { margin: 1.5rem 0; }
 .review-item { padding: 1rem 0; border-top: 1px solid var(--border); }
-.exam-confirm-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 1rem; background: rgb(15 23 42 / 0.48); }
+.exam-confirm-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 1rem; background: color-mix(in srgb, var(--text-main) 44%, transparent); }
 .exam-confirm-dialog { width: min(100%, 28rem); padding: 1.5rem; border-radius: 1rem; background: var(--bg-card); box-shadow: var(--shadow-lg); }
 .exam-confirm-dialog p { margin-top: 0.5rem; color: var(--text-muted); }
 .btn-back { padding: 0.4rem 0.65rem; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--bg-card); cursor: pointer; }
@@ -520,7 +665,7 @@ onBeforeUnmount(() => {
 .exam-sheet-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.45);
+  background: color-mix(in srgb, var(--text-main) 44%, transparent);
   backdrop-filter: blur(2px);
   z-index: 100;
   display: flex;
@@ -558,22 +703,54 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 760px) {
-  .exam-page { width: 100%; margin: 0; padding: 0.35rem 0.5rem 2rem; }
+  .exam-page { width: 100%; margin: 0; padding: 0.35rem 0.5rem 5.5rem; }
   .exam-layout { grid-template-columns: 1fr; }
   .exam-answer-sheet { display: none !important; } /* Hide stuck-at-bottom sheet on mobile, use modal drawer */
-  .exam-header { grid-template-columns: auto 1fr auto auto; gap: 0.4rem; padding: 0.5rem 0.65rem; }
-  .exam-header h1 { font-size: 1rem; }
-  .exam-header p { font-size: 0.75rem; }
-  .exam-clock { min-width: 4rem; padding: 0.35rem 0.5rem; font-size: 0.825rem; }
+  .exam-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important;
+    gap: 0.35rem !important;
+    padding: 0.4rem 0.65rem !important;
+  }
+  .exam-header-center {
+    flex: 1;
+    min-width: 0;
+  }
+  .exam-header h1 {
+    font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .exam-header p { font-size: 0.725rem; white-space: nowrap; }
+  .exam-clock { min-width: auto; padding: 0.25rem 0.45rem; font-size: 0.775rem; white-space: nowrap; }
   .mobile-only-btn { display: inline-flex !important; }
   .exam-question-card { padding: 0.85rem; border-radius: var(--radius-md); }
   .exam-question-card h2 { font-size: 1.05rem; margin-bottom: 0.85rem; line-height: 1.45; }
   .exam-options { gap: 0.5rem; }
   .exam-option { padding: 0.6rem 0.75rem; border-radius: var(--radius-md); }
+  .exam-option input { display: none !important; }
   .key-cap { min-width: 1.5rem; height: 1.5rem; font-size: 0.8rem; }
   .hotkey-badge { display: none !important; }
   .answer-grid { grid-template-columns: repeat(8, minmax(2rem, 1fr)); }
   .report-summary { grid-template-columns: repeat(2, 1fr); }
-  .exam-header .primary { font-size: 0.85rem; padding: 0.4rem 0.65rem; }
+  .exam-header .primary {
+    font-size: 0.8rem;
+    padding: 0.35rem 0.6rem;
+    white-space: nowrap;
+  }
+  .exam-fixed-action-bar {
+    padding: 0.45rem 0.75rem calc(0.45rem + env(safe-area-inset-bottom, 0px));
+  }
+  .btn-flag-toggle {
+    padding: 0.45rem 0.7rem;
+    font-size: 0.8rem;
+  }
+  .btn-exam-nav {
+    padding: 0.45rem 0.85rem;
+    font-size: 0.8rem;
+  }
 }
 </style>

@@ -1,10 +1,12 @@
 <template>
   <main class="learning-page">
-    <header class="page-header">
-      <button type="button" @click="$emit('back')">返回</button>
-      <div>
-        <h1>学习诊断与提分推荐</h1>
-        <p>基于真实作答与抗遗忘算法的多维学习画像</p>
+    <header class="page-header learning-header">
+      <div class="header-left">
+        <button type="button" class="btn-back" @click="$emit('back')">← {{ t('common.back') }}</button>
+        <div>
+          <h1>{{ t('learning.title') }}</h1>
+          <p>{{ t('learning.fsrs_stats') }}</p>
+        </div>
       </div>
     </header>
 
@@ -16,26 +18,26 @@
       <section class="metrics-grid">
         <article class="bank-card stat-box">
           <small>题库覆盖率</small>
-          <strong>{{ store.trends.value.coverage_percent }}%</strong>
-          <p>{{ store.trends.value.attempted_questions }} / {{ store.trends.value.total_questions }} 题已练习</p>
+          <strong>{{ store.trends.value.coverage_percent ?? 0 }}%</strong>
+          <p>{{ store.trends.value.attempted_questions ?? 0 }} / {{ store.trends.value.total_questions ?? 0 }} 题已练习</p>
         </article>
 
         <article class="bank-card stat-box">
           <small>复习完成度</small>
           <strong>{{ store.trends.value.review_completion_rate ?? 100 }}%</strong>
-          <p>已复习 {{ store.trends.value.reviews_completed ?? 0 }} 题 · 待复习 {{ store.trends.value.due_reviews }} 题</p>
+          <p>已复习 {{ store.trends.value.reviews_completed ?? 0 }} 题 · 待复习 {{ store.trends.value.due_reviews ?? 0 }} 题</p>
         </article>
 
         <article class="bank-card stat-box">
           <small>近期平均正确率</small>
-          <strong>{{ store.trends.value.recent.correct_rate }}%</strong>
-          <p>近 {{ store.trends.value.window_days }} 天作答 {{ store.trends.value.recent.attempts }} 次</p>
+          <strong>{{ store.trends.value.recent?.correct_rate ?? 0 }}%</strong>
+          <p>近 {{ store.trends.value.window_days ?? 7 }} 天作答 {{ store.trends.value.recent?.attempts ?? 0 }} 次</p>
         </article>
 
         <article class="bank-card stat-box">
           <small>近期单题平均耗时</small>
-          <strong>{{ store.trends.value.recent.avg_time_per_question ?? 0 }} 秒</strong>
-          <p>累计用时 {{ Math.round((store.trends.value.recent.time_spent || 0) / 60) }} 分钟</p>
+          <strong>{{ store.trends.value.recent?.avg_time_per_question ?? 0 }} 秒</strong>
+          <p>累计用时 {{ Math.round((store.trends.value.recent?.time_spent || 0) / 60) }} 分钟</p>
         </article>
       </section>
 
@@ -44,21 +46,21 @@
         <h2>近期表现 vs 长期历史基线</h2>
         <div class="comparison-grid">
           <div class="comp-col recent">
-            <h3>近期窗口（近 {{ store.trends.value.window_days }} 天）</h3>
+            <h3>近期窗口（近 {{ store.trends.value.window_days ?? 7 }} 天）</h3>
             <ul>
-              <li><span>作答次数：</span><strong>{{ store.trends.value.recent.attempts }}</strong></li>
-              <li><span>正确率：</span><strong>{{ store.trends.value.recent.correct_rate }}%</strong></li>
-              <li><span>单题均耗时：</span><strong>{{ store.trends.value.recent.avg_time_per_question ?? 0 }} 秒</strong></li>
-              <li><span>练习题量：</span><strong>{{ store.trends.value.recent.attempted_questions }} 题</strong></li>
+              <li><span>作答次数：</span><strong>{{ store.trends.value.recent?.attempts ?? 0 }} 次</strong></li>
+              <li><span>正确率：</span><strong>{{ store.trends.value.recent?.correct_rate ?? 0 }}%</strong></li>
+              <li><span>单题均耗时：</span><strong>{{ store.trends.value.recent?.avg_time_per_question ?? 0 }} 秒</strong></li>
+              <li><span>练习题量：</span><strong>{{ store.trends.value.recent?.attempted_questions ?? 0 }} 题</strong></li>
             </ul>
           </div>
           <div class="comp-col baseline">
             <h3>长期历史基线（此前全部记录）</h3>
             <ul>
-              <li><span>作答次数：</span><strong>{{ store.trends.value.baseline.attempts }}</strong></li>
-              <li><span>正确率：</span><strong>{{ store.trends.value.baseline.correct_rate }}%</strong></li>
-              <li><span>单题均耗时：</span><strong>{{ store.trends.value.baseline.avg_time_per_question ?? 0 }} 秒</strong></li>
-              <li><span>趋势状态：</span><strong :class="trendClass">{{ trendText }}</strong></li>
+              <li><span>作答次数：</span><strong>{{ store.trends.value.baseline?.attempts ?? 0 }} 次</strong></li>
+              <li><span>正确率：</span><strong>{{ store.trends.value.baseline?.correct_rate ?? 0 }}%</strong></li>
+              <li><span>单题均耗时：</span><strong>{{ store.trends.value.baseline?.avg_time_per_question ?? 0 }} 秒</strong></li>
+              <li><span>趋势状态：</span><strong :class="trendClass">{{ trendText || '数据积累中' }}</strong></li>
             </ul>
           </div>
         </div>
@@ -81,52 +83,58 @@
         <div class="rec-header">
           <h2>动态提分推荐</h2>
           <div class="rec-controls">
-            <label class="ctrl-check">
-              <input type="checkbox" v-model="filterNew" @change="applyFilters" />
-              <span>新题覆盖</span>
-            </label>
-            <label class="ctrl-check">
-              <input type="checkbox" v-model="filterWeak" @change="applyFilters" />
-              <span>薄弱强化</span>
-            </label>
-            <label class="ctrl-check">
-              <input type="checkbox" v-model="filterDue" @change="applyFilters" />
-              <span>到期复习</span>
-            </label>
-            <label class="ctrl-select">
-              <select id="select-rec-type" v-model="filterType" @change="applyFilters">
-                <option value="">全部题型</option>
-                <option value="SINGLE">单选题</option>
-                <option value="MULTI">多选题</option>
-                <option value="JUDGE">判断题</option>
-                <option value="ESSAY">主观题</option>
-              </select>
-            </label>
-            <label class="ctrl-select">
-              <select id="select-rec-diff" v-model="filterDifficulty" @change="applyFilters">
-                <option value="">全部难度</option>
-                <option value="1">难度 1</option>
-                <option value="2">难度 2</option>
-                <option value="3">难度 3</option>
-                <option value="4">难度 4</option>
-                <option value="5">难度 5</option>
-              </select>
-            </label>
-            <label class="ctrl-select">
-              <select id="select-rec-ratio" v-model.number="filterNewRatio" @change="applyFilters">
-                <option :value="0.5">新题比 50%</option>
-                <option :value="0.3">新题比 30%</option>
-                <option :value="0.7">新题比 70%</option>
-                <option :value="1.0">纯新题 100%</option>
-                <option :value="0.0">纯复习 0%</option>
-              </select>
-            </label>
-            <label class="ctrl-select bank-filter-ctrl">
-              <select id="select-rec-bank" v-model="selectedBankId" @change="onBankChange">
-                <option value="">全部题库</option>
-                <option v-for="b in banks" :key="b.id" :value="b.id">{{ b.name }}</option>
-              </select>
-            </label>
+            <div class="rec-filter-groups">
+              <div class="rec-switch-group">
+                <label class="ctrl-check">
+                  <input type="checkbox" v-model="filterNew" @change="applyFilters" />
+                  <span>新题覆盖</span>
+                </label>
+                <label class="ctrl-check">
+                  <input type="checkbox" v-model="filterWeak" @change="applyFilters" />
+                  <span>薄弱强化</span>
+                </label>
+                <label class="ctrl-check">
+                  <input type="checkbox" v-model="filterDue" @change="applyFilters" />
+                  <span>到期复习</span>
+                </label>
+              </div>
+              <div class="rec-select-group">
+                <label class="ctrl-select bank-filter-ctrl">
+                  <select id="select-rec-bank" v-model="selectedBankId" @change="onBankChange">
+                    <option value="">全部题库</option>
+                    <option v-for="b in banks" :key="b.id" :value="b.id">{{ b.name }}</option>
+                  </select>
+                </label>
+                <label class="ctrl-select">
+                  <select id="select-rec-type" v-model="filterType" @change="applyFilters">
+                    <option value="">全部题型</option>
+                    <option value="SINGLE">单选题</option>
+                    <option value="MULTI">多选题</option>
+                    <option value="JUDGE">判断题</option>
+                    <option value="ESSAY">主观题</option>
+                  </select>
+                </label>
+                <label class="ctrl-select">
+                  <select id="select-rec-diff" v-model="filterDifficulty" @change="applyFilters">
+                    <option value="">全部难度</option>
+                    <option value="1">难度 1</option>
+                    <option value="2">难度 2</option>
+                    <option value="3">难度 3</option>
+                    <option value="4">难度 4</option>
+                    <option value="5">难度 5</option>
+                  </select>
+                </label>
+                <label class="ctrl-select">
+                  <select id="select-rec-ratio" v-model.number="filterNewRatio" @change="applyFilters">
+                    <option :value="0.5">新题比 50%</option>
+                    <option :value="0.3">新题比 30%</option>
+                    <option :value="0.7">新题比 70%</option>
+                    <option :value="1.0">纯新题 100%</option>
+                    <option :value="0.0">纯复习 0%</option>
+                  </select>
+                </label>
+              </div>
+            </div>
             <div v-if="recsByBank.length" class="rec-actions">
               <button
                 v-for="group in recsByBank"
@@ -199,7 +207,7 @@
           </label>
           <div class="form-actions">
             <button type="button" class="primary btn-regen-plan" :disabled="planLoading" @click="updatePlan">
-              {{ planLoading ? '正在智能排布…' : '🔄 重新排布计划' }}
+              {{ planLoading ? '正在智能排布…' : '重新排布计划' }}
             </button>
           </div>
         </div>
@@ -225,7 +233,7 @@
                   :disabled="!day.question_ids?.length"
                   @click="startDayPlan(day)"
                 >
-                  🚀 开始第 {{ day.day_number }} 天 ({{ day.question_count }} 题)
+                  开始第 {{ day.day_number }} 天 ({{ day.question_count }} 题)
                 </button>
               </div>
             </div>
@@ -251,7 +259,7 @@
               </ul>
             </div>
             <div v-else class="day-empty-tip">
-              <span>🎉 今日无待复习任务，已达到抗遗忘目标或推荐库已学完。</span>
+              <span>今日无待复习任务，已达到抗遗忘目标或推荐库已学完。</span>
             </div>
           </div>
         </div>
@@ -263,9 +271,13 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import LinearIcon from '../components/LinearIcon.vue'
 import { useLearningStore } from '../stores/learningStore'
 import { listBanks } from '../api/banks'
 import { startSession } from '../api/practice'
+import { useLocale } from '../composables/useLocale.js'
+
+const { t } = useLocale()
 
 const props = defineProps({ token: { type: String, required: true } })
 const emit = defineEmits(['back', 'start-session'])
@@ -364,6 +376,16 @@ async function startRecommendedPractice(group) {
   }
 }
 
+function formatQuestionTypeName(type) {
+  const map = {
+    SINGLE: '单选题',
+    MULTI: '多选题',
+    JUDGE: '判断题',
+    ESSAY: '主观题'
+  }
+  return map[type] || type || '单选题'
+}
+
 function isDayExpanded(dayNum) {
   return Boolean(expandedDays.value[dayNum])
 }
@@ -417,15 +439,34 @@ onMounted(async () => {
 <style scoped>
 .learning-page {
   width: min(100% - 2rem, 76rem);
+  max-width: 76rem;
   margin: 1.5rem auto;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.5rem;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.learning-header {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  min-width: 0;
+}
+
+.learning-header .header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
 }
 
 .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
   gap: 1.25rem;
+  min-width: 0;
 }
 
 .stat-box {
@@ -434,6 +475,7 @@ onMounted(async () => {
   padding: 1.35rem;
   background: var(--bg-card);
   border-radius: var(--radius-lg);
+  min-width: 0;
 }
 
 .stat-box strong {
@@ -449,6 +491,11 @@ onMounted(async () => {
   font-weight: 500;
 }
 
+.bank-card {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .stat-box p {
   font-size: 0.8125rem;
   color: var(--text-muted);
@@ -457,9 +504,10 @@ onMounted(async () => {
 
 .comparison-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
   gap: 1.25rem;
   margin-top: 1.25rem;
+  min-width: 0;
 }
 
 .comp-col {
@@ -467,6 +515,7 @@ onMounted(async () => {
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: var(--bg-page);
+  min-width: 0;
 }
 
 .comp-col h3 {
@@ -553,6 +602,33 @@ onMounted(async () => {
   gap: 0.75rem;
   align-items: center;
   flex-wrap: wrap;
+  width: 100%;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+}
+
+.rec-filter-groups {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.rec-switch-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.35rem 0.75rem;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.rec-select-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
 }
 
 .ctrl-check {
@@ -587,6 +663,8 @@ onMounted(async () => {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--bg-page);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .rec-reason {
@@ -595,12 +673,13 @@ onMounted(async () => {
   padding: 0.2rem 0.55rem;
   border-radius: var(--radius-sm);
   background: var(--primary);
-  color: white;
+  color: var(--on-primary);
   white-space: nowrap;
 }
 
 .rec-stem {
-  flex: 1;
+  flex: 1 1 0%;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -626,16 +705,17 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.4rem 0.85rem;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  border-radius: 9999px;
-  font-size: 0.85rem;
-  color: #1e40af;
+  padding: 0.35rem 0.75rem;
+  background: var(--primary-light);
+  border: 1px solid var(--primary-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--linear-mono);
+  font-size: 0.8rem;
+  color: var(--linear-cyan);
 }
 
 .plan-summary-badge .sep {
-  color: #93c5fd;
+  color: var(--border-strong);
 }
 
 .plan-form-grid {
@@ -699,7 +779,7 @@ onMounted(async () => {
 
 .day-card.day-empty {
   opacity: 0.75;
-  background: #f8fafc;
+  background: var(--bg-subtle);
 }
 
 .day-card-header {
@@ -723,7 +803,7 @@ onMounted(async () => {
   padding: 0.2rem 0.55rem;
   border-radius: var(--radius-sm);
   background: var(--primary);
-  color: white;
+  color: var(--on-primary);
 }
 
 .day-info h4 {
@@ -737,9 +817,9 @@ onMounted(async () => {
   font-weight: 600;
   padding: 0.15rem 0.5rem;
   border-radius: 9999px;
-  background: #f3e8ff;
-  border: 1px solid #d8b4fe;
-  color: #7e22ce;
+  background: var(--primary-light);
+  border: 1px solid var(--primary-border);
+  color: var(--primary);
 }
 
 .day-meta {
@@ -805,20 +885,23 @@ onMounted(async () => {
   background: var(--bg-page);
   border-radius: var(--radius-sm);
   font-size: 0.85rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .item-reason-tag {
   font-size: 0.725rem;
   padding: 0.15rem 0.4rem;
   border-radius: 3px;
-  background: #e0f2fe;
-  color: #0369a1;
+  background: var(--primary-light);
+  color: var(--primary);
   font-weight: 600;
   white-space: nowrap;
 }
 
 .item-stem {
-  flex: 1;
+  flex: 1 1 0%;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -837,16 +920,58 @@ onMounted(async () => {
   font-style: italic;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .learning-page {
-    width: min(100% - 1rem, 76rem);
-    margin: 0.75rem auto;
+    width: 100% !important;
+    max-width: 100vw !important;
+    padding: 0 0.5rem !important;
+    margin: 0.5rem auto !important;
+    gap: 0.85rem !important;
+    overflow-x: hidden !important;
+    box-sizing: border-box !important;
+  }
+  .bank-card {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .stat-box {
+    padding: 0.75rem 0.65rem !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+  .stat-box strong {
+    font-size: 1.25rem !important;
+  }
+  .stat-box small {
+    font-size: 0.75rem !important;
+  }
+  .stat-box p {
+    font-size: 0.7rem !important;
+    line-height: 1.3 !important;
+    word-break: break-all !important;
   }
   .comparison-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
+    gap: 0.85rem !important;
   }
   .rec-controls {
-    width: 100%;
+    width: 100% !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.45rem !important;
+  }
+  .ctrl-select select {
+    max-width: 100% !important;
+  }
+  .rec-item {
+    flex-wrap: wrap !important;
   }
 }
 </style>

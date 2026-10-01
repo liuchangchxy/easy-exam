@@ -33,19 +33,28 @@ def _normalize(s: str) -> str:
 
 
 def normalize_difficulty(value: Any) -> int:
-    """Normalize textual or numeric difficulty into EasyExam 1..5 scale (default 3)."""
-    norm = _normalize(str(value or ""))
+    """Normalize textual or numeric difficulty into EasyExam 1..5 scale (0 for unclassified)."""
+    if value is None:
+        return 0
+    raw_str = str(value).strip()
+    if not raw_str:
+        return 0
+    norm = _normalize(raw_str)
     if norm in {"简单", "easy", "1"}:
         return 1
-    if norm in {"中等", "适中", "medium", "2", "3"}:
+    if norm in {"较易", "2"}:
+        return 2
+    if norm in {"中等", "适中", "medium", "3"}:
         return 3
-    if norm in {"困难", "hard", "4", "5"}:
+    if norm in {"较难", "4"}:
+        return 4
+    if norm in {"困难", "hard", "5"}:
         return 5
     try:
         val = int(value)
         return min(max(val, 1), 5)
     except (ValueError, TypeError):
-        return 3
+        return 0
 
 
 def detect_column_type(val: str) -> Optional[str]:
@@ -306,7 +315,7 @@ def parse_rows_with_mapping(rows: List[List[Any]], mapping: Dict[str, Any]) -> L
             qtype = detect_type_from_qa(stem, answer, bool(options))
 
         explanation = str(row[exp_idx]).strip() if exp_idx is not None and exp_idx < len(row) and row[exp_idx] is not None else ""
-        difficulty = normalize_difficulty(row[diff_idx]) if diff_idx is not None and diff_idx < len(row) and row[diff_idx] is not None else 3
+        difficulty = normalize_difficulty(row[diff_idx]) if diff_idx is not None and diff_idx < len(row) and row[diff_idx] is not None and str(row[diff_idx]).strip() else 0
 
         tags = []
         if tags_idx is not None and tags_idx < len(row) and row[tags_idx] is not None:

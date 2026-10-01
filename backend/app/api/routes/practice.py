@@ -83,6 +83,8 @@ def get_session_questions(session_id: str, request: Request, user=Depends(curren
         return request.app.state.services.practice.get_session(user["id"], session_id)["questions"]
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/sessions/{session_id}/answer", status_code=201)
@@ -96,6 +98,8 @@ def sync_draft(session_id: str, payload: DraftPayload, request: Request, user=De
         return request.app.state.services.practice.sync_draft(user["id"], session_id, payload.model_dump())
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/sessions/{session_id}/toggle-flag")
@@ -104,6 +108,8 @@ def toggle_flag(session_id: str, payload: FlagPayload, request: Request, user=De
         return {"flags": request.app.state.services.practice.toggle_flag(user["id"], session_id, payload.question_id)}
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/sessions/{session_id}/complete")
@@ -112,6 +118,8 @@ def complete_session(session_id: str, request: Request, user=Depends(current_use
         return request.app.state.services.practice.complete_session(user["id"], session_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/sessions/{session_id}/abandon")
@@ -120,6 +128,8 @@ def abandon_session(session_id: str, request: Request, user=Depends(current_user
         return request.app.state.services.practice.abandon_session(user["id"], session_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/sessions/abandon-all")

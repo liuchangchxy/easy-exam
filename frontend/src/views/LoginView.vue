@@ -1,11 +1,14 @@
 <template>
   <main class="auth-page">
+    <div class="auth-theme-switch" style="display: flex; gap: 0.5rem;"><ThemeToggle compact /><LocaleToggle compact /></div>
     <div class="auth-background-decoration"></div>
     <section class="auth-card">
       <div class="auth-brand">
-        <div class="brand-logo">📚</div>
-        <h1>易考宝</h1>
-        <p class="brand-sub">私有云刷题与错题消灭系统</p>
+        <div class="brand-logo">
+          <LinearIcon name="zap" size="24" />
+        </div>
+        <h1>{{ t('app.name') }}</h1>
+        <p class="brand-sub">{{ t('app.subtitle') }}</p>
       </div>
 
       <form class="auth-form" @submit.prevent="submit">
@@ -41,7 +44,7 @@
               :title="showPassword ? '隐藏密码' : '显示明文密码'"
               @click="showPassword = !showPassword"
             >
-              {{ showPassword ? '🙈' : '👁️' }}
+              {{ showPassword ? '隐藏' : '显示' }}
             </button>
           </div>
         </div>
@@ -62,7 +65,7 @@
               :title="showConfirmPassword ? '隐藏密码' : '显示明文密码'"
               @click="showConfirmPassword = !showConfirmPassword"
             >
-              {{ showConfirmPassword ? '🙈' : '👁️' }}
+              {{ showConfirmPassword ? '隐藏' : '显示' }}
             </button>
           </div>
         </div>
@@ -95,7 +98,13 @@
 
 <script setup>
 import { ref } from 'vue'
+import LinearIcon from '../components/LinearIcon.vue'
+import ThemeToggle from '../components/ThemeToggle.vue'
+import LocaleToggle from '../components/LocaleToggle.vue'
+import { useLocale } from '../composables/useLocale.js'
 import * as authApi from '../api/auth'
+
+const { t } = useLocale()
 
 const emit = defineEmits(['authenticated'])
 const username = ref('')
@@ -159,19 +168,26 @@ async function submit() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
+  background: var(--bg-page);
   padding: 1.5rem;
   position: relative;
   overflow: hidden;
 }
 
+.auth-theme-switch {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 2;
+}
+
 .auth-card {
   width: 100%;
   max-width: 25rem;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   border-radius: 1rem;
-  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+  box-shadow: var(--shadow-lg);
   padding: 2.25rem 2rem;
   position: relative;
   z-index: 1;
@@ -191,20 +207,20 @@ async function submit() {
 .auth-brand h1 {
   font-size: 1.6rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--text-main);
   margin: 0 0 0.25rem 0;
   letter-spacing: -0.02em;
 }
 
 .brand-sub {
   font-size: 0.875rem;
-  color: #64748b;
+  color: var(--text-muted);
   margin: 0;
 }
 
 .auth-tab-switch {
   display: flex;
-  background: #f1f5f9;
+  background: var(--bg-subtle);
   border-radius: 0.5rem;
   padding: 0.25rem;
   margin-bottom: 1.5rem;
@@ -218,17 +234,17 @@ async function submit() {
   padding: 0.5rem 0;
   font-size: 0.875rem;
   font-weight: 500;
-  color: #64748b;
+  color: var(--text-muted);
   border-radius: 0.375rem;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .tab-btn.active {
-  background: #ffffff;
-  color: #2563eb;
+  background: var(--bg-card);
+  color: var(--primary);
   font-weight: 600;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-sm);
 }
 
 .auth-form {
@@ -246,7 +262,7 @@ async function submit() {
 .field-label {
   font-size: 0.825rem;
   font-weight: 600;
-  color: #334155;
+  color: var(--text-main);
 }
 
 .input-wrapper {
@@ -258,20 +274,20 @@ async function submit() {
 .input-wrapper input {
   width: 100%;
   padding: 0.65rem 0.85rem;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-strong);
   border-radius: 0.5rem;
   font-size: 0.95rem;
-  color: #0f172a;
-  background: #f8fafc;
+  color: var(--text-main);
+  background: var(--bg-page);
   transition: all 0.15s ease;
   box-sizing: border-box;
 }
 
 .input-wrapper input:focus {
   outline: none;
-  border-color: #3b82f6;
-  background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  border-color: var(--primary);
+  background: var(--bg-card);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
 }
 
 .input-wrapper.has-trailing-action input {
@@ -308,14 +324,14 @@ async function submit() {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.825rem;
-  color: #475569;
+  color: var(--text-muted);
   cursor: pointer;
   user-select: none;
 }
 
 .remember-label input[type="checkbox"] {
   cursor: pointer;
-  accent-color: #2563eb;
+  accent-color: var(--primary);
   width: 1rem;
   height: 1rem;
 }
@@ -325,18 +341,18 @@ async function submit() {
   align-items: center;
   gap: 0.5rem;
   padding: 0.65rem 0.85rem;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: var(--danger-light);
+  border: 1px solid var(--danger-border);
   border-radius: 0.5rem;
-  color: #dc2626;
+  color: var(--danger);
   font-size: 0.825rem;
 }
 
 .submit-btn {
   width: 100%;
   padding: 0.75rem;
-  background: #2563eb;
-  color: #ffffff;
+  background: var(--primary);
+  color: var(--on-primary);
   border: none;
   border-radius: 0.5rem;
   font-size: 0.95rem;
@@ -347,7 +363,7 @@ async function submit() {
 }
 
 .submit-btn:hover:not(:disabled) {
-  background: #1d4ed8;
+  background: var(--primary-hover);
 }
 
 .submit-btn:active:not(:disabled) {
@@ -363,13 +379,13 @@ async function submit() {
   text-align: center;
   margin-top: 1.25rem;
   padding-top: 1rem;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .link-button {
   border: none;
   background: transparent;
-  color: #2563eb;
+  color: var(--primary);
   font-size: 0.85rem;
   cursor: pointer;
   font-weight: 500;

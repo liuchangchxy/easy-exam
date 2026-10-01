@@ -1,68 +1,95 @@
 <template>
   <main class="home-page">
-    <header class="page-header">
-      <div>
-        <h1>我的题库</h1>
-        <p>{{ user?.username }}</p>
+    <header class="page-header home-header">
+      <div class="home-brand-area">
+        <div class="home-brand-title">
+          <span class="home-brand-icon">
+            <LinearIcon name="layers" size="18" />
+          </span>
+          <h1>题库资产大厅</h1>
+        </div>
+        <p class="home-user-pill">
+          <span class="user-role-dot" :class="user?.is_admin ? 'role-admin' : 'role-user'"></span>
+          {{ user?.username }}
+          <span v-if="user?.is_admin" class="user-role-badge">管理员</span>
+        </p>
       </div>
-      <nav class="home-nav-bar">
-        <div class="nav-cluster nav-primary">
-          <button class="nav-btn nav-btn-featured" @click="$emit('learning')">📊 学习诊断</button>
-          <button class="nav-btn nav-btn-featured" @click="$emit('mistakes')">🎯 错题与斩杀</button>
-        </div>
-        <div class="nav-cluster nav-secondary">
-          <button class="nav-btn" @click="showCreateDialog = true">+ 创建题库</button>
-          <button class="nav-btn" @click="$emit('import')">📥 导入题目</button>
-          <button class="nav-btn" @click="openBlueprintDialog">📐 蓝图配置</button>
-          <button class="nav-btn" @click="openDraftsDialog">📝 变式草稿箱</button>
-        </div>
-        <div class="nav-cluster nav-user">
-          <button class="nav-btn" @click="openAiConfigDialog">🤖 AI与搜索配置</button>
-          <button class="nav-btn" @click="openAssetsDialog">👤 个人资料</button>
-          <button class="nav-btn btn-logout-text" @click="$emit('logout')">退出</button>
-        </div>
+
+      <nav class="home-main-nav">
+        <button type="button" class="main-nav-tab featured" @click="$emit('learning')">
+          <LinearIcon name="chart" size="14" /> {{ t('nav.learning') }}
+        </button>
+        <button type="button" class="main-nav-tab featured" @click="$emit('mistakes')">
+          <LinearIcon name="target" size="14" /> {{ t('nav.mistakes') }}
+        </button>
+        <button type="button" class="main-nav-tab" @click="$emit('import')">
+          <LinearIcon name="inbox" size="14" /> {{ t('nav.imports') }}
+        </button>
       </nav>
+
+      <div class="home-actions-area">
+        <button type="button" class="primary btn-create-bank" @click="showCreateDialog = true">
+          <LinearIcon name="plus" size="14" /> {{ t('home.create_bank') }}
+        </button>
+        <div class="home-utility-group">
+          <button type="button" class="btn-util" @click="openBlueprintDialog" title="蓝图配置">
+            <LinearIcon name="blueprint" size="14" /> <span class="btn-util-label">蓝图</span>
+          </button>
+          <button type="button" class="btn-util" @click="openDraftsDialog" title="变式草稿箱">
+            <LinearIcon name="draft" size="14" /> <span class="btn-util-label">草稿箱</span>
+          </button>
+          <button type="button" class="btn-util" @click="openAiConfigDialog" title="AI与搜索配置">
+            <LinearIcon name="cpu" size="14" /> <span class="btn-util-label">AI配置</span>
+          </button>
+          <button type="button" class="btn-util" @click="openAssetsDialog" title="个人资料">
+            <LinearIcon name="user" size="14" /> <span class="btn-util-label">资料</span>
+          </button>
+          <button type="button" class="btn-util btn-logout" @click="$emit('logout')" :title="t('nav.logout')">
+            {{ t('nav.logout') }}
+          </button>
+        </div>
+      </div>
     </header>
 
-    <!-- EE-019: 未完成会话恢复与管理横幅 -->
+    <!-- EE-019: 未完成会话恢复与管理终端 HUD -->
     <section v-if="activeSessions.length > 0" class="active-session-banner">
       <div class="banner-content">
-        <span class="banner-badge">⏱️ 未完成作答会话 ({{ activeSessions.length }})</span>
+        <span class="banner-badge">
+          <LinearIcon name="terminal" size="13" /> ACTIVE SESSION
+        </span>
         <span class="banner-text">
           <template v-if="activeSessions.length === 1">
-            您有 1 个未完成会话：
-            【{{ activeSessions[0].bank_name }}】{{ formatSessionMode(activeSessions[0].mode) }}
-            （已作答 {{ activeSessions[0].answered_count }} / {{ activeSessions[0].total_questions }} 题）
+            未完成会话：【{{ activeSessions[0].bank_name }}】{{ formatSessionMode(activeSessions[0].mode) }}
+            <span class="font-mono-code">({{ activeSessions[0].answered_count }} / {{ activeSessions[0].total_questions }} 题)</span>
           </template>
           <template v-else>
-            您有 {{ activeSessions.length }} 个未完成会话。最近会话：
-            【{{ activeSessions[0].bank_name }}】{{ formatSessionMode(activeSessions[0].mode) }}
-            （已作答 {{ activeSessions[0].answered_count }} / {{ activeSessions[0].total_questions }} 题）
+            {{ activeSessions.length }} 个进行中会话。最近：【{{ activeSessions[0].bank_name }}】{{ formatSessionMode(activeSessions[0].mode) }}
+            <span class="font-mono-code">({{ activeSessions[0].answered_count }} / {{ activeSessions[0].total_questions }} 题)</span>
           </template>
         </span>
       </div>
       <div class="banner-btn-group">
         <button type="button" class="primary btn-resume-session" @click="handleResume(activeSessions[0])">
-          {{ activeSessions.length > 1 ? '恢复最近会话' : '继续答题' }}
+          <LinearIcon name="play" size="13" /> {{ activeSessions.length > 1 ? '恢复最近会话' : '继续答题' }}
         </button>
         <button v-if="activeSessions.length > 1" type="button" class="secondary-btn btn-view-all-sessions" @click="showActiveSessionsModal = true">
-          选择其它会话 (全部 {{ activeSessions.length }} 个)
+          全部会话 ({{ activeSessions.length }})
         </button>
         <button v-else type="button" class="btn-abandon-single text-btn" :disabled="abandoningSession" @click="handleAbandonSession(activeSessions[0].id)">
-          放弃此会话
+          放弃会话
         </button>
       </div>
     </section>
 
-    <!-- 未完成会话列表与管理对话框 (EE-019 完整多会话恢复与清理) -->
+    <!-- 未完成会话列表与管理对话框 (EE-019) -->
     <div v-if="showActiveSessionsModal" class="exam-setup-backdrop" @click.self="showActiveSessionsModal = false" @keydown.esc="showActiveSessionsModal = false">
       <div class="exam-setup-dialog active-sessions-dialog" role="dialog" aria-modal="true" style="width: min(100%, 46rem); max-height: 85vh; overflow-y: auto;">
         <div class="dialog-header-row" style="display: flex; justify-content: space-between; align-items: center;">
-          <h2 style="font-size: 1.15rem; margin: 0;">未完成作答会话列表 (共 {{ activeSessions.length }} 个)</h2>
-          <button type="button" class="btn-close-icon" style="border: none; background: none; font-size: 1.25rem; cursor: pointer;" @click="showActiveSessionsModal = false">✕</button>
+          <h2 style="font-size: 1.15rem; margin: 0;">未完成作答会话 (共 {{ activeSessions.length }} 个)</h2>
+          <button type="button" class="btn-close-icon" style="border: none; background: none; font-size: 1.25rem; cursor: pointer; color: var(--linear-text-muted);" @click="showActiveSessionsModal = false">✕</button>
         </div>
-        <p style="font-size: 0.85rem; color: #64748b; margin: 0.25rem 0 0.75rem;">
-          检测到您有多个未完成的历史会话，可在此自由选择恢复继续作答，或放弃不再需要的草稿会话。
+        <p style="font-size: 0.825rem; color: var(--linear-text-dim); margin: 0.25rem 0 0.75rem;">
+          检测到多个未完成历史会话，可在此恢复继续作答，或放弃不再需要的草稿会话。
         </p>
 
         <div class="active-sessions-list" style="display: grid; gap: 0.75rem; margin-bottom: 1rem;">
@@ -70,25 +97,25 @@
             v-for="sess in activeSessions"
             :key="sess.id"
             class="session-card-item"
-            style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.85rem 1rem; background: #ffffff; display: flex; justify-content: space-between; align-items: center; gap: 1rem;"
+            style="border: 1px solid var(--border); border-radius: 8px; padding: 0.85rem 1rem; background: var(--bg-card); display: flex; justify-content: space-between; align-items: center; gap: 1rem;"
           >
             <div style="flex: 1;">
               <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.35rem;">
-                <span style="font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.5rem; border-radius: 4px; background: #e0f2fe; color: #0369a1;">
+                <span style="font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.5rem; border-radius: 4px; background: var(--primary-light); color: var(--linear-cyan); font-family: var(--linear-mono);">
                   {{ formatSessionMode(sess.mode) }}
                 </span>
-                <strong style="font-size: 0.95rem; color: #0f172a;">{{ sess.bank_name }}</strong>
-                <small style="color: #94a3b8;">{{ formatTimeAgo(sess.updated_at || sess.created_at) }}</small>
+                <strong style="font-size: 0.95rem; color: var(--text-main);">{{ sess.bank_name }}</strong>
+                <small style="color: var(--text-tertiary); font-family: var(--linear-mono);">{{ formatTimeAgo(sess.updated_at || sess.created_at) }}</small>
               </div>
               <div style="display: flex; align-items: center; gap: 0.75rem;">
-                <div style="flex: 1; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; max-width: 180px;">
+                <div style="flex: 1; height: 6px; background: var(--border-strong); border-radius: 3px; overflow: hidden; max-width: 180px;">
                   <div
-                    style="height: 100%; background: #3b82f6; border-radius: 3px;"
+                    style="height: 100%; background: var(--primary); border-radius: 3px;"
                     :style="{ width: `${sess.total_questions ? Math.min(100, Math.round((sess.answered_count / sess.total_questions) * 100)) : 0}%` }"
                   ></div>
                 </div>
-                <span style="font-size: 0.8rem; color: #64748b;">
-                  已答 {{ sess.answered_count }} / {{ sess.total_questions }} 题
+                <span style="font-size: 0.8rem; color: var(--text-muted); font-family: var(--linear-mono);">
+                  {{ sess.answered_count }} / {{ sess.total_questions }} 题
                   ({{ sess.total_questions ? Math.min(100, Math.round((sess.answered_count / sess.total_questions) * 100)) : 0 }}%)
                 </span>
               </div>
@@ -99,7 +126,7 @@
               </button>
               <button
                 type="button"
-                style="padding: 0.4rem 0.75rem; font-size: 0.85rem; border: 1px solid #cbd5e1; background: #ffffff; color: #ef4444; border-radius: 6px; cursor: pointer;"
+                style="padding: 0.4rem 0.75rem; font-size: 0.85rem; border: 1px solid var(--border); background: var(--bg-card); color: var(--danger); border-radius: 6px; cursor: pointer;"
                 :disabled="abandoningSession"
                 @click="handleAbandonSession(sess.id)"
               >
@@ -109,28 +136,28 @@
           </div>
         </div>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e2e8f0; padding-top: 0.75rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 0.75rem;">
           <button
             type="button"
-            style="color: #ef4444; background: none; border: 1px solid #fecaca; border-radius: 6px; padding: 0.4rem 0.8rem; font-size: 0.85rem; cursor: pointer;"
+            style="color: var(--danger); background: none; border: 1px solid var(--danger-border); border-radius: 6px; padding: 0.4rem 0.8rem; font-size: 0.85rem; cursor: pointer;"
             :disabled="abandoningSession"
             @click="handleAbandonAllSessions"
           >
-            全部放弃 (清空未完成草稿)
+            全部放弃 (清空草稿)
           </button>
-          <button type="button" style="padding: 0.4rem 1rem;" @click="showActiveSessionsModal = false">关闭</button>
+          <button type="button" class="secondary-btn" style="padding: 0.4rem 1rem;" @click="showActiveSessionsModal = false">关闭</button>
         </div>
       </div>
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="loading">正在加载题库…</p>
+    <p v-if="loading" class="muted" style="padding: 2rem; text-align: center; font-family: var(--linear-mono);">正在载入题库资源...</p>
     <section v-else class="bank-grid">
       <article v-for="bank in banks" :key="bank.id" class="bank-card" :class="{ 'has-active-session': Boolean(getActiveSessionForBank(bank.id)) }">
         <div class="bank-card-title-row">
           <h2>{{ bank.name }}</h2>
           <span v-if="getActiveSessionForBank(bank.id)" class="badge-active-progress">
-            ⏱️ 进行中 ({{ getActiveSessionForBank(bank.id).answered_count }}/{{ getActiveSessionForBank(bank.id).total_questions }} 题)
+            <LinearIcon name="clock" size="12" /> 进行中 ({{ getActiveSessionForBank(bank.id).answered_count }}/{{ getActiveSessionForBank(bank.id).total_questions }} 题)
           </span>
         </div>
         <p>{{ bank.description || '暂无描述' }}</p>
@@ -138,22 +165,30 @@
           <small>{{ bank.question_count }} 题</small>
           <span v-if="bank.category" class="bank-category-pill">{{ bank.category }}</span>
         </div>
-        <div class="bank-actions">
-          <button
-            v-if="getActiveSessionForBank(bank.id)"
-            class="primary btn-resume-direct"
-            @click="handleResume(getActiveSessionForBank(bank.id))"
-          >
-            继续答题
-          </button>
-          <button class="primary" :disabled="!bank.question_count" @click="$emit('start', bank)">开始刷题</button>
-          <button class="secondary-btn" :disabled="!bank.question_count" @click="openExamSetup(bank)">开始模考</button>
-          <button class="action-link-btn" @click="openAddQuestion(bank)">+ 录入题目</button>
-          <button class="action-link-btn" @click="openShareDialog(bank)">共享/成员</button>
-          <button class="action-link-btn" @click="openExportDialog(bank)">导出</button>
+        <div class="bank-actions-container">
+          <div class="bank-primary-actions">
+            <button
+              v-if="getActiveSessionForBank(bank.id)"
+              class="primary btn-resume-direct"
+              @click="handleResume(getActiveSessionForBank(bank.id))"
+            >
+              <LinearIcon name="play" size="13" /> 继续答题
+            </button>
+            <button class="primary" :disabled="!bank.question_count" @click="$emit('start', bank)">
+              <LinearIcon name="play" size="13" /> 开始刷题
+            </button>
+            <button class="secondary-btn" :disabled="!bank.question_count" @click="openExamSetup(bank)">
+              <LinearIcon name="award" size="13" /> 开始模考
+            </button>
+          </div>
+          <div class="bank-utility-actions">
+            <button type="button" class="btn-util-link" @click="openAddQuestion(bank)">+ 录入</button>
+            <button type="button" class="btn-util-link" @click="openShareDialog(bank)">共享</button>
+            <button type="button" class="btn-util-link" @click="openExportDialog(bank)">导出</button>
+          </div>
         </div>
       </article>
-      <p v-if="!banks.length">还没有题库，请点击上方“创建题库”或通过“导入题目”添加。</p>
+      <p v-if="!banks.length" class="muted" style="grid-column: 1 / -1; padding: 3rem; text-align: center;">还没有题库，请点击上方“创建题库”或通过“导入题目”添加。</p>
     </section>
 
     <!-- 创建题库对话框 -->
@@ -197,40 +232,40 @@
               </option>
             </select>
             <button type="button" class="action-link-btn" style="white-space: nowrap; font-size: 0.8rem; padding: 0.35rem 0.6rem;" @click="openBlueprintDialogFromExam">
-              ⚙️ 蓝图配置
+              蓝图配置
             </button>
           </div>
         </label>
-        <div v-if="selectedProfileBlueprintSummary" style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.85rem; color: #166534;">
-          <strong>📘 蓝图规则已就绪：</strong>
+        <div v-if="selectedProfileBlueprintSummary" style="background: var(--success-light); border: 1px solid var(--success-border); border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.85rem; color: var(--success);">
+          <strong>蓝图规则已就绪：</strong>
           共 {{ selectedProfileBlueprintSummary.sectionsCount }} 个大题小节 · 预设题量 {{ selectedProfileBlueprintSummary.totalQuestions }} 题
           <span v-if="selectedProfileBlueprintSummary.negativeMark > 0">· 错题倒扣 {{ selectedProfileBlueprintSummary.negativeMark }} 分</span>
-          <div style="font-size: 0.78rem; color: #15803d; margin-top: 0.2rem;">
+          <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem;">
             题量已自动同步为蓝图标准题量 ({{ totalQuestions }} 题)
           </div>
         </div>
-        <label class="ctrl-check">
+        <label class="ctrl-check exam-option-checkbox">
           <input v-model="recordMistakes" type="checkbox" />
           <span>错题入库（取消勾选则本场模考错题不计入错题本）</span>
         </label>
         <p v-if="examError" class="error">{{ examError }}</p>
-        <div class="bank-actions">
-          <button type="button" @click="examBank = null">取消</button>
-          <button type="submit" :disabled="startingExam">{{ startingExam ? '正在创建…' : '开始考试' }}</button>
+        <div class="dialog-actions-row">
+          <button type="button" class="secondary-btn" @click="examBank = null">取消</button>
+          <button type="submit" class="primary" :disabled="startingExam">{{ startingExam ? '正在创建…' : '开始考试' }}</button>
         </div>
       </form>
     </div>
 
     <!-- EE-011: 手动录入题目对话框 -->
     <div v-if="showAddQuestionDialog" class="exam-setup-backdrop" @click.self="showAddQuestionDialog = false" @keydown.esc="showAddQuestionDialog = false">
-      <form class="exam-setup-dialog" role="dialog" style="width: min(100%, 36rem);" @submit.prevent="handleCreateQuestion">
+      <form class="exam-setup-dialog" role="dialog" style="width: min(100%, 36rem); max-height: 85vh; overflow-y: auto;" @submit.prevent="handleCreateQuestion">
         <h2>手动录入题目（题库：{{ targetBankForQuestion?.name }}）</h2>
         <label>题干
           <textarea v-model.trim="addQuestionForm.stem" rows="2" placeholder="请输入题目内容" required></textarea>
         </label>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
           <label>题型
-            <select v-model="addQuestionForm.type">
+            <select v-model="addQuestionForm.type" @change="onQuestionTypeChange">
               <option value="SINGLE">单选题</option>
               <option value="MULTI">多选题</option>
               <option value="JUDGE">判断题</option>
@@ -248,18 +283,43 @@
           </label>
         </div>
         <div v-if="addQuestionForm.type === 'SINGLE' || addQuestionForm.type === 'MULTI' || addQuestionForm.type === 'JUDGE'">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
-            <label style="margin: 0;">选项配置</label>
-            <button type="button" class="btn-add-opt" @click="handleAddOpt">+ 加选项</button>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <label style="margin: 0; font-weight: 600;">选项配置（点选直接设为标准答案）</label>
+            <button v-if="addQuestionForm.type !== 'JUDGE'" type="button" class="btn-add-opt" @click="handleAddOpt">+ 加选项</button>
           </div>
-          <div v-for="(opt, idx) in addQuestionForm.options" :key="idx" style="display: flex; gap: 0.5rem; margin-bottom: 0.4rem;">
-            <input v-model.trim="opt.key" style="width: 3.5rem;" placeholder="标识" />
+          <div v-for="(opt, idx) in addQuestionForm.options" :key="idx" class="add-opt-row" style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.45rem;">
+            <label style="display: flex; align-items: center; margin: 0; cursor: pointer;" :title="`设为标准答案 (${opt.key})`">
+              <input
+                v-if="addQuestionForm.type === 'SINGLE' || addQuestionForm.type === 'JUDGE'"
+                type="radio"
+                name="correct-opt-radio"
+                :checked="addQuestionForm.answer === opt.key"
+                @change="addQuestionForm.answer = opt.key"
+              />
+              <input
+                v-else-if="addQuestionForm.type === 'MULTI'"
+                type="checkbox"
+                :checked="addQuestionForm.answer.includes(opt.key)"
+                @change="handleToggleMultiAnswer(opt.key)"
+              />
+            </label>
+            <input v-model.trim="opt.key" style="width: 3.5rem; text-align: center; font-weight: 600;" placeholder="标识" />
             <input v-model.trim="opt.text" style="flex: 1;" placeholder="选项文本" />
-            <button type="button" @click="addQuestionForm.options.splice(idx, 1)">删</button>
+            <button
+              v-if="addQuestionForm.type !== 'JUDGE'"
+              type="button"
+              class="btn-remove-opt"
+              title="删除此选项"
+              style="border: none; background: var(--danger-light); color: var(--danger); border-radius: 4px; padding: 0.35rem 0.6rem; cursor: pointer; font-size: 0.85rem;"
+              @click="addQuestionForm.options.splice(idx, 1)"
+            >✕</button>
           </div>
         </div>
         <label>标准答案
-          <input v-model.trim="addQuestionForm.answer" placeholder="如 A / AB / T" required />
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input v-model.trim="addQuestionForm.answer" placeholder="如 A / AB / T" required style="flex: 1;" />
+            <span style="font-size: 0.8rem; color: var(--text-muted);">(可在上方直接点选)</span>
+          </div>
         </label>
         <label>解析
           <textarea v-model.trim="addQuestionForm.explanation" rows="2" placeholder="题目解析说明"></textarea>
@@ -284,15 +344,15 @@
         <!-- 现有成员列表 -->
         <div style="margin-bottom: 1rem;">
           <h3 style="font-size: 0.95rem; margin-bottom: 0.4rem;">现有成员列表</h3>
-          <div v-if="loadingMembers" style="color: #94a3b8; font-size: 0.85rem;">正在加载成员...</div>
+          <div v-if="loadingMembers" style="color: var(--text-tertiary); font-size: 0.85rem;">正在加载成员...</div>
           <div v-else style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 8rem; overflow-y: auto;">
-            <div v-for="m in bankMembersList" :key="m.user_id" style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.6rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px;">
+            <div v-for="m in bankMembersList" :key="m.user_id" style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.6rem; background: var(--bg-page); border: 1px solid var(--border); border-radius: 4px;">
               <span style="font-size: 0.85rem; font-weight: 500;">{{ m.username }}</span>
               <div style="display: flex; align-items: center; gap: 0.6rem;">
-                <span style="font-size: 0.75rem; padding: 0.1rem 0.4rem; background: #f1f5f9; border-radius: 4px;">
+                <span style="font-size: 0.75rem; padding: 0.1rem 0.4rem; background: var(--bg-subtle); border-radius: 4px;">
                   {{ m.role === 'ADMIN' ? '管理员' : m.role === 'EDITOR' ? '编辑者' : '只读成员' }}
                 </span>
-                <button v-if="m.role !== 'ADMIN' && m.user_id !== user?.id" type="button" style="color: #ef4444; border: none; background: none; cursor: pointer; font-size: 0.75rem;" @click="handleRemoveMember(m.user_id)">
+                <button v-if="m.role !== 'ADMIN' && m.user_id !== user?.id" type="button" style="color: var(--danger); border: none; background: none; cursor: pointer; font-size: 0.75rem;" @click="handleRemoveMember(m.user_id)">
                   移除
                 </button>
               </div>
@@ -301,7 +361,7 @@
         </div>
 
         <!-- 添加成员表单 -->
-        <form style="border-top: 1px dashed #cbd5e1; padding-top: 0.75rem; margin-bottom: 1rem;" @submit.prevent="handleAddMember">
+        <form style="border-top: 1px dashed var(--border-strong); padding-top: 0.75rem; margin-bottom: 1rem;" @submit.prevent="handleAddMember">
           <h3 style="font-size: 0.95rem; margin-bottom: 0.4rem;">添加新成员</h3>
           <div style="display: flex; gap: 0.5rem; margin-bottom: 0.4rem;">
             <input v-model.trim="memberUsername" style="flex: 1;" placeholder="输入成员用户名" required />
@@ -315,7 +375,7 @@
         </form>
 
         <!-- 跨库复制题目小工具 -->
-        <div style="border-top: 1px dashed #cbd5e1; padding-top: 0.75rem;">
+        <div style="border-top: 1px dashed var(--border-strong); padding-top: 0.75rem;">
           <h3 style="font-size: 0.95rem; margin-bottom: 0.4rem;">题目跨库快速复制</h3>
           <div style="display: flex; gap: 0.5rem; align-items: center;">
             <input v-model.trim="copyQuestionId" style="flex: 1;" placeholder="输入当前题库的题目 ID" />
@@ -329,7 +389,7 @@
               {{ copyingQuestion ? '复制中…' : '复制题目' }}
             </button>
           </div>
-          <p v-if="copyNotice" style="font-size: 0.85rem; color: #0284c7; margin: 0.3rem 0 0 0;">{{ copyNotice }}</p>
+          <p v-if="copyNotice" style="font-size: 0.85rem; color: var(--primary); margin: 0.3rem 0 0 0;">{{ copyNotice }}</p>
         </div>
 
         <div class="bank-actions" style="margin-top: 1rem;">
@@ -364,20 +424,20 @@
     <div v-if="showDraftsDialog" class="exam-setup-backdrop" @click.self="showDraftsDialog = false" @keydown.esc="showDraftsDialog = false">
       <div class="exam-setup-dialog" role="dialog" style="width: min(100%, 46rem); max-height: 85vh; overflow-y: auto;">
         <h2>AI 变式题草稿箱</h2>
-        <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 0.75rem;">
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
           AI 根据错题或考点生成的变式题在此暂存。未经您审阅确认，变式题绝不会自动进入正式题库。
         </p>
-        <div v-if="loadingDrafts" style="text-align: center; color: #94a3b8; padding: 1.5rem;">正在加载草稿…</div>
-        <div v-else-if="!draftsList.length" style="text-align: center; color: #94a3b8; padding: 2rem;">
+        <div v-if="loadingDrafts" style="text-align: center; color: var(--text-tertiary); padding: 1.5rem;">正在加载草稿…</div>
+        <div v-else-if="!draftsList.length" style="text-align: center; color: var(--text-tertiary); padding: 2rem;">
           暂无待审阅的变式题草稿。您可以在刷题过程中点击“生成变式题草稿”。
         </div>
         <div v-else style="display: flex; flex-direction: column; gap: 1rem;">
-          <div v-for="d in draftsList" :key="d.id" style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 1rem; background: #f8fafc;">
+          <div v-for="d in draftsList" :key="d.id" style="border: 1px solid var(--border); border-radius: 8px; padding: 1rem; background: var(--bg-subtle);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-              <span style="font-size: 0.75rem; padding: 0.15rem 0.4rem; background: #e0e7ff; color: #3730a3; border-radius: 4px; font-weight: 600;">
+              <span style="font-size: 0.75rem; padding: 0.15rem 0.4rem; background: var(--primary-light); color: var(--linear-cyan); border-radius: 4px; font-weight: 600; font-family: var(--linear-mono);">
                 {{ d.type }} · 难度 {{ d.difficulty }}
               </span>
-              <span style="font-size: 0.75rem; color: #94a3b8;">{{ d.created_at }}</span>
+              <span style="font-size: 0.75rem; color: var(--text-tertiary);">{{ d.created_at }}</span>
             </div>
             <label style="font-size: 0.8rem; font-weight: 600;">题干：
               <textarea v-model="d.stem" rows="2" style="font-size: 0.85rem; margin-top: 0.2rem;"></textarea>
@@ -398,7 +458,7 @@
               <textarea v-model="d.explanation" rows="2" style="font-size: 0.85rem; margin-top: 0.2rem;"></textarea>
             </label>
             <div style="display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 0.75rem;">
-              <button type="button" style="color: #ef4444;" :disabled="d.processing" @click="handleDiscardDraft(d.id)">
+              <button type="button" style="color: var(--danger);" :disabled="d.processing" @click="handleDiscardDraft(d.id)">
                 丢弃草稿
               </button>
               <button type="button" class="primary" :disabled="d.processing" @click="handleAcceptDraft(d)">
@@ -419,26 +479,26 @@
         <h2>考试蓝图档案与组卷规则配置</h2>
 
         <!-- 蓝图引导卡片 -->
-        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem;">
+        <div style="background: var(--linear-bg-subtle); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem;">
           <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
-            <span style="font-size: 1.25rem;">📘</span>
-            <div style="font-size: 0.85rem; color: #1e3a8a; line-height: 1.5;">
+            <LinearIcon name="blueprint" size="20" style="color: var(--primary); margin-top: 2px;" />
+            <div style="font-size: 0.85rem; color: var(--text-main); line-height: 1.5;">
               <strong>什么是考试蓝图 (Blueprint)？</strong>
-              <p style="margin: 0.2rem 0 0.4rem; color: #1e40af;">
+              <p style="margin: 0.2rem 0 0.4rem; color: var(--text-muted);">
                 考试蓝图用于定义标准化试卷规则（如：35道单选题 + 10道多选题 + 5道判断题）。模考时将严格按照各小节设定的题型、数量、难度与章节，从题库中动态抽题，真实还原官方考场结构。
               </p>
               <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
-                <span style="font-weight: 600; color: #1d4ed8;">⚡ 快速套用模板：</span>
-                <button type="button" style="font-size: 0.75rem; padding: 0.15rem 0.5rem; background: #dbeafe; border: 1px solid #93c5fd; border-radius: 4px; cursor: pointer;" @click="applyBlueprintTemplate('STANDARD_50')">
+                <span style="font-weight: 600; color: var(--primary);">快速套用模板：</span>
+                <button type="button" style="font-size: 0.75rem; padding: 0.15rem 0.5rem; background: var(--primary-light); border: 1px solid var(--primary-border); border-radius: 4px; cursor: pointer;" @click="applyBlueprintTemplate('STANDARD_50')">
                   标准综合卷 (50题)
                 </button>
-                <button type="button" style="font-size: 0.75rem; padding: 0.15rem 0.5rem; background: #dbeafe; border: 1px solid #93c5fd; border-radius: 4px; cursor: pointer;" @click="applyBlueprintTemplate('OBJECTIVE_30')">
+                <button type="button" style="font-size: 0.75rem; padding: 0.15rem 0.5rem; background: var(--primary-light); border: 1px solid var(--primary-border); border-radius: 4px; cursor: pointer;" @click="applyBlueprintTemplate('OBJECTIVE_30')">
                   客观题速测 (30题)
                 </button>
-                <button type="button" style="font-size: 0.75rem; padding: 0.15rem 0.5rem; background: #dbeafe; border: 1px solid #93c5fd; border-radius: 4px; cursor: pointer;" @click="applyBlueprintTemplate('ADVANCED_SPRINT')">
+                <button type="button" style="font-size: 0.75rem; padding: 0.15rem 0.5rem; background: var(--primary-light); border: 1px solid var(--primary-border); border-radius: 4px; cursor: pointer;" @click="applyBlueprintTemplate('ADVANCED_SPRINT')">
                   考前冲刺卷 (75题含倒扣分)
                 </button>
-                <button type="button" style="font-size: 0.75rem; padding: 0.15rem 0.5rem; background: #dbeafe; border: 1px solid #93c5fd; border-radius: 4px; cursor: pointer;" @click="applyBlueprintTemplate('BASIC_25')">
+                <button type="button" style="font-size: 0.75rem; padding: 0.15rem 0.5rem; background: var(--primary-light); border: 1px solid var(--primary-border); border-radius: 4px; cursor: pointer;" @click="applyBlueprintTemplate('BASIC_25')">
                   基础概念卷 (25题)
                 </button>
               </div>
@@ -455,7 +515,7 @@
           <button type="button" @click="showCreateProfileBox = !showCreateProfileBox">+ 新建档案</button>
         </div>
 
-        <form v-if="showCreateProfileBox" style="background: #f1f5f9; padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem;" @submit.prevent="handleCreateExamProfile">
+        <form v-if="showCreateProfileBox" style="background: var(--bg-subtle); padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem;" @submit.prevent="handleCreateExamProfile">
           <div style="display: flex; gap: 0.5rem; margin-bottom: 0.4rem;">
             <input v-model.trim="newProfileName" style="flex: 1;" placeholder="新档案名称（如：系统分析师模拟一卷）" required />
             <button type="submit" :disabled="creatingProfile">{{ creatingProfile ? '创建中…' : '创建' }}</button>
@@ -463,28 +523,28 @@
           <input v-model.trim="newProfileDesc" placeholder="简要描述说明（可选）" />
         </form>
 
-        <div v-if="activeBlueprintProfileId" style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 1rem; background: #ffffff;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid #e2e8f0;">
-            <h3 style="font-size: 0.95rem; margin: 0;">编辑组卷规则</h3>
-            <span style="font-size: 0.8rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 0.2rem 0.5rem; color: #475569;">
+        <div v-if="activeBlueprintProfileId" style="border: 1px solid var(--border); border-radius: 8px; padding: 1rem; background: var(--bg-card);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+            <h3 style="font-size: 0.95rem; margin: 0; color: var(--text-main);">编辑组卷规则</h3>
+            <span style="font-size: 0.8rem; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 4px; padding: 0.2rem 0.5rem; color: var(--text-muted); font-family: var(--linear-mono);">
               已规划 {{ blueprintConfig.sections.length }} 个小节 · 共 <strong>{{ computedBlueprintTotal }}</strong> 题 · 建议限时 {{ Math.round(computedBlueprintTotal * 1.5) }} 分钟
             </span>
           </div>
 
-          <label style="font-size: 0.85rem; margin-bottom: 0.75rem;">错题负分扣减分值 (negative_mark)：
+          <label style="font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-main);">错题负分扣减分值 (negative_mark)：
             <input v-model.number="blueprintConfig.negative_mark" type="number" step="0.1" min="0" max="10" style="width: 8rem;" />
-            <span style="font-size: 0.75rem; color: #94a3b8; font-weight: normal; margin-left: 0.5rem;">答错时倒扣分值，0 表示不倒扣</span>
+            <span style="font-size: 0.75rem; color: var(--text-tertiary); font-weight: normal; margin-left: 0.5rem;">答错时倒扣分值，0 表示不倒扣</span>
           </label>
 
           <div style="margin-bottom: 0.75rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
-              <span style="font-size: 0.85rem; font-weight: 600;">试卷大题 / 小节规则定义 (Sections)：</span>
+              <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-main);">试卷大题 / 小节规则定义 (Sections)：</span>
               <button type="button" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;" @click="handleAddBlueprintSection">+ 添加大题小节</button>
             </div>
-            <div v-if="!blueprintConfig.sections.length" style="font-size: 0.8rem; color: #94a3b8; padding: 0.5rem; background: #f8fafc; border-radius: 4px; text-align: center;">
+            <div v-if="!blueprintConfig.sections.length" style="font-size: 0.8rem; color: var(--text-muted); padding: 0.5rem; background: var(--bg-subtle); border-radius: 4px; text-align: center;">
               暂无小节规则，组卷时将使用默认全题库抽选。您可以点击上方按钮添加小节或套用预设模板。
             </div>
-            <div v-for="(sec, sIdx) in blueprintConfig.sections" :key="sIdx" style="display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.5rem; padding: 0.6rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;">
+            <div v-for="(sec, sIdx) in blueprintConfig.sections" :key="sIdx" style="display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.5rem; padding: 0.6rem; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 6px;">
               <div style="display: flex; gap: 0.4rem; align-items: center;">
                 <input v-model.trim="sec.name" placeholder="小节名（如：单选第1部分）" style="width: 10rem; font-size: 0.8rem;" />
                 <select v-model="sec.type" style="width: 6.5rem; font-size: 0.8rem;">
@@ -502,7 +562,7 @@
                   <option :value="4">4 (较难)</option>
                   <option :value="5">5 (极难)</option>
                 </select>
-                <button type="button" style="color: #ef4444; border: none; background: none; cursor: pointer; padding: 0 0.3rem;" title="删除小节" @click="blueprintConfig.sections.splice(sIdx, 1)">✕</button>
+                <button type="button" style="color: var(--danger); border: none; background: none; cursor: pointer; padding: 0 0.3rem;" title="删除小节" @click="blueprintConfig.sections.splice(sIdx, 1)">✕</button>
               </div>
               <div style="display: flex; gap: 0.4rem; align-items: center; font-size: 0.75rem;">
                 <input v-model.trim="sec.chapter_id" placeholder="限定章节(可选，如：第1章)" style="flex: 1; font-size: 0.75rem;" />
@@ -528,7 +588,7 @@
     <div v-if="showAssetsDialog" class="exam-setup-backdrop" @click.self="showAssetsDialog = false" @keydown.esc="showAssetsDialog = false">
       <div class="exam-setup-dialog assets-dialog" role="dialog" aria-modal="true" style="width: min(100%, 40rem);" aria-labelledby="assets-dialog-title">
         <h2 id="assets-dialog-title">个人学习资料管理</h2>
-        <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 1rem;">
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
           管理您的个人笔记、速记口诀与参考文档。AI 答疑时将自动基于此专属知识库提供点拨。
         </p>
 
@@ -544,38 +604,38 @@
         </form>
 
         <!-- 上传文档 -->
-        <div style="margin-bottom: 1.25rem; padding: 0.75rem; border: 1px dashed #cbd5e1; border-radius: 6px;">
+        <div style="margin-bottom: 1.25rem; padding: 0.75rem; border: 1px dashed var(--border-strong); border-radius: 6px;">
           <label style="font-size: 0.85rem; display: block; margin-bottom: 0.4rem;">
             上传参考文档（支持 PDF / Markdown / TXT，由服务器统一解析文本并隔离存储）：
           </label>
           <input type="file" accept=".pdf,.md,.txt,.markdown" @change="handleUploadAssetFile" :disabled="uploadingAsset" />
-          <span v-if="uploadingAsset" style="margin-left: 0.5rem; color: #0284c7; font-size: 0.85rem;">正在解析上传…</span>
+          <span v-if="uploadingAsset" style="margin-left: 0.5rem; color: var(--primary); font-size: 0.85rem;">正在解析上传…</span>
         </div>
 
         <!-- 资料列表 -->
         <div style="max-height: 18rem; overflow-y: auto; margin-bottom: 1rem;">
-          <div v-if="loadingAssets" style="text-align: center; padding: 1rem; color: #94a3b8;">正在加载资料…</div>
-          <div v-else-if="!assetsList.length" style="text-align: center; padding: 1.5rem; color: #94a3b8;">
+          <div v-if="loadingAssets" style="text-align: center; padding: 1rem; color: var(--text-tertiary);">正在加载资料…</div>
+          <div v-else-if="!assetsList.length" style="text-align: center; padding: 1.5rem; color: var(--text-tertiary);">
             暂无个人资料，您可以通过上方输入笔记或上传文档。
           </div>
           <div v-else style="display: flex; flex-direction: column; gap: 0.6rem;">
             <div
               v-for="item in assetsList"
               :key="item.id"
-              style="padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc;"
+              style="padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-page);"
             >
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
-                <span style="font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.4rem; background: #e0f2fe; color: #0369a1; border-radius: 4px;">
+                <span style="font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.4rem; background: var(--primary-light); color: var(--primary); border-radius: 4px;">
                   {{ item.asset_type === 'MNEMONIC' ? '速记口诀' : item.asset_type === 'SUMMARY' ? '知识总结' : '笔记' }}
                 </span>
                 <div style="display: flex; align-items: center; gap: 0.75rem;">
-                  <time style="font-size: 0.75rem; color: #94a3b8;">{{ item.created_at?.slice(0, 10) }}</time>
-                  <button type="button" style="background: none; border: none; color: #ef4444; font-size: 0.75rem; cursor: pointer; padding: 0;" @click="handleDeleteAsset(item.id)">
+                  <time style="font-size: 0.75rem; color: var(--text-tertiary);">{{ item.created_at?.slice(0, 10) }}</time>
+                  <button type="button" style="background: none; border: none; color: var(--danger); font-size: 0.75rem; cursor: pointer; padding: 0;" @click="handleDeleteAsset(item.id)">
                     删除
                   </button>
                 </div>
               </div>
-              <p style="margin: 0; font-size: 0.85rem; line-height: 1.4; color: #334155; white-space: pre-wrap;">{{ item.content }}</p>
+              <p style="margin: 0; font-size: 0.85rem; line-height: 1.4; color: var(--text-main); white-space: pre-wrap;">{{ item.content }}</p>
             </div>
           </div>
         </div>
@@ -590,11 +650,11 @@
     <div v-if="showAiConfigDialog" class="exam-setup-backdrop" @click.self="showAiConfigDialog = false">
       <div class="exam-setup-dialog" role="dialog" style="width: min(100%, 36rem);" aria-modal="true">
         <h2>AI 模型与联网搜索配置</h2>
-        <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 1rem;">
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
           支持配置自定义大模型服务（如本地 Ollama、OpenAI 兼容接口）及联网搜索服务。敏感密钥在前端展示时自动脱敏，在后端受保护加载。
         </p>
 
-        <div v-if="aiConfigNotice" :style="{ padding: '0.6rem 0.8rem', borderRadius: '6px', fontSize: '0.85rem', marginBottom: '0.75rem', background: aiConfigNotice.includes('成功') ? '#dcfce7' : '#fee2e2', color: aiConfigNotice.includes('成功') ? '#166534' : '#991b1b' }">
+        <div v-if="aiConfigNotice" :style="{ padding: '0.6rem 0.8rem', borderRadius: '6px', fontSize: '0.85rem', marginBottom: '0.75rem', background: aiConfigNotice.includes('成功') ? 'var(--success-light)' : 'var(--danger-light)', color: aiConfigNotice.includes('成功') ? 'var(--success)' : 'var(--danger)' }">
           {{ aiConfigNotice }}
         </div>
 
@@ -649,12 +709,16 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import LinearIcon from '../components/LinearIcon.vue'
 import { listBanks, createBank, createQuestion, addBankMember, listBankMembers, removeBankMember, copyQuestionToBank } from '../api/banks'
 import { startExam, listProfiles, createProfile, saveBlueprint, getBlueprint } from '../api/exams'
 import { listActiveSessions, getSession, abandonSession, abandonAllSessions } from '../api/practice'
 import { listAssets, createAsset, uploadAssetFile, deleteAsset } from '../api/assets'
 import { listDrafts, acceptDraft, discardDraft, getAiConfig, updateAiConfig } from '../api/ai'
 import { triggerSyncEvent } from '../api/sync'
+import { useLocale } from '../composables/useLocale.js'
+
+const { t } = useLocale()
 
 const props = defineProps({ token: { type: String, required: true }, user: { type: Object, default: null } })
 const emit = defineEmits(['start', 'mock-exam', 'resume-session', 'learning', 'mistakes', 'import', 'logout'])
@@ -889,6 +953,35 @@ function handleAddOpt() {
   const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
   const nextKey = letters[addQuestionForm.value.options.length] || `Opt${addQuestionForm.value.options.length + 1}`
   addQuestionForm.value.options.push({ key: nextKey, text: '' })
+}
+
+function handleToggleMultiAnswer(key) {
+  let curr = addQuestionForm.value.answer ? addQuestionForm.value.answer.split('') : []
+  if (curr.includes(key)) {
+    curr = curr.filter(k => k !== key)
+  } else {
+    curr.push(key)
+    curr.sort()
+  }
+  addQuestionForm.value.answer = curr.join('')
+}
+
+function onQuestionTypeChange() {
+  if (addQuestionForm.value.type === 'JUDGE') {
+    addQuestionForm.value.options = [
+      { key: 'T', text: '正确' },
+      { key: 'F', text: '错误' }
+    ]
+    addQuestionForm.value.answer = 'T'
+  } else if ((addQuestionForm.value.type === 'SINGLE' || addQuestionForm.value.type === 'MULTI') && addQuestionForm.value.options.length === 2 && addQuestionForm.value.options[0].key === 'T') {
+    addQuestionForm.value.options = [
+      { key: 'A', text: '' },
+      { key: 'B', text: '' },
+      { key: 'C', text: '' },
+      { key: 'D', text: '' }
+    ]
+    addQuestionForm.value.answer = 'A'
+  }
 }
 
 async function handleCreateQuestion() {
@@ -1373,6 +1466,14 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('easyexam:events-synced', handleSyncedEvents)
 })
+
+defineExpose({
+  openBlueprintDialog,
+  openDraftsDialog,
+  openAiConfigDialog,
+  openAssetsDialog,
+  showCreateDialog
+})
 </script>
 
 <style scoped>
@@ -1381,62 +1482,160 @@ onUnmounted(() => {
   margin: 1.5rem auto;
 }
 
-.home-nav-bar {
+.home-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 0.85rem 1.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
 }
 
-.nav-cluster {
+.home-brand-area {
   display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-shrink: 0;
+}
+
+.home-brand-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.home-brand-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.home-brand-title h1 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.home-user-pill {
+  display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.25rem 0.35rem;
-  background: #f1f5f9;
-  border-radius: 8px;
+  padding: 0.2rem 0.6rem;
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font-size: 0.775rem;
+  color: var(--text-muted);
+  margin: 0;
 }
 
-.nav-cluster.nav-primary {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+.user-role-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+.user-role-dot.role-admin {
+  background: var(--success);
 }
 
-.nav-btn {
-  border: none;
+.user-role-badge {
+  font-size: 0.7rem;
+  color: var(--primary);
+  font-weight: 600;
+  margin-left: 0.15rem;
+}
+
+.home-main-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.main-nav-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.85rem;
   background: transparent;
-  padding: 0.4rem 0.75rem;
-  font-size: 0.85rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  font-size: 0.875rem;
   font-weight: 500;
-  border-radius: 6px;
+  color: var(--text-main);
   cursor: pointer;
-  color: #334155;
   transition: all 0.15s ease;
 }
 
-.nav-btn:hover {
-  background: #ffffff;
-  color: #0f172a;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+.main-nav-tab:hover {
+  background: var(--bg-muted);
+  border-color: var(--border);
+  color: var(--primary);
 }
 
-.nav-btn.nav-btn-featured {
-  color: #1d4ed8;
+.main-nav-tab.featured {
+  color: var(--primary);
   font-weight: 600;
 }
 
-.nav-btn.nav-btn-featured:hover {
-  background: #ffffff;
-  color: #1e40af;
+.main-nav-tab.featured:hover {
+  background: var(--primary-light);
+  border-color: var(--primary-border);
 }
 
-.nav-btn.btn-logout-text {
-  color: #dc2626;
+.home-actions-area {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-shrink: 0;
 }
 
-.nav-btn.btn-logout-text:hover {
-  background: #fee2e2;
-  color: #b91c1c;
+.btn-create-bank {
+  padding: 0.45rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+}
+
+.home-utility-group {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.btn-util {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem 0.6rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-util:hover {
+  background: var(--bg-muted);
+  border-color: var(--border);
+  color: var(--text-main);
+}
+
+.btn-util.btn-logout {
+  color: var(--danger);
+}
+
+.btn-util.btn-logout:hover {
+  background: var(--danger-light);
+  border-color: var(--danger-border);
+  color: var(--danger);
 }
 
 .bank-card-title-row {
@@ -1456,21 +1655,21 @@ onUnmounted(() => {
   font-size: 0.75rem;
   font-weight: 600;
   padding: 0.2rem 0.5rem;
-  background: #eff6ff;
-  color: #2563eb;
-  border: 1px solid #bfdbfe;
+  background: var(--primary-light);
+  color: var(--primary);
+  border: 1px solid var(--primary-border);
   border-radius: 9999px;
   white-space: nowrap;
 }
 
 .bank-card.has-active-session {
-  border-color: #93c5fd;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
+  border-color: var(--primary-border);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-resume-direct {
-  background: #2563eb !important;
-  color: #ffffff !important;
+  background: var(--primary) !important;
+  color: var(--on-primary) !important;
 }
 
 .bank-meta-info {
@@ -1482,19 +1681,68 @@ onUnmounted(() => {
 
 .bank-category-pill {
   font-size: 0.75rem;
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
   padding: 0.15rem 0.45rem;
   border-radius: 4px;
 }
 
-.bank-actions button:first-child {
-  background: var(--primary);
-  color: #ffffff;
-  border-color: transparent;
+.bank-actions-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 0.5rem;
 }
-.bank-actions button:first-child:hover:not(:disabled) {
-  background: var(--primary-hover);
+
+.bank-primary-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.bank-utility-actions {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+  border-top: 1px dashed var(--border);
+  padding-top: 0.5rem;
+}
+
+.btn-util-link {
+  font-size: 0.775rem;
+  padding: 0.25rem 0.55rem;
+  color: var(--text-muted);
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+}
+
+.btn-util-link:hover {
+  color: var(--primary);
+  border-color: var(--primary-border);
+  background: var(--primary-light);
+}
+
+.dialog-actions-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.exam-option-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-page);
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  cursor: pointer;
 }
 
 .exam-setup-backdrop {
@@ -1504,7 +1752,7 @@ onUnmounted(() => {
   display: grid;
   place-items: center;
   padding: 1rem;
-  background: rgb(15 23 42 / 0.5);
+  background: color-mix(in srgb, var(--text-main) 44%, transparent);
   backdrop-filter: blur(2px);
 }
 
@@ -1532,9 +1780,26 @@ onUnmounted(() => {
   color: var(--text-main);
 }
 
-.exam-setup-dialog input,
+.exam-setup-dialog input:not([type="checkbox"]):not([type="radio"]),
 .exam-setup-dialog textarea {
   width: 100%;
+}
+
+.exam-setup-dialog label.exam-option-checkbox,
+.exam-setup-dialog label.ctrl-check {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 0.6rem !important;
+}
+
+.exam-setup-dialog label.exam-option-checkbox input[type="checkbox"],
+.exam-setup-dialog label.ctrl-check input[type="checkbox"],
+.exam-setup-dialog input[type="checkbox"],
+.exam-setup-dialog input[type="radio"] {
+  width: auto !important;
+  margin: 0 !important;
+  flex: 0 0 auto !important;
 }
 
 .exam-setup-dialog .bank-actions {
@@ -1549,10 +1814,10 @@ onUnmounted(() => {
   gap: 1rem;
   padding: 0.85rem 1.25rem;
   margin-bottom: 1.5rem;
-  background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
-  border: 1px solid #bfdbfe;
+  background: linear-gradient(135deg, var(--primary-light) 0%, var(--success-light) 100%);
+  border: 1px solid var(--primary-border);
   border-radius: var(--radius-lg, 8px);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-sm);
   flex-wrap: wrap;
 }
 
@@ -1568,15 +1833,15 @@ onUnmounted(() => {
   font-size: 0.8rem;
   font-weight: 700;
   padding: 0.2rem 0.55rem;
-  background: #3b82f6;
-  color: #ffffff;
+  background: var(--primary);
+  color: var(--on-primary);
   border-radius: 4px;
   white-space: nowrap;
 }
 
 .banner-text {
   font-size: 0.9rem;
-  color: #1e293b;
+  color: var(--text-main);
   line-height: 1.4;
 }
 
@@ -1589,22 +1854,22 @@ onUnmounted(() => {
 .btn-view-all-sessions {
   font-size: 0.85rem;
   padding: 0.45rem 0.85rem;
-  background: #ffffff;
-  border: 1px solid #94a3b8;
-  color: #334155;
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  color: var(--text-main);
   border-radius: 6px;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .btn-view-all-sessions:hover {
-  background: #f1f5f9;
-  border-color: #64748b;
+  background: var(--bg-subtle);
+  border-color: var(--border-strong);
 }
 
 .btn-abandon-single {
   font-size: 0.85rem;
-  color: #ef4444;
+  color: var(--danger);
   background: none;
   border: none;
   cursor: pointer;
@@ -1613,6 +1878,95 @@ onUnmounted(() => {
 }
 
 .btn-abandon-single:hover {
-  color: #dc2626;
+  color: var(--danger-hover);
+}
+
+@media (max-width: 900px) {
+  .btn-util-label {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .home-page {
+    width: 100%;
+    padding: 0 0.5rem;
+    margin: 0.5rem auto;
+  }
+  .home-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.45rem;
+    padding: 0.55rem 0.75rem;
+    margin-bottom: 0.65rem;
+  }
+  .home-brand-area {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+  .home-brand-title h1 {
+    font-size: 1.1rem;
+  }
+  .home-user-pill {
+    font-size: 0.75rem;
+    padding: 0.15rem 0.45rem;
+  }
+  .home-main-nav {
+    display: flex;
+    overflow-x: auto;
+    width: 100%;
+    padding-bottom: 0.1rem;
+    gap: 0.35rem;
+  }
+  .main-nav-tab {
+    flex: 1;
+    justify-content: center;
+    padding: 0.35rem 0.4rem;
+    font-size: 0.78rem;
+    white-space: nowrap;
+    background: var(--bg-muted);
+    border-color: var(--border);
+  }
+  .home-actions-area {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .btn-create-bank {
+    flex: 1;
+    text-align: center;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.82rem;
+    min-height: 32px;
+  }
+  .home-utility-group {
+    display: flex;
+    gap: 0.25rem;
+    justify-content: flex-end;
+  }
+  .home-utility-group .btn-util {
+    padding: 0.35rem 0.45rem;
+    font-size: 0.82rem;
+    min-height: 32px;
+  }
+  .active-session-banner {
+    padding: 0.6rem 0.85rem;
+    gap: 0.5rem;
+    margin-bottom: 0.85rem;
+  }
+  .banner-text {
+    font-size: 0.82rem;
+  }
+  .bank-primary-actions {
+    width: 100%;
+  }
+  .bank-primary-actions button {
+    flex: 1;
+    min-height: 2.4rem;
+  }
 }
 </style>
