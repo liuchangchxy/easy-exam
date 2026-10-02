@@ -11,7 +11,6 @@ import { chromium } from 'playwright'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '../..')
-const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 
 let serverProcess = null
 let tempDbPath = ''
@@ -79,12 +78,12 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
     await waitForServer(BASE_URL, instanceToken)
     console.log(`FastAPI server is up and verified with instance token on port ${port}.`)
 
-    console.log(`Launching Google Chrome at: ${CHROME_PATH}...`)
+    console.log('Launching Chromium for the real browser run...')
     browser = await chromium.launch({
-      executablePath: CHROME_PATH,
+      ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}),
       headless: true,
     })
-    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'zh-CN' })
     const page = await context.newPage()
 
     page.on('console', msg => console.log(`[Browser Console ${msg.type()}] ${msg.text()}`))
@@ -97,7 +96,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
     await t.test('1. User Registration and Auto Login', async () => {
       await page.goto(BASE_URL)
       await page.waitForSelector('.auth-page')
-      assert.ok(await page.locator('text=易考宝').isVisible())
+      assert.ok(await page.locator('text=飞牛刷题').isVisible())
 
       // Switch to register
       await page.click('button:has-text("首次使用？创建账号")')
@@ -302,7 +301,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
     })
 
     await t.test('5. Mistakes View: Cause Persistence & FSRS Non-Default Rating Update (Fix 1)', async () => {
-      await page.click('button:has-text("错题与斩杀")')
+      await page.click('button:has-text("错题斩杀")')
       await page.waitForSelector('.mistakes-page')
 
       // Verify mistake question is in mistakes list
@@ -441,7 +440,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
     })
 
     await t.test('9. Learning Diagnostics Dashboard & Interactive Recommendations to Practice (Task B1)', async () => {
-      await page.click('button:has-text("学习诊断")')
+      await page.click('button:has-text("学习看板")')
       await page.waitForSelector('.learning-page')
 
       await page.waitForSelector('.metrics-grid', { timeout: 8000 })
@@ -491,7 +490,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
 
     await t.test('10. Spreadsheet Column Mapping Preview, User Manual Mapping & Precheck Validation (Task 1 & 2)', async () => {
       // Navigate to Import view
-      await page.click('button:has-text("导入题目")')
+      await page.click('button:has-text("导入题库")')
       await page.waitForSelector('.import-page')
       assert.ok(await page.locator('text=导入题目').isVisible())
 
@@ -735,7 +734,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
 
     await t.test('12. Forced Password Change Flow for Migrated Users & Final Logout (Fix 4)', async () => {
       // Logout current user
-      await page.click('button:has-text("退出")')
+      await page.click('button:has-text("退出登录")')
       await page.waitForSelector('.auth-page')
 
       // Register a migrated user via API then set must_change_password = 1
@@ -777,7 +776,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       console.log('✓ Successfully changed password and entered main workspace.')
 
       // Final Logout
-      await page.click('button:has-text("退出")')
+      await page.click('button:has-text("退出登录")')
       await page.waitForSelector('.auth-page')
       const storedToken = await page.evaluate(() => localStorage.getItem('easyexam_token'))
       assert.equal(storedToken, null)
@@ -795,6 +794,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       assert.equal(enLang, 'en-US')
       const storedLocale = await page.evaluate(() => localStorage.getItem('easyexam_locale'))
       assert.equal(storedLocale, 'en-US')
+      await assert.doesNotReject(() => page.getByRole('button', { name: 'Sign in' }).waitFor({ state: 'visible' }))
       console.log('✓ Switched to en-US in real browser and updated <html lang="en-US">.')
 
       // 3. Reload page to verify zero-flash persistence
@@ -814,6 +814,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       await page.click('.locale-toggle')
       const restoredLang = await page.evaluate(() => document.documentElement.getAttribute('lang'))
       assert.equal(restoredLang, 'zh-CN')
+      await assert.doesNotReject(() => page.getByRole('button', { name: '登录' }).waitFor({ state: 'visible' }))
       await page.click('.theme-toggle:not(.locale-toggle)')
       const restoredTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
       assert.equal(restoredTheme, 'light')

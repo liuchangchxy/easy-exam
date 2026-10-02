@@ -1,4 +1,4 @@
-import { authHeaders, request } from './client'
+import { authHeaders, request, requestForm } from './client'
 
 export const previewImport = (token, bankId, payload) => request(`/imports/banks/${bankId}/preview`, {
   method: 'POST', headers: authHeaders(token), body: JSON.stringify(payload),
@@ -10,17 +10,7 @@ export async function previewFileImport(token, bankId, file, columnMapping = nul
   if (columnMapping) {
     form.append('column_mapping', JSON.stringify(columnMapping))
   }
-  const response = await fetch(`/api/v1/imports/banks/${bankId}/preview-file`, {
-    method: 'POST', headers: authHeaders(token), body: form,
-  })
-  if (!response.ok) {
-    const body = await response.json()
-    const error = new Error(typeof body.detail === 'string' ? body.detail : body.detail?.reason || response.statusText)
-    error.status = response.status
-    error.detail = body.detail
-    throw error
-  }
-  return response.json()
+  return requestForm(`/imports/banks/${bankId}/preview-file`, form, { headers: authHeaders(token) })
 }
 
 export async function uploadImport(token, bankId, file, duplicateStrategy = 'prompt', columnMapping = null) {
@@ -30,33 +20,13 @@ export async function uploadImport(token, bankId, file, duplicateStrategy = 'pro
     form.append('column_mapping', JSON.stringify(columnMapping))
   }
   const query = new URLSearchParams({ duplicate_strategy: duplicateStrategy }).toString()
-  const response = await fetch(`/api/v1/imports/banks/${bankId}/file?${query}`, {
-    method: 'POST', headers: authHeaders(token), body: form,
-  })
-  if (!response.ok) {
-    const body = await response.json()
-    const error = new Error(typeof body.detail === 'string' ? body.detail : body.detail?.reason || response.statusText)
-    error.status = response.status
-    error.detail = body.detail
-    throw error
-  }
-  return response.json()
+  return requestForm(`/imports/banks/${bankId}/file?${query}`, form, { headers: authHeaders(token) })
 }
 
 export async function previewPdfImport(token, bankId, file) {
   const form = new FormData()
   form.append('file', file)
-  const response = await fetch(`/api/v1/imports/banks/${bankId}/pdf-preview`, {
-    method: 'POST', headers: authHeaders(token), body: form,
-  })
-  if (!response.ok) {
-    const body = await response.json()
-    const error = new Error(typeof body.detail === 'string' ? body.detail : body.detail?.reason || response.statusText)
-    error.status = response.status
-    error.detail = body.detail
-    throw error
-  }
-  return response.json()
+  return requestForm(`/imports/banks/${bankId}/pdf-preview`, form, { headers: authHeaders(token) })
 }
 
 export const confirmPdfImport = (token, bankId, payload) => request(`/imports/banks/${bankId}/pdf-confirm`, {

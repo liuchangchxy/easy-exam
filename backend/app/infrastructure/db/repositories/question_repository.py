@@ -246,7 +246,7 @@ class QuestionRepository:
                    LEFT JOIN kill_records k ON k.question_id = q.id AND k.user_id = ?
                    WHERE i.bank_id = ? AND qv.version_number = (
                      SELECT MAX(version_number) FROM question_versions WHERE question_id = q.id
-                   ) AND k.question_id IS NULL ORDER BY q.created_at ASC""",
+                   ) AND k.question_id IS NULL ORDER BY q.created_at ASC, q.rowid ASC""",
                 (user_id, user_id, bank_id),
             ).fetchall()
             result = []

@@ -48,8 +48,14 @@ python -m unittest discover -s tests -v
 # 前端单元/契约测试
 npm --prefix frontend run test:unit
 
+# 双语静态/词典完整性门禁（test:unit 和 pre-commit 也会强制执行）
+npm --prefix frontend run check:localization
+
 # 真实浏览器 E2E
 npm --prefix frontend run test:e2e
+
+# 双语真实浏览器门禁（localization.config.json 的 browser 阶段）
+npm --prefix frontend run test:localization:e2e
 
 # 生产构建
 npm --prefix frontend run build
@@ -70,6 +76,8 @@ git diff --check
 ```
 
 如果命令因环境未执行，报告为“未运行”；如果存在 skipped，报告实际数量并说明原因，不得宣称全绿。
+
+双语交付门禁由根目录 `localization.config.json` 声明适用语言和词典、源码、契约、浏览器四类检查。EasyExam 必须保持 `applicable: true`；源码守卫还必须通过一个含裸英文文案的红例和一个目录翻译的绿例。双语浏览器门禁运行真实后端和 Chromium，验证页面中英文、`Accept-Language`、API 错误消息即时切换及刷新持久化；词典键数量、构建成功或 API Mock 均不能替代。
 
 ## 4. EasyExam 关键回归面
 

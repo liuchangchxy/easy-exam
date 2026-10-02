@@ -1,4 +1,5 @@
 import json
+import threading
 from typing import Any, Dict, List, Optional
 
 
@@ -12,6 +13,8 @@ class AiTutorService:
         self.assets = assets
         self.drafts = drafts
         self.ai_configs = ai_configs
+        self._batch_tasks: Dict[tuple, dict] = {}
+        self._batch_lock = threading.Lock()
 
     def get_user_ai_config(self, user_id: str) -> dict:
         if self.ai_configs:
@@ -302,3 +305,93 @@ class AiTutorService:
         if not updated:
             raise LookupError("draft not found")
         return {"status": "DISCARDED", "draft_id": draft_id}
+
+    def get_batch_status(self, user_id: str, bank_id: str) -> dict:
+        with self._batch_lock:
+            task = self._batch_tasks.get((user_id, bank_id))
+            if task and task["status"] in ("running", "stopping"):
+                return {**task}
+
+            all_questions = self.questions.list_for_bank(bank_id, user_id)
+            with_explanation = 0
+            for q in all_questions:
+                if q.get("explanation") or bool(self.answers.list_for_question(q["id"], user_id)):
+                    with_explanation += 1
+            base = {
+                "status": task["status"] if task else "idle",
+                "total": len(all_questions),
+                "with_explanation": with_explanation,
+                "without_explanation": len(all_questions) - with_explanation,
+                "processed": task["processed"] if task else 0,
+                "succeeded": task["succeeded"] if task else 0,
+                "failed": task["failed"] if task else 0,
+                "current_question_stem": task["current_question_stem"] if task else "",
+            }
+            return base
+
+    def start_batch_generate(self, user_id: str, bank_id: str, overwrite: bool = False, target_lang: str = "zh-CN") -> dict:
+        with self._batch_lock:
+            existing = self._batch_tasks.get((user_id, bank_id))
+            if existing and existing["status"] == "running":
+                return {**existing}
+
+            all_questions = self.questions.list_for_bank(bank_id, user_id)
+            if not overwrite:
+                targets = [
+                    q for q in all_questions
+                    if not q.get("explanation") and not bool(self.answers.list_for_question(q["id"], user_id))
+                ]
+            else:
+                targets = all_questions
+
+            task = {
+                "status": "running",
+                "total": len(targets),
+                "processed": 0,
+                "succeeded": 0,
+                "failed": 0,
+                "current_question_stem": "",
+                "stop_requested": False,
+                "error": None,
+            }
+            self._batch_tasks[(user_id, bank_id)] = task
+
+        if not targets:
+            with self._batch_lock:
+                task["status"] = "completed"
+            return {**task}
+
+        def worker():
+            for q in targets:
+                with self._batch_lock:
+                    if task["stop_requested"]:
+                        task["status"] = "stopped"
+                        return
+                    task["current_question_stem"] = q.get("stem", "")[:60]
+                try:
+                    self.generate_answer(user_id, q["id"], target_lang=target_lang)
+                    with self._batch_lock:
+                        task["succeeded"] += 1
+                except Exception as exc:
+                    with self._batch_lock:
+                        task["failed"] += 1
+                finally:
+                    with self._batch_lock:
+                        task["processed"] += 1
+            with self._batch_lock:
+                task["status"] = "completed"
+                task["current_question_stem"] = ""
+
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+        return {**task}
+
+    def stop_batch_generate(self, user_id: str, bank_id: str) -> dict:
+        with self._batch_lock:
+            task = self._batch_tasks.get((user_id, bank_id))
+            if task and task["status"] == "running":
+                task["stop_requested"] = True
+                task["status"] = "stopping"
+                return {**task}
+            return task or {"status": "idle"}
+

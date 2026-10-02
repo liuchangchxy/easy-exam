@@ -7,7 +7,7 @@
       @click="$emit('navigate', 'home')"
     >
       <LinearIcon name="layers" size="18" />
-      <span class="mobile-nav-label">{{ t('nav.practice') }}</span>
+      <span class="mobile-nav-label">{{ t('nav.home') }}</span>
     </button>
 
     <button
@@ -33,6 +33,16 @@
     <button
       type="button"
       class="mobile-nav-item"
+      :class="{ active: currentPage === 'notes' }"
+      @click="$emit('navigate', 'notes')"
+    >
+      <LinearIcon name="edit" size="18" />
+      <span class="mobile-nav-label">{{ t('nav.notes') }}</span>
+    </button>
+
+    <button
+      type="button"
+      class="mobile-nav-item"
       :class="{ active: currentPage === 'import' }"
       @click="$emit('navigate', 'import')"
     >
@@ -48,16 +58,11 @@
       <LinearIcon name="command" size="18" />
       <span class="mobile-nav-label">{{ t('common.actions') }}</span>
     </button>
-
-    <ThemeToggle compact />
-    <LocaleToggle compact />
   </nav>
 </template>
 
 <script setup>
 import LinearIcon from './LinearIcon.vue'
-import ThemeToggle from './ThemeToggle.vue'
-import LocaleToggle from './LocaleToggle.vue'
 import { useLocale } from '../composables/useLocale.js'
 
 const { t } = useLocale()
@@ -115,23 +120,6 @@ defineEmits(['navigate', 'open-palette'])
   }
 
   .mobile-nav-label {
-    font-size: 0.65rem;
-    font-weight: 500;
-  }
-
-  .mobile-nav-bar :deep(.theme-toggle) {
-    height: 44px;
-    min-height: 44px;
-    min-width: 0;
-    flex: 1 1 0;
-    flex-direction: column;
-    gap: 2px;
-    padding: 0;
-    border: 0;
-    border-radius: 0;
-  }
-
-  .mobile-nav-bar :deep(.theme-toggle-label) {
     font-size: 0.65rem;
     font-weight: 500;
   }

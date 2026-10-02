@@ -2,12 +2,12 @@
   <main class="practice-page" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
     <header class="page-header compact-header">
       <div class="header-left-bar">
-        <button type="button" class="btn-back" @click="$emit('back')">← 返回</button>
+        <button type="button" class="btn-back" @click="handleBack">{{ t('ui.k0510') }}</button>
         <div class="header-titles">
-          <h1 class="practice-title">{{ session?.mode === 'ELIMINATION' ? '斩杀查漏补缺' : session?.mode === 'FSRS' ? 'FSRS 复习' : '练习刷题' }}</h1>
+          <h1 class="practice-title">{{ session?.mode === 'ELIMINATION' ? t('ui.k0734') : session?.mode === 'FSRS' ? t('ui.k0735') : session?.mode === 'PRACTICE' ? t('bank.sequential_practice') : t('ui.k0736') }}</h1>
           <span v-if="question" class="badge-type-pill">{{ formatType(question.type) }}</span>
-          <button v-if="question" type="button" class="badge-index-pill btn-sheet-trigger-pill" @click="showSheetModal = true" title="点击打开答题卡">
-            <small>{{ index + 1 }} / {{ questions.length }}</small> <LinearIcon name="layers" size="13" /> 答题卡
+          <button v-if="question" type="button" class="badge-index-pill btn-sheet-trigger-pill" @click="showSheetModal = true" :title="t('ui.k0511')">
+            <small>{{ index + 1 }} / {{ questions.length }}</small> <LinearIcon name="layers" size="13" /> {{ t('ui.k0093') }}
           </button>
         </div>
       </div>
@@ -15,40 +15,40 @@
         <ThemeToggle compact />
         <LocaleToggle compact />
         <!-- 桌面端平铺操作 -->
-        <button type="button" class="secondary-btn btn-help-guide desktop-only-btn" @click="showHelpTip = !showHelpTip" title="操作与快捷键指南">
-          <LinearIcon name="zap" size="13" /> 操作指南
+        <button type="button" class="secondary-btn btn-help-guide desktop-only-btn" @click="showHelpTip = !showHelpTip" :title="t('ui.k0512')">
+          <LinearIcon name="zap" size="13" /> {{ t('ui.k0513') }}
         </button>
         <button type="button" class="btn-flag desktop-only-btn" :class="{ active: isWeak }" @click="toggleWeak">
-          {{ isWeak ? '已标薄弱' : '标记薄弱' }}
+          {{ isWeak ? t('ui.k0737') : t('ui.k0738') }}
         </button>
         <button type="button" class="btn-kill desktop-only-btn" @click="handleKill">
-          斩杀此题
+          {{ t('ui.k0486') }}
         </button>
         <button type="button" class="btn-edit-question desktop-only-btn" @click="toggleEditQuestion">
-          {{ isEditingQuestion ? '取消编辑' : '编辑题目' }}
+          {{ isEditingQuestion ? t('ui.k0739') : t('ui.k0740') }}
         </button>
-        <button type="button" class="primary btn-header-complete desktop-only-btn" @click="complete">交卷</button>
+        <button type="button" class="primary btn-header-complete desktop-only-btn" @click="complete">{{ t('ui.k0514') }}</button>
 
         <!-- 移动端右上角“更多 ⋯”菜单 -->
         <div class="mobile-more-wrapper mobile-only-inline">
-          <button type="button" class="btn-help-mobile" @click="showHelpTip = !showHelpTip" title="操作指南">
+          <button type="button" class="btn-help-mobile" @click="showHelpTip = !showHelpTip" :title="t('ui.k0513')">
             <LinearIcon name="zap" size="13" />
           </button>
-          <button type="button" class="btn-more-menu" @click="showMoreMenu = !showMoreMenu" aria-label="更多操作">
+          <button type="button" class="btn-more-menu" @click="showMoreMenu = !showMoreMenu" :aria-label="t('ui.k0515')">
             ⋯
           </button>
           <div v-if="showMoreMenu" class="mobile-dropdown-menu" @click="showMoreMenu = false">
             <button type="button" class="dropdown-item" :class="{ active: isWeak }" @click="toggleWeak">
-              {{ isWeak ? '取消薄弱' : '标记薄弱' }}
+              {{ isWeak ? t('ui.k0741') : t('ui.k0738') }}
             </button>
             <button type="button" class="dropdown-item text-danger" @click="handleKill">
-              斩杀此题
+              {{ t('ui.k0486') }}
             </button>
             <button type="button" class="dropdown-item" @click="toggleEditQuestion">
-              {{ isEditingQuestion ? '取消编辑' : '编辑题目' }}
+              {{ isEditingQuestion ? t('ui.k0739') : t('ui.k0740') }}
             </button>
             <button type="button" class="dropdown-item text-danger" @click="complete">
-              提前交卷
+              {{ t('ui.k0516') }}
             </button>
           </div>
         </div>
@@ -59,28 +59,28 @@
     <div v-if="showHelpTip" class="help-tip-backdrop" @click.self="showHelpTip = false">
       <div class="help-tip-dialog" role="dialog" aria-modal="true">
         <div class="help-tip-header">
-          <h3><LinearIcon name="zap" size="15" /> 刷题操作与快捷键指南</h3>
+          <h3><LinearIcon name="zap" size="15" /> {{ t('ui.k0517') }}</h3>
           <button type="button" class="btn-close-tip" @click="showHelpTip = false">✕</button>
         </div>
         <div class="help-tip-body">
           <div class="tip-section">
-            <strong><LinearIcon name="compass" size="14" /> 键盘盲操快捷键</strong>
+            <strong><LinearIcon name="compass" size="14" /> {{ t('ui.k0518') }}</strong>
             <ul>
-              <li><kbd>A</kbd> / <kbd>B</kbd> / <kbd>C</kbd> / <kbd>D</kbd>：直接选中对应选项</li>
-              <li><kbd>Enter ↵</kbd>：提交作答（或交卷）</li>
-              <li><kbd>Space ␣</kbd> 或 <kbd>→</kbd>：下一题</li>
-              <li><kbd>←</kbd> 或 <kbd>K</kbd>：上一题</li>
-              <li><kbd>F</kbd>：标记 / 取消薄弱</li>
-              <li><kbd>1</kbd> ~ <kbd>4</kbd>：FSRS 记忆评级 (1-重来 2-困难 3-良好 4-简单)</li>
+              <li><kbd>A</kbd> / <kbd>B</kbd> / <kbd>C</kbd> / <kbd>D</kbd>{{ t('ui.k0519') }}</li>
+              <li><kbd>Enter ↵</kbd>{{ t('ui.k0520') }}</li>
+              <li><kbd>Space ␣</kbd> {{ t('ui.k0521') }} <kbd>→</kbd>{{ t('ui.k0522') }}</li>
+              <li><kbd>←</kbd> {{ t('ui.k0521') }} <kbd>K</kbd>{{ t('ui.k0523') }}</li>
+              <li><kbd>F</kbd>{{ t('ui.k0524') }}</li>
+              <li><kbd>1</kbd> ~ <kbd>4</kbd>{{ t('ui.k0525') }}</li>
             </ul>
           </div>
           <div class="tip-section">
-            <strong><LinearIcon name="maximize" size="14" /> 移动端手势</strong>
-            <p>题目卡片区域支持左滑下一题、右滑上一题（已自动排除文本输入区防误触）。</p>
+            <strong><LinearIcon name="maximize" size="14" /> {{ t('ui.k0526') }}</strong>
+            <p>{{ t('ui.k0527') }}</p>
           </div>
           <div class="tip-section">
-            <strong><LinearIcon name="layers" size="14" /> 快速答题卡</strong>
-            <p>随时点击顶栏的 <strong>“{{ index + 1 }}/{{ questions.length }} 答题卡”</strong> 即可呼出全卷面板并直达未做题。</p>
+            <strong><LinearIcon name="layers" size="14" /> {{ t('ui.k0528') }}</strong>
+            <p>{{ t('ui.k0529') }} <strong>“{{ index + 1 }}/{{ questions.length }} {{ t('ui.k0530') }}</strong> {{ t('ui.k0531') }}</p>
           </div>
         </div>
       </div>
@@ -91,23 +91,23 @@
       <div class="sheet-modal-drawer">
         <div class="sheet-drawer-header">
           <div class="sheet-drawer-title">
-            <h3>答题卡</h3>
-            <span class="sheet-stats-pill">已答 {{ answeredCount }} / {{ questions.length }} 题</span>
+            <h3>{{ t('ui.k0093') }}</h3>
+            <span class="sheet-stats-pill">{{ t('ui.k0096') }} {{ answeredCount }} / {{ questions.length }} {{ t('ui.k0101') }}</span>
           </div>
           <button type="button" class="btn-close-sheet" @click="showSheetModal = false">✕</button>
         </div>
 
         <div class="sheet-quick-actions">
           <button type="button" class="btn-jump-next-unanswered" @click="jumpNextUnanswered">
-            ⏭ 跳至下一道未做题
+            {{ t('ui.k0532') }}
           </button>
         </div>
 
         <div class="sheet-legend-bar">
-          <span class="legend-item"><span class="legend-dot unanswered"></span> 未答</span>
-          <span class="legend-item"><span class="legend-dot correct"></span> 正确</span>
-          <span class="legend-item"><span class="legend-dot incorrect"></span> 错误</span>
-          <span class="legend-item"><span class="legend-dot partial"></span> 漏选</span>
+          <span class="legend-item"><span class="legend-dot unanswered"></span> {{ t('ui.k0099') }}</span>
+          <span class="legend-item"><span class="legend-dot correct"></span> {{ t('ui.k0067') }}</span>
+          <span class="legend-item"><span class="legend-dot incorrect"></span> {{ t('ui.k0075') }}</span>
+          <span class="legend-item"><span class="legend-dot partial"></span> {{ t('ui.k0533') }}</span>
         </div>
 
         <div class="sheet-numbers-grid">
@@ -128,37 +128,37 @@
     <!-- 练习完成交卷结果报告卡片 (优雅模态框) -->
     <div v-if="practiceReport" class="sheet-modal-backdrop" data-testid="practice-report-modal">
       <div class="practice-result-card-modal">
-        <div class="result-card-badge"><LinearIcon name="check" size="14" /> 练习已完成</div>
-        <h2>作答成果报告</h2>
+        <div class="result-card-badge"><LinearIcon name="check" size="14" /> {{ t('ui.k0534') }}</div>
+        <h2>{{ t('ui.k0535') }}</h2>
         <div class="result-stats-grid">
           <div class="result-stat-box">
-            <small>得分</small>
+            <small>{{ t('ui.k0063') }}</small>
             <strong class="text-primary">{{ practiceReport.score }}</strong>
           </div>
           <div class="result-stat-box">
-            <small>正确率</small>
+            <small>{{ t('ui.k0064') }}</small>
             <strong :class="practiceReport.accuracy >= 80 ? 'text-success' : practiceReport.accuracy >= 60 ? 'text-warning' : 'text-danger'">
               {{ practiceReport.accuracy }}%
             </strong>
           </div>
           <div class="result-stat-box">
-            <small>作答题数</small>
+            <small>{{ t('ui.k0536') }}</small>
             <strong>{{ practiceReport.answered_count }} / {{ practiceReport.total_questions }}</strong>
           </div>
           <div class="result-stat-box">
-            <small>用时</small>
-            <strong>{{ formatRemainingTime ? formatRemainingTime(practiceReport.time_spent || 0) : `${practiceReport.time_spent || 0}秒` }}</strong>
+            <small>{{ t('ui.k0537') }}</small>
+            <strong>{{ formatRemainingTime ? formatRemainingTime(practiceReport.time_spent || 0) : `${practiceReport.time_spent || 0}${t('ui.k0742')}` }}</strong>
           </div>
         </div>
         <div class="result-counts-bar">
-          <span class="count-tag text-success">✓ 正确 {{ practiceReport.correct_count }}</span>
-          <span v-if="practiceReport.partial_count" class="count-tag text-warning">◒ 部分分 {{ practiceReport.partial_count }}</span>
-          <span class="count-tag text-danger">✗ 错误 {{ practiceReport.incorrect_count }}</span>
-          <span class="count-tag text-muted">○ 未答 {{ practiceReport.unanswered_count }}</span>
+          <span class="count-tag text-success">{{ t('ui.k0538') }} {{ practiceReport.correct_count }}</span>
+          <span v-if="practiceReport.partial_count" class="count-tag text-warning">{{ t('ui.k0539') }} {{ practiceReport.partial_count }}</span>
+          <span class="count-tag text-danger">{{ t('ui.k0540') }} {{ practiceReport.incorrect_count }}</span>
+          <span class="count-tag text-muted">{{ t('ui.k0541') }} {{ practiceReport.unanswered_count }}</span>
         </div>
         <div class="result-card-actions">
-          <button type="button" class="primary" @click="$emit('back')">返回题库</button>
-          <button type="button" class="secondary-btn" @click="handleRestartPractice">完成并离开</button>
+          <button type="button" class="primary" @click="handleBack">{{ t('ui.k0081') }}</button>
+          <button type="button" class="secondary-btn" @click="handleRestartPractice">{{ t('ui.k0542') }}</button>
         </div>
       </div>
     </div>
@@ -166,102 +166,102 @@
     <!-- 交卷前未答题目确认提示弹窗 -->
     <div v-if="showCompleteConfirmModal" class="sheet-modal-backdrop" @click.self="showCompleteConfirmModal = false">
       <div class="confirm-submit-dialog">
-        <h3>确认提前交卷？</h3>
+        <h3>{{ t('ui.k0543') }}</h3>
         <p v-if="questions.length - answeredCount > 0" class="confirm-warning-desc">
-          您还有 <strong class="text-danger">{{ questions.length - answeredCount }}</strong> 道题目尚未作答，提前交卷未作答题目将按 0 分结算。
+          {{ t('ui.k0544') }} <strong class="text-danger">{{ questions.length - answeredCount }}</strong> {{ t('ui.k0545') }}
         </p>
         <p v-else class="confirm-info-desc">
-          全卷 {{ questions.length }} 题已全部作答完毕，确认立即提交并结算成果？
+          {{ t('ui.k0546') }} {{ questions.length }} {{ t('ui.k0547') }}
         </p>
         <div class="confirm-dialog-actions">
-          <button type="button" class="secondary-btn" @click="showCompleteConfirmModal = false">继续做题</button>
+          <button type="button" class="secondary-btn" @click="showCompleteConfirmModal = false">{{ t('ui.k0548') }}</button>
           <button type="button" class="primary" :disabled="completing" @click="handleConfirmComplete">
-            {{ completing ? '正在交卷…' : '确认交卷' }}
+            {{ completing ? t('ui.k0658') : t('ui.k0659') }}
           </button>
         </div>
       </div>
     </div>
 
 
-    <p v-if="loading">正在加载题目…</p>
+    <p v-if="loading">{{ t('ui.k0549') }}</p>
     <section v-else-if="question" class="question-card">
       <!-- 离线暂存提示 -->
       <div v-if="offlineNotice" class="offline-banner" data-testid="offline-banner">
         <span>{{ offlineNotice }}</span>
-        <button type="button" class="btn-sync-offline" @click="syncOfflineEdits">重试重放同步</button>
+        <button type="button" class="btn-sync-offline" @click="syncOfflineEdits">{{ t('ui.k0550') }}</button>
       </div>
 
       <!-- 题目编辑面板 (EE-011: 支持完整题干、选项、题型、答案、难度、解析与标签编辑) -->
       <div v-if="isEditingQuestion" class="question-edit-panel" data-testid="question-edit-panel">
-        <h3>编辑题目 (基于版本 v{{ question.version_number }})</h3>
+        <h3>{{ t('ui.k0551') }}{{ question.version_number }})</h3>
         <div class="edit-form-grid">
           <label class="form-row">
-            <span>题干：</span>
+            <span>{{ t('ui.k0211') }}</span>
             <textarea v-model="editStem" class="input-edit-stem" rows="3"></textarea>
           </label>
           <div class="form-row-group">
             <label>
-              <span>题型：</span>
+              <span>{{ t('ui.k0366') }}</span>
               <select v-model="editType" class="select-edit-type">
-                <option value="SINGLE">单选题</option>
-                <option value="MULTI">多选题</option>
-                <option value="JUDGE">判断题</option>
-                <option value="ESSAY">主观/简答题</option>
+                <option value="SINGLE">{{ t('ui.k0050') }}</option>
+                <option value="MULTI">{{ t('ui.k0051') }}</option>
+                <option value="JUDGE">{{ t('ui.k0052') }}</option>
+                <option value="ESSAY">{{ t('ui.k0166') }}</option>
               </select>
             </label>
             <label>
-              <span>难度：</span>
+              <span>{{ t('ui.k0552') }}</span>
               <select v-model.number="editDifficulty" class="select-edit-diff">
-                <option :value="1">1 (入门)</option>
-                <option :value="2">2 (较易)</option>
-                <option :value="3">3 (中等)</option>
-                <option :value="4">4 (较难)</option>
-                <option :value="5">5 (极难)</option>
+                <option :value="1">{{ t('ui.k0168') }}</option>
+                <option :value="2">{{ t('ui.k0169') }}</option>
+                <option :value="3">{{ t('ui.k0170') }}</option>
+                <option :value="4">{{ t('ui.k0171') }}</option>
+                <option :value="5">{{ t('ui.k0172') }}</option>
               </select>
             </label>
             <label>
-              <span>标准答案：</span>
-              <input v-model="editAnswer" class="input-edit-answer" placeholder="如 A / AB / T / F" />
+              <span>{{ t('ui.k0080') }}</span>
+              <input v-model="editAnswer" class="input-edit-answer" :placeholder="t('ui.k0553')" />
             </label>
           </div>
           <div v-if="editType === 'SINGLE' || editType === 'MULTI' || editType === 'JUDGE'" class="options-edit-block">
             <div class="options-header">
-              <span>选项列表：</span>
-              <button type="button" class="btn-add-option" @click="addOption">+ 添加选项</button>
+              <span>{{ t('ui.k0370') }}</span>
+              <button type="button" class="btn-add-option" @click="addOption">{{ t('ui.k0554') }}</button>
             </div>
             <div v-for="(opt, oIdx) in editOptions" :key="oIdx" class="option-edit-row">
-              <input v-model="opt.key" class="opt-key-input" placeholder="标识" style="width: 3.5rem;" />
-              <input v-model="opt.content" class="opt-text-input" placeholder="选项内容" style="flex: 1;" />
-              <button type="button" class="btn-del-option" @click="removeOption(oIdx)">删除</button>
+              <input v-model="opt.key" class="opt-key-input" :placeholder="t('ui.k0176')" style="width: 3.5rem;" />
+              <input v-model="opt.content" class="opt-text-input" :placeholder="t('ui.k0555')" style="flex: 1;" />
+              <button type="button" class="btn-del-option" @click="removeOption(oIdx)">{{ t('ui.k0256') }}</button>
             </div>
           </div>
           <label class="form-row">
-            <span>解析说明：</span>
+            <span>{{ t('ui.k0213') }}</span>
             <textarea v-model="editExplanation" class="input-edit-exp" rows="2"></textarea>
           </label>
           <label class="form-row">
-            <span>标签（逗号分隔）：</span>
-            <input v-model="editTags" class="input-edit-tags" placeholder="如：重点, 逻辑推理" />
+            <span>{{ t('ui.k0556') }}</span>
+            <input v-model="editTags" class="input-edit-tags" :placeholder="t('ui.k0557')" />
           </label>
           <div class="edit-regrade-option" style="margin: 0.5rem 0; padding: 0.5rem; background: var(--bg-page); border-radius: 6px;">
             <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer;">
               <input type="checkbox" v-model="editRegradeHistory" class="checkbox-regrade-history" />
-              <span>可控历史重判：修改标准答案后，同步重判历史作答并重算 FSRS 状态与学习记录</span>
+              <span>{{ t('ui.k0558') }}</span>
             </label>
           </div>
         </div>
         <div class="edit-actions">
-          <button type="button" @click="isEditingQuestion = false">取消</button>
-          <button type="button" class="primary btn-save-question-edit" @click="saveQuestionEdit">保存新版本</button>
+          <button type="button" @click="isEditingQuestion = false">{{ t('ui.k0149') }}</button>
+          <button type="button" class="primary btn-save-question-edit" @click="saveQuestionEdit">{{ t('ui.k0559') }}</button>
         </div>
       </div>
 
       <!-- 多端并发修改冲突保留与选择横幅 (基于服务端真实冲突检测) -->
       <div v-if="activeConflict || conflictResolvedMessage" class="conflict-banner" data-testid="conflict-banner">
         <div v-if="activeConflict" class="conflict-header">
-          <span class="conflict-badge">⚠️ 检测到多端并发编辑冲突：您基于版本 v{{ activeConflict.base_version_number }} 的修改与服务端最新版本 v{{ activeConflict.server_version_number }} 发生冲突（双方版本均已完整保留在历史中）</span>
+          <span class="conflict-badge">{{ t('ui.k0560') }}{{ activeConflict.base_version_number }} {{ t('ui.k0561') }}{{ activeConflict.server_version_number }} {{ t('ui.k0562') }}</span>
           <button type="button" class="btn-conflict-toggle" @click="showConflictModal = !showConflictModal">
-            {{ showConflictModal ? '收起冲突比对' : '比对并选择最终采用版本' }}
+            {{ showConflictModal ? t('ui.k0743') : t('ui.k0744') }}
           </button>
         </div>
         <p v-if="conflictResolvedMessage" class="conflict-resolved-msg">{{ conflictResolvedMessage }}</p>
@@ -275,14 +275,14 @@
             :data-testid="`conflict-version-${v.version_number}`"
           >
             <div class="conflict-version-meta">
-              <strong>版本 v{{ v.version_number }}</strong>
+              <strong>{{ t('ui.k0563') }}{{ v.version_number }}</strong>
               <small>{{ v.created_at ? v.created_at.slice(0, 19).replace('T', ' ') : '' }}</small>
-              <span v-if="v.version_number === question.version_number" class="badge-current">当前生效</span>
+              <span v-if="v.version_number === question.version_number" class="badge-current">{{ t('ui.k0564') }}</span>
             </div>
             <div class="conflict-version-body">
-              <p><strong>题干：</strong>{{ v.stem }}</p>
-              <p><strong>答案：</strong>{{ v.answer }}</p>
-              <p v-if="v.explanation"><strong>解析：</strong>{{ v.explanation }}</p>
+              <p><strong>{{ t('ui.k0211') }}</strong>{{ v.stem }}</p>
+              <p><strong>{{ t('ui.k0565') }}</strong>{{ v.answer }}</p>
+              <p v-if="v.explanation"><strong>{{ t('ui.k0372') }}</strong>{{ v.explanation }}</p>
             </div>
             <div class="conflict-version-actions">
               <button
@@ -291,7 +291,7 @@
                 :disabled="!activeConflict && v.version_number === question.version_number"
                 @click="handleAdoptQuestionVersion(v)"
               >
-                {{ !activeConflict && v.version_number === question.version_number ? '当前已是此版本' : `采用此版本 (v${v.version_number})` }}
+                {{ !activeConflict && v.version_number === question.version_number ? t('ui.k0745') : `${t('ui.k0746')}${v.version_number})` }}
               </button>
             </div>
           </div>
@@ -318,7 +318,7 @@
                   }"
                   @click.prevent="selectOption(option.key)"
                 >
-                  <kbd class="key-cap" :title="`按键盘 ${option.key} 键直接选择`">{{ option.key }}</kbd>
+                  <kbd class="key-cap" :title="`${t('ui.k0084')} ${option.key} ${t('ui.k0085')}`">{{ option.key }}</kbd>
                   <input
                     :type="question.type === 'MULTI' ? 'checkbox' : 'radio'"
                     :name="`practice-${question.id}`"
@@ -327,20 +327,20 @@
                     :disabled="Boolean(result)"
                   />
                   <span class="option-text-content">{{ option.content }}</span>
-                  <span v-if="result && isCorrectOption(option.key)" class="inline-verdict-badge correct">✔ 正确答案</span>
-                  <span v-if="result && isWrongOption(option.key)" class="inline-verdict-badge wrong">✘ 你的作答</span>
+                  <span v-if="result && isCorrectOption(option.key)" class="inline-verdict-badge correct">{{ t('ui.k0566') }}</span>
+                  <span v-if="result && isWrongOption(option.key)" class="inline-verdict-badge wrong">{{ t('ui.k0567') }}</span>
                 </label>
               </div>
 
               <!-- 主观题 / 填空题文本输入 -->
               <div v-else class="text-answer-box">
                 <label>
-                  <span>作答内容</span>
+                  <span>{{ t('ui.k0568') }}</span>
                   <textarea
                     v-model="textAnswer"
                     :disabled="Boolean(result)"
                     rows="4"
-                    placeholder="输入你的答案或解题思路…"
+                    :placeholder="t('ui.k0569')"
                   />
                 </label>
               </div>
@@ -354,9 +354,9 @@
                   <strong>{{ formatVerdictTitle(question.type, result.correctness, result.is_objective) }}</strong>
                 </div>
                 <div class="verdict-text-inline">
-                  <span v-if="question.answer">标准答案：<strong class="text-correct">{{ question.answer }}</strong></span>
-                  <span v-if="hasAnswer">你的作答：<strong :class="result.correctness === 'CORRECT' ? 'text-correct' : 'text-danger'">{{ formatUserAnswer(question.options?.length ? answer : textAnswer) }}</strong></span>
-                  <span v-if="result.is_objective && result.score_ratio !== undefined">得分率：{{ Math.round((result.score_ratio || 0) * 100) }}%</span>
+                  <span v-if="question.answer">{{ t('ui.k0080') }}<strong class="text-correct">{{ question.answer }}</strong></span>
+                  <span v-if="hasAnswer">{{ t('ui.k0570') }}<strong :class="result.correctness === 'CORRECT' ? 'text-correct' : 'text-danger'">{{ formatUserAnswer(question.options?.length ? answer : textAnswer) }}</strong></span>
+                  <span v-if="result.is_objective && result.score_ratio !== undefined">{{ t('ui.k0571') }}{{ Math.round((result.score_ratio || 0) * 100) }}%</span>
                 </div>
               </div>
             </div>
@@ -367,9 +367,9 @@
                 <div class="result-header">
                   <strong :class="result.correctness.toLowerCase()">
                     {{ formatVerdictTitle(question.type, result.correctness, result.is_objective) }}
-                    <span v-if="result.correctness === 'CORRECT'" class="sub-correct-badge">（完全正确）</span>
+                    <span v-if="result.correctness === 'CORRECT'" class="sub-correct-badge">{{ t('ui.k0572') }}</span>
                   </strong>
-                  <span v-if="result.is_objective">得分比例：{{ result.score_ratio }}</span>
+                  <span v-if="result.is_objective">{{ t('ui.k0573') }}{{ result.score_ratio }}</span>
                 </div>
 
                 <!-- FSRS 记忆评级交互区 (驱动下次复习时间) -->
@@ -416,7 +416,7 @@
                 </div>
 
                 <div v-if="question.explanation" class="official-explanation">
-                  <h4>官方解析</h4>
+                  <h4>{{ t('ui.k0574') }}</h4>
                   <p>{{ question.explanation }}</p>
                 </div>
 
@@ -424,9 +424,9 @@
                 <div class="ai-assistant-entry-block">
                   <div class="ai-entry-meta">
                     <span class="ai-badge">
-                      <LinearIcon name="cpu" size="13" /> AI 深度助教
+                      <LinearIcon name="cpu" size="13" /> {{ t('ui.k0575') }}
                     </span>
-                    <span class="ai-desc">考点深度剖析 · 联网证据核查 · 变式题拓展</span>
+                    <span class="ai-desc">{{ t('ui.k0576') }}</span>
                   </div>
                   <button
                     type="button"
@@ -434,7 +434,7 @@
                     :class="{ active: showAiPanel }"
                     @click="toggleAiPanel"
                   >
-                    <LinearIcon name="cpu" size="13" /> {{ showAiPanel ? '收起助教 ▲' : '向 AI 助教提问 / 展开解析 ▼' }}
+                    <LinearIcon name="cpu" size="13" /> {{ showAiPanel ? t('ui.k0747') : t('ui.k0748') }}
                   </button>
                 </div>
               </section>
@@ -445,25 +445,25 @@
                   <LinearIcon name="command" size="22" />
                 </div>
                 <div class="placeholder-content">
-                  <h4>专注作答中</h4>
-                  <p>请在左侧选择或输入你的答案。</p>
-                  <p>作答后点击底栏“<strong>提交答案</strong>”或直接敲击 <strong>Enter</strong> 键即可立即查看评级与解析。</p>
+                  <h4>{{ t('ui.k0577') }}</h4>
+                  <p>{{ t('ui.k0578') }}</p>
+                  <p>{{ t('ui.k0579') }}<strong>{{ t('ui.k0580') }}</strong>{{ t('ui.k0581') }} <strong>Enter</strong> {{ t('ui.k0582') }}</p>
                 </div>
               </div>
 
       <!-- AI 助教与多版本解释面板 -->
       <section v-if="showAiPanel" class="ai-panel">
         <div class="ai-toolbar">
-          <h3>AI 助教与多版本解释</h3>
+          <h3>{{ t('ui.k0583') }}</h3>
           <div class="ai-btn-group">
             <button type="button" :disabled="aiLoading || generatingVariant" @click="generateExplanation">
-              {{ aiLoading ? '正在分析…' : '重新生成 AI 解释' }}
+              {{ aiLoading ? t('ui.k0689') : t('ui.k0749') }}
             </button>
             <button type="button" :disabled="aiLoading || generatingVariant" @click="handleVerifyWeb">
-              {{ aiLoading ? '正在核查…' : '联网核查证据' }}
+              {{ aiLoading ? t('ui.k0750') : t('ui.k0751') }}
             </button>
             <button type="button" :disabled="aiLoading || generatingVariant" @click="handleGenerateVariant">
-              {{ generatingVariant ? '正在生成草稿…' : '生成变式题草稿' }}
+              {{ generatingVariant ? t('ui.k0752') : t('ui.k0753') }}
             </button>
           </div>
         </div>
@@ -473,11 +473,11 @@
           <input
             v-model="customQuery"
             type="text"
-            placeholder="对这道题有疑问？输入追问内容，如：为什么选 B 不选 C…"
+            :placeholder="t('ui.k0584')"
             @keyup.enter="askCustomQuery"
           />
           <button type="button" :disabled="!customQuery.trim() || aiLoading" @click="askCustomQuery">
-            追问
+            {{ t('ui.k0585') }}
           </button>
         </div>
 
@@ -485,10 +485,10 @@
 
         <!-- 连续追问对话历史 (MiaowTest 对话模型) -->
         <div v-if="chatMessages.length" class="ai-chat-thread">
-          <h4>连续追问历史 ({{ chatMessages.length }})</h4>
+          <h4>{{ t('ui.k0586') }}{{ chatMessages.length }})</h4>
           <div v-for="msg in chatMessages" :key="msg.id" class="chat-bubble" :class="msg.role">
             <div class="chat-sender">
-              <strong>{{ msg.role === 'user' ? '我的追问' : 'AI 助教解答' }}</strong>
+              <strong>{{ msg.role === 'user' ? t('ui.k0754') : t('ui.k0755') }}</strong>
               <small class="muted">#{{ msg.sequence }}</small>
             </div>
             <p class="chat-text">{{ msg.content }}</p>
@@ -497,7 +497,7 @@
 
         <!-- 历史解释版本列表 -->
         <div v-if="answerVersions.length" class="ai-history">
-          <h4>解释版本历史 ({{ answerVersions.length }})</h4>
+          <h4>{{ t('ui.k0587') }}{{ answerVersions.length }})</h4>
           <article
             v-for="version in answerVersions"
             :key="version.id"
@@ -506,7 +506,7 @@
           >
             <div class="version-meta">
               <span class="source-tag">{{ formatSource(version.source) }}</span>
-              <span v-if="version.is_adopted" class="badge-adopted">当前主解释</span>
+              <span v-if="version.is_adopted" class="badge-adopted">{{ t('ui.k0588') }}</span>
               <small class="muted">{{ version.created_at ? version.created_at.slice(0, 19).replace('T', ' ') : '' }}</small>
             </div>
 
@@ -516,12 +516,12 @@
 
               <!-- 联网证据展示 -->
               <div v-if="version.evidence?.length" class="evidence-box">
-                <h5>联网检索证据依据 ({{ version.evidence.length }})</h5>
+                <h5>{{ t('ui.k0589') }}{{ version.evidence.length }})</h5>
                 <ul>
                   <li v-for="(ev, idx) in version.evidence" :key="idx">
                     <strong>{{ ev.title }}</strong>
                     <span v-if="ev.snippet"> - {{ ev.snippet }}</span>
-                    <a v-if="ev.url" :href="ev.url" target="_blank" rel="noopener">来源链接</a>
+                    <a v-if="ev.url" :href="ev.url" target="_blank" rel="noopener">{{ t('ui.k0590') }}</a>
                   </li>
                 </ul>
               </div>
@@ -532,11 +532,11 @@
                   type="button"
                   class="btn-adopt"
                   @click="adopt(version.id)"
-                >采纳为主解释</button>
+                >{{ t('ui.k0591') }}</button>
                 <button
                   type="button"
                   @click="startEdit(version)"
-                >编辑并存为个人解释</button>
+                >{{ t('ui.k0592') }}</button>
               </div>
             </div>
 
@@ -544,21 +544,21 @@
             <div v-else class="version-edit-box">
               <textarea v-model="editDraft" rows="4" />
               <div class="version-edit-actions">
-                <button type="button" @click="editingVersionId = null">取消</button>
+                <button type="button" @click="editingVersionId = null">{{ t('ui.k0149') }}</button>
                 <button type="button" class="primary" :disabled="!editDraft.trim()" @click="savePersonalExplanation">
-                  保存为个人解释版本
+                  {{ t('ui.k0593') }}
                 </button>
               </div>
             </div>
           </article>
         </div>
-        <p v-else class="muted">暂无历史解释，点击上方按钮让 AI 展开剖析。</p>
+        <p v-else class="muted">{{ t('ui.k0594') }}</p>
       </section>
         </div>
       </div>
     </div>
 </section>
-<p v-else>本题库暂无可练习题目。</p>
+<p v-else>{{ t('ui.k0595') }}</p>
 
 <!-- 屏幕底部固定操作底栏 (屏幕Y坐标永久固定，零位移，绝不被答案挤压) -->
 <footer v-if="question" class="ergonomic-action-bar" data-testid="practice-action-bar">
@@ -569,20 +569,20 @@
         class="secondary-btn btn-prev-question"
         :disabled="index === 0"
         @click="prev"
-        title="快捷键：← 或 K"
+        :title="t('ui.k0089')"
       >
-        ← 上一题
+        {{ t('ui.k0596') }}
         <kbd class="hotkey-badge">←</kbd>
       </button>
     </div>
 
     <!-- 键盘盲操指南条 (直观呈现，无需猜测，移动端自动隐藏) -->
     <div class="hotkey-helper-bar">
-      <span class="hotkey-item"><kbd>A-D</kbd> 选选项</span>
-      <span class="hotkey-item"><kbd>Enter</kbd> 提交/继续</span>
-      <span class="hotkey-item"><kbd>Space</kbd> 下一题</span>
-      <span class="hotkey-item"><kbd>←</kbd> 上一题</span>
-      <span class="hotkey-item"><kbd>F</kbd> 标薄弱</span>
+      <span class="hotkey-item"><kbd>A-D</kbd> {{ t('ui.k0597') }}</span>
+      <span class="hotkey-item"><kbd>Enter</kbd> {{ t('ui.k0598') }}</span>
+      <span class="hotkey-item"><kbd>Space</kbd> {{ t('ui.k0092') }}</span>
+      <span class="hotkey-item"><kbd>←</kbd> {{ t('ui.k0090') }}</span>
+      <span class="hotkey-item"><kbd>F</kbd> {{ t('ui.k0599') }}</span>
     </div>
 
     <div class="action-right">
@@ -592,9 +592,9 @@
         type="button"
         class="secondary-btn btn-skip-unanswered"
         @click="next"
-        title="快捷键：Space 或 →"
+        :title="t('ui.k0091')"
       >
-        <span>跳过 →</span>
+        <span>{{ t('ui.k0600') }}</span>
       </button>
 
       <!-- 核心主按钮：提交与下一题锁定在相同物理基准位置，消除跳动与误触 -->
@@ -604,9 +604,9 @@
         class="primary btn-submit-answer btn-action-fixed-primary"
         :disabled="!hasAnswer && question.options?.length"
         @click="submit"
-        title="快捷键：Enter"
+        :title="t('ui.k0601')"
       >
-        <span>提交答案</span>
+        <span>{{ t('ui.k0580') }}</span>
         <kbd class="hotkey-badge">Enter ↵</kbd>
       </button>
 
@@ -617,9 +617,9 @@
           type="button"
           class="primary btn-next-question btn-action-fixed-primary"
           @click="next"
-          title="快捷键：Space 或 →"
+          :title="t('ui.k0091')"
         >
-          <span>下一题 →</span>
+          <span>{{ t('ui.k0602') }}</span>
           <kbd class="hotkey-badge">Space ␣</kbd>
         </button>
         <button
@@ -627,9 +627,9 @@
           type="button"
           class="primary btn-finish-session btn-action-fixed-primary"
           @click="complete"
-          title="快捷键：Enter"
+          :title="t('ui.k0601')"
         >
-          <span>查看报告并交卷</span>
+          <span>{{ t('ui.k0603') }}</span>
         </button>
       </template>
     </div>
@@ -641,25 +641,37 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
 import LocaleToggle from '../components/LocaleToggle.vue'
 import { useLocale } from '../composables/useLocale.js'
 import { useAuthStore } from '../stores/authStore'
-import { getSession, getSessionQuestions, submitAttempt, completeSession } from '../api/practice'
+import { getSession, getSessionQuestions, submitAttempt, completeSession, syncDraft } from '../api/practice'
 import { getQuestion, listQuestionVersions, updateQuestion, getQuestionConflict, resolveQuestionConflict, regradeQuestion } from '../api/questions'
 import { generateAnswer, listAnswerVersions, adoptAnswer, saveCandidate, verifyWeb, listQuestionConversations, listConversationMessages, sendChatMessage, generateVariant } from '../api/ai'
 import { markWeak, unmarkWeak } from '../api/learning'
 import { killQuestion } from '../api/kills'
 import { triggerSyncEvent } from '../api/sync'
-import { formatVerdictTitle, findNextUnansweredIndex, isSwipeGestureValid } from '../domain/exam.js'
+import { formatVerdictTitle, findFirstUnansweredIndex, findNextUnansweredIndex, isSwipeGestureValid } from '../domain/exam.js'
 import { hydrateSessionPractice, normalizeQuestionOptions, shouldResetQuestionForm } from '../domain/practice.js'
 
 const props = defineProps({ token: { type: String, required: true }, sessionId: { type: String, required: true } })
 const emit = defineEmits(['back', 'completed'])
 
+const router = useRouter()
 const auth = useAuthStore()
 const { t } = useLocale()
+const authToken = computed(() => props.token || auth.token?.value || (typeof localStorage !== 'undefined' ? localStorage.getItem('easyexam_token') : '') || '')
+
+function handleBack() {
+  emit('back')
+  if (router && window.history.length > 1) {
+    router.back()
+  } else if (router) {
+    router.push('/')
+  }
+}
 
 function getOfflineQueueKey() {
   const uid = auth.user?.value?.id || auth.user?.value?.username || 'user'
@@ -754,7 +766,7 @@ function formatType(type) {
 }
 
 function formatSource(source) {
-  const map = { AI: 'AI 助教生成', WEB: '联网核查', PERSONAL: '个人定制解释', OFFICIAL: '官方解析' }
+  const map = { AI: t('ui.k0604'), WEB: t('ui.k0605'), PERSONAL: t('ui.k0606'), OFFICIAL: t('ui.k0574') }
   return map[source] || source
 }
 
@@ -781,9 +793,9 @@ function isWrongOption(key) {
 
 function formatUserAnswer(val) {
   if (Array.isArray(val)) {
-    return val.length ? val.join(', ') : '未作答'
+    return val.length ? val.join(', ') : t('ui.k0112')
   }
-  return val ? String(val) : '未作答'
+  return val ? String(val) : t('ui.k0112')
 }
 
 let touchStartX = 0
@@ -826,6 +838,9 @@ function saveCurrentQuestionState() {
 function restoreQuestionState(targetIndex) {
   saveCurrentQuestionState()
   index.value = targetIndex
+  if (props.sessionId && props.token) {
+    syncDraft(props.token, props.sessionId, { current_index: targetIndex }).catch(() => {})
+  }
 }
 
 async function handleSyncedEvents(e) {
@@ -946,7 +961,7 @@ async function submitRating(rating) {
 
   if (!question.value) return
   selectedFsrsRating.value = rating
-  fsrsRatingStatus.value = '正在更新 FSRS 状态…'
+  fsrsRatingStatus.value = t('ui.k0607')
   try {
     const res = await submitAttempt(props.token, props.sessionId, {
       question_id: question.value.id,
@@ -956,9 +971,9 @@ async function submitRating(rating) {
     result.value = res
     saveCurrentQuestionState()
     triggerSyncEvent('PRACTICE_RATING', 'SESSION', props.sessionId, { question_id: question.value.id, rating })
-    fsrsRatingStatus.value = `已更新 FSRS 评级：${['', '重来(Again)', '困难(Hard)', '良好(Good)', '简单(Easy)'][rating]}，已计算下次复习时间`
+    fsrsRatingStatus.value = `${t('ui.k0612')}${['', t('ui.k0608'), t('ui.k0609'), t('ui.k0610'), t('ui.k0611')][rating]}${t('ui.k0613')}`
   } catch (err) {
-    fsrsRatingStatus.value = `评级失败：${err.detail || err.message}`
+    fsrsRatingStatus.value = `${t('ui.k0614')}${err.detail || err.message}`
   }
 }
 
@@ -974,13 +989,13 @@ async function submit() {
     triggerSyncEvent('PRACTICE_ATTEMPT', 'SESSION', props.sessionId, { question_id: question.value.id })
     if (result.value?.correctness === 'INCORRECT' && (session.value?.mode === 'FSRS' || session.value?.mode === 'MISTAKE')) {
       selectedFsrsRating.value = 1
-      fsrsRatingStatus.value = '答错已自动记录为 Again (重来)'
+      fsrsRatingStatus.value = t('ui.k0615')
       if (sessionAnswers.value[question.value.id]) {
         sessionAnswers.value[question.value.id].selectedFsrsRating = 1
       }
     }
   } catch (err) {
-    alert(`作答提交失败：${err.detail || err.message || '网络连接异常'}`)
+    alert(`${t('ui.k0617')}${err.detail || err.message || t('ui.k0616')}`)
   } finally {
     submitting.value = false
   }
@@ -996,10 +1011,10 @@ async function generateExplanation() {
   aiLoading.value = true
   aiStatusMessage.value = ''
   try {
-    const saved = await generateAnswer(props.token, question.value.id, { query: '请结合这道题详细解释解题思路与要点。' })
+    const saved = await generateAnswer(props.token, question.value.id, { query: t('ui.k0618') })
     answerVersions.value = [saved, ...answerVersions.value]
   } catch (err) {
-    aiStatusMessage.value = `生成失败：${err.detail || err.message}`
+    aiStatusMessage.value = `${t('ui.k0619')}${err.detail || err.message}`
   } finally {
     aiLoading.value = false
   }
@@ -1021,7 +1036,7 @@ async function askCustomQuery() {
     chatMessages.value.push(res.assistant_message)
     customQuery.value = ''
   } catch (err) {
-    aiStatusMessage.value = `追问失败：${err.detail || err.message}`
+    aiStatusMessage.value = `${t('ui.k0620')}${err.detail || err.message}`
   } finally {
     aiLoading.value = false
   }
@@ -1035,10 +1050,10 @@ async function handleVerifyWeb() {
     const saved = await verifyWeb(props.token, question.value.id, { query: question.value.stem })
     answerVersions.value = [saved, ...answerVersions.value]
     if (saved.verification_status === 'UNAVAILABLE') {
-      aiStatusMessage.value = '联网检索服务当前未配置或不可用，已保留离线空证据记录。'
+      aiStatusMessage.value = t('ui.k0621')
     }
   } catch (err) {
-    aiStatusMessage.value = `联网核查失败：${err.detail || err.message}`
+    aiStatusMessage.value = `${t('ui.k0622')}${err.detail || err.message}`
   } finally {
     aiLoading.value = false
   }
@@ -1051,11 +1066,11 @@ async function handleGenerateVariant() {
   try {
     await generateVariant(props.token, {
       question_id: question.value.id,
-      prompt: '请基于此题考点和解题逻辑生成一道高质量的变式题草稿。',
+      prompt: t('ui.k0623'),
     })
-    aiStatusMessage.value = '变式题草稿已生成并暂存！请前往首页【变式草稿箱】审阅并确认入库。'
+    aiStatusMessage.value = t('ui.k0624')
   } catch (err) {
-    aiStatusMessage.value = `生成变式题草稿失败：${err.detail || err.message}`
+    aiStatusMessage.value = `${t('ui.k0625')}${err.detail || err.message}`
   } finally {
     generatingVariant.value = false
   }
@@ -1083,10 +1098,11 @@ async function savePersonalExplanation() {
     answerVersions.value = [saved, ...answerVersions.value]
     editingVersionId.value = null
   } catch (err) {
-    alert(`保存失败：${err.detail || err.message}`)
+    alert(`${t('ui.k0626')}${err.detail || err.message}`)
   }
 }
 
+// 标记薄弱与取消薄弱考点状态 (EE-013)
 async function toggleWeak() {
   if (!question.value) return
   try {
@@ -1098,19 +1114,20 @@ async function toggleWeak() {
       isWeak.value = true
     }
   } catch (err) {
-    alert(`操作失败：${err.detail || err.message}`)
+    alert(`${t('ui.k0627')}${err.detail || err.message}`)
   }
 }
 
+// 斩杀此题：直接将完全掌握的题目移入斩杀题库 (EE-013)
 async function handleKill() {
   if (!question.value) return
-  if (!window.confirm('确定要斩杀此题吗？斩杀后将从普通刷题与错题队列移出，进入斩杀题库（可在“错题与斩杀”中恢复）。')) return
+  if (!window.confirm(t('ui.k0628'))) return
   try {
     await killQuestion(props.token, question.value.id)
-    alert('已成功斩杀此题！此题将从普通刷题与错题队列移出，进入斩杀题库。')
+    alert(t('ui.k0629'))
     next()
   } catch (err) {
-    alert(`斩杀失败：${err.detail || err.message}`)
+    alert(`${t('ui.k0506')}${err.detail || err.message}`)
   }
 }
 
@@ -1141,7 +1158,7 @@ function jumpNextUnanswered() {
   if (nextIdx >= 0) {
     goTo(nextIdx)
   } else {
-    alert('所有题目均已作答！')
+    alert(t('ui.k0630'))
   }
 }
 
@@ -1309,75 +1326,102 @@ async function saveQuestionEdit() {
     queue.push(queueItem)
     localStorage.setItem(storageKey, JSON.stringify(queue))
     localStorage.setItem(userScopedKey, JSON.stringify(queue))
-    offlineNotice.value = '当前网络处于离线状态，修改已暂存本地隔离队列，网络恢复后将自动重放同步至服务端。'
+    offlineNotice.value = t('ui.k0631')
     isEditingQuestion.value = false
     return
   }
   try {
-    const updated = await updateQuestion(props.token, question.value.id, payload)
+    const currentToken = authToken.value
+    const updated = await updateQuestion(currentToken, question.value.id, payload)
     triggerSyncEvent('QUESTION_UPDATED', 'QUESTION', updated.id, { version_number: updated.version_number })
     isEditingQuestion.value = false
     questions.value[index.value] = updated
-    questionVersions.value = await listQuestionVersions(props.token, updated.id)
-    const conf = await getQuestionConflict(props.token, updated.id)
+    questionVersions.value = await listQuestionVersions(currentToken, updated.id)
+    const conf = await getQuestionConflict(currentToken, updated.id)
     activeConflict.value = conf?.has_conflict ? conf.conflict : null
   } catch {
     const queue = JSON.parse(localStorage.getItem(storageKey) || '[]')
     queue.push(queueItem)
     localStorage.setItem(storageKey, JSON.stringify(queue))
     localStorage.setItem(userScopedKey, JSON.stringify(queue))
-    offlineNotice.value = '连接服务端失败，修改已自动暂存本地隔离队列，网络恢复后将自动重放同步至服务端。'
+    offlineNotice.value = t('ui.k0632')
     isEditingQuestion.value = false
   }
 }
 
 let isSyncing = false
-async function syncOfflineEdits() {
-  if (isSyncing) return
-  isSyncing = true
+let syncQueued = false
+
+async function processOfflineQueue() {
   const storageKey = 'easyexam_offline_question_edits'
   const userScopedKey = getOfflineQueueKey()
   const uid = auth.user?.value?.id || auth.user?.value?.username || 'user'
-  try {
-    const raw = localStorage.getItem(storageKey) || localStorage.getItem(userScopedKey)
-    if (!raw) return
-    let queue = JSON.parse(raw)
-    if (!queue.length) return
-    const userItems = queue.filter(item => !item.userId || item.userId === uid)
-    if (!userItems.length) return
-    offlineNotice.value = '正在将离线修改逐项重放至服务端…'
+  const currentToken = authToken.value
+  const raw = localStorage.getItem(storageKey) || localStorage.getItem(userScopedKey)
+  if (!raw) return
+  let queue = JSON.parse(raw)
+  if (!queue.length) return
+  const userItems = queue.filter(item => !item.userId || item.userId === uid || item.userId === auth.user?.value?.id || item.userId === auth.user?.value?.username || item.userId === 'user')
+  if (!userItems.length) return
+  offlineNotice.value = t('ui.k0633')
 
-    // Process atomically item-by-item: NEVER wipe queue before confirmed completion!
-    while (queue.length > 0) {
-      const item = queue[0]
-      if (item.userId && item.userId !== uid) {
-        break
-      }
-      try {
-        const updated = await updateQuestion(props.token, item.questionId, item.payload)
-        triggerSyncEvent('QUESTION_UPDATED', 'QUESTION', updated.id, { version_number: updated.version_number })
-        if (question.value && question.value.id === item.questionId) {
-          questions.value[index.value] = updated
-          questionVersions.value = await listQuestionVersions(props.token, updated.id)
-          const conf = await getQuestionConflict(props.token, updated.id)
-          activeConflict.value = conf?.has_conflict ? conf.conflict : null
+  // Process atomically item-by-item: NEVER wipe queue before confirmed completion!
+  while (queue.length > 0) {
+    const item = queue[0]
+    const match = !item.userId || item.userId === uid || item.userId === auth.user?.value?.id || item.userId === auth.user?.value?.username || item.userId === 'user'
+    if (!match) {
+      break
+    }
+    try {
+      let updated
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          updated = await updateQuestion(currentToken, item.questionId, item.payload)
+          break
+        } catch (err) {
+          if (attempt < 2 && (err?.code === 'NETWORK_ERROR' || !err?.status)) {
+            await new Promise(r => setTimeout(r, 150))
+            continue
+          }
+          throw err
         }
-        // Remove item only upon confirmed success
-        queue.shift()
-        localStorage.setItem(storageKey, JSON.stringify(queue))
-        localStorage.setItem(userScopedKey, JSON.stringify(queue))
-      } catch (err) {
-        // Keep remaining items in queue on network or server error
-        break
       }
+      triggerSyncEvent('QUESTION_UPDATED', 'QUESTION', updated.id, { version_number: updated.version_number })
+      if (question.value && question.value.id === item.questionId) {
+        questions.value[index.value] = updated
+        questionVersions.value = await listQuestionVersions(currentToken, updated.id)
+        const conf = await getQuestionConflict(currentToken, updated.id)
+        activeConflict.value = conf?.has_conflict ? conf.conflict : null
+      }
+      // Remove item only upon confirmed success
+      queue.shift()
+      localStorage.setItem(storageKey, JSON.stringify(queue))
+      localStorage.setItem(userScopedKey, JSON.stringify(queue))
+    } catch (err) {
+      console.error('Failed to sync offline question edit:', err)
+      break
     }
-    if (queue.length) {
-      offlineNotice.value = `仍有 ${queue.length} 条离线修改待同步`
-    } else {
-      offlineNotice.value = ''
-      localStorage.removeItem(storageKey)
-      localStorage.removeItem(userScopedKey)
-    }
+  }
+  if (queue.length) {
+    offlineNotice.value = `${t('ui.k0634')} ${queue.length} ${t('ui.k0635')}`
+  } else {
+    offlineNotice.value = ''
+    localStorage.removeItem(storageKey)
+    localStorage.removeItem(userScopedKey)
+  }
+}
+
+async function syncOfflineEdits() {
+  if (isSyncing) {
+    syncQueued = true
+    return
+  }
+  isSyncing = true
+  try {
+    do {
+      syncQueued = false
+      await processOfflineQueue()
+    } while (syncQueued)
   } finally {
     isSyncing = false
   }
@@ -1385,12 +1429,13 @@ async function syncOfflineEdits() {
 
 async function handleAdoptQuestionVersion(targetVer) {
   try {
+    const currentToken = authToken.value
     let updated
     if (activeConflict.value) {
-      updated = await resolveQuestionConflict(props.token, question.value.id, targetVer.version_number)
+      updated = await resolveQuestionConflict(currentToken, question.value.id, targetVer.version_number)
       activeConflict.value = null
     } else {
-      updated = await updateQuestion(props.token, question.value.id, {
+      updated = await updateQuestion(currentToken, question.value.id, {
         stem: targetVer.stem,
         type: targetVer.type || question.value.type || 'SINGLE',
         options: targetVer.options || question.value.options || [],
@@ -1400,12 +1445,12 @@ async function handleAdoptQuestionVersion(targetVer) {
         tags: targetVer.tags || question.value.tags || [],
       })
     }
-    conflictResolvedMessage.value = `已成功确认采用版本 v${targetVer.version_number} 内容，服务端已原子生成最新生效版本！`
+    conflictResolvedMessage.value = `${t('ui.k0636')}${targetVer.version_number} ${t('ui.k0637')}`
     triggerSyncEvent('QUESTION_UPDATED', 'QUESTION', updated.id, { version_number: updated.version_number })
     questions.value[index.value] = updated
-    questionVersions.value = await listQuestionVersions(props.token, updated.id)
+    questionVersions.value = await listQuestionVersions(currentToken, updated.id)
   } catch (err) {
-    alert(`采用版本失败：${err.detail || err.message}`)
+    alert(`${t('ui.k0638')}${err.detail || err.message}`)
   }
 }
 
@@ -1432,7 +1477,7 @@ async function handleConfirmComplete() {
     showCompleteConfirmModal.value = false
     emit('completed', report)
   } catch (err) {
-    alert(`交卷失败：${err.detail || err.message}`)
+    alert(`${t('ui.k0639')}${err.detail || err.message}`)
   } finally {
     completing.value = false
   }

@@ -1,7 +1,9 @@
 """Versioned modular-monolith FastAPI entrypoint."""
 from pathlib import Path
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.routes import ai, assets, auth, banks, exams, imports, kills, learning, mistakes, practice, questions, sync, system
@@ -72,6 +74,26 @@ def create_app(db_path: str | None = None, dist_dir: str | Path | None = None) -
 
     app = FastAPI(title="EasyExam API", version="1.0.0")
     app.state.services = services
+
+    @app.exception_handler(HTTPException)
+    async def localized_http_error(request: Request, exc: HTTPException):
+        if not request.headers.get("Accept-Language"):
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=exc.headers)
+        code = f"HTTP_{exc.status_code}"
+        if request.url.path == "/api/v1/auth/login" and exc.status_code == 401:
+            code = "AUTH_INVALID_CREDENTIALS"
+        elif request.url.path == "/api/v1/auth/register" and exc.status_code == 409:
+            code = "AUTH_ACCOUNT_EXISTS"
+        body = {"error_code": code, "params": {}}
+        if exc.status_code == 409 and isinstance(exc.detail, dict):
+            body["detail"] = exc.detail
+        return JSONResponse(status_code=exc.status_code, content=body, headers=exc.headers)
+
+    @app.exception_handler(RequestValidationError)
+    async def localized_validation_error(request: Request, exc: RequestValidationError):
+        if not request.headers.get("Accept-Language"):
+            return JSONResponse(status_code=422, content={"detail": exc.errors()})
+        return JSONResponse(status_code=422, content={"error_code": "HTTP_422", "params": {}})
 
     @app.middleware("http")
     async def add_no_cache_for_html(request, call_next):

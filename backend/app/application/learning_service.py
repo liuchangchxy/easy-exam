@@ -40,13 +40,17 @@ class LearningService:
         self,
         user_id: str,
         bank_id: str | None,
-        minutes_per_day: int,
-        days: int,
+        minutes_per_day: int = 30,
+        days: int = 7,
         difficulty: int | None = None,
         chapter: str | None = None,
         new_ratio: float | None = None,
+        questions_per_day: int | None = None,
     ) -> dict:
-        limit = min(500, max(1, (minutes_per_day // 2) * days))
+        if questions_per_day is not None and int(questions_per_day) > 0:
+            limit = min(10000, max(1, int(questions_per_day) * days))
+        else:
+            limit = min(10000, max(1, (minutes_per_day // 2) * days))
         records = self.practices.recommendation_candidates(user_id, bank_id)
         recommendations = build_recommendations(
             records,
@@ -55,4 +59,9 @@ class LearningService:
             chapter=chapter,
             new_ratio=new_ratio,
         )
-        return build_study_plan(recommendations, minutes_per_day, days)
+        return build_study_plan(
+            recommendations,
+            minutes_per_day=minutes_per_day,
+            days=days,
+            questions_per_day=questions_per_day,
+        )

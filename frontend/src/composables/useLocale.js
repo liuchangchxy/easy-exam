@@ -56,6 +56,11 @@ export function toggleLocale() {
   return setLocale(next)
 }
 
+export function getCurrentLocale() {
+  initializeLocale()
+  return currentLocale.value
+}
+
 /**
  * 响应式国际化取值函数
  * @param {string} path 字典点分路径，如 'nav.practice'

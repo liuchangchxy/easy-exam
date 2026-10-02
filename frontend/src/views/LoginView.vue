@@ -13,27 +13,27 @@
 
       <form class="auth-form" @submit.prevent="submit">
         <div class="form-group">
-          <label class="field-label">用户名</label>
+          <label class="field-label">{{ t('ui.k0463') }}</label>
           <div class="input-wrapper">
             <input
               v-model.trim="username"
               autocomplete="username"
               autocapitalize="off"
               autocorrect="off"
-              placeholder="用户名"
+              :placeholder="t('ui.k0463')"
               required
             />
           </div>
         </div>
 
         <div class="form-group">
-          <label class="field-label">密码</label>
+          <label class="field-label">{{ t('ui.k0464') }}</label>
           <div class="input-wrapper has-trailing-action">
             <input
               v-model="password"
               :type="showPassword ? 'text' : 'password'"
               :autocomplete="registering ? 'new-password' : 'current-password'"
-              placeholder="密码（至少 8 位）"
+              :placeholder="t('ui.k0465')"
               required
               minlength="8"
             />
@@ -41,31 +41,31 @@
               type="button"
               class="btn-toggle-eye"
               tabindex="-1"
-              :title="showPassword ? '隐藏密码' : '显示明文密码'"
+              :title="showPassword ? t('ui.k0466') : t('ui.k0467')"
               @click="showPassword = !showPassword"
             >
-              {{ showPassword ? '隐藏' : '显示' }}
+              {{ showPassword ? t('ui.k0710') : t('ui.k0711') }}
             </button>
           </div>
         </div>
 
         <div v-if="registering" class="form-group">
-          <label class="field-label">确认密码</label>
+          <label class="field-label">{{ t('ui.k0468') }}</label>
           <div class="input-wrapper has-trailing-action">
             <input
               v-model="confirmPassword"
               :type="showConfirmPassword ? 'text' : 'password'"
               autocomplete="new-password"
-              placeholder="请再次输入密码以确认"
+              :placeholder="t('ui.k0469')"
             />
             <button
               type="button"
               class="btn-toggle-eye"
               tabindex="-1"
-              :title="showConfirmPassword ? '隐藏密码' : '显示明文密码'"
+              :title="showConfirmPassword ? t('ui.k0466') : t('ui.k0467')"
               @click="showConfirmPassword = !showConfirmPassword"
             >
-              {{ showConfirmPassword ? '隐藏' : '显示' }}
+              {{ showConfirmPassword ? t('ui.k0710') : t('ui.k0711') }}
             </button>
           </div>
         </div>
@@ -73,23 +73,23 @@
         <div class="auth-options-row">
           <label class="remember-label">
             <input type="checkbox" v-model="rememberMe" />
-            <span>保持登录状态（30天免登录）</span>
+            <span>{{ t('ui.k0470') }}</span>
           </label>
         </div>
 
         <div v-if="error" class="error-banner">
           <span class="error-icon">⚠️</span>
-          <span class="error-text">{{ error }}</span>
+          <span class="error-text">{{ errorText }}</span>
         </div>
 
         <button type="submit" class="primary-btn submit-btn" :disabled="busy">
-          {{ busy ? '处理中…' : (registering ? '注册并登录' : '登录') }}
+          {{ busy ? t('ui.k0712') : (registering ? t('ui.k0713') : t('ui.k0714')) }}
         </button>
       </form>
 
       <div class="auth-footer-toggle">
         <button class="link-button" type="button" @click="registering = !registering">
-          {{ registering ? '已有账号？登录' : '首次使用？创建账号' }}
+          {{ registering ? t('ui.k0715') : t('ui.k0716') }}
         </button>
       </div>
     </section>
@@ -97,7 +97,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import LinearIcon from '../components/LinearIcon.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
 import LocaleToggle from '../components/LocaleToggle.vue'
@@ -112,7 +112,12 @@ const password = ref('')
 const confirmPassword = ref('')
 const registering = ref(false)
 const busy = ref(false)
-const error = ref('')
+const error = ref(null)
+const errorText = computed(() => {
+  if (error.value?.translationKey) return t(error.value.translationKey)
+  if (error.value instanceof Error) return error.value.message
+  return error.value || ''
+})
 const showPassword = ref(false)
 const showConfirmPassword = ref(false)
 const rememberMe = ref(true)
@@ -132,7 +137,7 @@ async function submit() {
   error.value = ''
 
   if (registering.value && confirmPassword.value && confirmPassword.value !== password.value) {
-    error.value = '两次输入的密码不一致，请重新核对'
+    error.value = { translationKey: 'ui.k0471' }
     busy.value = false
     return
   }
@@ -155,7 +160,7 @@ async function submit() {
 
     emit('authenticated', result)
   } catch (err) {
-    error.value = err.detail || err.message || '操作失败，请检查账号密码'
+    error.value = err instanceof Error ? err : new Error(t('ui.k0472'))
   } finally {
     busy.value = false
   }

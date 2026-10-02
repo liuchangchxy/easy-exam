@@ -201,3 +201,26 @@ def discard_draft(draft_id: str, request: Request, user=Depends(current_user)):
         return request.app.state.services.ai.discard_variant_draft(user["id"], draft_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+class BatchGeneratePayload(BaseModel):
+    overwrite: bool = False
+
+
+@router.get("/banks/{bank_id}/batch-status")
+def get_batch_status(bank_id: str, request: Request, user=Depends(current_user)):
+    return request.app.state.services.ai.get_batch_status(user["id"], bank_id)
+
+
+@router.post("/banks/{bank_id}/generate-batch", status_code=202)
+def start_batch_generate(bank_id: str, payload: BatchGeneratePayload, request: Request, user=Depends(current_user)):
+    lang = request.headers.get("Accept-Language", "zh-CN")
+    return request.app.state.services.ai.start_batch_generate(
+        user["id"], bank_id, overwrite=payload.overwrite, target_lang=lang
+    )
+
+
+@router.post("/banks/{bank_id}/batch-stop")
+def stop_batch_generate(bank_id: str, request: Request, user=Depends(current_user)):
+    return request.app.state.services.ai.stop_batch_generate(user["id"], bank_id)
+

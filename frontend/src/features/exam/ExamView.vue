@@ -1,13 +1,13 @@
 <template>
   <main class="exam-page" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
     <header class="exam-header" :class="{ 'report-header': Boolean(report) }">
-      <button type="button" class="btn-back" @click="$emit('back')">← 返回题库</button>
+      <button type="button" class="btn-back" @click="handleBack">{{ t('ui.k0060') }}</button>
       <div class="exam-header-center" @click="!report && (showMobileSheet = true)">
-        <h1>{{ report ? '考试成绩单' : '模拟考试' }}</h1>
-        <p v-if="!report">{{ session ? `已作答 ${answeredCount} / ${questions.length}` : '正在载入…' }}</p>
+        <h1>{{ report ? t('ui.k0649') : t('ui.k0650') }}</h1>
+        <p v-if="!report">{{ session ? `${t('ui.k0651')} ${answeredCount} / ${questions.length}` : t('ui.k0652') }}</p>
       </div>
       <div v-if="!report" class="exam-clock" data-testid="exam-timer" role="timer" aria-live="off">
-        {{ session?.time_limit ? formatRemainingTime(remainingSeconds) : '不限时' }}
+        {{ session?.time_limit ? formatRemainingTime(remainingSeconds) : t('ui.k0653') }}
       </div>
       <ThemeToggle compact />
       <LocaleToggle compact />
@@ -16,24 +16,24 @@
 
 
     <p v-if="error" class="exam-error" role="alert">{{ error }}</p>
-    <p v-if="loading" class="exam-loading">正在恢复考试进度…</p>
+    <p v-if="loading" class="exam-loading">{{ t('ui.k0061') }}</p>
 
     <section v-else-if="report" class="exam-report" aria-labelledby="exam-report-title">
-      <h2 id="exam-report-title">考试报告</h2>
+      <h2 id="exam-report-title">{{ t('ui.k0062') }}</h2>
       <div class="report-summary">
-        <article><small>得分</small><strong>{{ report.score }}</strong></article>
-        <article><small>正确率</small><strong>{{ report.accuracy }}%</strong></article>
-        <article><small>答题数</small><strong>{{ report.answered_count }} / {{ report.total_questions }}</strong></article>
-        <article><small>耗时</small><strong>{{ formatRemainingTime(report.time_spent ?? elapsedSeconds) }}</strong></article>
+        <article><small>{{ t('ui.k0063') }}</small><strong>{{ report.score }}</strong></article>
+        <article><small>{{ t('ui.k0064') }}</small><strong>{{ report.accuracy }}%</strong></article>
+        <article><small>{{ t('ui.k0065') }}</small><strong>{{ report.answered_count }} / {{ report.total_questions }}</strong></article>
+        <article><small>{{ t('ui.k0066') }}</small><strong>{{ formatRemainingTime(report.time_spent ?? elapsedSeconds) }}</strong></article>
       </div>
-      <p>正确 {{ report.correct_count }} · 部分得分 {{ report.partial_count }} · 错误 {{ report.incorrect_count }} · 未作答 {{ report.unanswered_count }}</p>
+      <p>{{ t('ui.k0067') }} {{ report.correct_count }} {{ t('ui.k0068') }} {{ report.partial_count }} {{ t('ui.k0069') }} {{ report.incorrect_count }} {{ t('ui.k0070') }} {{ report.unanswered_count }}</p>
 
       <section v-if="report.type_stats && Object.keys(report.type_stats).length" class="exam-stats-group">
-        <h3>题型统计</h3>
+        <h3>{{ t('ui.k0071') }}</h3>
         <div class="stats-table-wrapper">
           <table class="stats-table">
             <thead>
-              <tr><th>题型</th><th>作答</th><th>正确</th><th>部分分</th><th>错误</th><th>正确率</th></tr>
+              <tr><th>{{ t('ui.k0072') }}</th><th>{{ t('ui.k0073') }}</th><th>{{ t('ui.k0067') }}</th><th>{{ t('ui.k0074') }}</th><th>{{ t('ui.k0075') }}</th><th>{{ t('ui.k0064') }}</th></tr>
             </thead>
             <tbody>
               <tr v-for="(val, type) in report.type_stats" :key="type">
@@ -50,11 +50,11 @@
       </section>
 
       <section v-if="report.tag_stats && Object.keys(report.tag_stats).length" class="exam-stats-group">
-        <h3>知识点掌握</h3>
+        <h3>{{ t('ui.k0076') }}</h3>
         <div class="stats-table-wrapper">
           <table class="stats-table">
             <thead>
-              <tr><th>知识点</th><th>作答</th><th>正确</th><th>错误</th><th>正确率</th></tr>
+              <tr><th>{{ t('ui.k0077') }}</th><th>{{ t('ui.k0073') }}</th><th>{{ t('ui.k0067') }}</th><th>{{ t('ui.k0075') }}</th><th>{{ t('ui.k0064') }}</th></tr>
             </thead>
             <tbody>
               <tr v-for="(val, tag) in report.tag_stats" :key="tag">
@@ -70,21 +70,21 @@
       </section>
 
       <section v-if="reviewQuestions.length" class="exam-review">
-        <h3>答题回顾</h3>
+        <h3>{{ t('ui.k0078') }}</h3>
         <article v-for="item in reviewQuestions" :key="item.id" class="review-item">
           <h4>{{ item.stem }}</h4>
-          <p>你的答案：{{ displayAnswer(report.answers[item.id]?.user_answer) }}</p>
-          <p>标准答案：{{ displayAnswer(report.answers[item.id]?.correct_answer) }}</p>
+          <p>{{ t('ui.k0079') }}{{ displayAnswer(report.answers[item.id]?.user_answer) }}</p>
+          <p>{{ t('ui.k0080') }}{{ displayAnswer(report.answers[item.id]?.correct_answer) }}</p>
           <p v-if="report.answers[item.id]?.explanation">{{ report.answers[item.id].explanation }}</p>
         </article>
       </section>
-      <button type="button" class="primary" @click="$emit('back')">返回题库</button>
+      <button type="button" class="primary" @click="handleBack">{{ t('ui.k0081') }}</button>
     </section>
 
     <template v-else-if="question">
       <div class="exam-layout">
         <section class="exam-question-card">
-          <div class="question-meta"><span>第 {{ currentIndex + 1 }} 题 / {{ questions.length }}</span><span class="badge-type">{{ formatQuestionTypeName(question.type) }}</span></div>
+          <div class="question-meta"><span>{{ t('ui.k0082') }} {{ currentIndex + 1 }} {{ t('ui.k0083') }} {{ questions.length }}</span><span class="badge-type">{{ formatQuestionTypeName(question.type) }}</span></div>
           <h2>{{ question.stem }}</h2>
           <div v-if="question.options?.length" class="exam-options">
             <label
@@ -93,7 +93,7 @@
               class="exam-option"
               :class="{ selected: isOptionSelected(option.key) }"
             >
-              <kbd class="key-cap" :title="`按键盘 ${option.key} 键直接选择`">{{ option.key }}</kbd>
+              <kbd class="key-cap" :title="`${t('ui.k0084')} ${option.key} ${t('ui.k0085')}`">{{ option.key }}</kbd>
               <input
                 :type="question.type === 'MULTI' ? 'checkbox' : 'radio'"
                 :name="`question-${question.id}`"
@@ -104,31 +104,31 @@
             </label>
           </div>
           <label v-else class="exam-text-answer">
-            <span>{{ ['ESSAY', 'SUBJECTIVE'].includes(question.type) ? '作答内容' : '填写答案' }}</span>
+            <span>{{ ['ESSAY', 'SUBJECTIVE'].includes(question.type) ? t('ui.k0654') : t('ui.k0655') }}</span>
             <textarea
               :value="currentTextAnswer"
               :rows="['ESSAY', 'SUBJECTIVE'].includes(question.type) ? 8 : 2"
-              :placeholder="['ESSAY', 'SUBJECTIVE'].includes(question.type) ? '输入你的作答' : '输入答案'"
+              :placeholder="['ESSAY', 'SUBJECTIVE'].includes(question.type) ? t('ui.k0086') : t('ui.k0087')"
               @input="setTextAnswer($event.target.value)"
             />
           </label>
 
           <div class="exam-question-actions exam-fixed-action-bar">
             <div class="exam-actions-inner">
-              <button type="button" class="btn-flag-toggle" data-testid="exam-flag-toggle" :aria-pressed="isFlagged" @click="toggleCurrentFlag" title="快捷键：F">
+              <button type="button" class="btn-flag-toggle" data-testid="exam-flag-toggle" :aria-pressed="isFlagged" @click="toggleCurrentFlag" :title="t('ui.k0088')">
                 <span class="flag-icon">
                   <LinearIcon name="target" size="13" />
                 </span>
-                <span>{{ isFlagged ? '取消待复查' : '标记待复查' }}</span>
+                <span>{{ isFlagged ? t('ui.k0656') : t('ui.k0657') }}</span>
                 <kbd class="hotkey-badge">F</kbd>
               </button>
               <div class="exam-nav-btns">
-                <button type="button" class="btn-exam-nav" :disabled="currentIndex === 0" @click="goTo(currentIndex - 1)" title="快捷键：← 或 K">
-                  上一题
+                <button type="button" class="btn-exam-nav" :disabled="currentIndex === 0" @click="goTo(currentIndex - 1)" :title="t('ui.k0089')">
+                  {{ t('ui.k0090') }}
                   <kbd class="hotkey-badge">←</kbd>
                 </button>
-                <button type="button" class="btn-exam-nav primary" :disabled="currentIndex >= questions.length - 1" @click="goTo(currentIndex + 1)" title="快捷键：Space 或 →">
-                  下一题
+                <button type="button" class="btn-exam-nav primary" :disabled="currentIndex >= questions.length - 1" @click="goTo(currentIndex + 1)" :title="t('ui.k0091')">
+                  {{ t('ui.k0092') }}
                   <kbd class="hotkey-badge">→</kbd>
                 </button>
               </div>
@@ -136,14 +136,14 @@
           </div>
         </section>
 
-        <aside class="exam-answer-sheet" data-testid="exam-answer-sheet" aria-label="答题卡">
-          <h2>答题卡</h2>
-          <p>{{ answeredCount }} 题已答 · {{ flaggedCount }} 题待复查</p>
+        <aside class="exam-answer-sheet" data-testid="exam-answer-sheet" :aria-label="t('ui.k0093')">
+          <h2>{{ t('ui.k0093') }}</h2>
+          <p>{{ answeredCount }} {{ t('ui.k0094') }} {{ flaggedCount }} {{ t('ui.k0095') }}</p>
           <div class="sheet-legend">
-            <span class="legend-item"><span class="legend-badge answered">✔</span> 已答</span>
-            <span class="legend-item"><span class="legend-badge flagged"><LinearIcon name="target" size="10" /></span> 待复查</span>
-            <span class="legend-item"><span class="legend-badge current">●</span> 当前</span>
-            <span class="legend-item"><span class="legend-badge">○</span> 未答</span>
+            <span class="legend-item"><span class="legend-badge answered">✔</span> {{ t('ui.k0096') }}</span>
+            <span class="legend-item"><span class="legend-badge flagged"><LinearIcon name="target" size="10" /></span> {{ t('ui.k0097') }}</span>
+            <span class="legend-item"><span class="legend-badge current">●</span> {{ t('ui.k0098') }}</span>
+            <span class="legend-item"><span class="legend-badge">○</span> {{ t('ui.k0099') }}</span>
           </div>
           <div class="answer-grid">
             <button
@@ -151,27 +151,27 @@
               :key="item.id"
               type="button"
               :class="answerButtonClass(item.id, index)"
-              :aria-label="`第 ${index + 1} 题${answerState(item.id).answered ? '已答' : '未答'}${answerState(item.id).flagged ? '，待复查' : ''}`"
+              :aria-label="`${t('ui.k0082')} ${index + 1} ${t('ui.k0101')}${answerState(item.id).answered ? t('ui.k0096') : t('ui.k0099')}${answerState(item.id).flagged ? t('ui.k0100') : ''}`"
               @click="goTo(index)"
             >{{ index + 1 }}</button>
           </div>
         </aside>
       </div>
     </template>
-    <p v-else-if="!loading" class="exam-loading">本次考试没有可用题目。</p>
+    <p v-else-if="!loading" class="exam-loading">{{ t('ui.k0102') }}</p>
 
     <!-- 移动端答题卡抽屉 -->
     <div v-if="showMobileSheet" class="exam-sheet-modal-backdrop" @click.self="showMobileSheet = false">
       <div class="exam-sheet-modal-drawer">
         <div class="exam-sheet-drawer-header">
-          <h3>答题卡 (已答 {{ answeredCount }} / {{ questions.length }})</h3>
+          <h3>{{ t('ui.k0103') }} {{ answeredCount }} / {{ questions.length }})</h3>
           <button type="button" class="btn-close-sheet" @click="showMobileSheet = false">✕</button>
         </div>
         <div class="sheet-legend">
-          <span class="legend-item"><span class="legend-badge answered">✔</span> 已答</span>
-          <span class="legend-item"><span class="legend-badge flagged"><LinearIcon name="target" size="10" /></span> 待查</span>
-          <span class="legend-item"><span class="legend-badge current">●</span> 当前</span>
-          <span class="legend-item"><span class="legend-badge">○</span> 未答</span>
+          <span class="legend-item"><span class="legend-badge answered">✔</span> {{ t('ui.k0096') }}</span>
+          <span class="legend-item"><span class="legend-badge flagged"><LinearIcon name="target" size="10" /></span> {{ t('ui.k0104') }}</span>
+          <span class="legend-item"><span class="legend-badge current">●</span> {{ t('ui.k0098') }}</span>
+          <span class="legend-item"><span class="legend-badge">○</span> {{ t('ui.k0099') }}</span>
         </div>
         <div class="answer-grid">
           <button
@@ -187,23 +187,23 @@
 
     <div v-if="showSubmitConfirm" class="exam-confirm-backdrop" @click.self="showSubmitConfirm = false">
       <section class="exam-confirm-dialog" data-testid="exam-submit-confirm" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
-        <h2 id="confirm-title">确认交卷？</h2>
+        <h2 id="confirm-title">{{ t('ui.k0105') }}</h2>
         <p>
-          还有
+          {{ t('ui.k0106') }}
           <button
             v-if="questions.length - answeredCount > 0"
             type="button"
             class="btn-link-jump"
-            title="点击跳转至首个未作答题目"
+            :title="t('ui.k0107')"
             @click="jumpToFirstUnanswered"
           >
-            <strong>{{ questions.length - answeredCount }} 题未答 (点击定位首题)</strong>
+            <strong>{{ questions.length - answeredCount }} {{ t('ui.k0108') }}</strong>
           </button>
-          <span v-else>0 题未答</span>，{{ flaggedCount }} 题待复查。
+          <span v-else>{{ t('ui.k0109') }}</span>，{{ flaggedCount }} {{ t('ui.k0110') }}
         </p>
         <div class="exam-question-actions">
-          <button type="button" :disabled="isSubmitting" @click="showSubmitConfirm = false">继续作答</button>
-          <button type="button" class="primary" :disabled="isSubmitting" @click="submitExam(false)">{{ isSubmitting ? '正在交卷…' : '确认交卷' }}</button>
+          <button type="button" :disabled="isSubmitting" @click="showSubmitConfirm = false">{{ t('ui.k0111') }}</button>
+          <button type="button" class="primary" :disabled="isSubmitting" @click="submitExam(false)">{{ isSubmitting ? t('ui.k0658') : t('ui.k0659') }}</button>
         </div>
       </section>
     </div>
@@ -212,6 +212,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import LinearIcon from '../../components/LinearIcon.vue'
 import ThemeToggle from '../../components/ThemeToggle.vue'
 import LocaleToggle from '../../components/LocaleToggle.vue'
@@ -220,9 +221,19 @@ import { completeSession, getSession, getSessionQuestions, submitAttempt, syncDr
 import { calculateAccuracy, examAnswerState, findFirstUnansweredIndex, formatQuestionTypeName, formatRemainingTime, isSwipeGestureValid, normalizeExamAnswer } from '../../domain/exam'
 
 const { t } = useLocale()
+const router = useRouter()
 
 const props = defineProps({ token: { type: String, required: true }, sessionId: { type: String, required: true } })
-defineEmits(['back'])
+const emit = defineEmits(['back'])
+
+function handleBack() {
+  emit('back')
+  if (router && window.history.length > 1) {
+    router.back()
+  } else if (router) {
+    router.push('/')
+  }
+}
 const session = ref(null)
 const questions = ref([])
 const answers = ref({})
@@ -286,8 +297,8 @@ function answerButtonClass(questionId, index) {
   return { current: index === currentIndex.value, answered: state.answered, flagged: state.flagged }
 }
 function displayAnswer(value) {
-  if (Array.isArray(value)) return value.join('、') || '未作答'
-  return value === undefined || value === null || value === '' ? '未作答' : String(value)
+  if (Array.isArray(value)) return value.join('、') || t('ui.k0112')
+  return value === undefined || value === null || value === '' ? t('ui.k0112') : String(value)
 }
 
 function scheduleDraftSave() {
@@ -308,7 +319,7 @@ async function persistDraft(force = false) {
   try {
     await draftPromise
   } catch (err) {
-    error.value = `进度暂未同步：${err.detail || err.message}`
+    error.value = `${t('ui.k0113')}${err.detail || err.message}`
   } finally {
     draftPromise = null
   }
@@ -364,9 +375,9 @@ async function submitExam(automatic) {
     }
     report.value = await completeSession(props.token, props.sessionId)
     report.value.time_spent = elapsedSeconds.value
-    if (automatic) error.value = '考试时间已到，系统已自动交卷。'
+    if (automatic) error.value = t('ui.k0114')
   } catch (err) {
-    error.value = `交卷未完成，请检查网络后重试：${err.detail || err.message}`
+    error.value = `${t('ui.k0115')}${err.detail || err.message}`
     isSubmitting.value = false
     tickHandle = setInterval(tick, 1000)
   }

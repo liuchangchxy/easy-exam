@@ -1,3 +1,4 @@
+import { t } from '../composables/useLocale.js'
 export function normalizeExamAnswer(type, value) {
   if (type === 'MULTI') {
     const selected = Array.isArray(value) ? value : typeof value === 'string' ? [...value] : []
@@ -30,13 +31,13 @@ export function formatRemainingTime(totalSeconds) {
 
 export function formatQuestionTypeName(type) {
   const map = {
-    SINGLE: '单选题',
-    MULTI: '多选题',
-    JUDGE: '判断题',
-    FILL: '填空题',
-    SHORT_ANSWER: '主观题',
-    ESSAY: '主观题',
-    SUBJECTIVE: '主观题',
+    SINGLE: t('ui.k0050'),
+    MULTI: t('ui.k0051'),
+    JUDGE: t('ui.k0052'),
+    FILL: t('ui.k0053'),
+    SHORT_ANSWER: t('ui.k0054'),
+    ESSAY: t('ui.k0054'),
+    SUBJECTIVE: t('ui.k0054'),
   }
   return map[String(type || '').toUpperCase()] || String(type || '')
 }
@@ -75,15 +76,15 @@ export function findNextUnansweredIndex(questions, answers, currentIndex = 0) {
 export function formatVerdictTitle(questionType, correctness, isObjective) {
   const type = String(questionType || 'SINGLE').toUpperCase()
   if (!isObjective || type === 'ESSAY' || type === 'SHORT_ANSWER' || type === 'SUBJECTIVE') {
-    return '作答已保存（主观题）'
+    return t('ui.k0055')
   }
   if (correctness === 'CORRECT') {
-    return type === 'MULTI' ? '回答完全正确！' : '回答正确！'
+    return type === 'MULTI' ? t('ui.k0056') : t('ui.k0057')
   }
   if (correctness === 'PARTIAL' && type === 'MULTI') {
-    return '部分得分（漏选）'
+    return t('ui.k0058')
   }
-  return '回答错误'
+  return t('ui.k0059')
 }
 
 export function isSwipeGestureValid(startX, startY, endX, endY, minDistance = 50) {

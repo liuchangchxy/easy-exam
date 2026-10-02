@@ -120,7 +120,44 @@
     <g v-else-if="name === 'chevron-right'">
       <polyline points="9 18 15 12 9 6" />
     </g>
+    <!-- edit / note -->
+    <g v-else-if="name === 'edit'">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </g>
+    <!-- file -->
+    <g v-else-if="name === 'file'">
+      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+      <polyline points="13 2 13 9 20 9" />
+    </g>
+    <!-- trash -->
+    <g v-else-if="name === 'trash'">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </g>
+    <!-- exam (试卷徽标) -->
+    <g v-else-if="name === 'exam'">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <polyline points="9 15 11 17 15 13" />
+    </g>
     <!-- default / circle -->
+    <!-- globe (语言切换) -->
+    <g v-else-if="name === 'globe'">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </g>
+    <!-- lock / key (安全与修改密码) -->
+    <g v-else-if="name === 'lock'">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </g>
+    <g v-else-if="name === 'key'">
+      <circle cx="7.5" cy="15.5" r="4.5" />
+      <path d="m21 2-9.6 9.6" />
+      <path d="m15.5 7.5 3 3" />
+    </g>
     <circle v-else cx="12" cy="12" r="8" />
   </svg>
 </template>

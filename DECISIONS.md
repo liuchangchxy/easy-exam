@@ -16,7 +16,71 @@
 
 ---
 
-## 历史决策流
+### [2026-10-02] v1.0.16: 工具弹窗顶层调度（彻底消除背景跳转）、用户账户纯净解耦与首页幽灵代码彻底清理
+- **触发背景**：用户反馈：1. 在复习中心、错题、笔记等非首页视图点击侧边栏的“配置与工具”（智能组卷/AI出题/AI配置）时，背景会强行跳回首页概览；2. 用户中心气泡菜单中依然混杂着“知识笔记”链接，与侧边栏独立一级“知识笔记”工作区重复混淆；3. 首页存在大量已被全局替代的旧版内联弹窗代码和冗余状态。
+- **核心决策**：
+  1. **工具弹窗全路由顶层就地唤起（Zero Background Jump）**：
+     - 将【智能组卷】(`BlueprintModal.vue`)、【AI出题】(`AiDraftsModal.vue`) 和【AI配置】(`AiConfigModal.vue`) 封装为独立组件，统一挂载在顶层容器 `AppLayout.vue`；
+     - 侧边栏及命令面板点击时直接通过响应式变量激活对应顶层遮罩，当前路由与背景页面 100% 保持不动，彻底消灭背景跳转和时序竞态；
+  2. **用户账户与知识笔记完全解耦**：
+     - 知识笔记作为一级独立路由（`/notes`）独占管理；
+     - 用户头像气泡菜单彻底剥离任何与知识笔记绑定的逻辑，仅保留账号基本信息、角色标识、密码修改弹窗（`ChangePasswordModal.vue`）和退出登录，职责完全正交化；
+  3. **首页彻底清理幽灵内联弹窗**：
+     - 从 `HomeView.vue` 中物理删除已被提升的 3 个旧内联弹窗模板（超 300 行）及关联的响应式变量与方法，首页通过触发全局自定义事件无缝转接顶层弹窗。
+- **对应 SPEC 章节**：SPEC.md 前端架构与导航规范。
+- **影响范围**：`frontend/src/layouts/AppLayout.vue`, `frontend/src/views/HomeView.vue`, `frontend/src/components/AppSidebar.vue`, `frontend/src/components/ChangePasswordModal.vue`, `frontend/src/components/BlueprintModal.vue`, `frontend/src/components/AiDraftsModal.vue`, `frontend/src/components/AiConfigModal.vue`, `fpk/easy-exam/*`。
+
+### [2026-10-02] v1.0.15: 跨路由动作竞态加固、移动端导航闭环与全端布局防溢出
+- **触发背景**：用户反馈：1. 在非首页路由下点击侧边栏工具存在偶发不响应或时序竞态；2. 侧边栏底栏由于按钮较多在窄屏下存在横向溢出隐患；3. 移动端底栏缺少笔记与指令中心；4. 移动端学习计划抽屉在小屏下展示不全。
+- **核心决策**：
+  1. 采用 `query: { action }` 路由传参 + `HomeView` 首帧同步监听；
+  2. 侧边栏底栏采用双层工学布局；
+  3. 移动端补齐知识笔记与指令中枢，统一题库大厅文案；
+  4. 学习计划任务抽屉全端自适应优化，彻底清理老首页幽灵残存代码。
+- **对应 SPEC 章节**：SPEC.md 前端架构与导航规范。
+- **影响范围**：`frontend/src/layouts/AppLayout.vue`, `frontend/src/views/HomeView.vue`, `frontend/src/components/AppSidebar.vue`, `frontend/src/components/MobileNav.vue`, `frontend/src/views/LearningView.vue`。
+
+### [2026-10-02] v1.0.14: 现代化前端架构重塑（App Shell + Vue Router）、人体工学抽屉、双模组卷与平实术语规范
+- **触发背景**：用户反馈：1. 前端采用大单体条件渲染导致伪多页面、状态缠绕、无法通过 URL 准确定位与刷新；2. 题目展开列表横向撑出屏幕，缺乏系统性工程设计；3. “考试蓝图”、“AI变式草稿箱”、“错题斩杀”等术语晦涩花哨，缺乏平实指引；4. 个人笔记与知识总结被压缩在用户页左下角缺乏独立工作区；5. 应用图标（小闪电）与系统图标（试卷）不一致且主题切换触控目标过小。
+- **核心决策**：
+  1. **现代前端体系重塑（App Shell + Vue Router）**：
+     - 引入 `vue-router`（4.x），使用 `createWebHashHistory` 避免飞牛反向代理/静态文件路径丢失路由问题；
+     - 拆解为 AppLayout 页面骨架、一级视图（HomeView, LearningView, MistakesView, ImportView, NotesView）以及独立沉浸式视图（PracticeViewV1, ExamView）；
+  2. **人体工学抽屉组件替代行内展开**：题目清单展开彻底摒弃行内流式插入，重构为标准 Slide-over Drawer（抽屉遮罩 + 侧滑面板 + 滚动隔离），彻底消灭窄屏溢出与行内挤压；
+  3. **智能组卷简易/高级双模分层与平实术语**：
+     - 考试蓝图改名“智能组卷”，默认开启“简易模式”（仅需配置各题型数量与分值比例），“高级模式”容纳知识点权重与难度过滤；
+     - 全站术语直白化（“AI出题”、“错题攻克”、“复习中心”），新功能指引卡片附带“不再提示”并持久化记忆，不常态化侵占首屏；
+  4. **一级工作区与品牌规范化**：
+     - 将知识笔记从用户弹窗剥离为一级导航核心工作区 `NotesView`，打通学习笔记、心得与 AI 知识库关联；
+     - 替换应用内小闪电为官方正牌试卷图标（`AppBrandIcon`），深浅主题与双语切换按钮优化为符合移动端与触控可达性规范的大尺寸圆角按钮。
+- **对应 SPEC 章节**：SPEC.md 前端架构、用户体验与导航规范、AGENTS.md 第 17 条（渐进式指引与平实命名）。
+- **影响范围**：`frontend/src/router/*`, `frontend/src/layouts/*`, `frontend/src/views/*`, `frontend/src/components/*`, `frontend/src/locales/*`, `fpk/easy-exam/*`。
+
+### [2026-10-01] v1.0.13: 题库顺序通刷与记忆、后台一键批量预生成 AI 解析
+- **触发背景**：用户反馈：1. 刷题时需要支持严格按照题库录入原始物理顺序（1 到 N）从头到尾刷一遍，具备断点续刷与进度可视化；2. AI 解析每次答题时现场生成等待耗时，希望在题库级一键直接在后台全部预生成，落盘持久化，后续刷题秒开。
+- **核心决策**：
+  1. **全库顺序通刷与断点自动恢复**：
+     - `question_repository.py` 严格保证 `ORDER BY q.created_at ASC, q.rowid ASC` 确定性物理录入顺序；
+     - 题库卡片实时计算并展示通刷进度条（已完成题数/总题数及百分比），根据是否有未完成练习动态呈现“继续顺序通刷 (第 X 题)”与“重新通刷”；
+     - 刷题端 `PracticeViewV1.vue` 建立断点记忆（支持 `syncDraft` 同步 `current_index`，复用或中途返回时自动定位至首个未答题目），顶栏标题切换为“顺序通刷”；
+  2. **后台异步批量预生成 AI 解析**：
+     - 后端 `AiTutorService` 增加线程安全的任务队列与锁调度，支持增量扫描（仅补缺失解析）或全量覆盖；
+     - 提供 REST 端点 `POST /api/v1/ai/banks/{bank_id}/generate-batch` (202 Accepted)、`GET /api/v1/ai/banks/{bank_id}/batch-status` 与 `POST /api/v1/ai/banks/{bank_id}/batch-stop`；
+     - 解析内容作为官方/辅助解析永久更新落盘至数据库题目标准版本，刷题与复习时零等待秒开；生成过程严格遵从领域红线（只充实官方/AI解析，绝不篡改标准答案）；
+     - 前端首页卡片集成“AI 批量解析”工作台弹窗，支持全量/增量选项、任务实时轮询、实时进度条、耗时估算与随时暂停。
+- **对应 SPEC 章节**：SPEC.md 核心刷题与 AI 智能辅导章节。
+- **影响范围**：`backend/app/application/ai_tutor_service.py`, `backend/app/api/routes/ai.py`, `backend/app/infrastructure/db/repositories/question_repository.py`, `frontend/src/views/HomeView.vue`, `frontend/src/views/PracticeViewV1.vue`, `frontend/src/api/ai.js`, `frontend/src/locales/*`, `fpk/easy-exam/*`。
+
+### [2026-10-01] v1.0.11: 学习看板重塑、学习计划配额化、错题双模切换、拖拽导入与弹窗互斥
+- **触发背景**：用户反馈：1. 学习计划选择 1 天目标时死板锁定为 15 题（硬编码时长整除导致）；2. 学习看板单列无限纵向堆叠、缺乏重点与行动引导；3. 错题展开卡片过大过占空间，需要紧凑高效查看；4. 题库导入缺少文件拖拽交互；5. 首页配置与工具模态弹窗可同时开启并堆叠重叠。
+- **核心决策**：
+  1. **学习计划算法解绑与多维配额支持**：解除每日题量与 `minutes // 2` 的单一硬编码绑定，支持 `questions_per_day` 显式配额（15/30/50/100/全部）或时长预算，目标天数为 1 时支持单日极速冲刺全部题目；后端领域层、服务层与路由统一透传 `questions_per_day`；
+  2. **学习看板重塑为行动第一的工作区**：顶部设立“今日智能学习任务”Hero 行动发射台与 `▶ 立即开始今日计划` 主行动按钮，内嵌参数调优栏；下方采用响应式双栏工作区（左侧日程时间线，右侧薄弱考点与提分推荐）；底部基线对比改为可折叠卡片，彻底消灭纵向失焦滚动；
+  3. **错题斩杀本双模态视图与持久化**：新增“紧凑列表”与“展开卡片”模式切换按钮，紧凑模式下单行呈现题型、题库、截断题干、错误统计与一键操作，极大提升信息扫描密度；偏好自动持久化至 `localStorage`；
+  4. **全格式拖拽 Dropzone 交互**：支持直接拖拽 `.xlsx`、`.csv`、`.json`、`.txt`、`.md`、`.pdf` 文件入上传卡片，支持悬停高亮、即时格式校验、文件信息展示与一键更换；
+  5. **首页模态弹窗全局互斥排他机制**：在 `HomeView.vue` 引入 `closeAllModals()` 状态机调度，打开任一工具弹窗（AI配置、草稿箱、考试蓝图、个人资产、创建题库等）强制自动清理并关闭既有其他弹窗，彻底杜绝多弹窗重叠。
+- **对应 SPEC 章节**：SPEC.md 核心刷题、错题本与学习计划章节。
+- **影响范围**：`backend/app/domain/learning/study_plan.py`, `backend/app/application/learning_service.py`, `backend/app/api/routes/learning.py`, `frontend/src/views/LearningView.vue`, `frontend/src/views/MistakesView.vue`, `frontend/src/views/ImportView.vue`, `frontend/src/views/HomeView.vue`, `frontend/src/locales/*`, `fpk/easy-exam/*`。
 
 ### [2026-09-30] 第二轮对抗性审查与安全漏洞加固 (ADV2-001 ~ ADV2-007)
 - **触发背景**：对全项目进行第二轮深度对抗性审查（涵盖模考旁路版本泄露、只读成员越权写入/重判/解冲突、FSRS 僵尸会话泄漏、多租户题目斩杀嗅探、刷题摘要统计口径以及跨平台与版本对齐）。

@@ -11,17 +11,23 @@ export function useLearningStore() {
   const loading = ref(false)
   const error = ref('')
 
-  async function load(token, bankId = '', minutesPerDay = 30, days = 7) {
+  async function load(token, bankId = '', minutesPerDay = 30, days = 7, questionsPerDay = null) {
     loading.value = true
     error.value = ''
     try {
       const params = bankId ? { bank_id: bankId } : {}
+      const planParams = { ...params, days }
+      if (questionsPerDay) {
+        planParams.questions_per_day = questionsPerDay
+      } else {
+        planParams.minutes_per_day = minutesPerDay
+      }
       ;[summary.value, trends.value, recommendations.value, mistakes.value, plan.value] = await Promise.all([
         getLearningSummary(token),
         getLearningTrends(token, params),
         getRecommendations(token, { ...params, limit: 20 }),
         listMistakes(token, bankId),
-        getStudyPlan(token, { ...params, minutes_per_day: minutesPerDay, days }),
+        getStudyPlan(token, planParams),
       ])
     } catch (err) {
       error.value = err.detail || err.message
@@ -39,9 +45,14 @@ export function useLearningStore() {
     }
   }
 
-  async function reloadStudyPlan(token, bankId = '', minutesPerDay = 30, days = 7) {
+  async function reloadStudyPlan(token, bankId = '', minutesPerDay = 30, days = 7, questionsPerDay = null) {
     try {
-      const params = { ...(bankId ? { bank_id: bankId } : {}), minutes_per_day: minutesPerDay, days }
+      const params = { ...(bankId ? { bank_id: bankId } : {}), days }
+      if (questionsPerDay) {
+        params.questions_per_day = questionsPerDay
+      } else {
+        params.minutes_per_day = minutesPerDay
+      }
       plan.value = await getStudyPlan(token, params)
     } catch (err) {
       error.value = err.detail || err.message

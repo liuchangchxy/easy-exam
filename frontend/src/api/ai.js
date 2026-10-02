@@ -80,3 +80,19 @@ export const updateAiConfig = (token, payload) => request('/ai/config', {
   body: JSON.stringify(payload),
 })
 
+export const getAiBatchStatus = (token, bankId) => request(`/ai/banks/${bankId}/batch-status`, {
+  headers: authHeaders(token),
+})
+
+export const startAiBatchGenerate = (token, bankId, overwrite = false) => request(`/ai/banks/${bankId}/generate-batch`, {
+  method: 'POST',
+  headers: authHeaders(token),
+  body: JSON.stringify({ overwrite }),
+})
+
+export const stopAiBatchGenerate = (token, bankId) => request(`/ai/banks/${bankId}/batch-stop`, {
+  method: 'POST',
+  headers: authHeaders(token),
+})
+
+

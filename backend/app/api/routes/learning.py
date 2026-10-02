@@ -28,11 +28,12 @@ def study_plan(
     difficulty: int | None = None,
     chapter: str | None = None,
     new_ratio: float | None = None,
+    questions_per_day: int | None = None,
     request: Request = None,
     user=Depends(current_user),
 ):
     return request.app.state.services.learning.study_plan(
-        user["id"], bank_id, minutes_per_day, days, difficulty, chapter, new_ratio
+        user["id"], bank_id, minutes_per_day, days, difficulty, chapter, new_ratio, questions_per_day
     )
 
 

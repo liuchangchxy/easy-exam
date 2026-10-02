@@ -875,3 +875,42 @@ button.link-button:hover:not(:disabled) {
     padding-bottom: 60px;
   }
 }
+
+/* Responsive adjustments for half-screen windows (769px to 1100px) */
+@media (max-width: 1100px) {
+  .app-content-viewport {
+    padding: 0.5rem;
+  }
+  .page-header {
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+    gap: 0.75rem;
+  }
+  .bank-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+    gap: 1rem;
+  }
+}
+
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 120ms ease;
+}
+
+.btn-back:hover {
+  background: var(--bg-subtle);
+  color: var(--text-main);
+  border-color: var(--border-strong);
+}

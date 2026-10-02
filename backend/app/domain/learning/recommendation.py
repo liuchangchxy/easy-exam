@@ -92,7 +92,7 @@ def build_recommendations(
     # 4. Sorting by priority desc, last_attempt_at, question_id
     ranked.sort(key=lambda item: (-item["priority"], item.get("last_attempt_at") or "", item["question_id"]))
 
-    max_limit = max(0, min(limit, 100))
+    max_limit = max(0, min(limit, 10000))
 
     # 5. Ratio adjustment if new_ratio is specified (0.0 to 1.0)
     if new_ratio is not None and max_limit > 0:

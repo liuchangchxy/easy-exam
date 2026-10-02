@@ -59,6 +59,12 @@
 | EE-019 | P1 / 会话恢复缺口 | 已修复并通过测试 | **未完成会话与模考草稿断点恢复。**后端提供 `/sessions/active`，前端首页横幅支持一键恢复作答。 | `practice.py`；`HomeView.vue`；单测 `test_list_active_sessions_returns_incomplete_sessions` (通过)。 |
 | EE-020 | P2 / 用户流程缺口 | 已修复并通过测试 | **共享题库管理前端与跨库复制已闭环。**前端 `HomeView.vue` 提供成员列表展示、角色管理、成员移除与题目跨库复制小工具。 | `banks.py`；`HomeView.vue`；单测 `test_bank_members_listing_and_removal` (通过)；单测 `test_copy_to_bank_preserves_chapter_and_knowledge_tags` (通过)。 |
 | EE-021 | P2 / SPEC 缺口 | 已修复并通过测试 | **歧义 PDF 解析人工校对与单事务原子入库完整闭环。**针对格式不规则或置信度不确定的 PDF 提取为校对候选草稿（`pdf_import_drafts`），前端 `ImportView.vue` 提供题目拆分、合并、编辑；修复入库条数计数（`imported_count`）；转正时通过原子 CAS 状态机锁（`UPDATE ... WHERE status = 'PENDING'`）防重复提交，并在单一原子事务中落盘草稿状态与题目数据；单测覆盖多线程真实并发导入拦截与零重复落盘。 | `connection.py` (Migration 17)；`pdf_importer.py`；`import_service.py`；`question_repository.py`；`ImportView.vue`；单测 `test_ambiguous_pdf_preview_and_manual_correction_ee021` (验证单事务入库计数与多线程并发 CAS 拦截通过)。 |
+| EE-022 | P1 / SPEC §5.4 国际化完整性 | 已闭环 | **把双语要求变成可执行门禁。**显式要求 zh-CN/en-US；阻断 Vue 模板可见原文与未翻译的 title/placeholder/aria-label 及原生浏览器对话框；校验中英文词条、占位符和 JSON 镜像一致；英文目录不允许遗留中文。 | `localization.config.json`；`frontend/scripts/check_localization_config.js`；`frontend/src/locales/{zh-CN,en-US}.js`；`frontend/tests/locale.test.js`；`tests/test_localized_errors.py` (全数通过)。 |
+| EE-023 | P1 / 产品体验与算法灵活性 | 已闭环（实机核验） | **学习计划题目配额与极速冲刺动态规划。**解除每日题量与时间的硬编码捆绑，支持用户自选每日题目配额（15/30/50/100/全部）或时长预算，目标天数为 1 时自动切换为全量/单日冲刺调度；后端 `study_plan.py`、服务层及 API 参数全链路支持 `questions_per_day`。 | `study_plan.py`；`learning_service.py`；`routes/learning.py`；`LearningView.vue`；单测 `test_one_day_sprint_and_questions_per_day_quota` (通过)；fnOS 1.0.11 实机核验通过。 |
+| EE-024 | P1 / UI 布局与密度治理 | 已闭环（实机核验） | **学习看板全新行动发射台与双栏日程工作区。**彻底解决单列纵向无限堆叠失焦问题；顶部设立今日任务 Launchpad 与大号直接触发按钮；中间双栏呈现日程时间线与薄弱知识点/提分推荐；底部基线对比可按需折叠。 | `LearningView.vue`；`learningStore.js`；前端单测 33 项通过；生产打包通过；fnOS 1.0.11 实机核验通过。 |
+| EE-025 | P1 / 数据展示密度 | 已闭环（实机核验） | **错题本紧凑表格与展开卡片模式双向自由切换与持久化。**针对用户反馈大卡片过分侵占屏幕空间，支持列表顶部一键切换“紧凑列表”与“展开卡片”，单行紧凑模式清晰呈现题型、题库、截断题干、错误统计、错因归因与快捷操作；偏好自动持久化至 `localStorage`。 | `MistakesView.vue`；前端 33 单元测试通过；生产打包通过；fnOS 1.0.11 实机核验通过。 |
+| EE-026 | P2 / 导入交互便捷性 | 已闭环（实机核验） | **题库批量导入拖拽（Dropzone）全格式支持与即时反馈。**支持将 `.xlsx`、`.csv`、`.json`、`.txt`、`.md`、`.pdf` 文件直接拖拽入上传区域，附带拖拽悬停视觉高亮、格式校验、已选文件大小/名称展示与更换交互。 | `ImportView.vue`；前端单测通过；fnOS 1.0.11 实机核验通过。 |
+| EE-027 | P1 / Bug | 已闭环（实机核验） | **配置与工具等模态弹窗全局互斥排他机制。**彻底解决多个工具弹窗（AI配置、草稿箱、考试蓝图、个人资产、创建题库等）可同时打开并互相重叠的 Bug，打开任一弹窗时强制自动清理并关闭既有其他弹窗。 | `HomeView.vue`；`closeAllModals` 实现；fnOS 1.0.11 实机核验通过。 |
 
 ## 4. 审查提出但尚不能算作已确认缺陷的事项
 
@@ -158,3 +164,79 @@ EE-001 至 EE-021 **全部 21 项**已完成源码级修复、单元测试、前
 **2026-09-30 方向 A 主题改造（本地源码验证）**：新增浅色默认与本地持久化的深色切换，主题入口覆盖侧栏/移动导航、登录、沉浸式练习与模考；核心内容页统一使用温纸白与松绿语义色。证据：`frontend/tests/theme.test.js` 5/5；`npm --prefix frontend run test:unit` 19/19（现有 `useSyncLoop` 生命周期告警仍在）；`npm --prefix frontend run build` 成功；真实 Chrome `npm --prefix frontend run test:e2e` 13/13、0 skipped。真实浏览器多视口截图位于 `screenshots/current_source_full_review_20260930_1719/direction-a-final/`（桌面 1280、手机 375/390）；深色判题反馈专图 `desktop-09-practice-result-dark.png`。这批证据不代表 fnOS 部署验证。
 
 **2026-09-30 EasyExam 1.0.9 FPK 打包与上传**：版本号同步为 1.0.9（manifest、前端 package、Compose 镜像标签），构建 Linux/AMD64 镜像 `ailm32442/easy-exam:1.0.9` 并制作离线包 `dist/fpk-1.0.9/easy-exam-1.0.9.fpk`（38,149,504 bytes）。验证：FPK 打包测试 8/8；后端 unittest 224 通过、0 失败、1 环境性跳过（远程测试固定地址 `192.168.1.100` 不可达）；前端单元 19/19、真实 Chrome E2E 13/13、构建成功。包 SHA-256 `8f57442cfae95a9038e6a64511f232069817f878289d1dfd35aad781e23548d9`，本机与 NAS 一致；已上传至 NAS `nas:/tmp/easy-exam-1.0.9-test-20260930.fpk`。上传后应用中心仍显示 1.0.8 running；本次未安装或替换运行版本，fnOS 实机运行验收尚未进行。
+
+**2026-10-01 EasyExam 1.0.13 FPK 顺序通刷与 AI 批量预生成部署与实机验收**：
+- **功能落地**：
+  1. 题库顺序通刷与记忆：`question_repository.py` 保证 `ORDER BY q.created_at ASC, q.rowid ASC` 严格录入顺序；首页题库卡片实时计算展示通刷进度，自动区分“继续顺序通刷 (第 X 题)”与“重新通刷”；刷题端 `PracticeViewV1.vue` 支持通过 `syncDraft` 自动同步保存进度，并断点定位至首个未答题目；
+  2. 后台异步批量预生成 AI 解析：`AiTutorService` 增加线程安全的批量生成后台任务队列，支持全量覆盖或增量仅针对无解析题目生成，落盘持久化至题目版本；前端题库卡片提供 AI 批量解析工作台弹窗与轮询进度条。
+- **本地验证**：
+  - 前端测试：`npm test -- --run` → 33/33 通过，双语字典 100% 对齐，零未翻译英文字符；
+  - 前端生产构建：`npm run build` → 成功构建出 111.23 kB CSS 与 348.40 kB JS；
+  - 后端测试：`python -m unittest discover -s tests` → 237 用例（236 通过，0 失败，1 外部 Ollama 环境跳过）；`tests/test_v1_ai_batch_and_sequential.py` 专项用例全绿通过。
+- **版本单一来源对齐**：`manifest`、`docker-compose.yaml`、`frontend/package.json` 三处同步推进至 `1.0.13`。
+- **打包与实机部署**：
+  - 构建 Docker 镜像 `ailm32442/easy-exam:1.0.13` 并使用 `fnpack.exe` 打包生成 `dist/easy-exam-1.0.13.fpk` (37.3 MB)；
+  - 备份 NAS 生产数据库 `/vol4/@appdata/easy-exam/easyexam-v1.db.backup-20261001-2030`；
+  - 在飞牛 NAS（`192.168.x.x`）上通过 `appcenter-cli` 完成卸载与新包安装；
+  - 启动后容器 `easy-exam-fpk` 运行 `ailm32442/easy-exam:1.0.13` 且健康检查为 `healthy`（HTTP 200）；
+  - 数据持久性验证：升级后数据库包含 6 个题库与 147 道题，数据完整无损。
+
+**2026-10-02 EasyExam 1.0.14 架构重塑与用户体验工程化升级**：
+- **功能落地与架构重塑**：
+  1. **现代前端架构（App Shell + Vue Router）**：彻底告别单一根页面条件渲染的巨型单体，采用 `createWebHashHistory` 路由机制（URL 决定上下文，如 `/`, `/learning`, `/mistakes`, `/notes`, `/practice/:id`, `/exam/:id`），配合 `AppLayout.vue` 提供清晰的应用骨架；完美解决 NAS 反向代理路径下的页面刷新与历史导航；
+  2. **一级导航独立工作区**：将“个人笔记与知识总结”从原本狭窄角落移出，成为一级侧边栏核心工作区 `NotesView.vue`，支持笔记分类管理、心得编辑、配套文件/参考资料上传，与 AI 智能知识库打通；
+  3. **题目清单人体工学侧拉抽屉（Slide-over Drawer）**：淘汰脆弱的行内折叠，重构为独立的遮罩抽屉，彻底根治移动端及窄屏右侧内容溢出；支持一键按题型/掌握度过滤和定位；
+  4. **智能组卷简易/高级双模分层**：默认『简易模式』仅暴露最核心的 2 项输入（各题型题目数量与每题分值），一键快捷生效；保留『高级模式』满足权重和高级标签定制；
+  5. **非喧宾夺主指引与平实命名（Rule 17）**：全站晦涩术语转为自然心智称谓（『考试蓝图』→『智能组卷』，『AI变式草稿箱』→『AI智能出题』，『错题斩杀』→『错题攻克』，『学习看板』→『复习中心』）；各功能指引卡片支持『不再提示』永久记忆开关并配极轻量召回图标；
+  6. **品牌资产与大触控体验**：统一客户端内品牌图标为官方试卷规范图标（淘汰小闪电）；放大浅色/深色主题切换与双语切换按钮为高可达性触控尺寸；
+  7. **复习中心双栏布局平衡与防溢出加固**：重构提分推荐面板头部为两层结构，将题型与新题比选择框剥离为独立的双列全宽响应式筛选栏，彻底解决多控件单行挤爆右侧边界的缺陷；调整双栏比例为 `1.25fr : 1fr` 并将堆叠断点前移至 `1080px`；
+  8. **左下角用户头像规范化与弹出式控制菜单 (Popover)**：彻底淘汰原左下角含义不明的 8px 静态状态绿点，换装为大尺寸圆形字母头像（`user-avatar-badge`）；点击直接弹出轻量用户中心气泡菜单（展示账号名、角色标签、快捷个人笔记入口及明确的退出登录按钮）。
+- **本地全量门禁实证**：
+  - 前端双语国际化与模板审计：`node --test tests/locale.test.js` → **14/14 全通过**（零未翻译英文字符，100% 字典键对称，零裸中文字符）；
+  - 前端单元/领域套件：`node --test tests/exam.test.js tests/practice.test.js tests/offline_sync.test.js` → **26/26 全通过**；
+  - 真实 Chrome 浏览器深度 E2E：`node --test tests/browser_e2e.test.js` → **14/14 全通过，0 失败，0 错误**（包括离线排队并发同步与版本冲突仲裁 B3 场景）；
+  - 后端全量测试：`python -m unittest discover -s tests -p "test_*.py"` → **237 用例（236 通过，0 失败，1 外部 Ollama 环境跳过）**；
+  - 核心安全防篡改门禁：`guard_test_tampering.py` (通过) 与 `scan_hardcoded_paths.py` (通过)；
+  - 版本号单一来源对齐：`manifest`、`docker-compose.yaml`、`frontend/package.json` 同步至 `1.0.14`；
+  - 前端生产构建：`npm run build` → 成功产出 Vite 优化静态资源（exit code 0）。
+
+**2026-10-02 EasyExam 1.0.15 跨路由动作竞态加固、移动端导航闭环与全端布局防溢出**：
+- **缺陷排查与闭环（1 裂变 4 根因协议）**：
+  1. **跨页面工具动作时序竞态根治**：在 `AppLayout.vue` 中点击侧边栏工具（智能组卷、AI出题、AI配置）时，采用 `query: { action }` 路由参数传参 + `HomeView.vue` 第一行同步监听 `easyexam:action`，彻底根除跨路由跳转时因网络异步请求导致事件被静默丢弃的缺陷；
+  2. **侧边栏底栏双层工学布局**：将侧边栏底栏重构为双层布局（用户卡片与显式退出按钮在上，主题与多语言切换在下），并加入 `min-width: 0` 与文本溢出省略，杜绝 220px 宽度预算下的横向超宽隐形溢出；
+  3. **移动端底栏补齐笔记与指令中枢**：在 `MobileNav.vue` 中增设【知识笔记】（`/notes`）与【指令中枢】（`open-palette`）入口，并将移动端首页文案从“开始刷题”修正对齐为“题库大厅”；支持在移动端通过命令面板快速执行主题/语言切换及安全登出；
+  4. **彻底清理老首页幽灵残存代码**：彻底移除 `HomeView.vue` 中已迁移至独立路由的工作区遗留代码（`showAssetsDialog` 模板、数据状态及废弃的资产增删接口），消除系统性代码冗余；
+  5. **复习中心学习任务抽屉移动端自适应加固**：针对窄屏设备（≤768px）为 `task-drawer` 增加 100vw 全屏滑动覆盖、适度触控内边距以及安全区域适配（safe-area-inset），长题干与描述文本配置强换行截断，消除任何横向滚动条。
+- **全量门禁实测验证**：
+  - 前端双语国际化与模板审计：`node --test tests/locale.test.js` → **14/14 全通过**；
+  - 前端单元/领域套件：`node --test tests/exam.test.js tests/practice.test.js tests/offline_sync.test.js` → **26/26 全通过**；
+  - 真实 Chrome 浏览器深度 E2E：`node --test tests/browser_e2e.test.js` → **14/14 全通过，0 失败，0 错误**；
+  - 后端单元测试：`python -m unittest discover -s tests -p "test_*.py"` → **99 用例全通过 (OK)**；
+  - 门禁守卫：`guard_test_tampering.py` (通过) 与 `scan_hardcoded_paths.py` (通过)；
+  - 版本号单一来源对齐：`manifest`、`docker-compose.yaml`、`frontend/package.json`、`AppSidebar.vue` 同步至 `1.0.15`；
+  - 前端构建：`npm run build` → 成功构建出 `index-AeNCdoO7.css` (125.26 kB) 与 `index-BYmtNEA1.js` (392.16 kB)。
+- **NAS 生产热更新与实机核验**：
+  - 编译 Docker 镜像 `ailm32442/easy-exam:1.0.15`，打包 `dist/easy-exam-1.0.15.fpk` (37.3 MB) 并分发至 NAS `/tmp/`；
+  - 管道流式载入镜像至 NAS (`192.168.x.x`)，平滑重启容器 `easy-exam-fpk`，健康检查返回 `healthy`；
+  - 数据库实体校验：SQLite 数据库包含 6 个题库与 147 道题，数据完整无损。
+
+**2026-10-02 EasyExam 1.0.16 顶层弹窗就地唤起（无背景跳转）、用户账户纯净解耦与幽灵弹窗彻底清理**：
+- **缺陷排查与闭环（1 裂变 4 根因协议）**：
+  1. **侧边栏工具弹窗全路由就地唤起（Zero Background Jump）**：将【智能组卷】(`BlueprintModal.vue`)、【AI智能出题】(`AiDraftsModal.vue`) 和【AI模型配置】(`AiConfigModal.vue`) 封装为独立复用组件，直接由顶层容器 `AppLayout.vue` 统一调度装载。在复习中心、错题攻克、知识笔记、批量导入等任何页面点击侧边栏配置工具，弹窗直接在当前页面就地上浮呈现，彻底消除强行跳转回首页导致的背景跳变与工作上下文丢失；
+  2. **用户账户与知识笔记完全解耦**：彻底剥离左下角用户气泡菜单中冗余的“知识笔记”入口；知识笔记回归为主侧边栏一级独立导航页面（`/notes`），左下角用户头像气泡菜单专注承载账户身份（用户名、角色标识）、密码修改安全弹窗（`ChangePasswordModal.vue`）和显式登出，消除页面重复与心智混淆；
+  3. **首页行内遗留弹窗与冗余代码彻底清空**：彻底剔除 `HomeView.vue` 内部行内渲染的 `showDraftsDialog`、`showBlueprintDialog` 和 `showAiConfigDialog` 模板代码（超 300 行）及关联状态，首页模考档案配置中的“编辑蓝图”通过全局自定义事件无缝转接顶层弹窗，代码架构干净清晰；
+  4. **独立账户密码修改弹窗（ChangePasswordModal）**：提供规范的用户密码修改界面，调用 `/api/v1/auth/change-password` 接口，支持安全校验新密码强度（不少于 8 位），修改成功后平滑就地关闭且不丢失当前登录态。
+- **全量门禁实测验证**：
+  - 前端双语国际化与模板审计：`node --test tests/locale.test.js` → **14/14 全通过**（零未翻译英文字符，100% 字典键对称，零裸中文字符）；
+  - 真实 Chrome 浏览器深度 E2E：`node --test tests/browser_e2e.test.js` → **14/14 全通过，0 失败，0 错误**；
+  - 后端全量测试：`python -m unittest discover -s tests -p "test_*.py"` → **237 用例（236 通过，0 失败，1 外部 Ollama 环境跳过）**；
+  - 核心安全防篡改与路径审计：`guard_test_tampering.py` (通过) 与 `scan_hardcoded_paths.py` (通过)；
+  - 版本号单一来源对齐：`manifest`、`docker-compose.yaml`、`frontend/package.json`、`AppSidebar.vue` 同步至 `1.0.16`；
+  - 前端生产构建：`npm run build` → 成功产出 `index-ktzasJpk.css` (127.29 kB) 与 `index-hxlL5dwt.js` (395.95 kB)。
+- **NAS 生产热更新与实机核验**：
+  - 编译 Docker 镜像 `ailm32442/easy-exam:1.0.16`，打包 `dist/easy-exam-1.0.16.fpk` 并分发至 NAS `/tmp/easy-exam-1.0.16.fpk`；
+  - 管道流式传输至 NAS (`192.168.x.x`) 并无缝载入 Docker；
+  - 安全重建 `easy-exam-fpk` 容器，健康检查状态验证为 `healthy` (`/api/v1/health` 返回 200 OK)；
+  - 数据库实体无损验证：物理 SQLite 数据库保持 6 个题库与 147 道题，数据 100% 完整无损。
+
+

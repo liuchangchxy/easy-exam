@@ -1,13 +1,23 @@
 from datetime import datetime, timezone
 
 
-def build_study_plan(recommendations: list[dict], minutes_per_day: int, days: int, minutes_per_question: int = 2) -> dict:
-    minutes_per_day = max(5, min(int(minutes_per_day), 600))
+def build_study_plan(
+    recommendations: list[dict],
+    minutes_per_day: int = 30,
+    days: int = 7,
+    minutes_per_question: int = 2,
+    questions_per_day: int | None = None,
+) -> dict:
+    minutes_per_day = max(1, min(int(minutes_per_day), 600))
     days = max(1, min(int(days), 30))
     minutes_per_question = max(1, int(minutes_per_question))
-    per_day = max(1, minutes_per_day // minutes_per_question)
 
     total_available = len(recommendations)
+    if questions_per_day is not None and int(questions_per_day) > 0:
+        per_day = max(1, min(int(questions_per_day), 10000))
+    else:
+        per_day = max(1, minutes_per_day // minutes_per_question)
+
     target_capacity = days * per_day
     schedule = []
 

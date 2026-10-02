@@ -58,6 +58,13 @@ for check in guard_test_tampering scan_hardcoded_paths; do
     fi
 done
 
+# Localization is a separate mandatory source gate and cannot be bypassed by
+# VIBE_TEST_CMD (which only replaces the project test command).
+if [ -f "frontend/package.json" ]; then
+    echo "Running mandatory localization source gate..."
+    npm --prefix frontend run check:localization || exit 1
+fi
+
 # 2. Check custom test command override
 if [ -n "$VIBE_TEST_CMD" ]; then
     echo "Running custom VIBE_TEST_CMD: $VIBE_TEST_CMD"

@@ -7,23 +7,60 @@
       </div>
     </header>
     <form class="bank-card import-form" @submit.prevent="submit">
-      <label>目标题库
+      <label>{{ t('ui.k0322') }}
         <select v-model="bankId" required>
-          <option value="" disabled>选择题库</option>
+          <option value="" disabled>{{ t('ui.k0323') }}</option>
           <option v-for="bank in banks" :key="bank.id" :value="bank.id">{{ bank.name }}</option>
         </select>
       </label>
-      <div class="file-upload-card">
-        <div class="file-card-inner">
-          <span class="file-upload-icon">
-            <LinearIcon name="inbox" size="24" />
-          </span>
-          <div class="file-card-text">
-            <strong>选择或上传题目文件</strong>
-            <small>支持 XLSX、CSV、JSON、Markdown/TXT 和可提取文本的 PDF</small>
+      <div
+        class="file-upload-card"
+        :class="{ 'drag-over': isDragging, 'has-file': Boolean(file) }"
+        @dragenter.prevent="isDragging = true"
+        @dragover.prevent="isDragging = true"
+        @dragleave="onDragLeave"
+        @drop.prevent="onDropFile"
+      >
+        <template v-if="isDragging">
+          <div class="drag-active-notice">
+            <LinearIcon name="upload-cloud" size="32" />
+            <strong>{{ t('imports.drag_drop_release') }}</strong>
           </div>
-        </div>
-        <input type="file" accept=".xlsx,.csv,.json,.txt,.md,.markdown,.pdf" required @change="selectFile" class="file-styled-input" />
+        </template>
+        <template v-else-if="file">
+          <div class="file-card-inner file-selected-row">
+            <span class="file-upload-icon active-icon">
+              <LinearIcon name="file" size="24" />
+            </span>
+            <div class="file-card-text">
+              <span style="font-size: 0.8rem; color: var(--text-muted);">{{ t('imports.file_selected') }}</span>
+              <strong class="selected-file-name">{{ file.name }}</strong>
+              <small class="selected-file-size font-mono-code">{{ (file.size / 1024).toFixed(1) }} KB</small>
+            </div>
+            <button type="button" class="btn-change-file" @click="triggerFileInput">
+              {{ t('imports.change_file') }}
+            </button>
+          </div>
+        </template>
+        <template v-else>
+          <div class="file-card-inner">
+            <span class="file-upload-icon">
+              <LinearIcon name="inbox" size="24" />
+            </span>
+            <div class="file-card-text">
+              <strong>{{ t('imports.drag_drop_prompt') }}</strong>
+              <small>{{ t('ui.k0325') }}</small>
+            </div>
+          </div>
+        </template>
+        <input
+          ref="fileInputRef"
+          type="file"
+          accept=".xlsx,.csv,.json,.txt,.md,.markdown,.pdf"
+          :required="!file"
+          @change="selectFile"
+          class="file-styled-input"
+        />
         <div class="file-format-tags">
           <span class="format-tag">.xlsx</span>
           <span class="format-tag">.csv</span>
@@ -35,130 +72,130 @@
 
       <div v-if="isSpreadsheet && !spreadsheetPreview" class="preview-actions">
         <button type="button" class="preview-btn" :disabled="loading || !bankId || !file" @click="inspectSpreadsheet">
-          {{ loading ? '正在分析…' : '预览表格列映射' }}
+          {{ loading ? t('ui.k0689') : t('ui.k0690') }}
         </button>
       </div>
 
       <div v-if="isPdf && !pdfPreview" class="preview-actions">
         <button type="button" class="preview-btn" :disabled="loading || !bankId || !file" @click="inspectPdf">
-          {{ loading ? '正在解析 PDF…' : '预览与校对 PDF（含人工校正）' }}
+          {{ loading ? t('ui.k0691') : t('ui.k0692') }}
         </button>
       </div>
 
       <!-- Exameow-style Column Mapping Preview Panel -->
       <section v-if="spreadsheetPreview" class="column-mapping-panel">
-        <h3>表格列映射预览</h3>
-        <p class="mapping-hint">已自动推断表头对应关系，您也可以手工调整列绑定：</p>
+        <h3>{{ t('ui.k0326') }}</h3>
+        <p class="mapping-hint">{{ t('ui.k0327') }}</p>
         <div class="mapping-grid">
-          <label>题干列 (必填)
+          <label>{{ t('ui.k0328') }}
             <select id="select-stem" v-model.number="currentMapping.stem">
-              <option :value="null">-- 未选择 --</option>
+              <option :value="null">{{ t('ui.k0329') }}</option>
               <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
             </select>
           </label>
-          <label>答案列 (必填)
+          <label>{{ t('ui.k0330') }}
             <select id="select-answer" v-model.number="currentMapping.answer">
-              <option :value="null">-- 未选择 --</option>
+              <option :value="null">{{ t('ui.k0329') }}</option>
               <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
             </select>
           </label>
-          <label>题型列
+          <label>{{ t('ui.k0331') }}
             <select id="select-type" v-model.number="currentMapping.type">
-              <option :value="null">-- 自动推断 --</option>
+              <option :value="null">{{ t('ui.k0332') }}</option>
               <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
             </select>
           </label>
-          <label>解析列
+          <label>{{ t('ui.k0333') }}
             <select id="select-explanation" v-model.number="currentMapping.explanation">
-              <option :value="null">-- 无 --</option>
+              <option :value="null">{{ t('ui.k0334') }}</option>
               <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
             </select>
           </label>
-          <label>难度列
+          <label>{{ t('ui.k0335') }}
             <select id="select-difficulty" v-model.number="currentMapping.difficulty">
-              <option :value="null">-- 默认适中 --</option>
+              <option :value="null">{{ t('ui.k0336') }}</option>
               <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
             </select>
           </label>
-          <label>标签/章节列
+          <label>{{ t('ui.k0337') }}
             <select id="select-tags" v-model.number="currentMapping.tags">
-              <option :value="null">-- 无 --</option>
+              <option :value="null">{{ t('ui.k0334') }}</option>
               <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
             </select>
           </label>
-          <label>组合选项列
+          <label>{{ t('ui.k0338') }}
             <select id="select-combined-options" v-model.number="currentMapping.combined_options">
-              <option :value="null">-- 无组合选项 --</option>
+              <option :value="null">{{ t('ui.k0339') }}</option>
               <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
             </select>
           </label>
-          <label v-if="currentMapping.combined_options !== null">选项分隔符
+          <label v-if="currentMapping.combined_options !== null">{{ t('ui.k0340') }}
             <select id="select-options-delimiter" v-model="currentMapping.options_delimiter">
-              <option value="">自动检测</option>
-              <option value="prefix">前缀字母 (A. B. C.)</option>
-              <option value=";">英文分号 (;)</option>
-              <option value="；">中文分号 (；)</option>
-              <option value="\n">换行符</option>
-              <option value="|">竖线 (|)</option>
-              <option value="、">顿号 (、)</option>
+              <option value="">{{ t('ui.k0341') }}</option>
+              <option value="prefix">{{ t('ui.k0342') }}</option>
+              <option value=";">{{ t('ui.k0343') }}</option>
+              <option value="；">{{ t('ui.k0344') }}</option>
+              <option value="\n">{{ t('ui.k0345') }}</option>
+              <option value="|">{{ t('ui.k0346') }}</option>
+              <option value="、">{{ t('ui.k0347') }}</option>
             </select>
           </label>
-          <label>选项 A 列
+          <label>{{ t('ui.k0348') }}
             <select id="select-opt-a" :value="getOptionCol(0)" @change="setOptionCol(0, $event.target.value)">
-              <option value="">-- 无 --</option>
+              <option value="">{{ t('ui.k0334') }}</option>
               <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
             </select>
           </label>
-          <label>选项 B 列
+          <label>{{ t('ui.k0349') }}
             <select id="select-opt-b" :value="getOptionCol(1)" @change="setOptionCol(1, $event.target.value)">
-              <option value="">-- 无 --</option>
+              <option value="">{{ t('ui.k0334') }}</option>
               <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
             </select>
           </label>
-          <label>选项 C 列
+          <label>{{ t('ui.k0350') }}
             <select id="select-opt-c" :value="getOptionCol(2)" @change="setOptionCol(2, $event.target.value)">
-              <option value="">-- 无 --</option>
+              <option value="">{{ t('ui.k0334') }}</option>
               <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
             </select>
           </label>
-          <label>选项 D 列
+          <label>{{ t('ui.k0351') }}
             <select id="select-opt-d" :value="getOptionCol(3)" @change="setOptionCol(3, $event.target.value)">
-              <option value="">-- 无 --</option>
+              <option value="">{{ t('ui.k0334') }}</option>
               <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
             </select>
           </label>
-          <label>选项 E 列
+          <label>{{ t('ui.k0352') }}
             <select id="select-opt-e" :value="getOptionCol(4)" @change="setOptionCol(4, $event.target.value)">
-              <option value="">-- 无 --</option>
+              <option value="">{{ t('ui.k0334') }}</option>
               <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
             </select>
           </label>
-          <label>选项 F 列
+          <label>{{ t('ui.k0353') }}
             <select id="select-opt-f" :value="getOptionCol(5)" @change="setOptionCol(5, $event.target.value)">
-              <option value="">-- 无 --</option>
+              <option value="">{{ t('ui.k0334') }}</option>
               <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
             </select>
           </label>
-          <label>选项 G 列
+          <label>{{ t('ui.k0354') }}
             <select id="select-opt-g" :value="getOptionCol(6)" @change="setOptionCol(6, $event.target.value)">
-              <option value="">-- 无 --</option>
+              <option value="">{{ t('ui.k0334') }}</option>
               <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
             </select>
           </label>
-          <label>选项 H 列
+          <label>{{ t('ui.k0355') }}
             <select id="select-opt-h" :value="getOptionCol(7)" @change="setOptionCol(7, $event.target.value)">
-              <option value="">-- 无 --</option>
+              <option value="">{{ t('ui.k0334') }}</option>
               <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
             </select>
           </label>
         </div>
 
         <div v-if="spreadsheetPreview.missing?.length" class="error missing-warning">
-          警告：缺少必要字段映射（{{ spreadsheetPreview.missing.join(', ') }}），请修正上方绑定后导入。
+          {{ t('ui.k0356') }}{{ spreadsheetPreview.missing.join(', ') }}{{ t('ui.k0357') }}
         </div>
 
         <div v-if="spreadsheetPreview.preview_rows?.length" class="sample-table-container">
-          <h4>前 {{ spreadsheetPreview.preview_rows.length }} 行内容采样：</h4>
+          <h4>{{ t('ui.k0358') }} {{ spreadsheetPreview.preview_rows.length }} {{ t('ui.k0359') }}</h4>
           <table class="sample-table">
             <thead>
               <tr>
@@ -177,88 +214,88 @@
       <!-- EE-021: PDF 人工校正草稿面板 -->
       <section v-if="pdfPreview" class="column-mapping-panel pdf-correction-panel" style="margin-top: 1rem; border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; background: var(--bg-card);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-          <h3 style="color: var(--text-main);">PDF 题目校对预览</h3>
+          <h3 style="color: var(--text-main);">{{ t('ui.k0360') }}</h3>
           <span :style="{ fontSize: '0.8rem', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 'bold', background: pdfPreview.confidence === 'HIGH' ? 'var(--success-light)' : 'var(--warning-light)', color: pdfPreview.confidence === 'HIGH' ? 'var(--success)' : 'var(--warning)' }">
-            {{ pdfPreview.confidence === 'HIGH' ? '解析置信度：高' : '解析置信度：较低（格式存在歧义，请人工核校）' }}
+            {{ pdfPreview.confidence === 'HIGH' ? t('ui.k0693') : t('ui.k0694') }}
           </span>
         </div>
         <p class="mapping-hint" style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
-          共提取出 {{ pdfCandidates.length }} 道候选题目。您可在入库前手动编辑、拆分、合并或剔除题目：
+          {{ t('ui.k0361') }} {{ pdfCandidates.length }} {{ t('ui.k0362') }}
         </p>
 
         <div style="display: flex; flex-direction: column; gap: 1rem;">
           <div v-for="(cand, cIdx) in pdfCandidates" :key="cIdx" style="border: 1px solid var(--border); border-radius: 8px; padding: 1rem; background: var(--bg-subtle);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-              <span style="font-weight: 600; font-size: 0.9rem; color: var(--text-main);">第 {{ cIdx + 1 }} 题</span>
+              <span style="font-weight: 600; font-size: 0.9rem; color: var(--text-main);">{{ t('ui.k0082') }} {{ cIdx + 1 }} {{ t('ui.k0101') }}</span>
               <div style="display: flex; gap: 0.5rem;">
-                <button v-if="cIdx > 0" type="button" class="action-link-btn" style="font-size: 0.75rem;" @click="mergeWithPrev(cIdx)">合并至上一题</button>
-                <button type="button" class="action-link-btn" style="font-size: 0.75rem;" @click="splitCandidate(cIdx)">在此拆分</button>
-                <button type="button" class="action-link-btn" style="font-size: 0.75rem; color: var(--danger);" @click="removeCandidate(cIdx)">删除</button>
+                <button v-if="cIdx > 0" type="button" class="action-link-btn" style="font-size: 0.75rem;" @click="mergeWithPrev(cIdx)">{{ t('ui.k0363') }}</button>
+                <button type="button" class="action-link-btn" style="font-size: 0.75rem;" @click="splitCandidate(cIdx)">{{ t('ui.k0364') }}</button>
+                <button type="button" class="action-link-btn" style="font-size: 0.75rem; color: var(--danger);" @click="removeCandidate(cIdx)">{{ t('ui.k0256') }}</button>
               </div>
             </div>
 
             <div v-if="cand.is_uncertain" style="padding: 0.4rem 0.6rem; background: var(--warning-light); border: 1px solid var(--warning-border); border-radius: 4px; font-size: 0.8rem; color: var(--warning); margin-bottom: 0.5rem;">
-              ⚠️ 校对提示：{{ cand.uncertain_reason }}
+              {{ t('ui.k0365') }}{{ cand.uncertain_reason }}
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.5rem;">
-              <label style="font-size: 0.8rem;">题型：
+              <label style="font-size: 0.8rem;">{{ t('ui.k0366') }}
                 <select v-model="cand.type" style="width: 100%; margin-top: 0.2rem;">
-                  <option value="SINGLE">单选题</option>
-                  <option value="MULTI">多选题</option>
-                  <option value="JUDGE">判断题</option>
-                  <option value="QA">简答/问答题</option>
+                  <option value="SINGLE">{{ t('ui.k0050') }}</option>
+                  <option value="MULTI">{{ t('ui.k0051') }}</option>
+                  <option value="JUDGE">{{ t('ui.k0052') }}</option>
+                  <option value="QA">{{ t('ui.k0367') }}</option>
                 </select>
               </label>
-              <label style="font-size: 0.8rem;">正确答案：
-                <input v-model="cand.answer" placeholder="如 A / AB / 正确 / 错误" style="width: 100%; margin-top: 0.2rem;" />
+              <label style="font-size: 0.8rem;">{{ t('ui.k0368') }}
+                <input v-model="cand.answer" :placeholder="t('ui.k0369')" style="width: 100%; margin-top: 0.2rem;" />
               </label>
             </div>
 
-            <label style="font-size: 0.8rem; display: block; margin-bottom: 0.5rem;">题干：
+            <label style="font-size: 0.8rem; display: block; margin-bottom: 0.5rem;">{{ t('ui.k0211') }}
               <textarea v-model="cand.stem" rows="2" style="width: 100%; margin-top: 0.2rem;"></textarea>
             </label>
 
             <div v-if="cand.type === 'SINGLE' || cand.type === 'MULTI'" style="margin-bottom: 0.5rem;">
               <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 0.8rem; font-weight: 500;">选项列表：</span>
-                <button type="button" class="action-link-btn" style="font-size: 0.75rem;" @click="addCandidateOption(cand)">+ 增加选项</button>
+                <span style="font-size: 0.8rem; font-weight: 500;">{{ t('ui.k0370') }}</span>
+                <button type="button" class="action-link-btn" style="font-size: 0.75rem;" @click="addCandidateOption(cand)">{{ t('ui.k0371') }}</button>
               </div>
               <div v-for="(opt, optIdx) in cand.options" :key="optIdx" style="display: flex; gap: 0.4rem; margin-top: 0.25rem;">
                 <input v-model="opt.key" style="width: 3rem;" placeholder="A" />
-                <input v-model="opt.content" style="flex: 1;" placeholder="选项文本" />
+                <input v-model="opt.content" style="flex: 1;" :placeholder="t('ui.k0177')" />
                 <button type="button" style="color: var(--danger); border: none; background: none; cursor: pointer;" @click="cand.options.splice(optIdx, 1)">×</button>
               </div>
             </div>
 
-            <label style="font-size: 0.8rem; display: block;">解析：
-              <input v-model="cand.explanation" placeholder="题目解析（可选）" style="width: 100%; margin-top: 0.2rem;" />
+            <label style="font-size: 0.8rem; display: block;">{{ t('ui.k0372') }}
+              <input v-model="cand.explanation" :placeholder="t('ui.k0373')" style="width: 100%; margin-top: 0.2rem;" />
             </label>
           </div>
         </div>
 
         <div class="preview-actions" style="margin-top: 1rem; display: flex; gap: 0.75rem;">
           <button type="button" class="primary" :disabled="loading || !pdfCandidates.length" @click="confirmPdfImportAction">
-            {{ loading ? '入库中…' : '确认校对并导入题库' }}
+            {{ loading ? t('ui.k0678') : t('ui.k0695') }}
           </button>
-          <button type="button" @click="pdfPreview = null">取消校对</button>
+          <button type="button" @click="pdfPreview = null">{{ t('ui.k0374') }}</button>
         </div>
       </section>
 
-      <p v-if="duplicatePreview" class="warning">检测到 {{ duplicatePreview.duplicates?.length || 0 }} 道重复题。请选择如何处理后再次导入。</p>
-      <label v-if="duplicatePreview">重复题处理
+      <p v-if="duplicatePreview" class="warning">{{ t('ui.k0375') }} {{ duplicatePreview.duplicates?.length || 0 }} {{ t('ui.k0376') }}</p>
+      <label v-if="duplicatePreview">{{ t('ui.k0377') }}
         <select v-model="duplicateStrategy">
-          <option value="skip">跳过重复题</option>
-          <option value="new">作为新题导入</option>
-          <option value="merge">合并到原题新版本</option>
+          <option value="skip">{{ t('ui.k0378') }}</option>
+          <option value="new">{{ t('ui.k0379') }}</option>
+          <option value="merge">{{ t('ui.k0380') }}</option>
         </select>
       </label>
 
-      <p v-if="error" class="error">{{ error }}</p>
-      <p v-if="result" class="success">导入完成：新增/更新 {{ result.imported_count }} 题，任务 {{ result.job_id }}</p>
+      <p v-if="error" class="error">{{ errorText }}</p>
+      <p v-if="result" class="success">{{ t('ui.k0381') }} {{ result.imported_count }} {{ t('ui.k0382') }} {{ result.job_id }}</p>
 
       <button type="submit" class="primary btn-submit-import" :disabled="loading || !bankId || !file">
-        {{ loading ? '正在处理…' : duplicatePreview ? '确认重复处理并导入' : spreadsheetPreview ? '确认列映射并导入' : '检查并导入' }}
+        {{ loading ? t('ui.k0696') : duplicatePreview ? t('ui.k0697') : spreadsheetPreview ? t('ui.k0698') : t('ui.k0699') }}
       </button>
     </form>
   </main>
@@ -278,8 +315,14 @@ defineEmits(['back'])
 const banks = ref([])
 const bankId = ref('')
 const file = ref(null)
+const isDragging = ref(false)
+const fileInputRef = ref(null)
 const loading = ref(false)
-const error = ref('')
+const error = ref(null)
+const errorText = computed(() => {
+  if (error.value instanceof Error) return error.value.message
+  return typeof error.value === 'string' ? error.value : ''
+})
 const result = ref(null)
 const duplicatePreview = ref(null)
 const duplicateStrategy = ref('skip')
@@ -331,8 +374,8 @@ function setOptionCol(index, rawVal) {
   syncOptionsFromSlots()
 }
 
-function selectFile(event) {
-  file.value = event.target.files?.[0] || null
+function handleSelectedFile(selected) {
+  file.value = selected || null
   result.value = null
   duplicatePreview.value = null
   spreadsheetPreview.value = null
@@ -342,11 +385,37 @@ function selectFile(event) {
   error.value = ''
 }
 
+function selectFile(event) {
+  handleSelectedFile(event.target.files?.[0] || null)
+}
+
+function triggerFileInput() {
+  fileInputRef.value?.click()
+}
+
+function onDropFile(event) {
+  isDragging.value = false
+  const dropped = event.dataTransfer?.files?.[0]
+  if (!dropped) return
+  const validExts = ['.xlsx', '.csv', '.json', '.txt', '.md', '.markdown', '.pdf']
+  const lower = dropped.name.toLowerCase()
+  if (!validExts.some(ext => lower.endsWith(ext))) {
+    error.value = t('imports.supported_formats')
+    return
+  }
+  handleSelectedFile(dropped)
+}
+
+function onDragLeave(event) {
+  if (event.currentTarget && event.relatedTarget && event.currentTarget.contains(event.relatedTarget)) return
+  isDragging.value = false
+}
+
 onMounted(async () => {
   try {
     banks.value = await listBanks(props.token)
   } catch (err) {
-    error.value = err.detail || err.message
+    error.value = err instanceof Error ? err : new Error(t('ui.k0472'))
   }
 })
 
@@ -368,7 +437,7 @@ async function inspectSpreadsheet() {
       syncOptionsFromSlots()
     }
   } catch (err) {
-    error.value = err.message
+    error.value = err
   } finally {
     loading.value = false
   }
@@ -383,7 +452,7 @@ async function inspectPdf() {
     pdfPreview.value = prev
     pdfCandidates.value = JSON.parse(JSON.stringify(prev.candidates || []))
   } catch (err) {
-    error.value = err.message
+    error.value = err
   } finally {
     loading.value = false
   }
@@ -409,7 +478,7 @@ function mergeWithPrev(idx) {
 function splitCandidate(idx) {
   const item = pdfCandidates.value[idx]
   const half = Math.floor(item.stem.length / 2)
-  const newStem = item.stem.slice(half).trim() || '拆分题目'
+  const newStem = item.stem.slice(half).trim() || t('ui.k0383')
   item.stem = item.stem.slice(0, half).trim()
   pdfCandidates.value.splice(idx + 1, 0, {
     candidate_id: pdfCandidates.value.length + 1,
@@ -421,7 +490,7 @@ function splitCandidate(idx) {
     difficulty: item.difficulty || 3,
     tags: item.tags || [],
     is_uncertain: true,
-    uncertain_reason: '手动拆分题目，请核准题干与答案',
+    uncertain_reason: t('ui.k0384'),
   })
 }
 
@@ -448,7 +517,7 @@ async function confirmPdfImportAction() {
     pdfPreview.value = null
     pdfCandidates.value = []
   } catch (err) {
-    error.value = err.message
+    error.value = err
   } finally {
     loading.value = false
   }
@@ -482,7 +551,7 @@ async function submit() {
     if (err.status === 409 && err.detail && typeof err.detail === 'object') {
       duplicatePreview.value = err.detail
     } else {
-      error.value = err.message
+      error.value = err
     }
   } finally {
     loading.value = false
@@ -528,6 +597,65 @@ async function submit() {
   background: var(--primary-light);
   border-radius: var(--radius-lg);
   transition: all 0.2s ease;
+  position: relative;
+}
+
+.file-upload-card.drag-over {
+  border-color: var(--primary);
+  background: var(--bg-hover, rgba(37, 99, 235, 0.08));
+  transform: scale(1.01);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+}
+
+.file-upload-card.has-file {
+  border-style: solid;
+  border-color: var(--border-strong);
+  background: var(--bg-card);
+}
+
+.drag-active-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  gap: 0.5rem;
+  color: var(--primary);
+  pointer-events: none;
+}
+
+.file-selected-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.selected-file-name {
+  font-size: 0.95rem;
+  color: var(--text-main);
+  word-break: break-all;
+}
+
+.selected-file-size {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.btn-change-file {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-change-file:hover {
+  background: var(--bg-subtle);
+  border-color: var(--border-strong);
 }
 
 .file-card-inner {

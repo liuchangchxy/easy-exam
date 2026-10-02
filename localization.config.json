@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "applicable": true,
+  "locales": ["zh-CN", "en-US"],
+  "default_locale": "zh-CN",
+  "checks": {
+    "catalog": ["npm", "--prefix", "frontend", "run", "check:localization:catalog"],
+    "source": ["npm", "--prefix", "frontend", "run", "check:localization"],
+    "contract": ["npm", "--prefix", "frontend", "run", "test:unit"],
+    "browser": ["npm", "--prefix", "frontend", "run", "test:localization:e2e"]
+  }
+}

@@ -314,6 +314,54 @@ class TestV1Learning(unittest.TestCase):
                 self.assertIn("estimated_minutes", d)
                 self.assertIsInstance(d["estimated_minutes"], int)
 
+    def test_one_day_sprint_and_questions_per_day_quota(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
+            client.post("/api/v1/auth/register", json={"username": "sprint_user", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "sprint_user", "password": "password-123456"}).json()["token"]
+            headers = {"Authorization": f"Bearer {token}"}
+            bank = client.post("/api/v1/banks", headers=headers, json={"name": "冲刺题库"}).json()
+            # Create 25 questions
+            for i in range(25):
+                client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": f"题目{i+1}", "answer": "A"})
+
+            # 1. When questions_per_day is explicitly set to 25 for a 1-day sprint: Day 1 schedules all 25 questions!
+            res_sprint = client.get(f"/api/v1/learning/plan?bank_id={bank['id']}&days=1&questions_per_day=25", headers=headers)
+            self.assertEqual(res_sprint.status_code, 200)
+            day1_items = res_sprint.json()["days"][0]
+            self.assertEqual(day1_items["question_count"], 25)
+
+            # 2. When questions_per_day is set to 10 for 2 days
+            res_quota = client.get(f"/api/v1/learning/plan?bank_id={bank['id']}&days=2&questions_per_day=10", headers=headers)
+            self.assertEqual(res_quota.status_code, 200)
+            quota_days = res_quota.json()["days"]
+            self.assertEqual(quota_days[0]["question_count"], 10)
+            self.assertEqual(quota_days[1]["question_count"], 10)
+
+    def test_plan_and_recommendations_support_over_100_questions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = TestClient(create_app(str(Path(tmp) / "db.sqlite")))
+            client.post("/api/v1/auth/register", json={"username": "big_user", "password": "password-123456"})
+            token = client.post("/api/v1/auth/login", json={"username": "big_user", "password": "password-123456"}).json()["token"]
+            headers = {"Authorization": f"Bearer {token}"}
+            bank = client.post("/api/v1/banks", headers=headers, json={"name": "超百题题库"}).json()
+            # Batch create 120 questions
+            for i in range(120):
+                client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": f"题目 {i+1}", "answer": "A"})
+
+            # Recommendations with limit=120 should return all 120 questions, not capped at 100
+            recs_res = client.get(f"/api/v1/learning/recommendations?bank_id={bank['id']}&limit=120", headers=headers)
+            self.assertEqual(recs_res.status_code, 200)
+            self.assertEqual(len(recs_res.json()), 120)
+
+            # Study plan for 1 day with questions_per_day=120 should yield 120 questions
+            plan_res = client.get(f"/api/v1/learning/plan?bank_id={bank['id']}&days=1&questions_per_day=120", headers=headers)
+            self.assertEqual(plan_res.status_code, 200)
+            plan = plan_res.json()
+            self.assertEqual(plan["question_count"], 120)
+            self.assertEqual(plan["days"][0]["question_count"], 120)
+
 
 if __name__ == "__main__":
     unittest.main()
+
