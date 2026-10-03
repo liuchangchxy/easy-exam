@@ -1,6 +1,6 @@
 services:
   easy-exam:
-    image: ailm32442/easy-exam:1.0.16
+    image: ailm32442/easy-exam:1.0.17
     container_name: easy-exam-fpk
     pull_policy: if_not_present
     restart: unless-stopped

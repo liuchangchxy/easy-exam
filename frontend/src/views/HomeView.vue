@@ -53,49 +53,48 @@
 
     <!-- 未完成会话列表与管理对话框 (EE-019) -->
     <div v-if="showActiveSessionsModal" class="exam-setup-backdrop" @click.self="showActiveSessionsModal = false" @keydown.esc="showActiveSessionsModal = false">
-      <div class="exam-setup-dialog active-sessions-dialog" role="dialog" aria-modal="true" style="width: min(100%, 46rem); max-height: 85vh; overflow-y: auto;">
-        <div class="dialog-header-row" style="display: flex; justify-content: space-between; align-items: center;">
-          <h2 style="font-size: 1.15rem; margin: 0;">{{ t('home.active_sessions_title', { count: activeSessions.length }) }}</h2>
-          <button type="button" class="btn-close-icon" style="border: none; background: none; font-size: 1.25rem; cursor: pointer; color: var(--linear-text-muted);" @click="showActiveSessionsModal = false">✕</button>
+      <div class="exam-setup-dialog active-sessions-dialog modal-dialog-large" role="dialog" aria-modal="true">
+        <div class="dialog-header-flex">
+          <h2>{{ t('home.active_sessions_title', { count: activeSessions.length }) }}</h2>
+          <button type="button" class="btn-close-icon" @click="showActiveSessionsModal = false">✕</button>
         </div>
-        <p style="font-size: 0.825rem; color: var(--linear-text-dim); margin: 0.25rem 0 0.75rem;">
+        <p class="dialog-desc">
           {{ t('home.active_sessions_desc') }}
         </p>
 
-        <div class="active-sessions-list" style="display: grid; gap: 0.75rem; margin-bottom: 1rem;">
+        <div class="sessions-list-grid">
           <div
             v-for="sess in activeSessions"
             :key="sess.id"
-            class="session-card-item"
-            style="border: 1px solid var(--border); border-radius: 8px; padding: 0.85rem 1rem; background: var(--bg-card); display: flex; justify-content: space-between; align-items: center; gap: 1rem;"
+            class="session-item-row"
           >
-            <div style="flex: 1;">
-              <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.35rem;">
-                <span style="font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.5rem; border-radius: 4px; background: var(--primary-light); color: var(--linear-cyan); font-family: var(--linear-mono);">
+            <div class="session-item-info">
+              <div class="session-item-header">
+                <span class="session-mode-badge">
                   {{ formatSessionMode(sess.mode) }}
                 </span>
-                <strong style="font-size: 0.95rem; color: var(--text-main);">{{ sess.bank_name }}</strong>
-                <small style="color: var(--text-tertiary); font-family: var(--linear-mono);">{{ formatTimeAgo(sess.updated_at || sess.created_at) }}</small>
+                <strong class="session-bank-title">{{ sess.bank_name }}</strong>
+                <small class="session-time-ago">{{ formatTimeAgo(sess.updated_at || sess.created_at) }}</small>
               </div>
-              <div style="display: flex; align-items: center; gap: 0.75rem;">
-                <div style="flex: 1; height: 6px; background: var(--border-strong); border-radius: 3px; overflow: hidden; max-width: 180px;">
+              <div class="session-item-progress">
+                <div class="session-progress-track">
                   <div
-                    style="height: 100%; background: var(--primary); border-radius: 3px;"
+                    class="session-progress-bar"
                     :style="{ width: `${sess.total_questions ? Math.min(100, Math.round((sess.answered_count / sess.total_questions) * 100)) : 0}%` }"
                   ></div>
                 </div>
-                <span style="font-size: 0.8rem; color: var(--text-muted); font-family: var(--linear-mono);">
+                <span class="session-progress-label">
                   {{ sess.answered_count }} / {{ sess.total_questions }} {{ t('ui.k0130') }}{{ sess.total_questions ? Math.min(100, Math.round((sess.answered_count / sess.total_questions) * 100)) : 0 }}%)
                 </span>
               </div>
             </div>
-            <div style="display: flex; gap: 0.5rem; align-items: center;">
-              <button type="button" class="primary" style="padding: 0.4rem 0.85rem; font-size: 0.85rem;" @click="handleResume(sess)">
+            <div class="session-item-actions">
+              <button type="button" class="primary" @click="handleResume(sess)">
                 {{ t('home.resume_session') }}
               </button>
               <button
                 type="button"
-                style="padding: 0.4rem 0.75rem; font-size: 0.85rem; border: 1px solid var(--border); background: var(--bg-card); color: var(--danger); border-radius: 6px; cursor: pointer;"
+                class="btn-ghost-danger"
                 :disabled="abandoningSession"
                 @click="handleAbandonSession(sess.id)"
               >
@@ -105,16 +104,16 @@
           </div>
         </div>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 0.75rem;">
+        <div class="dialog-footer-flex">
           <button
             type="button"
-            style="color: var(--danger); background: none; border: 1px solid var(--danger-border); border-radius: 6px; padding: 0.4rem 0.8rem; font-size: 0.85rem; cursor: pointer;"
+            class="btn-ghost-danger"
             :disabled="abandoningSession"
             @click="handleAbandonAllSessions"
           >
             {{ t('home.clear_all_drafts') }}
           </button>
-          <button type="button" class="secondary-btn" style="padding: 0.4rem 1rem;" @click="showActiveSessionsModal = false">{{ t('ui.k0134') }}</button>
+          <button type="button" class="secondary-btn" @click="showActiveSessionsModal = false">{{ t('ui.k0134') }}</button>
         </div>
       </div>
     </div>
@@ -201,7 +200,18 @@
           </div>
         </div>
       </article>
-      <p v-if="!banks.length" class="muted" style="grid-column: 1 / -1; padding: 3rem; text-align: center;">{{ t('home.no_banks') }}</p>
+      <div v-if="!banks.length" class="empty-state-card">
+        <div class="empty-state-icon">
+          <LinearIcon name="inbox" size="26" />
+        </div>
+        <h3 class="empty-state-title">{{ t('home.no_banks') }}</h3>
+        <p class="empty-state-desc">{{ t('home.create_bank_hint') || t('home.no_banks') }}</p>
+        <div class="empty-state-actions">
+          <button type="button" class="primary" @click="openCreateBankDialog">
+            <LinearIcon name="plus" size="14" /> {{ t('home.create_bank') }}
+          </button>
+        </div>
+      </div>
     </section>
 
     <!-- 创建题库对话框 -->
@@ -1357,6 +1367,11 @@ defineExpose({
 .bank-card-title-row h2 {
   margin: 0;
   font-size: 1.15rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.4;
+  flex: 1;
+  min-width: 0;
 }
 
 .badge-active-progress {
@@ -1610,10 +1625,22 @@ defineExpose({
   }
   .bank-primary-actions {
     width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
-  .bank-primary-actions button {
-    flex: 1;
-    min-height: 2.3rem;
+  .bank-primary-actions .btn-resume-direct,
+  .bank-primary-actions > button.primary {
+    width: 100%;
+    flex: 1 1 100%;
+    min-height: 2.6rem;
+    font-weight: 600;
+  }
+  .bank-primary-actions .btn-restart-sequential,
+  .bank-primary-actions > button.secondary-btn {
+    flex: 1 1 calc(50% - 0.25rem);
+    min-height: 2.4rem;
+    font-size: 0.8125rem;
   }
 }
 
@@ -1644,10 +1671,19 @@ defineExpose({
     gap: 0.5rem;
   }
   .btn-create-bank {
-    padding: 0.35rem 0.65rem;
-    font-size: 0.8rem;
-    min-height: 34px;
+    padding: 0.45rem 0.85rem;
+    font-size: 0.825rem;
+    min-height: 42px;
     white-space: nowrap;
+  }
+  .bank-utility-actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+  .btn-util-link {
+    min-height: 38px;
+    justify-content: center;
   }
   .active-session-banner {
     padding: 0.6rem 0.85rem;

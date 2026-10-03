@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { calculateAccuracy, examAnswerState, findFirstUnansweredIndex, findNextUnansweredIndex, formatQuestionTypeName, formatRemainingTime, formatVerdictTitle, isSwipeGestureValid, normalizeExamAnswer } from '../src/domain/exam.js'
+import { setLocale } from '../src/composables/useLocale.js'
+
+setLocale('zh-CN')
 
 test('multi-select answers are normalized deterministically for submission', () => {
   assert.equal(normalizeExamAnswer('MULTI', ['C', 'A', 'B']), 'ABC')

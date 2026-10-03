@@ -947,12 +947,16 @@ onMounted(loadData)
   padding: 0.35rem 0.75rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .mistake-filter-bar .bank-selector label {
   font-size: 0.8rem;
   color: var(--text-muted);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .mistake-filter-bar .bank-selector select {
@@ -963,6 +967,11 @@ onMounted(loadData)
   font-weight: 500;
   cursor: pointer;
   outline: none;
+  max-width: 16rem;
+  min-width: 0;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .practice-launchpad {
@@ -1007,15 +1016,15 @@ onMounted(loadData)
 }
 
 .attack-card::before {
-  background: linear-gradient(90deg, #f97316, #ef4444);
+  background: linear-gradient(90deg, var(--warning), var(--danger));
 }
 
 .fsrs-card::before {
-  background: linear-gradient(90deg, #3b82f6, #06b6d4);
+  background: linear-gradient(90deg, var(--primary), var(--success));
 }
 
 .kill-card::before {
-  background: linear-gradient(90deg, #8b5cf6, #ec4899);
+  background: linear-gradient(90deg, var(--primary-hover), var(--primary));
 }
 
 .launchpad-top {
@@ -1036,21 +1045,21 @@ onMounted(loadData)
 }
 
 .attack-gem {
-  background: rgba(249, 115, 22, 0.12);
-  color: #f97316;
-  border: 1px solid rgba(249, 115, 22, 0.25);
+  background: var(--warning-light);
+  color: var(--warning);
+  border: 1px solid var(--warning-border);
 }
 
 .fsrs-gem {
-  background: rgba(6, 182, 212, 0.12);
-  color: #06b6d4;
-  border: 1px solid rgba(6, 182, 212, 0.25);
+  background: var(--primary-light);
+  color: var(--primary);
+  border: 1px solid var(--primary-border);
 }
 
 .kill-gem {
-  background: rgba(139, 92, 246, 0.12);
-  color: #8b5cf6;
-  border: 1px solid rgba(139, 92, 246, 0.25);
+  background: var(--bg-muted);
+  color: var(--text-main);
+  border: 1px solid var(--border-strong);
 }
 
 .launchpad-header-meta {
@@ -1415,6 +1424,18 @@ onMounted(loadData)
   .mistakes-page {
     width: 100%;
     padding: 0.75rem;
+  }
+  .mistake-filter-bar {
+    justify-content: stretch;
+    width: 100%;
+  }
+  .mistake-filter-bar .bank-selector {
+    width: 100%;
+  }
+  .mistake-filter-bar .bank-selector select {
+    flex: 1;
+    min-width: 0;
+    max-width: calc(100% - 4.5rem);
   }
   .mistake-list-header {
     flex-direction: column;

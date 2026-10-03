@@ -554,7 +554,13 @@ onBeforeUnmount(() => {
   color: var(--on-primary);
   border-color: var(--primary);
 }
-.exam-option input { margin: 0; accent-color: var(--primary); }
+.exam-option input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
 .exam-text-answer { display: grid; gap: 0.5rem; }
 .exam-text-answer textarea { width: 100%; min-height: 4rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-md); resize: vertical; }
 

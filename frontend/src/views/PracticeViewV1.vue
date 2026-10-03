@@ -4,7 +4,7 @@
       <div class="header-left-bar">
         <button type="button" class="btn-back" @click="handleBack">{{ t('ui.k0510') }}</button>
         <div class="header-titles">
-          <h1 class="practice-title">{{ session?.mode === 'ELIMINATION' ? t('ui.k0734') : session?.mode === 'FSRS' ? t('ui.k0735') : session?.mode === 'PRACTICE' ? t('bank.sequential_practice') : t('ui.k0736') }}</h1>
+          <h1 class="practice-title">{{ session?.mode === 'ELIMINATION' ? t('ui.k0734') : session?.mode === 'FSRS' ? t('ui.k0735') : session?.mode === 'PRACTICE' ? t('home.sequential_practice') : t('ui.k0736') }}</h1>
           <span v-if="question" class="badge-type-pill">{{ formatType(question.type) }}</span>
           <button v-if="question" type="button" class="badge-index-pill btn-sheet-trigger-pill" @click="showSheetModal = true" :title="t('ui.k0511')">
             <small>{{ index + 1 }} / {{ questions.length }}</small> <LinearIcon name="layers" size="13" /> {{ t('ui.k0093') }}
@@ -12,8 +12,8 @@
         </div>
       </div>
       <div class="header-actions">
-        <ThemeToggle compact />
-        <LocaleToggle compact />
+        <ThemeToggle compact class="desktop-only-btn" />
+        <LocaleToggle compact class="desktop-only-btn" />
         <!-- 桌面端平铺操作 -->
         <button type="button" class="secondary-btn btn-help-guide desktop-only-btn" @click="showHelpTip = !showHelpTip" :title="t('ui.k0512')">
           <LinearIcon name="zap" size="13" /> {{ t('ui.k0513') }}
@@ -1846,6 +1846,16 @@ function handleRestartPractice() {
   border-radius: var(--radius-lg);
   background: var(--bg-card);
   box-shadow: var(--shadow-sm);
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.stem-box {
+  max-width: 100%;
+  min-width: 0;
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 .stem-box h2 {
@@ -1853,20 +1863,25 @@ function handleRestartPractice() {
   line-height: 1.65;
   margin-bottom: 1.25rem;
   white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: anywhere;
   color: var(--text-main);
   font-weight: 500;
+  max-width: 100%;
 }
 
 .options-group {
   display: grid;
   gap: 0.65rem;
   margin-bottom: 1.25rem;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .option {
   display: flex;
   gap: 0.85rem;
-  align-items: center;
+  align-items: flex-start;
   padding: 0.75rem 1rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -1875,10 +1890,66 @@ function handleRestartPractice() {
   transition: all 0.1s cubic-bezier(0.16, 1, 0.3, 1);
   font-size: 0.9375rem;
   line-height: 1.5;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .option .option-text-content {
   color: var(--text-main);
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* 统一底部操作栏 (Desktop Base) */
+.ergonomic-action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 80;
+  background: color-mix(in srgb, var(--bg-card) 95%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.04);
+  padding: 0.75rem 1.5rem;
+}
+
+.action-bar-inner {
+  max-width: 74rem;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.action-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.action-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.hotkey-helper-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+.hotkey-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .option:hover {
@@ -1900,9 +1971,11 @@ function handleRestartPractice() {
 }
 
 .option input {
-  margin-top: 0.25rem;
-  accent-color: var(--primary);
-  cursor: pointer;
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
 }
 
 .text-answer-box textarea {
@@ -2837,12 +2910,22 @@ function handleRestartPractice() {
 .btn-close-sheet {
   border: none;
   background: var(--bg-muted);
-  width: 1.85rem;
-  height: 1.85rem;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 50%;
   cursor: pointer;
   font-weight: 700;
   color: var(--text-muted);
+  transition: background-color 0.15s ease;
+}
+
+.btn-close-sheet:hover {
+  background: var(--border);
 }
 
 .sheet-quick-actions {
@@ -2850,6 +2933,10 @@ function handleRestartPractice() {
 }
 .btn-jump-next-unanswered {
   width: 100%;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0.55rem;
   background: var(--primary-light);
   border: 1px dashed var(--primary);
@@ -2979,27 +3066,33 @@ function handleRestartPractice() {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    height: 2rem !important;
-    padding: 0 0.5rem !important;
+    min-height: 42px !important;
+    height: 42px !important;
+    padding: 0 0.65rem !important;
     font-size: 0.85rem !important;
     white-space: nowrap !important;
-    border-radius: var(--radius-sm) !important;
+    border-radius: var(--radius-md) !important;
     flex-shrink: 0 !important;
   }
 
   .practice-title {
-    font-size: 0.9rem !important;
+    font-size: 0.95rem !important;
+    font-weight: 600 !important;
     margin: 0 !important;
   }
 
   .badge-type-pill {
     font-size: 0.72rem !important;
-    padding: 0.1rem 0.35rem !important;
+    padding: 0.15rem 0.35rem !important;
   }
 
   .btn-sheet-trigger-pill {
-    font-size: 0.72rem !important;
-    padding: 0.1rem 0.4rem !important;
+    font-size: 0.75rem !important;
+    padding: 0.2rem 0.5rem !important;
+    min-height: 42px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    border-radius: var(--radius-md) !important;
   }
 
   .header-actions {
@@ -3031,9 +3124,25 @@ function handleRestartPractice() {
     display: none !important;
   }
 
-  /* 移动端去除原生 radio/checkbox，使用精美字母键位圆角徽章 */
+  /* 移动端无障碍隐藏原生 radio/checkbox，保持屏幕阅读器与辅助技术可达 */
   .option input {
-    display: none !important;
+    position: absolute !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    width: 1px !important;
+    height: 1px !important;
+    margin: -1px !important;
+    clip: rect(0, 0, 0, 0) !important;
+    overflow: hidden !important;
+  }
+
+  .btn-help-mobile,
+  .btn-more-menu {
+    min-width: 42px !important;
+    min-height: 42px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 
   .mobile-only-inline {
@@ -3059,7 +3168,6 @@ function handleRestartPractice() {
     line-height: 1.45;
     margin-bottom: 0.75rem;
   }
-
 
   .options-group {
     gap: 0.5rem;
@@ -3096,12 +3204,21 @@ function handleRestartPractice() {
 
   /* 底部固定底栏极简化与安全区适配 */
   .ergonomic-action-bar {
-    padding: 0.4rem 0.6rem max(0.45rem, env(safe-area-inset-bottom)) !important;
-    min-height: 48px;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 80;
+    padding: 0.5rem 0.75rem max(0.5rem, env(safe-area-inset-bottom, 12px)) !important;
+    background: color-mix(in srgb, var(--bg-card) 96%, transparent) !important;
+    backdrop-filter: blur(12px) !important;
+    border-top: 1px solid var(--border) !important;
+    min-height: 52px;
   }
 
   .action-bar-inner {
-    gap: 0.35rem;
+    width: 100%;
+    gap: 0.5rem;
   }
 
   .btn-prev-question,
@@ -3110,9 +3227,9 @@ function handleRestartPractice() {
   .btn-skip-unanswered,
   .btn-finish-session,
   .btn-ai-toggle {
-    min-height: 2.35rem !important;
-    padding: 0.35rem 0.75rem !important;
-    font-size: 0.825rem !important;
+    min-height: 42px !important;
+    padding: 0.45rem 0.85rem !important;
+    font-size: 0.875rem !important;
   }
 
   .hotkey-badge,

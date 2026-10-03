@@ -729,11 +729,14 @@ onMounted(async () => {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.82rem;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .toolbar-label {
   color: var(--text-muted);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .toolbar-item select {
@@ -743,6 +746,11 @@ onMounted(async () => {
   border-radius: var(--radius-sm);
   background: var(--bg-page);
   color: var(--text-main);
+  max-width: 16rem;
+  min-width: 0;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .toolbar-item-quota {

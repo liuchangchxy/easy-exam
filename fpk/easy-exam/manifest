@@ -1,5 +1,5 @@
 appname               = easy-exam
-version               = 1.0.16
+version               = 1.0.17
 display_name          = 易考宝 (EasyExam)
 desc                  = 专为飞牛私有云 (fnOS) 打造的高效智能题库与全真模考系统：支持 Markdown/Excel 批量导入、错题靶向 2 次连对斩杀消除、FSRS 遗忘曲线间隔复习与本地 AI 智能伴学解惑。
 platform              = x86
@@ -14,5 +14,5 @@ service_port          = 3000
 checkport             = true
 ctl_stop              = true
 os_min_version        = 1.2.0
-changelog             = v1.0.16：<br/>1. 侧边栏工具弹窗（智能组卷/AI智能出题/AI模型配置）全路由就地唤起，彻底消除背景跳转与页面漂移；<br/>2. 个人卡片与知识笔记完全解耦，用户菜单回归纯粹的账户安全（修改密码/退出登录），消除功能重复混淆；<br/>3. 首页彻底清理旧版行内弹窗与冗余状态代码，所有弹窗统一由 AppLayout 顶层全局调度。
+changelog             = v1.0.17：<br/>1. 深度对抗性 UI 全面修复：修复超长无空格文本/代码导致的横向破版撑宽，多视口统一引入 overflow-wrap 与 word-break 兜底；<br/>2. 移动端触控安全区与人体工学治理：底部固定操作栏自适应安全区（env(safe-area-inset-bottom)），保证核心操作零遮挡；<br/>3. 触控面积强化：全站返回、关闭、跳转胶囊按钮统一满足 ≥42px 触控标准；<br/>4. 复杂下拉框与长选项防溢出约束：限制学习与错题页面选择器最大宽度，彻底消除视口横向穿透。
 

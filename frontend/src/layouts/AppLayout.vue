@@ -221,7 +221,10 @@ function handleSelectBank(bank) {
 @media (max-width: 768px) {
   .app-layout {
     flex-direction: column;
-    padding-bottom: 3.5rem;
+    padding-bottom: 0;
+  }
+  .app-content-viewport {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 16px));
   }
 }
 </style>

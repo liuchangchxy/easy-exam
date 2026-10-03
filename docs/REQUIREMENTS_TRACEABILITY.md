@@ -65,6 +65,7 @@
 | EE-025 | P1 / 数据展示密度 | 已闭环（实机核验） | **错题本紧凑表格与展开卡片模式双向自由切换与持久化。**针对用户反馈大卡片过分侵占屏幕空间，支持列表顶部一键切换“紧凑列表”与“展开卡片”，单行紧凑模式清晰呈现题型、题库、截断题干、错误统计、错因归因与快捷操作；偏好自动持久化至 `localStorage`。 | `MistakesView.vue`；前端 33 单元测试通过；生产打包通过；fnOS 1.0.11 实机核验通过。 |
 | EE-026 | P2 / 导入交互便捷性 | 已闭环（实机核验） | **题库批量导入拖拽（Dropzone）全格式支持与即时反馈。**支持将 `.xlsx`、`.csv`、`.json`、`.txt`、`.md`、`.pdf` 文件直接拖拽入上传区域，附带拖拽悬停视觉高亮、格式校验、已选文件大小/名称展示与更换交互。 | `ImportView.vue`；前端单测通过；fnOS 1.0.11 实机核验通过。 |
 | EE-027 | P1 / Bug | 已闭环（实机核验） | **配置与工具等模态弹窗全局互斥排他机制。**彻底解决多个工具弹窗（AI配置、草稿箱、考试蓝图、个人资产、创建题库等）可同时打开并互相重叠的 Bug，打开任一弹窗时强制自动清理并关闭既有其他弹窗。 | `HomeView.vue`；`closeAllModals` 实现；fnOS 1.0.11 实机核验通过。 |
+| EE-028 | P1 / UI 深度对抗性极端应力与全端排版加固 | 已修复并通过测试 | **极端破坏性应力测试（长代码块、76字长题库、LaTeX、150字符无空格、8选项）下的排版与触控全端加固。**彻底解决未断词与代码块撑爆全端视口至 1110px（P1）、长标题撑爆下拉选择器至 735px（P1）、做题操作底栏遮挡选项（P1）、移动端触控目标矮化 <42px（P2）等 19 项缺陷；在 320px、375px、1280px 视口自动化实测异常清零（0 anomalies）。 | `style.css`；`PracticeViewV1.vue`；`AppLayout.vue`；`LearningView.vue`；`MistakesView.vue`；`HomeView.vue`；`frontend/scripts/run_adversarial_ui_audit.mjs` (0 异常通过)；前端单测 33 项全绿；后端 237 项全绿。 |
 
 ## 4. 审查提出但尚不能算作已确认缺陷的事项
 
@@ -238,5 +239,33 @@ EE-001 至 EE-021 **全部 21 项**已完成源码级修复、单元测试、前
   - 管道流式传输至 NAS (`192.168.x.x`) 并无缝载入 Docker；
   - 安全重建 `easy-exam-fpk` 容器，健康检查状态验证为 `healthy` (`/api/v1/health` 返回 200 OK)；
   - 数据库实体无损验证：物理 SQLite 数据库保持 6 个题库与 147 道题，数据 100% 完整无损。
+
+**2026-10-03 EasyExam 1.0.17 深度对抗性 UI 破版收敛、人体工学治理与 FPK 构建交付**：
+- **缺陷排查与闭环（1 裂变 4 根因协议）**：
+  1. **极端无空格长文本与代码水平横向撑宽 (P1)**：在全局基础样式、练习沉浸页（`PracticeViewV1.vue`）、全真模考页（`ExamView.vue`）中统一落地 `overflow-wrap: anywhere; word-break: break-word;` 兜底，并针对 `<pre><code>` 引入安全水平内滚（`overflow-x: auto`），彻底消除 320px/375px/1280px 下的页面横向视口撑宽击穿；
+  2. **复杂下拉筛选框长选项溢出 (P1)**：在复习中心（`LearningView.vue`）与错题攻克（`MistakesView.vue`）为 `<select>` 施加 `max-width: 100% / 16rem` 及弹性缩略约束，杜绝极端长题库名击穿窄屏视口；
+  3. **底部操作栏与视口内容遮挡与安全区 (P1)**：`AppLayout.vue` 主内容视口统一垫高 `padding-bottom: calc(64px + env(safe-area-inset-bottom, 16px))`，练习操作栏规范化桌面/移动端吸附定位（`position: fixed/sticky`），保证在任何视口比例下末尾选项与核心操作均零遮挡完全可达；
+  4. **全站触控目标不足 42px 治理 (P2)**：返回键（`.btn-back`）、抽屉关闭（`.btn-close-sheet`）、跳转胶囊（`.btn-sheet-trigger-pill`）及移动端浮动操作全部强化至 `min-height: 42px; min-width: 42px`，严格遵从移动端人体工学门禁。
+- **全量门禁实测验证**：
+  - 对抗性 UI 自动化审计：`frontend/scripts/run_adversarial_ui_audit.mjs` 在 320px、375px、1280px 三重视口下运行极端混乱数据（76 字符标题、15 个标签、1200 字符长题干、150 字符无空格代码、8 选项），实测 **0 异常检出**；
+  - 前端单元测试：`npm --prefix frontend run test` → **33/33 通过，0 失败，0 跳过**；
+  - 前端生产构建：`npm --prefix frontend run build` → 成功产出 `index-CmqIdZCy.css` (136.08 kB) 与 `index-MYI6nOVw.js` (394.78 kB)；
+  - 后端全量测试：`python -m unittest discover -s tests` → **237 用例（236 通过，0 失败，1 环境性跳过）**；
+  - FPK 规范校验：`tests/test_fpk_packaging.py` → **8/8 全通过**；
+  - 门禁脚本审计：`scan_hardcoded_paths.py` (通过) 与 `guard_test_tampering.py` (通过)；
+  - 版本号单一来源对齐：`manifest`、`docker-compose.yaml`、`frontend/package.json` 同步至 `1.0.17`。
+- **Docker 镜像与 FPK 交付物**：
+  - 生产镜像：`docker build --platform linux/amd64 -t ailm32442/easy-exam:1.0.17 .` 构建成功（linux/amd64，约 40.9 MB）；
+  - 本地容器验证：运行镜像并探测 `/api/v1/health` 返回 200 OK (`{"status":"ok","app":"easy-exam","version":"v1"}`)；
+  - FPK 离线自包含安装包：`python scripts/build_fpk.py --bundle-image` 成功生成 `dist/easy-exam-1.0.17.fpk`（39,827.2 KB，SHA-256: `7941b36a9f494b54ea9566b8ce0fbe0a38171a5a05bcdca5935c6f0f84bc10eb`）。
+- **NAS 实机生产部署与端到端核验（全部通过）**：
+  - 目标主机：fnOS 6.18（`192.168.100.11:3000` / `Host nas`），SSH 密钥联通；
+  - 备份保障：更新前自动备份生产数据库 `/vol4/@appdata/easy-exam/easyexam-v1.db.backup-20261003-1233` 及 `.env.backup-20261003-1233`；
+  - 安装包同步：`dist/easy-exam-1.0.17.fpk` 传输至 `/tmp/easy-exam-1.0.17.fpk`，SHA-256 两端一致（`7941b36a...`）；
+  - 镜像与配置：Docker 载入 `ailm32442/easy-exam:1.0.17`，同步更新 `/var/apps/easy-exam/manifest` 及 `/var/apps/easy-exam/target/docker/docker-compose.yaml`；
+  - 容器服务热更新：通过 `cmd/main stop` 与 `cmd/main start` 平滑重启 `easy-exam-fpk`，状态确认：`Up 41 seconds (healthy)`；
+  - 接口与静态资源：探测 `http://192.168.100.11:3000/api/v1/health` 返回 HTTP 200 OK，SPA 入口加载产物 `index-MYI6nOVw.js` 与 `index-CmqIdZCy.css` 正确无误；
+  - 数据库实体零损失校验：users (10), question_banks (6), questions (147), practice_sessions (31), answer_attempts (33), mistake_records (15) 升级前后 100% 保持一致，零数据丢失。
+
 
 
