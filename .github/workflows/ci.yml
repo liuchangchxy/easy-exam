@@ -1,0 +1,178 @@
+name: EasyExam CI Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  quality-and-guards:
+    name: Whitespace & Guard Checks
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Record PR Head SHA in Job Summary
+        shell: bash
+        run: |
+          HEAD_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          echo "### Job Summary: Whitespace & Guard Checks" >> $GITHUB_STEP_SUMMARY
+          echo "- **Event**: \`${{ github.event_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR Number**: #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR Head SHA**: \`${HEAD_SHA}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR Base SHA**: \`${BASE_SHA}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Runner**: \`${{ runner.os }} (${{ runner.arch }})\`" >> $GITHUB_STEP_SUMMARY
+          echo "{\"job\": \"quality-and-guards\", \"head_sha\": \"${HEAD_SHA}\", \"pr\": \"${{ github.event.pull_request.number }}\"}" > artifact_metadata.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run Whitespace and Git Diff Check
+        shell: bash
+        run: |
+          python scripts/check_whitespace.py
+          if [ -n "${{ github.event.pull_request.base.sha }}" ] && [ -n "${{ github.event.pull_request.head.sha }}" ]; then
+            git diff --check ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
+          fi
+
+      - name: Run Guard Tests
+        shell: bash
+        run: |
+          python scripts/guard_test_tampering.py
+          python scripts/scan_hardcoded_paths.py
+          python -m unittest discover -s tests -p test_guard_checks.py -v
+
+  backend-suite:
+    name: Backend & Packaging Tests
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Record PR Head SHA in Job Summary
+        shell: bash
+        run: |
+          HEAD_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          echo "### Job Summary: Backend & Packaging Tests" >> $GITHUB_STEP_SUMMARY
+          echo "- **Event**: \`${{ github.event_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR Number**: #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR Head SHA**: \`${HEAD_SHA}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR Base SHA**: \`${BASE_SHA}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Runner**: \`${{ runner.os }} (${{ runner.arch }})\`" >> $GITHUB_STEP_SUMMARY
+          echo "{\"job\": \"backend-suite\", \"head_sha\": \"${HEAD_SHA}\", \"pr\": \"${{ github.event.pull_request.number }}\"}" > artifact_metadata.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python Dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt PyYAML pymupdf reportlab
+
+      - name: Run FPK Packaging Tests
+        shell: bash
+        run: |
+          python -m unittest tests.test_fpk_packaging -v
+
+      - name: Run Backend Test Suite
+        shell: bash
+        run: |
+          python -m unittest discover -s tests -v
+
+  frontend-and-e2e:
+    name: Frontend, Build & E2E Tests
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Record PR Head SHA in Job Summary
+        shell: bash
+        run: |
+          HEAD_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          echo "### Job Summary: Frontend & E2E Tests" >> $GITHUB_STEP_SUMMARY
+          echo "- **Event**: \`${{ github.event_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR Number**: #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR Head SHA**: \`${HEAD_SHA}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR Base SHA**: \`${BASE_SHA}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Runner**: \`${{ runner.os }} (${{ runner.arch }})\`" >> $GITHUB_STEP_SUMMARY
+          echo "{\"job\": \"frontend-and-e2e\", \"head_sha\": \"${HEAD_SHA}\", \"pr\": \"${{ github.event.pull_request.number }}\"}" > artifact_metadata.json
+
+      - name: Set up Python (for E2E backend server)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python Dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt PyYAML pymupdf reportlab
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Frontend Dependencies
+        shell: bash
+        run: |
+          npm --prefix frontend ci
+
+      - name: Install Playwright Chromium
+        shell: bash
+        run: |
+          npx --prefix frontend playwright install chromium
+
+      - name: Run Localization Static Check
+        shell: bash
+        run: |
+          npm --prefix frontend run check:localization
+
+      - name: Run Frontend Unit Tests
+        shell: bash
+        run: |
+          npm --prefix frontend run test:unit
+
+      - name: Production Build
+        shell: bash
+        run: |
+          npm --prefix frontend run build
+
+      - name: Run Localization Browser E2E
+        shell: bash
+        run: |
+          npm --prefix frontend run test:localization:e2e
+
+      - name: Run Full Browser E2E
+        shell: bash
+        run: |
+          npm --prefix frontend run test:e2e
+
+      - name: Run Mobile Interaction E2E
+        shell: bash
+        run: |
+          node frontend/tests/mobile_interaction_suite.mjs
