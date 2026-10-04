@@ -6,7 +6,7 @@
 
 1. **唯一事实源**：GitHub Issue（含 Frozen Spec）、Pull Request、GitHub Labels 和 GitHub Checks 是双 Agent 协作的唯一事实源。禁止根据聊天上下文、历史记忆或自行推测扩大或变更规范。
 2. **AntiGravity（Implementer Agent）职责**：
-   - 仅领取带有 `agent-ready` 标签的 Issue 并自动切换为 `agent-working`。
+   - 领取待处理的 Issue 并切换为 `agent-working`（支持 `agent-ready -> agent-working` 与 `changes-requested -> agent-working` 两种接单路径）。
    - 严格在 Frozen Spec 限定的文件与逻辑范围内实现，禁止顺手重构、增加新功能或擅自改变产品行为。
    - 严禁删除、跳过、放宽现有测试断言来制造虚假通过。
    - 负责编写规范的 PR 描述，如实登记实际改动、测试结果与未运行项。
@@ -15,7 +15,7 @@
    - 负责需求梳理并输出冻结的规范，锁定后为 Issue 添加 `agent-ready` 标签。
    - **严格且仅按 Frozen Spec 进行审查**，严禁在审查时临时追加新需求、新特性或抬高验收门槛。
    - 若发现范围外需求或潜在优化，必须创建独立的 follow-up Issue，不得追加进当前 Frozen Spec。
-   - 通过 GitHub 原生 Review 功能提交正式的 `CHANGES_REQUESTED` 或 `APPROVED`。
+   - 通过 GitHub 原生 Review 功能提交正式的 `CHANGES_REQUESTED` 或 `APPROVED`，并在提交 `CHANGES_REQUESTED` 时由 Work 将 Issue 状态置为 `changes-requested`。
 4. **GitHub Actions CI**：
    - 执行机械化、可重复的自动化门禁检查；本地通过或构建成功绝不能替代 CI。
 5. **fnOS Staging Physical Gate**：
@@ -28,8 +28,8 @@
 | 标签 | 含义与触发条件 | 谁来添加/切换 |
 |---|---|---|
 | `agent-ready` | Frozen Spec、修改范围、验收标准和停止条件已完全冻结，等待 AntiGravity 接单。 | Work / 人工管理员 |
-| `agent-working` | AntiGravity 已接单并正在进行分支检出、编码实现或测试验证。 | AntiGravity / Dispatcher |
-| `changes-requested` | Work 针对 Frozen Spec 正式提交了 GitHub CHANGES_REQUESTED Review。 | Dispatcher / Work |
+| `agent-working` | AntiGravity 已接单并正在进行分支检出、编码实现或测试验证（由 Dispatcher / Implementer 认领 `agent-ready` 或 `changes-requested` 后切换）。 | AntiGravity / Dispatcher |
+| `changes-requested` | Work 针对 Frozen Spec 正式提交了 GitHub CHANGES_REQUESTED Review 后由 Work 标记（Dispatcher 消费该状态并派发，但不得被描述为产生该状态的主体）。 | Work |
 | `infra-blocked` | 遇到环境崩溃、网络不可达、第三方依赖故障或基础设施受阻，自动处理停止。 | AntiGravity / Work |
 | `needs-human` | 达到停止条件、出现不可调和的歧义、或修改超过轮次上限，自动处理停止。 | AntiGravity / Work |
 
@@ -80,15 +80,18 @@
                        [needs-human] ──► 停止自动处理
 ```
 
-1. **接单**：Issue 必须带有 `agent-ready` 与 `frozen-spec`。AntiGravity 领取任务后，将协调状态切换为 `agent-working`。
+1. **接单**：Dispatcher / Implementer 可认领满足条件的 Issue 并将协调状态切换为 `agent-working`：
+   - `agent-ready -> agent-working`（初次接单：Issue 必须带有 `agent-ready` 与 `frozen-spec`）。
+   - `changes-requested -> agent-working`（返工接单：Work 针对既有 PR 提交正式 CHANGES_REQUESTED Review 后触发）。
+   `changes-requested` 必须来源于 Work 的正式 GitHub CHANGES_REQUESTED Review；Dispatcher 消费该状态并派发给 Implementer，但不得被描述为创建或产生该状态的主体。
 2. **分支与实现**：
    - 来源为 `agent-ready`：创建独立 feature 分支 `agent/issue-<number>-<slug>`，严禁直接在 `main` 上开发。
-   - 来源为 `changes-requested`：切换到既有关联分支，只修复最新正式 Review 中指出的具体问题。
+   - 来源为 `changes-requested`：切换到既有关联分支，只修复最新正式 Review 中与 Frozen Spec 直接相关的问题。
 3. **提交 PR**：完成实现与测试后，推送分支并创建/更新 PR。PR 必须显式关联源 Issue，Issue 保持 `agent-working` 状态。
 4. **CI 门禁**：GitHub Actions CI 自动响应 PR 事件（opened / synchronize / reopened）。CI 结果绑定当前 PR head SHA。
 5. **正式审查**：
    - Work 仅基于 PR 当前 head SHA 和 Frozen Spec 进行审查。
-   - 若不满足 Frozen Spec，Work 提交正式 `CHANGES_REQUESTED` Review，Issue 状态转为 `changes-requested`。
+   - 若不满足 Frozen Spec，Work 提交正式 `CHANGES_REQUESTED` Review，由 Work 将 Issue 状态转为 `changes-requested`。
    - 若完全满足 Frozen Spec，Work 提交 `APPROVED` Review。
 6. **合并与关闭**：PR 获得批准且通过所有 Required Checks 后，由原生机制合并并关闭关联 Issue。
 
