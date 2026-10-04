@@ -13,6 +13,7 @@
 | `DECISIONS.md` | 已确认的重要决策、背景和影响 | 日常进度 |
 | `docs/superpowers/plans/` | 可独立验收的单批计划 | 产品愿景或大而全架构 |
 | `docs/research/` | 外部源码审计和总体吸收路线 | 未证实的复用声明 |
+| `docs/AGENT_COLLABORATION_PROTOCOL.md` | 双 Agent 协作协议、五大协调状态与停止条件 | 临时需求或代码变更 |
 | `docs/optional/` | 触发式的安全、可靠性、并行规范 | 所有任务的默认负担 |
 
 ## 2. 需求批次流程

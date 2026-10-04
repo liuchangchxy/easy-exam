@@ -83,9 +83,11 @@ python scripts/checkpoint.py save "变更说明"
 | `docs/FNOS_FPK_GUIDE.md` | fnOS 应用包（fpk）打包、安装时序约束、主密钥与运维手册 |
 | `docs/optional/STEPPER_WORKFLOWS.md` | 向导式/多步流转的推进、暂存与终局校验规范 |
 | `docs/templates/` | 新项目或新批次可复制的空白模板 |
+| `docs/AGENT_COLLABORATION_PROTOCOL.md` | 双 Agent（AntiGravity 与 Work）协作协议、协调状态机、三轮上限与停止条件 |
 | `docs/ANTIGRAVITY_WORKFLOW.md` | AntiGravity 的完整执行工序与报告格式（含 `docs/ANTIGRAVITY_EXECUTION_PROMPT.md` / `docs/ANTIGRAVITY_OSS_MASTER_PLAN_PROMPT.md` 两个启动提示词） |
 | `specs/` | 大型系统的分片子模块规范（超过单体容量时启用） |
-| `templates/ci.yml` | GitHub Actions CI 模板。**当前未激活**：仓库无 `.github/` 目录，该工作流从未运行；启用前须先补前端/E2E/构建步骤（模板本身只跑后端 unittest） |
+| `.github/workflows/ci.yml` | 官方 GitHub Actions CI 门禁（10 类自动化检查） |
+| `templates/ci.yml` | GitHub Actions CI 基础历史参考模板 |
 | `EXECUTION.md` / `ARCHITECTURE.md` / `REVIEWING.md` | 大批次执行、架构推导和对抗性审查 |
 | `tests/visual_smoke/` | Web 视觉冒烟：白屏判据 + 四道正身信号（否定判据） |
 | `.agents/skills/` | AI 可执行的领域 Skill 和通用 SDD Skill |
