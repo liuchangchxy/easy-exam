@@ -94,7 +94,7 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt PyYAML pymupdf reportlab
+          pip install -r requirements.txt PyYAML pymupdf reportlab httpx
 
       - name: Run FPK Packaging Tests
         shell: bash
@@ -203,7 +203,7 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt PyYAML pymupdf reportlab
+          pip install -r requirements.txt PyYAML pymupdf reportlab httpx
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -283,7 +283,7 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt PyYAML pymupdf reportlab
+          pip install -r requirements.txt PyYAML pymupdf reportlab httpx
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
