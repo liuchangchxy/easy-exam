@@ -114,7 +114,6 @@ async function run() {
     await waitForServer(BASE_URL, instanceToken)
     console.log('Server ready. Launching mobile viewport in Playwright...')
     browser = await chromium.launch({
-      ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}),
       headless: true,
     })
     const context = await browser.newContext({
