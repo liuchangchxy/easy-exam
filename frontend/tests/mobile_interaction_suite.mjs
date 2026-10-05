@@ -10,7 +10,7 @@ import { chromium } from 'playwright'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '../..')
-const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+const FIXTURE_PATH = path.resolve(__dirname, 'fixtures/mobile_interaction_questions.md')
 const SCREENSHOT_DIR = path.resolve(repoRoot, 'screenshots/mobile')
 const ARTIFACT_DIR = path.resolve(repoRoot, 'screenshots/mobile')
 
@@ -113,7 +113,9 @@ async function run() {
   try {
     await waitForServer(BASE_URL, instanceToken)
     console.log('Server ready. Launching mobile viewport in Playwright...')
-    browser = await chromium.launch({ executablePath: CHROME_PATH, headless: true })
+    browser = await chromium.launch({
+      headless: true,
+    })
     const context = await browser.newContext({
       viewport: { width: 390, height: 844 },
       deviceScaleFactor: 2,
@@ -143,12 +145,13 @@ async function run() {
     })
     const bank = await createBankRes.json()
 
-    const mdContent = fs.readFileSync(path.join(repoRoot, 'data', 'ruankao_system_integration_142.md'), 'utf-8')
-    await fetch(`${BASE_URL}/api/v1/imports/banks/${bank.id}`, {
+    const mdContent = fs.readFileSync(FIXTURE_PATH, 'utf-8')
+    const importRes = await fetch(`${BASE_URL}/api/v1/imports/banks/${bank.id}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ format: 'markdown', content: mdContent.slice(0, 10000), duplicate_strategy: 'merge' }),
+      body: JSON.stringify({ format: 'markdown', content: mdContent, duplicate_strategy: 'merge' }),
     })
+    assert(importRes.ok, `Failed to import fixture questions: ${importRes.status}`)
 
     await page.reload()
     await page.waitForSelector('.bank-card')
