@@ -114,6 +114,7 @@ jobs:
         shell: bash
         run: |
           python -m unittest discover -s tests -v
+          node --test tests/coordination-label-cleanup.test.js
 
   frontend-unit-and-build:
     name: Frontend Unit & Build Tests
@@ -321,37 +322,3 @@ jobs:
           LANGUAGE: zh_CN:zh
         run: |
           node frontend/tests/mobile_interaction_suite.mjs
-
-  reviewer-wake:
-    name: Reviewer Wake (non-required)
-    needs:
-      - quality-and-guards
-      - backend-suite
-      - frontend-unit-and-build
-      - browser-e2e
-      - mobile-interaction-e2e
-    if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-    concurrency:
-      group: reviewer-wake-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
-      cancel-in-progress: false
-    steps:
-      - name: Create SHA-bound Reviewer wake comment
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          marker="[easyexam-review-ready:${HEAD_SHA}]"
-          comments="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --jq '.[].body')"
-
-          if printf '%s\n' "$comments" | grep -Fqx -- "$marker"; then
-            echo "Reviewer wake marker already exists for ${HEAD_SHA}; skipping duplicate."
-            exit 0
-          fi
-
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$marker"
