@@ -1115,6 +1115,51 @@ def dispatch_automated_repair(
     except Exception:
         pass
 
+    # 7b. Mutation boundary re-check: fresh canonical PR read
+    # Require the live PR to remain open, canonical, and live head == expected_repair_baseline_sha.
+    live_pr = get_pull_request_details(repo, pr_number)
+    live_state = str((live_pr or {}).get("state") or "").lower()
+    live_head_sha = ((live_pr or {}).get("head") or {}).get("sha") or ""
+    is_canonical = is_valid_canonical_pr_author(live_pr)
+    head_matches = verify_exact_head_sha(live_head_sha, expected_repair_baseline_sha) if live_head_sha else False
+
+    if not live_pr or live_state != "open" or not is_canonical or not head_matches:
+        logger.warning(
+            f"Stale repair abort at mutation boundary for #{issue_number} / PR #{pr_number}: "
+            f"live_state={live_state}, is_canonical={is_canonical}, "
+            f"live_head={live_head_sha}, expected={expected_repair_baseline_sha}"
+        )
+        ledger.record_outcome(
+            attempt_id,
+            "aborted_stale",
+            resulting_head_sha=live_head_sha or current_pr_head_sha,
+            last_error=f"mutation_boundary_mismatch:live_head={live_head_sha},expected={expected_repair_baseline_sha},state={live_state},canonical={is_canonical}",
+        )
+        ledger.release_lease(lease_token)
+        ledger.release_issue_lease(repo, issue_number)
+        try:
+            append_dispatch_audit({
+                "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                "attempt_id": attempt_id,
+                "event": "aborted_stale",
+                "repo": repo,
+                "issue_number": issue_number,
+                "source_label": "changes-requested" if repair_kind == "reviewer_repair" else "agent-working",
+                "repair_key": repair_key,
+                "repair_ordinal": ordinal,
+                "live_head_sha": live_head_sha,
+                "expected_pr_head_sha": expected_repair_baseline_sha,
+                "final_coordination_state": "changes-requested" if repair_kind == "reviewer_repair" else "agent-working",
+            })
+        except Exception:
+            pass
+        return False, "aborted_stale", {
+            "live_head_sha": live_head_sha,
+            "expected_repair_baseline_sha": expected_repair_baseline_sha,
+            "live_state": live_state,
+            "is_canonical": is_canonical,
+        }
+
     # 8. CAS transition if reviewer repair
     if repair_kind == "reviewer_repair":
         transitioned, trans_reason = cas_transition_coordination_state(
@@ -2707,20 +2752,75 @@ def get_pr_checks_status(repo: str, pr_number: int, head_sha: str = None, checks
     """
     if checks_data is None:
         gh_bin = shutil.which("gh") or "gh"
-        cmd = [gh_bin, "pr", "checks", str(pr_number), "--repo", repo, "--json", "name,state,bucket,description"]
-        code, stdout, stderr, timed_out = run_cmd(cmd, timeout=GITHUB_TIMEOUT_SECONDS)
-        if code != 0 or timed_out or not stdout.strip():
-            logger.warning(f"Could not fetch checks for PR #{pr_number}")
-            return {"status": "pending", "total_checks": 0, "completed_count": 0, "failed_check": None, "all_checks": []}
-        try:
-            checks_data = json.loads(stdout)
-        except json.JSONDecodeError:
-            return {"status": "pending", "total_checks": 0, "completed_count": 0, "failed_check": None, "all_checks": []}
+        if not head_sha and pr_number:
+            pr_dict = get_pull_request_details(repo, pr_number)
+            if pr_dict:
+                head_sha = ((pr_dict.get("head") or {}).get("sha"))
+
+        if head_sha:
+            cmd = [gh_bin, "api", f"repos/{repo}/commits/{head_sha}/check-runs?per_page=100"]
+            code, stdout, stderr, timed_out = run_cmd(cmd, timeout=GITHUB_TIMEOUT_SECONDS)
+            if code != 0 or timed_out or not stdout.strip():
+                logger.warning(f"Could not fetch check runs for commit {head_sha}")
+                return {"status": "pending", "total_checks": 0, "completed_count": 0, "failed_check": None, "all_checks": []}
+            try:
+                res = json.loads(stdout)
+                checks_data = res.get("check_runs", []) if isinstance(res, dict) else (res if isinstance(res, list) else [])
+            except json.JSONDecodeError:
+                return {"status": "pending", "total_checks": 0, "completed_count": 0, "failed_check": None, "all_checks": []}
+        else:
+            cmd = [gh_bin, "pr", "checks", str(pr_number), "--repo", repo, "--json", "name,state,bucket,description"]
+            code, stdout, stderr, timed_out = run_cmd(cmd, timeout=GITHUB_TIMEOUT_SECONDS)
+            if code != 0 or timed_out or not stdout.strip():
+                logger.warning(f"Could not fetch checks for PR #{pr_number}")
+                return {"status": "pending", "total_checks": 0, "completed_count": 0, "failed_check": None, "all_checks": []}
+            try:
+                checks_data = json.loads(stdout)
+            except json.JSONDecodeError:
+                return {"status": "pending", "total_checks": 0, "completed_count": 0, "failed_check": None, "all_checks": []}
 
     if not isinstance(checks_data, list):
         return {"status": "pending", "total_checks": 0, "completed_count": 0, "failed_check": None, "all_checks": []}
 
-    checks_by_name = {c.get("name"): c for c in checks_data if c.get("name")}
+    checks_by_name = {}
+    for c in checks_data:
+        name = c.get("name")
+        if not name:
+            continue
+        c_head = c.get("head_sha")
+        # If head_sha is specified and the check run specifies head_sha, require exact equality
+        if head_sha and c_head and not verify_exact_head_sha(c_head, head_sha):
+            continue
+        existing = checks_by_name.get(name)
+        if not existing:
+            checks_by_name[name] = c
+        else:
+            existing_id = existing.get("id") or 0
+            new_id = c.get("id") or 0
+            if new_id >= existing_id:
+                checks_by_name[name] = c
+
+    # Require all five named jobs to belong to head_sha before classifying or routing a repair
+    if head_sha:
+        for name in REQUIRED_CHECKS:
+            c = checks_by_name.get(name)
+            if not c:
+                return {
+                    "status": "pending",
+                    "total_checks": len(checks_data),
+                    "completed_count": 0,
+                    "failed_check": None,
+                    "all_checks": checks_data,
+                }
+            c_head = c.get("head_sha")
+            if c_head and not verify_exact_head_sha(c_head, head_sha):
+                return {
+                    "status": "pending",
+                    "total_checks": len(checks_data),
+                    "completed_count": 0,
+                    "failed_check": None,
+                    "all_checks": checks_data,
+                }
 
     # Check for any failures among check runs
     for name in REQUIRED_CHECKS:
@@ -2738,8 +2838,10 @@ def get_pr_checks_status(repo: str, pr_number: int, head_sha: str = None, checks
                     "status": "failure",
                     "total_checks": len(checks_data),
                     "completed_count": len([
-                        x for x in checks_data
-                        if (x.get("state") or "").upper() == "SUCCESS" or (x.get("bucket") or "").lower() == "pass"
+                        x for x in checks_by_name.values()
+                        if (x.get("state") or "").upper() == "SUCCESS"
+                        or (x.get("bucket") or "").lower() == "pass"
+                        or (x.get("conclusion") or "").lower() == "success"
                     ]),
                     "failed_check": c,
                     "all_checks": checks_data,

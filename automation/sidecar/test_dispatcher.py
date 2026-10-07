@@ -711,13 +711,20 @@ class ClosureV1DeterministicAcceptanceTests(unittest.TestCase):
         )
         self.assertTrue(self.ledger.is_repair_key_processed(key), "Processed repair key must be detected as duplicate")
 
+    @patch.object(dispatcher, "get_pull_request_details")
     @patch.object(dispatcher, "dispatch_agent")
     @patch.object(dispatcher, "get_issue_details")
-    def test_duplicate_failed_checks_deduplication(self, mock_details, mock_dispatch):
+    def test_duplicate_failed_checks_deduplication(self, mock_details, mock_dispatch, mock_pr_details):
         mock_details.return_value = {"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "agent-working"}]}
         mock_dispatch.return_value = {"launch_confirmed": True, "conversation_id": "test-uuid-1"}
 
         head_sha = "abcdef1234567890abcdef1234567890abcdef12"
+        mock_pr_details.return_value = {
+            "number": 15,
+            "state": "open",
+            "head": {"sha": head_sha, "ref": "agent/branch-1"},
+            "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+        }
         # First repair launch for failed check
         ok1, res1, meta1 = dispatcher.dispatch_automated_repair(
             repo="liuchangchxy/easy-exam",
@@ -750,14 +757,21 @@ class ClosureV1DeterministicAcceptanceTests(unittest.TestCase):
         self.assertFalse(ok2, "Duplicate failed check must be ignored")
         self.assertEqual(res2, "duplicate_repair_ignored")
 
+    @patch.object(dispatcher, "get_pull_request_details")
     @patch.object(dispatcher, "dispatch_agent")
     @patch.object(dispatcher, "cas_transition_coordination_state", return_value=(True, "transition_succeeded"))
     @patch.object(dispatcher, "get_issue_details")
-    def test_duplicate_review_deduplication(self, mock_details, mock_cas, mock_dispatch):
+    def test_duplicate_review_deduplication(self, mock_details, mock_cas, mock_dispatch, mock_pr_details):
         mock_details.return_value = {"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "changes-requested"}]}
         mock_dispatch.return_value = {"launch_confirmed": True, "conversation_id": "test-uuid-2"}
 
         rejected_sha = "9999888877776666555544443333222211110000"
+        mock_pr_details.return_value = {
+            "number": 15,
+            "state": "open",
+            "head": {"sha": rejected_sha, "ref": "agent/branch-2"},
+            "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+        }
         ok1, res1, _ = dispatcher.dispatch_automated_repair(
             repo="liuchangchxy/easy-exam",
             issue_number=35,
@@ -1109,6 +1123,7 @@ class ClosureV1ProductionPathIntegrationTests(unittest.TestCase):
         head_sha = "1111222233334444555566667777888899990000"
         mock_pr = {
             "number": 36,
+            "state": "open",
             "head": {"sha": head_sha, "ref": "agent/issue-35-closure"},
             "user": {"login": "chang-implementer[bot]", "type": "Bot"},
         }
@@ -1120,8 +1135,9 @@ class ClosureV1ProductionPathIntegrationTests(unittest.TestCase):
         }
 
         with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
-            with patch.object(dispatcher, "get_latest_changes_requested_review", return_value=mock_review):
-                dispatcher.poll_cycle()
+            with patch.object(dispatcher, "get_pull_request_details", return_value=mock_pr):
+                with patch.object(dispatcher, "get_latest_changes_requested_review", return_value=mock_review):
+                    dispatcher.poll_cycle()
 
         mock_cas.assert_called_once_with("liuchangchxy/easy-exam", 35, "changes-requested", "agent-working")
         mock_dispatch.assert_called_once()
@@ -1219,6 +1235,7 @@ class ClosureV1ProductionPathIntegrationTests(unittest.TestCase):
         head_sha = "1111222233334444555566667777888899990000"
         mock_pr = {
             "number": 36,
+            "state": "open",
             "head": {"sha": head_sha, "ref": "agent/issue-35-closure"},
             "user": {"login": "chang-implementer[bot]", "type": "Bot"},
         }
@@ -1230,18 +1247,19 @@ class ClosureV1ProductionPathIntegrationTests(unittest.TestCase):
         }
 
         with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
-            with patch.object(dispatcher, "get_latest_changes_requested_review", return_value=mock_review):
-                # Cycle 1: First launch succeeds
-                dispatcher.poll_cycle()
-                self.assertEqual(mock_dispatch.call_count, 1)
+            with patch.object(dispatcher, "get_pull_request_details", return_value=mock_pr):
+                with patch.object(dispatcher, "get_latest_changes_requested_review", return_value=mock_review):
+                    # Cycle 1: First launch succeeds
+                    dispatcher.poll_cycle()
+                    self.assertEqual(mock_dispatch.call_count, 1)
 
-                # Simulate release of issue lease or subsequent cycle with same head SHA
-                self.ledger.release_issue_lease("liuchangchxy/easy-exam", 35)
+                    # Simulate release of issue lease or subsequent cycle with same head SHA
+                    self.ledger.release_issue_lease("liuchangchxy/easy-exam", 35)
 
-                # Cycle 2: Duplicate review for same head SHA
-                dispatcher.poll_cycle()
-                # Dispatch count must NOT increase
-                self.assertEqual(mock_dispatch.call_count, 1)
+                    # Cycle 2: Duplicate review for same head SHA
+                    dispatcher.poll_cycle()
+                    # Dispatch count must NOT increase
+                    self.assertEqual(mock_dispatch.call_count, 1)
 
     @patch.object(dispatcher, "fail_closed_to_needs_human", return_value=True)
     @patch.object(dispatcher, "dispatch_agent")
@@ -1528,8 +1546,9 @@ class ClosureV1ProductionReachabilityTests(unittest.TestCase):
         }
 
         with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
-            with patch.object(dispatcher, "get_pr_checks_status", return_value={"status": "failure", "failed_check": failed_check}):
-                dispatcher.reconcile_closure_v1(repo, self.ledger)
+            with patch.object(dispatcher, "get_pull_request_details", return_value=mock_pr):
+                with patch.object(dispatcher, "get_pr_checks_status", return_value={"status": "failure", "failed_check": failed_check}):
+                    dispatcher.reconcile_closure_v1(repo, self.ledger)
 
         # Prior attempt marked repaired_ci_failure
         prior_att = self.ledger.get_attempt("att-ci-initial")
@@ -1585,9 +1604,10 @@ class ClosureV1ProductionReachabilityTests(unittest.TestCase):
         }
 
         with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
-            with patch.object(dispatcher, "get_latest_changes_requested_review", return_value=mock_cr):
-                with patch.object(dispatcher, "get_latest_approved_review", return_value=None):
-                    dispatcher.reconcile_closure_v1(repo, self.ledger)
+            with patch.object(dispatcher, "get_pull_request_details", return_value=mock_pr):
+                with patch.object(dispatcher, "get_latest_changes_requested_review", return_value=mock_cr):
+                    with patch.object(dispatcher, "get_latest_approved_review", return_value=None):
+                        dispatcher.reconcile_closure_v1(repo, self.ledger)
 
         # Prior attempt marked repaired_reviewer_changes_requested
         prior_att = self.ledger.get_attempt("att-cr-initial")
@@ -2320,6 +2340,276 @@ class ClosureV1WatchdogContinuousPollingAndHeadFencingTests(unittest.TestCase):
         att = self.ledger.get_attempt("att-neg-rev")
         self.assertEqual(att["phase"], "WAITING_REVIEW")
 
+    def test_get_pr_checks_status_queries_commit_sha_and_validates_required_jobs(self):
+        """
+        Verify that get_pr_checks_status binds to its head_sha argument, queries the
+        commit's check-runs API directly, and requires all 5 jobs on that SHA to succeed.
+        """
+        repo = "liuchangchxy/easy-exam"
+        pr_number = 100
+        target_sha = "1111222233334444555566667777888899990000"
+
+        mock_runs = [
+            {"name": name, "status": "completed", "conclusion": "success", "head_sha": target_sha, "id": i}
+            for i, name in enumerate(dispatcher.REQUIRED_CHECKS, 1)
+        ]
+        api_response = {"total_count": 5, "check_runs": mock_runs}
+
+        with patch.object(dispatcher, "run_cmd", return_value=(0, json.dumps(api_response), "", False)) as mock_cmd:
+            res = dispatcher.get_pr_checks_status(repo, pr_number, head_sha=target_sha)
+
+            # Proves it called commit check-runs endpoint rather than 'gh pr checks'
+            called_argv = mock_cmd.call_args[0][0]
+            self.assertIn("api", called_argv)
+            self.assertTrue(any(f"repos/{repo}/commits/{target_sha}/check-runs" in arg for arg in called_argv))
+
+            self.assertEqual(res["status"], "success")
+            self.assertEqual(res["completed_count"], 5)
+            self.assertIsNone(res["failed_check"])
+
+    def test_get_pr_checks_status_failure_on_exact_commit_sha(self):
+        """
+        Verify that a code failure among the 5 required checks on target_sha is identified as failure.
+        """
+        repo = "liuchangchxy/easy-exam"
+        pr_number = 100
+        target_sha = "1111222233334444555566667777888899990000"
+
+        mock_runs = []
+        for i, name in enumerate(dispatcher.REQUIRED_CHECKS, 1):
+            if name == "Backend & Packaging Tests":
+                mock_runs.append({"name": name, "status": "completed", "conclusion": "failure", "head_sha": target_sha, "id": i})
+            else:
+                mock_runs.append({"name": name, "status": "completed", "conclusion": "success", "head_sha": target_sha, "id": i})
+        api_response = {"total_count": 5, "check_runs": mock_runs}
+
+        with patch.object(dispatcher, "run_cmd", return_value=(0, json.dumps(api_response), "", False)):
+            res = dispatcher.get_pr_checks_status(repo, pr_number, head_sha=target_sha)
+            self.assertEqual(res["status"], "failure")
+            self.assertIsNotNone(res["failed_check"])
+            self.assertEqual(res["failed_check"]["name"], "Backend & Packaging Tests")
+
+    def test_get_pr_checks_status_requires_all_five_jobs_to_belong_to_head_sha(self):
+        """
+        Verify that if any of the five required jobs does not belong to target_sha (e.g. from
+        another SHA or missing), get_pr_checks_status returns pending and does not classify
+        success or failure.
+        """
+        repo = "liuchangchxy/easy-exam"
+        pr_number = 100
+        target_sha = "1111222233334444555566667777888899990000"
+        foreign_sha = "9999888877776666555544443333222211110000"
+
+        # Case 1: 4 jobs belong to target_sha, 1 job belongs to foreign_sha and failed
+        runs_mixed = []
+        for i, name in enumerate(dispatcher.REQUIRED_CHECKS, 1):
+            if name == "Backend & Packaging Tests":
+                runs_mixed.append({"name": name, "status": "completed", "conclusion": "failure", "head_sha": foreign_sha, "id": i})
+            else:
+                runs_mixed.append({"name": name, "status": "completed", "conclusion": "success", "head_sha": target_sha, "id": i})
+
+        res1 = dispatcher.get_pr_checks_status(repo, pr_number, head_sha=target_sha, checks_data=runs_mixed)
+        # Must NOT classify as failure because the failure is on foreign_sha!
+        self.assertEqual(res1["status"], "pending")
+        self.assertIsNone(res1["failed_check"])
+
+        # Case 2: Only 4 jobs registered (1 missing)
+        runs_partial = [
+            {"name": name, "status": "completed", "conclusion": "success", "head_sha": target_sha, "id": i}
+            for i, name in enumerate(dispatcher.REQUIRED_CHECKS[:4], 1)
+        ]
+        res2 = dispatcher.get_pr_checks_status(repo, pr_number, head_sha=target_sha, checks_data=runs_partial)
+        self.assertEqual(res2["status"], "pending")
+
+    @patch.object(dispatcher, "dispatch_agent")
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "agent-working"}]})
+    def test_production_path_ci_repair_race_head_change_aborts_repair(self, mock_details, mock_dispatch):
+        """
+        Production race test for CI repair: change the PR head after the lifecycle snapshot/check
+        read but before dispatch mutation boundary.
+        Proves:
+        - No Implementer launch
+        - Clean lease release
+        - No repair-key consumption for the new head
+        - Aborted-stale attempt recorded
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 310
+        pr_number = 110
+        old_head_sha = "aaaa111122223333444455556666777788889999"
+        new_head_sha = "bbbb111122223333444455556666777788889999"
+
+        ok, token, _ = self.ledger.acquire_lease(repo, issue_number, "worker-ci-race")
+        self.ledger.record_claim_intent(
+            repo, issue_number, "worker-ci-race", token, "att-ci-race", "initial_dispatch", "trig-ci-race",
+            pr_number=pr_number, branch="agent/race-ci", expected_pr_head_sha=old_head_sha
+        )
+        self.ledger.record_claimed("att-ci-race")
+        self.ledger.record_launch_confirmed("att-ci-race", "conv-ci-race")
+        self.ledger.record_phase("att-ci-race", "WAITING_CI", resulting_head_sha=old_head_sha)
+
+        mock_pr_old = {
+            "number": pr_number,
+            "state": "open",
+            "head": {"sha": old_head_sha, "ref": "agent/race-ci"},
+            "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+        }
+        mock_pr_new = {
+            "number": pr_number,
+            "state": "open",
+            "head": {"sha": new_head_sha, "ref": "agent/race-ci"},
+            "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+        }
+
+        # Snapshot sees mock_pr_old with a failing check
+        failed_check = {"name": "Backend & Packaging Tests", "state": "FAILURE", "bucket": "fail", "conclusion": "failure"}
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr_old)):
+            with patch.object(dispatcher, "get_pr_checks_status", return_value={"status": "failure", "failed_check": failed_check}):
+                # At mutation boundary, live PR read sees new_head_sha
+                with patch.object(dispatcher, "get_pull_request_details", return_value=mock_pr_new):
+                    dispatcher.reconcile_closure_v1(repo, self.ledger)
+
+        # 1. No Implementer launch
+        mock_dispatch.assert_not_called()
+
+        # 2. Clean lease release
+        self.assertIsNone(self.ledger.get_active_lease(repo, issue_number))
+
+        # 3. No repair-key consumption for the new head
+        new_key = dispatcher.compute_repair_key(repo, pr_number, new_head_sha)
+        self.assertFalse(self.ledger.is_repair_key_processed(new_key))
+
+        # 4. Repair attempt was recorded as aborted_stale
+        attempts = self.ledger.get_all_attempts_for_issue(repo, issue_number)
+        aborted_attempts = [a for a in attempts if a.get("outcome") == "aborted_stale"]
+        self.assertEqual(len(aborted_attempts), 1)
+
+    @patch.object(dispatcher, "cas_transition_coordination_state")
+    @patch.object(dispatcher, "dispatch_agent")
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "changes-requested"}]})
+    def test_production_path_reviewer_repair_race_head_change_aborts_repair(self, mock_details, mock_dispatch, mock_cas):
+        """
+        Production race test for Reviewer repair: change the PR head after the review read
+        but before dispatch mutation boundary.
+        Proves:
+        - No Implementer launch
+        - No changes-requested -> agent-working CAS transition
+        - Clean lease release
+        - No repair-key consumption for the new head
+        - Aborted-stale attempt recorded
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 311
+        pr_number = 111
+        old_head_sha = "cccc111122223333444455556666777788889999"
+        new_head_sha = "dddd111122223333444455556666777788889999"
+
+        ok, token, _ = self.ledger.acquire_lease(repo, issue_number, "worker-rev-race")
+        self.ledger.record_claim_intent(
+            repo, issue_number, "worker-rev-race", token, "att-rev-race", "initial_dispatch", "trig-rev-race",
+            pr_number=pr_number, branch="agent/race-rev", expected_pr_head_sha=old_head_sha
+        )
+        self.ledger.record_claimed("att-rev-race")
+        self.ledger.record_launch_confirmed("att-rev-race", "conv-rev-race")
+        self.ledger.record_phase("att-rev-race", "WAITING_REVIEW", resulting_head_sha=old_head_sha)
+
+        mock_pr_old = {
+            "number": pr_number,
+            "state": "open",
+            "head": {"sha": old_head_sha, "ref": "agent/race-rev"},
+            "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+        }
+        mock_pr_new = {
+            "number": pr_number,
+            "state": "open",
+            "head": {"sha": new_head_sha, "ref": "agent/race-rev"},
+            "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+        }
+
+        mock_cr = {
+            "id": 999,
+            "state": "CHANGES_REQUESTED",
+            "commit_id": old_head_sha,
+            "submitted_at": "2026-10-07T08:00:00Z",
+            "body": f"[easyexam-review:{old_head_sha}] please update logic",
+        }
+
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr_old)):
+            with patch.object(dispatcher, "get_latest_changes_requested_review", return_value=mock_cr):
+                with patch.object(dispatcher, "get_latest_approved_review", return_value=None):
+                    with patch.object(dispatcher, "get_pull_request_details", return_value=mock_pr_new):
+                        dispatcher.reconcile_closure_v1(repo, self.ledger)
+
+        # 1. No Implementer launch
+        mock_dispatch.assert_not_called()
+
+        # 2. No changes-requested -> agent-working transition
+        mock_cas.assert_not_called()
+
+        # 3. Clean lease release
+        self.assertIsNone(self.ledger.get_active_lease(repo, issue_number))
+
+        # 4. No repair-key consumption for the new head
+        new_key = dispatcher.compute_repair_key(repo, pr_number, new_head_sha)
+        self.assertFalse(self.ledger.is_repair_key_processed(new_key))
+
+        # 5. Stale repair attempt recorded as aborted_stale
+        attempts = self.ledger.get_all_attempts_for_issue(repo, issue_number)
+        aborted_attempts = [a for a in attempts if a.get("outcome") == "aborted_stale"]
+        self.assertEqual(len(aborted_attempts), 1)
+
+    @patch.object(dispatcher, "dispatch_agent")
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "agent-working"}]})
+    def test_dispatch_automated_repair_aborts_if_live_pr_closed_or_not_canonical(self, mock_details, mock_dispatch):
+        """
+        Verify that dispatch_automated_repair aborts if live PR is closed or has non-canonical author.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 312
+        pr_number = 112
+        head_sha = "eeee111122223333444455556666777788889999"
+
+        # 1. Closed PR
+        closed_pr = {
+            "number": pr_number,
+            "state": "closed",
+            "head": {"sha": head_sha},
+            "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+        }
+        ci_fail = {"name": "Backend & Packaging Tests", "conclusion": "failure"}
+        with patch.object(dispatcher, "get_pull_request_details", return_value=closed_pr):
+            ok1, res1, _ = dispatcher.dispatch_automated_repair(
+                repo=repo, issue_number=issue_number, pr_number=pr_number,
+                current_pr_head_sha=head_sha, expected_repair_baseline_sha=head_sha,
+                repair_kind="ci_repair", cause_type="ci_failure", cause_id="run-closed",
+                failure_detail=ci_fail,
+                ledger=self.ledger,
+            )
+            self.assertFalse(ok1)
+            self.assertEqual(res1, "aborted_stale")
+            self.assertIsNone(self.ledger.get_active_lease(repo, issue_number))
+
+        # 2. Non-canonical author
+        human_pr = {
+            "number": pr_number,
+            "state": "open",
+            "head": {"sha": head_sha},
+            "user": {"login": "some-human-user", "type": "User"},
+        }
+        with patch.object(dispatcher, "get_pull_request_details", return_value=human_pr):
+            ok2, res2, _ = dispatcher.dispatch_automated_repair(
+                repo=repo, issue_number=issue_number, pr_number=pr_number,
+                current_pr_head_sha=head_sha, expected_repair_baseline_sha=head_sha,
+                repair_kind="ci_repair", cause_type="ci_failure", cause_id="run-human",
+                failure_detail=ci_fail,
+                ledger=self.ledger,
+            )
+            self.assertFalse(ok2)
+            self.assertEqual(res2, "aborted_stale")
+            self.assertIsNone(self.ledger.get_active_lease(repo, issue_number))
+        mock_dispatch.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
+
