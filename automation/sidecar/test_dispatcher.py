@@ -1332,5 +1332,404 @@ class ClosureV1ProductionPathIntegrationTests(unittest.TestCase):
         self.assertEqual(chosen["commit_id"], "sha4")
 
 
+class ClosureV1ProductionReachabilityTests(unittest.TestCase):
+    """
+    Enforces the Production Reachability Rule:
+    'Any production lifecycle state must be reachable through a production entrypoint.
+     Directly seeding internal state in a test is not sufficient acceptance evidence.'
+
+    Each production lifecycle state (LAUNCH_CONFIRMED, PR_BOUND, WAITING_CI, WAITING_REVIEW,
+    WAITING_MERGE, terminal outcomes, automated repair dispatch) is reached through real
+    production entrypoints (poll_cycle() or reconcile_closure_v1()).
+    """
+
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.audit_path = Path(self.tmp_dir.name) / "dispatch_audit.jsonl"
+        self.audit_patcher = patch.object(dispatcher, "DISPATCH_AUDIT_PATH", self.audit_path)
+        self.audit_patcher.start()
+        self.ledger = dispatcher.ExecutionLedger(":memory:")
+        dispatcher.set_ledger(self.ledger)
+        dispatcher.CLAIM_BACKOFF_MAP.clear()
+
+        # Hermetic mocks for GitHub read calls
+        self.issue_details_patcher = patch.object(
+            dispatcher,
+            "get_issue_details",
+            side_effect=lambda repo, issue_num: {
+                "number": issue_num,
+                "state": "OPEN",
+                "labels": [{"name": "frozen-spec"}, {"name": "agent-working"}],
+            },
+        )
+        self.issue_details_patcher.start()
+
+        self.open_issues_patcher = patch.object(dispatcher, "get_open_issues", return_value=[])
+        self.open_issues_patcher.start()
+
+    def tearDown(self):
+        if hasattr(self, "open_issues_patcher") and self.open_issues_patcher:
+            self.open_issues_patcher.stop()
+        if hasattr(self, "issue_details_patcher") and self.issue_details_patcher:
+            self.issue_details_patcher.stop()
+        if hasattr(self, "audit_patcher") and self.audit_patcher:
+            self.audit_patcher.stop()
+        if hasattr(self, "tmp_dir") and self.tmp_dir:
+            self.tmp_dir.cleanup()
+        if hasattr(self, "ledger") and self.ledger:
+            self.ledger.close()
+        dispatcher.set_ledger(None)
+        dispatcher.CLAIM_BACKOFF_MAP.clear()
+
+    @patch.object(dispatcher, "dispatch_agent", return_value={"launch_confirmed": True, "conversation_id": "conv-zero-touch-100"})
+    @patch.object(dispatcher, "cas_transition_coordination_state", return_value=(True, "cas_ok"))
+    @patch.object(dispatcher, "execute_coordination_write", return_value=True)
+    def test_production_reachability_full_lifecycle_agent_ready_to_merged(
+        self, mock_write, mock_cas, mock_dispatch
+    ):
+        """
+        Step through complete production lifecycle through real entrypoints:
+        agent-ready (poll_cycle)
+        -> LAUNCH_CONFIRMED
+        -> PR_BOUND (reconcile_closure_v1)
+        -> WAITING_CI (reconcile_closure_v1)
+        -> WAITING_REVIEW (reconcile_closure_v1)
+        -> WAITING_MERGE (reconcile_closure_v1)
+        -> terminal merged_success (reconcile_closure_v1)
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 100
+        pr_number = 101
+        head_sha = "aabbccddeeff00112233445566778899aabbccdd"
+        branch = "agent/issue-100-test-lifecycle"
+
+        # 1. Reach LAUNCH_CONFIRMED via poll_cycle() on agent-ready
+        issue_details = {
+            "number": issue_number,
+            "title": "Full Lifecycle Task",
+            "state": "OPEN",
+            "labels": [{"name": "frozen-spec"}, {"name": "agent-ready"}],
+        }
+        with patch.object(dispatcher, "get_open_issues", return_value=[issue_details]):
+            with patch.object(dispatcher, "get_issue_details", return_value=issue_details):
+                dispatcher.poll_cycle()
+
+        mock_dispatch.assert_called_once()
+        active_lease = self.ledger.get_active_lease(repo, issue_number)
+        self.assertIsNotNone(active_lease, "Active lease must be held")
+        attempts = self.ledger.get_all_attempts_for_issue(repo, issue_number)
+        self.assertEqual(len(attempts), 1)
+        attempt_id = attempts[0]["attempt_id"]
+        att = self.ledger.get_attempt(attempt_id)
+        self.assertEqual(att["phase"], "LAUNCH_CONFIRMED")
+        self.assertEqual(att["launch_confirmed"], 1)
+
+        # 2. Reach PR_BOUND via reconcile_closure_v1() when PR is discovered
+        mock_pr = {
+            "number": pr_number,
+            "state": "open",
+            "head": {"sha": head_sha, "ref": branch},
+            "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+        }
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            dispatcher.reconcile_closure_v1(repo, self.ledger)
+
+        att = self.ledger.get_attempt(attempt_id)
+        self.assertEqual(att["phase"], "PR_BOUND")
+        self.assertEqual(att["pr_number"], pr_number)
+        self.assertEqual(att["branch"], branch)
+        self.assertEqual(att["resulting_head_sha"], head_sha)
+
+        # 3. Reach WAITING_CI via reconcile_closure_v1() when CI checks are pending
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "get_pr_checks_status", return_value={"status": "pending", "failed_check": None}):
+                dispatcher.reconcile_closure_v1(repo, self.ledger)
+
+        att = self.ledger.get_attempt(attempt_id)
+        self.assertEqual(att["phase"], "WAITING_CI")
+
+        # 4. Reach WAITING_REVIEW via reconcile_closure_v1() when all 5 checks succeed
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "get_pr_checks_status", return_value={"status": "success", "failed_check": None}):
+                dispatcher.reconcile_closure_v1(repo, self.ledger)
+
+        att = self.ledger.get_attempt(attempt_id)
+        self.assertEqual(att["phase"], "WAITING_REVIEW")
+
+        # 5. Reach WAITING_MERGE via reconcile_closure_v1() when review is APPROVED
+        mock_approved_review = {
+            "id": 5001,
+            "state": "APPROVED",
+            "commit_id": head_sha,
+            "submitted_at": "2026-10-07T06:00:00Z",
+        }
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "get_latest_changes_requested_review", return_value=None):
+                with patch.object(dispatcher, "get_latest_approved_review", return_value=mock_approved_review):
+                    dispatcher.reconcile_closure_v1(repo, self.ledger)
+
+        att = self.ledger.get_attempt(attempt_id)
+        self.assertEqual(att["phase"], "WAITING_MERGE")
+
+        # 6. Reach terminal merged_success via reconcile_closure_v1() when PR is merged
+        mock_merged_pr = {
+            "number": pr_number,
+            "state": "closed",
+            "merged": True,
+            "merged_at": "2026-10-07T06:05:00Z",
+            "head": {"sha": head_sha, "ref": branch},
+        }
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_merged_pr)):
+            dispatcher.reconcile_closure_v1(repo, self.ledger)
+
+        att = self.ledger.get_attempt(attempt_id)
+        self.assertEqual(att["outcome"], "merged_success")
+        self.assertEqual(att["resulting_head_sha"], head_sha)
+        self.assertIsNone(self.ledger.get_active_lease(repo, issue_number), "Lease must be released on terminal merge")
+
+    @patch.object(dispatcher, "dispatch_agent", return_value={"launch_confirmed": True, "conversation_id": "conv-repair-ci-1"})
+    @patch.object(dispatcher, "cas_transition_coordination_state", return_value=(True, "cas_ok"))
+    def test_production_reachability_ci_failure_automated_repair(self, mock_cas, mock_dispatch):
+        """
+        Verify that a code failure in CI reached via reconcile_closure_v1()
+        automatically dispatches CI automated repair #1, preserving unified budget.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 101
+        pr_number = 202
+        failed_sha = "1111222233334444555566667777888899990000"
+        branch = "agent/issue-101-ci-fail"
+
+        # Set up active attempt in WAITING_CI via normal ledger methods
+        ok, token, _ = self.ledger.acquire_lease(repo, issue_number, "worker-ci")
+        self.ledger.record_claim_intent(
+            repo=repo, issue_number=issue_number, owner_id="worker-ci", lease_token=token,
+            attempt_id="att-ci-initial", attempt_kind="initial_dispatch", trigger_key="trig-ci",
+            pr_number=pr_number, branch=branch, expected_pr_head_sha=failed_sha
+        )
+        self.ledger.record_claimed("att-ci-initial")
+        self.ledger.record_launch_confirmed("att-ci-initial", "conv-ci-0")
+        self.ledger.record_pr_bound("att-ci-initial", pr_number, branch, failed_sha)
+        self.ledger.record_phase("att-ci-initial", "WAITING_CI", failed_sha)
+
+        mock_pr = {
+            "number": pr_number,
+            "state": "open",
+            "head": {"sha": failed_sha, "ref": branch},
+            "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+        }
+        failed_check = {
+            "name": "Backend & Packaging Tests",
+            "state": "FAILURE",
+            "bucket": "fail",
+            "conclusion": "failure",
+            "description": "test failure in test_cases.py",
+        }
+
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "get_pr_checks_status", return_value={"status": "failure", "failed_check": failed_check}):
+                dispatcher.reconcile_closure_v1(repo, self.ledger)
+
+        # Prior attempt marked repaired_ci_failure
+        prior_att = self.ledger.get_attempt("att-ci-initial")
+        self.assertEqual(prior_att["outcome"], "repaired_ci_failure")
+
+        # New repair attempt dispatched
+        mock_dispatch.assert_called_once()
+        rep_count = self.ledger.get_repair_count(repo, pr_number)
+        self.assertEqual(rep_count, 1)
+
+        attempts = self.ledger.get_all_attempts_for_issue(repo, issue_number)
+        self.assertEqual(len(attempts), 2)
+        repair_att = attempts[1]
+        self.assertEqual(repair_att["attempt_kind"], "ci_repair")
+        self.assertEqual(repair_att["repair_ordinal"], 1)
+        self.assertEqual(repair_att["repair_cause_type"], "ci_failure")
+
+    @patch.object(dispatcher, "dispatch_agent", return_value={"launch_confirmed": True, "conversation_id": "conv-repair-cr-1"})
+    @patch.object(dispatcher, "cas_transition_coordination_state", return_value=(True, "cas_ok"))
+    def test_production_reachability_reviewer_changes_requested_repair(self, mock_cas, mock_dispatch):
+        """
+        Verify that Reviewer REQUEST_CHANGES reached via reconcile_closure_v1()
+        automatically dispatches Reviewer automated repair #1, preserving unified budget.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 104
+        pr_number = 204
+        head_sha = "4444555566667777888899990000111122223333"
+        branch = "agent/issue-104-cr"
+
+        ok, token, _ = self.ledger.acquire_lease(repo, issue_number, "worker-cr")
+        self.ledger.record_claim_intent(
+            repo=repo, issue_number=issue_number, owner_id="worker-cr", lease_token=token,
+            attempt_id="att-cr-initial", attempt_kind="initial_dispatch", trigger_key="trig-cr",
+            pr_number=pr_number, branch=branch, expected_pr_head_sha=head_sha
+        )
+        self.ledger.record_claimed("att-cr-initial")
+        self.ledger.record_launch_confirmed("att-cr-initial", "conv-cr-0")
+        self.ledger.record_phase("att-cr-initial", "WAITING_REVIEW", head_sha)
+
+        mock_pr = {
+            "number": pr_number,
+            "state": "open",
+            "head": {"sha": head_sha, "ref": branch},
+            "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+        }
+        mock_cr = {
+            "id": 9001,
+            "state": "CHANGES_REQUESTED",
+            "commit_id": head_sha,
+            "submitted_at": "2026-10-07T07:00:00Z",
+            "body": "[easyexam-review:" + head_sha + "] please fix invariant",
+        }
+
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "get_latest_changes_requested_review", return_value=mock_cr):
+                with patch.object(dispatcher, "get_latest_approved_review", return_value=None):
+                    dispatcher.reconcile_closure_v1(repo, self.ledger)
+
+        # Prior attempt marked repaired_reviewer_changes_requested
+        prior_att = self.ledger.get_attempt("att-cr-initial")
+        self.assertEqual(prior_att["outcome"], "repaired_reviewer_changes_requested")
+
+        # New repair attempt dispatched
+        mock_dispatch.assert_called_once()
+        rep_count = self.ledger.get_repair_count(repo, pr_number)
+        self.assertEqual(rep_count, 1)
+
+        attempts = self.ledger.get_all_attempts_for_issue(repo, issue_number)
+        self.assertEqual(len(attempts), 2)
+        repair_att = attempts[1]
+        self.assertEqual(repair_att["attempt_kind"], "reviewer_repair")
+        self.assertEqual(repair_att["repair_ordinal"], 1)
+        self.assertEqual(repair_att["repair_cause_type"], "changes_requested")
+
+    @patch.object(dispatcher, "fail_closed_to_infra_blocked", return_value=True)
+    def test_production_reachability_ci_infra_failure_to_infra_blocked(self, mock_infra):
+        """
+        Verify that an infrastructure CI failure via reconcile_closure_v1()
+        transitions to infra-blocked without consuming repair budget.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 102
+        pr_number = 203
+        sha = "3333444455556666777788889999000011112222"
+
+        ok, token, _ = self.ledger.acquire_lease(repo, issue_number, "worker-infra")
+        self.ledger.record_claim_intent(
+            repo=repo, issue_number=issue_number, owner_id="worker-infra", lease_token=token,
+            attempt_id="att-infra-fail", attempt_kind="initial_dispatch", trigger_key="trig-infra",
+            pr_number=pr_number, branch="agent/issue-102", expected_pr_head_sha=sha
+        )
+        self.ledger.record_claimed("att-infra-fail")
+        self.ledger.record_launch_confirmed("att-infra-fail", "conv-infra-0")
+        self.ledger.record_phase("att-infra-fail", "WAITING_CI", sha)
+
+        mock_pr = {"number": pr_number, "state": "open", "head": {"sha": sha, "ref": "agent/issue-102"}}
+        infra_check = {
+            "name": "Backend & Packaging Tests",
+            "state": "ERROR",
+            "bucket": "error",
+            "description": "runner lost communication with the server system_error",
+        }
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "get_pr_checks_status", return_value={"status": "failure", "failed_check": infra_check}):
+                dispatcher.reconcile_closure_v1(repo, self.ledger)
+
+        mock_infra.assert_called_once()
+        att = self.ledger.get_attempt("att-infra-fail")
+        self.assertEqual(att["outcome"], "infra_failure_blocked")
+        self.assertEqual(self.ledger.get_repair_count(repo, pr_number), 0)
+        self.assertIsNone(self.ledger.get_active_lease(repo, issue_number))
+
+    @patch.object(dispatcher, "fail_closed_to_needs_human", return_value=True)
+    def test_production_reachability_watchdog_timeout_waiting_review(self, mock_needs_human):
+        """
+        Verify that watchdog timeout during WAITING_REVIEW in reconcile_closure_v1()
+        transitions to needs-human.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 105
+        old_time = "2026-10-07T00:00:00+00:00"
+
+        ok, token, _ = self.ledger.acquire_lease(repo, issue_number, "worker-watchdog")
+        self.ledger.record_claim_intent(
+            repo=repo, issue_number=issue_number, owner_id="worker-watchdog", lease_token=token,
+            attempt_id="att-review-watchdog", attempt_kind="initial_dispatch", trigger_key="trig-wd",
+        )
+        self.ledger.record_claimed("att-review-watchdog")
+        self.ledger.record_launch_confirmed("att-review-watchdog", "conv-wd")
+        self.ledger.record_phase("att-review-watchdog", "WAITING_REVIEW")
+
+        with self.ledger._get_connection() as conn:
+            conn.execute("UPDATE execution_ledger SET updated_at = ?, heartbeat_at = ?", (old_time, old_time))
+            conn.commit()
+
+        mock_pr = {"number": 205, "state": "open", "head": {"sha": "sha-wd", "ref": "agent/branch"}}
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "get_latest_changes_requested_review", return_value=None):
+                with patch.object(dispatcher, "get_latest_approved_review", return_value=None):
+                    with patch("time.time", return_value=datetime.fromisoformat("2026-10-07T00:35:00+00:00").timestamp()):
+                        dispatcher.reconcile_closure_v1(repo, self.ledger)
+
+        mock_needs_human.assert_called_once()
+        att = self.ledger.get_attempt("att-review-watchdog")
+        self.assertEqual(att["outcome"], "timeout_needs_human")
+        self.assertIsNone(self.ledger.get_active_lease(repo, issue_number))
+
+    def test_production_reachability_cancellation_fencing(self):
+        """
+        Verify that cancellation fencing (issue closed or tagged needs-human)
+        terminates active work and releases lease via reconcile_closure_v1().
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 103
+
+        ok, token, _ = self.ledger.acquire_lease(repo, issue_number, "worker-cancel")
+        self.ledger.record_claim_intent(
+            repo=repo, issue_number=issue_number, owner_id="worker-cancel", lease_token=token,
+            attempt_id="att-cancel", attempt_kind="initial_dispatch", trigger_key="trig-cancel",
+        )
+        self.ledger.record_launch_confirmed("att-cancel", "conv-cancel-0")
+
+        # GitHub issue now has needs-human label
+        cancelled_issue = {
+            "number": issue_number,
+            "state": "OPEN",
+            "labels": [{"name": "frozen-spec"}, {"name": "needs-human"}],
+        }
+        with patch.object(dispatcher, "get_issue_details", return_value=cancelled_issue):
+            dispatcher.reconcile_closure_v1(repo, self.ledger)
+
+        att = self.ledger.get_attempt("att-cancel")
+        self.assertTrue(att["outcome"].startswith("cancelled_"))
+        self.assertIsNone(self.ledger.get_active_lease(repo, issue_number))
+
+    def test_hardened_repair_contract_prompts(self):
+        """
+        Verify repair prompt generation contract hardening:
+        - Review/CI finding = minimum known defect, not maximum repair scope
+        - 6 mandatory rules present
+        - Escalation levels 1, 2, 3
+        - MAX_AUTOMATED_REPAIRS = 3
+        """
+        p1 = dispatcher.build_repair_contract_section(1, "changes_requested")
+        self.assertIn("minimum known defect, not maximum repair scope", p1)
+        self.assertIn("Repair #1 升级强度要求", p1)
+        self.assertIn("深入排查根本原因（Root Cause）", p1)
+        self.assertIn("MAX_AUTOMATED_REPAIRS = 3", p1)
+        for i in range(1, 7):
+            self.assertIn(f"{i}. ", p1)
+
+        p2 = dispatcher.build_repair_contract_section(2, "changes_requested")
+        self.assertIn("Repair #2 升级强度要求", p2)
+        self.assertIn("受影响子系统（Affected subsystem）进行穷尽式全路径审计", p2)
+
+        p3 = dispatcher.build_repair_contract_section(3, "ci_failure")
+        self.assertIn("Repair #3 升级强度要求", p3)
+        self.assertIn("最后一次自动化修复机会", p3)
+        self.assertIn("CI failure finding = minimum known defect", p3)
+
+
 if __name__ == "__main__":
     unittest.main()

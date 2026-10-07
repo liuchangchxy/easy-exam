@@ -227,8 +227,9 @@ def classify_ci_failure(failure_info: dict) -> tuple[str, str]:
     conclusion = str(failure_info.get("conclusion") or "").lower()
     output = str(failure_info.get("output") or failure_info.get("message") or failure_info.get("title") or "").lower()
     log_snippet = str(failure_info.get("log_snippet") or failure_info.get("details") or "").lower()
+    description = str(failure_info.get("description") or "").lower()
 
-    combined = f"{name} {conclusion} {output} {log_snippet}"
+    combined = f"{name} {conclusion} {output} {log_snippet} {description}"
 
     # Infrastructure failures
     infra_markers = [
@@ -777,6 +778,61 @@ class ExecutionLedger:
                 )
             return [dict(r) for r in cur.fetchall()]
 
+    def record_phase(self, attempt_id: str, phase: str, resulting_head_sha: str = None) -> bool:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE execution_ledger
+                SET phase = ?,
+                    resulting_head_sha = COALESCE(?, resulting_head_sha),
+                    updated_at = ?, heartbeat_at = ?
+                WHERE attempt_id = ?
+                """,
+                (phase, resulting_head_sha, now_iso, now_iso, attempt_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+
+    def update_heartbeat(self, attempt_id: str) -> bool:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE execution_ledger SET heartbeat_at = ?, updated_at = ? WHERE attempt_id = ?",
+                (now_iso, now_iso, attempt_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+
+    def renew_issue_lease(self, repo: str, issue_number: int, ttl_seconds: float = DEFAULT_LEASE_TTL_SECONDS) -> bool:
+        now = time.time()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        expires_iso = datetime.fromtimestamp(now + ttl_seconds, tz=timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE active_leases SET expires_at = ?, heartbeat_at = ? WHERE repo = ? AND issue_number = ?",
+                (expires_iso, now_iso, repo, issue_number),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+
+    def get_active_attempt_for_issue(self, repo: str, issue_number: int) -> dict | None:
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT * FROM execution_ledger
+                WHERE repo = ? AND issue_number = ? AND phase != 'EXECUTION_OUTCOME' AND outcome = 'in_progress'
+                ORDER BY id DESC LIMIT 1
+                """,
+                (repo, issue_number),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+
     def close(self):
         if hasattr(self, "_conn") and self._conn:
             self._conn.close()
@@ -982,8 +1038,17 @@ def dispatch_automated_repair(
 
     # 9. Launch Agent
     title = (issue_details or {}).get("title", "")
-    source_label = "changes-requested" if repair_kind == "reviewer_repair" else "agent-working"
-    launch_result = dispatch_agent(repo, EASYEXAM_REPO_PATH, issue_number, title, source_label)
+    source_label = "changes-requested" if repair_kind == "reviewer_repair" else "ci-repair"
+    launch_result = dispatch_agent(
+        repo,
+        EASYEXAM_REPO_PATH,
+        issue_number,
+        title,
+        source_label,
+        repair_ordinal=ordinal,
+        repair_kind=repair_kind,
+        failure_detail=failure_detail,
+    )
 
     if launch_result.get("launch_confirmed") and launch_result.get("conversation_id"):
         conv_id = launch_result["conversation_id"]
@@ -1858,7 +1923,82 @@ NEXT_ACTION: Hand back to Work / Architect for formal review of new SHA.
     return prompt.strip()
 
 
-def render_dispatch_prompt(issue, issue_title=None, source_label="agent-ready", repo=None, repo_path=None):
+def build_repair_contract_section(repair_ordinal: int, cause_type: str = "changes_requested", failure_detail: dict = None) -> str:
+    """
+    Construct hardened repair contract section for repair prompts matching Frozen Spec Section 7.
+    Enforces:
+    - Review finding / CI finding = minimum known defect, not maximum repair scope.
+    - 6 mandatory repair rules (root cause, adjacent invariants, sibling paths, prior reviews, no regressions, reachability audit).
+    - Repair escalation intensity (Repair #1, #2, #3).
+    - MAX_AUTOMATED_REPAIRS = 3 budget reminder.
+    """
+    ordinal = max(1, int(repair_ordinal or 1))
+    if ordinal == 1:
+        intensity_title = "Repair #1 升级强度要求（Root Cause & Adjacent Invariants）"
+        intensity_scope = (
+            "- 必须深入排查根本原因（Root Cause），严禁停留于表面 symptom；\n"
+            "- 全面核查直接相邻的 Frozen Spec 不变量（Directly adjacent invariants）；\n"
+            "- 严禁仅修改 Reviewer/CI 报错行。"
+        )
+    elif ordinal == 2:
+        intensity_title = "Repair #2 升级强度要求（Affected Subsystem Exhaustive Audit）"
+        intensity_scope = (
+            "- 对受影响子系统（Affected subsystem）进行穷尽式全路径审计；\n"
+            "- 核查所有兄弟生产路径（Sibling production paths）、状态生产/消费闭环；\n"
+            "- 必须严格回读并验证所有历史 Review findings，防止多轮修复自相矛盾。"
+        )
+    else:
+        intensity_title = "Repair #3 升级强度要求（Last-Chance Full Frozen Spec Acceptance Matrix）"
+        intensity_scope = (
+            "- 这是最后一次自动化修复机会（MAX_AUTOMATED_REPAIRS = 3，绝无 Repair #4）；\n"
+            "- 针对所有受重大影响的 Closure requirements 重新生成完整的验收矩阵；\n"
+            "- 逐条核验 requirement -> production evidence -> test evidence，确保终局收敛。"
+        )
+
+    finding_name = "CI failure finding" if cause_type == "ci_failure" else "Review finding"
+    detail_line = ""
+    if failure_detail:
+        detail_name = failure_detail.get("name") or failure_detail.get("title") or failure_detail.get("id") or ""
+        if detail_name:
+            detail_line = f"当前点名缺陷信息：`{detail_name}`\n"
+
+    return f"""====================================================
+【强制修复契约】FROZEN SPEC REPAIR CONTRACT (ROUND #{ordinal})
+====================================================
+
+【核心审计原则】：
+{finding_name} = minimum known defect, not maximum repair scope.
+Reviewer / CI 反馈是指出的最低已知缺陷，绝不是完整修复范围的上限！
+{detail_line}
+每次修复必须严格满足以下 6 项要求：
+1. 深入排查并根治 Root Cause，严禁停留于表面 symptom 掩盖；
+2. 检查相邻 Frozen Spec requirements，确保边缘情况与相邻语义完全一致；
+3. 检查所有兄弟生产路径（sibling production paths），消除同类缺陷或遗留假实现；
+4. 完整读取并核验所有 prior Review findings，确保不破坏前几轮的修复成果；
+5. 不允许修复当前点同时破坏前一轮修复（Zero Regressions across all prior rounds）；
+6. 在 push 前必须完成 production caller / state reachability 审计，确保所有生产状态与方法具备真实调用路径。
+
+====================
+{intensity_title}
+====================
+{intensity_scope}
+
+【预算与阻断红线】：
+- 当前统一自动化修复预算为 MAX_AUTOMATED_REPAIRS = 3。
+- 当前轮次：Repair #{ordinal}。
+- 绝无 Repair #4。若本轮未能根治或超出预算，必须 fail-closed 切换至 needs-human。"""
+
+
+def render_dispatch_prompt(
+    issue,
+    issue_title=None,
+    source_label="agent-ready",
+    repo=None,
+    repo_path=None,
+    repair_ordinal=0,
+    repair_kind=None,
+    failure_detail=None,
+):
     """
     Render dispatch prompt for an issue without changing labels, claiming, or launching an agent.
     Accepts either an issue dict or an integer issue number.
@@ -1875,10 +2015,28 @@ def render_dispatch_prompt(issue, issue_title=None, source_label="agent-ready", 
         issue_number = int(issue)
         title = issue_title or f"Issue #{issue_number}"
         src_label = source_label
-    return build_implementer_prompt(repo, repo_path, issue_number, title, src_label)
+    return build_implementer_prompt(
+        repo,
+        repo_path,
+        issue_number,
+        title,
+        src_label,
+        repair_ordinal=repair_ordinal,
+        repair_kind=repair_kind,
+        failure_detail=failure_detail,
+    )
 
 
-def build_implementer_prompt(repo, repo_path, issue_number, issue_title, source_label):
+def build_implementer_prompt(
+    repo,
+    repo_path,
+    issue_number,
+    issue_title,
+    source_label,
+    repair_ordinal=0,
+    repair_kind=None,
+    failure_detail=None,
+):
     """Construct complete Implementer prompt for agentapi new-conversation."""
     recovery_spec = get_recovery_spec(issue_number)
     if recovery_spec is not None:
@@ -1890,11 +2048,24 @@ def build_implementer_prompt(repo, repo_path, issue_number, issue_title, source_
             repo, repo_path, issue_number, issue_title, source_label, recovery_spec
         )
 
+    repair_section = ""
+    is_repair = source_label in ("changes-requested", "ci-repair") or repair_ordinal > 0
+    if is_repair:
+        repair_section = "\n\n" + build_repair_contract_section(
+            repair_ordinal=repair_ordinal or 1,
+            cause_type="ci_failure" if (source_label == "ci-repair" or repair_kind == "ci_repair") else "changes_requested",
+            failure_detail=failure_detail,
+        )
+
     review_context = (
         f"本次触发来源为 changes-requested。\n"
         f"请在开始前完整读取 Issue #{issue_number} 及其关联 PR 最新正式 CHANGES_REQUESTED Review，\n"
         f"只处理其中与 Frozen Spec 直接相关的事项。"
         if source_label == "changes-requested"
+        else f"本次触发来源为 ci-repair。\n"
+        f"请在开始前完整读取 Issue #{issue_number} 及其关联 PR 失败的 CI Check Runs，\n"
+        f"只修复与本次实现相关的代码/测试缺陷。"
+        if source_label == "ci-repair"
         else f"本次触发来源为 agent-ready。\n"
         f"请在开始前完整读取 Issue #{issue_number} 的正文及 Frozen Spec。"
     )
@@ -1911,7 +2082,7 @@ Issue #{issue_number}: {issue_title}
 触发来源：{source_label}
 协调状态：dispatcher 已将协调状态切换为 agent-working。
 
-{review_context}
+{review_context}{repair_section}
 
 你的唯一职责是实现 GitHub 中已经冻结并明确交给你的任务。
 GitHub Issue、PR、Labels、Checks 是唯一事实源。
@@ -2160,13 +2331,29 @@ def build_implementer_environment(repo):
     return child_env, metadata
 
 
-def dispatch_agent(repo, repo_path, issue_number, issue_title, source_label):
+def dispatch_agent(
+    repo,
+    repo_path,
+    issue_number,
+    issue_title,
+    source_label,
+    repair_ordinal=0,
+    repair_kind=None,
+    failure_detail=None,
+):
     """
     Launch a new Antigravity implementer conversation via safe argv list.
     Syntax: agentapi new-conversation [--model=...] [--title=...] <prompt>
     """
     prompt = build_implementer_prompt(
-        repo, repo_path, issue_number, issue_title, source_label
+        repo,
+        repo_path,
+        issue_number,
+        issue_title,
+        source_label,
+        repair_ordinal=repair_ordinal,
+        repair_kind=repair_kind,
+        failure_detail=failure_detail,
     )
     cmd_prefix = get_agentapi_cmd_prefix()
     recovery_spec = get_recovery_spec(issue_number)
@@ -2174,8 +2361,9 @@ def dispatch_agent(repo, repo_path, issue_number, issue_title, source_label):
         title = f"Repair Implementer: Issue #{issue_number} ({source_label})"
     elif recovery_spec is not None:
         title = f"Recovery Implementer: Issue #{issue_number} ({source_label})"
-    elif source_label == "changes-requested":
-        title = f"Repair Implementer: Issue #{issue_number} ({source_label})"
+    elif source_label in ("changes-requested", "ci-repair") or repair_ordinal > 0:
+        ord_str = f" #{repair_ordinal}" if repair_ordinal else ""
+        title = f"Repair Implementer{ord_str}: Issue #{issue_number} ({source_label})"
     else:
         title = f"Implementer: Issue #{issue_number} ({source_label})"
 
@@ -2387,10 +2575,609 @@ def reconcile_incomplete_dispatches(repo):
     return reconciliation_ok
 
 
+REQUIRED_CHECKS = [
+    "Whitespace & Guard Checks",
+    "Backend & Packaging Tests",
+    "Frontend Unit & Build Tests",
+    "Browser E2E Tests",
+    "Mobile Interaction E2E",
+]
+
+
+def get_pull_request_details(repo: str, pr_number: int, pr_dict: dict = None) -> dict | None:
+    """Fetch PR details using canonical GitHub REST API or return provided test data."""
+    if pr_dict is not None:
+        return pr_dict
+    gh_bin = shutil.which("gh") or "gh"
+    cmd = [gh_bin, "api", f"repos/{repo}/pulls/{pr_number}"]
+    code, stdout, stderr, timed_out = run_cmd(cmd, timeout=GITHUB_TIMEOUT_SECONDS)
+    if code != 0 or timed_out or not stdout.strip():
+        logger.warning(f"Could not fetch details for PR #{pr_number}")
+        return None
+    try:
+        return json.loads(stdout)
+    except json.JSONDecodeError:
+        logger.warning(f"Could not parse details JSON for PR #{pr_number}")
+        return None
+
+
+def get_pr_checks_status(repo: str, pr_number: int, head_sha: str = None, checks_data: list[dict] = None) -> dict:
+    """
+    Query check runs for the PR or commit head.
+    Returns:
+    {
+        "status": "pending" | "success" | "failure",
+        "total_checks": int,
+        "completed_count": int,
+        "failed_check": dict | None,
+        "all_checks": list[dict],
+    }
+    """
+    if checks_data is None:
+        gh_bin = shutil.which("gh") or "gh"
+        cmd = [gh_bin, "pr", "checks", str(pr_number), "--repo", repo, "--json", "name,state,bucket,description"]
+        code, stdout, stderr, timed_out = run_cmd(cmd, timeout=GITHUB_TIMEOUT_SECONDS)
+        if code != 0 or timed_out or not stdout.strip():
+            logger.warning(f"Could not fetch checks for PR #{pr_number}")
+            return {"status": "pending", "total_checks": 0, "completed_count": 0, "failed_check": None, "all_checks": []}
+        try:
+            checks_data = json.loads(stdout)
+        except json.JSONDecodeError:
+            return {"status": "pending", "total_checks": 0, "completed_count": 0, "failed_check": None, "all_checks": []}
+
+    if not isinstance(checks_data, list):
+        return {"status": "pending", "total_checks": 0, "completed_count": 0, "failed_check": None, "all_checks": []}
+
+    checks_by_name = {c.get("name"): c for c in checks_data if c.get("name")}
+
+    # Check for any failures among check runs
+    for name in REQUIRED_CHECKS:
+        c = checks_by_name.get(name)
+        if c:
+            state = str(c.get("state") or "").upper()
+            bucket = str(c.get("bucket") or "").lower()
+            conclusion = str(c.get("conclusion") or "").lower()
+            if (
+                bucket in ("fail", "error")
+                or state in ("FAILURE", "ERROR", "TIMED_OUT", "ACTION_REQUIRED")
+                or conclusion in ("failure", "timed_out", "action_required")
+            ):
+                return {
+                    "status": "failure",
+                    "total_checks": len(checks_data),
+                    "completed_count": len([
+                        x for x in checks_data
+                        if (x.get("state") or "").upper() == "SUCCESS" or (x.get("bucket") or "").lower() == "pass"
+                    ]),
+                    "failed_check": c,
+                    "all_checks": checks_data,
+                }
+
+    # Check if all 5 required checks are completed and successful
+    completed_required = 0
+    for name in REQUIRED_CHECKS:
+        c = checks_by_name.get(name)
+        if c:
+            state = str(c.get("state") or "").upper()
+            bucket = str(c.get("bucket") or "").lower()
+            conclusion = str(c.get("conclusion") or "").lower()
+            if bucket == "pass" or state == "SUCCESS" or conclusion == "success":
+                completed_required += 1
+
+    if completed_required >= len(REQUIRED_CHECKS):
+        return {
+            "status": "success",
+            "total_checks": len(checks_data),
+            "completed_count": completed_required,
+            "failed_check": None,
+            "all_checks": checks_data,
+        }
+
+    return {
+        "status": "pending",
+        "total_checks": len(checks_data),
+        "completed_count": completed_required,
+        "failed_check": None,
+        "all_checks": checks_data,
+    }
+
+
+def get_latest_approved_review(repo: str, pr_number: int, reviews_list: list[dict] = None) -> dict | None:
+    """Fetch reviews and return latest APPROVED review if no subsequent CHANGES_REQUESTED review exists."""
+    if reviews_list is None:
+        gh_bin = shutil.which("gh") or "gh"
+        cmd = [gh_bin, "api", f"repos/{repo}/pulls/{pr_number}/reviews", "--paginate"]
+        code, stdout, stderr, timed_out = run_cmd(cmd, timeout=GITHUB_TIMEOUT_SECONDS)
+        if code != 0 or timed_out or not stdout.strip():
+            logger.error(f"Failed to fetch reviews for PR #{pr_number}: {stderr}")
+            return None
+        try:
+            reviews_list = json.loads(stdout)
+        except json.JSONDecodeError:
+            return None
+
+    if not isinstance(reviews_list, list):
+        return None
+
+    valid_reviews = [r for r in reviews_list if r.get("state") in ("APPROVED", "CHANGES_REQUESTED")]
+    if not valid_reviews:
+        return None
+    valid_reviews.sort(key=lambda r: (r.get("submitted_at") or "", r.get("id") or 0))
+    latest = valid_reviews[-1]
+    if latest.get("state") == "APPROVED":
+        return latest
+    return None
+
+
+def complete_terminal_merge(
+    repo: str,
+    issue_number: int,
+    attempt_id: str,
+    lease_token: str = None,
+    resulting_head_sha: str = None,
+    ledger: ExecutionLedger = None,
+) -> bool:
+    """
+    Handle terminal merge completion:
+    Record outcome 'merged_success', release ownership lease, and clean up active coordination labels.
+    """
+    ledger = ledger or get_ledger()
+    ledger.record_outcome(attempt_id, "merged_success", resulting_head_sha=resulting_head_sha)
+    if lease_token:
+        ledger.release_lease(lease_token)
+    else:
+        ledger.release_issue_lease(repo, issue_number)
+
+    logger.info(
+        f"Terminal closure SUCCESS for Issue #{issue_number} (attempt {attempt_id}): PR merged with SHA {resulting_head_sha}"
+    )
+
+    details = get_issue_details(repo, issue_number)
+    labels = {
+        l.get("name") if isinstance(l, dict) else str(l)
+        for l in (details or {}).get("labels", [])
+    }
+    remove_labels = [l for l in ("agent-working", "changes-requested", "agent-ready") if l in labels]
+    if remove_labels:
+        cmd_edit = ["issue", "edit", str(issue_number), "--repo", repo]
+        for rl in remove_labels:
+            cmd_edit.extend(["--remove-label", rl])
+        execute_coordination_write(cmd_edit, repo=repo)
+
+    return True
+
+
+def advance_active_lifecycle(
+    repo: str,
+    attempt: dict,
+    ledger: ExecutionLedger = None,
+    issue_details: dict = None,
+    pr_details: dict = None,
+    checks_data: list[dict] = None,
+    reviews_list: list[dict] = None,
+) -> tuple[bool, str]:
+    """
+    Advance the durable lifecycle of an active attempt based on GitHub and runtime state.
+    Covers the full production lifecycle:
+    LAUNCH_CONFIRMED -> PR_BOUND -> WAITING_CI -> WAITING_REVIEW -> WAITING_MERGE -> terminal outcome.
+    Renews active lease and updates heartbeat when progress is observed.
+    Evaluates watchdog timeouts when stalled.
+    """
+    ledger = ledger or get_ledger()
+    issue_number = attempt.get("issue_number")
+    attempt_id = attempt.get("attempt_id")
+    lease_token = attempt.get("lease_token")
+    phase = attempt.get("phase")
+
+    if not issue_number or not attempt_id:
+        return False, "invalid_attempt_record"
+
+    # Cancellation fencing check
+    if issue_details is None:
+        try:
+            issue_details = get_issue_details(repo, issue_number)
+        except Exception:
+            issue_details = None
+
+    if issue_details:
+        is_cancelled, cancel_reason = check_cancellation_fencing(issue_details)
+        if is_cancelled:
+            logger.info(
+                f"Active attempt {attempt_id} for Issue #{issue_number} is cancelled: {cancel_reason}"
+            )
+            ledger.record_outcome(attempt_id, f"cancelled_{cancel_reason}", last_error=cancel_reason)
+            if lease_token:
+                ledger.release_lease(lease_token)
+            ledger.release_issue_lease(repo, issue_number)
+            return True, f"cancelled_{cancel_reason}"
+
+    # Fleeting early phases before launch confirmation
+    if phase in ("CLAIM_INTENT", "CLAIMED", "LAUNCH_INTENT"):
+        timed_out, reason, target = evaluate_watchdog_timeout(attempt)
+        if timed_out:
+            fail_closed_to_infra_blocked(repo, issue_number, reason, attempt_id)
+            ledger.record_outcome(attempt_id, "timeout_infra_blocked", last_error=reason)
+            if lease_token:
+                ledger.release_lease(lease_token)
+            ledger.release_issue_lease(repo, issue_number)
+            return False, reason
+        return True, "awaiting_launch_confirmation"
+
+    # Phase: LAUNCH_CONFIRMED (waiting for PR creation / initial push / repair push)
+    if phase == "LAUNCH_CONFIRMED":
+        pr_number = attempt.get("pr_number")
+        is_repair = attempt.get("attempt_kind") in ("ci_repair", "reviewer_repair") or bool(attempt.get("expected_pr_head_sha"))
+
+        if pr_details is not None:
+            pr = pr_details
+            status = "adopted" if pr else "none_found"
+        else:
+            status, adopted_pr = adopt_existing_pr(repo, issue_number)
+            if status == "adopted" and adopted_pr and (not pr_number or adopted_pr.get("number") == pr_number):
+                pr = adopted_pr
+            elif pr_number:
+                pr = get_pull_request_details(repo, pr_number)
+                status = "adopted" if pr else "none_found"
+            else:
+                pr = None
+                status = "none_found"
+
+        if status == "needs_human_multiple_candidates":
+            fail_closed_to_needs_human(repo, issue_number, "multiple_pr_candidates", attempt_id)
+            ledger.record_outcome(attempt_id, "needs_human_multiple_candidates")
+            if lease_token:
+                ledger.release_lease(lease_token)
+            ledger.release_issue_lease(repo, issue_number)
+            return False, "multiple_pr_candidates"
+        elif status == "invalid_author":
+            fail_closed_to_infra_blocked(repo, issue_number, "orphan_pr_invalid_author", attempt_id)
+            ledger.record_outcome(attempt_id, "orphan_pr_invalid_author")
+            if lease_token:
+                ledger.release_lease(lease_token)
+            ledger.release_issue_lease(repo, issue_number)
+            return False, "invalid_author"
+
+        if pr:
+            pr_num = pr.get("number")
+            branch = ((pr.get("head") or {}).get("ref")) or attempt.get("branch") or ""
+            current_sha = ((pr.get("head") or {}).get("sha")) or ""
+            expected_head = attempt.get("expected_pr_head_sha")
+
+            if is_repair and expected_head and current_sha == expected_head:
+                # Repair agent still in progress, hasn't pushed new head yet
+                timed_out, reason, target = evaluate_watchdog_timeout(attempt)
+                if timed_out:
+                    fail_closed_to_infra_blocked(repo, issue_number, reason, attempt_id)
+                    ledger.record_outcome(attempt_id, "timeout_infra_blocked", last_error=reason)
+                    if lease_token:
+                        ledger.release_lease(lease_token)
+                    ledger.release_issue_lease(repo, issue_number)
+                    return False, reason
+                else:
+                    if lease_token:
+                        ledger.renew_lease(lease_token)
+                    ledger.renew_issue_lease(repo, issue_number)
+                    ledger.update_heartbeat(attempt_id)
+                    return True, "waiting_for_repair_push"
+
+            # PR created or new repair head pushed
+            ledger.record_pr_bound(attempt_id, pr_num, branch, current_sha)
+            if lease_token:
+                ledger.renew_lease(lease_token)
+            ledger.renew_issue_lease(repo, issue_number)
+            ledger.update_heartbeat(attempt_id)
+            attempt["phase"] = "PR_BOUND"
+            attempt["pr_number"] = pr_num
+            attempt["branch"] = branch
+            attempt["resulting_head_sha"] = current_sha
+            logger.info(
+                f"Production lifecycle: Issue #{issue_number} transitioned LAUNCH_CONFIRMED -> PR_BOUND (PR #{pr_num}, SHA {current_sha})"
+            )
+            return True, "pr_bound"
+        else:
+            # PR not created yet
+            timed_out, reason, target = evaluate_watchdog_timeout(attempt)
+            if timed_out:
+                fail_closed_to_infra_blocked(repo, issue_number, reason, attempt_id)
+                ledger.record_outcome(attempt_id, "timeout_infra_blocked", last_error=reason)
+                if lease_token:
+                    ledger.release_lease(lease_token)
+                ledger.release_issue_lease(repo, issue_number)
+                return False, reason
+            else:
+                if lease_token:
+                    ledger.renew_lease(lease_token)
+                ledger.renew_issue_lease(repo, issue_number)
+                ledger.update_heartbeat(attempt_id)
+                return True, "waiting_for_pr_creation"
+
+    # Phases: PR_BOUND or WAITING_CI
+    if phase in ("PR_BOUND", "WAITING_CI"):
+        pr_number = attempt.get("pr_number")
+        if not pr_number:
+            return True, "missing_pr_number"
+
+        if pr_details is not None:
+            pr = pr_details
+        else:
+            status, adopted_pr = adopt_existing_pr(repo, issue_number)
+            if status == "adopted" and adopted_pr and (not pr_number or adopted_pr.get("number") == pr_number):
+                pr = adopted_pr
+            elif pr_number:
+                pr = get_pull_request_details(repo, pr_number)
+            else:
+                pr = None
+
+        if not pr:
+            timed_out, reason, target = evaluate_watchdog_timeout(attempt)
+            if timed_out:
+                fail_closed_to_infra_blocked(repo, issue_number, reason, attempt_id)
+                ledger.record_outcome(attempt_id, "timeout_infra_blocked", last_error=reason)
+                if lease_token:
+                    ledger.release_lease(lease_token)
+                ledger.release_issue_lease(repo, issue_number)
+                return False, reason
+            return True, "pr_details_pending"
+
+        # Check if PR is already merged
+        if pr.get("merged") or (pr.get("state") == "closed" and pr.get("merged_at")):
+            complete_terminal_merge(
+                repo, issue_number, attempt_id, lease_token=lease_token,
+                resulting_head_sha=((pr.get("head") or {}).get("sha")), ledger=ledger
+            )
+            return True, "merged"
+
+        if pr.get("state") == "closed":
+            fail_closed_to_needs_human(repo, issue_number, "pr_closed_without_merge", attempt_id)
+            ledger.record_outcome(attempt_id, "pr_closed_unmerged")
+            if lease_token:
+                ledger.release_lease(lease_token)
+            ledger.release_issue_lease(repo, issue_number)
+            return False, "pr_closed_unmerged"
+
+        current_head_sha = ((pr.get("head") or {}).get("sha")) or attempt.get("resulting_head_sha") or attempt.get("expected_pr_head_sha")
+        branch = ((pr.get("head") or {}).get("ref")) or attempt.get("branch")
+
+        # Evaluate CI checks on current head
+        ci_info = get_pr_checks_status(repo, pr_number, head_sha=current_head_sha, checks_data=checks_data)
+        ci_status = ci_info.get("status")
+
+        if ci_status == "failure":
+            failed_check = ci_info.get("failed_check") or {}
+            classification, class_reason = classify_ci_failure(failed_check)
+            if classification == "infra_failure":
+                fail_closed_to_infra_blocked(repo, issue_number, f"ci_infra_{class_reason}", attempt_id)
+                ledger.record_outcome(attempt_id, "infra_failure_blocked", resulting_head_sha=current_head_sha, last_error=class_reason)
+                if lease_token:
+                    ledger.release_lease(lease_token)
+                ledger.release_issue_lease(repo, issue_number)
+                return False, "infra_failure_blocked"
+            elif classification == "ambiguous":
+                fail_closed_to_needs_human(repo, issue_number, f"ci_ambiguous_{class_reason}", attempt_id)
+                ledger.record_outcome(attempt_id, "ambiguous_failure_needs_human", resulting_head_sha=current_head_sha, last_error=class_reason)
+                if lease_token:
+                    ledger.release_lease(lease_token)
+                ledger.release_issue_lease(repo, issue_number)
+                return False, "ambiguous_failure_needs_human"
+            else:
+                # Code failure: automated CI repair
+                can_repair, ordinal = ledger.can_attempt_repair(repo, pr_number, max_repairs=MAX_AUTOMATED_REPAIRS)
+                if not can_repair:
+                    fail_closed_to_needs_human(repo, issue_number, "repair_budget_exhausted_max_3", attempt_id)
+                    ledger.record_outcome(attempt_id, "repair_budget_exhausted", resulting_head_sha=current_head_sha)
+                    if lease_token:
+                        ledger.release_lease(lease_token)
+                    ledger.release_issue_lease(repo, issue_number)
+                    return False, "repair_budget_exhausted"
+
+                repair_key = compute_repair_key(repo, pr_number, current_head_sha)
+                if ledger.is_repair_key_processed(repair_key):
+                    logger.info(f"Duplicate CI repair ignored for {repair_key}")
+                    return True, "duplicate_ci_repair_ignored"
+
+                ledger.record_outcome(attempt_id, "repaired_ci_failure", resulting_head_sha=current_head_sha)
+                if lease_token:
+                    ledger.release_lease(lease_token)
+                ledger.release_issue_lease(repo, issue_number)
+
+                rep_ok, rep_reason, rep_meta = dispatch_automated_repair(
+                    repo=repo,
+                    issue_number=issue_number,
+                    pr_number=pr_number,
+                    current_pr_head_sha=current_head_sha,
+                    expected_repair_baseline_sha=current_head_sha,
+                    repair_kind="ci_repair",
+                    cause_type="ci_failure",
+                    cause_id=failed_check.get("name") or "ci_failure",
+                    failure_detail=failed_check,
+                    ledger=ledger,
+                    branch=branch,
+                )
+                return rep_ok, rep_reason
+
+        elif ci_status == "pending":
+            if attempt.get("phase") != "WAITING_CI":
+                ledger.record_phase(attempt_id, "WAITING_CI", resulting_head_sha=current_head_sha)
+                attempt["phase"] = "WAITING_CI"
+                logger.info(
+                    f"Production lifecycle: Issue #{issue_number} (PR #{pr_number}) transitioned to WAITING_CI"
+                )
+            timed_out, reason, target = evaluate_watchdog_timeout(attempt)
+            if timed_out:
+                fail_closed_to_infra_blocked(repo, issue_number, reason, attempt_id)
+                ledger.record_outcome(attempt_id, "timeout_infra_blocked", last_error=reason)
+                if lease_token:
+                    ledger.release_lease(lease_token)
+                ledger.release_issue_lease(repo, issue_number)
+                return False, reason
+            else:
+                if lease_token:
+                    ledger.renew_lease(lease_token)
+                ledger.renew_issue_lease(repo, issue_number)
+                ledger.update_heartbeat(attempt_id)
+                return True, "waiting_ci"
+
+        elif ci_status == "success":
+            ledger.record_phase(attempt_id, "WAITING_REVIEW", resulting_head_sha=current_head_sha)
+            if lease_token:
+                ledger.renew_lease(lease_token)
+            ledger.renew_issue_lease(repo, issue_number)
+            ledger.update_heartbeat(attempt_id)
+            attempt["phase"] = "WAITING_REVIEW"
+            attempt["resulting_head_sha"] = current_head_sha
+            logger.info(
+                f"Production lifecycle: Issue #{issue_number} (PR #{pr_number}) CI succeeded, transitioned to WAITING_REVIEW"
+            )
+            return True, "waiting_review"
+
+    # Phase: WAITING_REVIEW
+    if phase == "WAITING_REVIEW":
+        pr_number = attempt.get("pr_number")
+        if pr_details is not None:
+            pr = pr_details
+        else:
+            status, adopted_pr = adopt_existing_pr(repo, issue_number)
+            if status == "adopted" and adopted_pr and (not pr_number or adopted_pr.get("number") == pr_number):
+                pr = adopted_pr
+            elif pr_number:
+                pr = get_pull_request_details(repo, pr_number)
+            else:
+                pr = None
+
+        current_head_sha = attempt.get("resulting_head_sha") or (((pr or {}).get("head") or {}).get("sha")) or ""
+        branch = ((pr or {}).get("head") or {}).get("ref") or attempt.get("branch")
+
+        # Check reviews on PR
+        latest_cr = get_latest_changes_requested_review(repo, pr_number, reviews_list=reviews_list) if pr_number else None
+        latest_app = get_latest_approved_review(repo, pr_number, reviews_list=reviews_list) if pr_number else None
+
+        if latest_cr and (not latest_app or (latest_cr.get("submitted_at") or "") > (latest_app.get("submitted_at") or "")):
+            # Reviewer requested changes on current head
+            can_repair, ordinal = ledger.can_attempt_repair(repo, pr_number, max_repairs=MAX_AUTOMATED_REPAIRS)
+            if not can_repair:
+                fail_closed_to_needs_human(repo, issue_number, "repair_budget_exhausted_max_3", attempt_id)
+                ledger.record_outcome(attempt_id, "repair_budget_exhausted", resulting_head_sha=current_head_sha)
+                if lease_token:
+                    ledger.release_lease(lease_token)
+                ledger.release_issue_lease(repo, issue_number)
+                return False, "repair_budget_exhausted"
+
+            repair_key = compute_repair_key(repo, pr_number, current_head_sha)
+            if ledger.is_repair_key_processed(repair_key):
+                logger.info(f"Duplicate reviewer repair ignored for {repair_key}")
+                return True, "duplicate_reviewer_repair_ignored"
+
+            ledger.record_outcome(attempt_id, "repaired_reviewer_changes_requested", resulting_head_sha=current_head_sha)
+            if lease_token:
+                ledger.release_lease(lease_token)
+            ledger.release_issue_lease(repo, issue_number)
+
+            rep_ok, rep_reason, rep_meta = dispatch_automated_repair(
+                repo=repo,
+                issue_number=issue_number,
+                pr_number=pr_number,
+                current_pr_head_sha=current_head_sha,
+                expected_repair_baseline_sha=current_head_sha,
+                repair_kind="reviewer_repair",
+                cause_type="changes_requested",
+                cause_id=str(latest_cr.get("id")),
+                failure_detail=latest_cr,
+                ledger=ledger,
+                branch=branch,
+            )
+            return rep_ok, rep_reason
+
+        elif latest_app:
+            # PR is APPROVED
+            if pr and (pr.get("merged") or (pr.get("state") == "closed" and pr.get("merged_at"))):
+                complete_terminal_merge(
+                    repo, issue_number, attempt_id, lease_token=lease_token,
+                    resulting_head_sha=current_head_sha, ledger=ledger
+                )
+                return True, "merged"
+
+            ledger.record_phase(attempt_id, "WAITING_MERGE", resulting_head_sha=current_head_sha)
+            if lease_token:
+                ledger.renew_lease(lease_token)
+            ledger.renew_issue_lease(repo, issue_number)
+            ledger.update_heartbeat(attempt_id)
+            attempt["phase"] = "WAITING_MERGE"
+            logger.info(
+                f"Production lifecycle: Issue #{issue_number} (PR #{pr_number}) approved, transitioned to WAITING_MERGE"
+            )
+            return True, "waiting_merge"
+
+        else:
+            # Still waiting for Reviewer
+            timed_out, reason, target = evaluate_watchdog_timeout(attempt)
+            if timed_out:
+                fail_closed_to_needs_human(repo, issue_number, reason, attempt_id)
+                ledger.record_outcome(attempt_id, "timeout_needs_human", last_error=reason)
+                if lease_token:
+                    ledger.release_lease(lease_token)
+                ledger.release_issue_lease(repo, issue_number)
+                return False, reason
+            else:
+                if lease_token:
+                    ledger.renew_lease(lease_token)
+                ledger.renew_issue_lease(repo, issue_number)
+                ledger.update_heartbeat(attempt_id)
+                return True, "waiting_review"
+
+    # Phase: WAITING_MERGE
+    if phase == "WAITING_MERGE":
+        pr_number = attempt.get("pr_number")
+        if pr_details is not None:
+            pr = pr_details
+        else:
+            status, adopted_pr = adopt_existing_pr(repo, issue_number)
+            if status == "adopted" and adopted_pr and (not pr_number or adopted_pr.get("number") == pr_number):
+                pr = adopted_pr
+            elif pr_number:
+                pr = get_pull_request_details(repo, pr_number)
+            else:
+                pr = None
+
+        current_head_sha = attempt.get("resulting_head_sha") or (((pr or {}).get("head") or {}).get("sha")) or ""
+
+        if pr and (pr.get("merged") or (pr.get("state") == "closed" and pr.get("merged_at"))):
+            complete_terminal_merge(
+                repo, issue_number, attempt_id, lease_token=lease_token,
+                resulting_head_sha=current_head_sha, ledger=ledger
+            )
+            return True, "merged"
+
+        if pr and pr.get("state") == "closed":
+            fail_closed_to_needs_human(repo, issue_number, "pr_closed_without_merge", attempt_id)
+            ledger.record_outcome(attempt_id, "pr_closed_unmerged")
+            if lease_token:
+                ledger.release_lease(lease_token)
+            ledger.release_issue_lease(repo, issue_number)
+            return False, "pr_closed_unmerged"
+
+        timed_out, reason, target = evaluate_watchdog_timeout(attempt)
+        if timed_out:
+            fail_closed_to_infra_blocked(repo, issue_number, reason, attempt_id)
+            ledger.record_outcome(attempt_id, "timeout_infra_blocked", last_error=reason)
+            if lease_token:
+                ledger.release_lease(lease_token)
+            ledger.release_issue_lease(repo, issue_number)
+            return False, reason
+        else:
+            if lease_token:
+                ledger.renew_lease(lease_token)
+            ledger.renew_issue_lease(repo, issue_number)
+            ledger.update_heartbeat(attempt_id)
+            return True, "waiting_merge"
+
+    return True, "noop"
+
+
 def reconcile_closure_v1(repo: str, ledger: ExecutionLedger = None) -> bool:
     """
     Startup & runtime reconciliation matching Frozen Spec Section 16:
     - Missed triggers & incomplete receipts.
+    - Active lifecycle progression: LAUNCH_CONFIRMED -> PR_BOUND -> WAITING_CI -> WAITING_REVIEW -> WAITING_MERGE -> merged.
     - Orphan agent-working issues: adopt existing PR or fail-closed.
     - Watchdog timeouts: fail-closed to infra-blocked or needs-human.
     - Cancellation fencing on stale active work.
@@ -2398,7 +3185,7 @@ def reconcile_closure_v1(repo: str, ledger: ExecutionLedger = None) -> bool:
     ledger = ledger or get_ledger()
     reconciled_ok = True
 
-    # 1. Watchdog evaluation across active attempts
+    # 1. Active attempt lifecycle progression & watchdog evaluation
     try:
         active_attempts = ledger.get_active_attempts(repo)
     except Exception as exc:
@@ -2411,37 +3198,9 @@ def reconcile_closure_v1(repo: str, ledger: ExecutionLedger = None) -> bool:
         if not issue_num or not attempt_id:
             continue
 
-        # Cancellation fencing check
-        try:
-            details = get_issue_details(repo, issue_num)
-        except Exception:
-            details = None
-
-        if details:
-            is_cancelled, cancel_reason = check_cancellation_fencing(details)
-            if is_cancelled:
-                logger.info(
-                    "Active attempt %s for Issue #%s is cancelled: %s",
-                    attempt_id, issue_num, cancel_reason
-                )
-                ledger.record_outcome(attempt_id, f"cancelled_{cancel_reason}", last_error=cancel_reason)
-                ledger.release_issue_lease(repo, issue_num)
-                continue
-
-        # Watchdog timeout check
-        timed_out, reason, target_state = evaluate_watchdog_timeout(attempt)
-        if timed_out:
-            logger.warning(
-                "Watchdog timeout triggered for Issue #%s (attempt_id=%s, phase=%s, reason=%s, target_state=%s)",
-                issue_num, attempt_id, attempt.get("phase"), reason, target_state
-            )
-            if target_state == "needs-human":
-                fail_closed_to_needs_human(repo, issue_num, reason, attempt_id)
-                ledger.record_outcome(attempt_id, "timeout_needs_human", last_error=reason)
-            else:
-                fail_closed_to_infra_blocked(repo, issue_num, reason, attempt_id)
-                ledger.record_outcome(attempt_id, "timeout_infra_blocked", last_error=reason)
-            ledger.release_issue_lease(repo, issue_num)
+        # Advance active lifecycle based on GitHub and runtime state
+        success, reason = advance_active_lifecycle(repo, attempt, ledger=ledger)
+        if not success:
             reconciled_ok = False
 
     # 2. Check open issues for orphan agent-working states
@@ -2526,8 +3285,12 @@ def poll_cycle():
             working_issues.append(issue.get("number"))
 
     if working_issues:
+        ledger = get_ledger()
+        working_issue = working_issues[0]
+        active_attempt = ledger.get_active_attempt_for_issue(EASYEXAM_REPO, working_issue)
+        current_phase = active_attempt.get("phase") if active_attempt else "unknown"
         logger.info(
-            f"Active task already in progress: Issue #{working_issues[0]} is agent-working. Sleeping."
+            f"Active task already in progress: Issue #{working_issue} is agent-working (phase: {current_phase}). Active monitoring."
         )
         return
 
