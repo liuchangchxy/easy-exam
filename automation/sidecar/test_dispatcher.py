@@ -1,6 +1,8 @@
 import os
 import shutil
 import sys
+from datetime import datetime, timezone
+import time
 from pathlib import Path
 import unittest
 from unittest.mock import MagicMock, patch
@@ -549,6 +551,387 @@ class CoordinationRoutingAndBypassTests(unittest.TestCase):
             self.assertNotIn("Direct git push blocked in Implementer shell", proc_real.stderr)
 
 
+class ClosureV1DeterministicAcceptanceTests(unittest.TestCase):
+    """
+    Deterministic acceptance suite for Automation Closure v1 matching Issue #35 Section 20:
+    - ownership / lease
+    - two-worker claim race
+    - duplicate events
+    - duplicate failed checks
+    - duplicate Review
+    - repair budget
+    - no repair #4
+    - crash before/after launch confirmation
+    - incomplete receipt
+    - restart reconciliation
+    - PR adoption
+    - stale SHA fencing
+    - failure classification
+    - cancellation fencing
+    - regression of existing dispatch/review/CI/auto-merge contracts
+    """
+
+    def setUp(self):
+        self.ledger = dispatcher.ExecutionLedger(":memory:")
+        dispatcher.set_ledger(self.ledger)
+
+    def tearDown(self):
+        if hasattr(self, "ledger") and self.ledger:
+            self.ledger.close()
+
+    def test_ownership_and_lease_lifecycle(self):
+        # 1. Acquire lease
+        ok, token, reason = self.ledger.acquire_lease("liuchangchxy/easy-exam", 35, "worker-1", ttl_seconds=60)
+        self.assertTrue(ok)
+        self.assertIsNotNone(token)
+        self.assertEqual(reason, "acquired")
+
+        # 2. Check active lease
+        lease = self.ledger.get_active_lease("liuchangchxy/easy-exam", 35)
+        self.assertIsNotNone(lease)
+        self.assertEqual(lease["owner_id"], "worker-1")
+        self.assertEqual(lease["lease_token"], token)
+
+        # 3. Same owner renews lease
+        ok_renew, renew_token, renew_reason = self.ledger.acquire_lease("liuchangchxy/easy-exam", 35, "worker-1", ttl_seconds=120)
+        self.assertTrue(ok_renew)
+        self.assertEqual(renew_reason, "renewed")
+        self.assertEqual(renew_token, token)
+
+        # 4. Release lease
+        rel_ok = self.ledger.release_lease(token)
+        self.assertTrue(rel_ok)
+        self.assertIsNone(self.ledger.get_active_lease("liuchangchxy/easy-exam", 35))
+
+    def test_two_worker_claim_race(self):
+        # Worker 1 acquires lease
+        ok1, token1, reason1 = self.ledger.acquire_lease("liuchangchxy/easy-exam", 35, "worker-1")
+        self.assertTrue(ok1)
+
+        # Worker 2 attempts to acquire lease for the same issue
+        ok2, token2, reason2 = self.ledger.acquire_lease("liuchangchxy/easy-exam", 35, "worker-2")
+        self.assertFalse(ok2, "Second worker must lose lease race")
+        self.assertIsNone(token2)
+        self.assertEqual(reason2, "lease_held_by_other_worker")
+
+    def test_duplicate_events_and_idempotency_key(self):
+        key = dispatcher.compute_repair_key("liuchangchxy/easy-exam", 15, "abc123def456")
+        self.assertEqual(key, "repair:liuchangchxy/easy-exam:pr:15:head:abc123def456")
+
+        self.assertFalse(self.ledger.is_repair_key_processed(key))
+        self.ledger.record_claim_intent(
+            repo="liuchangchxy/easy-exam",
+            issue_number=35,
+            owner_id="worker-1",
+            lease_token="token-1",
+            attempt_id="att-1",
+            attempt_kind="ci_repair",
+            trigger_key="trigger-1",
+            repair_key=key,
+        )
+        self.assertTrue(self.ledger.is_repair_key_processed(key), "Processed repair key must be detected as duplicate")
+
+    @patch.object(dispatcher, "dispatch_agent")
+    @patch.object(dispatcher, "get_issue_details")
+    def test_duplicate_failed_checks_deduplication(self, mock_details, mock_dispatch):
+        mock_details.return_value = {"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "agent-working"}]}
+        mock_dispatch.return_value = {"launch_confirmed": True, "conversation_id": "test-uuid-1"}
+
+        head_sha = "abcdef1234567890abcdef1234567890abcdef12"
+        # First repair launch for failed check
+        ok1, res1, meta1 = dispatcher.dispatch_automated_repair(
+            repo="liuchangchxy/easy-exam",
+            issue_number=35,
+            pr_number=15,
+            current_pr_head_sha=head_sha,
+            expected_repair_baseline_sha=head_sha,
+            repair_kind="ci_repair",
+            cause_type="ci_failure",
+            cause_id="run-1",
+            failure_detail={"name": "Backend & Packaging Tests", "conclusion": "failure"},
+            ledger=self.ledger,
+        )
+        self.assertTrue(ok1)
+        self.assertEqual(res1, "repair_launched")
+
+        # Second duplicate failed check event for same head SHA
+        ok2, res2, meta2 = dispatcher.dispatch_automated_repair(
+            repo="liuchangchxy/easy-exam",
+            issue_number=35,
+            pr_number=15,
+            current_pr_head_sha=head_sha,
+            expected_repair_baseline_sha=head_sha,
+            repair_kind="ci_repair",
+            cause_type="ci_failure",
+            cause_id="run-1-duplicate",
+            failure_detail={"name": "Backend & Packaging Tests", "conclusion": "failure"},
+            ledger=self.ledger,
+        )
+        self.assertFalse(ok2, "Duplicate failed check must be ignored")
+        self.assertEqual(res2, "duplicate_repair_ignored")
+
+    @patch.object(dispatcher, "dispatch_agent")
+    @patch.object(dispatcher, "cas_transition_coordination_state", return_value=(True, "transition_succeeded"))
+    @patch.object(dispatcher, "get_issue_details")
+    def test_duplicate_review_deduplication(self, mock_details, mock_cas, mock_dispatch):
+        mock_details.return_value = {"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "changes-requested"}]}
+        mock_dispatch.return_value = {"launch_confirmed": True, "conversation_id": "test-uuid-2"}
+
+        rejected_sha = "9999888877776666555544443333222211110000"
+        ok1, res1, _ = dispatcher.dispatch_automated_repair(
+            repo="liuchangchxy/easy-exam",
+            issue_number=35,
+            pr_number=15,
+            current_pr_head_sha=rejected_sha,
+            expected_repair_baseline_sha=rejected_sha,
+            repair_kind="reviewer_repair",
+            cause_type="reviewer_request_changes",
+            cause_id="review-1",
+            ledger=self.ledger,
+        )
+        self.assertTrue(ok1)
+        self.assertEqual(res1, "repair_launched")
+
+        # Second duplicate review event for same rejected SHA
+        ok2, res2, _ = dispatcher.dispatch_automated_repair(
+            repo="liuchangchxy/easy-exam",
+            issue_number=35,
+            pr_number=15,
+            current_pr_head_sha=rejected_sha,
+            expected_repair_baseline_sha=rejected_sha,
+            repair_kind="reviewer_repair",
+            cause_type="reviewer_request_changes",
+            cause_id="review-1-replay",
+            ledger=self.ledger,
+        )
+        self.assertFalse(ok2)
+        self.assertEqual(res2, "duplicate_repair_ignored")
+
+    @patch.object(dispatcher, "fail_closed_to_needs_human", return_value=True)
+    def test_repair_budget_enforcement_and_no_repair_4(self, mock_needs_human):
+        repo = "liuchangchxy/easy-exam"
+        pr_number = 15
+
+        # Record repair 1 (CI)
+        can1, ord1 = self.ledger.can_attempt_repair(repo, pr_number)
+        self.assertTrue(can1)
+        self.assertEqual(ord1, 1)
+        self.ledger.record_claim_intent(repo, 35, "w1", "tok1", "att-1", "ci_repair", "trig1", pr_number=pr_number, repair_ordinal=1)
+
+        # Record repair 2 (Reviewer)
+        can2, ord2 = self.ledger.can_attempt_repair(repo, pr_number)
+        self.assertTrue(can2)
+        self.assertEqual(ord2, 2)
+        self.ledger.record_claim_intent(repo, 35, "w1", "tok2", "att-2", "reviewer_repair", "trig2", pr_number=pr_number, repair_ordinal=2)
+
+        # Record repair 3 (CI)
+        can3, ord3 = self.ledger.can_attempt_repair(repo, pr_number)
+        self.assertTrue(can3)
+        self.assertEqual(ord3, 3)
+        self.ledger.record_claim_intent(repo, 35, "w1", "tok3", "att-3", "ci_repair", "trig3", pr_number=pr_number, repair_ordinal=3)
+
+        # Attempt repair 4 -> must be strictly prohibited!
+        can4, ord4 = self.ledger.can_attempt_repair(repo, pr_number)
+        self.assertFalse(can4, "Repair #4 must be rejected by budget")
+        self.assertEqual(ord4, 3)
+
+        # Attempting dispatch_automated_repair on exhausted budget routes to needs-human
+        with patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}]}):
+            ok, res, _ = dispatcher.dispatch_automated_repair(
+                repo=repo,
+                issue_number=35,
+                pr_number=pr_number,
+                current_pr_head_sha="sha_d",
+                expected_repair_baseline_sha="sha_d",
+                repair_kind="ci_repair",
+                cause_type="ci_failure",
+                cause_id="run-4",
+                failure_detail={"name": "test", "conclusion": "failure"},
+                ledger=self.ledger,
+            )
+            self.assertFalse(ok)
+            self.assertEqual(res, "repair_budget_exhausted_needs_human")
+            mock_needs_human.assert_called_once()
+
+    def test_stale_sha_fencing(self):
+        # Mismatch between actual PR head and expected baseline
+        self.assertTrue(dispatcher.verify_exact_head_sha("abc1234", "abc1234"))
+        self.assertTrue(dispatcher.verify_exact_head_sha("ABC1234", "abc1234"))
+        self.assertFalse(dispatcher.verify_exact_head_sha("abc1234", "def5678"))
+        self.assertFalse(dispatcher.verify_exact_head_sha("", "abc1234"))
+
+        with patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}]}):
+            ok, res, _ = dispatcher.dispatch_automated_repair(
+                repo="liuchangchxy/easy-exam",
+                issue_number=35,
+                pr_number=15,
+                current_pr_head_sha="new_head_sha",
+                expected_repair_baseline_sha="old_failed_sha",
+                repair_kind="ci_repair",
+                cause_type="ci_failure",
+                cause_id="run-1",
+                failure_detail={"name": "test", "conclusion": "failure"},
+                ledger=self.ledger,
+            )
+            self.assertFalse(ok)
+            self.assertEqual(res, "stale_head_sha_mismatch")
+
+    def test_failure_classification(self):
+        # 1. Code / test failure
+        cat, _ = dispatcher.classify_ci_failure({"name": "Backend & Packaging Tests", "conclusion": "failure"})
+        self.assertEqual(cat, "code_failure")
+
+        cat, _ = dispatcher.classify_ci_failure({"output": "AssertionError: 129 != 1"})
+        self.assertEqual(cat, "code_failure")
+
+        cat, _ = dispatcher.classify_ci_failure({"message": "scan_hardcoded_paths violation detected"})
+        self.assertEqual(cat, "code_failure")
+
+        # 2. Infrastructure failure
+        cat_infra, _ = dispatcher.classify_ci_failure({"output": "runner disconnected during job execution"})
+        self.assertEqual(cat_infra, "infra_failure")
+
+        cat_infra2, _ = dispatcher.classify_ci_failure({"message": "GitHub Actions outage runner timeout"})
+        self.assertEqual(cat_infra2, "infra_failure")
+
+        # 3. Ambiguous failure
+        cat_amb, _ = dispatcher.classify_ci_failure({"conclusion": "cancelled"})
+        self.assertEqual(cat_amb, "ambiguous")
+
+        cat_empty, _ = dispatcher.classify_ci_failure({})
+        self.assertEqual(cat_empty, "ambiguous")
+
+    def test_cancellation_fencing(self):
+        # Open & authorized
+        self.assertEqual(
+            dispatcher.check_cancellation_fencing({"state": "OPEN", "labels": [{"name": "frozen-spec"}]}),
+            (False, "authorized"),
+        )
+        # Closed
+        self.assertEqual(
+            dispatcher.check_cancellation_fencing({"state": "CLOSED", "labels": [{"name": "frozen-spec"}]}),
+            (True, "issue_not_open"),
+        )
+        # infra-blocked
+        self.assertEqual(
+            dispatcher.check_cancellation_fencing({"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "infra-blocked"}]}),
+            (True, "infra_blocked"),
+        )
+        # needs-human
+        self.assertEqual(
+            dispatcher.check_cancellation_fencing({"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "needs-human"}]}),
+            (True, "needs_human"),
+        )
+        # missing frozen-spec
+        self.assertEqual(
+            dispatcher.check_cancellation_fencing({"state": "OPEN", "labels": [{"name": "agent-ready"}]}),
+            (True, "frozen_spec_missing"),
+        )
+
+    def test_pr_adoption_scenarios(self):
+        valid_bot_pr = {
+            "number": 31,
+            "title": "Fix issue #35",
+            "body": "Closes #35",
+            "base": {"ref": "main"},
+            "head": {"ref": "agent/issue-35-closure", "sha": "headsha1"},
+            "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+        }
+        human_pr = {
+            "number": 32,
+            "title": "Fix issue #35",
+            "body": "Closes #35",
+            "base": {"ref": "main"},
+            "head": {"ref": "agent/issue-35-closure", "sha": "headsha2"},
+            "user": {"login": "liuchangchxy", "type": "User"},
+        }
+
+        # 1. Exactly one valid bot PR -> adopted
+        status, adopted = dispatcher.adopt_existing_pr("liuchangchxy/easy-exam", 35, pulls_list=[valid_bot_pr])
+        self.assertEqual(status, "adopted")
+        self.assertEqual(adopted["number"], 31)
+
+        # 2. Candidate PR with invalid human author -> rejected
+        status, adopted = dispatcher.adopt_existing_pr("liuchangchxy/easy-exam", 35, pulls_list=[human_pr])
+        self.assertEqual(status, "invalid_author")
+        self.assertIsNone(adopted)
+
+        # 3. Multiple bot candidate PRs -> needs-human
+        second_bot_pr = dict(valid_bot_pr, number=33)
+        status, adopted = dispatcher.adopt_existing_pr("liuchangchxy/easy-exam", 35, pulls_list=[valid_bot_pr, second_bot_pr])
+        self.assertEqual(status, "needs_human_multiple_candidates")
+        self.assertIsNone(adopted)
+
+        # 4. No matching PR -> none_found
+        status, adopted = dispatcher.adopt_existing_pr("liuchangchxy/easy-exam", 35, pulls_list=[])
+        self.assertEqual(status, "none_found")
+        self.assertIsNone(adopted)
+
+    def test_watchdog_timeouts(self):
+        # 1. Launch intent stuck for 150s (> 120s deadline)
+        old_time = "2026-10-07T00:00:00Z"
+        timed_out, reason, target = dispatcher.evaluate_watchdog_timeout(
+            {"phase": "LAUNCH_INTENT", "updated_at": old_time},
+            now_ts=datetime.fromisoformat("2026-10-07T00:02:31+00:00").timestamp(),
+        )
+        self.assertTrue(timed_out)
+        self.assertEqual(reason, "launch_confirmation_timeout")
+        self.assertEqual(target, "infra-blocked")
+
+        # 2. Implementer heartbeat timed out (> 1800s deadline)
+        timed_out, reason, target = dispatcher.evaluate_watchdog_timeout(
+            {"phase": "LAUNCH_CONFIRMED", "updated_at": old_time},
+            now_ts=datetime.fromisoformat("2026-10-07T00:35:00+00:00").timestamp(),
+        )
+        self.assertTrue(timed_out)
+        self.assertEqual(reason, "implementer_heartbeat_timeout")
+        self.assertEqual(target, "infra-blocked")
+
+        # 3. Reviewer completion timed out (> 1800s deadline)
+        timed_out, reason, target = dispatcher.evaluate_watchdog_timeout(
+            {"phase": "WAITING_REVIEW", "updated_at": old_time},
+            now_ts=datetime.fromisoformat("2026-10-07T00:35:00+00:00").timestamp(),
+        )
+        self.assertTrue(timed_out)
+        self.assertEqual(reason, "reviewer_completion_timeout")
+        self.assertEqual(target, "needs-human")
+
+        # 4. Recent attempt within deadline -> no timeout
+        timed_out, _, _ = dispatcher.evaluate_watchdog_timeout(
+            {"phase": "LAUNCH_INTENT", "updated_at": old_time},
+            now_ts=datetime.fromisoformat("2026-10-07T00:00:30+00:00").timestamp(),
+        )
+        self.assertFalse(timed_out)
+
+    @patch.object(dispatcher, "fail_closed_to_infra_blocked", return_value=True)
+    def test_restart_reconciliation_orphan_working_issue(self, mock_fail_closed):
+        # Orphan issue with agent-working but no lease and no PR
+        with patch.object(dispatcher, "get_open_issues", return_value=[{"number": 99, "labels": [{"name": "agent-working"}]}]):
+            with patch.object(dispatcher, "adopt_existing_pr", return_value=("none_found", None)):
+                reconciled = dispatcher.reconcile_closure_v1("liuchangchxy/easy-exam", self.ledger)
+                self.assertFalse(reconciled)
+                mock_fail_closed.assert_called_with("liuchangchxy/easy-exam", 99, "orphan_agent_working_detected")
+
+    def test_crash_before_and_after_launch_confirmation(self):
+        # Crash before launch confirmation (phase LAUNCH_INTENT)
+        self.ledger.record_claim_intent("liuchangchxy/easy-exam", 35, "w1", "tok", "att-crash", "initial_dispatch", "trig")
+        self.ledger.record_launch_intent("att-crash")
+        attempt = self.ledger.get_attempt("att-crash")
+        self.assertEqual(attempt["phase"], "LAUNCH_INTENT")
+        self.assertEqual(attempt["launch_confirmed"], 0)
+
+        # Watchdog marks crash before launch as timed out
+        timed_out, reason, target = dispatcher.evaluate_watchdog_timeout(attempt, now_ts=time.time() + 200)
+        self.assertTrue(timed_out)
+        self.assertEqual(target, "infra-blocked")
+
+        # After launch confirmation (phase LAUNCH_CONFIRMED)
+        self.ledger.record_launch_confirmed("att-crash", "conv-uuid-1234")
+        attempt_after = self.ledger.get_attempt("att-crash")
+        self.assertEqual(attempt_after["phase"], "LAUNCH_CONFIRMED")
+        self.assertEqual(attempt_after["launch_confirmed"], 1)
+        self.assertEqual(attempt_after["conversation_id"], "conv-uuid-1234")
+
+
 if __name__ == "__main__":
     unittest.main()
-

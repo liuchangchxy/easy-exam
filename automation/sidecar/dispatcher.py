@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import time
@@ -57,13 +58,30 @@ GITHUB_APP_EXPECTED_PERMISSIONS = {
     "metadata": "read", "actions": "read", "checks": "read",
 }
 GITHUB_APP_SLUG = os.environ.get("EASYEXAM_GITHUB_APP_SLUG", "chang-implementer")
-DISPATCHER_VERSION = "2026-10-05.06-cas-backoff-routing"
+DISPATCHER_VERSION = "2026-10-07.01-closure-v1"
 DISPATCH_AUDIT_PATH = Path(
     os.environ.get(
         "EASYEXAM_DISPATCH_AUDIT_PATH",
         str(Path.home() / ".gemini" / "config" / "sidecars" / "easyexam-dispatcher" / "dispatch_audit.jsonl"),
     )
 )
+LEDGER_DB_PATH = Path(
+    os.environ.get(
+        "EASYEXAM_LEDGER_DB_PATH",
+        str(Path.home() / ".gemini" / "config" / "sidecars" / "easyexam-dispatcher" / "execution_ledger.db"),
+    )
+)
+
+# Unified repair budget frozen by Spec
+MAX_AUTOMATED_REPAIRS = 3
+
+# Watchdog deadlines in seconds
+DEFAULT_LEASE_TTL_SECONDS = 300.0
+LAUNCH_CONFIRMATION_DEADLINE_SECONDS = 120.0
+IMPLEMENTER_DEADLINE_SECONDS = 1800.0
+CI_TERMINALIZATION_DEADLINE_SECONDS = 1800.0
+REVIEWER_COMPLETION_DEADLINE_SECONDS = 1800.0
+AUTO_MERGE_DEADLINE_SECONDS = 600.0
 
 COORDINATION_LABELS = {
     "agent-ready",
@@ -170,6 +188,756 @@ def check_pr_canonical_author_runtime(repo=EASYEXAM_REPO, pr_number=15):
     except Exception as exc:
         logger.warning(f"Failed to parse PR #{pr_number} REST response: {exc}")
         return {"checked": False, "login": None, "type": None, "valid": False}
+
+
+# ============================================================================
+# Automation Closure v1 Engines (Durable Ledger, Ownership, Fencing, Repair)
+# ============================================================================
+
+def compute_repair_key(repo: str, pr_number: int, head_sha: str) -> str:
+    """
+    Unified repair idempotency key matching Frozen Spec Section 11:
+    repair:<repo>:pr:<pr_number>:head:<failed_or_rejected_head_sha>
+    """
+    sha = (head_sha or "").strip()
+    return f"repair:{repo}:pr:{pr_number}:head:{sha}"
+
+
+def verify_exact_head_sha(actual_head_sha: str, expected_head_sha: str) -> bool:
+    """
+    Exact-SHA fencing matching Frozen Spec Section 15:
+    actual current PR head == expected repair baseline.
+    """
+    if not actual_head_sha or not expected_head_sha:
+        return False
+    return actual_head_sha.strip().lower() == expected_head_sha.strip().lower()
+
+
+def classify_ci_failure(failure_info: dict) -> tuple[str, str]:
+    """
+    Classify a CI check run failure according to Frozen Spec Section 12:
+    - 'code_failure': clearly caused by this implementation (test/lint/guard/build error) -> eligible for repair
+    - 'infra_failure': GitHub Actions runner outage, runner timeout, host crash -> infra-blocked
+    - 'ambiguous': semantic ambiguity, cancelled without reason, unclassifiable -> needs-human
+    """
+    if not failure_info:
+        return "ambiguous", "empty_failure_info"
+
+    name = str(failure_info.get("name") or failure_info.get("job") or "").lower()
+    conclusion = str(failure_info.get("conclusion") or "").lower()
+    output = str(failure_info.get("output") or failure_info.get("message") or failure_info.get("title") or "").lower()
+    log_snippet = str(failure_info.get("log_snippet") or failure_info.get("details") or "").lower()
+
+    combined = f"{name} {conclusion} {output} {log_snippet}"
+
+    # Infrastructure failures
+    infra_markers = [
+        "runner disconnected", "lost communication with the server", "hosted runner",
+        "github actions outage", "infrastructure failure", "internal error in runner",
+        "unable to contact runner", "runner image provisioning failed", "runner timeout",
+    ]
+    if any(m in combined for m in infra_markers):
+        return "infra_failure", "github_actions_infrastructure_error"
+
+    # Cancellation / Ambiguity
+    if conclusion in ("cancelled", "action_required"):
+        return "ambiguous", f"check_conclusion_{conclusion}"
+
+    # Implementation / Code failures
+    code_markers = [
+        "failed", "failure", "assertionerror", "exit code 1", "exit code 2",
+        "whitespace", "guard", "scan_hardcoded_paths", "tampering",
+        "test failed", "syntaxerror", "compilation error", "npm test",
+        "unittest", "pytest", "build error",
+    ]
+    if any(m in combined for m in code_markers) or conclusion == "failure":
+        return "code_failure", "implementation_check_failure"
+
+    return "ambiguous", "unrecognized_failure_classification"
+
+
+def check_cancellation_fencing(issue_details: dict) -> tuple[bool, str]:
+    """
+    Cancellation fencing matching Frozen Spec Section 19:
+    If issue is closed, not planned, infra-blocked, needs-human, or authorization revoked:
+    strictly do NOT launch Implementer, repair, APPROVE, or Auto-merge.
+    """
+    if not issue_details:
+        return True, "issue_details_missing"
+
+    state = str(issue_details.get("state") or "").upper()
+    if state != "OPEN":
+        return True, "issue_not_open"
+
+    labels = {
+        l.get("name") if isinstance(l, dict) else str(l)
+        for l in issue_details.get("labels", [])
+    }
+
+    if "infra-blocked" in labels:
+        return True, "infra_blocked"
+    if "needs-human" in labels:
+        return True, "needs_human"
+    if "frozen-spec" not in labels:
+        return True, "frozen_spec_missing"
+
+    return False, "authorized"
+
+
+def adopt_existing_pr(repo: str, issue_number: int, pulls_list: list[dict] = None) -> tuple[str, dict | None]:
+    """
+    Existing PR adoption matching Frozen Spec Section 17:
+    When local state is lost but GitHub already has PR:
+    find linked bot PR; author must be chang-implementer[bot];
+    repo/base/branch/Issue relationship must be correct.
+    Exactly one valid candidate -> adopt;
+    multiple plausible PR -> needs-human.
+    """
+    if pulls_list is None:
+        gh_bin = shutil.which("gh") or "gh"
+        cmd = [gh_bin, "api", f"repos/{repo}/pulls?state=open", "--paginate"]
+        code, stdout, stderr, timed_out = run_cmd(cmd, timeout=GITHUB_TIMEOUT_SECONDS)
+        if code != 0 or timed_out or not stdout.strip():
+            logger.warning("Could not fetch open PRs for adoption")
+            return "fetch_failed", None
+        try:
+            pulls_list = json.loads(stdout)
+        except json.JSONDecodeError:
+            return "fetch_failed", None
+
+    candidates = []
+    issue_tag = f"#{issue_number}"
+    issue_branch_tag = f"issue-{issue_number}"
+
+    for pr in pulls_list:
+        base_ref = ((pr.get("base") or {}).get("ref")) or ""
+        head_ref = ((pr.get("head") or {}).get("ref")) or ""
+        title = pr.get("title") or ""
+        body = pr.get("body") or ""
+
+        matches_branch = issue_branch_tag in head_ref
+        matches_text = issue_tag in title or issue_tag in body
+        if not (matches_branch or matches_text):
+            continue
+
+        if not is_valid_canonical_pr_author(pr):
+            logger.warning(
+                f"PR #{pr.get('number')} relates to Issue #{issue_number} but author is not canonical bot: {pr.get('user')}"
+            )
+            return "invalid_author", None
+
+        if base_ref not in ("main", "master"):
+            continue
+
+        candidates.append(pr)
+
+    if len(candidates) == 1:
+        logger.info(f"Adopted existing bot PR #{candidates[0].get('number')} for Issue #{issue_number}")
+        return "adopted", candidates[0]
+    elif len(candidates) > 1:
+        logger.warning(
+            f"Multiple candidate PRs found for Issue #{issue_number} ({[p.get('number') for p in candidates]}). Needs human."
+        )
+        return "needs_human_multiple_candidates", None
+    else:
+        return "none_found", None
+
+
+def evaluate_watchdog_timeout(attempt: dict, now_ts: float = None) -> tuple[bool, str | None, str | None]:
+    """
+    Watchdog evaluation matching Frozen Spec Section 18:
+    Active flow has configurable deadlines.
+    Timeout must eventually transition to infra-blocked or needs-human.
+    Returns (is_timed_out: bool, reason: str | None, target_state: str | None).
+    """
+    if not attempt:
+        return False, None, None
+
+    now = time.time() if now_ts is None else float(now_ts)
+    updated_str = attempt.get("updated_at") or attempt.get("heartbeat_at") or attempt.get("created_at")
+    if not updated_str:
+        return False, None, None
+
+    try:
+        updated_dt = datetime.fromisoformat(updated_str.replace("Z", "+00:00"))
+        updated_ts = updated_dt.timestamp()
+    except Exception:
+        return False, None, None
+
+    elapsed = now - updated_ts
+    phase = attempt.get("phase")
+
+    if phase == "LAUNCH_INTENT" and elapsed > LAUNCH_CONFIRMATION_DEADLINE_SECONDS:
+        return True, "launch_confirmation_timeout", "infra-blocked"
+
+    if phase in ("LAUNCH_CONFIRMED", "PR_BOUND") and elapsed > IMPLEMENTER_DEADLINE_SECONDS:
+        return True, "implementer_heartbeat_timeout", "infra-blocked"
+
+    if phase == "WAITING_CI" and elapsed > CI_TERMINALIZATION_DEADLINE_SECONDS:
+        return True, "ci_terminalization_timeout", "infra-blocked"
+
+    if phase == "WAITING_REVIEW" and elapsed > REVIEWER_COMPLETION_DEADLINE_SECONDS:
+        return True, "reviewer_completion_timeout", "needs-human"
+
+    if phase == "WAITING_MERGE" and elapsed > AUTO_MERGE_DEADLINE_SECONDS:
+        return True, "auto_merge_timeout", "infra-blocked"
+
+    return False, None, None
+
+
+class ExecutionLedger:
+    """
+    Durable execution ledger backed by SQLite.
+    Guarantees persistence of ownership leases, dispatch lifecycles, and repair accounting.
+    """
+
+    def __init__(self, db_path=None):
+        if db_path is None:
+            db_path = LEDGER_DB_PATH
+        self.db_path = str(db_path)
+        if self.db_path != ":memory:":
+            Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+        self._conn = sqlite3.connect(self.db_path, timeout=15.0, check_same_thread=False)
+        self._conn.row_factory = sqlite3.Row
+        self._init_db()
+
+    def _get_connection(self):
+        return self._conn
+
+    def _init_db(self):
+        with self._get_connection() as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS execution_ledger (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    repo TEXT NOT NULL,
+                    issue_number INTEGER NOT NULL,
+                    owner_id TEXT NOT NULL,
+                    lease_token TEXT NOT NULL,
+                    phase TEXT NOT NULL,
+                    heartbeat_at TEXT NOT NULL,
+                    attempt_id TEXT NOT NULL UNIQUE,
+                    attempt_kind TEXT NOT NULL,
+                    trigger_key TEXT NOT NULL,
+                    repair_key TEXT,
+                    repair_ordinal INTEGER DEFAULT 0,
+                    repair_cause_type TEXT,
+                    repair_cause_id TEXT,
+                    expected_base_sha TEXT,
+                    expected_pr_head_sha TEXT,
+                    conversation_id TEXT,
+                    launch_confirmed INTEGER DEFAULT 0,
+                    pr_number INTEGER,
+                    branch TEXT,
+                    resulting_head_sha TEXT,
+                    outcome TEXT,
+                    last_error TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS active_leases (
+                    repo TEXT NOT NULL,
+                    issue_number INTEGER NOT NULL,
+                    owner_id TEXT NOT NULL,
+                    lease_token TEXT NOT NULL,
+                    acquired_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    heartbeat_at TEXT NOT NULL,
+                    PRIMARY KEY (repo, issue_number)
+                )
+            """)
+            conn.commit()
+
+    def acquire_lease(
+        self,
+        repo: str,
+        issue_number: int,
+        owner_id: str,
+        ttl_seconds: float = DEFAULT_LEASE_TTL_SECONDS,
+    ) -> tuple[bool, str | None, str]:
+        """
+        Acquire an exclusive ownership lease for an issue.
+        Two-worker claim race: exactly one worker wins.
+        Expired leases held by another worker do NOT automatically transfer (requires confirmation/fencing).
+        Returns (success: bool, lease_token: str | None, reason: str).
+        """
+        now = time.time()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        expires_iso = datetime.fromtimestamp(now + ttl_seconds, tz=timezone.utc).isoformat()
+
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM active_leases WHERE repo = ? AND issue_number = ?", (repo, issue_number))
+            row = cur.fetchone()
+            if row is not None:
+                if row["owner_id"] == owner_id:
+                    cur.execute(
+                        "UPDATE active_leases SET expires_at = ?, heartbeat_at = ? WHERE repo = ? AND issue_number = ?",
+                        (expires_iso, now_iso, repo, issue_number),
+                    )
+                    conn.commit()
+                    return True, row["lease_token"], "renewed"
+                else:
+                    return False, None, "lease_held_by_other_worker"
+
+            token = str(uuid.uuid4())
+            try:
+                cur.execute(
+                    """
+                    INSERT INTO active_leases (repo, issue_number, owner_id, lease_token, acquired_at, expires_at, heartbeat_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (repo, issue_number, owner_id, token, now_iso, expires_iso, now_iso),
+                )
+                conn.commit()
+                return True, token, "acquired"
+            except sqlite3.IntegrityError:
+                return False, None, "lease_race_lost"
+
+    def renew_lease(self, lease_token: str, ttl_seconds: float = DEFAULT_LEASE_TTL_SECONDS) -> bool:
+        now = time.time()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        expires_iso = datetime.fromtimestamp(now + ttl_seconds, tz=timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE active_leases SET expires_at = ?, heartbeat_at = ? WHERE lease_token = ?",
+                (expires_iso, now_iso, lease_token),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+
+    def release_lease(self, lease_token: str) -> bool:
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM active_leases WHERE lease_token = ?", (lease_token,))
+            conn.commit()
+            return cur.rowcount > 0
+
+    def release_issue_lease(self, repo: str, issue_number: int) -> bool:
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM active_leases WHERE repo = ? AND issue_number = ?", (repo, issue_number))
+            conn.commit()
+            return cur.rowcount > 0
+
+    def get_active_lease(self, repo: str, issue_number: int) -> dict | None:
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM active_leases WHERE repo = ? AND issue_number = ?", (repo, issue_number))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def record_claim_intent(
+        self,
+        repo: str,
+        issue_number: int,
+        owner_id: str,
+        lease_token: str,
+        attempt_id: str,
+        attempt_kind: str,
+        trigger_key: str,
+        expected_base_sha: str = None,
+        expected_pr_head_sha: str = None,
+        repair_key: str = None,
+        repair_ordinal: int = 0,
+        repair_cause_type: str = None,
+        repair_cause_id: str = None,
+        pr_number: int = None,
+        branch: str = None,
+    ) -> dict:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        entry = {
+            "repo": repo,
+            "issue_number": issue_number,
+            "owner_id": owner_id,
+            "lease_token": lease_token,
+            "phase": "CLAIM_INTENT",
+            "heartbeat_at": now_iso,
+            "attempt_id": attempt_id,
+            "attempt_kind": attempt_kind,
+            "trigger_key": trigger_key,
+            "repair_key": repair_key,
+            "repair_ordinal": repair_ordinal,
+            "repair_cause_type": repair_cause_type,
+            "repair_cause_id": repair_cause_id,
+            "expected_base_sha": expected_base_sha,
+            "expected_pr_head_sha": expected_pr_head_sha,
+            "conversation_id": None,
+            "launch_confirmed": 0,
+            "pr_number": pr_number,
+            "branch": branch,
+            "resulting_head_sha": None,
+            "outcome": "in_progress",
+            "last_error": None,
+            "created_at": now_iso,
+            "updated_at": now_iso,
+        }
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO execution_ledger (
+                    repo, issue_number, owner_id, lease_token, phase, heartbeat_at,
+                    attempt_id, attempt_kind, trigger_key, repair_key, repair_ordinal,
+                    repair_cause_type, repair_cause_id, expected_base_sha, expected_pr_head_sha,
+                    conversation_id, launch_confirmed, pr_number, branch, resulting_head_sha,
+                    outcome, last_error, created_at, updated_at
+                ) VALUES (
+                    :repo, :issue_number, :owner_id, :lease_token, :phase, :heartbeat_at,
+                    :attempt_id, :attempt_kind, :trigger_key, :repair_key, :repair_ordinal,
+                    :repair_cause_type, :repair_cause_id, :expected_base_sha, :expected_pr_head_sha,
+                    :conversation_id, :launch_confirmed, :pr_number, :branch, :resulting_head_sha,
+                    :outcome, :last_error, :created_at, :updated_at
+                )
+                """,
+                entry,
+            )
+            conn.commit()
+        return entry
+
+    def record_claimed(self, attempt_id: str) -> bool:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE execution_ledger SET phase = 'CLAIMED', updated_at = ?, heartbeat_at = ? WHERE attempt_id = ?",
+                (now_iso, now_iso, attempt_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+
+    def record_launch_intent(self, attempt_id: str) -> bool:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE execution_ledger SET phase = 'LAUNCH_INTENT', updated_at = ?, heartbeat_at = ? WHERE attempt_id = ?",
+                (now_iso, now_iso, attempt_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+
+    def record_launch_confirmed(self, attempt_id: str, conversation_id: str) -> bool:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE execution_ledger
+                SET phase = 'LAUNCH_CONFIRMED', conversation_id = ?, launch_confirmed = 1,
+                    updated_at = ?, heartbeat_at = ?
+                WHERE attempt_id = ?
+                """,
+                (conversation_id, now_iso, now_iso, attempt_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+
+    def record_pr_bound(self, attempt_id: str, pr_number: int, branch: str, resulting_head_sha: str = None) -> bool:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE execution_ledger
+                SET phase = 'PR_BOUND', pr_number = ?, branch = ?,
+                    resulting_head_sha = COALESCE(?, resulting_head_sha),
+                    updated_at = ?, heartbeat_at = ?
+                WHERE attempt_id = ?
+                """,
+                (pr_number, branch, resulting_head_sha, now_iso, now_iso, attempt_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+
+    def record_outcome(
+        self, attempt_id: str, outcome: str, resulting_head_sha: str = None, last_error: str = None
+    ) -> bool:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE execution_ledger
+                SET phase = 'EXECUTION_OUTCOME', outcome = ?,
+                    resulting_head_sha = COALESCE(?, resulting_head_sha),
+                    last_error = ?, updated_at = ?, heartbeat_at = ?
+                WHERE attempt_id = ?
+                """,
+                (outcome, resulting_head_sha, last_error, now_iso, now_iso, attempt_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+
+    def get_attempt(self, attempt_id: str) -> dict | None:
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM execution_ledger WHERE attempt_id = ?", (attempt_id,))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def get_repair_count(self, repo: str, pr_number: int) -> int:
+        """
+        Count automated repairs on this PR across BOTH CI failures and Reviewer REQUEST_CHANGES.
+        Aborted stale attempts and duplicates do not consume the budget.
+        """
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT COUNT(*) as cnt FROM execution_ledger
+                WHERE repo = ? AND pr_number = ?
+                  AND attempt_kind IN ('ci_repair', 'reviewer_repair')
+                  AND outcome NOT IN ('aborted_stale', 'duplicate_ignored')
+                """,
+                (repo, pr_number),
+            )
+            row = cur.fetchone()
+            return int(row["cnt"]) if row else 0
+
+    def can_attempt_repair(self, repo: str, pr_number: int, max_repairs: int = MAX_AUTOMATED_REPAIRS) -> tuple[bool, int]:
+        current = self.get_repair_count(repo, pr_number)
+        if current >= max_repairs:
+            return False, current
+        return True, current + 1
+
+    def is_repair_key_processed(self, repair_key: str) -> bool:
+        if not repair_key:
+            return False
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT 1 FROM execution_ledger
+                WHERE repair_key = ?
+                  AND outcome NOT IN ('failed_to_claim', 'aborted_stale')
+                LIMIT 1
+                """,
+                (repair_key,),
+            )
+            return cur.fetchone() is not None
+
+    def get_all_attempts_for_issue(self, repo: str, issue_number: int) -> list[dict]:
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT * FROM execution_ledger WHERE repo = ? AND issue_number = ? ORDER BY id ASC",
+                (repo, issue_number),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+    def close(self):
+        if hasattr(self, "_conn") and self._conn:
+            self._conn.close()
+            self._conn = None
+
+
+_LEDGER_INSTANCE = None
+
+
+def get_ledger(db_path=None) -> ExecutionLedger:
+    global _LEDGER_INSTANCE
+    if _LEDGER_INSTANCE is None or db_path is not None:
+        _LEDGER_INSTANCE = ExecutionLedger(db_path=db_path or LEDGER_DB_PATH)
+    return _LEDGER_INSTANCE
+
+
+def set_ledger(ledger: ExecutionLedger):
+    global _LEDGER_INSTANCE
+    _LEDGER_INSTANCE = ledger
+
+
+def fail_closed_to_needs_human(repo: str, issue_number: int, reason: str, attempt_id: str = None) -> bool:
+    """
+    Transition issue to needs-human when automated repair budget is exhausted
+    or human architectural decision is required.
+    """
+    category = str(reason or "needs_human_required")
+    logger.warning(
+        f"Switching #{issue_number} to needs-human. Category: {category}"
+    )
+
+    details = get_issue_details(repo, issue_number)
+    labels = {
+        l.get("name") if isinstance(l, dict) else str(l)
+        for l in (details or {}).get("labels", [])
+    }
+    remove_labels = [l for l in ("agent-working", "changes-requested", "agent-ready") if l in labels]
+
+    cmd_edit = [
+        "issue",
+        "edit",
+        str(issue_number),
+        "--repo",
+        repo,
+        "--add-label",
+        "needs-human",
+    ]
+    for rl in remove_labels:
+        cmd_edit.extend(["--remove-label", rl])
+
+    code, _, stderr, timed_out = execute_coordination_write(cmd_edit, repo=repo)
+    label_ok = code == 0 and not timed_out
+    if not label_ok:
+        logger.critical(f"Failed to label #{issue_number} as needs-human: {stderr}")
+
+    marker = f"<!-- easyexam-needs-human:{attempt_id} -->" if attempt_id else None
+    comment_body = (
+        f"**[EasyExam Dispatcher Alert — Human Decision Required]**\n\n"
+        f"This task requires human judgment or has exhausted automated repairs:\n"
+        f"- Reason: `{category}`\n"
+        f"- Target coordination state: `needs-human`.\n"
+        f"Please inspect the issue and PR, then re-authorize with `agent-ready` or resolve manually."
+    )
+    if marker:
+        comment_body += f"\n\n{marker}"
+
+    cmd_comment = [
+        "issue",
+        "comment",
+        str(issue_number),
+        "--repo",
+        repo,
+        "--body",
+        comment_body,
+    ]
+    comment_code, _, _, comment_timeout = execute_coordination_write(cmd_comment, repo=repo)
+    return label_ok and comment_code == 0 and not comment_timeout
+
+
+def dispatch_automated_repair(
+    repo: str,
+    issue_number: int,
+    pr_number: int,
+    current_pr_head_sha: str,
+    expected_repair_baseline_sha: str,
+    repair_kind: str,
+    cause_type: str,
+    cause_id: str,
+    failure_detail: dict = None,
+    ledger: ExecutionLedger = None,
+    owner_id: str = None,
+) -> tuple[bool, str, dict]:
+    """
+    Unified repair workflow matching Frozen Spec Sections 10-15:
+    1. Cancellation fencing check.
+    2. Exact-SHA fencing check: current_pr_head_sha == expected_repair_baseline_sha.
+    3. Failure classification: if infra -> infra-blocked; if ambiguous -> needs-human.
+    4. Deduplication via repair_key: repair:<repo>:pr:<pr_number>:head:<sha>.
+    5. Unified budget enforcement: MAX_AUTOMATED_REPAIRS = 3 (CI + Reviewer combined).
+    6. Acquire exclusive lease.
+    7. CAS transition if needed.
+    8. Launch AntiGravity Implementer.
+    9. Durable ledger persistence across all phases.
+    """
+    ledger = ledger or get_ledger()
+    owner_id = owner_id or f"dispatcher-{os.getpid()}"
+    attempt_id = str(uuid.uuid4())
+
+    # 1. Cancellation check
+    issue_details = get_issue_details(repo, issue_number)
+    is_blocked, block_reason = check_cancellation_fencing(issue_details)
+    if is_blocked:
+        logger.warning(f"Repair aborted due to cancellation fencing: #{issue_number} ({block_reason})")
+        return False, f"cancellation_fenced_{block_reason}", {}
+
+    # 2. Exact-SHA fencing
+    if not verify_exact_head_sha(current_pr_head_sha, expected_repair_baseline_sha):
+        logger.warning(
+            f"Stale repair abort for #{issue_number} / PR #{pr_number}: "
+            f"head SHA changed (expected {expected_repair_baseline_sha}, actual {current_pr_head_sha})"
+        )
+        return False, "stale_head_sha_mismatch", {}
+
+    # 3. Failure classification (if CI repair)
+    if cause_type == "ci_failure":
+        classification, class_reason = classify_ci_failure(failure_detail or {})
+        if classification == "infra_failure":
+            fail_closed_to_infra_blocked(repo, issue_number, f"ci_infra_{class_reason}", attempt_id)
+            return False, "infra_failure_blocked", {}
+        elif classification == "ambiguous":
+            fail_closed_to_needs_human(repo, issue_number, f"ci_ambiguous_{class_reason}", attempt_id)
+            return False, "ambiguous_failure_needs_human", {}
+
+    # 4. Repair Key & Idempotency
+    repair_key = compute_repair_key(repo, pr_number, expected_repair_baseline_sha)
+    if ledger.is_repair_key_processed(repair_key):
+        logger.info(f"Duplicate repair ignored for #{issue_number} / PR #{pr_number} (key: {repair_key})")
+        return False, "duplicate_repair_ignored", {"repair_key": repair_key}
+
+    # 5. Unified Budget Check
+    can_repair, ordinal = ledger.can_attempt_repair(repo, pr_number, max_repairs=MAX_AUTOMATED_REPAIRS)
+    if not can_repair:
+        logger.critical(
+            f"Repair budget exhausted for #{issue_number} / PR #{pr_number}: "
+            f"{ordinal} repairs recorded, max is {MAX_AUTOMATED_REPAIRS}. Switching to needs-human."
+        )
+        fail_closed_to_needs_human(repo, issue_number, "repair_budget_exhausted_max_3", attempt_id)
+        return False, "repair_budget_exhausted_needs_human", {"repair_ordinal": ordinal}
+
+    # 6. Acquire Lease
+    acquired, lease_token, lease_reason = ledger.acquire_lease(repo, issue_number, owner_id)
+    if not acquired:
+        logger.warning(f"Could not acquire lease for #{issue_number} repair: {lease_reason}")
+        return False, f"lease_unavailable_{lease_reason}", {}
+
+    # 7. Record claim intent in ledger
+    trigger_key = f"repair_trigger:{repair_key}:{attempt_id}"
+    ledger_entry = ledger.record_claim_intent(
+        repo=repo,
+        issue_number=issue_number,
+        owner_id=owner_id,
+        lease_token=lease_token,
+        attempt_id=attempt_id,
+        attempt_kind=repair_kind,
+        trigger_key=trigger_key,
+        expected_pr_head_sha=expected_repair_baseline_sha,
+        repair_key=repair_key,
+        repair_ordinal=ordinal,
+        repair_cause_type=cause_type,
+        repair_cause_id=cause_id,
+        pr_number=pr_number,
+    )
+
+    # 8. CAS transition if reviewer repair
+    if repair_kind == "reviewer_repair":
+        transitioned, trans_reason = cas_transition_coordination_state(
+            repo, issue_number, "changes-requested", "agent-working"
+        )
+        if not transitioned:
+            ledger.record_outcome(attempt_id, "failed_to_claim", last_error=trans_reason)
+            ledger.release_lease(lease_token)
+            return False, f"transition_failed_{trans_reason}", {}
+
+    ledger.record_claimed(attempt_id)
+    ledger.record_launch_intent(attempt_id)
+
+    # 9. Launch Agent
+    title = (issue_details or {}).get("title", "")
+    source_label = "changes-requested" if repair_kind == "reviewer_repair" else "agent-working"
+    launch_result = dispatch_agent(repo, EASYEXAM_REPO_PATH, issue_number, title, source_label)
+
+    if launch_result.get("launch_confirmed") and launch_result.get("conversation_id"):
+        conv_id = launch_result["conversation_id"]
+        ledger.record_launch_confirmed(attempt_id, conv_id)
+        ledger.record_pr_bound(attempt_id, pr_number, branch=None, resulting_head_sha=expected_repair_baseline_sha)
+        logger.info(
+            f"Automated repair #{ordinal} launched successfully for #{issue_number} / PR #{pr_number}: {conv_id}"
+        )
+        return True, "repair_launched", {
+            "attempt_id": attempt_id,
+            "repair_ordinal": ordinal,
+            "conversation_id": conv_id,
+            "repair_key": repair_key,
+        }
+    else:
+        err_cat = launch_result.get("error_category") or "launch_unconfirmed"
+        ledger.record_outcome(attempt_id, "failed_to_launch", last_error=err_cat)
+        fail_closed_to_infra_blocked(repo, issue_number, err_cat, attempt_id)
+        ledger.release_lease(lease_token)
+        return False, f"launch_failed_{err_cat}", {"attempt_id": attempt_id}
+
 
 
 class WindowsSingleInstanceLock:
@@ -1505,6 +2273,74 @@ def reconcile_incomplete_dispatches(repo):
     return reconciliation_ok
 
 
+def reconcile_closure_v1(repo: str, ledger: ExecutionLedger = None) -> bool:
+    """
+    Startup & runtime reconciliation matching Frozen Spec Section 16:
+    - Missed triggers & incomplete receipts.
+    - Orphan agent-working issues: adopt existing PR or fail-closed.
+    - Watchdog timeouts: fail-closed to infra-blocked or needs-human.
+    - Cancellation fencing on stale active work.
+    """
+    ledger = ledger or get_ledger()
+    reconciled_ok = True
+
+    try:
+        issues = get_open_issues(repo)
+    except Exception as exc:
+        logger.error(f"Reconciliation error fetching issues: {exc}")
+        return False
+
+    if issues is None:
+        return True
+
+    for issue in issues:
+        issue_num = issue.get("number")
+        if not issue_num:
+            continue
+        labels = {l.get("name") if isinstance(l, dict) else str(l) for l in issue.get("labels", [])}
+
+        # Check orphan agent-working
+        if "agent-working" in labels:
+            active_lease = ledger.get_active_lease(repo, issue_num)
+            if not active_lease:
+                adoption_status, adopted_pr = adopt_existing_pr(repo, issue_num)
+                if adoption_status == "adopted" and adopted_pr:
+                    pr_num = adopted_pr.get("number")
+                    pr_branch = ((adopted_pr.get("head") or {}).get("ref")) or ""
+                    pr_sha = ((adopted_pr.get("head") or {}).get("sha")) or ""
+                    attempt_id = str(uuid.uuid4())
+                    owner_id = f"reconciler-{os.getpid()}"
+                    acq_ok, token, _ = ledger.acquire_lease(repo, issue_num, owner_id)
+                    ledger.record_claim_intent(
+                        repo=repo,
+                        issue_number=issue_num,
+                        owner_id=owner_id,
+                        lease_token=token or "adopted",
+                        attempt_id=attempt_id,
+                        attempt_kind="pr_adoption",
+                        trigger_key=f"reconcile_adopt:{pr_num}",
+                        pr_number=pr_num,
+                        branch=pr_branch,
+                        expected_pr_head_sha=pr_sha,
+                    )
+                    ledger.record_claimed(attempt_id)
+                    ledger.record_launch_intent(attempt_id)
+                    ledger.record_launch_confirmed(attempt_id, f"adopted-pr-{pr_num}")
+                    ledger.record_pr_bound(attempt_id, pr_num, pr_branch, pr_sha)
+                    logger.info(f"Reconciliation: adopted orphan PR #{pr_num} for Issue #{issue_num}")
+                elif adoption_status == "needs_human_multiple_candidates":
+                    fail_closed_to_needs_human(repo, issue_num, "multiple_pr_candidates_on_reconcile")
+                    reconciled_ok = False
+                elif adoption_status == "invalid_author":
+                    fail_closed_to_infra_blocked(repo, issue_num, "orphan_pr_invalid_author")
+                    reconciled_ok = False
+                else:
+                    fail_closed_to_infra_blocked(repo, issue_num, "orphan_agent_working_detected")
+                    reconciled_ok = False
+
+    return reconciled_ok
+
+
 def poll_cycle():
     """Run one polling iteration."""
     if not reconcile_incomplete_dispatches(EASYEXAM_REPO):
@@ -1694,7 +2530,7 @@ def main():
         )
 
         try:
-            reconciliation_ok = reconcile_incomplete_dispatches(EASYEXAM_REPO)
+            reconciliation_ok = reconcile_incomplete_dispatches(EASYEXAM_REPO) and reconcile_closure_v1(EASYEXAM_REPO)
         except Exception as exc:
             logger.error("Could not reconcile incomplete dispatch attempts (%s)", type(exc).__name__)
             reconciliation_ok = False
@@ -1703,7 +2539,7 @@ def main():
             try:
                 if not reconciliation_ok:
                     try:
-                        reconciliation_ok = reconcile_incomplete_dispatches(EASYEXAM_REPO)
+                        reconciliation_ok = reconcile_incomplete_dispatches(EASYEXAM_REPO) and reconcile_closure_v1(EASYEXAM_REPO)
                     except Exception as exc:
                         logger.error("Dispatch remains paused until audit reconciliation succeeds (%s)", type(exc).__name__)
                 if reconciliation_ok:
