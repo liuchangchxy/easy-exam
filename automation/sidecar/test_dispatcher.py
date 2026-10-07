@@ -1152,7 +1152,7 @@ class ClosureV1ProductionPathIntegrationTests(unittest.TestCase):
         self.assertEqual(att["attempt_kind"], "reviewer_repair")
         self.assertEqual(att["pr_number"], 36)
         self.assertEqual(att["expected_pr_head_sha"], head_sha)
-        self.assertEqual(att["phase"], "PR_BOUND")
+        self.assertEqual(att["phase"], "LAUNCH_CONFIRMED")
         self.assertEqual(att["conversation_id"], "test-uuid-repair-1")
 
     @patch.object(dispatcher, "fail_closed_to_needs_human", return_value=True)
@@ -2609,6 +2609,193 @@ class ClosureV1WatchdogContinuousPollingAndHeadFencingTests(unittest.TestCase):
             self.assertIsNone(self.ledger.get_active_lease(repo, issue_number))
         mock_dispatch.assert_not_called()
 
+    @patch.object(dispatcher, "dispatch_agent", return_value={"launch_confirmed": True, "conversation_id": "conv-repair-lifecycle-1"})
+    @patch.object(dispatcher, "cas_transition_coordination_state", return_value=(True, "cas_ok"))
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "changes-requested"}]})
+    def test_repair_launch_keeps_launch_confirmed_until_new_push_and_advances_to_waiting_ci(self, mock_details, mock_cas, mock_dispatch):
+        """
+        Integration test verifying:
+        1. Both CI and Reviewer repair launches keep attempt in LAUNCH_CONFIRMED with expected_pr_head_sha.
+        2. advance_active_lifecycle reconciles:
+           - Before push (current_sha == expected_head): remains waiting_for_repair_push.
+           - After push (current_sha != expected_head): records PR_BOUND and transitions to WAITING_CI.
+        3. Proves old head cannot re-enter review/duplicate loops.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 35
+        pr_number = 36
+        old_failed_sha = "1111222233334444555566667777888899990000"
+        new_repair_sha = "2222333344445555666677778888999900001111"
+
+        # 1. Launch repair
+        mock_pr_old = {
+            "number": pr_number,
+            "state": "open",
+            "head": {"sha": old_failed_sha, "ref": "agent/branch-repair"},
+            "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+        }
+        with patch.object(dispatcher, "get_pull_request_details", return_value=mock_pr_old):
+            ok, reason, meta = dispatcher.dispatch_automated_repair(
+                repo=repo,
+                issue_number=issue_number,
+                pr_number=pr_number,
+                current_pr_head_sha=old_failed_sha,
+                expected_repair_baseline_sha=old_failed_sha,
+                repair_kind="reviewer_repair",
+                cause_type="changes_requested",
+                cause_id="review-cr-1",
+                failure_detail={"id": 123},
+                ledger=self.ledger,
+                branch="agent/branch-repair",
+            )
+            self.assertTrue(ok)
+            self.assertEqual(reason, "repair_launched")
+
+        att_id = meta["attempt_id"]
+        attempt = self.ledger.get_attempt(att_id)
+        # Attempt MUST be in LAUNCH_CONFIRMED, NOT PR_BOUND
+        self.assertEqual(attempt["phase"], "LAUNCH_CONFIRMED")
+        self.assertEqual(attempt["expected_pr_head_sha"], old_failed_sha)
+        self.assertEqual(attempt["conversation_id"], "conv-repair-lifecycle-1")
+
+        # 2. Reconcile before new push (current_sha == old_failed_sha)
+        adv_ok1, adv_reason1 = dispatcher.advance_active_lifecycle(
+            repo, attempt, ledger=self.ledger, pr_details=mock_pr_old
+        )
+        self.assertTrue(adv_ok1)
+        self.assertEqual(adv_reason1, "waiting_for_repair_push")
+        attempt_after1 = self.ledger.get_attempt(att_id)
+        self.assertEqual(attempt_after1["phase"], "LAUNCH_CONFIRMED")
+
+        # 3. Reconcile after new push (current_sha == new_repair_sha)
+        mock_pr_new = {
+            "number": pr_number,
+            "state": "open",
+            "head": {"sha": new_repair_sha, "ref": "agent/branch-repair"},
+            "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+        }
+        adv_ok2, adv_reason2 = dispatcher.advance_active_lifecycle(
+            repo, attempt, ledger=self.ledger, pr_details=mock_pr_new
+        )
+        self.assertTrue(adv_ok2)
+        self.assertEqual(adv_reason2, "waiting_ci")
+        attempt_after2 = self.ledger.get_attempt(att_id)
+        # Proven: transitioned to WAITING_CI with resulting_head_sha = new_repair_sha
+        self.assertEqual(attempt_after2["phase"], "WAITING_CI")
+        self.assertEqual(attempt_after2["resulting_head_sha"], new_repair_sha)
+
+        # 4. Old head cannot re-enter review/duplicate loops
+        old_repair_key = dispatcher.compute_repair_key(repo, pr_number, old_failed_sha)
+        self.assertTrue(self.ledger.is_repair_key_processed(old_repair_key))
+
+    def test_duplicate_repair_routes_through_in_flight_attempt_and_renews_lease(self):
+        """
+        Verify that receiving a duplicate failure or changes_requested event when an in-flight
+        repair exists routes through it, checks watchdog, renews lease, and does not strand
+        in an unmonitored holding pattern.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 35
+        pr_number = 36
+        head_sha = "3333444455556666777788889999000011112222"
+
+        # Set up an active lease and in-flight attempt in LAUNCH_CONFIRMED
+        ok, lease_tok, _ = self.ledger.acquire_lease(repo, issue_number, "test-worker-dup")
+        att_id = "att-in-flight-repair"
+        repair_key = dispatcher.compute_repair_key(repo, pr_number, head_sha)
+        self.ledger.record_claim_intent(
+            repo, issue_number, "test-worker-dup", lease_tok, att_id, "ci_repair",
+            f"trig:{att_id}", pr_number=pr_number, branch="agent/dup",
+            expected_pr_head_sha=head_sha, repair_key=repair_key, repair_ordinal=1
+        )
+        self.ledger.record_claimed(att_id)
+        self.ledger.record_launch_confirmed(att_id, "conv-in-flight-dup")
+
+        mock_pr = {
+            "number": pr_number,
+            "state": "open",
+            "head": {"sha": head_sha, "ref": "agent/dup"},
+            "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+        }
+        ci_fail = {"name": "Backend & Packaging Tests", "conclusion": "failure"}
+
+        # Simulate advance_active_lifecycle receiving CI failure on duplicate repair key
+        mock_attempt = {
+            "attempt_id": "att-new-eval",
+            "issue_number": issue_number,
+            "pr_number": pr_number,
+            "lease_token": lease_tok,
+            "phase": "WAITING_CI",
+            "resulting_head_sha": head_sha,
+        }
+        ci_fail_status = {"status": "failure", "failed_check": ci_fail, "completed_count": 5, "total_checks": 5, "all_checks": [ci_fail]}
+        with patch.object(dispatcher, "get_pr_checks_status", return_value=ci_fail_status):
+            adv_ok, adv_reason = dispatcher.advance_active_lifecycle(
+                repo, mock_attempt, ledger=self.ledger, pr_details=mock_pr, checks_data=[ci_fail]
+            )
+        self.assertTrue(adv_ok)
+        self.assertEqual(adv_reason, "duplicate_ci_repair_ignored")
+
+        # Lease must remain active and renewed
+        lease = self.ledger.get_active_lease(repo, issue_number)
+        self.assertIsNotNone(lease)
+        self.assertEqual(lease["lease_token"], lease_tok)
+
+    def test_implementer_heartbeat_progress_extends_watchdog_deadline_and_stalled_fails_closed(self):
+        """
+        Verify:
+        1. When Implementer conversation shows progress, heartbeat_at is refreshed.
+        2. An active attempt with fresh heartbeat survives past IMPLEMENTER_DEADLINE_SECONDS from phase_entered_at.
+        3. A stalled attempt without fresh heartbeat fails closed (implementer_heartbeat_timeout) after 1800s.
+        """
+        start_ts = 1000000.0
+        now_ts = start_ts + 2000.0  # 2000s > 1800s (IMPLEMENTER_DEADLINE_SECONDS)
+
+        # 1. Stalled attempt (no heartbeat refreshed, heartbeat_at == phase_entered_at = start_ts)
+        start_iso = datetime.fromtimestamp(start_ts, tz=timezone.utc).isoformat()
+        stalled_attempt = {
+            "attempt_id": "att-stalled",
+            "phase": "LAUNCH_CONFIRMED",
+            "phase_entered_at": start_iso,
+            "heartbeat_at": start_iso,
+            "created_at": start_iso,
+        }
+        timed_out1, reason1, target1 = dispatcher.evaluate_watchdog_timeout(stalled_attempt, now_ts=now_ts)
+        self.assertTrue(timed_out1)
+        self.assertEqual(reason1, "implementer_heartbeat_timeout")
+        self.assertEqual(target1, "infra-blocked")
+
+        # 2. Active attempt (heartbeat refreshed 100s ago)
+        active_hb_ts = now_ts - 100.0
+        active_hb_iso = datetime.fromtimestamp(active_hb_ts, tz=timezone.utc).isoformat()
+        active_attempt = {
+            "attempt_id": "att-active",
+            "phase": "LAUNCH_CONFIRMED",
+            "phase_entered_at": start_iso,  # phase_entered_at is 2000s ago, preserving phase deadline
+            "heartbeat_at": active_hb_iso,  # recent heartbeat
+            "created_at": start_iso,
+        }
+        timed_out2, reason2, target2 = dispatcher.evaluate_watchdog_timeout(active_attempt, now_ts=now_ts)
+        self.assertFalse(timed_out2)
+        self.assertIsNone(reason2)
+
+        # 3. ExecutionLedger.update_heartbeat updates heartbeat_at without resetting phase_entered_at
+        self.ledger.record_claim_intent(
+            "liuchangchxy/easy-exam", 35, "w1", "tok1", "att-hb-test", "ci_repair", "trig-hb"
+        )
+        self.ledger.record_claimed("att-hb-test")
+        self.ledger.record_phase("att-hb-test", "LAUNCH_CONFIRMED", phase_entered_at=start_iso)
+        reloaded1 = self.ledger.get_attempt("att-hb-test")
+        self.assertEqual(reloaded1["phase_entered_at"], start_iso)
+
+        self.ledger.update_heartbeat("att-hb-test")
+        reloaded2 = self.ledger.get_attempt("att-hb-test")
+        # phase_entered_at must remain untouched
+        self.assertEqual(reloaded2["phase_entered_at"], start_iso)
+        # heartbeat_at must be updated to recent time
+        self.assertNotEqual(reloaded2["heartbeat_at"], start_iso)
+
 
 if __name__ == "__main__":
     unittest.main()
+

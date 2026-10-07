@@ -483,8 +483,16 @@ def evaluate_watchdog_timeout(attempt: dict, now_ts: float = None) -> tuple[bool
     if phase == "LAUNCH_INTENT" and elapsed > LAUNCH_CONFIRMATION_DEADLINE_SECONDS:
         return True, "launch_confirmation_timeout", "infra-blocked"
 
-    if phase in ("LAUNCH_CONFIRMED", "PR_BOUND") and elapsed > IMPLEMENTER_DEADLINE_SECONDS:
-        return True, "implementer_heartbeat_timeout", "infra-blocked"
+    if phase in ("LAUNCH_CONFIRMED", "PR_BOUND"):
+        # For implementer phases, check elapsed time since latest heartbeat (or phase_entered_at if no heartbeat)
+        hb_str = attempt.get("heartbeat_at") or updated_str
+        try:
+            hb_dt = datetime.fromisoformat(hb_str.replace("Z", "+00:00"))
+            hb_elapsed = now - hb_dt.timestamp()
+        except Exception:
+            hb_elapsed = elapsed
+        if hb_elapsed > IMPLEMENTER_DEADLINE_SECONDS:
+            return True, "implementer_heartbeat_timeout", "infra-blocked"
 
     if phase == "WAITING_CI" and elapsed > CI_TERMINALIZATION_DEADLINE_SECONDS:
         return True, "ci_terminalization_timeout", "infra-blocked"
@@ -844,6 +852,25 @@ class ExecutionLedger:
             )
             return cur.fetchone() is not None
 
+    def get_active_repair_attempt(self, repair_key: str) -> dict | None:
+        """Return the active in-progress attempt record for this repair key, if any."""
+        if not repair_key:
+            return None
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT * FROM execution_ledger
+                WHERE repair_key = ?
+                  AND phase != 'EXECUTION_OUTCOME'
+                  AND outcome = 'in_progress'
+                ORDER BY id DESC LIMIT 1
+                """,
+                (repair_key,),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+
     def get_all_attempts_for_issue(self, repo: str, issue_number: int) -> list[dict]:
         with self._get_connection() as conn:
             cur = conn.cursor()
@@ -1190,7 +1217,6 @@ def dispatch_automated_repair(
     if launch_result.get("launch_confirmed") and launch_result.get("conversation_id"):
         conv_id = launch_result["conversation_id"]
         ledger.record_launch_confirmed(attempt_id, conv_id)
-        ledger.record_pr_bound(attempt_id, pr_number, branch=branch, resulting_head_sha=expected_repair_baseline_sha)
         logger.info(
             f"Automated repair #{ordinal} launched successfully for #{issue_number} / PR #{pr_number}: {conv_id}"
         )
@@ -1242,27 +1268,62 @@ def dispatch_automated_repair(
 
 
 class WindowsSingleInstanceLock:
-    """Windows Named Mutex to ensure single dispatcher instance."""
+    """Named Mutex / file lock to ensure single dispatcher instance across Windows and Unix hosts."""
 
     def __init__(self, mutex_name="Local\\EasyExamDispatcherMutex"):
         self.mutex_name = mutex_name
         self.mutex_handle = None
+        self._unix_fd = None
 
     def acquire(self):
-        kernel32 = ctypes.windll.kernel32
-        self.mutex_handle = kernel32.CreateMutexW(None, False, self.mutex_name)
-        last_error = kernel32.GetLastError()
-        if last_error == ERROR_ALREADY_EXISTS:
-            logger.error(
-                f"Another instance of dispatcher is already running (Mutex {self.mutex_name} exists). Exiting immediately."
-            )
-            return False
-        return True
+        if sys.platform == "win32":
+            kernel32 = ctypes.windll.kernel32
+            self.mutex_handle = kernel32.CreateMutexW(None, False, self.mutex_name)
+            last_error = kernel32.GetLastError()
+            if last_error == ERROR_ALREADY_EXISTS:
+                logger.error(
+                    f"Another instance of dispatcher is already running (Mutex {self.mutex_name} exists). Exiting immediately."
+                )
+                return False
+            return True
+        else:
+            try:
+                import fcntl
+                import tempfile
+                safe_name = self.mutex_name.replace("\\", "_").replace(":", "_").replace("/", "_")
+                lock_file = os.path.join(tempfile.gettempdir(), f"{safe_name}.lock")
+                self._unix_fd = open(lock_file, "w")
+                fcntl.flock(self._unix_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return True
+            except (BlockingIOError, OSError):
+                if self._unix_fd:
+                    try:
+                        self._unix_fd.close()
+                    except Exception:
+                        pass
+                    self._unix_fd = None
+                logger.error(
+                    f"Another instance of dispatcher is already running (Lock {self.mutex_name} exists). Exiting immediately."
+                )
+                return False
+            except Exception as exc:
+                logger.warning(f"Could not initialize single-instance lock on non-Windows host ({exc}); permitting execution.")
+                return True
 
     def release(self):
-        if self.mutex_handle:
-            ctypes.windll.kernel32.CloseHandle(self.mutex_handle)
-            self.mutex_handle = None
+        if sys.platform == "win32":
+            if self.mutex_handle:
+                ctypes.windll.kernel32.CloseHandle(self.mutex_handle)
+                self.mutex_handle = None
+        else:
+            if self._unix_fd:
+                try:
+                    import fcntl
+                    fcntl.flock(self._unix_fd.fileno(), fcntl.LOCK_UN)
+                    self._unix_fd.close()
+                except Exception:
+                    pass
+                self._unix_fd = None
 
 
 def get_agentapi_cmd_prefix():
@@ -1332,6 +1393,60 @@ def extract_conversation_id(stdout):
         elif isinstance(current, list):
             pending.extend(current)
     return None
+
+
+def check_implementer_conversation_progress(conversation_id: str) -> tuple[bool, float | None]:
+    """
+    Check if the Antigravity Implementer conversation has observable progress on disk.
+    Inspects conversation SQLite db and/or transcript logs.
+    Returns (has_progress: bool, latest_activity_ts: float | None).
+    """
+    if not conversation_id or not re.fullmatch(
+        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+        conversation_id,
+    ):
+        return False, None
+
+    candidate_roots = [
+        Path.home() / ".gemini" / "antigravity",
+    ]
+    if sys.platform == "win32" or os.name == "nt":
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            candidate_roots.append(Path(local_app_data) / "Programs" / "antigravity")
+        app_data = os.environ.get("APPDATA")
+        if app_data:
+            candidate_roots.append(Path(app_data) / "Antigravity")
+
+    latest_mtime = None
+    found_any = False
+
+    for root in candidate_roots:
+        # Check SQLite db
+        db_path = root / "conversations" / f"{conversation_id}.db"
+        if db_path.exists():
+            found_any = True
+            try:
+                mtime = db_path.stat().st_mtime
+                if latest_mtime is None or mtime > latest_mtime:
+                    latest_mtime = mtime
+            except OSError:
+                pass
+
+        # Check transcript log
+        log_path = root / "brain" / conversation_id / ".system_generated" / "logs" / "transcript.jsonl"
+        if log_path.exists():
+            found_any = True
+            try:
+                mtime = log_path.stat().st_mtime
+                if latest_mtime is None or mtime > latest_mtime:
+                    latest_mtime = mtime
+            except OSError:
+                pass
+
+    if found_any and latest_mtime is not None:
+        return True, latest_mtime
+    return False, None
 
 
 def _audit_safe_value(value):
@@ -3082,6 +3197,15 @@ def advance_active_lifecycle(
 
             if is_repair and expected_head and current_sha == expected_head:
                 # Repair agent still in progress, hasn't pushed new head yet
+                conv_id = attempt.get("conversation_id")
+                if conv_id:
+                    has_progress, _ = check_implementer_conversation_progress(conv_id)
+                    if has_progress:
+                        ledger.update_heartbeat(attempt_id)
+                        reloaded = ledger.get_attempt(attempt_id)
+                        if reloaded:
+                            attempt.update(reloaded)
+
                 timed_out, reason, target = evaluate_watchdog_timeout(attempt, now_ts=now_ts)
                 if timed_out:
                     fail_closed_to_infra_blocked(repo, issue_number, reason, attempt_id)
@@ -3118,6 +3242,14 @@ def advance_active_lifecycle(
             logger.info(
                 f"Production lifecycle: Issue #{issue_number} transitioned LAUNCH_CONFIRMED -> PR_BOUND (PR #{pr_num}, SHA {current_sha})"
             )
+
+            if is_repair:
+                # Transition immediately PR_BOUND -> WAITING_CI for repair pushes
+                transition_attempt_phase(attempt, ledger, "WAITING_CI", resulting_head_sha=current_sha, now_ts=now_ts)
+                logger.info(
+                    f"Production lifecycle: Issue #{issue_number} (PR #{pr_num}) transitioned PR_BOUND -> WAITING_CI after repair push"
+                )
+                return True, "waiting_ci"
             return True, "pr_bound"
         else:
             # PR not created yet
@@ -3221,6 +3353,25 @@ def advance_active_lifecycle(
                 repair_key = compute_repair_key(repo, pr_number, current_head_sha)
                 if ledger.is_repair_key_processed(repair_key):
                     logger.info(f"Duplicate CI repair ignored for {repair_key}")
+                    in_flight = ledger.get_active_repair_attempt(repair_key)
+                    if in_flight:
+                        in_flight_id = in_flight.get("attempt_id")
+                        in_flight_conv = in_flight.get("conversation_id")
+                        if in_flight_conv:
+                            has_prog, _ = check_implementer_conversation_progress(in_flight_conv)
+                            if has_prog:
+                                ledger.update_heartbeat(in_flight_id)
+                        timed_out, reason, target = evaluate_watchdog_timeout(in_flight, now_ts=now_ts)
+                        if timed_out:
+                            fail_closed_to_infra_blocked(repo, issue_number, reason, in_flight_id)
+                            ledger.record_outcome(in_flight_id, "timeout_infra_blocked", last_error=reason)
+                            if lease_token:
+                                ledger.release_lease(lease_token)
+                            ledger.release_issue_lease(repo, issue_number)
+                            return False, reason
+                    if lease_token:
+                        ledger.renew_lease(lease_token)
+                    ledger.renew_issue_lease(repo, issue_number)
                     return True, "duplicate_ci_repair_ignored"
 
                 ledger.record_outcome(attempt_id, "repaired_ci_failure", resulting_head_sha=current_head_sha)
@@ -3344,6 +3495,25 @@ def advance_active_lifecycle(
             repair_key = compute_repair_key(repo, pr_number, current_head_sha)
             if ledger.is_repair_key_processed(repair_key):
                 logger.info(f"Duplicate reviewer repair ignored for {repair_key}")
+                in_flight = ledger.get_active_repair_attempt(repair_key)
+                if in_flight:
+                    in_flight_id = in_flight.get("attempt_id")
+                    in_flight_conv = in_flight.get("conversation_id")
+                    if in_flight_conv:
+                        has_prog, _ = check_implementer_conversation_progress(in_flight_conv)
+                        if has_prog:
+                            ledger.update_heartbeat(in_flight_id)
+                    timed_out, reason, target = evaluate_watchdog_timeout(in_flight, now_ts=now_ts)
+                    if timed_out:
+                        fail_closed_to_infra_blocked(repo, issue_number, reason, in_flight_id)
+                        ledger.record_outcome(in_flight_id, "timeout_infra_blocked", last_error=reason)
+                        if lease_token:
+                            ledger.release_lease(lease_token)
+                        ledger.release_issue_lease(repo, issue_number)
+                        return False, reason
+                if lease_token:
+                    ledger.renew_lease(lease_token)
+                ledger.renew_issue_lease(repo, issue_number)
                 return True, "duplicate_reviewer_repair_ignored"
 
             ledger.record_outcome(attempt_id, "repaired_reviewer_changes_requested", resulting_head_sha=current_head_sha)
