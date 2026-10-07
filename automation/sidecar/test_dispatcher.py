@@ -1,6 +1,7 @@
 import os
 import shutil
 import sys
+import tempfile
 from datetime import datetime, timezone
 import time
 from pathlib import Path
@@ -490,30 +491,80 @@ class CoordinationRoutingAndBypassTests(unittest.TestCase):
         finally:
             lock1.release()
 
+    @staticmethod
+    def _find_real_gh_executable() -> str | None:
+        for drive in ["C", "D"]:
+            for sub in [r"Program Files\GitHub CLI\gh.exe", r"Program Files\GitHub CLI\bin\gh.exe"]:
+                candidate = f"{drive}:\\{sub}"
+                if os.path.isfile(candidate):
+                    return candidate
+        for p in os.environ.get("PATH", "").split(os.pathsep):
+            if not p:
+                continue
+            cand = os.path.join(p, "gh.exe")
+            if os.path.isfile(cand):
+                return cand
+        return None
+
+    @staticmethod
+    def _find_real_git_executable() -> str | None:
+        for drive in ["C", "D"]:
+            for sub in [r"Program Files\Git\cmd\git.exe", r"Program Files\Git\bin\git.exe"]:
+                candidate = f"{drive}:\\{sub}"
+                if os.path.isfile(candidate):
+                    return candidate
+        for p in os.environ.get("PATH", "").split(os.pathsep):
+            if not p:
+                continue
+            cand = os.path.join(p, "git.exe")
+            if os.path.isfile(cand):
+                return cand
+        return None
+
     def test_absolute_gh_exe_bypasses_gh_cmd_guard(self):
         """
         Regression test documenting that PATH shim (gh.cmd) does NOT protect against
-        direct absolute invocation of C:\\Program Files\\GitHub CLI\\gh.exe.
+        direct absolute invocation of gh.exe.
+        Deterministic across local Windows environments and GitHub Actions runners.
         """
-        import subprocess
-        gh_cmd = "gh.cmd" if sys.platform == "win32" and shutil.which("gh.cmd") else "gh"
-        proc_shim = subprocess.run(
-            [gh_cmd, "issue", "edit", "--help"],
-            capture_output=True,
-            text=True,
-            shell=True,
-        )
-        self.assertEqual(proc_shim.returncode, 1)
-        self.assertIn("GitHub write blocked in Implementer shell", proc_shim.stderr)
+        if sys.platform != "win32":
+            self.skipTest("PATH shim bypass regression is specific to Windows")
 
-        # 2. Direct absolute path invocation runs real gh.exe without hitting gh_guard.py
-        real_gh = r"C:\Program Files\GitHub CLI\gh.exe"
-        if os.path.isfile(real_gh):
+        import subprocess
+
+        with tempfile.TemporaryDirectory() as td:
+            # 1. Deterministic PATH shim that blocks writes
+            shim_path = os.path.join(td, "gh.cmd")
+            with open(shim_path, "w", encoding="utf-8") as f:
+                f.write("@echo off\n>&2 echo GitHub write blocked in Implementer shell\nexit /b 1\n")
+
+            env = dict(os.environ)
+            env["PATH"] = td + os.pathsep + env.get("PATH", "")
+
+            # 1. PATH invocation hits shim and blocks
+            proc_shim = subprocess.run(
+                ["gh.cmd", "issue", "edit", "--help"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                shell=True,
+                env=env,
+            )
+            self.assertEqual(proc_shim.returncode, 1)
+            self.assertIn("GitHub write blocked in Implementer shell", proc_shim.stderr)
+
+            # 2. Direct absolute path invocation runs real gh.exe without hitting guard
+            real_gh = self._find_real_gh_executable()
+            self.assertIsNotNone(real_gh, "Real gh.exe must be present on Windows runner")
             proc_real = subprocess.run(
                 [real_gh, "issue", "edit", "--help"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 shell=False,
+                env=env,
             )
             # Exits 0 and prints usage, proving gh_guard.py was bypassed
             self.assertEqual(proc_real.returncode, 0)
@@ -523,30 +574,49 @@ class CoordinationRoutingAndBypassTests(unittest.TestCase):
     def test_absolute_git_exe_bypasses_git_cmd_guard(self):
         """
         Regression test documenting that PATH shim (git.cmd) does NOT protect against
-        direct absolute invocation of D:\\Program Files\\Git\\cmd\\git.exe.
+        direct absolute invocation of git.exe.
+        Deterministic across local Windows environments and GitHub Actions runners.
         """
-        import subprocess
-        # 1. PATH invocation 'git' hits guard and blocks 'push -h'
-        git_cmd = "git.cmd" if sys.platform == "win32" and shutil.which("git.cmd") else "git"
-        proc_shim = subprocess.run(
-            [git_cmd, "push", "-h"],
-            capture_output=True,
-            text=True,
-            shell=True,
-        )
-        self.assertEqual(proc_shim.returncode, 1)
-        self.assertIn("Direct git push blocked in Implementer shell", proc_shim.stderr)
+        if sys.platform != "win32":
+            self.skipTest("PATH shim bypass regression is specific to Windows")
 
-        # 2. Direct absolute path invocation runs real git.exe without hitting git_guard.py
-        real_git = r"D:\Program Files\Git\cmd\git.exe"
-        if os.path.isfile(real_git):
+        import subprocess
+
+        with tempfile.TemporaryDirectory() as td:
+            # 1. Deterministic PATH shim that blocks push
+            shim_path = os.path.join(td, "git.cmd")
+            with open(shim_path, "w", encoding="utf-8") as f:
+                f.write("@echo off\n>&2 echo Direct git push blocked in Implementer shell. Use app-git-push.\nexit /b 1\n")
+
+            env = dict(os.environ)
+            env["PATH"] = td + os.pathsep + env.get("PATH", "")
+
+            # 1. PATH invocation hits shim and blocks
+            proc_shim = subprocess.run(
+                ["git.cmd", "push", "-h"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                shell=True,
+                env=env,
+            )
+            self.assertEqual(proc_shim.returncode, 1)
+            self.assertIn("Direct git push blocked in Implementer shell", proc_shim.stderr)
+
+            # 2. Direct absolute path invocation runs real git.exe without hitting guard
+            real_git = self._find_real_git_executable()
+            self.assertIsNotNone(real_git, "Real git.exe must be present on Windows runner")
             proc_real = subprocess.run(
                 [real_git, "push", "-h"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 shell=False,
+                env=env,
             )
-            # Exits 1 (due to -h usage exit) and prints git push usage, proving git_guard.py was bypassed
+            # Exits with git usage output (returncode 129 in git CLI), proving guard was bypassed
             self.assertIn("usage: git push", proc_real.stderr + proc_real.stdout)
             self.assertNotIn("Direct git push blocked in Implementer shell", proc_real.stderr)
 
