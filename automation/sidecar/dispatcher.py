@@ -1,0 +1,1735 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+EasyExam Dispatcher Sidecar for Antigravity 2.0
+Polls GitHub for frozen EasyExam agent tasks and dispatches Antigravity implementers.
+"""
+
+import ctypes
+from ctypes import wintypes
+import importlib.util
+import json
+import logging
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import time
+import uuid
+from datetime import datetime, timezone
+
+# Ensure UTF-8 output on Windows
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", line_buffering=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("easyexam-dispatcher")
+
+# Environment configurations
+EASYEXAM_REPO = os.environ.get("EASYEXAM_REPO", "liuchangchxy/easy-exam")
+EASYEXAM_REPO_PATH = os.environ.get("EASYEXAM_REPO_PATH", str(Path(__file__).resolve().parents[2]))
+EASYEXAM_POLL_SECONDS = int(os.environ.get("EASYEXAM_POLL_SECONDS", "10"))
+EASYEXAM_DRY_RUN = os.environ.get("EASYEXAM_DRY_RUN", "0") in ("1", "true", "True")
+EASYEXAM_RUN_ONCE = os.environ.get("EASYEXAM_RUN_ONCE", "0") in ("1", "true", "True")
+GITHUB_APP_ID = os.environ.get("EASYEXAM_GITHUB_APP_ID", "5187459")
+GITHUB_APP_HELPER = Path(os.environ.get(
+    "EASYEXAM_GITHUB_APP_HELPER",
+    str(Path.home() / ".gemini" / "credentials" / "github-app" / "github_app_credentials.py"),
+))
+APP_GH_EXECUTOR = Path(os.environ.get(
+    "EASYEXAM_APP_GH_EXECUTOR",
+    str(Path.home() / ".gemini" / "credentials" / "github-app" / "app_gh.py"),
+))
+APP_GIT_PUSH_EXECUTOR = Path(os.environ.get(
+    "EASYEXAM_APP_GIT_PUSH_EXECUTOR",
+    str(Path.home() / ".gemini" / "credentials" / "github-app" / "app_git_push.py"),
+))
+GITHUB_APP_EXPECTED_PERMISSIONS = {
+    "contents": "write", "pull_requests": "write", "issues": "write",
+    "metadata": "read", "actions": "read", "checks": "read",
+}
+GITHUB_APP_SLUG = os.environ.get("EASYEXAM_GITHUB_APP_SLUG", "chang-implementer")
+DISPATCHER_VERSION = "2026-10-05.06-cas-backoff-routing"
+DISPATCH_AUDIT_PATH = Path(
+    os.environ.get(
+        "EASYEXAM_DISPATCH_AUDIT_PATH",
+        str(Path.home() / ".gemini" / "config" / "sidecars" / "easyexam-dispatcher" / "dispatch_audit.jsonl"),
+    )
+)
+
+COORDINATION_LABELS = {
+    "agent-ready",
+    "agent-working",
+    "changes-requested",
+    "infra-blocked",
+    "needs-human",
+}
+
+CLAIM_BACKOFF_MAP: dict[int, dict] = {}
+
+# Timeouts in seconds
+GITHUB_TIMEOUT_SECONDS = 30
+AGENTAPI_TIMEOUT_SECONDS = 60
+
+ERROR_ALREADY_EXISTS = 183
+
+
+class RecoverySpec:
+    """Explicit, trusted repo-external specification for a recovery task."""
+
+    def __init__(
+        self,
+        issue_number: int,
+        preserved_sha: str,
+        recovery_branch: str,
+        allowed_changed_files: list[str],
+        allow_reimplementation: bool = False,
+        allow_new_implementation_commit: bool = False,
+        push_executor: str = "app-git-push",
+        github_write_executor: str = "app-gh",
+    ):
+        self.issue_number = int(issue_number)
+        self.preserved_sha = str(preserved_sha).strip()
+        self.recovery_branch = str(recovery_branch).strip()
+        self.allowed_changed_files = list(allowed_changed_files)
+        self.allow_reimplementation = bool(allow_reimplementation)
+        self.allow_new_implementation_commit = bool(allow_new_implementation_commit)
+        self.push_executor = str(push_executor).strip()
+        self.github_write_executor = str(github_write_executor).strip()
+
+
+TRUSTED_RECOVERY_JOBS: dict[int, RecoverySpec] = {
+    4: RecoverySpec(
+        issue_number=4,
+        preserved_sha="4428ef14bffd0bf94fc28bff508e7be5ec2a30f0",
+        recovery_branch="agent/issue-4-self-contained-mobile-e2e-bot",
+        allowed_changed_files=[
+            "frontend/tests/mobile_interaction_suite.mjs",
+            "frontend/tests/fixtures/mobile_interaction_questions.md",
+        ],
+        allow_reimplementation=False,
+        allow_new_implementation_commit=False,
+        push_executor="app-git-push",
+        github_write_executor="app-gh",
+    )
+}
+
+
+def get_recovery_spec(issue_number):
+    """
+    Retrieve trusted repo-external recovery specification for an issue.
+    Not controllable by caller environment or repo files.
+    """
+    try:
+        num = int(issue_number)
+    except (TypeError, ValueError):
+        return None
+    return TRUSTED_RECOVERY_JOBS.get(num)
+
+
+def get_dispatch_mode(issue_number):
+    """Return 'recovery' if issue has a trusted recovery spec, else 'normal'."""
+    return "recovery" if get_recovery_spec(issue_number) is not None else "normal"
+
+
+def is_valid_canonical_pr_author(rest_pull_request):
+    """Validate the PR author using canonical GitHub REST pull_request.user fields."""
+    user = (rest_pull_request or {}).get("user") or {}
+    return (
+        user.get("login") == "chang-implementer[bot]"
+        and user.get("type") == "Bot"
+    )
+
+
+def check_pr_canonical_author_runtime(repo=EASYEXAM_REPO, pr_number=15):
+    """
+    Read-only check of canonical REST author for a PR.
+    Calls GET /repos/{repo}/pulls/{pr_number} and validates with is_valid_canonical_pr_author.
+    """
+    gh_bin = shutil.which("gh") or "gh"
+    cmd = [gh_bin, "api", f"repos/{repo}/pulls/{pr_number}"]
+    code, stdout, stderr, timeout = run_cmd(cmd, timeout=GITHUB_TIMEOUT_SECONDS)
+    if code != 0 or timeout or not stdout.strip():
+        logger.warning(f"Could not check PR #{pr_number} runtime canonical author")
+        return {"checked": False, "login": None, "type": None, "valid": False}
+    try:
+        data = json.loads(stdout)
+        user = data.get("user") or {}
+        login = user.get("login")
+        user_type = user.get("type")
+        valid = is_valid_canonical_pr_author(data)
+        return {"checked": True, "login": login, "type": user_type, "valid": valid}
+    except Exception as exc:
+        logger.warning(f"Failed to parse PR #{pr_number} REST response: {exc}")
+        return {"checked": False, "login": None, "type": None, "valid": False}
+
+
+class WindowsSingleInstanceLock:
+    """Windows Named Mutex to ensure single dispatcher instance."""
+
+    def __init__(self, mutex_name="Local\\EasyExamDispatcherMutex"):
+        self.mutex_name = mutex_name
+        self.mutex_handle = None
+
+    def acquire(self):
+        kernel32 = ctypes.windll.kernel32
+        self.mutex_handle = kernel32.CreateMutexW(None, False, self.mutex_name)
+        last_error = kernel32.GetLastError()
+        if last_error == ERROR_ALREADY_EXISTS:
+            logger.error(
+                f"Another instance of dispatcher is already running (Mutex {self.mutex_name} exists). Exiting immediately."
+            )
+            return False
+        return True
+
+    def release(self):
+        if self.mutex_handle:
+            ctypes.windll.kernel32.CloseHandle(self.mutex_handle)
+            self.mutex_handle = None
+
+
+def get_agentapi_cmd_prefix():
+    """
+    Locate language_server.exe directly to avoid cmd.exe shell wrapper.
+    Returns argv prefix list, e.g. [language_server_path, 'agentapi']
+    """
+    lang_server = os.environ.get(
+        "ANTIGRAVITY_LANGUAGE_SERVER_PATH",
+        str(Path.home() / "AppData" / "Local" / "Programs" / "antigravity" / "resources" / "bin" / "language_server.exe"),
+    )
+    if os.path.exists(lang_server):
+        return [lang_server, "agentapi"]
+
+    bat_path = shutil.which("agentapi.bat") or shutil.which("agentapi")
+    if bat_path and os.path.exists(bat_path):
+        try:
+            with open(bat_path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+            for line in content.splitlines():
+                line = line.strip()
+                if "language_server.exe" in line and not line.startswith("@") and not line.startswith("REM"):
+                    parts = line.split('"')
+                    if len(parts) >= 2 and os.path.exists(parts[1]):
+                        return [parts[1], "agentapi"]
+        except Exception as exc:
+            logger.warning(f"Could not parse agentapi.bat for language_server.exe: {exc}")
+        return [bat_path]
+
+    return ["agentapi"]
+
+
+def _redact_secrets(value, env):
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", errors="replace")
+    text = str(value or "")
+    for key in ("GH_TOKEN", "GITHUB_APP_TOKEN", "GITHUB_TOKEN"):
+        secret = (env or {}).get(key)
+        if secret:
+            text = text.replace(secret, "[REDACTED]")
+    return text.strip()
+
+
+def extract_conversation_id(stdout):
+    """Return the durable Antigravity conversation ID from agentapi JSON output."""
+    try:
+        payload = json.loads(stdout)
+    except (TypeError, json.JSONDecodeError):
+        return None
+
+    pending = [payload]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, str):
+            try:
+                pending.append(json.loads(current))
+            except (TypeError, json.JSONDecodeError):
+                continue
+        elif isinstance(current, dict):
+            conversation_id = current.get("conversationId") or current.get("conversation_id")
+            if isinstance(conversation_id, str) and re.fullmatch(
+                r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+                conversation_id,
+            ):
+                return conversation_id
+            pending.extend(current.values())
+        elif isinstance(current, list):
+            pending.extend(current)
+    return None
+
+
+def _audit_safe_value(value):
+    """Recursively omit credential and prompt fields before writing audit data."""
+    if isinstance(value, dict):
+        return {
+            key: _audit_safe_value(item)
+            for key, item in value.items()
+            if not re.search(r"private.?key|askpass|prompt|secret|password", str(key), re.IGNORECASE)
+            and str(key).lower() not in {
+                "gh_token", "github_app_token", "github_token", "access_token", "refresh_token", "token"
+            }
+        }
+    if isinstance(value, list):
+        return [_audit_safe_value(item) for item in value]
+    if isinstance(value, str):
+        value = re.sub(r"(?i)(gho|ghu|ghs)_[A-Za-z0-9_]+", "[REDACTED]", value)
+        return re.sub(r"eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", "[REDACTED]", value)
+    return value
+
+
+def append_dispatch_audit(record):
+    """Durably append one secret-free event to the sidecar-owned JSONL journal."""
+    safe_record = _audit_safe_value(record)
+    with open(DISPATCH_AUDIT_PATH, "a", encoding="utf-8", newline="\n") as audit_file:
+        audit_file.write(json.dumps(safe_record, ensure_ascii=False, sort_keys=True) + "\n")
+        audit_file.flush()
+        os.fsync(audit_file.fileno())
+
+
+def run_cmd(cmd_list, cwd=EASYEXAM_REPO_PATH, timeout=GITHUB_TIMEOUT_SECONDS, env=None):
+    """
+    Run an external command safely using argv list (shell=False).
+    Returns (returncode, stdout, stderr, timed_out); credential values are redacted.
+    """
+    try:
+        proc = subprocess.run(
+            cmd_list,
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            shell=False,
+            timeout=timeout,
+        )
+        return proc.returncode, _redact_secrets(proc.stdout, env), _redact_secrets(proc.stderr, env), False
+    except subprocess.TimeoutExpired as exc:
+        stdout = _redact_secrets(exc.stdout, env)
+        error_msg = f"Command timed out after {timeout}s: {' '.join(cmd_list[:3])}"
+        logger.error(error_msg)
+        return -1, stdout, error_msg, True
+    except Exception as exc:
+        error_msg = _redact_secrets(exc, env)
+        logger.error(f"Command execution error: {error_msg}")
+        return -1, "", error_msg, False
+
+
+def get_open_issues(repo):
+    """Query open issues with their labels and status using gh CLI."""
+    gh_bin = shutil.which("gh") or "gh"
+    cmd = [gh_bin, "issue", "list", "--repo", repo, "--state", "open", "--json", "number,title,labels,state"]
+    code, stdout, stderr, timed_out = run_cmd(cmd, timeout=GITHUB_TIMEOUT_SECONDS)
+    if code != 0 or timed_out:
+        logger.error(f"Failed to fetch open issues from GitHub: {stderr}")
+        return None
+    try:
+        return json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        logger.error(f"Failed to parse JSON response from gh CLI: {exc}")
+        return None
+
+
+def get_issue_details(repo, issue_number):
+    """Fetch current details of a specific issue to verify eligibility."""
+    gh_bin = shutil.which("gh") or "gh"
+    cmd = [gh_bin, "issue", "view", str(issue_number), "--repo", repo, "--json", "number,title,labels,state"]
+    code, stdout, stderr, timed_out = run_cmd(cmd, timeout=GITHUB_TIMEOUT_SECONDS)
+    if code != 0 or timed_out:
+        logger.error(f"Failed to view issue #{issue_number}: {stderr}")
+        return None
+    try:
+        return json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        logger.error(f"Failed to parse JSON for issue #{issue_number}: {exc}")
+        return None
+
+
+def record_claim_failure(issue_number: int, reason: str, base_backoff: float = 30.0, max_backoff: float = 300.0) -> float:
+    """Record a claim failure for an issue and return the backoff duration in seconds."""
+    entry = CLAIM_BACKOFF_MAP.get(int(issue_number), {"failures": 0, "next_retry": 0.0, "reason": ""})
+    failures = entry["failures"] + 1
+    duration = min(max_backoff, base_backoff * (2 ** (failures - 1)))
+    next_retry = time.time() + duration
+    CLAIM_BACKOFF_MAP[int(issue_number)] = {
+        "failures": failures,
+        "next_retry": next_retry,
+        "reason": str(reason),
+    }
+    logger.warning(
+        f"Claim backoff for Issue #{issue_number}: failure #{failures}, backing off {duration:.1f}s. Reason: {reason}"
+    )
+    return duration
+
+
+def is_in_claim_backoff(issue_number: int) -> tuple[bool, float]:
+    """Check if an issue is currently within its claim failure backoff window."""
+    entry = CLAIM_BACKOFF_MAP.get(int(issue_number))
+    if not entry:
+        return False, 0.0
+    remaining = entry["next_retry"] - time.time()
+    if remaining > 0:
+        return True, remaining
+    return False, 0.0
+
+
+def reset_claim_backoff(issue_number: int):
+    """Clear claim backoff tracking for an issue upon successful transition."""
+    CLAIM_BACKOFF_MAP.pop(int(issue_number), None)
+
+
+def execute_coordination_write(args: list[str], repo: str = EASYEXAM_REPO, timeout: int = GITHUB_TIMEOUT_SECONDS):
+    """
+    Execute a coordination-plane write using the dedicated GitHub App executor.
+    Does NOT use ordinary guarded gh from PATH.
+    """
+    if not APP_GH_EXECUTOR.is_file():
+        logger.error(f"App gh executor not found at: {APP_GH_EXECUTOR}")
+        return -1, "", "app_gh_executor_not_found", False
+
+    cmd = [sys.executable, str(APP_GH_EXECUTOR)] + args
+    return run_cmd(cmd, timeout=timeout)
+
+
+def cas_transition_coordination_state(
+    repo: str,
+    issue_number: int,
+    expected_state: str,
+    target_state: str,
+) -> tuple[bool, str]:
+    """
+    Strict Compare-And-Set (CAS) transition for coordination labels.
+    Guarantees:
+    1. Fresh pre-read of current issue state.
+    2. Validates expected_state is present in current coordination labels.
+    3. Validates target_state is NOT already present.
+    4. Validates no blocking labels (infra-blocked / needs-human) are present unexpectedly.
+    5. Deterministic label removal and addition using coordination write executor.
+    6. Post-write verification to confirm mutual exclusivity and target state presence.
+    Returns (success: bool, reason_category: str).
+    """
+    if expected_state not in COORDINATION_LABELS or target_state not in COORDINATION_LABELS:
+        return False, "invalid_coordination_labels"
+    if expected_state == target_state:
+        return False, "identity_transition_prohibited"
+
+    # Step 1: Fresh read
+    details = get_issue_details(repo, issue_number)
+    if not details or details.get("state") != "OPEN":
+        return False, "issue_not_open_or_missing"
+
+    current_labels = {
+        l.get("name") if isinstance(l, dict) else str(l)
+        for l in details.get("labels", [])
+    }
+
+    # Step 2: Check target already present
+    if target_state in current_labels:
+        logger.warning(
+            f"CAS ABORT for Issue #{issue_number}: target state '{target_state}' already present in labels: {current_labels}"
+        )
+        return False, "target_already_present"
+
+    # Step 3: Validate expected state
+    if expected_state not in current_labels:
+        logger.warning(
+            f"CAS ABORT for Issue #{issue_number}: expected '{expected_state}' not found in current labels: {current_labels}"
+        )
+        return False, "stale_expected_state"
+
+    # Step 4: Check blocking labels
+    blocking = {"infra-blocked", "needs-human"} - {expected_state, target_state}
+    found_blocking = blocking.intersection(current_labels)
+    if found_blocking:
+        logger.warning(
+            f"CAS ABORT for Issue #{issue_number}: blocking label(s) {found_blocking} present in labels: {current_labels}"
+        )
+        return False, "blocking_label_present"
+
+    # Step 5: Deterministic label replacement using coordination executor
+    cmd_edit = [
+        "issue",
+        "edit",
+        str(issue_number),
+        "--repo",
+        repo,
+        "--remove-label",
+        expected_state,
+        "--add-label",
+        target_state,
+    ]
+    code, stdout, stderr, timed_out = execute_coordination_write(cmd_edit, repo=repo)
+    if code != 0 or timed_out:
+        logger.error(
+            f"CAS WRITE FAILED for Issue #{issue_number} (-{expected_state}, +{target_state}): {stderr}"
+        )
+        return False, "github_write_failed"
+
+    # Step 6: Post-write verification
+    verified_details = get_issue_details(repo, issue_number)
+    if not verified_details:
+        logger.error(f"CAS POST-VERIFY FAILED: Could not read #{issue_number} after write")
+        return False, "post_verify_read_failed"
+
+    verified_labels = {
+        l.get("name") if isinstance(l, dict) else str(l)
+        for l in verified_details.get("labels", [])
+    }
+    if target_state not in verified_labels or expected_state in verified_labels:
+        logger.error(
+            f"CAS POST-VERIFY MISMATCH for #{issue_number}: expected +{target_state} -{expected_state}, found {verified_labels}"
+        )
+        return False, "post_verify_label_mismatch"
+
+    logger.info(
+        f"CAS transition SUCCESS for Issue #{issue_number}: {expected_state} -> {target_state}"
+    )
+    return True, "transition_succeeded"
+
+
+def set_issue_labels(repo, issue_number, remove_label, add_label):
+    """
+    Perform claim transition on GitHub issue: remove source label and add destination label.
+    Delegates to strict CAS transition.
+    """
+    ok, _ = cas_transition_coordination_state(repo, issue_number, remove_label, add_label)
+    return ok
+
+
+def fail_closed_to_infra_blocked(repo, issue_number, reason, attempt_id=None):
+    """
+    Fail-closed policy: Switch issue from agent-working to infra-blocked.
+    Prevents duplicate Agent dispatch and requires human intervention to unblock.
+    """
+    category = str(reason or "dispatch_unconfirmed")
+    if not re.fullmatch(r"[a-z0-9_]{1,64}", category):
+        category = "dispatch_unconfirmed"
+    logger.critical(
+        f"Entering fail-closed: switching #{issue_number} from agent-working to infra-blocked. Category: {category}"
+    )
+
+    details = get_issue_details(repo, issue_number)
+    labels = {
+        l.get("name") if isinstance(l, dict) else str(l)
+        for l in (details or {}).get("labels", [])
+    }
+    if details is not None and "infra-blocked" in labels and "agent-working" not in labels:
+        label_ok = True
+    else:
+        cmd_edit = [
+            "issue",
+            "edit",
+            str(issue_number),
+            "--repo",
+            repo,
+            "--remove-label",
+            "agent-working",
+            "--add-label",
+            "infra-blocked",
+        ]
+        code, _, stderr, timed_out = execute_coordination_write(cmd_edit, repo=repo)
+        label_ok = code == 0 and not timed_out
+        if not label_ok:
+            logger.critical(f"Failed to label #{issue_number} as infra-blocked: {stderr}")
+
+    marker = f"<!-- easyexam-dispatch-attempt:{attempt_id} -->" if attempt_id else None
+    comment_body = (
+        f"**[EasyExam Dispatcher Fail-Closed Alert]**\n\n"
+        f"Agent dispatch failed or could not be verified:\n"
+        f"- Reason category: `{category}`\n"
+        f"- Target coordination state: `infra-blocked`.\n"
+        f"Please check Antigravity agent logs and remove `infra-blocked` manually after resolving."
+    )
+    gh_bin = shutil.which("gh") or "gh"
+    if marker:
+        comment_body += f"\n\n{marker}"
+        cmd_find_comment = [
+            gh_bin,
+            "api",
+            f"repos/{repo}/issues/{issue_number}/comments",
+            "--paginate",
+            "--jq",
+            f'.[] | select((.body // "") | contains("{marker}")) | .id',
+        ]
+        find_code, found, _, find_timeout = run_cmd(cmd_find_comment, timeout=GITHUB_TIMEOUT_SECONDS)
+        comment_ok = find_code == 0 and not find_timeout and bool(found.strip())
+    else:
+        comment_ok = False
+
+    if not comment_ok:
+        cmd_comment = [
+            "issue",
+            "comment",
+            str(issue_number),
+            "--repo",
+            repo,
+            "--body",
+            comment_body,
+        ]
+        comment_code, _, _, comment_timeout = execute_coordination_write(cmd_comment, repo=repo)
+        comment_ok = comment_code == 0 and not comment_timeout
+    return label_ok and comment_ok
+
+
+def _build_recovery_prompt(repo, repo_path, issue_number, issue_title, source_label, spec):
+    """Construct deterministic recovery prompt for authorized recovery jobs."""
+    allowed_files_lines = "\n".join(f"- {f}" for f in spec.allowed_changed_files)
+    prompt = f"""工作目录：{repo_path}
+
+你是 EasyExam 的 Implementer Agent。
+
+仓库：
+{repo}
+
+目标任务：
+Issue #{issue_number}: {issue_title}
+触发来源：{source_label}
+协调状态：dispatcher 已将协调状态切换为 agent-working。
+执行模式：RECOVERY (受控恢复模式)
+
+====================================================
+【核心指令】THIS IS A RECOVERY TASK, NOT AN IMPLEMENTATION TASK.
+====================================================
+
+这是一次受控凭证边界恢复任务（Recovery Task），绝对不是普通实现任务！
+Human Architect 已经授权对 Issue #{issue_number} 执行 exact preserved commit 恢复。
+Recovery must reuse the preserved implementation commit exactly. No reimplementation or product-code changes are authorized.
+
+Preserved implementation SHA: {spec.preserved_sha}
+Target recovery branch: {spec.recovery_branch}
+
+====================
+一、凭证边界与 GitHub 写入规则（红线）
+====================
+
+GitHub writes:
+- NEVER use ordinary gh for writes
+- NEVER use ordinary git push
+- use app-gh
+- use app-git-push
+
+严禁使用普通 git push！
+严禁使用普通 gh pr create / gh pr merge！
+严禁使用普通 gh 进行任何写入操作（pr create/edit/merge, issue create/edit/comment, api write 等）！
+严禁使用 host human 凭据 (liuchangchxy) 进行任何写操作！
+
+Agent 终端环境已配置 FAIL-CLOSED 机械拦截 (mechanically blocked)：
+- 普通 git push 会被 git shim 机械阻断；
+- 普通 gh 写操作会被 gh shim 机械阻断；
+- 只有 app-gh 和 app-git-push 才能写。
+
+所有 Implementer GitHub 写操作必须显式调用受控 wrapper：
+- Git Push: 必须使用 app-git-push (或 python {APP_GIT_PUSH_EXECUTOR})
+- PR 创建: 必须使用 app-gh (或 python {APP_GH_EXECUTOR})
+
+普通只读命令（git status, git diff, git log, git rev-parse, git cat-file, gh pr view, gh issue view）直接在本地执行。
+
+====================
+二、Preserved SHA 与 Diff 验证（必须首先执行）
+====================
+
+在开始任何分支或推送操作前，必须进行严格本地验证：
+
+1. 验证 Preserved SHA 存在：
+   执行：
+   git rev-parse {spec.preserved_sha}
+   git cat-file -e {spec.preserved_sha}^{{commit}}
+   确认 commit 对象在本地仓库中完整存在。
+
+2. 验证 Exact Diff 严格受限：
+   检查 preserved commit 相对其 parent 所修改的文件：
+   git show --name-only --format="" {spec.preserved_sha}
+   或者：
+   git diff --name-only {spec.preserved_sha}~1 {spec.preserved_sha}
+   必须且仅允许包含以下文件：
+{allowed_files_lines}
+   如果包含任何其他文件，或者修改范围超出上述两文件限制：
+   立即 STOP 并报告 blocker！
+
+====================
+三、严禁重新实现与严禁修改产品代码 (No Reimplementation)
+====================
+
+- 严禁重新实现任何业务逻辑或测试逻辑！
+- 不修改上述允许文件
+- 不重新编辑 fixture ({spec.allowed_changed_files[1]})
+- 不重新编辑 suite ({spec.allowed_changed_files[0]})
+- 不做任何“顺手修复”
+- 不格式化
+- 不更新 dependency
+- 不修改 workflow
+- 不修改 docs
+- 绝对不触碰 EasyExam 产品代码！
+
+如果发现测试不通过或需要修改代码才能继续：
+立即 STOP 并报告 blocker，严禁自行修改代码或重新实现！
+
+====================
+四、Recovery Branch 准备（零新 Commit）
+====================
+
+必须使用指定的 recovery branch：
+{spec.recovery_branch}
+
+分支创建规则：
+1. 必须从 exact preserved SHA 创建：
+   git checkout -B {spec.recovery_branch} {spec.preserved_sha}
+2. 验证 recovery branch HEAD 必须严格等于 preserved SHA：
+   git rev-parse HEAD
+   HEAD 必须是 {spec.preserved_sha}。
+3. 【红线】Do not create any new implementation commit.
+   - 不 cherry-pick 出新 SHA
+   - 不 amend
+   - 不 rebase
+   - 不 merge
+   - 不 squash
+   - 不 recommit
+   目标必须是同一个 commit object ({spec.preserved_sha})，绝对不是“内容等价的新 commit”。
+   如果 recovery branch head 与 preserved SHA 不一致：立即 STOP！
+
+【不要信任旧 branch 状态】：
+已有旧 branch (agent/issue-4-self-contained-mobile-e2e) 来自 invalid credential chain。
+可以进行只读检查，但绝对不得将其作为最终 recovery branch。
+Recovery branch 必须且只能是 {spec.recovery_branch}，其 head 必须是 {spec.preserved_sha}。
+
+====================
+五、受控 App-Authenticated Push (指定 Expected SHA)
+====================
+
+必须使用 app-git-push 将 recovery branch 推送到 remote：
+命令格式（--expected-sha 为强制必填项）：
+app-git-push --branch {spec.recovery_branch} --expected-sha {spec.preserved_sha}
+或者：
+python {APP_GIT_PUSH_EXECUTOR} --branch {spec.recovery_branch} --expected-sha {spec.preserved_sha}
+
+严禁：
+- 使用普通 git push
+- 更改 --expected-sha 参数
+- push 到其他 repo 或其他 implementation branch
+
+推送后必须立即验证 remote branch SHA：
+git ls-remote origin refs/heads/{spec.recovery_branch}
+确认 remote branch 的 SHA 严格等于 {spec.preserved_sha}。
+如果 remote SHA 不匹配：立即 STOP！
+
+====================
+六、使用 app-gh 创建 Bot-Authored Replacement PR
+====================
+
+必须使用 app-gh 创建 replacement PR（严禁使用普通 gh pr create）：
+PR 配置要求：
+- base: main
+- head: {spec.recovery_branch}
+- 必须包含关键关闭/关联词：
+  Closes #{issue_number}
+  Relates #1
+- 正文必须明确说明：
+  - replacement for invalid-identity PR #14
+  - credential-boundary recovery
+  - implementation itself unchanged
+  - preserved SHA reused exactly ({spec.preserved_sha})
+  - original PR #14 invalid because it used Human identity
+  - 严禁引用旧 PR #14 中错误的 #5 描述！
+
+命令示例：
+app-gh pr create --base main --head {spec.recovery_branch} --title "Infrastructure Phase 3A: Make Mobile Interaction E2E self-contained (bot replacement)" --body "Closes #{issue_number}\\nRelates #1\\n\\nThis PR is a credential-boundary recovery replacement for PR #14.\\nThe original PR #14 was invalid because it was authored using Human identity instead of GitHub App Bot identity.\\nThe implementation itself is completely unchanged, reusing preserved implementation commit {spec.preserved_sha} exactly."
+
+====================
+七、PR 身份回读校验 (Identity Validation)
+====================
+
+PR 创建后，Implementer 必须立即通过 GitHub REST canonical endpoint 回读 PR author 身份：
+GET /repos/liuchangchxy/easy-exam/pulls/<PR_NUMBER>
+
+只使用响应中的 `pull_request.user.login` 与 `pull_request.user.type` 作为身份判定字段。
+必须严格验证以下条件：
+- `pull_request.user.login == chang-implementer[bot]`
+- `pull_request.user.type == Bot`
+
+例如 `gh pr view --json author` 可能将 GitHub App 显示为 `app/chang-implementer`；
+GraphQL / CLI 的 actor 表示仅作辅助记录，不能覆盖或替代 REST canonical author 字段。
+若 REST canonical 字段不满足以上两个条件：
+立即 STOP 并报告 blocker！
+不得关闭 #{issue_number}！不得 merge！
+
+====================
+八、Recovery 成功与停止标准
+====================
+
+本次 Recovery 对话成功仅代表满足以下全部 7 项条件：
+1. preserved SHA verified
+2. diff verified
+3. exact branch created
+4. App-authenticated push succeeded
+5. remote SHA exact match
+6. Bot-authored replacement PR created
+7. PR CI triggered
+
+一旦上述 7 项完成：立即停止！
+- 不要等待 Architect Review
+- 不要 merge
+- 不要关闭 Issue #{issue_number}
+
+====================
+九、Recovery 失败与阻断条件 (STOP Conditions)
+====================
+
+若出现以下任一情况，必须立即 STOP 并输出 BLOCKER 报告：
+- preserved SHA 不存在
+- preserved diff 不符合两文件限制 ({', '.join(spec.allowed_changed_files)})
+- branch head 不是 preserved SHA ({spec.preserved_sha})
+- branch 已存在但 SHA 冲突
+- app-git-push 失败
+- remote SHA mismatch
+- app-gh 失败
+- REST canonical PR author 无效 (`pull_request.user.type != Bot` 或 `pull_request.user.login != chang-implementer[bot]`)
+- 需要修改实现代码才能继续
+严禁自行尝试“修复”或变通绕过！
+
+====================
+十、最终输出
+====================
+
+执行结束只输出：
+STATUS: [SUCCESS | BLOCKED]
+MODE: RECOVERY
+ISSUE: #{issue_number}
+PRESERVED_SHA: {spec.preserved_sha}
+RECOVERY_BRANCH: {spec.recovery_branch}
+PR: <PR_URL or NONE>
+PR_ACTOR: <ACTOR>
+BLOCKERS: <NONE or REASON>
+NEXT_ACTION:
+"""
+    return prompt.strip()
+
+
+def _build_issue_4_repair_prompt(repo, repo_path, issue_number, issue_title, source_label, spec=None):
+    """Construct deterministic REQUEST_CHANGES repair prompt for Issue #4 / PR #15."""
+    target_pr = 15
+    target_branch = "agent/issue-4-self-contained-mobile-e2e-bot"
+    reviewed_sha = "4428ef14bffd0bf94fc28bff508e7be5ec2a30f0"
+    allowed_file = "frontend/tests/mobile_interaction_suite.mjs"
+
+    prompt = f"""工作目录：{repo_path}
+
+你是 EasyExam 的 Implementer Agent。
+
+仓库：
+{repo}
+
+目标任务：
+Issue #{issue_number}: {issue_title}
+触发来源：{source_label}
+协调状态：dispatcher 已将协调状态切换为 agent-working。
+执行模式：REQUEST_CHANGES REPAIR (正式审查修改模式)
+
+目标 PR：PR #{target_pr}
+目标分支：{target_branch}
+审查基线 SHA：{reviewed_sha}
+
+====================================================
+【核心指令】THIS IS A FORMAL REQUEST_CHANGES REPAIR, NOT A RECOVERY REPLACEMENT.
+====================================================
+
+这是针对 PR #{target_pr} 最新正式原生 REQUEST_CHANGES 审查的受控修复任务（Repair Task）！
+Architect (liuchangchxy) 已在 PR #{target_pr} 审查基线 SHA {reviewed_sha} 上提交了正式 REQUEST_CHANGES。
+PR #{target_pr} 是合法的 GitHub App Bot PR (`pull_request.user.login == chang-implementer[bot]`, `pull_request.user.type == Bot`)。
+
+绝对禁止以下行为：
+- 严禁关闭 PR #{target_pr}！
+- 严禁创建新 PR (例如 #{target_pr + 1})！
+- 严禁重新创建 recovery 分支或强制覆盖！
+- 严禁重新走 recovery replacement 流程！
+必须直接在现有 PR #{target_pr} 分支 `{target_branch}` 上修复唯一 blocker。
+
+====================
+一、唯一授权实现修改 (Repair Scope)
+====================
+
+本次修复有且仅有一个授权修改点（Frozen Spec 验收标准 1 / Architect Formal Review Blocker）：
+在 `{allowed_file}` 中：
+删除 CHROME_PATH 环境变量覆盖逻辑：
+```js
+...(process.env.CHROME_PATH
+  ? {{ executablePath: process.env.CHROME_PATH }}
+  : {{}}),
+```
+使 Chromium 启动恢复为仅使用 package-lock 安装的 Playwright-managed Chromium，语义上：
+```js
+browser = await chromium.launch({{
+  headless: true,
+}})
+```
+不得传递或使用任何机器级 Chrome executablePath！
+
+====================
+二、严禁任何其他实现修改 (Strict Negative Scope)
+====================
+
+为确保最小变更与确定性，严禁以下任何修改：
+- 严禁修改 fixture 题目 (frontend/tests/fixtures/mobile_interaction_questions.md)；
+- 严禁修改 import 逻辑；
+- 严禁修改 11 个测试断言；
+- 严禁修改 threshold；
+- 严禁修改 EasyExam 产品代码 (backend, frontend/src 等)；
+- 严禁修改 backend；
+- 严禁修改 workflow；
+- 严禁修改 package dependencies / package-lock.json；
+- 严禁修改 docs；
+- 严禁修改任何其它文件！
+
+预期 repair diff：
+只修改 `{allowed_file}`，且只删除 CHROME_PATH override 相关代码。
+
+====================
+三、允许创建新 Repair Commit
+====================
+
+与初始 recovery 流程（要求零新 commit）不同：
+本次正式 REQUEST_CHANGES repair 允许创建一个新的 repair commit！
+操作要求：
+1. 本地检出 PR #{target_pr} 所在分支：
+   git checkout {target_branch}
+2. 确认当前基线 HEAD 为 {reviewed_sha}：
+   git rev-parse HEAD
+   若本地不一致，拉取或重置到 {reviewed_sha}。
+3. 执行唯一授权修改（仅修改 `{allowed_file}`）。
+4. 本地运行测试验证：
+   node frontend/tests/mobile_interaction_suite.mjs
+   确认 11 个断言全部通过。
+5. 创建新的 repair commit：
+   git add {allowed_file}
+   git commit -m "fix(test): remove CHROME_PATH override to enforce lockfile Playwright Chromium"
+6. 记录新 commit SHA：
+   NEW_REPAIR_SHA=$(git rev-parse HEAD)
+
+====================
+四、受控 App-Authenticated Push (绑定新 Commit SHA)
+====================
+
+GitHub writes:
+- NEVER use ordinary gh for writes
+- NEVER use ordinary git push
+- use app-gh
+- use app-git-push
+
+严禁使用普通 git push！
+严禁使用普通 gh 进行任何写操作！
+Agent 终端环境已配置 FAIL-CLOSED 机械拦截 (mechanically blocked)。
+
+所有 Implementer 推送必须使用受控 wrapper：
+- Git Push: 必须使用 app-git-push (或 python {APP_GIT_PUSH_EXECUTOR})
+- 必须将 --expected-sha 绑定到【新 repair commit SHA】（而不是旧 preserved SHA）：
+  app-git-push --branch {target_branch} --expected-sha <NEW_REPAIR_SHA>
+  或者：
+  python {APP_GIT_PUSH_EXECUTOR} --branch {target_branch} --expected-sha <NEW_REPAIR_SHA>
+
+推送后验证 remote branch SHA：
+git ls-remote origin refs/heads/{target_branch}
+确认 remote SHA 与新 commit SHA 完全一致。
+
+====================
+五、PR 状态与身份回读（无需新建 PR）
+====================
+
+PR #{target_pr} 已经合法存在，不得新建 PR！
+推送完成后，通过 GitHub REST canonical endpoint 验证 PR #{target_pr}：
+GET /repos/{repo}/pulls/{target_pr}
+
+验证：
+1. PR 状态仍为 open。
+2. PR head ref 仍为 `{target_branch}`。
+3. PR head sha 已更新为新 repair commit SHA。
+4. PR canonical author 仍为：
+   - pull_request.user.login == chang-implementer[bot]
+   - pull_request.user.type == Bot
+（辅助显示如 `app/chang-implementer` 不得覆盖 canonical REST 判定）。
+
+====================
+六、新 CI 运行等待与验证
+====================
+
+新 repair commit 推送后，必须在 GitHub Actions 触发新的 `pull_request` CI run。
+旧 CI run (如 37267571349) 仅证明旧 SHA {reviewed_sha}。
+新 repair 必须等待并核验对应于新 head SHA 的新 CI run，不能复用旧 success。
+
+====================
+七、正式 Review 轮次完成与停止
+====================
+
+这是第 1 轮 native REQUEST_CHANGES formal round。
+一旦新 commit 推送成功、PR #{target_pr} head 更新已验证、新 CI 运行触发/验证完成：
+立即 STOP！
+由 Work / Architect 对新 SHA 进行正式审查。
+严禁自行 APPROVE！严禁 merge！严禁关闭 Issue #{issue_number}！严禁启动后续 Issue！
+
+====================
+八、最终输出
+====================
+
+执行结束只输出：
+STATUS: [SUCCESS | BLOCKED]
+MODE: REQUEST_CHANGES_REPAIR
+ISSUE: #{issue_number}
+PR: #{target_pr}
+BRANCH: {target_branch}
+BASE_SHA: {reviewed_sha}
+NEW_HEAD_SHA: <NEW_SHA>
+CI_RUN: <CI_RUN_ID or TRIGGERED>
+BLOCKERS: <NONE or REASON>
+NEXT_ACTION: Hand back to Work / Architect for formal review of new SHA.
+"""
+    return prompt.strip()
+
+
+def render_dispatch_prompt(issue, issue_title=None, source_label="agent-ready", repo=None, repo_path=None):
+    """
+    Render dispatch prompt for an issue without changing labels, claiming, or launching an agent.
+    Accepts either an issue dict or an integer issue number.
+    Uses the exact same production prompt builder as dispatch_agent.
+    """
+    repo = repo or EASYEXAM_REPO
+    repo_path = repo_path or EASYEXAM_REPO_PATH
+    if isinstance(issue, dict):
+        issue_number = issue.get("number")
+        title = issue.get("title", issue_title or "")
+        label_names = {l.get("name") if isinstance(l, dict) else str(l) for l in issue.get("labels", [])}
+        src_label = "changes-requested" if "changes-requested" in label_names else "agent-ready"
+    else:
+        issue_number = int(issue)
+        title = issue_title or f"Issue #{issue_number}"
+        src_label = source_label
+    return build_implementer_prompt(repo, repo_path, issue_number, title, src_label)
+
+
+def build_implementer_prompt(repo, repo_path, issue_number, issue_title, source_label):
+    """Construct complete Implementer prompt for agentapi new-conversation."""
+    recovery_spec = get_recovery_spec(issue_number)
+    if recovery_spec is not None:
+        if source_label == "changes-requested":
+            return _build_issue_4_repair_prompt(
+                repo, repo_path, issue_number, issue_title, source_label, recovery_spec
+            )
+        return _build_recovery_prompt(
+            repo, repo_path, issue_number, issue_title, source_label, recovery_spec
+        )
+
+    review_context = (
+        f"本次触发来源为 changes-requested。\n"
+        f"请在开始前完整读取 Issue #{issue_number} 及其关联 PR 最新正式 CHANGES_REQUESTED Review，\n"
+        f"只处理其中与 Frozen Spec 直接相关的事项。"
+        if source_label == "changes-requested"
+        else f"本次触发来源为 agent-ready。\n"
+        f"请在开始前完整读取 Issue #{issue_number} 的正文及 Frozen Spec。"
+    )
+
+    prompt = f"""工作目录：{repo_path}
+
+你是 EasyExam 的 Implementer Agent。
+
+仓库：
+{repo}
+
+目标任务：
+Issue #{issue_number}: {issue_title}
+触发来源：{source_label}
+协调状态：dispatcher 已将协调状态切换为 agent-working。
+
+{review_context}
+
+你的唯一职责是实现 GitHub 中已经冻结并明确交给你的任务。
+GitHub Issue、PR、Labels、Checks 是唯一事实源。
+不得根据聊天记忆、自己的想法或历史任务扩大需求。
+
+每次运行按以下协议执行。
+
+====================
+一、仓库与 GitHub 预检
+====================
+
+1. 确认当前目录属于 EasyExam 仓库。
+2. 确认 remote 指向 {repo}。
+3. 确认 gh 已认证。
+4. 如果本地存在无法解释的未提交改动：
+   - 不覆盖；
+   - 不自动清理；
+   - 不继续实现；
+   - 输出 LOCAL_WORKTREE_DIRTY 并停止。
+
+====================
+二、任务资格检查
+====================
+
+完整读取 Issue #{issue_number}：
+- Issue 正文
+- labels
+- 父 Issue / 关联 Issue
+- 当前关联 PR（如有）
+- 最新正式 Review（如有）
+
+只有满足以下条件才能执行：
+1. Issue 有 frozen-spec。
+2. Frozen Spec 足够明确。
+3. 没有 infra-blocked 或 needs-human。
+4. 当前要求不存在明显自相矛盾。
+
+如果不满足：
+不要修改代码。
+记录原因。
+需要人工判断时将 Issue 标签转 needs-human 并停止。
+不得自行补全、重新定义或扩大 Frozen Spec。
+
+====================
+三、领取与分支准备
+====================
+
+若来源为 agent-ready：
+- 创建独立 feature branch：
+  agent/issue-{issue_number}-<short-slug>
+- 不得直接修改 main。
+
+若来源为 changes-requested：
+- 找到该 Issue 已有关联 PR 和 branch。
+- 只处理最新正式 CHANGES_REQUESTED Review 中与 Frozen Spec 直接相关的事项。
+- 不创建重复 PR。
+
+====================
+四、实现规则
+====================
+
+实现必须严格受 Frozen Spec 限制。
+
+禁止：
+- 顺手重构范围外代码；
+- 增加新功能；
+- 改产品行为，除非 Frozen Spec 明确要求；
+- 删除或放宽测试断言来获得全绿；
+- 将 skipped / 未运行 / 失败报告为通过；
+- 修改 Issue 的验收标准；
+- 修改父 Frozen Spec；
+- 自动解除 infra-blocked 或 needs-human。
+
+发现范围外问题：
+- 不在当前 PR 修复；
+- 创建或建议 follow-up Issue；
+- 当前任务继续按原 Frozen Spec 收敛。
+
+====================
+五、测试
+====================
+
+运行 Frozen Spec 要求的测试。
+
+必须如实记录：
+- 实际运行命令；
+- PASS；
+- FAIL；
+- SKIPPED；
+- NOT RUN；
+- 环境原因。
+
+不得把低层测试冒充高层验收。
+
+如果失败属于当前实现缺陷：
+修复后重跑。
+
+如果属于环境/基础设施且无法在当前任务解决：
+不要修改业务代码规避。
+记录证据并在 Issue 上转 infra-blocked，然后停止。
+
+====================
+六、提交与 PR（强制 GitHub App 凭据边界）
+====================
+
+【严格红线】：
+Git commit author metadata is NOT authentication evidence.
+GitHub identity proof strictly comes from App-authenticated API,
+App-authenticated push chain, or PR actor.
+Do NOT rely on git author user.name/email for authentication.
+
+GitHub writes:
+- NEVER use ordinary gh for writes
+- NEVER use ordinary git push
+- use app-gh
+- use app-git-push
+
+严禁使用普通 git push！
+严禁使用普通 gh pr create / gh pr merge！
+严禁使用普通 gh 进行任何写入操作（pr create/edit/merge, issue create/edit/comment, api write 等）！
+严禁使用 host human 凭据 (liuchangchxy) 进行任何写操作！
+
+Agent 终端环境已配置 FAIL-CLOSED 机械拦截 (mechanically blocked)：
+- 普通 git push 会被 git shim 机械阻断；
+- 普通 gh 写操作会被 gh shim 机械阻断；
+- 只有 app-gh 和 app-git-push 才能写。
+
+所有 Implementer GitHub 写操作必须显式调用受控 wrapper：
+1. Git Push：
+   必须使用 app-git-push (或 python {APP_GIT_PUSH_EXECUTOR})
+   命令格式（--expected-sha 为强制必填项）：
+   app-git-push --branch <branch> --expected-sha <40 hex SHA>
+   或者：
+   python {APP_GIT_PUSH_EXECUTOR} --branch <branch> --expected-sha <40 hex SHA>
+
+2. PR 创建与更新：
+   必须使用 app-gh (或 python {APP_GH_EXECUTOR})
+   命令格式：
+   app-gh pr create --title "..." --body "..."
+   或者：
+   python {APP_GH_EXECUTOR} pr create --title "..." --body "..."
+
+3. PR 必须关联源 Issue #{issue_number}。
+4. PR 描述必须如实填写：
+   - Frozen Spec
+   - 实际修改范围
+   - 是否偏离
+   - 实际测试结果
+   - skipped / 未运行项
+   - 已知问题
+   - follow-up Issue
+
+普通只读命令（git status, git diff, git log, gh pr view, gh issue view, 测试运行）直接在本地执行，无需 wrapper。
+不得自动 merge。
+
+====================
+七、CI 与结束
+====================
+
+PR 创建或更新后：
+- 不伪造 CI 状态；
+- 不因为本地测试通过就宣称 CI 已通过；
+- GitHub Actions 结果由 GitHub 记录。
+- 本次 Agent 运行到 PR 已创建/更新且本地证据已记录后即可停止。
+
+====================
+八、Changes Requested 上限
+====================
+
+一次正式 GitHub CHANGES_REQUESTED Review = 1 轮。
+最多允许 3 轮。
+若第 3 轮修改后仍收到正式 CHANGES_REQUESTED：
+在 Issue 上转 needs-human 并停止，不得开始第 4 轮。
+
+====================
+九、最终输出
+====================
+
+每次执行结束只输出：
+STATUS:
+ISSUE: #{issue_number}
+BRANCH:
+PR:
+CHANGES:
+TESTS:
+BLOCKERS:
+NEXT_ACTION:
+"""
+    return prompt.strip()
+
+
+def ensure_workspace_fail_closed_guard(repo_path):
+    """Ensure repo-local git config and hooks fail closed for direct push."""
+    repo_dir = Path(repo_path)
+    if not (repo_dir / ".git").is_dir():
+        return
+    git_bin = shutil.which("git") or "git"
+    for remote in ("origin", "easyexam"):
+        run_cmd([git_bin, "config", f"remote.{remote}.pushURL", "FAIL_CLOSED_DIRECT_PUSH_DISABLED_USE_APP_GIT_PUSH"], cwd=repo_path)
+    # Git commit author metadata is NOT authentication evidence.
+    # GitHub identity proof solely comes from App-authenticated API / push chain.
+    # Do NOT inject bot user.name or user.email into repo-local or global config.
+    hook_path = repo_dir / ".git" / "hooks" / "pre-push"
+    hook_content = (
+        "#!/bin/sh\n"
+        'if [ "$EASYEXAM_APP_PUSH_AUTH" != "1" ] && [ "$ALLOW_HOST_PUSH" != "1" ]; then\n'
+        '    echo "FAIL-CLOSED: Direct git push is blocked. Use app_git_push executor." >&2\n'
+        '    exit 1\n'
+        'fi\n'
+        'exit 0\n'
+    )
+    try:
+        hook_path.parent.mkdir(parents=True, exist_ok=True)
+        hook_path.write_text(hook_content, encoding="utf-8")
+    except Exception as exc:
+        logger.warning(f"Could not write pre-push hook: {exc}")
+
+
+def build_implementer_environment(repo):
+    """
+    Verify external GitHub App credential helper and executors exist.
+    Operation-time token architecture: no secrets are injected into agentapi launch environment.
+    """
+    if not GITHUB_APP_HELPER.is_file():
+        raise RuntimeError("GitHub App credential helper was not found")
+    if not APP_GH_EXECUTOR.is_file():
+        raise RuntimeError("GitHub App gh executor was not found")
+    if not APP_GIT_PUSH_EXECUTOR.is_file():
+        raise RuntimeError("GitHub App git push executor was not found")
+
+    spec = importlib.util.spec_from_file_location("easyexam_github_app_credentials", GITHUB_APP_HELPER)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Could not load GitHub App credential helper")
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+
+    child_env = os.environ.copy()
+    for key in ("GH_TOKEN", "GITHUB_APP_TOKEN", "GITHUB_TOKEN"):
+        child_env.pop(key, None)
+
+    metadata = {
+        "installation_id": int(os.environ.get("EASYEXAM_INSTALLATION_ID", "167869152")),
+        "app_slug": GITHUB_APP_SLUG,
+        "expires_at": None,
+    }
+    return child_env, metadata
+
+
+def dispatch_agent(repo, repo_path, issue_number, issue_title, source_label):
+    """
+    Launch a new Antigravity implementer conversation via safe argv list.
+    Syntax: agentapi new-conversation [--model=...] [--title=...] <prompt>
+    """
+    prompt = build_implementer_prompt(
+        repo, repo_path, issue_number, issue_title, source_label
+    )
+    cmd_prefix = get_agentapi_cmd_prefix()
+    recovery_spec = get_recovery_spec(issue_number)
+    if recovery_spec is not None and source_label == "changes-requested":
+        title = f"Repair Implementer: Issue #{issue_number} ({source_label})"
+    elif recovery_spec is not None:
+        title = f"Recovery Implementer: Issue #{issue_number} ({source_label})"
+    elif source_label == "changes-requested":
+        title = f"Repair Implementer: Issue #{issue_number} ({source_label})"
+    else:
+        title = f"Implementer: Issue #{issue_number} ({source_label})"
+
+    cmd_args = cmd_prefix + ["new-conversation", f"--title={title}", prompt]
+
+    result = {
+        "app_slug": GITHUB_APP_SLUG,
+        "installation_id": None,
+        "token_expires_at": None,
+        "agentapi_invoked": False,
+        "exit_code": None,
+        "timeout": False,
+        "conversation_id": None,
+        "launch_confirmed": False,
+        "error_category": None,
+    }
+    try:
+        ensure_workspace_fail_closed_guard(repo_path)
+        child_env, credential = build_implementer_environment(repo)
+        result["installation_id"] = credential.get("installation_id")
+        result["token_expires_at"] = credential.get("expires_at")
+        result["app_slug"] = credential.get("app_slug") or GITHUB_APP_SLUG
+    except Exception as exc:
+        logger.error("Could not prepare isolated Implementer credentials (%s)", type(exc).__name__)
+        result["error_category"] = "credential_setup_exception"
+        return result
+
+    logger.info(
+        f"Invoking agentapi new-conversation for Issue #{issue_number} using binary: {cmd_prefix[0]}..."
+    )
+    logger.info("Implementer credential boundary verified; launch env has no persistent tokens.")
+
+    result["agentapi_invoked"] = True
+    try:
+        code, stdout, stderr, timed_out = run_cmd(
+            cmd_args, timeout=AGENTAPI_TIMEOUT_SECONDS, env=child_env
+        )
+    except Exception as exc:
+        logger.error("agentapi invocation raised an unexpected exception (%s)", type(exc).__name__)
+        result["error_category"] = "agentapi_invocation_exception"
+        return result
+    result["exit_code"] = code
+    result["timeout"] = bool(timed_out)
+
+    if timed_out:
+        logger.error("agentapi timed out")
+        result["error_category"] = "agentapi_timeout"
+        return result
+
+    if code != 0:
+        logger.error("agentapi returned a non-zero exit code: %s", code)
+        result["error_category"] = "agentapi_nonzero_exit"
+        return result
+
+    conversation_id = extract_conversation_id(stdout)
+    if not conversation_id:
+        logger.error("agentapi returned success without a parseable conversation ID")
+        result["error_category"] = "conversation_id_missing"
+        return result
+
+    result["conversation_id"] = conversation_id
+    result["launch_confirmed"] = True
+    logger.info("Agent launch confirmed for Issue #%s, conversation %s", issue_number, conversation_id)
+    return result
+
+
+def process_claimed_dispatch(repo, issue_number, issue_title, source_label, attempt_id):
+    """Launch a claimed issue and leave a durable receipt or fail it closed."""
+    record = {
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "attempt_id": attempt_id,
+        "event": "claimed",
+        "repo": repo,
+        "issue_number": issue_number,
+        "source_label": source_label,
+        "claim_result": True,
+        "app_slug": GITHUB_APP_SLUG,
+        "installation_id": None,
+        "token_expires_at": None,
+        "agentapi_invoked": False,
+        "exit_code": None,
+        "timeout": False,
+        "conversation_id": None,
+        "launch_confirmed": False,
+        "final_coordination_state": "agent-working",
+        "error_category": None,
+    }
+    try:
+        append_dispatch_audit(record)
+    except Exception as exc:
+        logger.error("Could not persist the claimed dispatch receipt (%s)", type(exc).__name__)
+        try:
+            blocked = fail_closed_to_infra_blocked(repo, issue_number, "audit_write_failed", attempt_id)
+        except Exception as fail_exc:
+            logger.error("Fail-closed GitHub update raised an exception (%s)", type(fail_exc).__name__)
+            blocked = False
+        record["final_coordination_state"] = "infra-blocked" if blocked else "agent-working"
+        record["error_category"] = "audit_write_failed"
+        return record
+
+    try:
+        result = dispatch_agent(repo, EASYEXAM_REPO_PATH, issue_number, issue_title, source_label)
+        if not isinstance(result, dict):
+            raise TypeError("dispatch_result_invalid")
+    except Exception as exc:
+        logger.error("Unexpected exception while dispatching a claimed issue (%s)", type(exc).__name__)
+        result = {"error_category": "unexpected_dispatch_exception"}
+
+    for key in (
+        "app_slug", "installation_id", "token_expires_at", "agentapi_invoked",
+        "exit_code", "timeout", "conversation_id", "launch_confirmed", "error_category",
+    ):
+        if key in result:
+            record[key] = result[key]
+
+    if record["launch_confirmed"] and record["conversation_id"]:
+        record["event"] = "launch_confirmed"
+        try:
+            append_dispatch_audit(record)
+            return record
+        except Exception as exc:
+            logger.error("Could not persist the confirmed conversation receipt (%s)", type(exc).__name__)
+            record["error_category"] = "audit_write_failed"
+
+    category = record["error_category"] or "dispatch_unconfirmed"
+    try:
+        blocked = fail_closed_to_infra_blocked(repo, issue_number, category, attempt_id)
+    except Exception as exc:
+        logger.error("Fail-closed GitHub update raised an exception (%s)", type(exc).__name__)
+        blocked = False
+    record["event"] = "finalized" if blocked else "fail_closed_pending"
+    record["final_coordination_state"] = "infra-blocked" if blocked else "agent-working"
+    record["launch_confirmed"] = False
+    record["error_category"] = category if blocked else "fail_closed_github_update_failed"
+    try:
+        append_dispatch_audit(record)
+    except Exception as exc:
+        logger.error("Could not persist the fail-closed dispatch receipt (%s)", type(exc).__name__)
+    return record
+
+
+def reconcile_incomplete_dispatches(repo):
+    """Fail closed on claims interrupted between claim and a durable terminal receipt."""
+    if not DISPATCH_AUDIT_PATH.is_file():
+        return True
+    latest_by_attempt = {}
+    reconciliation_ok = True
+    with open(DISPATCH_AUDIT_PATH, "r", encoding="utf-8", errors="replace") as audit_file:
+        for line in audit_file:
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                logger.error("Ignoring malformed dispatch audit line during reconciliation")
+                reconciliation_ok = False
+                continue
+            attempt_id = item.get("attempt_id")
+            if attempt_id:
+                latest_by_attempt[attempt_id] = item
+
+    for attempt_id, item in latest_by_attempt.items():
+        if item.get("event") in ("launch_confirmed", "finalized", "claim_failed"):
+            continue
+        issue_number = item.get("issue_number")
+        if not issue_number:
+            continue
+        details = get_issue_details(repo, issue_number)
+        labels = {label.get("name") for label in (details or {}).get("labels", [])}
+        if details is None or "agent-working" in labels or "infra-blocked" in labels:
+            try:
+                blocked = fail_closed_to_infra_blocked(
+                    repo, issue_number, "dispatcher_interrupted_after_claim", attempt_id
+                )
+            except Exception as exc:
+                logger.error("Interrupted-dispatch fail-closed raised an exception (%s)", type(exc).__name__)
+                blocked = False
+            final_state = "infra-blocked" if blocked else "agent-working"
+            category = "dispatcher_interrupted_after_claim" if blocked else "fail_closed_github_update_failed"
+        else:
+            final_state = "unclaimed"
+            category = "claim_not_applied"
+        item.update({
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "event": "finalized" if final_state != "agent-working" else "fail_closed_pending",
+            "launch_confirmed": False,
+            "final_coordination_state": final_state,
+            "error_category": category,
+        })
+        try:
+            append_dispatch_audit(item)
+        except Exception as exc:
+            logger.error("Could not persist an interrupted dispatch reconciliation (%s)", type(exc).__name__)
+            reconciliation_ok = False
+        if item.get("event") == "fail_closed_pending":
+            reconciliation_ok = False
+    return reconciliation_ok
+
+
+def poll_cycle():
+    """Run one polling iteration."""
+    if not reconcile_incomplete_dispatches(EASYEXAM_REPO):
+        logger.error("Skipping claim scan while dispatch audit reconciliation is pending")
+        return
+
+    issues = get_open_issues(EASYEXAM_REPO)
+    if issues is None:
+        logger.warning("Could not retrieve issue list from GitHub. Retrying next cycle.")
+        return
+
+    # Check if there is already an active agent-working issue
+    working_issues = []
+    for issue in issues:
+        label_names = [l.get("name") for l in issue.get("labels", [])]
+        if "agent-working" in label_names:
+            working_issues.append(issue.get("number"))
+
+    if working_issues:
+        logger.info(
+            f"Active task already in progress: Issue #{working_issues[0]} is agent-working. Sleeping."
+        )
+        return
+
+    # Filter candidate issues
+    changes_requested_candidates = []
+    agent_ready_candidates = []
+
+    for issue in issues:
+        issue_num = issue.get("number")
+        if issue_num is not None:
+            in_backoff, remaining = is_in_claim_backoff(issue_num)
+            if in_backoff:
+                logger.debug(f"Issue #{issue_num} is in claim backoff ({remaining:.1f}s remaining). Skipping.")
+                continue
+
+        label_names = set(l.get("name") for l in issue.get("labels", []))
+
+        # Ignore blocked or needs-human issues
+        if "infra-blocked" in label_names or "needs-human" in label_names:
+            continue
+
+        # Must have frozen-spec
+        if "frozen-spec" not in label_names:
+            continue
+
+        if "changes-requested" in label_names:
+            changes_requested_candidates.append(issue)
+        elif "agent-ready" in label_names:
+            agent_ready_candidates.append(issue)
+
+    # Priority: changes-requested > agent-ready
+    target_issue = None
+    source_label = None
+
+    if changes_requested_candidates:
+        target_issue = changes_requested_candidates[0]
+        source_label = "changes-requested"
+    elif agent_ready_candidates:
+        target_issue = agent_ready_candidates[0]
+        source_label = "agent-ready"
+
+    if not target_issue:
+        logger.debug("No eligible tasks found. Sleeping.")
+        return
+
+    issue_number = target_issue.get("number")
+    issue_title = target_issue.get("title", "")
+    logger.info(
+        f"Found candidate task: #{issue_number} ({issue_title}) with source label '{source_label}'"
+    )
+
+    # DRY RUN mode check
+    if EASYEXAM_DRY_RUN:
+        mode_str = "Recovery Implementer" if get_recovery_spec(issue_number) else "Implementer"
+        logger.info(f"[DRY RUN] Target issue identified: #{issue_number} ({issue_title})")
+        logger.info(f"[DRY RUN] Would execute claim transition: -{source_label} +agent-working")
+        logger.info(
+            f"[DRY RUN] Would execute agentapi new-conversation with title '{mode_str}: Issue #{issue_number} ({source_label})'"
+        )
+        logger.info("[DRY RUN] Skipping all write operations and Agent launch.")
+        return
+
+    # Re-verify issue eligibility right before claiming (Double-check)
+    details = get_issue_details(EASYEXAM_REPO, issue_number)
+    if not details or details.get("state") != "OPEN":
+        logger.warning(f"Issue #{issue_number} is no longer OPEN. Skipping.")
+        return
+
+    current_labels = set(l.get("name") for l in details.get("labels", []))
+    if (
+        "infra-blocked" in current_labels
+        or "needs-human" in current_labels
+        or "frozen-spec" not in current_labels
+        or source_label not in current_labels
+    ):
+        logger.warning(
+            f"Issue #{issue_number} labels changed before claiming: {current_labels}. Skipping."
+        )
+        return
+
+    # Persist claim intent first so a process interruption can be reconciled safely.
+    attempt_id = str(uuid.uuid4())
+    claim_record = {
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "attempt_id": attempt_id,
+        "event": "claim_intent",
+        "repo": EASYEXAM_REPO,
+        "issue_number": issue_number,
+        "source_label": source_label,
+        "claim_result": None,
+        "app_slug": GITHUB_APP_SLUG,
+        "installation_id": None,
+        "token_expires_at": None,
+        "agentapi_invoked": False,
+        "exit_code": None,
+        "timeout": False,
+        "conversation_id": None,
+        "launch_confirmed": False,
+        "final_coordination_state": "not_claimed",
+        "error_category": None,
+    }
+    try:
+        append_dispatch_audit(claim_record)
+    except Exception:
+        logger.exception("Cannot safely claim an issue without a durable dispatch journal")
+        return
+
+    # Claim transition: switch source label to agent-working via strict CAS.
+    claimed, claim_reason = cas_transition_coordination_state(
+        EASYEXAM_REPO, issue_number, source_label, "agent-working"
+    )
+    if not claimed:
+        logger.error(f"Failed claim transition for #{issue_number} (reason: {claim_reason}). Aborting dispatch.")
+        backoff_sec = record_claim_failure(issue_number, claim_reason)
+        claim_record.update({
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "event": "claim_failed",
+            "claim_result": False,
+            "final_coordination_state": "unchanged",
+            "error_category": f"claim_transition_failed_{claim_reason}",
+            "backoff_seconds": backoff_sec,
+        })
+        try:
+            append_dispatch_audit(claim_record)
+        except Exception as exc:
+            logger.error("Could not persist failed claim outcome (%s)", type(exc).__name__)
+        return
+
+    reset_claim_backoff(issue_number)
+
+    claim_record.update({
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "event": "claimed",
+        "claim_result": True,
+        "final_coordination_state": "agent-working",
+    })
+    try:
+        append_dispatch_audit(claim_record)
+    except Exception as exc:
+        logger.error("Claim succeeded but its result could not be journaled (%s)", type(exc).__name__)
+        fail_closed_to_infra_blocked(EASYEXAM_REPO, issue_number, "audit_write_failed", attempt_id)
+        return
+
+    process_claimed_dispatch(
+        EASYEXAM_REPO, issue_number, issue_title, source_label, attempt_id
+    )
+
+
+def main():
+    lock = WindowsSingleInstanceLock()
+    if not lock.acquire():
+        sys.exit(1)
+
+    try:
+        logger.info("Starting EasyExam Dispatcher Sidecar")
+        logger.info(f"Dispatcher Version: {DISPATCHER_VERSION}")
+        logger.info(f"Repository: {EASYEXAM_REPO}")
+        logger.info(f"Local Path: {EASYEXAM_REPO_PATH}")
+        logger.info(f"Poll Interval: {EASYEXAM_POLL_SECONDS}s")
+        logger.info(f"Dry Run: {EASYEXAM_DRY_RUN} | Run Once: {EASYEXAM_RUN_ONCE}")
+
+        self_check = check_pr_canonical_author_runtime(EASYEXAM_REPO, 15)
+        logger.info(
+            f"Runtime self-check: PR #15 canonical REST author login={self_check.get('login')}, "
+            f"type={self_check.get('type')}, valid={self_check.get('valid')}"
+        )
+
+        try:
+            reconciliation_ok = reconcile_incomplete_dispatches(EASYEXAM_REPO)
+        except Exception as exc:
+            logger.error("Could not reconcile incomplete dispatch attempts (%s)", type(exc).__name__)
+            reconciliation_ok = False
+
+        while True:
+            try:
+                if not reconciliation_ok:
+                    try:
+                        reconciliation_ok = reconcile_incomplete_dispatches(EASYEXAM_REPO)
+                    except Exception as exc:
+                        logger.error("Dispatch remains paused until audit reconciliation succeeds (%s)", type(exc).__name__)
+                if reconciliation_ok:
+                    poll_cycle()
+                else:
+                    logger.error("Dispatch paused: unresolved claim receipt remains")
+            except Exception as exc:
+                logger.error("Unexpected error in polling cycle (%s)", type(exc).__name__)
+
+            if EASYEXAM_RUN_ONCE:
+                logger.info("EASYEXAM_RUN_ONCE enabled. Exiting main loop.")
+                break
+
+            time.sleep(EASYEXAM_POLL_SECONDS)
+    finally:
+        lock.release()
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "--preview":
+        num = int(sys.argv[2]) if len(sys.argv) > 2 else 4
+        source_label = sys.argv[3] if len(sys.argv) > 3 else "agent-ready"
+        print(render_dispatch_prompt(num, source_label=source_label))
+        sys.exit(0)
+    if len(sys.argv) > 1 and sys.argv[1] == "--self-check":
+        check = check_pr_canonical_author_runtime(EASYEXAM_REPO, 15)
+        print(json.dumps(check, indent=2))
+        sys.exit(0)
+    main()
