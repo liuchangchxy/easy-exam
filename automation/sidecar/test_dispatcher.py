@@ -2795,6 +2795,405 @@ class ClosureV1WatchdogContinuousPollingAndHeadFencingTests(unittest.TestCase):
         # heartbeat_at must be updated to recent time
         self.assertNotEqual(reloaded2["heartbeat_at"], start_iso)
 
+    def test_production_path_unchanged_conversation_artifact_times_out(self):
+        """
+        Verify requirement 1 & 4:
+        Reconciling repeatedly against a static/unchanged existing conversation artifact
+        does NOT update heartbeat_at, and watchdog fails closed after 1800s.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 35
+        pr_number = 36
+        head_sha = "4444555566667777888899990000111122223333"
+        conv_id = "test-conv-static-timeout"
+        start_ts = 1000000.0
+        start_iso = datetime.fromtimestamp(start_ts, tz=timezone.utc).isoformat()
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            log_dir = tmp_path / "brain" / conv_id / ".system_generated" / "logs"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            log_file = log_dir / "transcript.jsonl"
+            log_file.write_text("{\"step\": 1}\n", encoding="utf-8")
+            os.utime(log_file, (start_ts, start_ts))
+
+            dispatcher.reset_conversation_progress_cache()
+
+            ok, lease_tok, _ = self.ledger.acquire_lease(repo, issue_number, "test-worker-static")
+            att_id = "att-static-test"
+            self.ledger.record_claim_intent(
+                repo, issue_number, "test-worker-static", lease_tok, att_id, "ci_repair",
+                f"trig:{att_id}", pr_number=pr_number, branch="agent/static",
+                expected_pr_head_sha=head_sha
+            )
+            self.ledger.record_claimed(att_id)
+            self.ledger.record_phase(att_id, "LAUNCH_CONFIRMED", phase_entered_at=start_iso)
+            with self.ledger._get_connection() as conn:
+                conn.execute(
+                    "UPDATE execution_ledger SET conversation_id = ?, heartbeat_at = ? WHERE attempt_id = ?",
+                    (conv_id, start_iso, att_id)
+                )
+                conn.commit()
+
+            attempt = self.ledger.get_attempt(att_id)
+            mock_pr = {
+                "number": pr_number,
+                "state": "open",
+                "head": {"sha": head_sha, "ref": "agent/static"},
+                "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+            }
+
+            with patch.dict(os.environ, {"EASYEXAM_ANTIGRAVITY_ROOT": str(tmp_path)}), \
+                 patch.object(dispatcher, "fail_closed_to_infra_blocked") as mock_fail_closed:
+
+                # 1. Reconcile at start_ts + 100s: file is static (mtime <= start_ts)
+                adv_ok1, adv_reason1 = dispatcher.advance_active_lifecycle(
+                    repo, attempt, ledger=self.ledger, pr_details=mock_pr, now_ts=start_ts + 100.0
+                )
+                self.assertTrue(adv_ok1)
+                self.assertEqual(adv_reason1, "waiting_for_repair_push")
+                reloaded1 = self.ledger.get_attempt(att_id)
+                self.assertEqual(reloaded1["heartbeat_at"], start_iso)
+                mock_fail_closed.assert_not_called()
+
+                # 2. Reconcile at start_ts + 1900s (> 1800s): still static -> fails closed
+                adv_ok2, adv_reason2 = dispatcher.advance_active_lifecycle(
+                    repo, attempt, ledger=self.ledger, pr_details=mock_pr, now_ts=start_ts + 1900.0
+                )
+                self.assertFalse(adv_ok2)
+                self.assertEqual(adv_reason2, "implementer_heartbeat_timeout")
+                mock_fail_closed.assert_called_once_with(repo, issue_number, "implementer_heartbeat_timeout", att_id)
+                reloaded2 = self.ledger.get_attempt(att_id)
+                self.assertEqual(reloaded2["outcome"], "timeout_infra_blocked")
+
+    def test_production_path_advancing_conversation_mtime_extends_deadline(self):
+        """
+        Verify requirement 2 & 4:
+        When conversation artifact mtime/content advances, heartbeat_at is updated
+        to the actual activity timestamp and extends the watchdog deadline.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 35
+        pr_number = 36
+        head_sha = "5555666677778888999900001111222233334444"
+        conv_id = "test-conv-advancing-mtime"
+        start_ts = 1000000.0
+        start_iso = datetime.fromtimestamp(start_ts, tz=timezone.utc).isoformat()
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            log_dir = tmp_path / "brain" / conv_id / ".system_generated" / "logs"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            log_file = log_dir / "transcript.jsonl"
+            log_file.write_text("{\"step\": 1}\n", encoding="utf-8")
+            os.utime(log_file, (start_ts, start_ts))
+
+            dispatcher.reset_conversation_progress_cache()
+
+            ok, lease_tok, _ = self.ledger.acquire_lease(repo, issue_number, "test-worker-adv")
+            att_id = "att-adv-test"
+            self.ledger.record_claim_intent(
+                repo, issue_number, "test-worker-adv", lease_tok, att_id, "ci_repair",
+                f"trig:{att_id}", pr_number=pr_number, branch="agent/adv",
+                expected_pr_head_sha=head_sha
+            )
+            self.ledger.record_claimed(att_id)
+            self.ledger.record_phase(att_id, "LAUNCH_CONFIRMED", phase_entered_at=start_iso)
+            with self.ledger._get_connection() as conn:
+                conn.execute(
+                    "UPDATE execution_ledger SET conversation_id = ?, heartbeat_at = ? WHERE attempt_id = ?",
+                    (conv_id, start_iso, att_id)
+                )
+                conn.commit()
+
+            attempt = self.ledger.get_attempt(att_id)
+            mock_pr = {
+                "number": pr_number,
+                "state": "open",
+                "head": {"sha": head_sha, "ref": "agent/adv"},
+                "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+            }
+
+            with patch.dict(os.environ, {"EASYEXAM_ANTIGRAVITY_ROOT": str(tmp_path)}), \
+                 patch.object(dispatcher, "fail_closed_to_infra_blocked") as mock_fail_closed:
+
+                # Advance conversation file at start_ts + 1000s
+                activity_ts = start_ts + 1000.0
+                activity_iso = datetime.fromtimestamp(activity_ts, tz=timezone.utc).isoformat()
+                with open(log_file, "a", encoding="utf-8") as f:
+                    f.write("{\"step\": 2}\n")
+                os.utime(log_file, (activity_ts, activity_ts))
+
+                # Reconcile at start_ts + 1100s: observes new activity at activity_ts
+                adv_ok1, adv_reason1 = dispatcher.advance_active_lifecycle(
+                    repo, attempt, ledger=self.ledger, pr_details=mock_pr, now_ts=start_ts + 1100.0
+                )
+                self.assertTrue(adv_ok1)
+                self.assertEqual(adv_reason1, "waiting_for_repair_push")
+                reloaded1 = self.ledger.get_attempt(att_id)
+                # Proven: heartbeat_at updated to real activity_iso (start_ts + 1000s), NOT polling time (start_ts + 1100s)
+                self.assertEqual(reloaded1["heartbeat_at"], activity_iso)
+
+                # Reconcile at start_ts + 2000s:
+                # Without the activity, 2000s > 1800s would have timed out.
+                # With activity at 1000s, elapsed is 2000 - 1000 = 1000s <= 1800s.
+                adv_ok2, adv_reason2 = dispatcher.advance_active_lifecycle(
+                    repo, attempt, ledger=self.ledger, pr_details=mock_pr, now_ts=start_ts + 2000.0
+                )
+                self.assertTrue(adv_ok2)
+                self.assertEqual(adv_reason2, "waiting_for_repair_push")
+                mock_fail_closed.assert_not_called()
+
+                # Reconcile at start_ts + 2900s (1900s after last activity at start_ts + 1000s):
+                # Now stalled past 1800s from last activity -> fails closed
+                adv_ok3, adv_reason3 = dispatcher.advance_active_lifecycle(
+                    repo, attempt, ledger=self.ledger, pr_details=mock_pr, now_ts=start_ts + 2900.0
+                )
+                self.assertFalse(adv_ok3)
+                self.assertEqual(adv_reason3, "implementer_heartbeat_timeout")
+                mock_fail_closed.assert_called_once_with(repo, issue_number, "implementer_heartbeat_timeout", att_id)
+
+    def test_duplicate_ci_repair_reloads_refreshed_attempt_and_differentiates_progress_vs_stalled(self):
+        """
+        Verify requirement 3 & 4:
+        Duplicate CI repair branch reloads in-flight attempt after heartbeat update
+        and evaluates watchdog against fresh heartbeat, surviving if active and failing closed if stalled.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 35
+        pr_number = 36
+        head_sha = "6666777788889999000011112222333344445555"
+        conv_id = "test-conv-dup-ci"
+        start_ts = 1000000.0
+        start_iso = datetime.fromtimestamp(start_ts, tz=timezone.utc).isoformat()
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            log_dir = tmp_path / "brain" / conv_id / ".system_generated" / "logs"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            log_file = log_dir / "transcript.jsonl"
+            log_file.write_text("{\"step\": 1}\n", encoding="utf-8")
+            os.utime(log_file, (start_ts, start_ts))
+
+            dispatcher.reset_conversation_progress_cache()
+
+            ok, lease_tok, _ = self.ledger.acquire_lease(repo, issue_number, "test-worker-dup-ci")
+            att_id = "att-in-flight-ci"
+            repair_key = dispatcher.compute_repair_key(repo, pr_number, head_sha)
+            self.ledger.record_claim_intent(
+                repo, issue_number, "test-worker-dup-ci", lease_tok, att_id, "ci_repair",
+                f"trig:{att_id}", pr_number=pr_number, branch="agent/dup-ci",
+                expected_pr_head_sha=head_sha, repair_key=repair_key, repair_ordinal=1
+            )
+            self.ledger.record_claimed(att_id)
+            self.ledger.record_launch_confirmed(att_id, conv_id)
+            with self.ledger._get_connection() as conn:
+                conn.execute(
+                    "UPDATE execution_ledger SET phase_entered_at = ?, heartbeat_at = ? WHERE attempt_id = ?",
+                    (start_iso, start_iso, att_id)
+                )
+                conn.commit()
+
+            mock_pr = {
+                "number": pr_number,
+                "state": "open",
+                "head": {"sha": head_sha, "ref": "agent/dup-ci"},
+                "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+            }
+            ci_fail = {"name": "Backend & Packaging Tests", "conclusion": "failure"}
+            ci_fail_status = {"status": "failure", "failed_check": ci_fail, "completed_count": 5, "total_checks": 5, "all_checks": [ci_fail]}
+
+            eval_attempt = {
+                "attempt_id": "att-eval-dup-ci",
+                "issue_number": issue_number,
+                "pr_number": pr_number,
+                "lease_token": lease_tok,
+                "phase": "WAITING_CI",
+                "resulting_head_sha": head_sha,
+            }
+
+            with patch.dict(os.environ, {"EASYEXAM_ANTIGRAVITY_ROOT": str(tmp_path)}), \
+                 patch.object(dispatcher, "get_pr_checks_status", return_value=ci_fail_status), \
+                 patch.object(dispatcher, "fail_closed_to_infra_blocked") as mock_fail_closed:
+
+                # Advance file at start_ts + 1000s; reconcile at start_ts + 2000s
+                activity_ts = start_ts + 1000.0
+                activity_iso = datetime.fromtimestamp(activity_ts, tz=timezone.utc).isoformat()
+                with open(log_file, "a", encoding="utf-8") as f:
+                    f.write("{\"step\": 2}\n")
+                os.utime(log_file, (activity_ts, activity_ts))
+
+                adv_ok1, adv_reason1 = dispatcher.advance_active_lifecycle(
+                    repo, eval_attempt, ledger=self.ledger, pr_details=mock_pr, checks_data=[ci_fail], now_ts=start_ts + 2000.0
+                )
+                self.assertTrue(adv_ok1)
+                self.assertEqual(adv_reason1, "duplicate_ci_repair_ignored")
+                # Proven: in-flight attempt reloaded with refreshed activity timestamp
+                in_flight_reloaded = self.ledger.get_attempt(att_id)
+                self.assertEqual(in_flight_reloaded["heartbeat_at"], activity_iso)
+                mock_fail_closed.assert_not_called()
+
+                # Reconcile at start_ts + 2900s (1900s after activity, file unchanged):
+                # Must fail closed to infra-blocked
+                adv_ok2, adv_reason2 = dispatcher.advance_active_lifecycle(
+                    repo, eval_attempt, ledger=self.ledger, pr_details=mock_pr, checks_data=[ci_fail], now_ts=start_ts + 2900.0
+                )
+                self.assertFalse(adv_ok2)
+                self.assertEqual(adv_reason2, "implementer_heartbeat_timeout")
+                mock_fail_closed.assert_called_once_with(repo, issue_number, "implementer_heartbeat_timeout", att_id)
+
+    def test_duplicate_reviewer_repair_reloads_refreshed_attempt_and_differentiates_progress_vs_stalled(self):
+        """
+        Verify requirement 3 & 4:
+        Duplicate Reviewer repair branch reloads in-flight attempt after heartbeat update
+        and evaluates watchdog against fresh heartbeat, surviving if active and failing closed if stalled.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 35
+        pr_number = 36
+        head_sha = "7777888899990000111122223333444455556666"
+        conv_id = "test-conv-dup-cr"
+        start_ts = 1000000.0
+        start_iso = datetime.fromtimestamp(start_ts, tz=timezone.utc).isoformat()
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            log_dir = tmp_path / "brain" / conv_id / ".system_generated" / "logs"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            log_file = log_dir / "transcript.jsonl"
+            log_file.write_text("{\"step\": 1}\n", encoding="utf-8")
+            os.utime(log_file, (start_ts, start_ts))
+
+            dispatcher.reset_conversation_progress_cache()
+
+            ok, lease_tok, _ = self.ledger.acquire_lease(repo, issue_number, "test-worker-dup-cr")
+            att_id = "att-in-flight-cr"
+            repair_key = dispatcher.compute_repair_key(repo, pr_number, head_sha)
+            self.ledger.record_claim_intent(
+                repo, issue_number, "test-worker-dup-cr", lease_tok, att_id, "reviewer_repair",
+                f"trig:{att_id}", pr_number=pr_number, branch="agent/dup-cr",
+                expected_pr_head_sha=head_sha, repair_key=repair_key, repair_ordinal=1
+            )
+            self.ledger.record_claimed(att_id)
+            self.ledger.record_launch_confirmed(att_id, conv_id)
+            with self.ledger._get_connection() as conn:
+                conn.execute(
+                    "UPDATE execution_ledger SET phase_entered_at = ?, heartbeat_at = ? WHERE attempt_id = ?",
+                    (start_iso, start_iso, att_id)
+                )
+                conn.commit()
+
+            mock_pr = {
+                "number": pr_number,
+                "state": "open",
+                "head": {"sha": head_sha, "ref": "agent/dup-cr"},
+                "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+            }
+            cr_review = {
+                "id": 999,
+                "state": "CHANGES_REQUESTED",
+                "commit_id": head_sha,
+                "submitted_at": start_iso,
+                "body": f"[easyexam-review:{head_sha}]\nPlease fix requirement.",
+            }
+
+            eval_attempt = {
+                "attempt_id": "att-eval-dup-cr",
+                "issue_number": issue_number,
+                "pr_number": pr_number,
+                "lease_token": lease_tok,
+                "phase": "WAITING_REVIEW",
+                "resulting_head_sha": head_sha,
+            }
+
+            with patch.dict(os.environ, {"EASYEXAM_ANTIGRAVITY_ROOT": str(tmp_path)}), \
+                 patch.object(dispatcher, "fail_closed_to_infra_blocked") as mock_fail_closed:
+
+                # Advance file at start_ts + 1000s; reconcile at start_ts + 2000s
+                activity_ts = start_ts + 1000.0
+                activity_iso = datetime.fromtimestamp(activity_ts, tz=timezone.utc).isoformat()
+                with open(log_file, "a", encoding="utf-8") as f:
+                    f.write("{\"step\": 2}\n")
+                os.utime(log_file, (activity_ts, activity_ts))
+
+                adv_ok1, adv_reason1 = dispatcher.advance_active_lifecycle(
+                    repo, eval_attempt, ledger=self.ledger, pr_details=mock_pr, reviews_list=[cr_review], now_ts=start_ts + 2000.0
+                )
+                self.assertTrue(adv_ok1)
+                self.assertEqual(adv_reason1, "duplicate_reviewer_repair_ignored")
+                # Proven: in-flight attempt reloaded with refreshed activity timestamp
+                in_flight_reloaded = self.ledger.get_attempt(att_id)
+                self.assertEqual(in_flight_reloaded["heartbeat_at"], activity_iso)
+                mock_fail_closed.assert_not_called()
+
+                # Reconcile at start_ts + 2900s (1900s after activity, file unchanged):
+                # Must fail closed to infra-blocked
+                adv_ok2, adv_reason2 = dispatcher.advance_active_lifecycle(
+                    repo, eval_attempt, ledger=self.ledger, pr_details=mock_pr, reviews_list=[cr_review], now_ts=start_ts + 2900.0
+                )
+                self.assertFalse(adv_ok2)
+                self.assertEqual(adv_reason2, "implementer_heartbeat_timeout")
+                mock_fail_closed.assert_called_once_with(repo, issue_number, "implementer_heartbeat_timeout", att_id)
+
+    def test_check_implementer_conversation_progress_distinguishes_new_activity_from_static(self):
+        """
+        Direct unit test for check_implementer_conversation_progress verifying:
+        - Non-existent files return (False, None).
+        - Existing static files compared against baseline return (False, mtime).
+        - Advanced mtime returns (True, new_mtime).
+        - Internal cache distinguishes repeated calls without explicit baseline.
+        """
+        conv_id = "test-conv-unit-distinguish"
+        t0 = 500000.0
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            dispatcher.reset_conversation_progress_cache()
+
+            # 1. Non-existent
+            has_prog, ts = dispatcher.check_implementer_conversation_progress(conv_id, custom_root=tmp_path)
+            self.assertFalse(has_prog)
+            self.assertIsNone(ts)
+
+            # 2. Create static file at t0
+            log_dir = tmp_path / "brain" / conv_id / ".system_generated" / "logs"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            log_file = log_dir / "transcript.jsonl"
+            log_file.write_text("{\"step\": 1}\n", encoding="utf-8")
+            os.utime(log_file, (t0, t0))
+
+            # With baseline == t0: static, not new
+            has_prog1, ts1 = dispatcher.check_implementer_conversation_progress(
+                conv_id, last_activity_ts=t0, custom_root=tmp_path
+            )
+            self.assertFalse(has_prog1)
+            self.assertEqual(ts1, t0)
+
+            # With baseline > t0: older, not new
+            has_prog2, ts2 = dispatcher.check_implementer_conversation_progress(
+                conv_id, last_activity_ts=t0 + 10.0, custom_root=tmp_path
+            )
+            self.assertFalse(has_prog2)
+            self.assertEqual(ts2, t0)
+
+            # 3. Advance file to t0 + 100.0
+            t1 = t0 + 100.0
+            os.utime(log_file, (t1, t1))
+
+            # With baseline == t0: newer -> progress True!
+            has_prog3, ts3 = dispatcher.check_implementer_conversation_progress(
+                conv_id, last_activity_ts=t0, custom_root=tmp_path
+            )
+            self.assertTrue(has_prog3)
+            self.assertEqual(ts3, t1)
+
+            # 4. Monotonic check: now baseline is t1 -> static again
+            has_prog4, ts4 = dispatcher.check_implementer_conversation_progress(
+                conv_id, last_activity_ts=t1, custom_root=tmp_path
+            )
+            self.assertFalse(has_prog4)
+            self.assertEqual(ts4, t1)
+
 
 if __name__ == "__main__":
     unittest.main()

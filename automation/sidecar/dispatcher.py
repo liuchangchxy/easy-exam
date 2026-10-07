@@ -914,13 +914,24 @@ class ExecutionLedger:
             conn.commit()
             return cur.rowcount > 0
 
-    def update_heartbeat(self, attempt_id: str) -> bool:
+    def update_heartbeat(self, attempt_id: str, heartbeat_at: str | None = None) -> bool:
         now_iso = datetime.now(timezone.utc).isoformat()
+        hb_iso = heartbeat_at or now_iso
         with self._get_connection() as conn:
             cur = conn.cursor()
+            cur.execute("SELECT heartbeat_at FROM execution_ledger WHERE attempt_id = ?", (attempt_id,))
+            row = cur.fetchone()
+            if row and row["heartbeat_at"] and heartbeat_at:
+                try:
+                    existing_ts = datetime.fromisoformat(row["heartbeat_at"].replace("Z", "+00:00")).timestamp()
+                    new_ts = datetime.fromisoformat(hb_iso.replace("Z", "+00:00")).timestamp()
+                    if new_ts <= existing_ts:
+                        return False
+                except Exception:
+                    pass
             cur.execute(
                 "UPDATE execution_ledger SET heartbeat_at = ?, updated_at = ? WHERE attempt_id = ?",
-                (now_iso, now_iso, attempt_id),
+                (hb_iso, now_iso, attempt_id),
             )
             conn.commit()
             return cur.rowcount > 0
@@ -1395,21 +1406,36 @@ def extract_conversation_id(stdout):
     return None
 
 
-def check_implementer_conversation_progress(conversation_id: str) -> tuple[bool, float | None]:
+_CONVERSATION_PROGRESS_CACHE: dict[str, float] = {}
+
+
+def reset_conversation_progress_cache() -> None:
+    """Clear in-memory conversation progress cache (useful for tests)."""
+    _CONVERSATION_PROGRESS_CACHE.clear()
+
+
+def check_implementer_conversation_progress(
+    conversation_id: str,
+    last_activity_ts: float | str | None = None,
+    custom_root: Path | str | None = None,
+) -> tuple[bool, float | None]:
     """
     Check if the Antigravity Implementer conversation has observable progress on disk.
     Inspects conversation SQLite db and/or transcript logs.
+    Distinguishes new activity from static conversation artifacts by comparing against
+    an observed activity timestamp (last_activity_ts) or an internal monotonic marker.
     Returns (has_progress: bool, latest_activity_ts: float | None).
     """
-    if not conversation_id or not re.fullmatch(
-        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-        conversation_id,
-    ):
+    if not conversation_id or not re.fullmatch(r"[0-9a-zA-Z_-]+", conversation_id):
         return False, None
 
-    candidate_roots = [
-        Path.home() / ".gemini" / "antigravity",
-    ]
+    candidate_roots = []
+    if custom_root:
+        candidate_roots.append(Path(custom_root))
+    env_root = os.environ.get("EASYEXAM_ANTIGRAVITY_ROOT")
+    if env_root:
+        candidate_roots.append(Path(env_root))
+    candidate_roots.append(Path.home() / ".gemini" / "antigravity")
     if sys.platform == "win32" or os.name == "nt":
         local_app_data = os.environ.get("LOCALAPPDATA")
         if local_app_data:
@@ -1422,31 +1448,51 @@ def check_implementer_conversation_progress(conversation_id: str) -> tuple[bool,
     found_any = False
 
     for root in candidate_roots:
-        # Check SQLite db
-        db_path = root / "conversations" / f"{conversation_id}.db"
-        if db_path.exists():
-            found_any = True
-            try:
-                mtime = db_path.stat().st_mtime
-                if latest_mtime is None or mtime > latest_mtime:
-                    latest_mtime = mtime
-            except OSError:
-                pass
+        candidates = [
+            root / "conversations" / f"{conversation_id}.db",
+            root / "brain" / conversation_id / ".system_generated" / "logs" / "transcript.jsonl",
+            root / "brain" / conversation_id / ".system_generated" / "logs" / "transcript_full.jsonl",
+            root / "brain" / conversation_id / "transcript.jsonl",
+            root / "brain" / conversation_id / f"{conversation_id}.db",
+        ]
+        for p in candidates:
+            if p.exists():
+                found_any = True
+                try:
+                    mtime = p.stat().st_mtime
+                    if latest_mtime is None or mtime > latest_mtime:
+                        latest_mtime = mtime
+                except OSError:
+                    pass
 
-        # Check transcript log
-        log_path = root / "brain" / conversation_id / ".system_generated" / "logs" / "transcript.jsonl"
-        if log_path.exists():
-            found_any = True
-            try:
-                mtime = log_path.stat().st_mtime
-                if latest_mtime is None or mtime > latest_mtime:
-                    latest_mtime = mtime
-            except OSError:
-                pass
+    if not found_any or latest_mtime is None:
+        return False, None
 
-    if found_any and latest_mtime is not None:
-        return True, latest_mtime
-    return False, None
+    baseline_ts = None
+    if last_activity_ts is not None:
+        if isinstance(last_activity_ts, (int, float)):
+            baseline_ts = float(last_activity_ts)
+        elif isinstance(last_activity_ts, str):
+            try:
+                baseline_ts = datetime.fromisoformat(last_activity_ts.replace("Z", "+00:00")).timestamp()
+            except Exception:
+                baseline_ts = None
+
+    if baseline_ts is not None:
+        has_progress = (latest_mtime - baseline_ts) > 0.001
+        if has_progress:
+            _CONVERSATION_PROGRESS_CACHE[conversation_id] = latest_mtime
+        return has_progress, latest_mtime
+
+    cached_ts = _CONVERSATION_PROGRESS_CACHE.get(conversation_id)
+    if cached_ts is not None:
+        has_progress = (latest_mtime - cached_ts) > 0.001
+        if has_progress:
+            _CONVERSATION_PROGRESS_CACHE[conversation_id] = latest_mtime
+        return has_progress, latest_mtime
+
+    _CONVERSATION_PROGRESS_CACHE[conversation_id] = latest_mtime
+    return False, latest_mtime
 
 
 def _audit_safe_value(value):
@@ -3199,9 +3245,12 @@ def advance_active_lifecycle(
                 # Repair agent still in progress, hasn't pushed new head yet
                 conv_id = attempt.get("conversation_id")
                 if conv_id:
-                    has_progress, _ = check_implementer_conversation_progress(conv_id)
-                    if has_progress:
-                        ledger.update_heartbeat(attempt_id)
+                    has_progress, latest_act = check_implementer_conversation_progress(
+                        conv_id, last_activity_ts=attempt.get("heartbeat_at")
+                    )
+                    if has_progress and latest_act is not None:
+                        act_iso = datetime.fromtimestamp(latest_act, tz=timezone.utc).isoformat()
+                        ledger.update_heartbeat(attempt_id, heartbeat_at=act_iso)
                         reloaded = ledger.get_attempt(attempt_id)
                         if reloaded:
                             attempt.update(reloaded)
@@ -3253,6 +3302,18 @@ def advance_active_lifecycle(
             return True, "pr_bound"
         else:
             # PR not created yet
+            conv_id = attempt.get("conversation_id")
+            if conv_id:
+                has_progress, latest_act = check_implementer_conversation_progress(
+                    conv_id, last_activity_ts=attempt.get("heartbeat_at")
+                )
+                if has_progress and latest_act is not None:
+                    act_iso = datetime.fromtimestamp(latest_act, tz=timezone.utc).isoformat()
+                    ledger.update_heartbeat(attempt_id, heartbeat_at=act_iso)
+                    reloaded = ledger.get_attempt(attempt_id)
+                    if reloaded:
+                        attempt.update(reloaded)
+
             timed_out, reason, target = evaluate_watchdog_timeout(attempt, now_ts=now_ts)
             if timed_out:
                 fail_closed_to_infra_blocked(repo, issue_number, reason, attempt_id)
@@ -3358,9 +3419,15 @@ def advance_active_lifecycle(
                         in_flight_id = in_flight.get("attempt_id")
                         in_flight_conv = in_flight.get("conversation_id")
                         if in_flight_conv:
-                            has_prog, _ = check_implementer_conversation_progress(in_flight_conv)
-                            if has_prog:
-                                ledger.update_heartbeat(in_flight_id)
+                            has_prog, latest_act = check_implementer_conversation_progress(
+                                in_flight_conv, last_activity_ts=in_flight.get("heartbeat_at")
+                            )
+                            if has_prog and latest_act is not None:
+                                act_iso = datetime.fromtimestamp(latest_act, tz=timezone.utc).isoformat()
+                                ledger.update_heartbeat(in_flight_id, heartbeat_at=act_iso)
+                                reloaded = ledger.get_attempt(in_flight_id)
+                                if reloaded:
+                                    in_flight.update(reloaded)
                         timed_out, reason, target = evaluate_watchdog_timeout(in_flight, now_ts=now_ts)
                         if timed_out:
                             fail_closed_to_infra_blocked(repo, issue_number, reason, in_flight_id)
@@ -3500,9 +3567,15 @@ def advance_active_lifecycle(
                     in_flight_id = in_flight.get("attempt_id")
                     in_flight_conv = in_flight.get("conversation_id")
                     if in_flight_conv:
-                        has_prog, _ = check_implementer_conversation_progress(in_flight_conv)
-                        if has_prog:
-                            ledger.update_heartbeat(in_flight_id)
+                        has_prog, latest_act = check_implementer_conversation_progress(
+                            in_flight_conv, last_activity_ts=in_flight.get("heartbeat_at")
+                        )
+                        if has_prog and latest_act is not None:
+                            act_iso = datetime.fromtimestamp(latest_act, tz=timezone.utc).isoformat()
+                            ledger.update_heartbeat(in_flight_id, heartbeat_at=act_iso)
+                            reloaded = ledger.get_attempt(in_flight_id)
+                            if reloaded:
+                                in_flight.update(reloaded)
                     timed_out, reason, target = evaluate_watchdog_timeout(in_flight, now_ts=now_ts)
                     if timed_out:
                         fail_closed_to_infra_blocked(repo, issue_number, reason, in_flight_id)
