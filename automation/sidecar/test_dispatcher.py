@@ -648,6 +648,7 @@ class ClosureV1DeterministicAcceptanceTests(unittest.TestCase):
     def tearDown(self):
         if hasattr(self, "ledger") and self.ledger:
             self.ledger.close()
+        dispatcher.set_ledger(None)
 
     def test_ownership_and_lease_lifecycle(self):
         # 1. Acquire lease
@@ -1001,6 +1002,318 @@ class ClosureV1DeterministicAcceptanceTests(unittest.TestCase):
         self.assertEqual(attempt_after["phase"], "LAUNCH_CONFIRMED")
         self.assertEqual(attempt_after["launch_confirmed"], 1)
         self.assertEqual(attempt_after["conversation_id"], "conv-uuid-1234")
+
+
+class ClosureV1ProductionPathIntegrationTests(unittest.TestCase):
+    """
+    Integration tests verifying Closure v1 engines wired into actual production paths:
+    - poll_cycle() executes ExecutionLedger claim/lease/lifecycle.
+    - Two-worker lease race prevents duplicate dispatch in poll_cycle().
+    - poll_cycle() routes changes-requested to dispatch_automated_repair().
+    - Repair budget (max 3, no #4) enforced in production poll_cycle().
+    - Exact-SHA fencing enforced in production poll_cycle().
+    - Deduplication key enforced in production poll_cycle().
+    - Watchdog evaluation executed via poll_cycle() and reconcile_closure_v1().
+    """
+
+    def setUp(self):
+        self.ledger = dispatcher.ExecutionLedger(":memory:")
+        dispatcher.set_ledger(self.ledger)
+        dispatcher.CLAIM_BACKOFF_MAP.clear()
+
+    def tearDown(self):
+        if hasattr(self, "ledger") and self.ledger:
+            self.ledger.close()
+        dispatcher.set_ledger(None)
+        dispatcher.CLAIM_BACKOFF_MAP.clear()
+
+    @patch.object(dispatcher, "dispatch_agent", return_value={"launch_confirmed": True, "conversation_id": "test-uuid-agent-ready"})
+    @patch.object(dispatcher, "cas_transition_coordination_state", return_value=(True, "cas_ok"))
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "agent-ready"}]})
+    @patch.object(dispatcher, "get_open_issues", return_value=[{"number": 42, "title": "Test Task", "labels": [{"name": "frozen-spec"}, {"name": "agent-ready"}]}])
+    def test_poll_cycle_agent_ready_lifecycle(self, mock_open, mock_details, mock_cas, mock_dispatch):
+        dispatcher.poll_cycle()
+
+        # Check lease acquired
+        lease = self.ledger.get_active_lease("liuchangchxy/easy-exam", 42)
+        self.assertIsNotNone(lease, "Worker must hold active lease after launch")
+
+        # Check attempts in SQLite ledger
+        attempts = self.ledger.get_all_attempts_for_issue("liuchangchxy/easy-exam", 42)
+        self.assertEqual(len(attempts), 1)
+        att = attempts[0]
+        self.assertEqual(att["phase"], "LAUNCH_CONFIRMED")
+        self.assertEqual(att["launch_confirmed"], 1)
+        self.assertEqual(att["conversation_id"], "test-uuid-agent-ready")
+        self.assertEqual(att["attempt_kind"], "initial_dispatch")
+        self.assertEqual(att["outcome"], "in_progress")
+
+        mock_cas.assert_called_once_with("liuchangchxy/easy-exam", 42, "agent-ready", "agent-working")
+        mock_dispatch.assert_called_once()
+
+    @patch.object(dispatcher, "dispatch_agent", return_value={"launch_confirmed": True, "conversation_id": "test-uuid-w1"})
+    @patch.object(dispatcher, "cas_transition_coordination_state", return_value=(True, "cas_ok"))
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "agent-ready"}]})
+    @patch.object(dispatcher, "get_open_issues", return_value=[{"number": 42, "title": "Test Task", "labels": [{"name": "frozen-spec"}, {"name": "agent-ready"}]}])
+    def test_poll_cycle_agent_ready_two_worker_race(self, mock_open, mock_details, mock_cas, mock_dispatch):
+        # Worker 1 acquires the lease first
+        ok, token, _ = self.ledger.acquire_lease("liuchangchxy/easy-exam", 42, "worker-1")
+        self.assertTrue(ok)
+
+        # Worker 2 runs poll_cycle (with a different owner_id in dispatcher)
+        with patch("os.getpid", return_value=99999):
+            dispatcher.poll_cycle()
+
+        # Worker 2 must have lost the lease race and NOT called CAS or dispatch_agent
+        mock_cas.assert_not_called()
+        mock_dispatch.assert_not_called()
+
+    @patch.object(dispatcher, "dispatch_agent")
+    @patch.object(dispatcher, "cas_transition_coordination_state", return_value=(False, "cas_failed_conflict"))
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "agent-ready"}]})
+    @patch.object(dispatcher, "get_open_issues", return_value=[{"number": 42, "title": "Test Task", "labels": [{"name": "frozen-spec"}, {"name": "agent-ready"}]}])
+    def test_poll_cycle_agent_ready_cas_failure_releases_lease(self, mock_open, mock_details, mock_cas, mock_dispatch):
+        dispatcher.poll_cycle()
+
+        mock_dispatch.assert_not_called()
+        # Active lease must be released on CAS failure
+        lease = self.ledger.get_active_lease("liuchangchxy/easy-exam", 42)
+        self.assertIsNone(lease, "Lease must be released if CAS transition fails")
+
+        attempts = self.ledger.get_all_attempts_for_issue("liuchangchxy/easy-exam", 42)
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(attempts[0]["outcome"], "failed_to_claim")
+
+    @patch.object(dispatcher, "dispatch_agent", return_value={"launch_confirmed": True, "conversation_id": "test-uuid-repair-1"})
+    @patch.object(dispatcher, "cas_transition_coordination_state", return_value=(True, "cas_ok"))
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "changes-requested"}]})
+    @patch.object(dispatcher, "get_open_issues", return_value=[{"number": 35, "title": "Task 35", "labels": [{"name": "frozen-spec"}, {"name": "changes-requested"}]}])
+    def test_poll_cycle_changes_requested_production_repair_path(self, mock_open, mock_details, mock_cas, mock_dispatch):
+        head_sha = "1111222233334444555566667777888899990000"
+        mock_pr = {
+            "number": 36,
+            "head": {"sha": head_sha, "ref": "agent/issue-35-closure"},
+            "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+        }
+        mock_review = {
+            "id": 1001,
+            "state": "CHANGES_REQUESTED",
+            "commit_id": head_sha,
+            "submitted_at": "2026-10-07T05:00:00Z",
+        }
+
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "get_latest_changes_requested_review", return_value=mock_review):
+                dispatcher.poll_cycle()
+
+        mock_cas.assert_called_once_with("liuchangchxy/easy-exam", 35, "changes-requested", "agent-working")
+        mock_dispatch.assert_called_once()
+
+        # Check ledger entries
+        rep_count = self.ledger.get_repair_count("liuchangchxy/easy-exam", 36)
+        self.assertEqual(rep_count, 1)
+
+        attempts = self.ledger.get_all_attempts_for_issue("liuchangchxy/easy-exam", 35)
+        self.assertEqual(len(attempts), 1)
+        att = attempts[0]
+        self.assertEqual(att["attempt_kind"], "reviewer_repair")
+        self.assertEqual(att["pr_number"], 36)
+        self.assertEqual(att["expected_pr_head_sha"], head_sha)
+        self.assertEqual(att["phase"], "PR_BOUND")
+        self.assertEqual(att["conversation_id"], "test-uuid-repair-1")
+
+    @patch.object(dispatcher, "fail_closed_to_needs_human", return_value=True)
+    @patch.object(dispatcher, "dispatch_agent")
+    @patch.object(dispatcher, "cas_transition_coordination_state")
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "changes-requested"}]})
+    @patch.object(dispatcher, "get_open_issues", return_value=[{"number": 35, "title": "Task 35", "labels": [{"name": "frozen-spec"}, {"name": "changes-requested"}]}])
+    def test_poll_cycle_changes_requested_budget_exhaustion(self, mock_open, mock_details, mock_cas, mock_dispatch, mock_needs_human):
+        head_sha = "1111222233334444555566667777888899990000"
+        mock_pr = {
+            "number": 36,
+            "head": {"sha": head_sha, "ref": "agent/issue-35-closure"},
+            "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+        }
+        mock_review = {
+            "id": 1004,
+            "state": "CHANGES_REQUESTED",
+            "commit_id": head_sha,
+            "submitted_at": "2026-10-07T05:00:00Z",
+        }
+
+        # Seed ledger with 3 completed repairs
+        for i in range(1, 4):
+            self.ledger.record_claim_intent(
+                repo="liuchangchxy/easy-exam",
+                issue_number=35,
+                owner_id=f"w-{i}",
+                lease_token=f"tok-{i}",
+                attempt_id=f"att-{i}",
+                attempt_kind="reviewer_repair",
+                trigger_key=f"trig-{i}",
+                pr_number=36,
+                repair_ordinal=i,
+            )
+
+        self.assertEqual(self.ledger.get_repair_count("liuchangchxy/easy-exam", 36), 3)
+
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "get_latest_changes_requested_review", return_value=mock_review):
+                dispatcher.poll_cycle()
+
+        # Must fail closed to needs-human and NOT launch 4th repair
+        mock_needs_human.assert_called_once()
+        mock_cas.assert_not_called()
+        mock_dispatch.assert_not_called()
+
+    @patch.object(dispatcher, "dispatch_agent")
+    @patch.object(dispatcher, "cas_transition_coordination_state")
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "changes-requested"}]})
+    @patch.object(dispatcher, "get_open_issues", return_value=[{"number": 35, "title": "Task 35", "labels": [{"name": "frozen-spec"}, {"name": "changes-requested"}]}])
+    def test_poll_cycle_changes_requested_stale_sha_fencing(self, mock_open, mock_details, mock_cas, mock_dispatch):
+        current_sha = "2222222222222222222222222222222222222222"
+        reviewed_sha = "1111111111111111111111111111111111111111"
+        mock_pr = {
+            "number": 36,
+            "head": {"sha": current_sha, "ref": "agent/issue-35-closure"},
+            "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+        }
+        mock_review = {
+            "id": 1005,
+            "state": "CHANGES_REQUESTED",
+            "commit_id": reviewed_sha,
+            "submitted_at": "2026-10-07T05:00:00Z",
+        }
+
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "get_latest_changes_requested_review", return_value=mock_review):
+                dispatcher.poll_cycle()
+
+        # Stale SHA mismatch: no CAS, no dispatch
+        mock_cas.assert_not_called()
+        mock_dispatch.assert_not_called()
+        self.assertEqual(self.ledger.get_repair_count("liuchangchxy/easy-exam", 36), 0)
+
+    @patch.object(dispatcher, "dispatch_agent", return_value={"launch_confirmed": True, "conversation_id": "test-uuid-repair-dedupe"})
+    @patch.object(dispatcher, "cas_transition_coordination_state", return_value=(True, "cas_ok"))
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "changes-requested"}]})
+    @patch.object(dispatcher, "get_open_issues", return_value=[{"number": 35, "title": "Task 35", "labels": [{"name": "frozen-spec"}, {"name": "changes-requested"}]}])
+    def test_poll_cycle_changes_requested_duplicate_review_idempotency(self, mock_open, mock_details, mock_cas, mock_dispatch):
+        head_sha = "1111222233334444555566667777888899990000"
+        mock_pr = {
+            "number": 36,
+            "head": {"sha": head_sha, "ref": "agent/issue-35-closure"},
+            "user": {"login": "chang-implementer[bot]", "type": "Bot"},
+        }
+        mock_review = {
+            "id": 1006,
+            "state": "CHANGES_REQUESTED",
+            "commit_id": head_sha,
+            "submitted_at": "2026-10-07T05:00:00Z",
+        }
+
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "get_latest_changes_requested_review", return_value=mock_review):
+                # Cycle 1: First launch succeeds
+                dispatcher.poll_cycle()
+                self.assertEqual(mock_dispatch.call_count, 1)
+
+                # Simulate release of issue lease or subsequent cycle with same head SHA
+                self.ledger.release_issue_lease("liuchangchxy/easy-exam", 35)
+
+                # Cycle 2: Duplicate review for same head SHA
+                dispatcher.poll_cycle()
+                # Dispatch count must NOT increase
+                self.assertEqual(mock_dispatch.call_count, 1)
+
+    @patch.object(dispatcher, "fail_closed_to_needs_human", return_value=True)
+    @patch.object(dispatcher, "dispatch_agent")
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "changes-requested"}]})
+    @patch.object(dispatcher, "get_open_issues", return_value=[{"number": 35, "title": "Task 35", "labels": [{"name": "frozen-spec"}, {"name": "changes-requested"}]}])
+    def test_poll_cycle_changes_requested_missing_pr_fails_closed(self, mock_open, mock_details, mock_dispatch, mock_needs_human):
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("none_found", None)):
+            dispatcher.poll_cycle()
+
+        mock_needs_human.assert_called_once_with(
+            "liuchangchxy/easy-exam", 35, "no_associated_pr_for_changes_requested"
+        )
+        mock_dispatch.assert_not_called()
+
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "agent-working"}]})
+    @patch.object(dispatcher, "fail_closed_to_infra_blocked", return_value=True)
+    @patch.object(dispatcher, "get_open_issues", return_value=[])
+    def test_poll_cycle_reconciles_watchdog_timeout(self, mock_open, mock_fail_closed, mock_details):
+        # Insert timed-out attempt in ledger (LAUNCH_INTENT created 200s ago)
+        old_time = "2026-10-07T00:00:00+00:00"
+        self.ledger.acquire_lease("liuchangchxy/easy-exam", 55, "worker-old")
+        self.ledger.record_claim_intent(
+            repo="liuchangchxy/easy-exam",
+            issue_number=55,
+            owner_id="worker-old",
+            lease_token="tok-old",
+            attempt_id="att-timed-out",
+            attempt_kind="initial_dispatch",
+            trigger_key="trig-old",
+        )
+        self.ledger.record_launch_intent("att-timed-out")
+
+        # Manually backdate updated_at in DB
+        with self.ledger._get_connection() as conn:
+            conn.execute("UPDATE execution_ledger SET updated_at = ?, heartbeat_at = ?", (old_time, old_time))
+            conn.commit()
+
+        # Run poll_cycle with current time far ahead of deadline
+        with patch("time.time", return_value=datetime.fromisoformat("2026-10-07T00:05:00+00:00").timestamp()):
+            dispatcher.poll_cycle()
+
+        # Fail closed called for timed-out issue
+        mock_fail_closed.assert_called_once()
+        att = self.ledger.get_attempt("att-timed-out")
+        self.assertEqual(att["outcome"], "timeout_infra_blocked")
+        self.assertIsNone(self.ledger.get_active_lease("liuchangchxy/easy-exam", 55))
+
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "agent-working"}]})
+    @patch.object(dispatcher, "fail_closed_to_needs_human", return_value=True)
+    def test_reconcile_closure_v1_watchdog_timeout_to_needs_human(self, mock_needs_human, mock_details):
+        old_time = "2026-10-07T00:00:00+00:00"
+        self.ledger.acquire_lease("liuchangchxy/easy-exam", 66, "worker-review")
+        self.ledger.record_claim_intent(
+            repo="liuchangchxy/easy-exam",
+            issue_number=66,
+            owner_id="worker-review",
+            lease_token="tok-review",
+            attempt_id="att-review-timeout",
+            attempt_kind="initial_dispatch",
+            trigger_key="trig-review",
+        )
+        with self.ledger._get_connection() as conn:
+            conn.execute(
+                "UPDATE execution_ledger SET phase = 'WAITING_REVIEW', updated_at = ?, heartbeat_at = ?",
+                (old_time, old_time),
+            )
+            conn.commit()
+
+        with patch.object(dispatcher, "get_open_issues", return_value=[]):
+            with patch("time.time", return_value=datetime.fromisoformat("2026-10-07T00:35:00+00:00").timestamp()):
+                reconciled = dispatcher.reconcile_closure_v1("liuchangchxy/easy-exam", self.ledger)
+
+        self.assertFalse(reconciled)
+        mock_needs_human.assert_called_once()
+        att = self.ledger.get_attempt("att-review-timeout")
+        self.assertEqual(att["outcome"], "timeout_needs_human")
+        self.assertIsNone(self.ledger.get_active_lease("liuchangchxy/easy-exam", 66))
+
+    def test_get_latest_changes_requested_review_selection(self):
+        reviews = [
+            {"id": 1, "state": "COMMENTED", "submitted_at": "2026-10-07T01:00:00Z", "commit_id": "sha1"},
+            {"id": 2, "state": "CHANGES_REQUESTED", "submitted_at": "2026-10-07T02:00:00Z", "commit_id": "sha2"},
+            {"id": 3, "state": "APPROVED", "submitted_at": "2026-10-07T03:00:00Z", "commit_id": "sha3"},
+            {"id": 4, "state": "CHANGES_REQUESTED", "submitted_at": "2026-10-07T04:00:00Z", "commit_id": "sha4"},
+        ]
+        chosen = dispatcher.get_latest_changes_requested_review("liuchangchxy/easy-exam", 99, reviews_list=reviews)
+        self.assertIsNotNone(chosen)
+        self.assertEqual(chosen["id"], 4)
+        self.assertEqual(chosen["commit_id"], "sha4")
 
 
 if __name__ == "__main__":

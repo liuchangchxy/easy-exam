@@ -343,6 +343,34 @@ def adopt_existing_pr(repo: str, issue_number: int, pulls_list: list[dict] = Non
         return "none_found", None
 
 
+def get_latest_changes_requested_review(repo: str, pr_number: int, reviews_list: list[dict] = None) -> dict | None:
+    """
+    Fetch reviews for the given PR and return the latest CHANGES_REQUESTED review.
+    Enforces exact review baseline matching Frozen Spec Sections 13-15.
+    """
+    if reviews_list is None:
+        gh_bin = shutil.which("gh") or "gh"
+        cmd = [gh_bin, "api", f"repos/{repo}/pulls/{pr_number}/reviews", "--paginate"]
+        code, stdout, stderr, timed_out = run_cmd(cmd, timeout=GITHUB_TIMEOUT_SECONDS)
+        if code != 0 or timed_out or not stdout.strip():
+            logger.error(f"Failed to fetch reviews for PR #{pr_number}: {stderr}")
+            return None
+        try:
+            reviews_list = json.loads(stdout)
+        except json.JSONDecodeError as exc:
+            logger.error(f"Failed to parse reviews for PR #{pr_number}: {exc}")
+            return None
+
+    if not isinstance(reviews_list, list):
+        return None
+
+    cr_reviews = [r for r in reviews_list if r.get("state") == "CHANGES_REQUESTED"]
+    if not cr_reviews:
+        return None
+    cr_reviews.sort(key=lambda r: (r.get("submitted_at") or "", r.get("id") or 0))
+    return cr_reviews[-1]
+
+
 def evaluate_watchdog_timeout(attempt: dict, now_ts: float = None) -> tuple[bool, str | None, str | None]:
     """
     Watchdog evaluation matching Frozen Spec Section 18:
@@ -366,6 +394,9 @@ def evaluate_watchdog_timeout(attempt: dict, now_ts: float = None) -> tuple[bool
 
     elapsed = now - updated_ts
     phase = attempt.get("phase")
+
+    if phase in ("CLAIM_INTENT", "CLAIMED") and elapsed > LAUNCH_CONFIRMATION_DEADLINE_SECONDS:
+        return True, "claim_confirmation_timeout", "infra-blocked"
 
     if phase == "LAUNCH_INTENT" and elapsed > LAUNCH_CONFIRMATION_DEADLINE_SECONDS:
         return True, "launch_confirmation_timeout", "infra-blocked"
@@ -402,6 +433,10 @@ class ExecutionLedger:
         self._init_db()
 
     def _get_connection(self):
+        if self._conn is None:
+            self._conn = sqlite3.connect(self.db_path, timeout=15.0, check_same_thread=False)
+            self._conn.row_factory = sqlite3.Row
+            self._init_db()
         return self._conn
 
     def _init_db(self):
@@ -727,6 +762,21 @@ class ExecutionLedger:
             )
             return [dict(r) for r in cur.fetchall()]
 
+    def get_active_attempts(self, repo: str = None) -> list[dict]:
+        """Return all active in-progress attempts for bounded runtime watchdog evaluation."""
+        with self._get_connection() as conn:
+            cur = conn.cursor()
+            if repo:
+                cur.execute(
+                    "SELECT * FROM execution_ledger WHERE repo = ? AND phase != 'EXECUTION_OUTCOME' AND outcome = 'in_progress' ORDER BY id ASC",
+                    (repo,),
+                )
+            else:
+                cur.execute(
+                    "SELECT * FROM execution_ledger WHERE phase != 'EXECUTION_OUTCOME' AND outcome = 'in_progress' ORDER BY id ASC"
+                )
+            return [dict(r) for r in cur.fetchall()]
+
     def close(self):
         if hasattr(self, "_conn") and self._conn:
             self._conn.close()
@@ -738,7 +788,7 @@ _LEDGER_INSTANCE = None
 
 def get_ledger(db_path=None) -> ExecutionLedger:
     global _LEDGER_INSTANCE
-    if _LEDGER_INSTANCE is None or db_path is not None:
+    if _LEDGER_INSTANCE is None or db_path is not None or getattr(_LEDGER_INSTANCE, "_conn", None) is None:
         _LEDGER_INSTANCE = ExecutionLedger(db_path=db_path or LEDGER_DB_PATH)
     return _LEDGER_INSTANCE
 
@@ -818,6 +868,7 @@ def dispatch_automated_repair(
     failure_detail: dict = None,
     ledger: ExecutionLedger = None,
     owner_id: str = None,
+    branch: str = None,
 ) -> tuple[bool, str, dict]:
     """
     Unified repair workflow matching Frozen Spec Sections 10-15:
@@ -898,7 +949,23 @@ def dispatch_automated_repair(
         repair_cause_type=cause_type,
         repair_cause_id=cause_id,
         pr_number=pr_number,
+        branch=branch,
     )
+
+    try:
+        append_dispatch_audit({
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "attempt_id": attempt_id,
+            "event": "claim_intent",
+            "repo": repo,
+            "issue_number": issue_number,
+            "source_label": "changes-requested" if repair_kind == "reviewer_repair" else "agent-working",
+            "repair_key": repair_key,
+            "repair_ordinal": ordinal,
+            "final_coordination_state": "agent-working",
+        })
+    except Exception:
+        pass
 
     # 8. CAS transition if reviewer repair
     if repair_kind == "reviewer_repair":
@@ -921,10 +988,26 @@ def dispatch_automated_repair(
     if launch_result.get("launch_confirmed") and launch_result.get("conversation_id"):
         conv_id = launch_result["conversation_id"]
         ledger.record_launch_confirmed(attempt_id, conv_id)
-        ledger.record_pr_bound(attempt_id, pr_number, branch=None, resulting_head_sha=expected_repair_baseline_sha)
+        ledger.record_pr_bound(attempt_id, pr_number, branch=branch, resulting_head_sha=expected_repair_baseline_sha)
         logger.info(
             f"Automated repair #{ordinal} launched successfully for #{issue_number} / PR #{pr_number}: {conv_id}"
         )
+        try:
+            append_dispatch_audit({
+                "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                "attempt_id": attempt_id,
+                "event": "launch_confirmed",
+                "repo": repo,
+                "issue_number": issue_number,
+                "source_label": source_label,
+                "repair_key": repair_key,
+                "repair_ordinal": ordinal,
+                "conversation_id": conv_id,
+                "launch_confirmed": True,
+                "final_coordination_state": "agent-working",
+            })
+        except Exception:
+            pass
         return True, "repair_launched", {
             "attempt_id": attempt_id,
             "repair_ordinal": ordinal,
@@ -936,6 +1019,22 @@ def dispatch_automated_repair(
         ledger.record_outcome(attempt_id, "failed_to_launch", last_error=err_cat)
         fail_closed_to_infra_blocked(repo, issue_number, err_cat, attempt_id)
         ledger.release_lease(lease_token)
+        try:
+            append_dispatch_audit({
+                "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                "attempt_id": attempt_id,
+                "event": "finalized",
+                "repo": repo,
+                "issue_number": issue_number,
+                "source_label": source_label,
+                "repair_key": repair_key,
+                "repair_ordinal": ordinal,
+                "launch_confirmed": False,
+                "final_coordination_state": "infra-blocked",
+                "error_category": err_cat,
+            })
+        except Exception:
+            pass
         return False, f"launch_failed_{err_cat}", {"attempt_id": attempt_id}
 
 
@@ -2142,8 +2241,11 @@ def dispatch_agent(repo, repo_path, issue_number, issue_title, source_label):
     return result
 
 
-def process_claimed_dispatch(repo, issue_number, issue_title, source_label, attempt_id):
+def process_claimed_dispatch(repo, issue_number, issue_title, source_label, attempt_id, lease_token=None, ledger=None):
     """Launch a claimed issue and leave a durable receipt or fail it closed."""
+    ledger = ledger or get_ledger()
+    ledger.record_launch_intent(attempt_id)
+
     record = {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "attempt_id": attempt_id,
@@ -2174,6 +2276,11 @@ def process_claimed_dispatch(repo, issue_number, issue_title, source_label, atte
             blocked = False
         record["final_coordination_state"] = "infra-blocked" if blocked else "agent-working"
         record["error_category"] = "audit_write_failed"
+        ledger.record_outcome(attempt_id, "audit_write_failed", last_error="audit_write_failed")
+        if lease_token:
+            ledger.release_lease(lease_token)
+        else:
+            ledger.release_issue_lease(repo, issue_number)
         return record
 
     try:
@@ -2193,6 +2300,7 @@ def process_claimed_dispatch(repo, issue_number, issue_title, source_label, atte
 
     if record["launch_confirmed"] and record["conversation_id"]:
         record["event"] = "launch_confirmed"
+        ledger.record_launch_confirmed(attempt_id, record["conversation_id"])
         try:
             append_dispatch_audit(record)
             return record
@@ -2210,6 +2318,11 @@ def process_claimed_dispatch(repo, issue_number, issue_title, source_label, atte
     record["final_coordination_state"] = "infra-blocked" if blocked else "agent-working"
     record["launch_confirmed"] = False
     record["error_category"] = category if blocked else "fail_closed_github_update_failed"
+    ledger.record_outcome(attempt_id, "failed_to_launch", last_error=category)
+    if lease_token:
+        ledger.release_lease(lease_token)
+    else:
+        ledger.release_issue_lease(repo, issue_number)
     try:
         append_dispatch_audit(record)
     except Exception as exc:
@@ -2284,6 +2397,53 @@ def reconcile_closure_v1(repo: str, ledger: ExecutionLedger = None) -> bool:
     ledger = ledger or get_ledger()
     reconciled_ok = True
 
+    # 1. Watchdog evaluation across active attempts
+    try:
+        active_attempts = ledger.get_active_attempts(repo)
+    except Exception as exc:
+        logger.error("Error fetching active attempts during reconciliation (%s)", type(exc).__name__)
+        active_attempts = []
+
+    for attempt in active_attempts:
+        issue_num = attempt.get("issue_number")
+        attempt_id = attempt.get("attempt_id")
+        if not issue_num or not attempt_id:
+            continue
+
+        # Cancellation fencing check
+        try:
+            details = get_issue_details(repo, issue_num)
+        except Exception:
+            details = None
+
+        if details:
+            is_cancelled, cancel_reason = check_cancellation_fencing(details)
+            if is_cancelled:
+                logger.info(
+                    "Active attempt %s for Issue #%s is cancelled: %s",
+                    attempt_id, issue_num, cancel_reason
+                )
+                ledger.record_outcome(attempt_id, f"cancelled_{cancel_reason}", last_error=cancel_reason)
+                ledger.release_issue_lease(repo, issue_num)
+                continue
+
+        # Watchdog timeout check
+        timed_out, reason, target_state = evaluate_watchdog_timeout(attempt)
+        if timed_out:
+            logger.warning(
+                "Watchdog timeout triggered for Issue #%s (attempt_id=%s, phase=%s, reason=%s, target_state=%s)",
+                issue_num, attempt_id, attempt.get("phase"), reason, target_state
+            )
+            if target_state == "needs-human":
+                fail_closed_to_needs_human(repo, issue_num, reason, attempt_id)
+                ledger.record_outcome(attempt_id, "timeout_needs_human", last_error=reason)
+            else:
+                fail_closed_to_infra_blocked(repo, issue_num, reason, attempt_id)
+                ledger.record_outcome(attempt_id, "timeout_infra_blocked", last_error=reason)
+            ledger.release_issue_lease(repo, issue_num)
+            reconciled_ok = False
+
+    # 2. Check open issues for orphan agent-working states
     try:
         issues = get_open_issues(repo)
     except Exception as exc:
@@ -2346,6 +2506,11 @@ def poll_cycle():
     if not reconcile_incomplete_dispatches(EASYEXAM_REPO):
         logger.error("Skipping claim scan while dispatch audit reconciliation is pending")
         return
+
+    try:
+        reconcile_closure_v1(EASYEXAM_REPO)
+    except Exception as exc:
+        logger.error("Error during Closure v1 reconciliation (%s)", type(exc).__name__)
 
     issues = get_open_issues(EASYEXAM_REPO)
     if issues is None:
@@ -2442,8 +2607,87 @@ def poll_cycle():
         )
         return
 
-    # Persist claim intent first so a process interruption can be reconciled safely.
+    ledger = get_ledger()
+    owner_id = f"dispatcher-{os.getpid()}"
+
+    if source_label == "changes-requested":
+        # Production repair entry point:
+        # Resolves linked PR and head SHA, latest rejected review baseline,
+        # enforces unified repair budget (<= 3), repair-key idempotency, and exact-SHA fencing.
+        status, pr = adopt_existing_pr(EASYEXAM_REPO, issue_number)
+        if status == "needs_human_multiple_candidates":
+            logger.warning(f"Multiple candidate PRs for Issue #{issue_number}. Failing closed to needs-human.")
+            fail_closed_to_needs_human(EASYEXAM_REPO, issue_number, "multiple_pr_candidates")
+            return
+        elif status == "invalid_author":
+            logger.warning(f"PR for Issue #{issue_number} has invalid author. Failing closed to infra-blocked.")
+            fail_closed_to_infra_blocked(EASYEXAM_REPO, issue_number, "orphan_pr_invalid_author")
+            return
+        elif status != "adopted" or not pr:
+            logger.warning(f"No valid PR found for changes-requested Issue #{issue_number}. Failing closed to needs-human.")
+            fail_closed_to_needs_human(EASYEXAM_REPO, issue_number, "no_associated_pr_for_changes_requested")
+            return
+
+        pr_number = pr.get("number")
+        current_head_sha = ((pr.get("head") or {}).get("sha")) or ""
+        branch = ((pr.get("head") or {}).get("ref")) or ""
+
+        latest_review = get_latest_changes_requested_review(EASYEXAM_REPO, pr_number)
+        if latest_review:
+            cause_id = str(latest_review.get("id") or "latest")
+            expected_baseline_sha = latest_review.get("commit_id")
+            if not expected_baseline_sha:
+                m = re.search(r"\[easyexam-review:([0-9a-fA-F]{40})\]", latest_review.get("body", ""))
+                if m:
+                    expected_baseline_sha = m.group(1)
+                else:
+                    m2 = re.search(r"Reviewed head:\s*([0-9a-fA-F]{40})", latest_review.get("body", ""))
+                    if m2:
+                        expected_baseline_sha = m2.group(1)
+                    else:
+                        expected_baseline_sha = current_head_sha
+        else:
+            cause_id = "review_unknown"
+            expected_baseline_sha = current_head_sha
+
+        repair_ok, repair_reason, repair_meta = dispatch_automated_repair(
+            repo=EASYEXAM_REPO,
+            issue_number=issue_number,
+            pr_number=pr_number,
+            current_pr_head_sha=current_head_sha,
+            expected_repair_baseline_sha=expected_baseline_sha,
+            repair_kind="reviewer_repair",
+            cause_type="changes_requested",
+            cause_id=cause_id,
+            ledger=ledger,
+            owner_id=owner_id,
+            branch=branch,
+        )
+        logger.info(
+            f"Automated repair dispatch result for #{issue_number} (PR #{pr_number}): "
+            f"ok={repair_ok}, reason={repair_reason}, meta={repair_meta}"
+        )
+        return
+
+    # Initial dispatch path (agent-ready):
+    # Enforce exclusive lease, SQLite ledger CLAIM_INTENT -> CLAIMED -> LAUNCH_INTENT -> LAUNCH_CONFIRMED.
+    acquired, lease_token, lease_reason = ledger.acquire_lease(EASYEXAM_REPO, issue_number, owner_id)
+    if not acquired:
+        logger.warning(f"Could not acquire execution lease for #{issue_number}: {lease_reason}")
+        return
+
     attempt_id = str(uuid.uuid4())
+    trigger_key = f"dispatch:{EASYEXAM_REPO}:{issue_number}:{attempt_id}"
+    ledger.record_claim_intent(
+        repo=EASYEXAM_REPO,
+        issue_number=issue_number,
+        owner_id=owner_id,
+        lease_token=lease_token,
+        attempt_id=attempt_id,
+        attempt_kind="initial_dispatch",
+        trigger_key=trigger_key,
+    )
+
     claim_record = {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "attempt_id": attempt_id,
@@ -2467,6 +2711,7 @@ def poll_cycle():
         append_dispatch_audit(claim_record)
     except Exception:
         logger.exception("Cannot safely claim an issue without a durable dispatch journal")
+        ledger.release_lease(lease_token)
         return
 
     # Claim transition: switch source label to agent-working via strict CAS.
@@ -2488,10 +2733,13 @@ def poll_cycle():
             append_dispatch_audit(claim_record)
         except Exception as exc:
             logger.error("Could not persist failed claim outcome (%s)", type(exc).__name__)
+        ledger.record_outcome(attempt_id, "failed_to_claim", last_error=claim_reason)
+        ledger.release_lease(lease_token)
         return
 
     reset_claim_backoff(issue_number)
 
+    ledger.record_claimed(attempt_id)
     claim_record.update({
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "event": "claimed",
@@ -2503,10 +2751,12 @@ def poll_cycle():
     except Exception as exc:
         logger.error("Claim succeeded but its result could not be journaled (%s)", type(exc).__name__)
         fail_closed_to_infra_blocked(EASYEXAM_REPO, issue_number, "audit_write_failed", attempt_id)
+        ledger.record_outcome(attempt_id, "audit_write_failed", last_error="audit_write_failed")
+        ledger.release_lease(lease_token)
         return
 
     process_claimed_dispatch(
-        EASYEXAM_REPO, issue_number, issue_title, source_label, attempt_id
+        EASYEXAM_REPO, issue_number, issue_title, source_label, attempt_id, lease_token=lease_token, ledger=ledger
     )
 
 
