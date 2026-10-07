@@ -1,0 +1,1 @@
+# automation.sidecar package root
