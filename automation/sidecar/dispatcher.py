@@ -344,46 +344,74 @@ def adopt_existing_pr(repo: str, issue_number: int, pulls_list: list[dict] = Non
         return "none_found", None
 
 
+HEX_40_RE = re.compile(r"^[0-9a-fA-F]{40}$")
+
+
 def get_review_target_commit_sha(review: dict) -> str | None:
     """
     Extract the target commit SHA from a review:
-    1. Formal marker [easyexam-review:<SHA>] in review body
-    2. 'Reviewed head: <SHA>' in review body
-    3. Native GitHub review commit_id
+    1. Formal marker [easyexam-review:<40-hex-SHA>] in review body
+    2. 'Reviewed head: <40-hex-SHA>' in review body (plain or backtick-wrapped)
+    3. Native GitHub review commit_id (40 hex)
+
+    Requires an exact normalized 40-hex equality from native commit_id or the formal full-SHA marker.
+    Rejects abbreviated or prefix-only markers (< 40 hex).
+    Rejects conflicting body-marker and native-commit values.
+    Returns normalized 40-hex lowercase string, or None if invalid, abbreviated, or conflicting.
     """
-    if not review:
+    if not review or not isinstance(review, dict):
         return None
+
     body = review.get("body") or ""
-    m = re.search(r"\[easyexam-review:([0-9a-fA-F]{7,40})\]", body)
-    if m:
-        return m.group(1)
-    m2 = re.search(r"Reviewed head:\s*([0-9a-fA-F]{7,40})", body)
-    if m2:
-        return m2.group(1)
-    commit_id = (review.get("commit_id") or "").strip()
-    if commit_id:
-        return commit_id
+    body_shas = set()
+
+    # Search for [easyexam-review:...] markers
+    for m in re.finditer(r"\[easyexam-review:([^\]\s]+)\]", body):
+        token = m.group(1).strip()
+        if not HEX_40_RE.match(token):
+            return None
+        body_shas.add(token.lower())
+
+    # Search for Reviewed head: markers (supports optional backticks)
+    for m in re.finditer(r"Reviewed head:\s*`?([^`\s\r\n]+)`?", body):
+        token = m.group(1).strip()
+        if not HEX_40_RE.match(token):
+            return None
+        body_shas.add(token.lower())
+
+    if len(body_shas) > 1:
+        return None
+
+    native_commit = (review.get("commit_id") or "").strip()
+    if native_commit:
+        if not HEX_40_RE.match(native_commit):
+            return None
+        native_norm = native_commit.lower()
+        if body_shas and native_norm not in body_shas:
+            return None
+        return native_norm
+
+    if body_shas:
+        return next(iter(body_shas))
+
     return None
 
 
 def is_review_anchored_to_sha(review: dict, expected_sha: str) -> bool:
     """
     Determine if a review is anchored to expected_sha via commit_id or exact formal marker.
-    Matches exact 40-hex SHA or common prefix (>= 7 chars).
+    Requires exact normalized 40-hex equality between the review's target SHA and expected_sha.
+    Abbreviated or prefix-only matches are strictly rejected.
     """
     if not review or not expected_sha:
         return False
-    target = get_review_target_commit_sha(review)
-    if not target:
+    e_sha = str(expected_sha).strip()
+    if not HEX_40_RE.match(e_sha):
         return False
-    t_low = target.lower()
-    e_low = expected_sha.lower()
-    if t_low == e_low:
-        return True
-    if len(t_low) >= 7 and len(e_low) >= 7:
-        if t_low.startswith(e_low) or e_low.startswith(t_low):
-            return True
-    return False
+    target = get_review_target_commit_sha(review)
+    if not target or not HEX_40_RE.match(target):
+        return False
+    return target == e_sha.lower()
 
 
 def get_latest_changes_requested_review(
@@ -729,8 +757,11 @@ class ExecutionLedger:
             conn.commit()
             return cur.rowcount > 0
 
-    def record_pr_bound(self, attempt_id: str, pr_number: int, branch: str, resulting_head_sha: str = None) -> bool:
+    def record_pr_bound(
+        self, attempt_id: str, pr_number: int, branch: str, resulting_head_sha: str = None, phase_entered_at: str = None
+    ) -> bool:
         now_iso = datetime.now(timezone.utc).isoformat()
+        p_entered = phase_entered_at or now_iso
         with self._get_connection() as conn:
             cur = conn.cursor()
             cur.execute(
@@ -741,7 +772,7 @@ class ExecutionLedger:
                     updated_at = ?, heartbeat_at = ?
                 WHERE attempt_id = ?
                 """,
-                (now_iso, pr_number, branch, resulting_head_sha, now_iso, now_iso, attempt_id),
+                (p_entered, pr_number, branch, resulting_head_sha, now_iso, now_iso, attempt_id),
             )
             conn.commit()
             return cur.rowcount > 0
@@ -2814,6 +2845,42 @@ def complete_terminal_merge(
     return True
 
 
+def transition_attempt_phase(
+    attempt: dict,
+    ledger: ExecutionLedger,
+    new_phase: str,
+    resulting_head_sha: str = None,
+    now_ts: float = None,
+) -> str:
+    """
+    Transition an attempt's phase both in the ExecutionLedger and in the in-memory attempt dict.
+    Updates in-memory attempt's phase_entered_at, phase, and resulting_head_sha so subsequent
+    watchdog checks evaluate the newly persisted clock rather than inheriting the previous phase's clock.
+    """
+    p_entered = (
+        datetime.fromtimestamp(float(now_ts), tz=timezone.utc).isoformat()
+        if now_ts is not None
+        else datetime.now(timezone.utc).isoformat()
+    )
+    if ledger:
+        ledger.record_phase(
+            attempt.get("attempt_id"),
+            new_phase,
+            resulting_head_sha=resulting_head_sha,
+            phase_entered_at=p_entered,
+        )
+        reloaded = ledger.get_attempt(attempt.get("attempt_id"))
+        if reloaded:
+            attempt.update(reloaded)
+            return p_entered
+
+    attempt["phase"] = new_phase
+    attempt["phase_entered_at"] = p_entered
+    if resulting_head_sha is not None:
+        attempt["resulting_head_sha"] = resulting_head_sha
+    return p_entered
+
+
 def advance_active_lifecycle(
     repo: str,
     attempt: dict,
@@ -2928,14 +2995,24 @@ def advance_active_lifecycle(
                     return True, "waiting_for_repair_push"
 
             # PR created or new repair head pushed
-            ledger.record_pr_bound(attempt_id, pr_num, branch, current_sha)
+            p_time = (
+                datetime.fromtimestamp(float(now_ts), tz=timezone.utc).isoformat()
+                if now_ts is not None
+                else datetime.now(timezone.utc).isoformat()
+            )
+            ledger.record_pr_bound(attempt_id, pr_num, branch, current_sha, phase_entered_at=p_time)
+            reloaded = ledger.get_attempt(attempt_id)
+            if reloaded:
+                attempt.update(reloaded)
+            else:
+                attempt["phase"] = "PR_BOUND"
+                attempt["phase_entered_at"] = p_time
+                attempt["pr_number"] = pr_num
+                attempt["branch"] = branch
+                attempt["resulting_head_sha"] = current_sha
             if lease_token:
                 ledger.renew_lease(lease_token)
             ledger.renew_issue_lease(repo, issue_number)
-            attempt["phase"] = "PR_BOUND"
-            attempt["pr_number"] = pr_num
-            attempt["branch"] = branch
-            attempt["resulting_head_sha"] = current_sha
             logger.info(
                 f"Production lifecycle: Issue #{issue_number} transitioned LAUNCH_CONFIRMED -> PR_BOUND (PR #{pr_num}, SHA {current_sha})"
             )
@@ -3066,8 +3143,9 @@ def advance_active_lifecycle(
 
         elif ci_status == "pending":
             if attempt.get("phase") != "WAITING_CI":
-                ledger.record_phase(attempt_id, "WAITING_CI", resulting_head_sha=current_head_sha)
-                attempt["phase"] = "WAITING_CI"
+                transition_attempt_phase(
+                    attempt, ledger, "WAITING_CI", resulting_head_sha=current_head_sha, now_ts=now_ts
+                )
                 logger.info(
                     f"Production lifecycle: Issue #{issue_number} (PR #{pr_number}) transitioned to WAITING_CI"
                 )
@@ -3086,12 +3164,12 @@ def advance_active_lifecycle(
                 return True, "waiting_ci"
 
         elif ci_status == "success":
-            ledger.record_phase(attempt_id, "WAITING_REVIEW", resulting_head_sha=current_head_sha)
+            transition_attempt_phase(
+                attempt, ledger, "WAITING_REVIEW", resulting_head_sha=current_head_sha, now_ts=now_ts
+            )
             if lease_token:
                 ledger.renew_lease(lease_token)
             ledger.renew_issue_lease(repo, issue_number)
-            attempt["phase"] = "WAITING_REVIEW"
-            attempt["resulting_head_sha"] = current_head_sha
             logger.info(
                 f"Production lifecycle: Issue #{issue_number} (PR #{pr_number}) CI succeeded, transitioned to WAITING_REVIEW"
             )
@@ -3122,9 +3200,9 @@ def advance_active_lifecycle(
                 f"PR #{pr_number} head updated from {ledger_head_sha} to {live_head_sha}; "
                 f"returning to current-head CI path"
             )
-            ledger.record_phase(attempt_id, "WAITING_CI", resulting_head_sha=live_head_sha)
-            attempt["phase"] = "WAITING_CI"
-            attempt["resulting_head_sha"] = live_head_sha
+            transition_attempt_phase(
+                attempt, ledger, "WAITING_CI", resulting_head_sha=live_head_sha, now_ts=now_ts
+            )
             return advance_active_lifecycle(
                 repo=repo,
                 attempt=attempt,
@@ -3195,11 +3273,12 @@ def advance_active_lifecycle(
                 )
                 return True, "merged"
 
-            ledger.record_phase(attempt_id, "WAITING_MERGE", resulting_head_sha=current_head_sha)
+            transition_attempt_phase(
+                attempt, ledger, "WAITING_MERGE", resulting_head_sha=current_head_sha, now_ts=now_ts
+            )
             if lease_token:
                 ledger.renew_lease(lease_token)
             ledger.renew_issue_lease(repo, issue_number)
-            attempt["phase"] = "WAITING_MERGE"
             logger.info(
                 f"Production lifecycle: Issue #{issue_number} (PR #{pr_number}) approved, transitioned to WAITING_MERGE"
             )
@@ -3244,9 +3323,9 @@ def advance_active_lifecycle(
                 f"PR #{pr_number} head updated while WAITING_MERGE from {ledger_head_sha} to {live_head_sha}; "
                 f"returning to WAITING_CI"
             )
-            ledger.record_phase(attempt_id, "WAITING_CI", resulting_head_sha=live_head_sha)
-            attempt["phase"] = "WAITING_CI"
-            attempt["resulting_head_sha"] = live_head_sha
+            transition_attempt_phase(
+                attempt, ledger, "WAITING_CI", resulting_head_sha=live_head_sha, now_ts=now_ts
+            )
             return advance_active_lifecycle(
                 repo=repo,
                 attempt=attempt,

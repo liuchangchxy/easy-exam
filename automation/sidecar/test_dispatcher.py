@@ -2082,6 +2082,244 @@ class ClosureV1WatchdogContinuousPollingAndHeadFencingTests(unittest.TestCase):
         self.assertEqual(att["phase"], "WAITING_MERGE")
         self.assertEqual(att["resulting_head_sha"], head_sha)
 
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "agent-working"}]})
+    @patch.object(dispatcher, "fail_closed_to_infra_blocked", return_value=True)
+    def test_transition_to_waiting_ci_resets_phase_entered_at_and_deadline(self, mock_fail_closed, mock_details):
+        """
+        Verify that transitioning from PR_BOUND to WAITING_CI updates the in-memory
+        attempt's phase_entered_at from the newly persisted value, ensuring the new CI
+        deadline begins at the transition rather than inheriting prior elapsed time.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 307
+        t0 = datetime.fromisoformat("2026-10-07T00:00:00+00:00").timestamp()
+        t0_iso = "2026-10-07T00:00:00+00:00"
+
+        ok, token, _ = self.ledger.acquire_lease(repo, issue_number, "worker-trans-ci")
+        self.ledger.record_claim_intent(
+            repo, issue_number, "worker-trans-ci", token, "att-trans-ci", "initial_dispatch", "trig-trans-ci",
+            pr_number=107,
+        )
+        self.ledger.record_claimed("att-trans-ci")
+        self.ledger.record_launch_confirmed("att-trans-ci", "conv-trans-ci")
+        self.ledger.record_pr_bound("att-trans-ci", 107, "agent/branch", "sha-initial-head")
+
+        # Set phase_entered_at to t0 in DB and attempt
+        with self.ledger._get_connection() as conn:
+            conn.execute(
+                "UPDATE execution_ledger SET phase_entered_at = ?, updated_at = ?, heartbeat_at = ?",
+                (t0_iso, t0_iso, t0_iso),
+            )
+            conn.commit()
+
+        mock_pr = {"number": 107, "state": "open", "head": {"sha": "sha-initial-head", "ref": "agent/branch"}}
+        pending_checks = {"status": "pending", "failed_check": None, "completed_count": 0, "total_checks": 5, "all_checks": []}
+
+        # Transition happens at t0 + 2000s (> IMPLEMENTER_DEADLINE and > CI_TERMINALIZATION_DEADLINE)
+        t_trans = t0 + 2000.0
+        t_trans_iso = datetime.fromtimestamp(t_trans, tz=timezone.utc).isoformat()
+
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "get_pr_checks_status", return_value=pending_checks):
+                with patch("time.time", return_value=t_trans):
+                    dispatcher.reconcile_closure_v1(repo, self.ledger, now_ts=t_trans)
+
+        att = self.ledger.get_attempt("att-trans-ci")
+        self.assertEqual(att["phase"], "WAITING_CI")
+        self.assertEqual(att["outcome"], "in_progress")
+        # phase_entered_at must be the transition time, NOT the old t0 timestamp
+        self.assertEqual(att["phase_entered_at"], t_trans_iso)
+        # Watchdog must NOT have timed out upon entering WAITING_CI
+        mock_fail_closed.assert_not_called()
+
+        # Polling 500s later (still within 1800s CI deadline) must continue without timing out
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "get_pr_checks_status", return_value=pending_checks):
+                t_poll = t_trans + 500.0
+                with patch("time.time", return_value=t_poll):
+                    dispatcher.reconcile_closure_v1(repo, self.ledger, now_ts=t_poll)
+
+                att = self.ledger.get_attempt("att-trans-ci")
+                self.assertEqual(att["phase"], "WAITING_CI")
+                self.assertEqual(att["outcome"], "in_progress")
+                self.assertEqual(att["phase_entered_at"], t_trans_iso)
+                mock_fail_closed.assert_not_called()
+
+                # Polling past CI_TERMINALIZATION_DEADLINE_SECONDS from the transition triggers timeout
+                t_over = t_trans + dispatcher.CI_TERMINALIZATION_DEADLINE_SECONDS + 10.0
+                with patch("time.time", return_value=t_over):
+                    dispatcher.reconcile_closure_v1(repo, self.ledger, now_ts=t_over)
+
+        mock_fail_closed.assert_called_once_with(repo, issue_number, "ci_terminalization_timeout", "att-trans-ci")
+        att = self.ledger.get_attempt("att-trans-ci")
+        self.assertEqual(att["outcome"], "timeout_infra_blocked")
+
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "agent-working"}]})
+    @patch.object(dispatcher, "fail_closed_to_infra_blocked", return_value=True)
+    def test_waiting_review_head_change_resets_phase_entered_at(self, mock_fail_closed, mock_details):
+        """
+        Verify that when an attempt is in WAITING_REVIEW with an old timestamp and a head
+        change occurs, transitioning back to WAITING_CI resets phase_entered_at in memory
+        and in the ledger so newly started CI does not fail closed immediately.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 308
+        t0 = datetime.fromisoformat("2026-10-07T00:00:00+00:00").timestamp()
+        t0_iso = "2026-10-07T00:00:00+00:00"
+
+        ok, token, _ = self.ledger.acquire_lease(repo, issue_number, "worker-rev-hc")
+        self.ledger.record_claim_intent(
+            repo, issue_number, "worker-rev-hc", token, "att-rev-hc", "initial_dispatch", "trig-rev-hc",
+            pr_number=108,
+        )
+        self.ledger.record_claimed("att-rev-hc")
+        self.ledger.record_launch_confirmed("att-rev-hc", "conv-rev-hc")
+        self.ledger.record_phase("att-rev-hc", "WAITING_REVIEW", resulting_head_sha="0a220d0beb83fb21ce16c804ce4abdd4b68a2aeb")
+
+        with self.ledger._get_connection() as conn:
+            conn.execute(
+                "UPDATE execution_ledger SET phase_entered_at = ?, updated_at = ?, heartbeat_at = ?",
+                (t0_iso, t0_iso, t0_iso),
+            )
+            conn.commit()
+
+        # Head updated at t0 + 2000s (> 1800s)
+        new_head = "6f252ec101d2ee0c2c4bbaa7f5882ce595e4b71b"
+        mock_pr = {"number": 108, "state": "open", "head": {"sha": new_head, "ref": "agent/branch"}}
+        pending_checks = {"status": "pending", "failed_check": None, "completed_count": 0, "total_checks": 5, "all_checks": []}
+
+        t_trans = t0 + 2000.0
+        t_trans_iso = datetime.fromtimestamp(t_trans, tz=timezone.utc).isoformat()
+
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "get_pr_checks_status", return_value=pending_checks):
+                with patch("time.time", return_value=t_trans):
+                    dispatcher.reconcile_closure_v1(repo, self.ledger, now_ts=t_trans)
+
+        att = self.ledger.get_attempt("att-rev-hc")
+        self.assertEqual(att["phase"], "WAITING_CI")
+        self.assertEqual(att["resulting_head_sha"], new_head)
+        self.assertEqual(att["outcome"], "in_progress")
+        self.assertEqual(att["phase_entered_at"], t_trans_iso)
+        mock_fail_closed.assert_not_called()
+
+    def test_review_target_commit_sha_exactness_and_rejections(self):
+        """
+        Verify get_review_target_commit_sha requires exact normalized 40-hex equality:
+        - Accepts valid 40-hex native commit_id
+        - Accepts valid 40-hex formal marker [easyexam-review:<40-hex>]
+        - Accepts valid 40-hex 'Reviewed head: <40-hex>' (with or without backticks)
+        - Rejects 7-character abbreviated prefix commit_id
+        - Rejects 7-character abbreviated prefix formal marker
+        - Rejects 7-character abbreviated prefix Reviewed head
+        - Rejects conflicting body-marker and native-commit values
+        - Rejects conflicting multiple body markers
+        """
+        sha40_a = "0a220d0beb83fb21ce16c804ce4abdd4b68a2aeb"
+        sha40_b = "6f252ec101d2ee0c2c4bbaa7f5882ce595e4b71b"
+        sha7 = "0a220d0"
+
+        # Valid 40-hex native commit_id
+        self.assertEqual(dispatcher.get_review_target_commit_sha({"commit_id": sha40_a}), sha40_a)
+        # Valid 40-hex uppercase normalizes to lowercase
+        self.assertEqual(dispatcher.get_review_target_commit_sha({"commit_id": sha40_a.upper()}), sha40_a)
+        # Valid 40-hex formal marker
+        self.assertEqual(dispatcher.get_review_target_commit_sha({"body": f"[easyexam-review:{sha40_a}]"}), sha40_a)
+        # Valid 40-hex Reviewed head plain and backticked
+        self.assertEqual(dispatcher.get_review_target_commit_sha({"body": f"Reviewed head: {sha40_a}"}), sha40_a)
+        self.assertEqual(dispatcher.get_review_target_commit_sha({"body": f"Reviewed head: `{sha40_a}`"}), sha40_a)
+        # Concordant body and commit_id
+        self.assertEqual(
+            dispatcher.get_review_target_commit_sha({"commit_id": sha40_a, "body": f"[easyexam-review:{sha40_a}]"}),
+            sha40_a,
+        )
+
+        # Negative tests: 7-character prefixes strictly rejected (returns None)
+        self.assertIsNone(dispatcher.get_review_target_commit_sha({"commit_id": sha7}))
+        self.assertIsNone(dispatcher.get_review_target_commit_sha({"body": f"[easyexam-review:{sha7}]"}))
+        self.assertIsNone(dispatcher.get_review_target_commit_sha({"body": f"Reviewed head: {sha7}"}))
+        self.assertIsNone(dispatcher.get_review_target_commit_sha({"body": f"Reviewed head: `{sha7}`"}))
+
+        # Negative tests: conflicting values strictly rejected (returns None)
+        self.assertIsNone(dispatcher.get_review_target_commit_sha({
+            "commit_id": sha40_a,
+            "body": f"[easyexam-review:{sha40_b}]",
+        }))
+        self.assertIsNone(dispatcher.get_review_target_commit_sha({
+            "body": f"[easyexam-review:{sha40_a}]\nReviewed head: {sha40_b}",
+        }))
+
+    def test_is_review_anchored_to_sha_exactness(self):
+        """
+        Verify is_review_anchored_to_sha strictly requires exact 40-hex equality and rejects prefix-only matches.
+        """
+        sha40 = "0a220d0beb83fb21ce16c804ce4abdd4b68a2aeb"
+        sha7 = "0a220d0"
+
+        # Exact 40-hex match
+        review_40 = {"commit_id": sha40, "body": f"[easyexam-review:{sha40}]"}
+        self.assertTrue(dispatcher.is_review_anchored_to_sha(review_40, sha40))
+
+        # Rejects 7-char prefix in review against 40-char expected
+        review_7 = {"commit_id": sha7}
+        self.assertFalse(dispatcher.is_review_anchored_to_sha(review_7, sha40))
+
+        # Rejects 7-char prefix as expected_sha against 40-char review
+        self.assertFalse(dispatcher.is_review_anchored_to_sha(review_40, sha7))
+
+        # Rejects conflicting review
+        review_conflict = {"commit_id": sha40, "body": "[easyexam-review:6f252ec101d2ee0c2c4bbaa7f5882ce595e4b71b]"}
+        self.assertFalse(dispatcher.is_review_anchored_to_sha(review_conflict, sha40))
+
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "agent-working"}]})
+    def test_reconcile_rejects_prefix_and_conflicting_reviews(self, mock_details):
+        """
+        Verify that reconcile_closure_v1 ignores reviews with 7-char prefix or conflicting
+        markers, and does not dispatch automated repair or advance to WAITING_MERGE.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 309
+        head_sha = "0a220d0beb83fb21ce16c804ce4abdd4b68a2aeb"
+        prefix_sha = "0a220d0"
+        other_sha = "6f252ec101d2ee0c2c4bbaa7f5882ce595e4b71b"
+
+        ok, token, _ = self.ledger.acquire_lease(repo, issue_number, "worker-neg-rev")
+        self.ledger.record_claim_intent(
+            repo, issue_number, "worker-neg-rev", token, "att-neg-rev", "initial_dispatch", "trig-neg-rev",
+            pr_number=109,
+        )
+        self.ledger.record_claimed("att-neg-rev")
+        self.ledger.record_launch_confirmed("att-neg-rev", "conv-neg-rev")
+        self.ledger.record_phase("att-neg-rev", "WAITING_REVIEW", resulting_head_sha=head_sha)
+
+        mock_pr = {"number": 109, "state": "open", "head": {"sha": head_sha, "ref": "agent/branch"}}
+
+        # 1. 7-character prefix CHANGES_REQUESTED review must not launch repair
+        prefix_cr = [
+            {"id": 1, "state": "CHANGES_REQUESTED", "submitted_at": "2026-10-07T01:00:00Z", "commit_id": prefix_sha, "body": f"[easyexam-review:{prefix_sha}] prefix"}
+        ]
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "run_cmd", return_value=(0, json.dumps(prefix_cr), "", False)):
+                with patch.object(dispatcher, "dispatch_automated_repair") as mock_repair:
+                    dispatcher.reconcile_closure_v1(repo, self.ledger)
+                    mock_repair.assert_not_called()
+
+        att = self.ledger.get_attempt("att-neg-rev")
+        self.assertEqual(att["phase"], "WAITING_REVIEW")
+
+        # 2. Conflicting body-marker and native-commit CHANGES_REQUESTED review must not launch repair
+        conflict_cr = [
+            {"id": 2, "state": "CHANGES_REQUESTED", "submitted_at": "2026-10-07T02:00:00Z", "commit_id": head_sha, "body": f"[easyexam-review:{other_sha}] conflict"}
+        ]
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "run_cmd", return_value=(0, json.dumps(conflict_cr), "", False)):
+                with patch.object(dispatcher, "dispatch_automated_repair") as mock_repair:
+                    dispatcher.reconcile_closure_v1(repo, self.ledger)
+                    mock_repair.assert_not_called()
+
+        att = self.ledger.get_attempt("att-neg-rev")
+        self.assertEqual(att["phase"], "WAITING_REVIEW")
+
 
 if __name__ == "__main__":
     unittest.main()
