@@ -344,10 +344,55 @@ def adopt_existing_pr(repo: str, issue_number: int, pulls_list: list[dict] = Non
         return "none_found", None
 
 
-def get_latest_changes_requested_review(repo: str, pr_number: int, reviews_list: list[dict] = None) -> dict | None:
+def get_review_target_commit_sha(review: dict) -> str | None:
+    """
+    Extract the target commit SHA from a review:
+    1. Formal marker [easyexam-review:<SHA>] in review body
+    2. 'Reviewed head: <SHA>' in review body
+    3. Native GitHub review commit_id
+    """
+    if not review:
+        return None
+    body = review.get("body") or ""
+    m = re.search(r"\[easyexam-review:([0-9a-fA-F]{7,40})\]", body)
+    if m:
+        return m.group(1)
+    m2 = re.search(r"Reviewed head:\s*([0-9a-fA-F]{7,40})", body)
+    if m2:
+        return m2.group(1)
+    commit_id = (review.get("commit_id") or "").strip()
+    if commit_id:
+        return commit_id
+    return None
+
+
+def is_review_anchored_to_sha(review: dict, expected_sha: str) -> bool:
+    """
+    Determine if a review is anchored to expected_sha via commit_id or exact formal marker.
+    Matches exact 40-hex SHA or common prefix (>= 7 chars).
+    """
+    if not review or not expected_sha:
+        return False
+    target = get_review_target_commit_sha(review)
+    if not target:
+        return False
+    t_low = target.lower()
+    e_low = expected_sha.lower()
+    if t_low == e_low:
+        return True
+    if len(t_low) >= 7 and len(e_low) >= 7:
+        if t_low.startswith(e_low) or e_low.startswith(t_low):
+            return True
+    return False
+
+
+def get_latest_changes_requested_review(
+    repo: str, pr_number: int, reviews_list: list[dict] = None, target_head_sha: str = None
+) -> dict | None:
     """
     Fetch reviews for the given PR and return the latest CHANGES_REQUESTED review.
     Enforces exact review baseline matching Frozen Spec Sections 13-15.
+    If target_head_sha is specified, only reviews anchored to target_head_sha are considered.
     """
     if reviews_list is None:
         gh_bin = shutil.which("gh") or "gh"
@@ -366,6 +411,8 @@ def get_latest_changes_requested_review(repo: str, pr_number: int, reviews_list:
         return None
 
     cr_reviews = [r for r in reviews_list if r.get("state") == "CHANGES_REQUESTED"]
+    if target_head_sha:
+        cr_reviews = [r for r in cr_reviews if is_review_anchored_to_sha(r, target_head_sha)]
     if not cr_reviews:
         return None
     cr_reviews.sort(key=lambda r: (r.get("submitted_at") or "", r.get("id") or 0))
@@ -383,7 +430,13 @@ def evaluate_watchdog_timeout(attempt: dict, now_ts: float = None) -> tuple[bool
         return False, None, None
 
     now = time.time() if now_ts is None else float(now_ts)
-    updated_str = attempt.get("updated_at") or attempt.get("heartbeat_at") or attempt.get("created_at")
+    # Prefer phase_entered_at to preserve stable phase/progress deadline
+    updated_str = (
+        attempt.get("phase_entered_at")
+        or attempt.get("updated_at")
+        or attempt.get("heartbeat_at")
+        or attempt.get("created_at")
+    )
     if not updated_str:
         return False, None, None
 
@@ -450,6 +503,7 @@ class ExecutionLedger:
                     owner_id TEXT NOT NULL,
                     lease_token TEXT NOT NULL,
                     phase TEXT NOT NULL,
+                    phase_entered_at TEXT,
                     heartbeat_at TEXT NOT NULL,
                     attempt_id TEXT NOT NULL UNIQUE,
                     attempt_kind TEXT NOT NULL,
@@ -471,6 +525,10 @@ class ExecutionLedger:
                     updated_at TEXT NOT NULL
                 )
             """)
+            try:
+                conn.execute("ALTER TABLE execution_ledger ADD COLUMN phase_entered_at TEXT")
+            except sqlite3.OperationalError:
+                pass
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS active_leases (
                     repo TEXT NOT NULL,
@@ -590,6 +648,7 @@ class ExecutionLedger:
             "owner_id": owner_id,
             "lease_token": lease_token,
             "phase": "CLAIM_INTENT",
+            "phase_entered_at": now_iso,
             "heartbeat_at": now_iso,
             "attempt_id": attempt_id,
             "attempt_kind": attempt_kind,
@@ -614,13 +673,13 @@ class ExecutionLedger:
             conn.execute(
                 """
                 INSERT INTO execution_ledger (
-                    repo, issue_number, owner_id, lease_token, phase, heartbeat_at,
+                    repo, issue_number, owner_id, lease_token, phase, phase_entered_at, heartbeat_at,
                     attempt_id, attempt_kind, trigger_key, repair_key, repair_ordinal,
                     repair_cause_type, repair_cause_id, expected_base_sha, expected_pr_head_sha,
                     conversation_id, launch_confirmed, pr_number, branch, resulting_head_sha,
                     outcome, last_error, created_at, updated_at
                 ) VALUES (
-                    :repo, :issue_number, :owner_id, :lease_token, :phase, :heartbeat_at,
+                    :repo, :issue_number, :owner_id, :lease_token, :phase, :phase_entered_at, :heartbeat_at,
                     :attempt_id, :attempt_kind, :trigger_key, :repair_key, :repair_ordinal,
                     :repair_cause_type, :repair_cause_id, :expected_base_sha, :expected_pr_head_sha,
                     :conversation_id, :launch_confirmed, :pr_number, :branch, :resulting_head_sha,
@@ -637,8 +696,8 @@ class ExecutionLedger:
         with self._get_connection() as conn:
             cur = conn.cursor()
             cur.execute(
-                "UPDATE execution_ledger SET phase = 'CLAIMED', updated_at = ?, heartbeat_at = ? WHERE attempt_id = ?",
-                (now_iso, now_iso, attempt_id),
+                "UPDATE execution_ledger SET phase = 'CLAIMED', phase_entered_at = ?, updated_at = ?, heartbeat_at = ? WHERE attempt_id = ?",
+                (now_iso, now_iso, now_iso, attempt_id),
             )
             conn.commit()
             return cur.rowcount > 0
@@ -648,8 +707,8 @@ class ExecutionLedger:
         with self._get_connection() as conn:
             cur = conn.cursor()
             cur.execute(
-                "UPDATE execution_ledger SET phase = 'LAUNCH_INTENT', updated_at = ?, heartbeat_at = ? WHERE attempt_id = ?",
-                (now_iso, now_iso, attempt_id),
+                "UPDATE execution_ledger SET phase = 'LAUNCH_INTENT', phase_entered_at = ?, updated_at = ?, heartbeat_at = ? WHERE attempt_id = ?",
+                (now_iso, now_iso, now_iso, attempt_id),
             )
             conn.commit()
             return cur.rowcount > 0
@@ -661,11 +720,11 @@ class ExecutionLedger:
             cur.execute(
                 """
                 UPDATE execution_ledger
-                SET phase = 'LAUNCH_CONFIRMED', conversation_id = ?, launch_confirmed = 1,
+                SET phase = 'LAUNCH_CONFIRMED', phase_entered_at = ?, conversation_id = ?, launch_confirmed = 1,
                     updated_at = ?, heartbeat_at = ?
                 WHERE attempt_id = ?
                 """,
-                (conversation_id, now_iso, now_iso, attempt_id),
+                (now_iso, conversation_id, now_iso, now_iso, attempt_id),
             )
             conn.commit()
             return cur.rowcount > 0
@@ -677,12 +736,12 @@ class ExecutionLedger:
             cur.execute(
                 """
                 UPDATE execution_ledger
-                SET phase = 'PR_BOUND', pr_number = ?, branch = ?,
+                SET phase = 'PR_BOUND', phase_entered_at = ?, pr_number = ?, branch = ?,
                     resulting_head_sha = COALESCE(?, resulting_head_sha),
                     updated_at = ?, heartbeat_at = ?
                 WHERE attempt_id = ?
                 """,
-                (pr_number, branch, resulting_head_sha, now_iso, now_iso, attempt_id),
+                (now_iso, pr_number, branch, resulting_head_sha, now_iso, now_iso, attempt_id),
             )
             conn.commit()
             return cur.rowcount > 0
@@ -778,19 +837,21 @@ class ExecutionLedger:
                 )
             return [dict(r) for r in cur.fetchall()]
 
-    def record_phase(self, attempt_id: str, phase: str, resulting_head_sha: str = None) -> bool:
+    def record_phase(self, attempt_id: str, phase: str, resulting_head_sha: str = None, phase_entered_at: str = None) -> bool:
         now_iso = datetime.now(timezone.utc).isoformat()
+        p_entered = phase_entered_at or now_iso
         with self._get_connection() as conn:
             cur = conn.cursor()
             cur.execute(
                 """
                 UPDATE execution_ledger
                 SET phase = ?,
+                    phase_entered_at = ?,
                     resulting_head_sha = COALESCE(?, resulting_head_sha),
                     updated_at = ?, heartbeat_at = ?
                 WHERE attempt_id = ?
                 """,
-                (phase, resulting_head_sha, now_iso, now_iso, attempt_id),
+                (phase, p_entered, resulting_head_sha, now_iso, now_iso, attempt_id),
             )
             conn.commit()
             return cur.rowcount > 0
@@ -2682,8 +2743,12 @@ def get_pr_checks_status(repo: str, pr_number: int, head_sha: str = None, checks
     }
 
 
-def get_latest_approved_review(repo: str, pr_number: int, reviews_list: list[dict] = None) -> dict | None:
-    """Fetch reviews and return latest APPROVED review if no subsequent CHANGES_REQUESTED review exists."""
+def get_latest_approved_review(
+    repo: str, pr_number: int, reviews_list: list[dict] = None, target_head_sha: str = None
+) -> dict | None:
+    """Fetch reviews and return latest APPROVED review if no subsequent CHANGES_REQUESTED review exists.
+    If target_head_sha is specified, only reviews anchored to target_head_sha are considered.
+    """
     if reviews_list is None:
         gh_bin = shutil.which("gh") or "gh"
         cmd = [gh_bin, "api", f"repos/{repo}/pulls/{pr_number}/reviews", "--paginate"]
@@ -2700,6 +2765,8 @@ def get_latest_approved_review(repo: str, pr_number: int, reviews_list: list[dic
         return None
 
     valid_reviews = [r for r in reviews_list if r.get("state") in ("APPROVED", "CHANGES_REQUESTED")]
+    if target_head_sha:
+        valid_reviews = [r for r in valid_reviews if is_review_anchored_to_sha(r, target_head_sha)]
     if not valid_reviews:
         return None
     valid_reviews.sort(key=lambda r: (r.get("submitted_at") or "", r.get("id") or 0))
@@ -2755,6 +2822,7 @@ def advance_active_lifecycle(
     pr_details: dict = None,
     checks_data: list[dict] = None,
     reviews_list: list[dict] = None,
+    now_ts: float = None,
 ) -> tuple[bool, str]:
     """
     Advance the durable lifecycle of an active attempt based on GitHub and runtime state.
@@ -2793,7 +2861,7 @@ def advance_active_lifecycle(
 
     # Fleeting early phases before launch confirmation
     if phase in ("CLAIM_INTENT", "CLAIMED", "LAUNCH_INTENT"):
-        timed_out, reason, target = evaluate_watchdog_timeout(attempt)
+        timed_out, reason, target = evaluate_watchdog_timeout(attempt, now_ts=now_ts)
         if timed_out:
             fail_closed_to_infra_blocked(repo, issue_number, reason, attempt_id)
             ledger.record_outcome(attempt_id, "timeout_infra_blocked", last_error=reason)
@@ -2845,7 +2913,7 @@ def advance_active_lifecycle(
 
             if is_repair and expected_head and current_sha == expected_head:
                 # Repair agent still in progress, hasn't pushed new head yet
-                timed_out, reason, target = evaluate_watchdog_timeout(attempt)
+                timed_out, reason, target = evaluate_watchdog_timeout(attempt, now_ts=now_ts)
                 if timed_out:
                     fail_closed_to_infra_blocked(repo, issue_number, reason, attempt_id)
                     ledger.record_outcome(attempt_id, "timeout_infra_blocked", last_error=reason)
@@ -2857,7 +2925,6 @@ def advance_active_lifecycle(
                     if lease_token:
                         ledger.renew_lease(lease_token)
                     ledger.renew_issue_lease(repo, issue_number)
-                    ledger.update_heartbeat(attempt_id)
                     return True, "waiting_for_repair_push"
 
             # PR created or new repair head pushed
@@ -2865,7 +2932,6 @@ def advance_active_lifecycle(
             if lease_token:
                 ledger.renew_lease(lease_token)
             ledger.renew_issue_lease(repo, issue_number)
-            ledger.update_heartbeat(attempt_id)
             attempt["phase"] = "PR_BOUND"
             attempt["pr_number"] = pr_num
             attempt["branch"] = branch
@@ -2876,7 +2942,7 @@ def advance_active_lifecycle(
             return True, "pr_bound"
         else:
             # PR not created yet
-            timed_out, reason, target = evaluate_watchdog_timeout(attempt)
+            timed_out, reason, target = evaluate_watchdog_timeout(attempt, now_ts=now_ts)
             if timed_out:
                 fail_closed_to_infra_blocked(repo, issue_number, reason, attempt_id)
                 ledger.record_outcome(attempt_id, "timeout_infra_blocked", last_error=reason)
@@ -2888,15 +2954,11 @@ def advance_active_lifecycle(
                 if lease_token:
                     ledger.renew_lease(lease_token)
                 ledger.renew_issue_lease(repo, issue_number)
-                ledger.update_heartbeat(attempt_id)
                 return True, "waiting_for_pr_creation"
 
     # Phases: PR_BOUND or WAITING_CI
     if phase in ("PR_BOUND", "WAITING_CI"):
         pr_number = attempt.get("pr_number")
-        if not pr_number:
-            return True, "missing_pr_number"
-
         if pr_details is not None:
             pr = pr_details
         else:
@@ -2908,8 +2970,15 @@ def advance_active_lifecycle(
             else:
                 pr = None
 
+        if not pr_number and pr:
+            pr_number = pr.get("number")
+            attempt["pr_number"] = pr_number
+
+        if not pr_number:
+            return True, "missing_pr_number"
+
         if not pr:
-            timed_out, reason, target = evaluate_watchdog_timeout(attempt)
+            timed_out, reason, target = evaluate_watchdog_timeout(attempt, now_ts=now_ts)
             if timed_out:
                 fail_closed_to_infra_blocked(repo, issue_number, reason, attempt_id)
                 ledger.record_outcome(attempt_id, "timeout_infra_blocked", last_error=reason)
@@ -3002,7 +3071,7 @@ def advance_active_lifecycle(
                 logger.info(
                     f"Production lifecycle: Issue #{issue_number} (PR #{pr_number}) transitioned to WAITING_CI"
                 )
-            timed_out, reason, target = evaluate_watchdog_timeout(attempt)
+            timed_out, reason, target = evaluate_watchdog_timeout(attempt, now_ts=now_ts)
             if timed_out:
                 fail_closed_to_infra_blocked(repo, issue_number, reason, attempt_id)
                 ledger.record_outcome(attempt_id, "timeout_infra_blocked", last_error=reason)
@@ -3014,7 +3083,6 @@ def advance_active_lifecycle(
                 if lease_token:
                     ledger.renew_lease(lease_token)
                 ledger.renew_issue_lease(repo, issue_number)
-                ledger.update_heartbeat(attempt_id)
                 return True, "waiting_ci"
 
         elif ci_status == "success":
@@ -3022,7 +3090,6 @@ def advance_active_lifecycle(
             if lease_token:
                 ledger.renew_lease(lease_token)
             ledger.renew_issue_lease(repo, issue_number)
-            ledger.update_heartbeat(attempt_id)
             attempt["phase"] = "WAITING_REVIEW"
             attempt["resulting_head_sha"] = current_head_sha
             logger.info(
@@ -3044,15 +3111,47 @@ def advance_active_lifecycle(
             else:
                 pr = None
 
-        current_head_sha = attempt.get("resulting_head_sha") or (((pr or {}).get("head") or {}).get("sha")) or ""
-        branch = ((pr or {}).get("head") or {}).get("ref") or attempt.get("branch")
+        live_head_sha = ((pr or {}).get("head") or {}).get("sha") or ""
+        ledger_head_sha = attempt.get("resulting_head_sha") or ""
+        branch = ((pr or {}).get("head") or {}).get("ref") or attempt.get("branch") or ""
 
-        # Check reviews on PR
-        latest_cr = get_latest_changes_requested_review(repo, pr_number, reviews_list=reviews_list) if pr_number else None
-        latest_app = get_latest_approved_review(repo, pr_number, reviews_list=reviews_list) if pr_number else None
+        # Head change detection: read live PR head first; if it differs from the ledger's
+        # resulting_head_sha, return to the current-head CI path immediately.
+        if live_head_sha and ledger_head_sha and live_head_sha != ledger_head_sha:
+            logger.info(
+                f"PR #{pr_number} head updated from {ledger_head_sha} to {live_head_sha}; "
+                f"returning to current-head CI path"
+            )
+            ledger.record_phase(attempt_id, "WAITING_CI", resulting_head_sha=live_head_sha)
+            attempt["phase"] = "WAITING_CI"
+            attempt["resulting_head_sha"] = live_head_sha
+            return advance_active_lifecycle(
+                repo=repo,
+                attempt=attempt,
+                ledger=ledger,
+                issue_details=issue_details,
+                pr_details=pr,
+                checks_data=checks_data,
+                reviews_list=reviews_list,
+                now_ts=now_ts,
+            )
+
+        current_head_sha = live_head_sha or ledger_head_sha
+
+        # Check reviews on PR anchored to exact live current_head_sha
+        latest_cr = (
+            get_latest_changes_requested_review(repo, pr_number, reviews_list=reviews_list, target_head_sha=current_head_sha)
+            if pr_number
+            else None
+        )
+        latest_app = (
+            get_latest_approved_review(repo, pr_number, reviews_list=reviews_list, target_head_sha=current_head_sha)
+            if pr_number
+            else None
+        )
 
         if latest_cr and (not latest_app or (latest_cr.get("submitted_at") or "") > (latest_app.get("submitted_at") or "")):
-            # Reviewer requested changes on current head
+            # Reviewer requested changes anchored to current head
             can_repair, ordinal = ledger.can_attempt_repair(repo, pr_number, max_repairs=MAX_AUTOMATED_REPAIRS)
             if not can_repair:
                 fail_closed_to_needs_human(repo, issue_number, "repair_budget_exhausted_max_3", attempt_id)
@@ -3088,7 +3187,7 @@ def advance_active_lifecycle(
             return rep_ok, rep_reason
 
         elif latest_app:
-            # PR is APPROVED
+            # PR is APPROVED anchored to current head
             if pr and (pr.get("merged") or (pr.get("state") == "closed" and pr.get("merged_at"))):
                 complete_terminal_merge(
                     repo, issue_number, attempt_id, lease_token=lease_token,
@@ -3100,7 +3199,6 @@ def advance_active_lifecycle(
             if lease_token:
                 ledger.renew_lease(lease_token)
             ledger.renew_issue_lease(repo, issue_number)
-            ledger.update_heartbeat(attempt_id)
             attempt["phase"] = "WAITING_MERGE"
             logger.info(
                 f"Production lifecycle: Issue #{issue_number} (PR #{pr_number}) approved, transitioned to WAITING_MERGE"
@@ -3108,8 +3206,8 @@ def advance_active_lifecycle(
             return True, "waiting_merge"
 
         else:
-            # Still waiting for Reviewer
-            timed_out, reason, target = evaluate_watchdog_timeout(attempt)
+            # Still waiting for Reviewer anchored to current head
+            timed_out, reason, target = evaluate_watchdog_timeout(attempt, now_ts=now_ts)
             if timed_out:
                 fail_closed_to_needs_human(repo, issue_number, reason, attempt_id)
                 ledger.record_outcome(attempt_id, "timeout_needs_human", last_error=reason)
@@ -3121,7 +3219,6 @@ def advance_active_lifecycle(
                 if lease_token:
                     ledger.renew_lease(lease_token)
                 ledger.renew_issue_lease(repo, issue_number)
-                ledger.update_heartbeat(attempt_id)
                 return True, "waiting_review"
 
     # Phase: WAITING_MERGE
@@ -3138,7 +3235,30 @@ def advance_active_lifecycle(
             else:
                 pr = None
 
-        current_head_sha = attempt.get("resulting_head_sha") or (((pr or {}).get("head") or {}).get("sha")) or ""
+        live_head_sha = ((pr or {}).get("head") or {}).get("sha") or ""
+        ledger_head_sha = attempt.get("resulting_head_sha") or ""
+        branch = ((pr or {}).get("head") or {}).get("ref") or attempt.get("branch") or ""
+
+        if live_head_sha and ledger_head_sha and live_head_sha != ledger_head_sha:
+            logger.info(
+                f"PR #{pr_number} head updated while WAITING_MERGE from {ledger_head_sha} to {live_head_sha}; "
+                f"returning to WAITING_CI"
+            )
+            ledger.record_phase(attempt_id, "WAITING_CI", resulting_head_sha=live_head_sha)
+            attempt["phase"] = "WAITING_CI"
+            attempt["resulting_head_sha"] = live_head_sha
+            return advance_active_lifecycle(
+                repo=repo,
+                attempt=attempt,
+                ledger=ledger,
+                issue_details=issue_details,
+                pr_details=pr,
+                checks_data=checks_data,
+                reviews_list=reviews_list,
+                now_ts=now_ts,
+            )
+
+        current_head_sha = live_head_sha or ledger_head_sha
 
         if pr and (pr.get("merged") or (pr.get("state") == "closed" and pr.get("merged_at"))):
             complete_terminal_merge(
@@ -3155,7 +3275,7 @@ def advance_active_lifecycle(
             ledger.release_issue_lease(repo, issue_number)
             return False, "pr_closed_unmerged"
 
-        timed_out, reason, target = evaluate_watchdog_timeout(attempt)
+        timed_out, reason, target = evaluate_watchdog_timeout(attempt, now_ts=now_ts)
         if timed_out:
             fail_closed_to_infra_blocked(repo, issue_number, reason, attempt_id)
             ledger.record_outcome(attempt_id, "timeout_infra_blocked", last_error=reason)
@@ -3167,13 +3287,12 @@ def advance_active_lifecycle(
             if lease_token:
                 ledger.renew_lease(lease_token)
             ledger.renew_issue_lease(repo, issue_number)
-            ledger.update_heartbeat(attempt_id)
             return True, "waiting_merge"
 
     return True, "noop"
 
 
-def reconcile_closure_v1(repo: str, ledger: ExecutionLedger = None) -> bool:
+def reconcile_closure_v1(repo: str, ledger: ExecutionLedger = None, now_ts: float = None) -> bool:
     """
     Startup & runtime reconciliation matching Frozen Spec Section 16:
     - Missed triggers & incomplete receipts.
@@ -3199,7 +3318,7 @@ def reconcile_closure_v1(repo: str, ledger: ExecutionLedger = None) -> bool:
             continue
 
         # Advance active lifecycle based on GitHub and runtime state
-        success, reason = advance_active_lifecycle(repo, attempt, ledger=ledger)
+        success, reason = advance_active_lifecycle(repo, attempt, ledger=ledger, now_ts=now_ts)
         if not success:
             reconciled_ok = False
 
@@ -3261,14 +3380,14 @@ def reconcile_closure_v1(repo: str, ledger: ExecutionLedger = None) -> bool:
     return reconciled_ok
 
 
-def poll_cycle():
+def poll_cycle(now_ts: float = None):
     """Run one polling iteration."""
     if not reconcile_incomplete_dispatches(EASYEXAM_REPO):
         logger.error("Skipping claim scan while dispatch audit reconciliation is pending")
         return
 
     try:
-        reconcile_closure_v1(EASYEXAM_REPO)
+        reconcile_closure_v1(EASYEXAM_REPO, now_ts=now_ts)
     except Exception as exc:
         logger.error("Error during Closure v1 reconciliation (%s)", type(exc).__name__)
 

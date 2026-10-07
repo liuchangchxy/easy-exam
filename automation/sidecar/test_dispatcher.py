@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import sys
@@ -1273,9 +1274,9 @@ class ClosureV1ProductionPathIntegrationTests(unittest.TestCase):
         )
         self.ledger.record_launch_intent("att-timed-out")
 
-        # Manually backdate updated_at in DB
+        # Manually backdate updated_at and phase_entered_at in DB
         with self.ledger._get_connection() as conn:
-            conn.execute("UPDATE execution_ledger SET updated_at = ?, heartbeat_at = ?", (old_time, old_time))
+            conn.execute("UPDATE execution_ledger SET phase_entered_at = ?, updated_at = ?, heartbeat_at = ?", (old_time, old_time, old_time))
             conn.commit()
 
         # Run poll_cycle with current time far ahead of deadline
@@ -1304,8 +1305,8 @@ class ClosureV1ProductionPathIntegrationTests(unittest.TestCase):
         )
         with self.ledger._get_connection() as conn:
             conn.execute(
-                "UPDATE execution_ledger SET phase = 'WAITING_REVIEW', updated_at = ?, heartbeat_at = ?",
-                (old_time, old_time),
+                "UPDATE execution_ledger SET phase = 'WAITING_REVIEW', phase_entered_at = ?, updated_at = ?, heartbeat_at = ?",
+                (old_time, old_time, old_time),
             )
             conn.commit()
 
@@ -1662,7 +1663,7 @@ class ClosureV1ProductionReachabilityTests(unittest.TestCase):
         self.ledger.record_phase("att-review-watchdog", "WAITING_REVIEW")
 
         with self.ledger._get_connection() as conn:
-            conn.execute("UPDATE execution_ledger SET updated_at = ?, heartbeat_at = ?", (old_time, old_time))
+            conn.execute("UPDATE execution_ledger SET phase_entered_at = ?, updated_at = ?, heartbeat_at = ?", (old_time, old_time, old_time))
             conn.commit()
 
         mock_pr = {"number": 205, "state": "open", "head": {"sha": "sha-wd", "ref": "agent/branch"}}
@@ -1729,6 +1730,357 @@ class ClosureV1ProductionReachabilityTests(unittest.TestCase):
         self.assertIn("Repair #3 升级强度要求", p3)
         self.assertIn("最后一次自动化修复机会", p3)
         self.assertIn("CI failure finding = minimum known defect", p3)
+
+
+class ClosureV1WatchdogContinuousPollingAndHeadFencingTests(unittest.TestCase):
+    """
+    Deterministic production-path tests for:
+    1. Preserving stable phase-entry/progress deadlines across continuous polling cycles.
+    2. Proving that repeatedly reconciling a stalled attempt while polling continues reaches fail-closed timeouts.
+    3. Live PR head fencing returning to WAITING_CI when head changes after WAITING_REVIEW.
+    4. Rejecting stale APPROVED / CHANGES_REQUESTED reviews and accepting only reviews anchored to live PR head.
+    """
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.db_path = os.path.join(self.tmp_dir, "test_ledger.db")
+        self.ledger = dispatcher.ExecutionLedger(self.db_path)
+        self.orig_ledger = dispatcher.get_ledger()
+        dispatcher._GLOBAL_LEDGER = self.ledger
+        self.audit_path = os.path.join(self.tmp_dir, "dispatch_audit.jsonl")
+        self.orig_audit = dispatcher.DISPATCH_AUDIT_PATH
+        dispatcher.DISPATCH_AUDIT_PATH = Path(self.audit_path)
+        self.mock_open_issues = patch.object(dispatcher, "get_open_issues", return_value=[])
+        self.mock_open_issues.start()
+
+    def tearDown(self):
+        self.mock_open_issues.stop()
+        self.ledger.close()
+        dispatcher._GLOBAL_LEDGER = self.orig_ledger
+        dispatcher.DISPATCH_AUDIT_PATH = self.orig_audit
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "agent-working"}]})
+    @patch.object(dispatcher, "fail_closed_to_infra_blocked", return_value=True)
+    def test_continuous_polling_stalled_launch_confirmed_times_out(self, mock_fail_closed, mock_details):
+        """
+        Prove that a continuously polling loop preserves the launch/implementer deadline
+        without resetting it, and eventually triggers implementer_heartbeat_timeout.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 301
+        t0 = datetime.fromisoformat("2026-10-07T00:00:00+00:00").timestamp()
+        t0_iso = "2026-10-07T00:00:00+00:00"
+
+        ok, token, _ = self.ledger.acquire_lease(repo, issue_number, "worker-poll")
+        self.ledger.record_claim_intent(repo, issue_number, "worker-poll", token, "att-lc-poll", "initial_dispatch", "trig-lc")
+        self.ledger.record_claimed("att-lc-poll")
+        self.ledger.record_launch_confirmed("att-lc-poll", "conv-lc-poll")
+
+        with self.ledger._get_connection() as conn:
+            conn.execute(
+                "UPDATE execution_ledger SET phase_entered_at = ?, updated_at = ?, heartbeat_at = ?",
+                (t0_iso, t0_iso, t0_iso),
+            )
+            conn.commit()
+
+        # Simulate 5 polling cycles while stalled (no PR created)
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("none_found", None)):
+            for offset in (10, 60, 300, 900, 1500):
+                poll_ts = t0 + offset
+                with patch("time.time", return_value=poll_ts):
+                    dispatcher.reconcile_closure_v1(repo, self.ledger, now_ts=poll_ts)
+
+                att = self.ledger.get_attempt("att-lc-poll")
+                self.assertEqual(att["phase"], "LAUNCH_CONFIRMED")
+                self.assertEqual(att["outcome"], "in_progress")
+                # Stable phase_entered_at must NOT be reset by no-progress polls
+                self.assertEqual(att["phase_entered_at"], t0_iso)
+                # Dispatcher ownership lease must be maintained
+                self.assertIsNotNone(self.ledger.get_active_lease(repo, issue_number))
+                mock_fail_closed.assert_not_called()
+
+            # Now poll past the implementer deadline (> 1800s)
+            over_ts = t0 + dispatcher.IMPLEMENTER_DEADLINE_SECONDS + 10
+            with patch("time.time", return_value=over_ts):
+                dispatcher.reconcile_closure_v1(repo, self.ledger, now_ts=over_ts)
+
+        mock_fail_closed.assert_called_once_with(repo, issue_number, "implementer_heartbeat_timeout", "att-lc-poll")
+        att = self.ledger.get_attempt("att-lc-poll")
+        self.assertEqual(att["outcome"], "timeout_infra_blocked")
+        self.assertIsNone(self.ledger.get_active_lease(repo, issue_number))
+
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "agent-working"}]})
+    @patch.object(dispatcher, "fail_closed_to_infra_blocked", return_value=True)
+    def test_continuous_polling_stalled_waiting_ci_times_out(self, mock_fail_closed, mock_details):
+        """
+        Prove that a continuously polling loop on pending CI preserves phase_entered_at
+        and triggers ci_terminalization_timeout once deadline is exceeded.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 302
+        t0 = datetime.fromisoformat("2026-10-07T00:00:00+00:00").timestamp()
+        t0_iso = "2026-10-07T00:00:00+00:00"
+
+        ok, token, _ = self.ledger.acquire_lease(repo, issue_number, "worker-ci")
+        self.ledger.record_claim_intent(repo, issue_number, "worker-ci", token, "att-ci-poll", "initial_dispatch", "trig-ci")
+        self.ledger.record_claimed("att-ci-poll")
+        self.ledger.record_launch_confirmed("att-ci-poll", "conv-ci")
+        self.ledger.record_phase("att-ci-poll", "WAITING_CI", resulting_head_sha="sha-ci-poll")
+
+        with self.ledger._get_connection() as conn:
+            conn.execute(
+                "UPDATE execution_ledger SET phase_entered_at = ?, updated_at = ?, heartbeat_at = ?",
+                (t0_iso, t0_iso, t0_iso),
+            )
+            conn.commit()
+
+        mock_pr = {"number": 102, "state": "open", "head": {"sha": "sha-ci-poll", "ref": "agent/branch"}}
+        pending_checks = {"status": "pending", "failed_check": None, "completed_count": 0, "total_checks": 5, "all_checks": []}
+
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "get_pr_checks_status", return_value=pending_checks):
+                for offset in (50, 150, 300, 500):
+                    poll_ts = t0 + offset
+                    with patch("time.time", return_value=poll_ts):
+                        dispatcher.reconcile_closure_v1(repo, self.ledger, now_ts=poll_ts)
+
+                    att = self.ledger.get_attempt("att-ci-poll")
+                    self.assertEqual(att["phase"], "WAITING_CI")
+                    self.assertEqual(att["outcome"], "in_progress")
+                    self.assertEqual(att["phase_entered_at"], t0_iso)
+                    self.assertIsNotNone(self.ledger.get_active_lease(repo, issue_number))
+                    mock_fail_closed.assert_not_called()
+
+                # Timeout after 600s
+                over_ts = t0 + dispatcher.CI_TERMINALIZATION_DEADLINE_SECONDS + 10
+                with patch("time.time", return_value=over_ts):
+                    dispatcher.reconcile_closure_v1(repo, self.ledger, now_ts=over_ts)
+
+        mock_fail_closed.assert_called_once_with(repo, issue_number, "ci_terminalization_timeout", "att-ci-poll")
+        att = self.ledger.get_attempt("att-ci-poll")
+        self.assertEqual(att["outcome"], "timeout_infra_blocked")
+        self.assertIsNone(self.ledger.get_active_lease(repo, issue_number))
+
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "agent-working"}]})
+    @patch.object(dispatcher, "fail_closed_to_needs_human", return_value=True)
+    def test_continuous_polling_stalled_waiting_review_times_out(self, mock_fail_closed, mock_details):
+        """
+        Prove that a continuously polling loop waiting for reviewer preserves phase_entered_at
+        and triggers reviewer_completion_timeout to needs-human once deadline is exceeded.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 303
+        t0 = datetime.fromisoformat("2026-10-07T00:00:00+00:00").timestamp()
+        t0_iso = "2026-10-07T00:00:00+00:00"
+
+        ok, token, _ = self.ledger.acquire_lease(repo, issue_number, "worker-rev")
+        self.ledger.record_claim_intent(repo, issue_number, "worker-rev", token, "att-rev-poll", "initial_dispatch", "trig-rev")
+        self.ledger.record_claimed("att-rev-poll")
+        self.ledger.record_launch_confirmed("att-rev-poll", "conv-rev")
+        self.ledger.record_phase("att-rev-poll", "WAITING_REVIEW", resulting_head_sha="sha-rev-poll")
+
+        with self.ledger._get_connection() as conn:
+            conn.execute(
+                "UPDATE execution_ledger SET phase_entered_at = ?, updated_at = ?, heartbeat_at = ?",
+                (t0_iso, t0_iso, t0_iso),
+            )
+            conn.commit()
+
+        mock_pr = {"number": 103, "state": "open", "head": {"sha": "sha-rev-poll", "ref": "agent/branch"}}
+
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "get_latest_changes_requested_review", return_value=None):
+                with patch.object(dispatcher, "get_latest_approved_review", return_value=None):
+                    for offset in (100, 400, 800, 1400):
+                        poll_ts = t0 + offset
+                        with patch("time.time", return_value=poll_ts):
+                            dispatcher.reconcile_closure_v1(repo, self.ledger, now_ts=poll_ts)
+
+                        att = self.ledger.get_attempt("att-rev-poll")
+                        self.assertEqual(att["phase"], "WAITING_REVIEW")
+                        self.assertEqual(att["outcome"], "in_progress")
+                        self.assertEqual(att["phase_entered_at"], t0_iso)
+                        self.assertIsNotNone(self.ledger.get_active_lease(repo, issue_number))
+                        mock_fail_closed.assert_not_called()
+
+                    # Timeout after 1800s
+                    over_ts = t0 + dispatcher.REVIEWER_COMPLETION_DEADLINE_SECONDS + 10
+                    with patch("time.time", return_value=over_ts):
+                        dispatcher.reconcile_closure_v1(repo, self.ledger, now_ts=over_ts)
+
+        mock_fail_closed.assert_called_once_with(repo, issue_number, "reviewer_completion_timeout", "att-rev-poll")
+        att = self.ledger.get_attempt("att-rev-poll")
+        self.assertEqual(att["outcome"], "timeout_needs_human")
+        self.assertIsNone(self.ledger.get_active_lease(repo, issue_number))
+
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "agent-working"}]})
+    @patch.object(dispatcher, "fail_closed_to_infra_blocked", return_value=True)
+    def test_continuous_polling_stalled_waiting_merge_times_out(self, mock_fail_closed, mock_details):
+        """
+        Prove that a continuously polling loop waiting for auto-merge preserves phase_entered_at
+        and triggers auto_merge_timeout once deadline is exceeded.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 304
+        t0 = datetime.fromisoformat("2026-10-07T00:00:00+00:00").timestamp()
+        t0_iso = "2026-10-07T00:00:00+00:00"
+
+        ok, token, _ = self.ledger.acquire_lease(repo, issue_number, "worker-merge")
+        self.ledger.record_claim_intent(repo, issue_number, "worker-merge", token, "att-merge-poll", "initial_dispatch", "trig-merge")
+        self.ledger.record_claimed("att-merge-poll")
+        self.ledger.record_launch_confirmed("att-merge-poll", "conv-merge")
+        self.ledger.record_phase("att-merge-poll", "WAITING_MERGE", resulting_head_sha="sha-merge-poll")
+
+        with self.ledger._get_connection() as conn:
+            conn.execute(
+                "UPDATE execution_ledger SET phase_entered_at = ?, updated_at = ?, heartbeat_at = ?",
+                (t0_iso, t0_iso, t0_iso),
+            )
+            conn.commit()
+
+        mock_pr = {"number": 104, "state": "open", "merged": False, "head": {"sha": "sha-merge-poll", "ref": "agent/branch"}}
+
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            for offset in (50, 150, 300, 500):
+                poll_ts = t0 + offset
+                with patch("time.time", return_value=poll_ts):
+                    dispatcher.reconcile_closure_v1(repo, self.ledger, now_ts=poll_ts)
+
+                att = self.ledger.get_attempt("att-merge-poll")
+                self.assertEqual(att["phase"], "WAITING_MERGE")
+                self.assertEqual(att["outcome"], "in_progress")
+                self.assertEqual(att["phase_entered_at"], t0_iso)
+                self.assertIsNotNone(self.ledger.get_active_lease(repo, issue_number))
+                mock_fail_closed.assert_not_called()
+
+            # Timeout after 600s
+            over_ts = t0 + dispatcher.AUTO_MERGE_DEADLINE_SECONDS + 10
+            with patch("time.time", return_value=over_ts):
+                dispatcher.reconcile_closure_v1(repo, self.ledger, now_ts=over_ts)
+
+        mock_fail_closed.assert_called_once_with(repo, issue_number, "auto_merge_timeout", "att-merge-poll")
+        att = self.ledger.get_attempt("att-merge-poll")
+        self.assertEqual(att["outcome"], "timeout_infra_blocked")
+        self.assertIsNone(self.ledger.get_active_lease(repo, issue_number))
+
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "agent-working"}]})
+    def test_waiting_review_live_head_change_returns_to_current_head_ci(self, mock_details):
+        """
+        Verify that when an attempt is in WAITING_REVIEW on sha-old, but a new commit sha-new
+        is pushed to the PR, dispatcher detects the head change, records WAITING_CI for sha-new,
+        and re-enters the current-head CI path.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 305
+
+        ok, token, _ = self.ledger.acquire_lease(repo, issue_number, "worker-head-change")
+        self.ledger.record_claim_intent(
+            repo, issue_number, "worker-head-change", token, "att-head-change", "initial_dispatch", "trig-hc",
+            pr_number=105,
+        )
+        self.ledger.record_claimed("att-head-change")
+        self.ledger.record_launch_confirmed("att-head-change", "conv-hc")
+        self.ledger.record_phase("att-head-change", "WAITING_REVIEW", resulting_head_sha="sha-initial-1111")
+
+        # Live PR has updated head sha-subsequent-2222
+        mock_pr = {"number": 105, "state": "open", "head": {"sha": "sha-subsequent-2222", "ref": "agent/branch"}}
+        pending_ci = {"status": "pending", "failed_check": None, "completed_count": 0, "total_checks": 5, "all_checks": []}
+
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "get_pr_checks_status", return_value=pending_ci) as mock_get_checks:
+                dispatcher.reconcile_closure_v1(repo, self.ledger)
+
+        att = self.ledger.get_attempt("att-head-change")
+        # Attempt must have transitioned back to WAITING_CI for the new head
+        self.assertEqual(att["phase"], "WAITING_CI")
+        self.assertEqual(att["resulting_head_sha"], "sha-subsequent-2222")
+        mock_get_checks.assert_called_with(repo, 105, head_sha="sha-subsequent-2222", checks_data=None)
+
+    @patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "agent-working"}]})
+    def test_stale_reviews_fenced_and_anchored_reviews_accepted(self, mock_details):
+        """
+        Verify that:
+        1. A stale CHANGES_REQUESTED review on an older SHA does NOT launch repair for current head.
+        2. A stale APPROVED review on an older SHA does NOT advance current head to WAITING_MERGE.
+        3. A CHANGES_REQUESTED review anchored to current head triggers automated repair.
+        4. An APPROVED review anchored to current head advances to WAITING_MERGE.
+        """
+        repo = "liuchangchxy/easy-exam"
+        issue_number = 306
+        head_sha = "0a220d0beb83fb21ce16c804ce4abdd4b68a2aeb"
+        old_sha = "b50524c6b5312b280c156084025c41bf7a353d52"
+
+        ok, token, _ = self.ledger.acquire_lease(repo, issue_number, "worker-fenced")
+        self.ledger.record_claim_intent(
+            repo, issue_number, "worker-fenced", token, "att-fenced-rev", "initial_dispatch", "trig-fenced",
+            pr_number=106,
+        )
+        self.ledger.record_claimed("att-fenced-rev")
+        self.ledger.record_launch_confirmed("att-fenced-rev", "conv-fenced")
+        self.ledger.record_phase("att-fenced-rev", "WAITING_REVIEW", resulting_head_sha=head_sha)
+
+        mock_pr = {"number": 106, "state": "open", "head": {"sha": head_sha, "ref": "agent/branch"}}
+
+        # 1. Stale CHANGES_REQUESTED on old_sha
+        stale_cr = [
+            {"id": 1, "state": "CHANGES_REQUESTED", "submitted_at": "2026-10-07T01:00:00Z", "commit_id": old_sha, "body": f"[easyexam-review:{old_sha}] fix needed"}
+        ]
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "run_cmd", return_value=(0, json.dumps(stale_cr), "", False)):
+                with patch.object(dispatcher, "dispatch_automated_repair") as mock_repair:
+                    dispatcher.reconcile_closure_v1(repo, self.ledger)
+                    mock_repair.assert_not_called()
+
+        att = self.ledger.get_attempt("att-fenced-rev")
+        self.assertEqual(att["phase"], "WAITING_REVIEW")
+
+        # 2. Stale APPROVED on old_sha
+        stale_app = [
+            {"id": 2, "state": "APPROVED", "submitted_at": "2026-10-07T02:00:00Z", "commit_id": old_sha, "body": f"Reviewed head: {old_sha}\nlooks good"}
+        ]
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "run_cmd", return_value=(0, json.dumps(stale_app), "", False)):
+                dispatcher.reconcile_closure_v1(repo, self.ledger)
+
+        att = self.ledger.get_attempt("att-fenced-rev")
+        self.assertEqual(att["phase"], "WAITING_REVIEW")
+
+        # 3. Anchored CHANGES_REQUESTED on head_sha -> launches repair
+        anchored_cr = [
+            {"id": 1, "state": "CHANGES_REQUESTED", "submitted_at": "2026-10-07T01:00:00Z", "commit_id": old_sha, "body": "old"},
+            {"id": 3, "state": "CHANGES_REQUESTED", "submitted_at": "2026-10-07T03:00:00Z", "commit_id": head_sha, "body": f"[easyexam-review:{head_sha}]\nfix this"}
+        ]
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "run_cmd", return_value=(0, json.dumps(anchored_cr), "", False)):
+                with patch.object(dispatcher, "dispatch_automated_repair", return_value=(True, "dispatched", {})) as mock_repair:
+                    dispatcher.reconcile_closure_v1(repo, self.ledger)
+                    mock_repair.assert_called_once()
+                    call_kwargs = mock_repair.call_args[1]
+                    self.assertEqual(call_kwargs["current_pr_head_sha"], head_sha)
+                    self.assertEqual(call_kwargs["expected_repair_baseline_sha"], head_sha)
+                    self.assertEqual(call_kwargs["cause_type"], "changes_requested")
+
+        # 4. Anchored APPROVED on head_sha -> advances to WAITING_MERGE
+        ok, tok2, _ = self.ledger.acquire_lease(repo, issue_number, "worker-fenced-app")
+        self.ledger.record_claim_intent(
+            repo, issue_number, "worker-fenced-app", tok2, "att-fenced-app", "initial_dispatch", "trig-fenced-app",
+            pr_number=106,
+        )
+        self.ledger.record_claimed("att-fenced-app")
+        self.ledger.record_launch_confirmed("att-fenced-app", "conv-fenced-app")
+        self.ledger.record_phase("att-fenced-app", "WAITING_REVIEW", resulting_head_sha=head_sha)
+
+        anchored_app = [
+            {"id": 4, "state": "APPROVED", "submitted_at": "2026-10-07T04:00:00Z", "commit_id": head_sha, "body": f"[easyexam-review:{head_sha}]\nAPPROVED!"}
+        ]
+        with patch.object(dispatcher, "adopt_existing_pr", return_value=("adopted", mock_pr)):
+            with patch.object(dispatcher, "run_cmd", return_value=(0, json.dumps(anchored_app), "", False)):
+                dispatcher.reconcile_closure_v1(repo, self.ledger)
+
+        att = self.ledger.get_attempt("att-fenced-app")
+        self.assertEqual(att["phase"], "WAITING_MERGE")
+        self.assertEqual(att["resulting_head_sha"], head_sha)
 
 
 if __name__ == "__main__":
