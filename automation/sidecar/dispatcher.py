@@ -1154,6 +1154,7 @@ def _audit_safe_value(value):
 def append_dispatch_audit(record):
     """Durably append one secret-free event to the sidecar-owned JSONL journal."""
     safe_record = _audit_safe_value(record)
+    DISPATCH_AUDIT_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(DISPATCH_AUDIT_PATH, "a", encoding="utf-8", newline="\n") as audit_file:
         audit_file.write(json.dumps(safe_record, ensure_ascii=False, sort_keys=True) + "\n")
         audit_file.flush()

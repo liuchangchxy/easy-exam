@@ -642,10 +642,18 @@ class ClosureV1DeterministicAcceptanceTests(unittest.TestCase):
     """
 
     def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.audit_path = Path(self.tmp_dir.name) / "dispatch_audit.jsonl"
+        self.audit_patcher = patch.object(dispatcher, "DISPATCH_AUDIT_PATH", self.audit_path)
+        self.audit_patcher.start()
         self.ledger = dispatcher.ExecutionLedger(":memory:")
         dispatcher.set_ledger(self.ledger)
 
     def tearDown(self):
+        if hasattr(self, "audit_patcher") and self.audit_patcher:
+            self.audit_patcher.stop()
+        if hasattr(self, "tmp_dir") and self.tmp_dir:
+            self.tmp_dir.cleanup()
         if hasattr(self, "ledger") and self.ledger:
             self.ledger.close()
         dispatcher.set_ledger(None)
@@ -1017,11 +1025,19 @@ class ClosureV1ProductionPathIntegrationTests(unittest.TestCase):
     """
 
     def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.audit_path = Path(self.tmp_dir.name) / "dispatch_audit.jsonl"
+        self.audit_patcher = patch.object(dispatcher, "DISPATCH_AUDIT_PATH", self.audit_path)
+        self.audit_patcher.start()
         self.ledger = dispatcher.ExecutionLedger(":memory:")
         dispatcher.set_ledger(self.ledger)
         dispatcher.CLAIM_BACKOFF_MAP.clear()
 
     def tearDown(self):
+        if hasattr(self, "audit_patcher") and self.audit_patcher:
+            self.audit_patcher.stop()
+        if hasattr(self, "tmp_dir") and self.tmp_dir:
+            self.tmp_dir.cleanup()
         if hasattr(self, "ledger") and self.ledger:
             self.ledger.close()
         dispatcher.set_ledger(None)
