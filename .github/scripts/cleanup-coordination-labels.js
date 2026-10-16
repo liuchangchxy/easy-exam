@@ -3,9 +3,7 @@ const TERMINAL_LABELS = ["infra-blocked", "needs-human"];
 
 async function cleanupCoordinationLabels(issue, removeLabel) {
   const labels = new Set(issue.labels.map(({ name }) => name));
-  if (TERMINAL_LABELS.some((name) => labels.has(name))) {
-    return { preservedTerminalState: true, removed: [] };
-  }
+  const preservedTerminalState = TERMINAL_LABELS.some((name) => labels.has(name));
 
   const removed = [];
   for (const name of ACTIVE_LABELS) {
@@ -14,7 +12,7 @@ async function cleanupCoordinationLabels(issue, removeLabel) {
       removed.push(name);
     }
   }
-  return { preservedTerminalState: false, removed };
+  return { preservedTerminalState, removed };
 }
 
 module.exports = cleanupCoordinationLabels;
