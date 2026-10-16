@@ -54,7 +54,7 @@
       >
         <LinearIcon name="target" size="16" />
         <span v-if="!isCollapsed" class="nav-item-label">{{ t('nav.mistakes') }}</span>
-        <span v-if="!isCollapsed" class="nav-item-sub">FSRS</span>
+        <span v-if="!isCollapsed" class="nav-item-sub">{{ t('nav.mistakes_sub') }}</span>
       </button>
 
       <button
@@ -66,6 +66,7 @@
       >
         <LinearIcon name="chart" size="16" />
         <span v-if="!isCollapsed" class="nav-item-label">{{ t('nav.learning') }}</span>
+        <span v-if="!isCollapsed" class="nav-item-sub">{{ t('nav.learning_sub') }}</span>
       </button>
 
       <button
@@ -88,6 +89,17 @@
       >
         <LinearIcon name="edit" size="16" />
         <span v-if="!isCollapsed" class="nav-item-label">{{ t('nav.notes') }}</span>
+      </button>
+
+      <button
+        type="button"
+        class="sidebar-nav-item"
+        :class="{ active: currentPage === 'settings' }"
+        @click="$emit('navigate', 'settings')"
+        :title="isCollapsed ? t('nav.settings') : ''"
+      >
+        <LinearIcon name="settings" size="16" />
+        <span v-if="!isCollapsed" class="nav-item-label">{{ t('nav.settings') }}</span>
       </button>
     </nav>
 
@@ -154,6 +166,10 @@
           </div>
         </div>
         <div class="popover-actions">
+          <button type="button" class="popover-action-item" @click="handleSettings">
+            <LinearIcon name="settings" size="14" />
+            <span>{{ t('nav.settings') }}</span>
+          </button>
           <button type="button" class="popover-action-item" @click="handleChangePassword">
             <LinearIcon name="key" size="14" />
             <span>{{ t('ui.k0002') }}</span>
@@ -205,6 +221,11 @@ const userInitial = computed(() => {
 
 function toggleUserMenu() {
   showUserMenu.value = !showUserMenu.value
+}
+
+function handleSettings() {
+  showUserMenu.value = false
+  emit('navigate', 'settings')
 }
 
 function handleChangePassword() {

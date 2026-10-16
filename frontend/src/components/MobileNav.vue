@@ -120,8 +120,14 @@ defineEmits(['navigate', 'open-palette'])
   }
 
   .mobile-nav-label {
-    font-size: 0.65rem;
+    font-size: 0.68rem;
     font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.1;
+    max-width: 100%;
+    padding: 0 1px;
   }
 }
 </style>

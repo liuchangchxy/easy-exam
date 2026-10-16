@@ -126,6 +126,7 @@ function handleNavigate(targetPage) {
   else if (targetPage === 'mistakes') router.push('/mistakes')
   else if (targetPage === 'import') router.push('/import')
   else if (targetPage === 'notes') router.push('/notes')
+  else if (targetPage === 'settings') router.push('/settings')
   else router.push('/')
 }
 
@@ -135,6 +136,8 @@ function handleSidebarAction(action) {
     activeDialog.value = action
   } else if (action === 'change-password') {
     showChangePasswordModal.value = true
+  } else if (action === 'settings') {
+    router.push('/settings')
   } else if (action === 'profile' || action === 'notes') {
     router.push('/notes')
   }
@@ -151,6 +154,8 @@ const commands = computed(() => [
   { id: 'learning', title: t('nav.learning'), icon: 'chart', action: () => router.push('/learning') },
   { id: 'notes', title: t('nav.notes'), icon: 'edit', action: () => router.push('/notes') },
   { id: 'import', title: t('nav.imports'), icon: 'inbox', action: () => router.push('/import') },
+  { id: 'settings', title: t('nav.settings'), icon: 'settings', action: () => router.push('/settings') },
+  { id: 'appearance', title: t('settings.tab_appearance'), icon: 'zap', action: () => router.push('/settings') },
   { id: 'blueprint', title: t('sidebar.blueprint'), icon: 'blueprint', action: () => handleSidebarAction('blueprint') },
   { id: 'drafts', title: t('sidebar.drafts'), icon: 'draft', action: () => handleSidebarAction('drafts') },
   { id: 'ai', title: t('sidebar.ai_search'), icon: 'cpu', action: () => handleSidebarAction('ai') },

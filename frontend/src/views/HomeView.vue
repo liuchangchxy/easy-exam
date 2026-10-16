@@ -120,7 +120,50 @@
 
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="loading" class="muted" style="padding: 2rem; text-align: center; font-family: var(--linear-mono);">{{ t('ui.k0135') }}</p>
-    <section v-else class="bank-grid">
+    <template v-else>
+      <!-- 学习主路径优先级看板 (EE-053: 继续练习 / FSRS复习 / 错题 / 题库) -->
+      <section v-if="banks.length > 0" class="learning-quick-hub">
+        <div class="quick-hub-card hub-fsrs-card" role="button" tabindex="0" @click="emit('learning')">
+          <div class="hub-icon-wrap fsrs-icon">
+            <LinearIcon name="chart" size="18" />
+          </div>
+          <div class="hub-text-wrap">
+            <span class="hub-card-label">{{ t('nav.learning') }}</span>
+            <strong class="hub-card-val">{{ dueMistakesCount }} <small>{{ t('ui.k0101') }}</small></strong>
+            <span class="hub-card-hint">{{ t('home.mistake_review') }}</span>
+          </div>
+          <div class="hub-arrow-icon">
+            <LinearIcon name="chevron-right" size="14" />
+          </div>
+        </div>
+
+        <div class="quick-hub-card hub-mistakes-card" role="button" tabindex="0" @click="emit('mistakes')">
+          <div class="hub-icon-wrap mistakes-icon">
+            <LinearIcon name="target" size="18" />
+          </div>
+          <div class="hub-text-wrap">
+            <span class="hub-card-label">{{ t('nav.mistakes') }}</span>
+            <strong class="hub-card-val">{{ mistakesCount }} <small>{{ t('ui.k0101') }}</small></strong>
+            <span class="hub-card-hint">{{ t('nav.mistakes_sub') }}</span>
+          </div>
+          <div class="hub-arrow-icon">
+            <LinearIcon name="chevron-right" size="14" />
+          </div>
+        </div>
+
+        <div class="quick-hub-card hub-banks-card">
+          <div class="hub-icon-wrap banks-icon">
+            <LinearIcon name="layers" size="18" />
+          </div>
+          <div class="hub-text-wrap">
+            <span class="hub-card-label">{{ t('home.all_banks_title') }}</span>
+            <strong class="hub-card-val">{{ banks.length }} <small>{{ t('ui.k0146') }}</small></strong>
+            <span class="hub-card-hint">{{ t('home.all_banks_count', { count: banks.length }) }}</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="bank-grid">
       <article v-for="bank in banks" :key="bank.id" class="bank-card" :class="{ 'has-active-session': Boolean(getActiveSessionForBank(bank.id)) }">
         <div class="bank-card-title-row">
           <h2>{{ bank.name }}</h2>
@@ -213,6 +256,7 @@
         </div>
       </div>
     </section>
+  </template>
 
     <!-- 创建题库对话框 -->
     <div v-if="showCreateDialog" class="exam-setup-backdrop" @click.self="showCreateDialog = false" @keydown.esc="showCreateDialog = false">
@@ -552,6 +596,7 @@ import LinearIcon from '../components/LinearIcon.vue'
 import { listBanks, createBank, createQuestion, addBankMember, listBankMembers, removeBankMember, copyQuestionToBank } from '../api/banks'
 import { startExam, listProfiles, getBlueprint } from '../api/exams'
 import { listActiveSessions, getSession, abandonSession, abandonAllSessions } from '../api/practice'
+import { listDueMistakes, listMistakes } from '../api/mistakes'
 import { getAiBatchStatus, startAiBatchGenerate, stopAiBatchGenerate } from '../api/ai'
 import { triggerSyncEvent } from '../api/sync'
 import { useLocale } from '../composables/useLocale.js'
@@ -570,6 +615,25 @@ const showActiveSessionsModal = ref(false)
 const abandoningSession = ref(false)
 const loading = ref(true)
 const error = ref('')
+
+const dueMistakesCount = ref(0)
+const mistakesCount = ref(0)
+
+async function refreshLearningStats() {
+  if (!props.token) return
+  try {
+    const dueRes = await listDueMistakes(props.token)
+    dueMistakesCount.value = Array.isArray(dueRes) ? dueRes.length : 0
+  } catch (_) {
+    dueMistakesCount.value = 0
+  }
+  try {
+    const misRes = await listMistakes(props.token)
+    mistakesCount.value = Array.isArray(misRes) ? misRes.length : 0
+  } catch (_) {
+    mistakesCount.value = 0
+  }
+}
 
 function getActiveSessionForBank(bankId) {
   return activeSessions.value.find(s => s.bank_id === bankId) || null
@@ -1165,6 +1229,7 @@ onMounted(async () => {
   } catch (_) {
     activeSessions.value = []
   }
+  refreshLearningStats()
 })
 
 watch(() => route.query.action, (act) => {
@@ -1765,5 +1830,115 @@ defineExpose({
 
 .btn-ai-batch:hover {
   background: var(--primary-light);
+}
+
+/* ==========================================================================
+   Learning Quick Hub · 首页优先级核心看板 (EE-053)
+   ========================================================================== */
+.learning-quick-hub {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.quick-hub-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1rem 1.15rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  transition: all 150ms ease;
+  user-select: none;
+  cursor: pointer;
+}
+
+.quick-hub-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.hub-icon-wrap {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.hub-icon-wrap.fsrs-icon {
+  background: var(--primary-light);
+  color: var(--primary);
+  border: 1px solid var(--primary-border);
+}
+
+.hub-icon-wrap.mistakes-icon {
+  background: var(--danger-light);
+  color: var(--danger);
+  border: 1px solid var(--danger-border);
+}
+
+.hub-icon-wrap.banks-icon {
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.hub-text-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.hub-card-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.hub-card-val {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.2;
+}
+
+.hub-card-val small {
+  font-size: 0.75rem;
+  font-weight: normal;
+  color: var(--text-muted);
+}
+
+.hub-card-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hub-arrow-icon {
+  color: var(--text-tertiary);
+  opacity: 0.6;
+}
+
+@media (max-width: 768px) {
+  .learning-quick-hub {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+  }
+  .quick-hub-card {
+    padding: 0.75rem 0.95rem;
+  }
 }
 </style>
