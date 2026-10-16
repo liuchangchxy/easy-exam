@@ -1684,7 +1684,7 @@ function handleRestartPractice() {
 
 .btn-toggle-ai-card.active {
   background: var(--success);
-  color: var(--on-primary);
+  color: var(--on-success, #ffffff);
 }
 
 /* 专注作答状态占位卡 */
@@ -2993,7 +2993,7 @@ function handleRestartPractice() {
   transition: all 0.15s ease;
 }
 .sheet-num-btn.current {
-  border: 2px solid var(--primary) !important;
+  border: 2px solid var(--primary-fg, var(--primary)) !important;
   box-shadow: 0 0 0 2px var(--primary-border);
 }
 .sheet-num-btn.answered {
@@ -3003,17 +3003,17 @@ function handleRestartPractice() {
 .sheet-num-btn.correct {
   background: var(--success);
   border-color: var(--success-hover);
-  color: var(--on-primary);
+  color: var(--on-success, #ffffff);
 }
 .sheet-num-btn.incorrect {
   background: var(--danger);
   border-color: var(--danger-hover);
-  color: var(--on-primary);
+  color: var(--on-danger, #ffffff);
 }
 .sheet-num-btn.partial {
   background: var(--warning);
   border-color: var(--warning-hover);
-  color: var(--on-primary);
+  color: var(--on-warning, #ffffff);
 }
 
 /* ==========================================================================

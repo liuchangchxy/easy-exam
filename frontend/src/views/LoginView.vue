@@ -390,7 +390,7 @@ async function submit() {
 .link-button {
   border: none;
   background: transparent;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-size: 0.85rem;
   cursor: pointer;
   font-weight: 500;
@@ -398,6 +398,7 @@ async function submit() {
 }
 
 .link-button:hover {
+  color: var(--primary-fg, var(--primary));
   text-decoration: underline;
 }
 </style>

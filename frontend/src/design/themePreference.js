@@ -91,6 +91,38 @@ export function getContrastTextColor(hexColor) {
   return '#ffffff'
 }
 
+export function mixHex(hex1, hex2, weight = 0.5) {
+  const c1 = normalizeHexColor(hex1) || '#000000'
+  const c2 = normalizeHexColor(hex2) || '#000000'
+  const r1 = parseInt(c1.slice(1, 3), 16)
+  const g1 = parseInt(c1.slice(3, 5), 16)
+  const b1 = parseInt(c1.slice(5, 7), 16)
+  const r2 = parseInt(c2.slice(1, 3), 16)
+  const g2 = parseInt(c2.slice(3, 5), 16)
+  const b2 = parseInt(c2.slice(5, 7), 16)
+  const w = Math.max(0, Math.min(1, weight))
+  const r = Math.round(r1 * (1 - w) + r2 * w)
+  const g = Math.round(g1 * (1 - w) + g2 * w)
+  const b = Math.round(b1 * (1 - w) + b2 * w)
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`.toLowerCase()
+}
+
+export function getAccessibleForeground(hexColor, isDarkTheme = false) {
+  const norm = normalizeHexColor(hexColor)
+  if (!norm) return isDarkTheme ? '#f8fafc' : '#0f172a'
+  const surface = isDarkTheme ? '#131b2e' : '#ffffff'
+  if (calculateContrastRatio(norm, surface) >= 4.5) return norm
+
+  // If contrast is insufficient (e.g. #ffffff on white surface or #000000 on dark surface),
+  // progressively adjust luminance while preserving the hue/tone as closely as possible.
+  const target = isDarkTheme ? '#ffffff' : (norm === '#ffffff' ? '#0f172a' : '#000000')
+  for (let step = 1; step <= 20; step++) {
+    const candidate = mixHex(norm, target, step * 0.05)
+    if (calculateContrastRatio(candidate, surface) >= 4.5) return candidate
+  }
+  return isDarkTheme ? '#f8fafc' : '#0f172a'
+}
+
 export function readThemePreference(storage, key = THEME_STORAGE_KEY) {
   try {
     const raw = storage?.getItem(key)
@@ -194,23 +226,37 @@ export function applyPalettePreference(root, palette) {
   return norm
 }
 
-export function applyAccentPreference(root, hexColor) {
+export function applyAccentPreference(root, hexColor, effectiveTheme = 'light') {
   const hex = normalizeHexColor(hexColor)
   if (!root?.style) return ''
 
   if (hex) {
+    const isDark = effectiveTheme === 'dark' || root?.getAttribute?.('data-theme') === 'dark'
     const onPrimary = getContrastTextColor(hex)
+    const hoverTarget = hex === '#000000' ? '#ffffff' : '#000000'
+    const primaryHover = mixHex(hex, hoverTarget, 0.12)
+    const primaryActive = mixHex(hex, hoverTarget, 0.24)
+    const onPrimaryHover = getContrastTextColor(primaryHover)
+    const onPrimaryActive = getContrastTextColor(primaryActive)
+    const primaryFg = getAccessibleForeground(hex, isDark)
+
     root.style.setProperty('--primary', hex)
+    root.style.setProperty('--primary-fg', primaryFg)
     root.style.setProperty('--on-primary', onPrimary)
-    root.style.setProperty('--primary-hover', `color-mix(in srgb, ${hex} 86%, ${onPrimary === '#ffffff' ? '#ffffff' : '#000000'})`)
-    root.style.setProperty('--primary-active', `color-mix(in srgb, ${hex} 72%, #000000)`)
+    root.style.setProperty('--on-primary-hover', onPrimaryHover)
+    root.style.setProperty('--on-primary-active', onPrimaryActive)
+    root.style.setProperty('--primary-hover', primaryHover)
+    root.style.setProperty('--primary-active', primaryActive)
     root.style.setProperty('--primary-light', `color-mix(in srgb, ${hex} 14%, transparent)`)
-    root.style.setProperty('--primary-border', `color-mix(in srgb, ${hex} 36%, transparent)`)
+    root.style.setProperty('--primary-border', `color-mix(in srgb, ${primaryFg} 36%, transparent)`)
     return hex
   }
 
   root.style.removeProperty('--primary')
+  root.style.removeProperty('--primary-fg')
   root.style.removeProperty('--on-primary')
+  root.style.removeProperty('--on-primary-hover')
+  root.style.removeProperty('--on-primary-active')
   root.style.removeProperty('--primary-hover')
   root.style.removeProperty('--primary-active')
   root.style.removeProperty('--primary-light')
@@ -222,7 +268,7 @@ export function applyFullTheme({ root, mode, palette, customAccent, isSystemDark
   const effectiveTheme = resolveEffectiveTheme(mode, isSystemDark)
   applyThemePreference(root, effectiveTheme)
   applyPalettePreference(root, palette)
-  applyAccentPreference(root, customAccent)
+  applyAccentPreference(root, customAccent, effectiveTheme)
   return {
     effectiveTheme,
     palette: normalizePalettePreference(palette),

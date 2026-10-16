@@ -327,7 +327,7 @@ const paletteList = computed(() => [
     primary: '#2563eb',
     onPrimary: '#ffffff',
     textMain: '#0f172a',
-    textMuted: '#94a3b8',
+    textMuted: '#475569',
     border: '#cbd5e1',
   },
   {
@@ -339,7 +339,7 @@ const paletteList = computed(() => [
     primary: '#3b6978',
     onPrimary: '#ffffff',
     textMain: '#192533',
-    textMuted: '#8899ac',
+    textMuted: '#526375',
     border: '#d2dce6',
   },
   {
@@ -351,7 +351,7 @@ const paletteList = computed(() => [
     primary: '#0891b2',
     onPrimary: getContrastTextColor('#0891b2'),
     textMain: '#0c2830',
-    textMuted: '#769da8',
+    textMuted: '#3d6673',
     border: '#c4e3e8',
   },
   {
@@ -363,7 +363,7 @@ const paletteList = computed(() => [
     primary: '#7c3aed',
     onPrimary: '#ffffff',
     textMain: '#24143d',
-    textMuted: '#8c77a6',
+    textMuted: '#5e4a78',
     border: '#dac2f7',
   },
   {
@@ -375,7 +375,7 @@ const paletteList = computed(() => [
     primary: '#e11d48',
     onPrimary: '#ffffff',
     textMain: '#3b111a',
-    textMuted: '#a86c78',
+    textMuted: '#783d49',
     border: '#f8b4c0',
   },
   {
@@ -387,7 +387,7 @@ const paletteList = computed(() => [
     primary: '#d97706',
     onPrimary: getContrastTextColor('#d97706'),
     textMain: '#382305',
-    textMuted: '#a67c3b',
+    textMuted: '#78531a',
     border: '#fcd34d',
   },
   {
@@ -399,7 +399,7 @@ const paletteList = computed(() => [
     primary: '#286b53',
     onPrimary: '#ffffff',
     textMain: '#20332b',
-    textMuted: '#89948c',
+    textMuted: '#5c6b63',
     border: '#d9e1d9',
   },
   {
@@ -411,7 +411,7 @@ const paletteList = computed(() => [
     primary: '#845339',
     onPrimary: '#ffffff',
     textMain: '#2b1f1a',
-    textMuted: '#947f75',
+    textMuted: '#68554d',
     border: '#d8c8ba',
   },
 ])
@@ -832,7 +832,7 @@ function handleHexInputChange(e) {
 .sample-badge {
   font-size: 0.78rem;
   font-weight: 500;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   background: var(--primary-light);
   border: 1px solid var(--primary-border);
   padding: 0.35rem 0.65rem;
@@ -919,7 +919,7 @@ function handleHexInputChange(e) {
 
 .about-item-label {
   font-size: 0.75rem;
-  color: var(--text-tertiary);
+  color: var(--text-muted);
 }
 
 .about-item-val {

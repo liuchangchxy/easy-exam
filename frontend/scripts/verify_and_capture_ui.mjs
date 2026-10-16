@@ -156,6 +156,22 @@ async function main() {
     await page.waitForSelector('.bank-card:has-text("2026架构师全真模拟题库") button.primary')
     await page.waitForTimeout(500)
 
+    // 1. Verify quick-hub keyboard activation (Enter on FSRS, Space on Mistakes)
+    await page.waitForSelector('.hub-fsrs-card')
+    await page.focus('.hub-fsrs-card')
+    await page.keyboard.press('Enter')
+    await page.waitForSelector('.learning-page')
+    console.log('✓ Quick-hub FSRS card activated via Enter key')
+    await page.goto(BASE_URL)
+    await page.waitForSelector('.home-page')
+    await page.waitForSelector('.hub-mistakes-card')
+    await page.focus('.hub-mistakes-card')
+    await page.keyboard.press('Space')
+    await page.waitForSelector('.mistakes-page')
+    console.log('✓ Quick-hub Mistakes card activated via Space key')
+    await page.goto(BASE_URL)
+    await page.waitForSelector('.home-page')
+
     // Capture 1: Home Page (Default Neutral Blue-Grey)
     const homeShot = path.join(outputDir, '01_desktop_home_blue_grey_light.png')
     await page.screenshot({ path: homeShot, fullPage: false })
@@ -182,37 +198,124 @@ async function main() {
     await page.waitForTimeout(500)
 
     // Capture 3: Settings Page (8 Palettes, Custom Accent with WCAG AA badge)
-    const settingsShot = path.join(outputDir, '03_desktop_settings_themes.png')
+    const settingsShot = path.join(outputDir, '03_desktop_settings_themes_light.png')
     await page.screenshot({ path: settingsShot, fullPage: false })
     console.log(`Saved screenshot 3: ${settingsShot}`)
 
+    // Verify Live System Mode Media Changes
+    await page.click('.segment-btn:has-text("跟随系统")')
+    await page.emulateMedia({ colorScheme: 'dark' })
+    await page.waitForTimeout(300)
+    const systemDarkAttr = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
+    if (systemDarkAttr !== 'dark') throw new Error(`Live dark media scheme failed, got ${systemDarkAttr}`)
+
+    await page.emulateMedia({ colorScheme: 'light' })
+    await page.waitForTimeout(300)
+    const systemLightAttr = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
+    if (systemLightAttr !== 'light') throw new Error(`Live light media scheme failed, got ${systemLightAttr}`)
+    console.log('✓ System mode live media query changes verified')
+
     // Switch to Dark Mode on Settings
     await page.click('.segment-btn:has-text("深色模式")')
-    await page.waitForTimeout(600)
+    await page.waitForTimeout(400)
 
     // Capture 4: Settings Page (Dark Mode)
     const settingsDarkShot = path.join(outputDir, '04_desktop_settings_dark_mode.png')
     await page.screenshot({ path: settingsDarkShot, fullPage: false })
     console.log(`Saved screenshot 4: ${settingsDarkShot}`)
 
-    // Switch to another palette (e.g. ocean) in dark mode
-    await page.click('.palette-preview-card[data-preview-palette="ocean"]')
-    await page.waitForTimeout(400)
-
-    // Return to light mode and navigate to Notes
+    // Test Custom Accent #ffffff in Light Mode and Verify Contrast & Badge
     await page.click('.segment-btn:has-text("浅色模式")')
+    const hexInput = page.locator('.accent-hex-input')
+    await hexInput.fill('#ffffff')
+    await hexInput.dispatchEvent('change')
+    await page.waitForTimeout(300)
+
+    const lightAccentStyles = await page.evaluate(() => {
+      const root = document.documentElement
+      const cs = getComputedStyle(root)
+      const badge = document.querySelector('.sample-badge')
+      const badgeCs = badge ? getComputedStyle(badge) : null
+      return {
+        primary: cs.getPropertyValue('--primary').trim(),
+        onPrimary: cs.getPropertyValue('--on-primary').trim(),
+        primaryFg: cs.getPropertyValue('--primary-fg').trim(),
+        badgeColor: badgeCs ? badgeCs.color : '',
+      }
+    })
+    if (lightAccentStyles.primary !== '#ffffff') throw new Error(`Expected --primary #ffffff but got ${lightAccentStyles.primary}`)
+    if (lightAccentStyles.onPrimary !== '#0f172a') throw new Error(`Expected dark --on-primary #0f172a but got ${lightAccentStyles.onPrimary}`)
+    if (lightAccentStyles.badgeColor === 'rgb(255, 255, 255)') throw new Error('Badge text is unreadable white-on-white')
+    console.log('✓ Verified custom accent #ffffff contrast handling and accessible badge text')
+
+    // Capture 5: Settings Custom Accent Contrast
+    const accentShot = path.join(outputDir, '05_desktop_settings_custom_accent_contrast.png')
+    await page.screenshot({ path: accentShot, fullPage: false })
+    console.log(`Saved screenshot 5: ${accentShot}`)
+
+    // Verify Reload Persistence with Ocean Palette
+    await page.click('.palette-preview-card[data-preview-palette="ocean"]')
+    await hexInput.fill('#0891b2')
+    await hexInput.dispatchEvent('change')
+    await page.reload()
+    await page.waitForSelector('.settings-page')
+
+    const persisted = await page.evaluate(() => ({
+      palette: document.documentElement.getAttribute('data-theme-palette'),
+      primary: document.documentElement.style.getPropertyValue('--primary').trim(),
+    }))
+    if (persisted.palette !== 'ocean' || persisted.primary !== '#0891b2') {
+      throw new Error(`Reload persistence mismatch: ${JSON.stringify(persisted)}`)
+    }
+    console.log('✓ Reload persistence verified for palette and custom accent')
+
+    // Reset custom accent & restore blue-grey
+    await page.click('.btn-reset-accent')
+    await page.click('.palette-preview-card[data-preview-palette="blue-grey"]')
+
+    // Navigate to Notes
     await page.goto(`${BASE_URL}/#/notes`)
     await page.waitForSelector('.notes-page')
     await page.waitForTimeout(400)
 
-    // Capture 5: Knowledge Notes View
-    const notesShot = path.join(outputDir, '05_desktop_notes_view.png')
+    // Capture 6: Knowledge Notes View
+    const notesShot = path.join(outputDir, '06_desktop_notes_view.png')
     await page.screenshot({ path: notesShot, fullPage: false })
-    console.log(`Saved screenshot 5: ${notesShot}`)
+    console.log(`Saved screenshot 6: ${notesShot}`)
 
     await desktopContext.close()
 
-    // 2. Mobile Context (375x667 iPhone SE)
+    // 2. Tablet Context (768x1024 iPad)
+    const tabletContext = await browser.newContext({
+      viewport: { width: 768, height: 1024 },
+      locale: 'zh-CN',
+    })
+    const tabletPage = await tabletContext.newPage()
+    await tabletPage.goto(BASE_URL)
+    await tabletPage.evaluate(({ savedUser, savedToken }) => {
+      localStorage.setItem('easyexam_user', savedUser)
+      localStorage.setItem('easyexam_token', savedToken)
+    }, { savedUser: userStorage, savedToken: token })
+    await tabletPage.reload()
+    await tabletPage.waitForSelector('.home-page')
+    await tabletPage.click('.bank-card:has-text("2026架构师全真模拟题库") button.primary')
+    await tabletPage.waitForSelector('.practice-page')
+    await tabletPage.waitForTimeout(400)
+
+    // Capture 7: Tablet Practice View (768px)
+    const tabletPracticeShot = path.join(outputDir, '07_tablet_practice_768px.png')
+    await tabletPage.screenshot({ path: tabletPracticeShot, fullPage: false })
+    console.log(`Saved screenshot 7: ${tabletPracticeShot}`)
+
+    const tabletScrollWidth = await tabletPage.evaluate(() => document.documentElement.scrollWidth)
+    const tabletClientWidth = await tabletPage.evaluate(() => document.documentElement.clientWidth)
+    if (tabletScrollWidth > tabletClientWidth + 1) {
+      throw new Error(`Tablet horizontal overflow detected: scrollWidth=${tabletScrollWidth} > clientWidth=${tabletClientWidth}`)
+    }
+    console.log(`✓ Tablet 768px zero-overflow check passed`)
+    await tabletContext.close()
+
+    // 3. Mobile Context (375x667 iPhone SE)
     const mobileContext = await browser.newContext({
       viewport: { width: 375, height: 667 },
       isMobile: true,
@@ -229,10 +332,10 @@ async function main() {
     await mobilePage.waitForSelector('.home-page')
     await mobilePage.waitForTimeout(400)
 
-    // Capture 6: Mobile Home View (375px)
-    const mobileHomeShot = path.join(outputDir, '06_mobile_home_375px.png')
+    // Capture 8: Mobile Home View (375px)
+    const mobileHomeShot = path.join(outputDir, '08_mobile_home_375px.png')
     await mobilePage.screenshot({ path: mobileHomeShot, fullPage: false })
-    console.log(`Saved screenshot 6: ${mobileHomeShot}`)
+    console.log(`Saved screenshot 8: ${mobileHomeShot}`)
 
     // Mobile practice navigation
     await mobilePage.waitForSelector('.bank-card:has-text("2026架构师全真模拟题库") button.primary')
@@ -240,10 +343,10 @@ async function main() {
     await mobilePage.waitForSelector('.practice-page')
     await mobilePage.waitForTimeout(400)
 
-    // Capture 7: Mobile Practice View (375px)
-    const mobilePracticeShot = path.join(outputDir, '07_mobile_practice_375px.png')
+    // Capture 9: Mobile Practice View (375px)
+    const mobilePracticeShot = path.join(outputDir, '09_mobile_practice_375px.png')
     await mobilePage.screenshot({ path: mobilePracticeShot, fullPage: false })
-    console.log(`Saved screenshot 7: ${mobilePracticeShot}`)
+    console.log(`Saved screenshot 9: ${mobilePracticeShot}`)
 
     // Verify no horizontal overflow on mobile
     const scrollWidth = await mobilePage.evaluate(() => document.documentElement.scrollWidth)
@@ -251,7 +354,7 @@ async function main() {
     if (scrollWidth > clientWidth + 1) {
       throw new Error(`Mobile horizontal overflow detected: scrollWidth=${scrollWidth} > clientWidth=${clientWidth}`)
     }
-    console.log(`Mobile zero-overflow check passed: scrollWidth=${scrollWidth} == clientWidth=${clientWidth}`)
+    console.log(`✓ Mobile zero-overflow check passed: scrollWidth=${scrollWidth} == clientWidth=${clientWidth}`)
 
     await mobileContext.close()
     await browser.close()

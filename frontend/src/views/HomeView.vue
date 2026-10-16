@@ -123,7 +123,13 @@
     <template v-else>
       <!-- 学习主路径优先级看板 (EE-053: 继续练习 / FSRS复习 / 错题 / 题库) -->
       <section v-if="banks.length > 0" class="learning-quick-hub">
-        <div class="quick-hub-card hub-fsrs-card" role="button" tabindex="0" @click="emit('learning')">
+        <button
+          type="button"
+          class="quick-hub-card hub-fsrs-card"
+          @click="emit('learning')"
+          @keydown.enter="emit('learning')"
+          @keydown.space.prevent="emit('learning')"
+        >
           <div class="hub-icon-wrap fsrs-icon">
             <LinearIcon name="chart" size="18" />
           </div>
@@ -135,9 +141,15 @@
           <div class="hub-arrow-icon">
             <LinearIcon name="chevron-right" size="14" />
           </div>
-        </div>
+        </button>
 
-        <div class="quick-hub-card hub-mistakes-card" role="button" tabindex="0" @click="emit('mistakes')">
+        <button
+          type="button"
+          class="quick-hub-card hub-mistakes-card"
+          @click="emit('mistakes')"
+          @keydown.enter="emit('mistakes')"
+          @keydown.space.prevent="emit('mistakes')"
+        >
           <div class="hub-icon-wrap mistakes-icon">
             <LinearIcon name="target" size="18" />
           </div>
@@ -149,7 +161,7 @@
           <div class="hub-arrow-icon">
             <LinearIcon name="chevron-right" size="14" />
           </div>
-        </div>
+        </button>
 
         <div class="quick-hub-card hub-banks-card">
           <div class="hub-icon-wrap banks-icon">
@@ -1854,12 +1866,26 @@ defineExpose({
   transition: all 150ms ease;
   user-select: none;
   cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+  width: 100%;
 }
 
 .quick-hub-card:hover {
   border-color: var(--border-strong);
   transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
+}
+
+button.quick-hub-card:focus-visible {
+  outline: none;
+  border-color: var(--primary-fg, var(--primary));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-fg, var(--primary)) 28%, transparent);
+}
+
+.hub-banks-card {
+  cursor: default;
 }
 
 .hub-icon-wrap {
@@ -1874,7 +1900,7 @@ defineExpose({
 
 .hub-icon-wrap.fsrs-icon {
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   border: 1px solid var(--primary-border);
 }
 
@@ -1901,7 +1927,7 @@ defineExpose({
 .hub-card-label {
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--text-tertiary);
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }

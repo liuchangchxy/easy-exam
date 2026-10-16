@@ -10,8 +10,10 @@ import {
   applyThemePreference,
   calculateContrastRatio,
   calculateRelativeLuminance,
+  getAccessibleForeground,
   getContrastTextColor,
   isValidHexColor,
+  mixHex,
   normalizeHexColor,
   normalizeModePreference,
   normalizePalettePreference,
@@ -237,18 +239,74 @@ test('WCAG AA contrast is mathematically guaranteed (>= 4.5:1) across 8 palettes
   }
 })
 
+test('mixHex correctly blends colors across weights', () => {
+  assert.equal(mixHex('#000000', '#ffffff', 0), '#000000')
+  assert.equal(mixHex('#000000', '#ffffff', 1), '#ffffff')
+  assert.equal(mixHex('#000000', '#ffffff', 0.5), '#808080')
+  assert.equal(mixHex('#ff0000', '#0000ff', 0.5), '#800080')
+})
+
+test('getAccessibleForeground guarantees WCAG AA contrast against surfaces', () => {
+  // 1. Light mode surface (#ffffff)
+  const lightCases = ['#ffffff', '#000000', '#fbbf24', '#0891b2', '#d97706', '#60a5fa', '#2563eb', '#ffff00']
+  for (const hex of lightCases) {
+    const fg = getAccessibleForeground(hex, false)
+    const ratio = calculateContrastRatio(fg, '#ffffff')
+    assert.ok(ratio >= 4.5, `Foreground ${fg} on #ffffff contrast ${ratio.toFixed(2)}:1 is below 4.5:1 for accent ${hex}`)
+  }
+
+  // 2. Dark mode surface (#131b2e)
+  const darkCases = ['#000000', '#ffffff', '#1e40af', '#0c2830', '#60a5fa', '#22d3ee', '#fbbf24']
+  for (const hex of darkCases) {
+    const fg = getAccessibleForeground(hex, true)
+    const ratio = calculateContrastRatio(fg, '#131b2e')
+    assert.ok(ratio >= 4.5, `Foreground ${fg} on #131b2e contrast ${ratio.toFixed(2)}:1 is below 4.5:1 for accent ${hex}`)
+  }
+})
+
+test('button base, hover, and active states guarantee WCAG AA contrast across presets and custom accents', () => {
+  // Problematic preset palettes cited in review:
+  // amber light hover #b45309 and active #92400e
+  assert.ok(calculateContrastRatio('#b45309', '#ffffff') >= 4.5, 'Amber hover with white text must meet AA')
+  assert.ok(calculateContrastRatio('#92400e', '#ffffff') >= 4.5, 'Amber active with white text must meet AA')
+  // ocean light hover #0e7490
+  assert.ok(calculateContrastRatio('#0e7490', '#ffffff') >= 4.5, 'Ocean hover with white text must meet AA')
+
+  // Custom accents at base, hover, and active
+  const accents = ['#d97706', '#0891b2', '#2563eb', '#ffffff', '#000000', '#fbbf24']
+  for (const hex of accents) {
+    const onPrimary = getContrastTextColor(hex)
+    assert.ok(calculateContrastRatio(hex, onPrimary) >= 4.5)
+
+    const hoverTarget = hex === '#000000' ? '#ffffff' : '#000000'
+    const hover = mixHex(hex, hoverTarget, 0.12)
+    const onHover = getContrastTextColor(hover)
+    assert.ok(calculateContrastRatio(hover, onHover) >= 4.5)
+
+    const active = mixHex(hex, hoverTarget, 0.24)
+    const onActive = getContrastTextColor(active)
+    assert.ok(calculateContrastRatio(active, onActive) >= 4.5)
+  }
+})
+
 test('applyAccentPreference sets inline variables on root and cleans up on reset', () => {
   const root = createMockRoot()
 
-  applyAccentPreference(root, '#2563eb')
-  assert.equal(root.style.getPropertyValue('--primary'), '#2563eb')
-  assert.equal(root.style.getPropertyValue('--on-primary'), '#ffffff')
-  assert.ok(root.style.getPropertyValue('--primary-hover').includes('color-mix'))
+  applyAccentPreference(root, '#ffffff', 'light')
+  assert.equal(root.style.getPropertyValue('--primary'), '#ffffff')
+  assert.equal(root.style.getPropertyValue('--on-primary'), '#0f172a')
+  assert.ok(root.style.getPropertyValue('--primary-fg'))
+  assert.ok(calculateContrastRatio(root.style.getPropertyValue('--primary-fg'), '#ffffff') >= 4.5)
+  assert.ok(root.style.getPropertyValue('--on-primary-hover'))
+  assert.ok(root.style.getPropertyValue('--on-primary-active'))
 
   // Reset or invalid removes the custom properties
   applyAccentPreference(root, '')
   assert.equal(root.style.getPropertyValue('--primary'), '')
+  assert.equal(root.style.getPropertyValue('--primary-fg'), '')
   assert.equal(root.style.getPropertyValue('--on-primary'), '')
+  assert.equal(root.style.getPropertyValue('--on-primary-hover'), '')
+  assert.equal(root.style.getPropertyValue('--on-primary-active'), '')
 
   applyAccentPreference(root, 'invalid-hex')
   assert.equal(root.style.getPropertyValue('--primary'), '')
@@ -270,4 +328,5 @@ test('applyFullTheme coordinates theme, palette, and custom accent', () => {
   assert.equal(root.getAttribute('data-theme'), 'dark')
   assert.equal(root.getAttribute('data-theme-palette'), 'ocean')
   assert.equal(root.style.getPropertyValue('--primary'), '#0891b2')
+  assert.ok(root.style.getPropertyValue('--primary-fg'))
 })

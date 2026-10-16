@@ -22,7 +22,7 @@
   --bg-muted: #e2e8f0;
   --text-main: #0f172a;
   --text-muted: #475569;
-  --text-tertiary: #94a3b8;
+  --text-tertiary: #64748b;
   --border: #cbd5e1;
   --border-subtle: #e2e8f0;
   --border-strong: #94a3b8;
@@ -31,7 +31,13 @@
   --primary-active: #1e40af;
   --primary-light: #eff6ff;
   --primary-border: #bfdbfe;
+  --primary-fg: #2563eb;
   --on-primary: #ffffff;
+  --on-primary-hover: #ffffff;
+  --on-primary-active: #ffffff;
+  --on-success: #ffffff;
+  --on-danger: #ffffff;
+  --on-warning: #1c1408;
   --success: #16a34a;
   --success-hover: #15803d;
   --success-light: #f0fdf4;
@@ -86,7 +92,13 @@
   --primary-active: #3b82f6;
   --primary-light: rgba(96, 165, 250, 0.16);
   --primary-border: rgba(96, 165, 250, 0.32);
+  --primary-fg: #60a5fa;
   --on-primary: #090d16;
+  --on-primary-hover: #090d16;
+  --on-primary-active: #090d16;
+  --on-success: #090d16;
+  --on-danger: #090d16;
+  --on-warning: #090d16;
   --success: #4ade80;
   --success-hover: #86efac;
   --success-light: rgba(74, 222, 128, 0.14);
@@ -114,7 +126,7 @@
   --bg-muted: #dfe5ed;
   --text-main: #192533;
   --text-muted: #526375;
-  --text-tertiary: #8899ac;
+  --text-tertiary: #526375;
   --border: #d2dce6;
   --border-subtle: #e3ebf2;
   --border-strong: #a6b8cc;
@@ -123,7 +135,13 @@
   --primary-active: #25434d;
   --primary-light: #e8f1f5;
   --primary-border: #bdd2dc;
+  --primary-fg: #3b6978;
   --on-primary: #ffffff;
+  --on-primary-hover: #ffffff;
+  --on-primary-active: #ffffff;
+  --on-success: #ffffff;
+  --on-danger: #ffffff;
+  --on-warning: #1c1408;
 }
 
 /* 2. 雾蓝 · Mist Blue · Dark */
@@ -143,7 +161,13 @@
   --primary-active: #64a1b7;
   --primary-light: rgba(126, 182, 203, 0.16);
   --primary-border: rgba(126, 182, 203, 0.32);
+  --primary-fg: #7eb6cb;
   --on-primary: #10171d;
+  --on-primary-hover: #10171d;
+  --on-primary-active: #10171d;
+  --on-success: #090d16;
+  --on-danger: #090d16;
+  --on-warning: #090d16;
 }
 
 /* 3. 海盐 · Sea Salt / Ocean · Light */
@@ -154,7 +178,7 @@
   --bg-muted: #d1ebef;
   --text-main: #0c2830;
   --text-muted: #3d6673;
-  --text-tertiary: #769da8;
+  --text-tertiary: #3d6673;
   --border: #c4e3e8;
   --border-subtle: #daf0f3;
   --border-strong: #95cdd6;
@@ -163,7 +187,13 @@
   --primary-active: #155e75;
   --primary-light: #ecfeff;
   --primary-border: #a5f3fc;
+  --primary-fg: #0e7490;
   --on-primary: #09181c;
+  --on-primary-hover: #ffffff;
+  --on-primary-active: #ffffff;
+  --on-success: #ffffff;
+  --on-danger: #ffffff;
+  --on-warning: #1c1408;
 }
 
 /* 3. 海盐 · Sea Salt / Ocean · Dark */
@@ -183,7 +213,13 @@
   --primary-active: #06b6d4;
   --primary-light: rgba(34, 211, 238, 0.16);
   --primary-border: rgba(34, 211, 238, 0.32);
+  --primary-fg: #22d3ee;
   --on-primary: #09181c;
+  --on-primary-hover: #09181c;
+  --on-primary-active: #09181c;
+  --on-success: #09181c;
+  --on-danger: #09181c;
+  --on-warning: #09181c;
 }
 
 /* 4. 紫晶 · Amethyst / Violet · Light */
@@ -194,7 +230,7 @@
   --bg-muted: #e9d5ff;
   --text-main: #24143d;
   --text-muted: #5e4a78;
-  --text-tertiary: #8c77a6;
+  --text-tertiary: #5e4a78;
   --border: #dac2f7;
   --border-subtle: #ede0fc;
   --border-strong: #bfa2ea;
@@ -203,7 +239,13 @@
   --primary-active: #5b21b6;
   --primary-light: #f5f3ff;
   --primary-border: #ddd6fe;
+  --primary-fg: #7c3aed;
   --on-primary: #ffffff;
+  --on-primary-hover: #ffffff;
+  --on-primary-active: #ffffff;
+  --on-success: #ffffff;
+  --on-danger: #ffffff;
+  --on-warning: #1c1408;
 }
 
 /* 4. 紫晶 · Amethyst / Violet · Dark */
@@ -223,7 +265,13 @@
   --primary-active: #8b5cf6;
   --primary-light: rgba(167, 139, 250, 0.16);
   --primary-border: rgba(167, 139, 250, 0.32);
+  --primary-fg: #a78bfa;
   --on-primary: #130c22;
+  --on-primary-hover: #130c22;
+  --on-primary-active: #130c22;
+  --on-success: #090d16;
+  --on-danger: #090d16;
+  --on-warning: #090d16;
 }
 
 /* 5. 玫瑰 · Rose · Light */
@@ -234,7 +282,7 @@
   --bg-muted: #fecdd3;
   --text-main: #3b111a;
   --text-muted: #783d49;
-  --text-tertiary: #a86c78;
+  --text-tertiary: #783d49;
   --border: #f8b4c0;
   --border-subtle: #fde2e6;
   --border-strong: #f48b9f;
@@ -243,7 +291,13 @@
   --primary-active: #9f1239;
   --primary-light: #fff1f2;
   --primary-border: #fecdd3;
+  --primary-fg: #e11d48;
   --on-primary: #ffffff;
+  --on-primary-hover: #ffffff;
+  --on-primary-active: #ffffff;
+  --on-success: #ffffff;
+  --on-danger: #ffffff;
+  --on-warning: #1c1408;
 }
 
 /* 5. 玫瑰 · Rose · Dark */
@@ -263,7 +317,13 @@
   --primary-active: #f43f5e;
   --primary-light: rgba(251, 113, 133, 0.16);
   --primary-border: rgba(251, 113, 133, 0.32);
+  --primary-fg: #fb7185;
   --on-primary: #1f0b11;
+  --on-primary-hover: #1f0b11;
+  --on-primary-active: #1f0b11;
+  --on-success: #090d16;
+  --on-danger: #090d16;
+  --on-warning: #090d16;
 }
 
 /* 6. 琥珀 · Amber · Light */
@@ -274,7 +334,7 @@
   --bg-muted: #fde68a;
   --text-main: #382305;
   --text-muted: #78531a;
-  --text-tertiary: #a67c3b;
+  --text-tertiary: #78531a;
   --border: #fcd34d;
   --border-subtle: #fef08a;
   --border-strong: #f59e0b;
@@ -283,7 +343,13 @@
   --primary-active: #92400e;
   --primary-light: #fef3c7;
   --primary-border: #fde68a;
+  --primary-fg: #b45309;
   --on-primary: #1c1408;
+  --on-primary-hover: #ffffff;
+  --on-primary-active: #ffffff;
+  --on-success: #ffffff;
+  --on-danger: #ffffff;
+  --on-warning: #1c1408;
 }
 
 /* 6. 琥珀 · Amber · Dark */
@@ -303,7 +369,13 @@
   --primary-active: #f59e0b;
   --primary-light: rgba(251, 191, 36, 0.16);
   --primary-border: rgba(251, 191, 36, 0.32);
+  --primary-fg: #fbbf24;
   --on-primary: #1c1408;
+  --on-primary-hover: #1c1408;
+  --on-primary-active: #1c1408;
+  --on-success: #1c1408;
+  --on-danger: #1c1408;
+  --on-warning: #1c1408;
 }
 
 /* 7. 森林 · Forest (Preserving original green) · Light */
@@ -314,7 +386,7 @@
   --bg-muted: #e5eae2;
   --text-main: #20332b;
   --text-muted: #66756e;
-  --text-tertiary: #89948c;
+  --text-tertiary: #5c6b63;
   --border: #d9e1d9;
   --border-subtle: #e5e9e2;
   --border-strong: #c9d5cc;
@@ -323,7 +395,13 @@
   --primary-active: #1d4c3c;
   --primary-light: #e4efe8;
   --primary-border: #bad2c2;
+  --primary-fg: #286b53;
   --on-primary: #ffffff;
+  --on-primary-hover: #ffffff;
+  --on-primary-active: #ffffff;
+  --on-success: #ffffff;
+  --on-danger: #ffffff;
+  --on-warning: #1c1408;
   --success: #2f7d5b;
   --success-hover: #28684c;
   --success-light: #e5f1e9;
@@ -347,7 +425,13 @@
   --primary-active: #83b995;
   --primary-light: #2b4034;
   --primary-border: #42634d;
+  --primary-fg: #98c8a8;
   --on-primary: #20332b;
+  --on-primary-hover: #20332b;
+  --on-primary-active: #20332b;
+  --on-success: #20332b;
+  --on-danger: #20332b;
+  --on-warning: #20332b;
   --success: #8ed0a2;
   --success-hover: #a0dcb1;
   --success-light: #283f30;
@@ -362,7 +446,7 @@
   --bg-muted: #ded3c7;
   --text-main: #2b1f1a;
   --text-muted: #68554d;
-  --text-tertiary: #947f75;
+  --text-tertiary: #68554d;
   --border: #d8c8ba;
   --border-subtle: #e7dbcf;
   --border-strong: #bfa895;
@@ -371,7 +455,13 @@
   --primary-active: #543321;
   --primary-light: #f3eae3;
   --primary-border: #d4bfb0;
+  --primary-fg: #845339;
   --on-primary: #ffffff;
+  --on-primary-hover: #ffffff;
+  --on-primary-active: #ffffff;
+  --on-success: #ffffff;
+  --on-danger: #ffffff;
+  --on-warning: #1c1408;
 }
 
 /* 8. 摩卡 · Mocha · Dark */
@@ -391,7 +481,13 @@
   --primary-active: #c7835d;
   --primary-light: rgba(217, 155, 121, 0.16);
   --primary-border: rgba(217, 155, 121, 0.32);
+  --primary-fg: #d99b79;
   --on-primary: #181210;
+  --on-primary-hover: #181210;
+  --on-primary-active: #181210;
+  --on-success: #090d16;
+  --on-danger: #090d16;
+  --on-warning: #090d16;
 }
 
 * {
@@ -414,7 +510,7 @@ body {
 
 ::selection {
   background-color: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
 }
 
 #app {
@@ -498,8 +594,8 @@ input, textarea, select {
 
 input:focus, textarea:focus, select:focus {
   outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
+  border-color: var(--primary-fg, var(--primary));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-fg, var(--primary)) 22%, transparent);
 }
 
 .btn-back {
@@ -571,7 +667,7 @@ button:active:not(:disabled) {
 
 button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 28%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-fg, var(--primary)) 28%, transparent);
 }
 
 button:disabled {
@@ -617,13 +713,13 @@ button.primary:hover:not(:disabled),
 .primary-btn:hover:not(:disabled) {
   background: var(--primary-hover);
   border-color: transparent;
-  color: var(--on-primary);
+  color: var(--on-primary-hover, var(--on-primary));
 }
 
 button.primary:active:not(:disabled),
 .primary-btn:active:not(:disabled) {
   background: var(--primary-active);
-  color: var(--on-primary);
+  color: var(--on-primary-active, var(--on-primary));
 }
 
 button.theme-toggle {
@@ -676,12 +772,13 @@ button.theme-toggle.theme-toggle-compact {
 button.link-button {
   border: none;
   background: transparent;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   padding: 0.25rem 0.5rem;
 }
 
 button.link-button:hover:not(:disabled) {
   background: transparent;
+  color: var(--primary-fg, var(--primary));
   text-decoration: underline;
 }
 
