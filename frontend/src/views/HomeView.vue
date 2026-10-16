@@ -1521,7 +1521,7 @@ defineExpose({
 }
 
 .btn-util-link:hover {
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   border-color: var(--primary-border);
   background: var(--primary-light);
 }
@@ -1794,12 +1794,12 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
 }
 
 .sequential-progress-header .progress-percent {
   font-family: var(--linear-mono);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
 }
 
 .sequential-progress-box .progress-track {
@@ -1836,7 +1836,7 @@ defineExpose({
 }
 
 .btn-ai-batch {
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-weight: 500;
 }
 

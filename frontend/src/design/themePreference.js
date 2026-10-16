@@ -107,18 +107,39 @@ export function mixHex(hex1, hex2, weight = 0.5) {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`.toLowerCase()
 }
 
-export function getAccessibleForeground(hexColor, isDarkTheme = false) {
+export const PALETTE_SURFACES = Object.freeze({
+  'blue-grey': { light: '#ffffff', lightSubtle: '#f1f5f9', dark: '#131b2e', darkSubtle: '#1e293b' },
+  'mist': { light: '#ffffff', lightSubtle: '#eaeff4', dark: '#18222a', darkSubtle: '#22303c' },
+  'ocean': { light: '#ffffff', lightSubtle: '#e1f3f5', dark: '#10242b', darkSubtle: '#18353f' },
+  'amethyst': { light: '#ffffff', lightSubtle: '#f3e8ff', dark: '#1d1433', darkSubtle: '#2b1d4a' },
+  'rose': { light: '#ffffff', lightSubtle: '#ffe4e6', dark: '#2c121a', darkSubtle: '#3f1b26' },
+  'amber': { light: '#ffffff', lightSubtle: '#fef3c7', dark: '#281a06', darkSubtle: '#3a270b' },
+  'forest': { light: '#ffffff', lightSubtle: '#eaf5f0', dark: '#12251e', darkSubtle: '#1c382d' },
+  'mocha': { light: '#ffffff', lightSubtle: '#f5eee9', dark: '#241a15', darkSubtle: '#34261f' },
+})
+
+export function getAccessibleForeground(hexColor, isDarkTheme = false, palette = DEFAULT_PALETTE) {
   const norm = normalizeHexColor(hexColor)
   if (!norm) return isDarkTheme ? '#f8fafc' : '#0f172a'
-  const surface = isDarkTheme ? '#131b2e' : '#ffffff'
-  if (calculateContrastRatio(norm, surface) >= 4.5) return norm
+  const normPalette = normalizePalettePreference(palette)
+  const surfaces = PALETTE_SURFACES[normPalette] || PALETTE_SURFACES['blue-grey']
+  const card = isDarkTheme ? surfaces.dark : surfaces.light
+  const subtle = isDarkTheme ? surfaces.darkSubtle : surfaces.lightSubtle
+  const trans = mixHex(card, norm, isDarkTheme ? 0.16 : 0.14)
+  const targetSurfaces = [card, subtle, trans]
+
+  if (targetSurfaces.every(s => calculateContrastRatio(norm, s) >= 4.5)) {
+    return norm
+  }
 
   // If contrast is insufficient (e.g. #ffffff on white surface or #000000 on dark surface),
   // progressively adjust luminance while preserving the hue/tone as closely as possible.
   const target = isDarkTheme ? '#ffffff' : (norm === '#ffffff' ? '#0f172a' : '#000000')
   for (let step = 1; step <= 20; step++) {
     const candidate = mixHex(norm, target, step * 0.05)
-    if (calculateContrastRatio(candidate, surface) >= 4.5) return candidate
+    if (targetSurfaces.every(s => calculateContrastRatio(candidate, s) >= 4.5)) {
+      return candidate
+    }
   }
   return isDarkTheme ? '#f8fafc' : '#0f172a'
 }
@@ -226,19 +247,20 @@ export function applyPalettePreference(root, palette) {
   return norm
 }
 
-export function applyAccentPreference(root, hexColor, effectiveTheme = 'light') {
+export function applyAccentPreference(root, hexColor, effectiveTheme = 'light', palette = '') {
   const hex = normalizeHexColor(hexColor)
   if (!root?.style) return ''
 
   if (hex) {
     const isDark = effectiveTheme === 'dark' || root?.getAttribute?.('data-theme') === 'dark'
+    const curPalette = palette || root?.getAttribute?.('data-theme-palette') || DEFAULT_PALETTE
     const onPrimary = getContrastTextColor(hex)
     const hoverTarget = hex === '#000000' ? '#ffffff' : '#000000'
     const primaryHover = mixHex(hex, hoverTarget, 0.12)
     const primaryActive = mixHex(hex, hoverTarget, 0.24)
     const onPrimaryHover = getContrastTextColor(primaryHover)
     const onPrimaryActive = getContrastTextColor(primaryActive)
-    const primaryFg = getAccessibleForeground(hex, isDark)
+    const primaryFg = getAccessibleForeground(hex, isDark, curPalette)
 
     root.style.setProperty('--primary', hex)
     root.style.setProperty('--primary-fg', primaryFg)
@@ -267,11 +289,11 @@ export function applyAccentPreference(root, hexColor, effectiveTheme = 'light') 
 export function applyFullTheme({ root, mode, palette, customAccent, isSystemDark = false }) {
   const effectiveTheme = resolveEffectiveTheme(mode, isSystemDark)
   applyThemePreference(root, effectiveTheme)
-  applyPalettePreference(root, palette)
-  applyAccentPreference(root, customAccent, effectiveTheme)
+  const normPalette = applyPalettePreference(root, palette)
+  applyAccentPreference(root, customAccent, effectiveTheme, normPalette)
   return {
     effectiveTheme,
-    palette: normalizePalettePreference(palette),
+    palette: normPalette,
     customAccent: normalizeHexColor(customAccent) || '',
   }
 }

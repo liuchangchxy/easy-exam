@@ -462,7 +462,7 @@ function handleHexInputChange(e) {
   height: 44px;
   border-radius: var(--radius-lg);
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   border: 1px solid var(--primary-border);
   display: flex;
   align-items: center;
@@ -510,7 +510,7 @@ function handleHexInputChange(e) {
   display: flex;
   align-items: center;
   gap: 0.65rem;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
 }
 
 .section-title-wrap h2 {
@@ -580,7 +580,8 @@ function handleHexInputChange(e) {
 
 .segment-btn.active {
   background: var(--bg-card);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
+  border: 1px solid var(--primary-border, var(--border));
   font-weight: 600;
   box-shadow: var(--shadow-sm);
 }
@@ -611,8 +612,8 @@ function handleHexInputChange(e) {
 }
 
 .palette-preview-card.active {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-light);
+  border-color: var(--primary-fg, var(--primary));
+  box-shadow: 0 0 0 2px var(--primary-border, var(--primary-light));
 }
 
 .palette-swatch-box {
@@ -862,9 +863,9 @@ function handleHexInputChange(e) {
 }
 
 .account-avatar.role-admin {
-  background: rgba(37, 99, 235, 0.12);
-  color: var(--primary);
-  border: 1.5px solid rgba(37, 99, 235, 0.3);
+  background: var(--primary-light);
+  color: var(--primary-fg, var(--primary));
+  border: 1.5px solid var(--primary-border);
 }
 
 .account-avatar.role-user {

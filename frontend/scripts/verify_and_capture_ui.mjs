@@ -12,6 +12,59 @@ const repoRoot = path.resolve(__dirname, '../..')
 const outputDir = path.join(repoRoot, 'screenshots')
 fs.mkdirSync(outputDir, { recursive: true })
 
+function parseRgb(str, parentRgb = [255, 255, 255]) {
+  if (!str) return parentRgb
+  str = str.trim()
+  if (str.startsWith('color(srgb')) {
+    const parts = str.slice(10, -1).trim().split(/[\s/]+/).map(Number)
+    const r = Math.round(parts[0] * 255)
+    const g = Math.round(parts[1] * 255)
+    const b = Math.round(parts[2] * 255)
+    const a = parts.length > 3 ? parts[3] : 1
+    if (a < 1) {
+      return [
+        Math.round(r * a + parentRgb[0] * (1 - a)),
+        Math.round(g * a + parentRgb[1] * (1 - a)),
+        Math.round(b * a + parentRgb[2] * (1 - a)),
+      ]
+    }
+    return [r, g, b]
+  }
+  const m = str.match(/rgba?\(([^)]+)\)/)
+  if (m) {
+    const parts = m[1].split(/[\s,]+/).filter(Boolean).map(Number)
+    const r = parts[0], g = parts[1], b = parts[2]
+    const a = parts.length > 3 ? parts[3] : 1
+    if (a < 1) {
+      return [
+        Math.round(r * a + parentRgb[0] * (1 - a)),
+        Math.round(g * a + parentRgb[1] * (1 - a)),
+        Math.round(b * a + parentRgb[2] * (1 - a)),
+      ]
+    }
+    return [r, g, b]
+  }
+  const digits = (str || '').match(/\d+/g)
+  if (digits && digits.length >= 3) {
+    return [Number(digits[0]), Number(digits[1]), Number(digits[2])]
+  }
+  return [15, 23, 42]
+}
+
+function calcLum([r, g, b]) {
+  const [lr, lg, lb] = [r, g, b].map(c => {
+    const s = c / 255
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
+  })
+  return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb
+}
+
+function calcContrast(color1, color2, parentRgb = [255, 255, 255]) {
+  const l1 = calcLum(Array.isArray(color1) ? color1 : parseRgb(color1, parentRgb))
+  const l2 = calcLum(Array.isArray(color2) ? color2 : parseRgb(color2, parentRgb))
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)
+}
+
 async function getFreePort() {
   return new Promise((resolve, reject) => {
     const srv = net.createServer()
@@ -236,22 +289,109 @@ async function main() {
       const cs = getComputedStyle(root)
       const badge = document.querySelector('.sample-badge')
       const badgeCs = badge ? getComputedStyle(badge) : null
+      const segBtn = document.querySelector('.segment-btn.active')
+      const segCs = segBtn ? getComputedStyle(segBtn) : null
+      const palCard = document.querySelector('.palette-preview-card.active')
+      const palCs = palCard ? getComputedStyle(palCard) : null
+      const sidebarActive = document.querySelector('.sidebar-nav-item.active')
+      const sidebarCs = sidebarActive ? getComputedStyle(sidebarActive) : null
+
       return {
         primary: cs.getPropertyValue('--primary').trim(),
         onPrimary: cs.getPropertyValue('--on-primary').trim(),
         primaryFg: cs.getPropertyValue('--primary-fg').trim(),
         badgeColor: badgeCs ? badgeCs.color : '',
+        badgeBg: badgeCs ? badgeCs.backgroundColor : '',
+        segColor: segCs ? segCs.color : '',
+        segBg: segCs ? segCs.backgroundColor : '',
+        segBorder: segCs ? segCs.borderColor : '',
+        palBorder: palCs ? palCs.borderColor : '',
+        sidebarColor: sidebarCs ? sidebarCs.color : '',
+        sidebarBg: sidebarCs ? sidebarCs.backgroundColor : '',
       }
     })
+    const lightBadgeRatio = calcContrast(lightAccentStyles.badgeColor, lightAccentStyles.badgeBg, [241, 245, 249])
+    const lightSegRatio = calcContrast(lightAccentStyles.segColor, lightAccentStyles.segBg)
+    const lightSidebarRatio = calcContrast(lightAccentStyles.sidebarColor, lightAccentStyles.sidebarBg, [248, 250, 252])
+
     if (lightAccentStyles.primary !== '#ffffff') throw new Error(`Expected --primary #ffffff but got ${lightAccentStyles.primary}`)
     if (lightAccentStyles.onPrimary !== '#0f172a') throw new Error(`Expected dark --on-primary #0f172a but got ${lightAccentStyles.onPrimary}`)
-    if (lightAccentStyles.badgeColor === 'rgb(255, 255, 255)') throw new Error('Badge text is unreadable white-on-white')
-    console.log('✓ Verified custom accent #ffffff contrast handling and accessible badge text')
+    if (lightBadgeRatio < 4.5) throw new Error(`Badge contrast ${lightBadgeRatio.toFixed(2)}:1 is below 4.5:1`)
+    if (lightSegRatio < 4.5) throw new Error(`Segment button contrast ${lightSegRatio.toFixed(2)}:1 is below 4.5:1`)
+    if (lightAccentStyles.segBorder === 'rgb(255, 255, 255)') throw new Error('Segment button border is invisible white-on-white')
+    if (lightAccentStyles.palBorder === 'rgb(255, 255, 255)') throw new Error('Palette card border is invisible white-on-white')
+    if (lightSidebarRatio < 4.5) throw new Error(`Sidebar active contrast ${lightSidebarRatio.toFixed(2)}:1 is below 4.5:1`)
+    console.log(`✓ Verified custom accent #ffffff computed contrast: badge=${lightBadgeRatio.toFixed(2)}:1, segBtn=${lightSegRatio.toFixed(2)}:1, sidebar=${lightSidebarRatio.toFixed(2)}:1`)
 
     // Capture 5: Settings Custom Accent Contrast
     const accentShot = path.join(outputDir, '05_desktop_settings_custom_accent_contrast.png')
     await page.screenshot({ path: accentShot, fullPage: false })
     console.log(`Saved screenshot 5: ${accentShot}`)
+
+    // Test Custom Accent #000000 in Dark Mode
+    await page.click('.segment-btn:has-text("深色模式")')
+    await hexInput.fill('#000000')
+    await hexInput.dispatchEvent('change')
+    await page.waitForTimeout(300)
+
+    const darkZeroStyles = await page.evaluate(() => {
+      const root = document.documentElement
+      const cs = getComputedStyle(root)
+      const badge = document.querySelector('.sample-badge')
+      const badgeCs = badge ? getComputedStyle(badge) : null
+      const segBtn = document.querySelector('.segment-btn.active')
+      const segCs = segBtn ? getComputedStyle(segBtn) : null
+
+      return {
+        primary: cs.getPropertyValue('--primary').trim(),
+        onPrimary: cs.getPropertyValue('--on-primary').trim(),
+        badgeColor: badgeCs ? badgeCs.color : '',
+        badgeBg: badgeCs ? badgeCs.backgroundColor : '',
+        segColor: segCs ? segCs.color : '',
+        segBg: segCs ? segCs.backgroundColor : '',
+        segBorder: segCs ? segCs.borderColor : '',
+      }
+    })
+    const darkBadgeRatio = calcContrast(darkZeroStyles.badgeColor, darkZeroStyles.badgeBg, [30, 41, 59])
+    const darkSegRatio = calcContrast(darkZeroStyles.segColor, darkZeroStyles.segBg)
+    if (darkZeroStyles.primary !== '#000000') throw new Error(`Expected --primary #000000 but got ${darkZeroStyles.primary}`)
+    if (darkZeroStyles.onPrimary !== '#ffffff') throw new Error(`Expected --on-primary #ffffff but got ${darkZeroStyles.onPrimary}`)
+    if (darkBadgeRatio < 4.5) throw new Error(`Dark badge contrast ${darkBadgeRatio.toFixed(2)}:1 is below 4.5:1`)
+    if (darkSegRatio < 4.5) throw new Error(`Dark segBtn contrast ${darkSegRatio.toFixed(2)}:1 is below 4.5:1`)
+    console.log(`✓ Verified dark mode custom accent #000000 computed contrast: badge=${darkBadgeRatio.toFixed(2)}:1, segBtn=${darkSegRatio.toFixed(2)}:1`)
+
+    const darkZeroShot = path.join(outputDir, '10_desktop_settings_dark_zero_black_accent.png')
+    await page.screenshot({ path: darkZeroShot, fullPage: false })
+    console.log(`Saved screenshot 10: ${darkZeroShot}`)
+
+    // Test invalid custom input & reset button
+    await hexInput.fill('invalid-hex-code')
+    await hexInput.dispatchEvent('change')
+    await page.waitForTimeout(200)
+    const afterInvalid = await page.evaluate(() => document.documentElement.style.getPropertyValue('--primary'))
+    if (afterInvalid !== '') throw new Error(`Invalid hex did not clear --primary, got ${afterInvalid}`)
+
+    await hexInput.fill('#e11d48')
+    await hexInput.dispatchEvent('change')
+    await page.click('.btn-reset-accent')
+    await page.waitForTimeout(200)
+    const afterReset = await page.evaluate(() => document.documentElement.style.getPropertyValue('--primary'))
+    if (afterReset !== '') throw new Error(`Reset button did not clear --primary, got ${afterReset}`)
+    console.log('✓ Invalid custom accent input and reset button fallback verified')
+
+    // Test legacy theme restoration
+    await page.evaluate(() => {
+      localStorage.removeItem('easyexam-theme-mode')
+      localStorage.setItem('easyexam-theme', 'dark')
+    })
+    await page.reload()
+    await page.waitForSelector('.settings-page')
+    const legacyThemeRestored = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
+    if (legacyThemeRestored !== 'dark') throw new Error(`Expected legacy dark restoration but got ${legacyThemeRestored}`)
+    console.log('✓ Legacy theme restoration verified')
+
+    // Switch back to light mode
+    await page.click('.segment-btn:has-text("浅色模式")')
 
     // Verify Reload Persistence with Ocean Palette
     await page.click('.palette-preview-card[data-preview-palette="ocean"]')
@@ -269,8 +409,64 @@ async function main() {
     }
     console.log('✓ Reload persistence verified for palette and custom accent')
 
-    // Reset custom accent & restore blue-grey
+    // Reset custom accent & test Amber palette practice view
     await page.click('.btn-reset-accent')
+    await page.click('.palette-preview-card[data-preview-palette="amber"]')
+    await page.goto(BASE_URL)
+    await page.waitForSelector('.home-page')
+    await page.click('.bank-card:has-text("2026架构师全真模拟题库") button.primary')
+    await page.waitForSelector('.practice-page')
+    await page.waitForTimeout(300)
+
+    const amberShot = path.join(outputDir, '11_desktop_practice_amber_verdict.png')
+    await page.screenshot({ path: amberShot, fullPage: false })
+    console.log(`Saved screenshot 11: ${amberShot}`)
+
+    const amberPracticeContrast = await page.evaluate(() => {
+      const btn = document.querySelector('.header-actions .btn-header-complete')
+      const cs = btn ? getComputedStyle(btn) : null
+      const goodBtn = document.querySelector('.rating-btn.good')
+      const goodCs = goodBtn ? getComputedStyle(goodBtn) : null
+      const aiToggle = document.querySelector('.btn-ai-toggle.active')
+      const aiCs = aiToggle ? getComputedStyle(aiToggle) : null
+      const correctNum = document.querySelector('.sheet-num-btn.correct')
+      const correctCs = correctNum ? getComputedStyle(correctNum) : null
+
+      return {
+        completeColor: cs ? cs.color : '',
+        completeBg: cs ? cs.backgroundColor : '',
+        goodColor: goodCs ? goodCs.color : '',
+        aiColor: aiCs ? aiCs.color : '',
+        aiBg: aiCs ? aiCs.backgroundColor : '',
+        correctColor: correctCs ? correctCs.color : '',
+        correctBg: correctCs ? correctCs.backgroundColor : '',
+      }
+    })
+    const completeRatio = calcContrast(amberPracticeContrast.completeColor, amberPracticeContrast.completeBg)
+    if (completeRatio < 4.5) throw new Error(`Amber complete button contrast ${completeRatio.toFixed(2)}:1 < 4.5:1`)
+    if (amberPracticeContrast.goodColor) {
+      const goodRatio = calcContrast(amberPracticeContrast.goodColor, 'rgb(255, 255, 255)')
+      if (goodRatio < 4.5) throw new Error(`Amber good button contrast ${goodRatio.toFixed(2)}:1 < 4.5:1`)
+    }
+
+    const completeBtnLocator = page.locator('.header-actions .btn-header-complete')
+    await completeBtnLocator.hover()
+    await page.waitForTimeout(400)
+    const hoverCascade = await page.evaluate(() => {
+      const btn = document.querySelector('.header-actions .btn-header-complete')
+      const cs = getComputedStyle(btn)
+      return {
+        bg: cs.backgroundColor,
+        color: cs.color,
+      }
+    })
+    const hoverRatio = calcContrast(hoverCascade.color, hoverCascade.bg)
+    if (hoverRatio < 4.5) throw new Error(`Amber hover cascade contrast ${hoverRatio.toFixed(2)}:1 < 4.5:1`)
+    console.log(`✓ Amber practice contrast: complete=${completeRatio.toFixed(2)}:1, hover=${hoverRatio.toFixed(2)}:1`)
+
+    // Restore blue-grey
+    await page.goto(`${BASE_URL}/#/settings`)
+    await page.waitForSelector('.settings-page')
     await page.click('.palette-preview-card[data-preview-palette="blue-grey"]')
 
     // Navigate to Notes

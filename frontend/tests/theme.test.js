@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   DEFAULT_MODE,
   DEFAULT_PALETTE,
+  PALETTE_SURFACES,
   THEME_PALETTES,
   applyAccentPreference,
   applyFullTheme,
@@ -246,22 +247,47 @@ test('mixHex correctly blends colors across weights', () => {
   assert.equal(mixHex('#ff0000', '#0000ff', 0.5), '#800080')
 })
 
-test('getAccessibleForeground guarantees WCAG AA contrast against surfaces', () => {
-  // 1. Light mode surface (#ffffff)
-  const lightCases = ['#ffffff', '#000000', '#fbbf24', '#0891b2', '#d97706', '#60a5fa', '#2563eb', '#ffff00']
-  for (const hex of lightCases) {
-    const fg = getAccessibleForeground(hex, false)
-    const ratio = calculateContrastRatio(fg, '#ffffff')
-    assert.ok(ratio >= 4.5, `Foreground ${fg} on #ffffff contrast ${ratio.toFixed(2)}:1 is below 4.5:1 for accent ${hex}`)
+test('getAccessibleForeground guarantees WCAG AA contrast against surfaces across all 8 palettes and translucent accents', () => {
+  const testAccents = ['#ffffff', '#000000', '#fbbf24', '#0891b2', '#d97706', '#60a5fa', '#2563eb', '#ffff00', '#777777']
+  for (const pal of THEME_PALETTES) {
+    const surfaces = PALETTE_SURFACES[pal]
+    for (const isDark of [false, true]) {
+      const card = isDark ? surfaces.dark : surfaces.light
+      const subtle = isDark ? surfaces.darkSubtle : surfaces.lightSubtle
+      for (const hex of testAccents) {
+        const fg = getAccessibleForeground(hex, isDark, pal)
+        const trans = mixHex(card, hex, isDark ? 0.16 : 0.14)
+        assert.ok(
+          calculateContrastRatio(fg, card) >= 4.5,
+          `Foreground ${fg} on card ${card} (${pal} dark=${isDark}) contrast is below 4.5:1 for accent ${hex}`
+        )
+        assert.ok(
+          calculateContrastRatio(fg, subtle) >= 4.5,
+          `Foreground ${fg} on subtle ${subtle} (${pal} dark=${isDark}) contrast is below 4.5:1 for accent ${hex}`
+        )
+        assert.ok(
+          calculateContrastRatio(fg, trans) >= 4.5,
+          `Foreground ${fg} on translucent ${trans} (${pal} dark=${isDark}) contrast is below 4.5:1 for accent ${hex}`
+        )
+      }
+    }
   }
+})
 
-  // 2. Dark mode surface (#131b2e)
-  const darkCases = ['#000000', '#ffffff', '#1e40af', '#0c2830', '#60a5fa', '#22d3ee', '#fbbf24']
-  for (const hex of darkCases) {
-    const fg = getAccessibleForeground(hex, true)
-    const ratio = calculateContrastRatio(fg, '#131b2e')
-    assert.ok(ratio >= 4.5, `Foreground ${fg} on #131b2e contrast ${ratio.toFixed(2)}:1 is below 4.5:1 for accent ${hex}`)
-  }
+test('status foreground/background pairs guarantee WCAG AA contrast across all modes', () => {
+  // Light mode status pairs:
+  // --success #15803d against --on-success #ffffff (>= 5.0:1) and --bg-card #ffffff (>= 5.0:1)
+  assert.ok(calculateContrastRatio('#15803d', '#ffffff') >= 4.5, 'Light success #15803d on white must meet AA')
+  assert.ok(calculateContrastRatio('#166534', '#ffffff') >= 4.5, 'Light success-hover #166534 on white must meet AA')
+  // --danger #dc2626 against --on-danger #ffffff (>= 4.8:1)
+  assert.ok(calculateContrastRatio('#dc2626', '#ffffff') >= 4.5, 'Light danger on white must meet AA')
+  // --warning #d97706 against --on-warning #1c1408 (>= 5.7:1)
+  assert.ok(calculateContrastRatio('#d97706', '#1c1408') >= 4.5, 'Light warning #d97706 on #1c1408 must meet AA')
+
+  // Dark mode status pairs:
+  assert.ok(calculateContrastRatio('#4ade80', '#090d16') >= 4.5, 'Dark success on dark on-success must meet AA')
+  assert.ok(calculateContrastRatio('#f87171', '#090d16') >= 4.5, 'Dark danger on dark on-danger must meet AA')
+  assert.ok(calculateContrastRatio('#fbbf24', '#090d16') >= 4.5, 'Dark warning on dark on-warning must meet AA')
 })
 
 test('button base, hover, and active states guarantee WCAG AA contrast across presets and custom accents', () => {

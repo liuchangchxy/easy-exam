@@ -629,8 +629,8 @@ onBeforeUnmount(() => {
 }
 
 .btn-exam-nav:hover:not(:disabled) {
-  border-color: var(--primary);
-  color: var(--primary);
+  border-color: var(--primary-border, var(--border-strong));
+  color: var(--primary-fg, var(--primary));
 }
 
 .btn-exam-nav.primary {
@@ -641,6 +641,12 @@ onBeforeUnmount(() => {
 
 .btn-exam-nav.primary:hover:not(:disabled) {
   background: var(--primary-hover);
+  color: var(--on-primary-hover, var(--on-primary));
+}
+
+.btn-exam-nav.primary:active:not(:disabled) {
+  background: var(--primary-active);
+  color: var(--on-primary-active, var(--on-primary));
 }
 
 .btn-exam-nav:disabled {
@@ -653,8 +659,16 @@ onBeforeUnmount(() => {
 .answer-grid button { min-height: 2.3rem; border: 1px solid var(--border); border-radius: 0.55rem; background: var(--bg-page); }
 .answer-grid button.answered { border-color: var(--success); background: var(--success-light); }
 .answer-grid button.flagged { box-shadow: inset 0 -3px var(--warning); }
-.answer-grid button.current { outline: 2px solid var(--primary); outline-offset: 1px; }
+.answer-grid button.current { outline: 2px solid var(--primary-fg, var(--primary)); outline-offset: 1px; }
 .primary { padding: 0.65rem 0.9rem; border-radius: 0.6rem; background: var(--primary); color: var(--on-primary); }
+.primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+  color: var(--on-primary-hover, var(--on-primary));
+}
+.primary:active:not(:disabled) {
+  background: var(--primary-active);
+  color: var(--on-primary-active, var(--on-primary));
+}
 .primary:disabled { opacity: 0.55; cursor: wait; }
 .exam-error { margin: 0.75rem 0; color: var(--danger); }
 .exam-loading { padding: 2rem; text-align: center; color: var(--text-muted); }

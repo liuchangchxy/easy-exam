@@ -1822,6 +1822,11 @@ function handleRestartPractice() {
 }
 .header-actions .btn-header-complete:hover:not(:disabled) {
   background: var(--primary-hover);
+  color: var(--on-primary-hover, var(--on-primary));
+}
+.header-actions .btn-header-complete:active:not(:disabled) {
+  background: var(--primary-active);
+  color: var(--on-primary-active, var(--on-primary));
 }
 
 .btn-flag.active {
@@ -1958,10 +1963,10 @@ function handleRestartPractice() {
 }
 
 .option.selected {
-  border-color: var(--primary);
+  border-color: var(--primary-fg, var(--primary));
   background: var(--primary-light);
   color: var(--text-main);
-  box-shadow: 0 0 0 1px var(--primary);
+  box-shadow: 0 0 0 1px var(--primary-border, var(--primary));
 }
 
 .option.selected .key-cap {
@@ -2202,7 +2207,7 @@ function handleRestartPractice() {
 
 .btn-ai-toggle.active {
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   border-color: var(--primary-border);
 }
 
@@ -2258,7 +2263,7 @@ function handleRestartPractice() {
 }
 
 .rating-btn.good {
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   border-color: var(--primary-border);
 }
 .rating-btn.good:hover:not(:disabled) {
@@ -2286,7 +2291,7 @@ function handleRestartPractice() {
 .fsrs-status {
   margin-top: 0.5rem;
   font-size: 0.85rem;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
 }
 
 .ai-panel {
@@ -2521,8 +2526,8 @@ function handleRestartPractice() {
 }
 
 .conflict-version-item.active {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 1px var(--primary);
+  border-color: var(--primary-fg, var(--primary));
+  box-shadow: 0 0 0 1px var(--primary-border, var(--primary));
 }
 
 .conflict-version-meta {
@@ -2535,7 +2540,8 @@ function handleRestartPractice() {
 .badge-current {
   font-size: 0.75rem;
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
+  border: 1px solid var(--primary-border);
   padding: 0.1rem 0.4rem;
   border-radius: var(--radius-sm);
   font-weight: 600;
@@ -2634,7 +2640,7 @@ function handleRestartPractice() {
 .btn-sheet-trigger-pill {
   border: 1px solid var(--primary-border);
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -2939,8 +2945,8 @@ function handleRestartPractice() {
   justify-content: center;
   padding: 0.55rem;
   background: var(--primary-light);
-  border: 1px dashed var(--primary);
-  color: var(--primary);
+  border: 1px dashed var(--primary-fg, var(--primary));
+  color: var(--primary-fg, var(--primary));
   border-radius: var(--radius-md);
   font-weight: 600;
   font-size: 0.875rem;
@@ -3013,7 +3019,7 @@ function handleRestartPractice() {
 .sheet-num-btn.partial {
   background: var(--warning);
   border-color: var(--warning-hover);
-  color: var(--on-warning, #ffffff);
+  color: var(--on-warning, #1c1408);
 }
 
 /* ==========================================================================

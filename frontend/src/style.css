@@ -38,8 +38,8 @@
   --on-success: #ffffff;
   --on-danger: #ffffff;
   --on-warning: #1c1408;
-  --success: #16a34a;
-  --success-hover: #15803d;
+  --success: #15803d;
+  --success-hover: #166534;
   --success-light: #f0fdf4;
   --success-border: #bbf7d0;
   --danger: #dc2626;
@@ -57,11 +57,11 @@
   --linear-border: var(--border);
   --linear-border-subtle: var(--border-subtle);
   --linear-border-focus: var(--border-strong);
-  --linear-brand: var(--primary);
+  --linear-brand: var(--primary-fg, var(--primary));
   --linear-brand-hover: var(--primary-hover);
   --linear-brand-light: var(--primary-light);
   --linear-brand-border: var(--primary-border);
-  --linear-cyan: var(--primary);
+  --linear-cyan: var(--primary-fg, var(--primary));
   --linear-text-main: var(--text-main);
   --linear-text-primary: var(--text-main);
   --linear-text-muted: var(--text-muted);
@@ -957,10 +957,12 @@ button.link-button:hover:not(:disabled) {
 
 .auth-card form button[type="submit"]:hover:not(:disabled) {
   background: var(--primary-hover);
+  color: var(--on-primary-hover, var(--on-primary));
 }
 
 .auth-card form button[type="submit"]:active:not(:disabled) {
   background: var(--primary-active);
+  color: var(--on-primary-active, var(--on-primary));
 }
 
 .auth-card .link-button {

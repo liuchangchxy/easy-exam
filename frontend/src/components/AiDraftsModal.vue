@@ -12,7 +12,7 @@
       <div v-else style="display: flex; flex-direction: column; gap: 1rem;">
         <div v-for="d in draftsList" :key="d.id" style="border: 1px solid var(--border); border-radius: 8px; padding: 1rem; background: var(--bg-subtle);">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <span style="font-size: 0.75rem; padding: 0.15rem 0.4rem; background: var(--primary-light); color: var(--linear-cyan); border-radius: 4px; font-weight: 600; font-family: var(--linear-mono);">
+            <span style="font-size: 0.75rem; padding: 0.15rem 0.4rem; background: var(--primary-light); color: var(--linear-cyan); border: 1px solid var(--primary-border); border-radius: 4px; font-weight: 600; font-family: var(--linear-mono);">
               {{ d.type }} {{ t('ui.k0210') }} {{ d.difficulty }}
             </span>
             <span style="font-size: 0.75rem; color: var(--text-tertiary);">{{ d.created_at }}</span>

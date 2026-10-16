@@ -116,7 +116,7 @@ defineEmits(['navigate', 'open-palette'])
   }
 
   .mobile-nav-item.active {
-    color: var(--primary);
+    color: var(--primary-fg, var(--primary));
   }
 
   .mobile-nav-label {

@@ -327,7 +327,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   flex-shrink: 0;
 }
 
@@ -458,7 +458,7 @@ onUnmounted(() => {
 
 .sidebar-nav-item.active {
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-weight: 600;
 }
 
@@ -488,8 +488,9 @@ onUnmounted(() => {
 .nav-item-sub {
   font-size: 0.65rem;
   font-family: var(--linear-mono, monospace);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   background: var(--primary-light);
+  border: 1px solid var(--primary-border);
   padding: 1px 4px;
   border-radius: 3px;
 }
@@ -555,9 +556,9 @@ onUnmounted(() => {
 }
 
 .user-avatar-badge.role-admin {
-  background: rgba(37, 99, 235, 0.12);
-  color: var(--primary);
-  border: 1px solid rgba(37, 99, 235, 0.28);
+  background: var(--primary-light);
+  color: var(--primary-fg, var(--primary));
+  border: 1px solid var(--primary-border);
 }
 
 .user-avatar-badge.role-user {
@@ -623,9 +624,9 @@ onUnmounted(() => {
 }
 
 .popover-avatar.role-admin {
-  background: rgba(37, 99, 235, 0.12);
-  color: var(--primary);
-  border: 1px solid rgba(37, 99, 235, 0.28);
+  background: var(--primary-light);
+  color: var(--primary-fg, var(--primary));
+  border: 1px solid var(--primary-border);
 }
 
 .popover-avatar.role-user {
@@ -659,7 +660,8 @@ onUnmounted(() => {
 
 .popover-badge.admin {
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
+  border: 1px solid var(--primary-border);
 }
 
 .popover-badge.user {

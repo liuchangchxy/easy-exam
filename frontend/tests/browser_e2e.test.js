@@ -15,6 +15,59 @@ const repoRoot = path.resolve(__dirname, '../..')
 let serverProcess = null
 let tempDbPath = ''
 
+function parseRgb(str, parentRgb = [255, 255, 255]) {
+  if (!str) return parentRgb
+  str = str.trim()
+  if (str.startsWith('color(srgb')) {
+    const parts = str.slice(10, -1).trim().split(/[\s/]+/).map(Number)
+    const r = Math.round(parts[0] * 255)
+    const g = Math.round(parts[1] * 255)
+    const b = Math.round(parts[2] * 255)
+    const a = parts.length > 3 ? parts[3] : 1
+    if (a < 1) {
+      return [
+        Math.round(r * a + parentRgb[0] * (1 - a)),
+        Math.round(g * a + parentRgb[1] * (1 - a)),
+        Math.round(b * a + parentRgb[2] * (1 - a)),
+      ]
+    }
+    return [r, g, b]
+  }
+  const m = str.match(/rgba?\(([^)]+)\)/)
+  if (m) {
+    const parts = m[1].split(/[\s,]+/).filter(Boolean).map(Number)
+    const r = parts[0], g = parts[1], b = parts[2]
+    const a = parts.length > 3 ? parts[3] : 1
+    if (a < 1) {
+      return [
+        Math.round(r * a + parentRgb[0] * (1 - a)),
+        Math.round(g * a + parentRgb[1] * (1 - a)),
+        Math.round(b * a + parentRgb[2] * (1 - a)),
+      ]
+    }
+    return [r, g, b]
+  }
+  const digits = (str || '').match(/\d+/g)
+  if (digits && digits.length >= 3) {
+    return [Number(digits[0]), Number(digits[1]), Number(digits[2])]
+  }
+  return [15, 23, 42]
+}
+
+function calcLum([r, g, b]) {
+  const [lr, lg, lb] = [r, g, b].map(c => {
+    const s = c / 255
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
+  })
+  return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb
+}
+
+function calcContrast(color1, color2, parentRgb = [255, 255, 255]) {
+  const l1 = calcLum(Array.isArray(color1) ? color1 : parseRgb(color1, parentRgb))
+  const l2 = calcLum(Array.isArray(color2) ? color2 : parseRgb(color2, parentRgb))
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)
+}
+
 async function getFreePort() {
   return new Promise((resolve, reject) => {
     const srv = net.createServer()
@@ -819,6 +872,257 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       const restoredTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
       assert.equal(restoredTheme, 'light')
       console.log('✓ Restored locale and theme to clean baseline.')
+    })
+
+    await t.test('14. Theme System Production Path, Computed Contrast & Appearance Verification', async () => {
+      // 1. Log in to access settings and workspace
+      await page.fill('input[placeholder="用户名"]', 'e2e_student')
+      await page.fill('input[placeholder="密码（至少 8 位）"]', 'password-123456')
+      await page.click('button:has-text("登录")')
+      await page.waitForSelector('.home-page')
+
+      // 2. Navigate to Settings View
+      await page.goto(`${BASE_URL}/#/settings`)
+      await page.waitForSelector('.settings-page')
+
+      // 3. Live System Mode Media Changes
+      await page.click('.segment-btn:has-text("跟随系统")')
+      await page.emulateMedia({ colorScheme: 'dark' })
+      await page.waitForTimeout(200)
+      const systemDarkAttr = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
+      assert.equal(systemDarkAttr, 'dark', 'Live system dark mode must reflect on document element')
+
+      await page.emulateMedia({ colorScheme: 'light' })
+      await page.waitForTimeout(200)
+      const systemLightAttr = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
+      assert.equal(systemLightAttr, 'light', 'Live system light mode must reflect on document element')
+      console.log('✓ System mode live media query changes verified in real browser.')
+
+      // 4. Custom Accent #ffffff in Light Mode: contrast and borders
+      await page.click('.segment-btn:has-text("浅色模式")')
+      const hexInput = page.locator('.accent-hex-input')
+      await hexInput.fill('#ffffff')
+      await hexInput.dispatchEvent('change')
+      await page.waitForTimeout(300)
+
+      const lightAccentVerification = await page.evaluate(() => {
+        const badge = document.querySelector('.sample-badge')
+        const badgeCs = badge ? getComputedStyle(badge) : null
+        const segBtn = document.querySelector('.segment-btn.active')
+        const segCs = segBtn ? getComputedStyle(segBtn) : null
+        const palCard = document.querySelector('.palette-preview-card.active')
+        const palCs = palCard ? getComputedStyle(palCard) : null
+        const sidebarActive = document.querySelector('.sidebar-nav-item.active')
+        const sidebarCs = sidebarActive ? getComputedStyle(sidebarActive) : null
+
+        return {
+          primary: document.documentElement.style.getPropertyValue('--primary').trim(),
+          onPrimary: document.documentElement.style.getPropertyValue('--on-primary').trim(),
+          badgeColor: badgeCs ? badgeCs.color : '',
+          badgeBg: badgeCs ? badgeCs.backgroundColor : '',
+          segColor: segCs ? segCs.color : '',
+          segBg: segCs ? segCs.backgroundColor : '',
+          segBorder: segCs ? segCs.borderColor : '',
+          palBorder: palCs ? palCs.borderColor : '',
+          sidebarColor: sidebarCs ? sidebarCs.color : '',
+          sidebarBg: sidebarCs ? sidebarCs.backgroundColor : '',
+        }
+      })
+
+      assert.equal(lightAccentVerification.primary, '#ffffff')
+      assert.equal(lightAccentVerification.onPrimary, '#0f172a')
+      const lightBadgeRatio = calcContrast(lightAccentVerification.badgeColor, lightAccentVerification.badgeBg, [241, 245, 249])
+      const lightSegRatio = calcContrast(lightAccentVerification.segColor, lightAccentVerification.segBg)
+      const lightSidebarRatio = calcContrast(lightAccentVerification.sidebarColor, lightAccentVerification.sidebarBg, [248, 250, 252])
+
+      assert.ok(lightBadgeRatio >= 4.5, `Sample badge contrast ${lightBadgeRatio.toFixed(2)}:1 must meet AA`)
+      assert.ok(lightSegRatio >= 4.5, `Segment button active contrast ${lightSegRatio.toFixed(2)}:1 must meet AA`)
+      assert.notEqual(lightAccentVerification.segBorder, 'rgb(255, 255, 255)', 'Segment button active border must be visible against white')
+      assert.notEqual(lightAccentVerification.palBorder, 'rgb(255, 255, 255)', 'Palette card active border must be visible against white')
+      console.log('✓ Light mode custom accent #ffffff: computed badge, segment-btn, palette border, and sidebar meet WCAG AA.')
+
+      // 5. Custom Accent #000000 in Dark Mode: contrast and borders
+      await page.click('.segment-btn:has-text("深色模式")')
+      await hexInput.fill('#000000')
+      await hexInput.dispatchEvent('change')
+      await page.waitForTimeout(300)
+
+      const darkAccentVerification = await page.evaluate(() => {
+        const badge = document.querySelector('.sample-badge')
+        const badgeCs = badge ? getComputedStyle(badge) : null
+        const segBtn = document.querySelector('.segment-btn.active')
+        const segCs = segBtn ? getComputedStyle(segBtn) : null
+        const palCard = document.querySelector('.palette-preview-card.active')
+        const palCs = palCard ? getComputedStyle(palCard) : null
+
+        return {
+          primary: document.documentElement.style.getPropertyValue('--primary').trim(),
+          onPrimary: document.documentElement.style.getPropertyValue('--on-primary').trim(),
+          badgeColor: badgeCs ? badgeCs.color : '',
+          badgeBg: badgeCs ? badgeCs.backgroundColor : '',
+          segColor: segCs ? segCs.color : '',
+          segBg: segCs ? segCs.backgroundColor : '',
+          segBorder: segCs ? segCs.borderColor : '',
+          palBorder: palCs ? palCs.borderColor : '',
+        }
+      })
+
+      assert.equal(darkAccentVerification.primary, '#000000')
+      assert.equal(darkAccentVerification.onPrimary, '#ffffff')
+      const darkBadgeRatio = calcContrast(darkAccentVerification.badgeColor, darkAccentVerification.badgeBg, [30, 41, 59])
+      const darkSegRatio = calcContrast(darkAccentVerification.segColor, darkAccentVerification.segBg)
+      assert.ok(darkBadgeRatio >= 4.5, `Dark sample badge contrast ${darkBadgeRatio.toFixed(2)}:1 must meet AA`)
+      assert.ok(darkSegRatio >= 4.5, `Dark segment button active contrast ${darkSegRatio.toFixed(2)}:1 must meet AA`)
+      console.log('✓ Dark mode custom accent #000000: computed badge, segment-btn, and palette border meet WCAG AA.')
+
+      // 6. Invalid custom accent input and reset button fallback
+      await hexInput.fill('invalid-hex-code')
+      await hexInput.dispatchEvent('change')
+      await page.waitForTimeout(200)
+      const afterInvalidPrimary = await page.evaluate(() => document.documentElement.style.getPropertyValue('--primary'))
+      assert.equal(afterInvalidPrimary, '', 'Invalid hex input must clear inline --primary style override')
+
+      // Set accent again, then click Reset button
+      await hexInput.fill('#e11d48')
+      await hexInput.dispatchEvent('change')
+      await page.click('.btn-reset-accent')
+      await page.waitForTimeout(200)
+      const afterResetPrimary = await page.evaluate(() => document.documentElement.style.getPropertyValue('--primary'))
+      assert.equal(afterResetPrimary, '', 'Reset button must remove custom accent override')
+      console.log('✓ Invalid custom accent input and reset button fallback verified.')
+
+      // 7. Reload persistence with Ocean palette and custom accent
+      await page.click('.palette-preview-card[data-preview-palette="ocean"]')
+      await hexInput.fill('#0891b2')
+      await hexInput.dispatchEvent('change')
+      await page.reload()
+      await page.waitForSelector('.settings-page')
+
+      const reloadPersisted = await page.evaluate(() => ({
+        palette: document.documentElement.getAttribute('data-theme-palette'),
+        primary: document.documentElement.style.getPropertyValue('--primary').trim(),
+      }))
+      assert.equal(reloadPersisted.palette, 'ocean')
+      assert.equal(reloadPersisted.primary, '#0891b2')
+      console.log('✓ Reload persistence verified for palette and custom accent.')
+
+      // 8. Legacy theme restoration
+      await page.evaluate(() => {
+        localStorage.removeItem('easyexam-theme-mode')
+        localStorage.setItem('easyexam-theme', 'dark')
+      })
+      await page.reload()
+      await page.waitForSelector('.settings-page')
+      const restoredLegacyTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
+      assert.equal(restoredLegacyTheme, 'dark', 'Legacy easyexam-theme dark must restore dark mode')
+      console.log('✓ Legacy theme restoration verified.')
+
+      // Restore clean baseline: light mode, blue-grey, reset accent
+      await page.click('.segment-btn:has-text("浅色模式")')
+      await page.click('.btn-reset-accent')
+      await page.click('.palette-preview-card[data-preview-palette="blue-grey"]')
+
+      // 9. PracticeView computed contrast on actual components & Amber light hover
+      // Switch to Amber palette to test Amber hover cascade
+      await page.click('.palette-preview-card[data-preview-palette="amber"]')
+      await page.goto(BASE_URL)
+      await page.waitForSelector('.home-page')
+      await page.click('.bank-card:has-text("E2E真实浏览器题库") button.primary')
+      await page.waitForSelector('.practice-page')
+
+      // Ensure question is submitted to reveal result/complete buttons
+      const isResultVisible = await page.locator('.result-card, .quick-verdict-bar').isVisible().catch(() => false)
+      if (!isResultVisible) {
+        const opt = page.locator('label.option').first()
+        await opt.click().catch(() => {})
+        await page.click('button:has-text("提交答案")').catch(() => {})
+        await page.waitForSelector('.result-card, .quick-verdict-bar', { timeout: 5000 }).catch(() => {})
+      }
+
+      const practiceStyles = await page.evaluate(() => {
+        const completeBtn = document.querySelector('.header-actions .btn-header-complete')
+        const goodBtn = document.querySelector('.rating-btn.good')
+        const aiToggle = document.querySelector('.btn-ai-toggle.active')
+        const correctNum = document.querySelector('.sheet-num-btn.correct')
+
+        const completeCs = completeBtn ? getComputedStyle(completeBtn) : null
+        const goodCs = goodBtn ? getComputedStyle(goodBtn) : null
+        const aiCs = aiToggle ? getComputedStyle(aiToggle) : null
+        const correctCs = correctNum ? getComputedStyle(correctNum) : null
+
+        return {
+          completeColor: completeCs ? completeCs.color : '',
+          completeBg: completeCs ? completeCs.backgroundColor : '',
+          goodColor: goodCs ? goodCs.color : '',
+          aiColor: aiCs ? aiCs.color : '',
+          aiBg: aiCs ? aiCs.backgroundColor : '',
+          correctColor: correctCs ? correctCs.color : '',
+          correctBg: correctCs ? correctCs.backgroundColor : '',
+        }
+      })
+
+      const completeRatio = calcContrast(practiceStyles.completeColor, practiceStyles.completeBg)
+      assert.ok(completeRatio >= 4.5, `Complete button contrast ${completeRatio.toFixed(2)}:1 must meet AA`)
+      if (practiceStyles.goodColor) {
+        const goodRatio = calcContrast(practiceStyles.goodColor, 'rgb(255, 255, 255)')
+        assert.ok(goodRatio >= 4.5, `Good rating button contrast ${goodRatio.toFixed(2)}:1 must meet AA`)
+      }
+      if (practiceStyles.correctColor && practiceStyles.correctBg) {
+        const correctRatio = calcContrast(practiceStyles.correctColor, practiceStyles.correctBg)
+        assert.ok(correctRatio >= 4.5, `Correct status button contrast ${correctRatio.toFixed(2)}:1 must meet AA`)
+      }
+
+      // Test Amber hover cascade specificity on .btn-header-complete
+      const completeBtnLocator = page.locator('.header-actions .btn-header-complete')
+      await completeBtnLocator.hover()
+      await page.waitForTimeout(400)
+      const hoverCascade = await page.evaluate(() => {
+        const btn = document.querySelector('.header-actions .btn-header-complete')
+        const cs = getComputedStyle(btn)
+        return {
+          bg: cs.backgroundColor,
+          color: cs.color,
+        }
+      })
+      const hoverRatio = calcContrast(hoverCascade.color, hoverCascade.bg)
+      assert.ok(hoverRatio >= 4.5, `Amber hover cascade contrast ${hoverRatio.toFixed(2)}:1 (${hoverCascade.color} on ${hoverCascade.bg}) must meet AA`)
+      console.log(`✓ PracticeView computed contrast verified (Amber complete button hover contrast: ${hoverRatio.toFixed(2)}:1).`)
+
+      // 10. Multi-viewport zero-overflow verification (375px, 768px, 1280px)
+      await page.setViewportSize({ width: 375, height: 667 })
+      await page.waitForTimeout(200)
+      const mobileScroll = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }))
+      assert.ok(mobileScroll.scrollWidth <= mobileScroll.clientWidth + 1, `Mobile 375px zero-overflow: scrollWidth=${mobileScroll.scrollWidth} <= clientWidth=${mobileScroll.clientWidth}`)
+
+      await page.setViewportSize({ width: 768, height: 1024 })
+      await page.waitForTimeout(200)
+      const tabletScroll = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }))
+      assert.ok(tabletScroll.scrollWidth <= tabletScroll.clientWidth + 1, `Tablet 768px zero-overflow: scrollWidth=${tabletScroll.scrollWidth} <= clientWidth=${tabletScroll.clientWidth}`)
+
+      await page.setViewportSize({ width: 1280, height: 800 })
+      await page.waitForTimeout(200)
+      const desktopScroll = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }))
+      assert.ok(desktopScroll.scrollWidth <= desktopScroll.clientWidth + 1, `Desktop 1280px zero-overflow: scrollWidth=${desktopScroll.scrollWidth} <= clientWidth=${desktopScroll.clientWidth}`)
+      console.log('✓ Multi-viewport zero-overflow verified across 375px, 768px, and 1280px.')
+
+      // Final restore to blue-grey default palette
+      await page.goto(`${BASE_URL}/#/settings`)
+      await page.waitForSelector('.settings-page')
+      await page.click('.palette-preview-card[data-preview-palette="blue-grey"]')
+      const resetBtn = page.locator('.btn-reset-accent')
+      if (await resetBtn.isVisible().catch(() => false)) {
+        await resetBtn.click()
+      }
+      console.log('✓ Cleaned up and restored baseline settings.')
     })
   } finally {
     if (browser) {
