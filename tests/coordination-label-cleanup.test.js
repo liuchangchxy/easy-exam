@@ -6,18 +6,18 @@ const cleanupCoordinationLabels = require("../.github/scripts/cleanup-coordinati
 test("successful completion removes only active coordination labels", async () => {
   const removed = [];
   const result = await cleanupCoordinationLabels(
-    { labels: ["agent-working", "changes-requested", "frozen-spec", "bug"].map((name) => ({ name })) },
+    { labels: ["agent-ready", "agent-working", "changes-requested", "frozen-spec", "bug"].map((name) => ({ name })) },
     async (name) => removed.push(name),
   );
 
-  assert.deepEqual(removed, ["agent-working", "changes-requested"]);
+  assert.deepEqual(removed, ["agent-ready", "agent-working", "changes-requested"]);
   assert.deepEqual(result, {
     preservedTerminalState: false,
-    removed: ["agent-working", "changes-requested"],
+    removed: ["agent-ready", "agent-working", "changes-requested"],
   });
 });
 
-test("closing in either terminal blocked state preserves all labels", async () => {
+test("closing in either terminal blocked state removes active labels and preserves terminal evidence", async () => {
   for (const terminalLabel of ["infra-blocked", "needs-human"]) {
     const removed = [];
     const result = await cleanupCoordinationLabels(
@@ -25,7 +25,7 @@ test("closing in either terminal blocked state preserves all labels", async () =
       async (name) => removed.push(name),
     );
 
-    assert.deepEqual(removed, []);
-    assert.deepEqual(result, { preservedTerminalState: true, removed: [] });
+    assert.deepEqual(removed, ["agent-working"]);
+    assert.deepEqual(result, { preservedTerminalState: true, removed: ["agent-working"] });
   }
 });
