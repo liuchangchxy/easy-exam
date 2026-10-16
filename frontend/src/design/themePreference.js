@@ -61,9 +61,34 @@ export function calculateRelativeLuminance(hexColor) {
   return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
 }
 
+export function calculateContrastRatio(color1, color2) {
+  const l1 = calculateRelativeLuminance(color1)
+  const l2 = calculateRelativeLuminance(color2)
+  const lighter = Math.max(l1, l2)
+  const darker = Math.min(l1, l2)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
 export function getContrastTextColor(hexColor) {
-  const lum = calculateRelativeLuminance(hexColor)
-  return lum > 0.45 ? '#0f172a' : '#ffffff'
+  if (!isValidHexColor(hexColor)) return '#ffffff'
+  const contrastWithWhite = calculateContrastRatio(hexColor, '#ffffff')
+  const contrastWithDark = calculateContrastRatio(hexColor, '#0f172a')
+
+  // If pure white meets WCAG AA (>= 4.5:1) and offers better or equal contrast than dark text, choose white
+  if (contrastWithWhite >= 4.5 && contrastWithWhite >= contrastWithDark) {
+    return '#ffffff'
+  }
+  // If modern deep slate text (#0f172a) meets WCAG AA, choose #0f172a
+  if (contrastWithDark >= 4.5) {
+    return '#0f172a'
+  }
+  // For edge-case midtones where #0f172a gives 4.2:1-4.49:1, pure black (#000000)
+  // mathematically guarantees contrast ratio >= 4.58:1 across the entire spectrum
+  const contrastWithBlack = calculateContrastRatio(hexColor, '#000000')
+  if (contrastWithBlack >= contrastWithWhite) {
+    return '#000000'
+  }
+  return '#ffffff'
 }
 
 export function readThemePreference(storage, key = THEME_STORAGE_KEY) {
@@ -177,7 +202,7 @@ export function applyAccentPreference(root, hexColor) {
     const onPrimary = getContrastTextColor(hex)
     root.style.setProperty('--primary', hex)
     root.style.setProperty('--on-primary', onPrimary)
-    root.style.setProperty('--primary-hover', `color-mix(in srgb, ${hex} 86%, ${onPrimary === '#0f172a' ? '#000000' : '#ffffff'})`)
+    root.style.setProperty('--primary-hover', `color-mix(in srgb, ${hex} 86%, ${onPrimary === '#ffffff' ? '#ffffff' : '#000000'})`)
     root.style.setProperty('--primary-active', `color-mix(in srgb, ${hex} 72%, #000000)`)
     root.style.setProperty('--primary-light', `color-mix(in srgb, ${hex} 14%, transparent)`)
     root.style.setProperty('--primary-border', `color-mix(in srgb, ${hex} 36%, transparent)`)

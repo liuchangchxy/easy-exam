@@ -8,6 +8,7 @@ import {
   applyFullTheme,
   applyPalettePreference,
   applyThemePreference,
+  calculateContrastRatio,
   calculateRelativeLuminance,
   getContrastTextColor,
   isValidHexColor,
@@ -170,6 +171,70 @@ test('custom accent relative luminance and WCAG text contrast calculation', () =
   assert.equal(getContrastTextColor('#1d4ed8'), '#ffffff')
   // Pale yellow (#fef08a) -> dark text
   assert.equal(getContrastTextColor('#fef08a'), '#0f172a')
+
+  // Problematic midtone colors explicitly cited in issue verification:
+  // #d97706 with white is 3.19:1 (fails), but with dark text is >= 5.6:1 (passes AA)
+  const amberText = getContrastTextColor('#d97706')
+  assert.equal(amberText, '#0f172a')
+  assert.ok(calculateContrastRatio('#d97706', amberText) >= 4.5)
+
+  // #888888 with white is 3.54:1 (fails), but with dark text is >= 5.0:1 (passes AA)
+  const greyText = getContrastTextColor('#888888')
+  assert.equal(greyText, '#0f172a')
+  assert.ok(calculateContrastRatio('#888888', greyText) >= 4.5)
+
+  // #0891b2 (ocean light primary)
+  const oceanText = getContrastTextColor('#0891b2')
+  assert.equal(oceanText, '#0f172a')
+  assert.ok(calculateContrastRatio('#0891b2', oceanText) >= 4.5)
+})
+
+test('WCAG AA contrast is mathematically guaranteed (>= 4.5:1) across 8 palettes, boundaries, and 200 random legal hex colors', () => {
+  // 1. All 8 palette primary colors
+  const palettePrimaries = [
+    '#2563eb', // blue-grey
+    '#3b6978', // mist
+    '#0891b2', // ocean
+    '#7c3aed', // amethyst
+    '#e11d48', // rose
+    '#d97706', // amber
+    '#286b53', // forest
+    '#845339', // mocha
+  ]
+  for (const hex of palettePrimaries) {
+    const text = getContrastTextColor(hex)
+    const ratio = calculateContrastRatio(hex, text)
+    assert.ok(ratio >= 4.5, `Palette ${hex} contrast ${ratio.toFixed(2)}:1 is below 4.5:1`)
+  }
+
+  // 2. Critical boundary and corner-case colors
+  const boundaries = [
+    '#000000', '#ffffff', '#7f7f7f', '#808080', '#bfbfbf', '#3f3f3f',
+    '#ffff00', '#00ffff', '#ff00ff', '#ff0000', '#00ff00', '#0000ff',
+    '#faad14', '#13c2c2', '#52c41a', '#f5222d', '#722ed1', '#eb2f96'
+  ]
+  for (const hex of boundaries) {
+    const text = getContrastTextColor(hex)
+    const ratio = calculateContrastRatio(hex, text)
+    assert.ok(ratio >= 4.5, `Boundary ${hex} contrast ${ratio.toFixed(2)}:1 is below 4.5:1`)
+  }
+
+  // 3. 200 pseudo-random legal hex codes (LCG deterministic seed for 100% reproducibility)
+  let state = 123456789
+  const lcg = () => {
+    state = (1103515245 * state + 12345) & 0x7fffffff
+    return state
+  }
+
+  for (let i = 0; i < 200; i++) {
+    const r = (lcg() >> 16) & 0xff
+    const g = (lcg() >> 16) & 0xff
+    const b = (lcg() >> 16) & 0xff
+    const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`
+    const text = getContrastTextColor(hex)
+    const ratio = calculateContrastRatio(hex, text)
+    assert.ok(ratio >= 4.5, `Random hex ${hex} with text ${text} contrast ${ratio.toFixed(2)}:1 is below 4.5:1`)
+  }
 })
 
 test('applyAccentPreference sets inline variables on root and cleans up on reset', () => {

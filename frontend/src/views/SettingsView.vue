@@ -283,6 +283,7 @@ import LinearIcon from '../components/LinearIcon.vue'
 import ChangePasswordModal from '../components/ChangePasswordModal.vue'
 import { useLocale } from '../composables/useLocale.js'
 import { useTheme } from '../composables/useTheme.js'
+import { getContrastTextColor } from '../design/themePreference.js'
 
 const props = defineProps({
   token: { type: String, default: '' },
@@ -348,7 +349,7 @@ const paletteList = computed(() => [
     bgPage: '#f0f9fa',
     bgCard: '#ffffff',
     primary: '#0891b2',
-    onPrimary: '#ffffff',
+    onPrimary: getContrastTextColor('#0891b2'),
     textMain: '#0c2830',
     textMuted: '#769da8',
     border: '#c4e3e8',
@@ -384,7 +385,7 @@ const paletteList = computed(() => [
     bgPage: '#fffbeb',
     bgCard: '#ffffff',
     primary: '#d97706',
-    onPrimary: '#ffffff',
+    onPrimary: getContrastTextColor('#d97706'),
     textMain: '#382305',
     textMuted: '#a67c3b',
     border: '#fcd34d',
