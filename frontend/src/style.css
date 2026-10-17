@@ -1213,8 +1213,8 @@ button.link-button:hover:not(:disabled) {
 }
 
 .legend-badge.current {
-  border-color: var(--primary);
-  outline: 2px solid var(--primary);
+  border-color: var(--primary-fg, var(--primary));
+  outline: 2px solid var(--primary-fg, var(--primary));
   outline-offset: 1px;
 }
 
@@ -1452,7 +1452,7 @@ button.link-button:hover:not(:disabled) {
   padding: 0.15rem 0.5rem;
   border-radius: var(--radius-sm);
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-family: var(--linear-mono);
 }
 
@@ -1806,7 +1806,7 @@ button.link-button:hover:not(:disabled) {
   width: 1.25rem;
   height: 1.25rem;
   border: 2px solid var(--border);
-  border-top-color: var(--primary);
+  border-top-color: var(--primary-fg, var(--primary));
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }

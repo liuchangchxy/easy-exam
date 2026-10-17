@@ -279,7 +279,7 @@ onMounted(() => {
 }
 
 .header-icon {
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
 }
 
 .notes-header h1 {
@@ -391,7 +391,7 @@ onMounted(() => {
   align-items: center;
   gap: 0.4rem;
   font-size: 0.82rem;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   background: var(--primary-light);
   padding: 0.45rem 0.8rem;
   border-radius: var(--radius-md);
@@ -498,7 +498,7 @@ onMounted(() => {
 
 .type-pill.note {
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
 }
 
 .type-pill.mistake_summary {

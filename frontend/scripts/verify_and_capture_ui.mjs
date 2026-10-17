@@ -230,6 +230,17 @@ async function main() {
     await page.screenshot({ path: homeShot, fullPage: false })
     console.log(`Saved screenshot 1: ${homeShot}`)
 
+    // Capture Modal Dialog: Open BlueprintModal from sidebar
+    await page.click('.sidebar-nav-item.sub:has-text("智能组卷")')
+    await page.waitForSelector('.exam-setup-dialog')
+    await page.waitForTimeout(300)
+    const modalShot = path.join(outputDir, '07_desktop_representative_modal.png')
+    await page.screenshot({ path: modalShot, fullPage: false })
+    console.log(`Saved screenshot modal: ${modalShot}`)
+    await page.click('.exam-setup-dialog .bank-actions button')
+    await page.waitForSelector('.exam-setup-dialog', { state: 'detached', timeout: 5000 })
+    await page.waitForTimeout(300)
+
     // Navigate to Practice Page
     await page.click('.bank-card:has-text("2026架构师全真模拟题库") button.primary')
     await page.waitForSelector('.practice-page')
@@ -554,6 +565,29 @@ async function main() {
 
     await mobileContext.close()
     await browser.close()
+
+    // Persist representative screenshot evidence to docs/research/ui-evidence/pr54/ for PR #54 review
+    const prEvidenceDir = path.join(repoRoot, 'docs/research/ui-evidence/pr54')
+    fs.mkdirSync(prEvidenceDir, { recursive: true })
+    const copyMap = [
+      ['01_desktop_home_blue_grey_light.png', '01_desktop_home.png'],
+      ['02_desktop_practice_single_choice.png', '02_desktop_practice.png'],
+      ['03_desktop_settings_themes_light.png', '03_desktop_settings.png'],
+      ['04_desktop_settings_dark_mode.png', '04_desktop_settings_dark.png'],
+      ['05_desktop_settings_custom_accent_contrast.png', '05_desktop_custom_white_light.png'],
+      ['10_desktop_settings_dark_zero_black_accent.png', '06_desktop_custom_black_dark.png'],
+      ['07_desktop_representative_modal.png', '07_desktop_representative_modal.png'],
+      ['07_tablet_practice_768px.png', '08_tablet_practice_768px.png'],
+      ['08_mobile_home_375px.png', '09_mobile_home_375px.png'],
+      ['09_mobile_practice_375px.png', '10_mobile_practice_375px.png'],
+    ]
+    for (const [srcName, destName] of copyMap) {
+      const srcPath = path.join(outputDir, srcName)
+      if (fs.existsSync(srcPath)) {
+        fs.copyFileSync(srcPath, path.join(prEvidenceDir, destName))
+      }
+    }
+    console.log(`✓ Representative screenshots copied to ${prEvidenceDir}`)
     console.log('All screenshots and visual assertions completed successfully!')
   } finally {
     server.kill()

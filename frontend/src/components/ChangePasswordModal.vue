@@ -105,7 +105,7 @@ async function handleSubmit() {
   gap: 0.35rem;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   background: var(--primary-light);
   padding: 0.15rem 0.5rem;
   border-radius: 4px;
@@ -148,7 +148,7 @@ async function handleSubmit() {
 
 .form-field input:focus {
   outline: none;
-  border-color: var(--primary);
+  border-color: var(--primary-fg, var(--primary));
   box-shadow: 0 0 0 2px var(--primary-light);
 }
 
@@ -183,7 +183,7 @@ async function handleSubmit() {
 .primary-btn {
   padding: 0.5rem 1.2rem;
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   border: none;
   border-radius: var(--radius-md);
   font-size: 0.875rem;

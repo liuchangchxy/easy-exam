@@ -720,7 +720,7 @@ onMounted(loadData)
 
 .view-tabs button.active {
   background: var(--bg-card);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-weight: 600;
   box-shadow: var(--shadow-sm);
 }
@@ -1052,7 +1052,7 @@ onMounted(loadData)
 
 .fsrs-gem {
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   border: 1px solid var(--primary-border);
 }
 
@@ -1278,7 +1278,7 @@ onMounted(loadData)
 
 .mode-btn.active {
   background: var(--bg-card);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-weight: 600;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }

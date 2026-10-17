@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   DEFAULT_MODE,
   DEFAULT_PALETTE,
@@ -247,16 +250,70 @@ test('mixHex correctly blends colors across weights', () => {
   assert.equal(mixHex('#ff0000', '#0000ff', 0.5), '#800080')
 })
 
+test('anti-drift: PALETTE_SURFACES exactly matches actual CSS palette variables in style.css', () => {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url))
+  const cssPath = path.resolve(__dirname, '../src/style.css')
+  const css = fs.readFileSync(cssPath, 'utf-8')
+
+  // Parse :root[data-theme-palette="..."] blocks from style.css
+  const paletteBlocks = {}
+  const lines = css.split('\n')
+  let curPalette = null
+  let curTheme = 'light'
+  let inBlock = false
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    const match = trimmed.match(/:root(?:\[data-theme-palette="([a-z-]+)"])?(?:\[data-theme="(dark)"])?\s*\{/)
+    if (match) {
+      if (match[1]) curPalette = match[1]
+      else if (trimmed.includes(':root,')) curPalette = 'blue-grey'
+      curTheme = match[2] === 'dark' || trimmed.includes('[data-theme="dark"]') ? 'dark' : 'light'
+      inBlock = true
+      if (curPalette) {
+        if (!paletteBlocks[curPalette]) paletteBlocks[curPalette] = { light: {}, dark: {} }
+      }
+    } else if (trimmed === '}') {
+      inBlock = false
+    } else if (inBlock && curPalette) {
+      const vMatch = trimmed.match(/^(--bg-[a-z]+):\s*([^;]+);/)
+      if (vMatch) {
+        paletteBlocks[curPalette][curTheme][vMatch[1]] = vMatch[2].trim().toLowerCase()
+      }
+    }
+  }
+
+  for (const pal of THEME_PALETTES) {
+    const ps = PALETTE_SURFACES[pal]
+    assert.ok(ps, `Missing PALETTE_SURFACES definition for ${pal}`)
+    const parsed = paletteBlocks[pal]
+    assert.ok(parsed, `Missing style.css definition for ${pal}`)
+
+    // Light mode surfaces
+    assert.equal(ps.lightPage, parsed.light['--bg-page'], `${pal} lightPage mismatch with style.css --bg-page`)
+    assert.equal(ps.light, parsed.light['--bg-card'], `${pal} light card mismatch with style.css --bg-card`)
+    assert.equal(ps.lightSubtle, parsed.light['--bg-subtle'], `${pal} lightSubtle mismatch with style.css --bg-subtle`)
+
+    // Dark mode surfaces
+    assert.equal(ps.darkPage, parsed.dark['--bg-page'], `${pal} darkPage mismatch with style.css --bg-page`)
+    assert.equal(ps.dark, parsed.dark['--bg-card'], `${pal} dark card mismatch with style.css --bg-card`)
+    assert.equal(ps.darkSubtle, parsed.dark['--bg-subtle'], `${pal} darkSubtle mismatch with style.css --bg-subtle`)
+  }
+})
+
 test('getAccessibleForeground guarantees WCAG AA contrast against surfaces across all 8 palettes and translucent accents', () => {
   const testAccents = ['#ffffff', '#000000', '#fbbf24', '#0891b2', '#d97706', '#60a5fa', '#2563eb', '#ffff00', '#777777']
   for (const pal of THEME_PALETTES) {
     const surfaces = PALETTE_SURFACES[pal]
     for (const isDark of [false, true]) {
+      const page = isDark ? surfaces.darkPage : surfaces.lightPage
       const card = isDark ? surfaces.dark : surfaces.light
       const subtle = isDark ? surfaces.darkSubtle : surfaces.lightSubtle
       for (const hex of testAccents) {
         const fg = getAccessibleForeground(hex, isDark, pal)
-        const trans = mixHex(card, hex, isDark ? 0.16 : 0.14)
+        const transCard = mixHex(card, hex, isDark ? 0.16 : 0.14)
+        const transSubtle = mixHex(subtle, hex, isDark ? 0.16 : 0.14)
+        const transPage = mixHex(page, hex, isDark ? 0.16 : 0.14)
         assert.ok(
           calculateContrastRatio(fg, card) >= 4.5,
           `Foreground ${fg} on card ${card} (${pal} dark=${isDark}) contrast is below 4.5:1 for accent ${hex}`
@@ -266,10 +323,61 @@ test('getAccessibleForeground guarantees WCAG AA contrast against surfaces acros
           `Foreground ${fg} on subtle ${subtle} (${pal} dark=${isDark}) contrast is below 4.5:1 for accent ${hex}`
         )
         assert.ok(
-          calculateContrastRatio(fg, trans) >= 4.5,
-          `Foreground ${fg} on translucent ${trans} (${pal} dark=${isDark}) contrast is below 4.5:1 for accent ${hex}`
+          calculateContrastRatio(fg, page) >= 4.5,
+          `Foreground ${fg} on page ${page} (${pal} dark=${isDark}) contrast is below 4.5:1 for accent ${hex}`
+        )
+        assert.ok(
+          calculateContrastRatio(fg, transCard) >= 4.5,
+          `Foreground ${fg} on translucent card ${transCard} (${pal} dark=${isDark}) contrast is below 4.5:1 for accent ${hex}`
+        )
+        assert.ok(
+          calculateContrastRatio(fg, transSubtle) >= 4.5,
+          `Foreground ${fg} on translucent subtle ${transSubtle} (${pal} dark=${isDark}) contrast is below 4.5:1 for accent ${hex}`
+        )
+        assert.ok(
+          calculateContrastRatio(fg, transPage) >= 4.5,
+          `Foreground ${fg} on translucent page ${transPage} (${pal} dark=${isDark}) contrast is below 4.5:1 for accent ${hex}`
         )
       }
+    }
+  }
+})
+
+test('confirmed reviewer counterexamples guarantee WCAG AA >= 4.5:1 across actual surfaces and composite primary-light', () => {
+  const counterexamples = [
+    { palette: 'forest', isDark: false, accent: '#ffff00', desc: 'Forest light + custom #ffff00' },
+    { palette: 'mocha', isDark: false, accent: '#cccc66', desc: 'Mocha light + custom #cccc66' },
+    { palette: 'amber', isDark: true, accent: '#338833', desc: 'Amber dark + custom #338833' },
+    { palette: 'blue-grey', isDark: false, accent: '#ffffff', desc: 'Blue-grey light + custom #ffffff' },
+    { palette: 'blue-grey', isDark: true, accent: '#000000', desc: 'Blue-grey dark + custom #000000' },
+  ]
+
+  for (const { palette, isDark, accent, desc } of counterexamples) {
+    const fg = getAccessibleForeground(accent, isDark, palette)
+    const s = PALETTE_SURFACES[palette]
+    const card = isDark ? s.dark : s.light
+    const subtle = isDark ? s.darkSubtle : s.lightSubtle
+    const page = isDark ? s.darkPage : s.lightPage
+    const alpha = isDark ? 0.16 : 0.14
+    const transCard = mixHex(card, accent, alpha)
+    const transSubtle = mixHex(subtle, accent, alpha)
+    const transPage = mixHex(page, accent, alpha)
+
+    const surfaces = [
+      { name: 'card', color: card },
+      { name: 'subtle', color: subtle },
+      { name: 'page', color: page },
+      { name: 'transCard', color: transCard },
+      { name: 'transSubtle', color: transSubtle },
+      { name: 'transPage', color: transPage },
+    ]
+
+    for (const surf of surfaces) {
+      const ratio = calculateContrastRatio(fg, surf.color)
+      assert.ok(
+        ratio >= 4.5,
+        `${desc}: fg ${fg} against ${surf.name} ${surf.color} is ${ratio.toFixed(2)}:1 (must be >= 4.5:1)`
+      )
     }
   }
 })

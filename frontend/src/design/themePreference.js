@@ -108,14 +108,14 @@ export function mixHex(hex1, hex2, weight = 0.5) {
 }
 
 export const PALETTE_SURFACES = Object.freeze({
-  'blue-grey': { light: '#ffffff', lightSubtle: '#f1f5f9', dark: '#131b2e', darkSubtle: '#1e293b' },
-  'mist': { light: '#ffffff', lightSubtle: '#eaeff4', dark: '#18222a', darkSubtle: '#22303c' },
-  'ocean': { light: '#ffffff', lightSubtle: '#e1f3f5', dark: '#10242b', darkSubtle: '#18353f' },
-  'amethyst': { light: '#ffffff', lightSubtle: '#f3e8ff', dark: '#1d1433', darkSubtle: '#2b1d4a' },
-  'rose': { light: '#ffffff', lightSubtle: '#ffe4e6', dark: '#2c121a', darkSubtle: '#3f1b26' },
-  'amber': { light: '#ffffff', lightSubtle: '#fef3c7', dark: '#281a06', darkSubtle: '#3a270b' },
-  'forest': { light: '#ffffff', lightSubtle: '#eaf5f0', dark: '#12251e', darkSubtle: '#1c382d' },
-  'mocha': { light: '#ffffff', lightSubtle: '#f5eee9', dark: '#241a15', darkSubtle: '#34261f' },
+  'blue-grey': { lightPage: '#f8fafc', light: '#ffffff', lightSubtle: '#f1f5f9', darkPage: '#090d16', dark: '#131b2e', darkSubtle: '#1e293b' },
+  'mist': { lightPage: '#f4f6f8', light: '#ffffff', lightSubtle: '#eaeff4', darkPage: '#10171d', dark: '#18222a', darkSubtle: '#22303c' },
+  'ocean': { lightPage: '#f0f9fa', light: '#ffffff', lightSubtle: '#e1f3f5', darkPage: '#09181c', dark: '#10242b', darkSubtle: '#18353f' },
+  'amethyst': { lightPage: '#faf5ff', light: '#ffffff', lightSubtle: '#f3e8ff', darkPage: '#130c22', dark: '#1d1433', darkSubtle: '#2b1d4a' },
+  'rose': { lightPage: '#fff1f2', light: '#ffffff', lightSubtle: '#ffe4e6', darkPage: '#1f0b11', dark: '#2c121a', darkSubtle: '#3f1b26' },
+  'amber': { lightPage: '#fffbeb', light: '#ffffff', lightSubtle: '#fef3c7', darkPage: '#1c1408', dark: '#2a1d0b', darkSubtle: '#3c2a12' },
+  'forest': { lightPage: '#f5f3eb', light: '#fffefa', lightSubtle: '#ecefe7', darkPage: '#151d19', dark: '#1d2822', darkSubtle: '#28352e' },
+  'mocha': { lightPage: '#f5f0eb', light: '#ffffff', lightSubtle: '#ebe3db', darkPage: '#181210', dark: '#241c19', darkSubtle: '#332824' },
 })
 
 export function getAccessibleForeground(hexColor, isDarkTheme = false, palette = DEFAULT_PALETTE) {
@@ -123,10 +123,14 @@ export function getAccessibleForeground(hexColor, isDarkTheme = false, palette =
   if (!norm) return isDarkTheme ? '#f8fafc' : '#0f172a'
   const normPalette = normalizePalettePreference(palette)
   const surfaces = PALETTE_SURFACES[normPalette] || PALETTE_SURFACES['blue-grey']
+  const page = isDarkTheme ? surfaces.darkPage : surfaces.lightPage
   const card = isDarkTheme ? surfaces.dark : surfaces.light
   const subtle = isDarkTheme ? surfaces.darkSubtle : surfaces.lightSubtle
-  const trans = mixHex(card, norm, isDarkTheme ? 0.16 : 0.14)
-  const targetSurfaces = [card, subtle, trans]
+  const alpha = isDarkTheme ? 0.16 : 0.14
+  const transCard = mixHex(card, norm, alpha)
+  const transSubtle = mixHex(subtle, norm, alpha)
+  const transPage = mixHex(page, norm, alpha)
+  const targetSurfaces = [page, card, subtle, transPage, transCard, transSubtle]
 
   if (targetSurfaces.every(s => calculateContrastRatio(norm, s) >= 4.5)) {
     return norm
@@ -135,8 +139,8 @@ export function getAccessibleForeground(hexColor, isDarkTheme = false, palette =
   // If contrast is insufficient (e.g. #ffffff on white surface or #000000 on dark surface),
   // progressively adjust luminance while preserving the hue/tone as closely as possible.
   const target = isDarkTheme ? '#ffffff' : (norm === '#ffffff' ? '#0f172a' : '#000000')
-  for (let step = 1; step <= 20; step++) {
-    const candidate = mixHex(norm, target, step * 0.05)
+  for (let step = 1; step <= 50; step++) {
+    const candidate = mixHex(norm, target, step * 0.02)
     if (targetSurfaces.every(s => calculateContrastRatio(candidate, s) >= 4.5)) {
       return candidate
     }

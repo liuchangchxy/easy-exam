@@ -11,7 +11,7 @@
         <p class="home-user-pill">
           <span class="user-role-dot" :class="user?.is_admin ? 'role-admin' : 'role-user'"></span>
           {{ user?.username }}
-          <span v-if="user?.is_admin" class="user-role-badge">{{ user?.is_admin ? t('sidebar.role_admin') : t('sidebar.role_user') }}</span>
+          <span v-if="user" class="user-role-badge">{{ user?.is_admin ? t('sidebar.role_admin') : t('sidebar.role_user') }}</span>
         </p>
       </div>
 
@@ -468,7 +468,7 @@
               {{ copyingQuestion ? t('ui.k0674') : t('ui.k0675') }}
             </button>
           </div>
-          <p v-if="copyNotice" style="font-size: 0.85rem; color: var(--primary); margin: 0.3rem 0 0 0;">{{ copyNotice }}</p>
+          <p v-if="copyNotice" style="font-size: 0.85rem; color: var(--primary-fg, var(--primary)); margin: 0.3rem 0 0 0;">{{ copyNotice }}</p>
         </div>
 
         <div class="bank-actions" style="margin-top: 1rem;">
@@ -525,7 +525,7 @@
           </div>
           <div style="background: var(--bg-subtle); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border); text-align: center;">
             <small style="color: var(--text-muted); font-size: 0.75rem;">{{ t('home.batch_ai_missing') }}</small>
-            <strong style="display: block; font-size: 1.25rem; font-family: var(--linear-mono); color: var(--primary);">{{ aiBatchStatus?.without_explanation ?? 0 }}</strong>
+            <strong style="display: block; font-size: 1.25rem; font-family: var(--linear-mono); color: var(--primary-fg, var(--primary));">{{ aiBatchStatus?.without_explanation ?? 0 }}</strong>
           </div>
         </div>
 
@@ -544,7 +544,7 @@
         <!-- 正在执行中的进度状态条 -->
         <div v-if="aiBatchStatus?.status === 'running' || (aiBatchStatus?.processed || 0) > 0" style="margin-bottom: 1.25rem; background: var(--bg-subtle); padding: 0.85rem; border-radius: 8px; border: 1px solid var(--border);">
           <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; margin-bottom: 0.4rem;">
-            <span style="color: var(--primary); font-weight: 600;">
+            <span style="color: var(--primary-fg, var(--primary)); font-weight: 600;">
               {{ aiBatchStatus?.status === 'running' ? t('home.batch_ai_status_running') : (aiBatchStatus?.status === 'stopped' ? t('home.batch_ai_status_stopped') : t('home.batch_ai_status_completed')) }}
             </span>
             <span style="font-family: var(--linear-mono); color: var(--text-muted);">
@@ -1340,7 +1340,7 @@ defineExpose({
 
 .user-role-badge {
   font-size: 0.7rem;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-weight: 600;
   margin-left: 0.15rem;
 }
@@ -1369,11 +1369,11 @@ defineExpose({
 .main-nav-tab:hover {
   background: var(--bg-muted);
   border-color: var(--border);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
 }
 
 .main-nav-tab.featured {
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-weight: 600;
 }
 
@@ -1456,7 +1456,7 @@ defineExpose({
   font-weight: 600;
   padding: 0.2rem 0.5rem;
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   border: 1px solid var(--primary-border);
   border-radius: 9999px;
   white-space: nowrap;

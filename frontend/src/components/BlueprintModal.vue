@@ -8,7 +8,7 @@
           <button
             type="button"
             style="padding: 0.25rem 0.65rem; font-size: 0.78rem; border-radius: 4px; cursor: pointer; border: none; transition: all 120ms ease;"
-            :style="blueprintMode === 'simple' ? 'background: var(--primary); color: #fff; font-weight: 600;' : 'background: transparent; color: var(--text-muted);'"
+            :style="blueprintMode === 'simple' ? 'background: var(--primary); color: var(--on-primary); font-weight: 600;' : 'background: transparent; color: var(--text-muted);'"
             @click="blueprintMode = 'simple'"
           >
             {{ t('blueprint.mode_simple') }}
@@ -16,7 +16,7 @@
           <button
             type="button"
             style="padding: 0.25rem 0.65rem; font-size: 0.78rem; border-radius: 4px; cursor: pointer; border: none; transition: all 120ms ease;"
-            :style="blueprintMode === 'advanced' ? 'background: var(--primary); color: #fff; font-weight: 600;' : 'background: transparent; color: var(--text-muted);'"
+            :style="blueprintMode === 'advanced' ? 'background: var(--primary); color: var(--on-primary); font-weight: 600;' : 'background: transparent; color: var(--text-muted);'"
             @click="blueprintMode = 'advanced'"
           >
             {{ t('blueprint.mode_advanced') }}
@@ -34,14 +34,14 @@
           <span>{{ t('blueprint.hide_guide') }}</span> ✕
         </button>
         <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
-          <LinearIcon name="blueprint" size="20" style="color: var(--primary); margin-top: 2px;" />
+          <LinearIcon name="blueprint" size="20" style="color: var(--primary-fg, var(--primary)); margin-top: 2px;" />
           <div style="font-size: 0.85rem; color: var(--text-main); line-height: 1.5; padding-right: 4.5rem;">
             <strong>{{ t('ui.k0216') }}</strong>
             <p style="margin: 0.2rem 0 0.4rem; color: var(--text-muted);">
               {{ t('blueprint.guide_banner') }}
             </p>
             <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
-              <span style="font-weight: 600; color: var(--primary);">{{ t('ui.k0218') }}</span>
+              <span style="font-weight: 600; color: var(--primary-fg, var(--primary));">{{ t('ui.k0218') }}</span>
               <button type="button" style="font-size: 0.75rem; padding: 0.15rem 0.5rem; background: var(--primary-light); border: 1px solid var(--primary-border); border-radius: 4px; cursor: pointer;" @click="applyBlueprintTemplate('STANDARD_50')">
                 {{ t('ui.k0219') }}
               </button>

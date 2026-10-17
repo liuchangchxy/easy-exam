@@ -601,7 +601,7 @@ async function submit() {
 }
 
 .file-upload-card.drag-over {
-  border-color: var(--primary);
+  border-color: var(--primary-fg, var(--primary));
   background: var(--bg-hover, rgba(37, 99, 235, 0.08));
   transform: scale(1.01);
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
@@ -620,7 +620,7 @@ async function submit() {
   justify-content: center;
   padding: 1rem;
   gap: 0.5rem;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   pointer-events: none;
 }
 
@@ -704,7 +704,7 @@ async function submit() {
   font-size: 0.725rem;
   padding: 0.15rem 0.45rem;
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-weight: 600;
   border-radius: 4px;
 }

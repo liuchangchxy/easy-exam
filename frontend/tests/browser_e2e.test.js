@@ -385,8 +385,32 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       // Answer correctly
       await answerCurrentQuestion(false)
 
-      // FSRS rating buttons are shown: deliberately select non-default '4 - 简单 (Easy)'
+      // FSRS rating buttons are shown: verify computed contrast meets WCAG AA >= 4.5:1
       await page.waitForSelector('.fsrs-rating-box')
+      const ratingBtnStyles = await page.evaluate(() => {
+        const againBtn = document.querySelector('.rating-btn.again')
+        const goodBtn = document.querySelector('.rating-btn.good')
+        const easyBtn = document.querySelector('.rating-btn.easy')
+        const csAgain = againBtn ? getComputedStyle(againBtn) : null
+        const csGood = goodBtn ? getComputedStyle(goodBtn) : null
+        const csEasy = easyBtn ? getComputedStyle(easyBtn) : null
+        return {
+          againColor: csAgain ? csAgain.color : '',
+          againBg: csAgain ? csAgain.backgroundColor : '',
+          goodColor: csGood ? csGood.color : '',
+          goodBg: csGood ? csGood.backgroundColor : '',
+          easyColor: csEasy ? csEasy.color : '',
+          easyBg: csEasy ? csEasy.backgroundColor : '',
+        }
+      })
+      assert.ok(ratingBtnStyles.againColor && ratingBtnStyles.againBg, 'Again button must be rendered')
+      assert.ok(calcContrast(ratingBtnStyles.againColor, ratingBtnStyles.againBg) >= 4.5, 'Again rating button contrast >= 4.5')
+      assert.ok(ratingBtnStyles.goodColor && ratingBtnStyles.goodBg, 'Good button must be rendered')
+      assert.ok(calcContrast(ratingBtnStyles.goodColor, ratingBtnStyles.goodBg) >= 4.5, 'Good rating button contrast >= 4.5')
+      assert.ok(ratingBtnStyles.easyColor && ratingBtnStyles.easyBg, 'Easy button must be rendered')
+      assert.ok(calcContrast(ratingBtnStyles.easyColor, ratingBtnStyles.easyBg) >= 4.5, 'Easy rating button contrast >= 4.5')
+
+      // Deliberately select non-default '4 - 简单 (Easy)'
       await page.click('button.rating-btn.easy')
       await page.waitForSelector('text=已更新 FSRS 评级')
 
@@ -937,9 +961,30 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
 
       assert.ok(lightBadgeRatio >= 4.5, `Sample badge contrast ${lightBadgeRatio.toFixed(2)}:1 must meet AA`)
       assert.ok(lightSegRatio >= 4.5, `Segment button active contrast ${lightSegRatio.toFixed(2)}:1 must meet AA`)
+      assert.ok(lightSidebarRatio >= 4.5, `Sidebar selected item contrast ${lightSidebarRatio.toFixed(2)}:1 must meet AA`)
       assert.notEqual(lightAccentVerification.segBorder, 'rgb(255, 255, 255)', 'Segment button active border must be visible against white')
       assert.notEqual(lightAccentVerification.palBorder, 'rgb(255, 255, 255)', 'Palette card active border must be visible against white')
       console.log('✓ Light mode custom accent #ffffff: computed badge, segment-btn, palette border, and sidebar meet WCAG AA.')
+
+      // 4b. HomeView consumers under custom accent #ffffff
+      await page.goto(BASE_URL)
+      await page.waitForSelector('.home-page')
+      const homeStyles = await page.evaluate(() => {
+        const roleBadge = document.querySelector('.user-role-badge')
+        const roleCs = roleBadge ? getComputedStyle(roleBadge) : null
+        const navTab = document.querySelector('.main-nav-tab')
+        const navCs = navTab ? getComputedStyle(navTab) : null
+        return {
+          roleColor: roleCs ? roleCs.color : '',
+          navColor: navCs ? navCs.color : '',
+        }
+      })
+      assert.ok(homeStyles.roleColor, 'Home user-role-badge must be rendered')
+      const roleRatio = calcContrast(homeStyles.roleColor, 'rgb(255, 255, 255)')
+      assert.ok(roleRatio >= 4.5, `Home user-role-badge contrast ${roleRatio.toFixed(2)}:1 must meet AA`)
+      // Return to settings
+      await page.goto(`${BASE_URL}/#/settings`)
+      await page.waitForSelector('.settings-page')
 
       // 5. Custom Accent #000000 in Dark Mode: contrast and borders
       await page.click('.segment-btn:has-text("深色模式")')
@@ -974,6 +1019,76 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       assert.ok(darkBadgeRatio >= 4.5, `Dark sample badge contrast ${darkBadgeRatio.toFixed(2)}:1 must meet AA`)
       assert.ok(darkSegRatio >= 4.5, `Dark segment button active contrast ${darkSegRatio.toFixed(2)}:1 must meet AA`)
       console.log('✓ Dark mode custom accent #000000: computed badge, segment-btn, and palette border meet WCAG AA.')
+
+      // 5b. Confirmed Reviewer Counterexamples in Real Browser DOM Computed Styles
+      // (1) Forest light + custom #ffff00
+      await page.click('.palette-preview-card[data-preview-palette="forest"]')
+      await page.click('.segment-btn:has-text("浅色模式")')
+      await hexInput.fill('#ffff00')
+      await hexInput.dispatchEvent('change')
+      await page.waitForTimeout(250)
+      const forestVerification = await page.evaluate(() => {
+        const badge = document.querySelector('.sample-badge')
+        const badgeCs = badge ? getComputedStyle(badge) : null
+        const seg = document.querySelector('.segment-btn.active')
+        const segCs = seg ? getComputedStyle(seg) : null
+        return {
+          badgeColor: badgeCs ? badgeCs.color : '',
+          badgeBg: badgeCs ? badgeCs.backgroundColor : '',
+          segColor: segCs ? segCs.color : '',
+          segBg: segCs ? segCs.backgroundColor : '',
+        }
+      })
+      const forestBadgeRatio = calcContrast(forestVerification.badgeColor, forestVerification.badgeBg, [236, 239, 231])
+      const forestSegRatio = calcContrast(forestVerification.segColor, forestVerification.segBg)
+      assert.ok(forestBadgeRatio >= 4.5, `Forest light + #ffff00 badge contrast ${forestBadgeRatio.toFixed(2)}:1 must meet AA`)
+      assert.ok(forestSegRatio >= 4.5, `Forest light + #ffff00 segment contrast ${forestSegRatio.toFixed(2)}:1 must meet AA`)
+
+      // (2) Mocha light + custom #cccc66
+      await page.click('.palette-preview-card[data-preview-palette="mocha"]')
+      await hexInput.fill('#cccc66')
+      await hexInput.dispatchEvent('change')
+      await page.waitForTimeout(250)
+      const mochaVerification = await page.evaluate(() => {
+        const badge = document.querySelector('.sample-badge')
+        const badgeCs = badge ? getComputedStyle(badge) : null
+        const seg = document.querySelector('.segment-btn.active')
+        const segCs = seg ? getComputedStyle(seg) : null
+        return {
+          badgeColor: badgeCs ? badgeCs.color : '',
+          badgeBg: badgeCs ? badgeCs.backgroundColor : '',
+          segColor: segCs ? segCs.color : '',
+          segBg: segCs ? segCs.backgroundColor : '',
+        }
+      })
+      const mochaBadgeRatio = calcContrast(mochaVerification.badgeColor, mochaVerification.badgeBg, [235, 227, 219])
+      const mochaSegRatio = calcContrast(mochaVerification.segColor, mochaVerification.segBg)
+      assert.ok(mochaBadgeRatio >= 4.5, `Mocha light + #cccc66 badge contrast ${mochaBadgeRatio.toFixed(2)}:1 must meet AA`)
+      assert.ok(mochaSegRatio >= 4.5, `Mocha light + #cccc66 segment contrast ${mochaSegRatio.toFixed(2)}:1 must meet AA`)
+
+      // (3) Amber dark + custom #338833
+      await page.click('.palette-preview-card[data-preview-palette="amber"]')
+      await page.click('.segment-btn:has-text("深色模式")')
+      await hexInput.fill('#338833')
+      await hexInput.dispatchEvent('change')
+      await page.waitForTimeout(250)
+      const amberDarkVerification = await page.evaluate(() => {
+        const badge = document.querySelector('.sample-badge')
+        const badgeCs = badge ? getComputedStyle(badge) : null
+        const seg = document.querySelector('.segment-btn.active')
+        const segCs = seg ? getComputedStyle(seg) : null
+        return {
+          badgeColor: badgeCs ? badgeCs.color : '',
+          badgeBg: badgeCs ? badgeCs.backgroundColor : '',
+          segColor: segCs ? segCs.color : '',
+          segBg: segCs ? segCs.backgroundColor : '',
+        }
+      })
+      const amberDarkBadgeRatio = calcContrast(amberDarkVerification.badgeColor, amberDarkVerification.badgeBg, [60, 42, 18])
+      const amberDarkSegRatio = calcContrast(amberDarkVerification.segColor, amberDarkVerification.segBg)
+      assert.ok(amberDarkBadgeRatio >= 4.5, `Amber dark + #338833 badge contrast ${amberDarkBadgeRatio.toFixed(2)}:1 must meet AA`)
+      assert.ok(amberDarkSegRatio >= 4.5, `Amber dark + #338833 segment contrast ${amberDarkSegRatio.toFixed(2)}:1 must meet AA`)
+      console.log('✓ Confirmed reviewer counterexamples verified in real browser DOM computed styles.')
 
       // 6. Invalid custom accent input and reset button fallback
       await hexInput.fill('invalid-hex-code')
@@ -1029,53 +1144,23 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       await page.waitForSelector('.home-page')
       await page.click('.bank-card:has-text("E2E真实浏览器题库") button.primary')
       await page.waitForSelector('.practice-page')
-
-      // Ensure question is submitted to reveal result/complete buttons
-      const isResultVisible = await page.locator('.result-card, .quick-verdict-bar').isVisible().catch(() => false)
-      if (!isResultVisible) {
-        const opt = page.locator('label.option').first()
-        await opt.click().catch(() => {})
-        await page.click('button:has-text("提交答案")').catch(() => {})
-        await page.waitForSelector('.result-card, .quick-verdict-bar', { timeout: 5000 }).catch(() => {})
-      }
-
-      const practiceStyles = await page.evaluate(() => {
-        const completeBtn = document.querySelector('.header-actions .btn-header-complete')
-        const goodBtn = document.querySelector('.rating-btn.good')
-        const aiToggle = document.querySelector('.btn-ai-toggle.active')
-        const correctNum = document.querySelector('.sheet-num-btn.correct')
-
-        const completeCs = completeBtn ? getComputedStyle(completeBtn) : null
-        const goodCs = goodBtn ? getComputedStyle(goodBtn) : null
-        const aiCs = aiToggle ? getComputedStyle(aiToggle) : null
-        const correctCs = correctNum ? getComputedStyle(correctNum) : null
-
+      // Check header complete button contrast under Amber theme
+      const completeBtnStyles = await page.evaluate(() => {
+        const btn = document.querySelector('.header-actions .btn-header-complete')
+        const cs = btn ? getComputedStyle(btn) : null
         return {
-          completeColor: completeCs ? completeCs.color : '',
-          completeBg: completeCs ? completeCs.backgroundColor : '',
-          goodColor: goodCs ? goodCs.color : '',
-          aiColor: aiCs ? aiCs.color : '',
-          aiBg: aiCs ? aiCs.backgroundColor : '',
-          correctColor: correctCs ? correctCs.color : '',
-          correctBg: correctCs ? correctCs.backgroundColor : '',
+          color: cs ? cs.color : '',
+          bg: cs ? cs.backgroundColor : '',
         }
       })
-
-      const completeRatio = calcContrast(practiceStyles.completeColor, practiceStyles.completeBg)
+      assert.ok(completeBtnStyles.color && completeBtnStyles.bg, 'Complete button must be rendered')
+      const completeRatio = calcContrast(completeBtnStyles.color, completeBtnStyles.bg)
       assert.ok(completeRatio >= 4.5, `Complete button contrast ${completeRatio.toFixed(2)}:1 must meet AA`)
-      if (practiceStyles.goodColor) {
-        const goodRatio = calcContrast(practiceStyles.goodColor, 'rgb(255, 255, 255)')
-        assert.ok(goodRatio >= 4.5, `Good rating button contrast ${goodRatio.toFixed(2)}:1 must meet AA`)
-      }
-      if (practiceStyles.correctColor && practiceStyles.correctBg) {
-        const correctRatio = calcContrast(practiceStyles.correctColor, practiceStyles.correctBg)
-        assert.ok(correctRatio >= 4.5, `Correct status button contrast ${correctRatio.toFixed(2)}:1 must meet AA`)
-      }
 
       // Test Amber hover cascade specificity on .btn-header-complete
       const completeBtnLocator = page.locator('.header-actions .btn-header-complete')
       await completeBtnLocator.hover()
-      await page.waitForTimeout(400)
+      await page.waitForTimeout(300)
       const hoverCascade = await page.evaluate(() => {
         const btn = document.querySelector('.header-actions .btn-header-complete')
         const cs = getComputedStyle(btn)
@@ -1086,7 +1171,80 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       })
       const hoverRatio = calcContrast(hoverCascade.color, hoverCascade.bg)
       assert.ok(hoverRatio >= 4.5, `Amber hover cascade contrast ${hoverRatio.toFixed(2)}:1 (${hoverCascade.color} on ${hoverCascade.bg}) must meet AA`)
-      console.log(`✓ PracticeView computed contrast verified (Amber complete button hover contrast: ${hoverRatio.toFixed(2)}:1).`)
+
+      // Deterministically answer question to inspect result state
+      await page.waitForSelector('.question-card', { timeout: 8000 })
+      const opt = page.locator('label.option').first()
+      await opt.click()
+      await page.click('button:has-text("提交答案")')
+      await page.waitForSelector('.result-card', { timeout: 8000 })
+
+      const resultVerdictStyles = await page.evaluate(() => {
+        const verdict = document.querySelector('.result-header strong')
+        const card = document.querySelector('.result-card')
+        const verdictCs = verdict ? getComputedStyle(verdict) : null
+        const cardCs = card ? getComputedStyle(card) : null
+        return {
+          color: verdictCs ? verdictCs.color : '',
+          bg: cardCs ? cardCs.backgroundColor : '',
+        }
+      })
+      assert.ok(resultVerdictStyles.color && resultVerdictStyles.bg, 'Verdict header and card must be present')
+      const verdictRatio = calcContrast(resultVerdictStyles.color, resultVerdictStyles.bg)
+      assert.ok(verdictRatio >= 4.5, `Verdict text contrast ${verdictRatio.toFixed(2)}:1 must meet AA`)
+
+      // Deterministically inspect answer sheet drawer and number button contrast
+      await page.click('.btn-sheet-trigger-pill')
+      await page.waitForSelector('.sheet-numbers-grid .sheet-num-btn', { timeout: 8000 })
+      const sheetBtnStyles = await page.evaluate(() => {
+        const numBtn = document.querySelector('.sheet-num-btn')
+        const cs = numBtn ? getComputedStyle(numBtn) : null
+        return {
+          color: cs ? cs.color : '',
+          bg: cs ? cs.backgroundColor : '',
+        }
+      })
+      assert.ok(sheetBtnStyles.color, 'Sheet number button must be rendered')
+      const sheetBtnRatio = calcContrast(sheetBtnStyles.color, sheetBtnStyles.bg)
+      assert.ok(sheetBtnRatio >= 4.5, `Sheet number button contrast ${sheetBtnRatio.toFixed(2)}:1 must meet AA`)
+      await page.click('.btn-close-sheet')
+      await page.waitForSelector('.sheet-modal-backdrop', { state: 'detached' })
+
+      // Navigate back to HomeView with active session and verify active-session badge
+      await page.click('button.btn-back')
+      await page.waitForSelector('.home-page')
+      await page.waitForSelector('.badge-active-progress', { timeout: 8000 })
+      const activeBadgeStyles = await page.evaluate(() => {
+        const badge = document.querySelector('.badge-active-progress')
+        const cs = badge ? getComputedStyle(badge) : null
+        return {
+          color: cs ? cs.color : '',
+          bg: cs ? cs.backgroundColor : '',
+        }
+      })
+      assert.ok(activeBadgeStyles.color, 'Active session badge must be present on bank card')
+      const activeBadgeRatio = calcContrast(activeBadgeStyles.color, activeBadgeStyles.bg, [255, 255, 255])
+      assert.ok(activeBadgeRatio >= 4.5, `Active session badge contrast ${activeBadgeRatio.toFixed(2)}:1 must meet AA`)
+
+      // Verify AI batch status consumer in modal dialog
+      await page.click('.btn-ai-batch')
+      await page.waitForSelector('.ai-batch-dialog', { timeout: 8000 })
+      const aiBatchStyles = await page.evaluate(() => {
+        const num = document.querySelector('.ai-batch-dialog strong')
+        const dialog = document.querySelector('.ai-batch-dialog')
+        const numCs = num ? getComputedStyle(num) : null
+        const dialogCs = dialog ? getComputedStyle(dialog) : null
+        return {
+          color: numCs ? numCs.color : '',
+          bg: dialogCs ? dialogCs.backgroundColor : '',
+        }
+      })
+      assert.ok(aiBatchStyles.color, 'AI batch status consumer must be present')
+      const aiBatchRatio = calcContrast(aiBatchStyles.color, aiBatchStyles.bg)
+      assert.ok(aiBatchRatio >= 4.5, `AI batch status number contrast ${aiBatchRatio.toFixed(2)}:1 must meet AA`)
+      await page.click('.ai-batch-dialog button.secondary-btn')
+      await page.waitForSelector('.ai-batch-dialog', { state: 'detached' })
+      console.log('✓ PracticeView, Active Session Badge, and AI Batch consumers computed contrast verified under Amber palette.')
 
       // 10. Multi-viewport zero-overflow verification (375px, 768px, 1280px)
       await page.setViewportSize({ width: 375, height: 667 })

@@ -640,7 +640,7 @@ onMounted(async () => {
   font-size: 0.75rem;
   font-weight: 700;
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   padding: 0.2rem 0.6rem;
   border-radius: 9999px;
 }
@@ -780,7 +780,7 @@ onMounted(async () => {
 
 .toolbar-mode-switch button.active {
   background: var(--bg-card);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-weight: 600;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
@@ -825,7 +825,7 @@ onMounted(async () => {
 
 .stat-box strong {
   font-size: 1.65rem;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-weight: 700;
   letter-spacing: -0.02em;
   font-family: var(--linear-mono);
@@ -965,7 +965,7 @@ onMounted(async () => {
 }
 
 .rec-filter-select:focus {
-  border-color: var(--primary);
+  border-color: var(--primary-fg, var(--primary));
   background: var(--bg-card);
 }
 
@@ -1057,7 +1057,7 @@ onMounted(async () => {
   font-size: 0.72rem;
   padding: 0.15rem 0.4rem;
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   border-radius: 3px;
   white-space: nowrap;
   flex-shrink: 0;
@@ -1087,7 +1087,7 @@ onMounted(async () => {
 }
 
 .day-card.day-today {
-  border-color: var(--primary);
+  border-color: var(--primary-fg, var(--primary));
   background: var(--bg-card);
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
 }
@@ -1111,7 +1111,7 @@ onMounted(async () => {
   font-size: 0.72rem;
   font-weight: 700;
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   padding: 0.15rem 0.5rem;
   border-radius: 4px;
   font-family: var(--linear-mono);
@@ -1169,7 +1169,7 @@ onMounted(async () => {
   gap: 0.35rem;
   background: none;
   border: none;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-size: 0.78rem;
   font-weight: 500;
   padding: 0.2rem 0;
@@ -1244,7 +1244,7 @@ onMounted(async () => {
 
 .item-reason-tag {
   font-size: 0.68rem;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   background: var(--primary-light);
   padding: 0.1rem 0.4rem;
   border-radius: 3px;
@@ -1494,7 +1494,7 @@ onMounted(async () => {
 }
 
 .drawer-question-card:hover {
-  border-color: var(--primary);
+  border-color: var(--primary-fg, var(--primary));
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.06);
 }
 
