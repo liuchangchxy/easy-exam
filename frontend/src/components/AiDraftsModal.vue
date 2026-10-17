@@ -5,8 +5,8 @@
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
         {{ t('ui.k0207') }}
       </p>
-      <div v-if="loadingDrafts" style="text-align: center; color: var(--text-tertiary); padding: 1.5rem;">{{ t('ui.k0208') }}</div>
-      <div v-else-if="!draftsList.length" style="text-align: center; color: var(--text-tertiary); padding: 2rem;">
+      <div v-if="loadingDrafts" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">{{ t('ui.k0208') }}</div>
+      <div v-else-if="!draftsList.length" style="text-align: center; color: var(--text-muted); padding: 2rem;">
         {{ t('ui.k0209') }}
       </div>
       <div v-else style="display: flex; flex-direction: column; gap: 1rem;">

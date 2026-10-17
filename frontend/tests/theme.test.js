@@ -442,6 +442,65 @@ test('preset --primary-fg tokens guarantee WCAG AA contrast against their respec
   assert.ok(calculateContrastRatio(roseFg, roseTransCard) >= 4.5, 'Rose fg on primary-light must meet AA')
 })
 
+test('tertiary text tokens guarantee WCAG AA >= 4.5:1 across all 8 light & dark palettes and surfaces (card, subtle, page)', () => {
+  const cssPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/style.css')
+  const css = fs.readFileSync(cssPath, 'utf8')
+
+  for (const pal of THEME_PALETTES) {
+    const s = PALETTE_SURFACES[pal]
+
+    // Light mode block
+    const escapedPal = pal.replace('-', '\\-')
+    const palRegex = new RegExp(`:root\\[data-theme-palette="${escapedPal}"\\]\\s*\\{([\\s\\S]*?)\\}`, 'm')
+    const lightBlockMatch = css.match(palRegex)
+    assert.ok(lightBlockMatch, `Light CSS block for ${pal} must exist`)
+    const lightTertMatch = lightBlockMatch[1].match(/--text-tertiary:\s*(#[0-9a-fA-F]{3,8});/)
+    assert.ok(lightTertMatch, `Light --text-tertiary for ${pal} must be defined in style.css`)
+    const lightTert = lightTertMatch[1]
+
+    for (const [sName, sVal] of Object.entries({ page: s.lightPage, card: s.light, subtle: s.lightSubtle })) {
+      const ratio = calculateContrastRatio(lightTert, sVal)
+      assert.ok(
+        ratio >= 4.5,
+        `Light ${pal} --text-tertiary (${lightTert}) on ${sName} (${sVal}) is ${ratio.toFixed(2)}:1 (must be >= 4.5:1)`
+      )
+    }
+
+    // Dark mode block
+    let darkBlockMatch
+    if (pal === 'blue-grey') {
+      darkBlockMatch = css.match(/:root\[data-theme="dark"\],[^\{]*\{([\s\S]*?)\}/)
+    } else {
+      const escapedPal = pal.replace('-', '\\-')
+      const darkRegex = new RegExp(`:root\\[data-theme-palette="${escapedPal}"\\]\\[data-theme="dark"\\]\\s*\\{([\\s\\S]*?)\\}`, 'm')
+      darkBlockMatch = css.match(darkRegex)
+    }
+    assert.ok(darkBlockMatch, `Dark CSS block for ${pal} must exist`)
+    const darkTertMatch = darkBlockMatch[1].match(/--text-tertiary:\s*(#[0-9a-fA-F]{3,8});/)
+    const darkMutedMatch = darkBlockMatch[1].match(/--text-muted:\s*(#[0-9a-fA-F]{3,8});/)
+    assert.ok(darkTertMatch, `Dark --text-tertiary for ${pal} must be defined in style.css`)
+    assert.ok(darkMutedMatch, `Dark --text-muted for ${pal} must be defined in style.css`)
+    const darkTert = darkTertMatch[1]
+    const darkMuted = darkMutedMatch[1]
+
+    for (const [sName, sVal] of Object.entries({ page: s.darkPage, card: s.dark, subtle: s.darkSubtle })) {
+      const ratio = calculateContrastRatio(darkTert, sVal)
+      assert.ok(
+        ratio >= 4.5,
+        `Dark ${pal} --text-tertiary (${darkTert}) on ${sName} (${sVal}) is ${ratio.toFixed(2)}:1 (must be >= 4.5:1)`
+      )
+    }
+
+    // Dark hierarchy verification
+    const mutedRatio = calculateContrastRatio(darkMuted, s.darkSubtle)
+    const tertRatio = calculateContrastRatio(darkTert, s.darkSubtle)
+    assert.ok(
+      tertRatio < mutedRatio,
+      `Dark ${pal} hierarchy preserved: tertiary contrast (${tertRatio.toFixed(2)}) must be below muted contrast (${mutedRatio.toFixed(2)})`
+    )
+  }
+})
+
 test('button base, hover, and active states guarantee WCAG AA contrast across presets and custom accents', () => {
   // Problematic preset palettes cited in review:
   // amber light hover #b45309 and active #92400e

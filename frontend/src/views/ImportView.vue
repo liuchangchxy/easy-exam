@@ -215,7 +215,7 @@
       <section v-if="pdfPreview" class="column-mapping-panel pdf-correction-panel" style="margin-top: 1rem; border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; background: var(--bg-card);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
           <h3 style="color: var(--text-main);">{{ t('ui.k0360') }}</h3>
-          <span :style="{ fontSize: '0.8rem', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 'bold', background: pdfPreview.confidence === 'HIGH' ? 'var(--success-light)' : 'var(--warning-light)', color: pdfPreview.confidence === 'HIGH' ? 'var(--success-fg, var(--success))' : 'var(--warning-fg, #92400e)' }">
+          <span class="pdf-confidence-badge" :style="{ fontSize: '0.8rem', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 'bold', background: pdfPreview.confidence === 'HIGH' ? 'var(--success-light)' : 'var(--warning-light)', color: pdfPreview.confidence === 'HIGH' ? 'var(--success-fg, var(--success))' : 'var(--warning-fg, #92400e)' }">
             {{ pdfPreview.confidence === 'HIGH' ? t('ui.k0693') : t('ui.k0694') }}
           </span>
         </div>
@@ -234,7 +234,7 @@
               </div>
             </div>
 
-            <div v-if="cand.is_uncertain" style="padding: 0.4rem 0.6rem; background: var(--warning-light); border: 1px solid var(--warning-border); border-radius: 4px; font-size: 0.8rem; color: var(--warning-fg, #92400e); margin-bottom: 0.5rem;">
+            <div v-if="cand.is_uncertain" class="pdf-uncertain-box" style="padding: 0.4rem 0.6rem; background: var(--warning-light); border: 1px solid var(--warning-border); border-radius: 4px; font-size: 0.8rem; color: var(--warning-fg, #92400e); margin-bottom: 0.5rem;">
               {{ t('ui.k0365') }}{{ cand.uncertain_reason }}
             </div>
 

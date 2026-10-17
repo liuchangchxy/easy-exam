@@ -1294,61 +1294,115 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       await page.waitForSelector('.home-page', { timeout: 8000 })
       await page.click('.bank-card:first-child button.primary')
       await page.waitForSelector('.practice-page', { timeout: 8000 })
+
+      // Select option and submit to reveal result card and AI entry block
+      await page.click('label.option')
+      await page.click('button:has-text("提交答案"), .btn-submit-answer')
+      await page.waitForSelector('.btn-toggle-ai-card', { timeout: 8000 })
+
+      // Open AI assistant panel
+      await page.click('.btn-toggle-ai-card')
+      await page.waitForSelector('.ai-panel', { timeout: 8000 })
+
+      // Route AI generation to return deterministic error payload triggering aiStatusMessage
+      await page.route('**/ai/questions/*/generate', async route => {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ detail: 'AI service unconfigured' }),
+        })
+      })
+
+      // Trigger AI explanation generation (fails because AI provider is unconfigured, populating aiStatusMessage)
+      await page.click('.ai-btn-group button:first-child')
+      await page.waitForSelector('.ai-status', { timeout: 8000 })
+
       const aiStatusStyles = await page.evaluate(() => {
-        const p = document.createElement('p')
-        p.className = 'ai-status'
-        p.textContent = 'AI服务未配置，降级使用本地题库'
-        const host = document.querySelector('.ai-dialog-card, .practice-page')
-        host.appendChild(p)
-        const cs = getComputedStyle(p)
-        const res = {
+        const el = document.querySelector('.ai-status')
+        const cs = el ? getComputedStyle(el) : null
+        return {
           color: cs ? cs.color : '',
           bg: cs ? cs.backgroundColor : '',
+          text: el ? el.textContent.trim() : '',
         }
-        p.remove()
-        return res
       })
       assert.ok(aiStatusStyles.color, 'AI status element must have valid color')
+      assert.ok(aiStatusStyles.text.length > 0, 'AI status element must contain actual status message')
       const aiStatusRatio = calcContrast(aiStatusStyles.color, aiStatusStyles.bg, [255, 255, 255])
       assert.ok(aiStatusRatio >= 4.5, `AI status contrast ${aiStatusRatio.toFixed(2)}:1 must meet AA >= 4.5:1`)
 
       // 10d. Uncertain import state in ImportView
+      await page.route('**/*pdf-preview*', async route => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            draft_id: 'test_pdf_draft_001',
+            confidence: 'MEDIUM',
+            candidates: [
+              {
+                candidate_id: 1,
+                type: 'SINGLE',
+                stem: '关于微服务架构的描述，下列哪项是不正确的？',
+                options: [
+                  { key: 'A', content: '服务间通过轻量级机制通信' },
+                  { key: 'B', content: '每个服务应具备独立的数据存储' },
+                ],
+                answer: 'C',
+                explanation: '微服务强调服务自治与独立存储',
+                difficulty: 3,
+                tags: ['系统架构'],
+                is_uncertain: true,
+                uncertain_reason: '候选解析置信度偏低，请核对标准答案',
+              },
+            ],
+          }),
+        })
+      })
+
       await page.goto(`${BASE_URL}/#/import`)
       await page.waitForSelector('.import-page', { timeout: 8000 })
-      const importStatusStyles = await page.evaluate(() => {
-        const host = document.querySelector('.import-page') || document.body
-        const badge = document.createElement('span')
-        badge.style.fontSize = '0.8rem'
-        badge.style.padding = '0.25rem 0.6rem'
-        badge.style.borderRadius = '4px'
-        badge.style.fontWeight = 'bold'
-        badge.style.background = 'var(--warning-light)'
-        badge.style.color = 'var(--warning-fg, #92400e)'
-        badge.textContent = 'MEDIUM'
 
-        const uncertainBox = document.createElement('div')
-        uncertainBox.style.padding = '0.4rem 0.6rem'
-        uncertainBox.style.background = 'var(--warning-light)'
-        uncertainBox.style.border = '1px solid var(--warning-border)'
-        uncertainBox.style.borderRadius = '4px'
-        uncertainBox.style.fontSize = '0.8rem'
-        uncertainBox.style.color = 'var(--warning-fg, #92400e)'
-        uncertainBox.textContent = '候选解析不确定'
+      // Select bank
+      const importBankSelect = page.locator('form.import-form select').first()
+      await importBankSelect.waitFor({ state: 'visible' })
+      const firstBankOpt = importBankSelect.locator('option:not([disabled])').first()
+      await firstBankOpt.waitFor({ state: 'attached', timeout: 8000 })
+      const bVal = await firstBankOpt.getAttribute('value')
+      await importBankSelect.selectOption(bVal)
 
-        host.appendChild(badge)
-        host.appendChild(uncertainBox)
-        const bCs = getComputedStyle(badge)
-        const uCs = getComputedStyle(uncertainBox)
-        const res = {
-          badgeColor: bCs.color,
-          badgeBg: bCs.backgroundColor,
-          boxColor: uCs.color,
-          boxBg: uCs.backgroundColor,
-        }
-        badge.remove()
-        uncertainBox.remove()
-        return res
+      // Provide mock PDF file to activate PDF inspection actions
+      const importFileInput = page.locator('input[type="file"]')
+      await importFileInput.setInputFiles({
+        name: 'sample_exam.pdf',
+        mimeType: 'application/pdf',
+        buffer: Buffer.from('%PDF-1.4 sample content'),
       })
+
+      // Click genuine inspect button to trigger real PDF preview render
+      const inspectPdfBtn = page.locator('.preview-actions button:has-text("解析并校对 PDF"), .preview-actions button.preview-btn')
+      await inspectPdfBtn.click()
+
+      await page.waitForSelector('.pdf-correction-panel', { timeout: 8000 })
+      await page.waitForSelector('.pdf-confidence-badge', { timeout: 8000 })
+      await page.waitForSelector('.pdf-uncertain-box', { timeout: 8000 })
+
+      const importStatusStyles = await page.evaluate(() => {
+        const badge = document.querySelector('.pdf-confidence-badge')
+        const box = document.querySelector('.pdf-uncertain-box')
+        const bCs = badge ? getComputedStyle(badge) : null
+        const uCs = box ? getComputedStyle(box) : null
+        return {
+          badgeColor: bCs ? bCs.color : '',
+          badgeBg: bCs ? bCs.backgroundColor : '',
+          badgeText: badge ? badge.textContent.trim() : '',
+          boxColor: uCs ? uCs.color : '',
+          boxBg: uCs ? uCs.backgroundColor : '',
+          boxText: box ? box.textContent.trim() : '',
+        }
+      })
+      assert.ok(importStatusStyles.badgeText.length > 0, 'PDF confidence badge must contain text')
+      assert.ok(importStatusStyles.boxText.length > 0, 'PDF uncertain box must contain text')
       const importBadgeRatio = calcContrast(importStatusStyles.badgeColor, importStatusStyles.badgeBg, [255, 255, 255])
       assert.ok(importBadgeRatio >= 4.5, `Import PDF confidence badge contrast ${importBadgeRatio.toFixed(2)}:1 must meet AA >= 4.5:1`)
       const importBoxRatio = calcContrast(importStatusStyles.boxColor, importStatusStyles.boxBg, [255, 255, 255])
@@ -1509,10 +1563,11 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       await page.goto(`${BASE_URL}/#/settings`)
       await page.waitForSelector('.settings-page', { timeout: 8000 })
       const initialZhActive = await page.evaluate(() => {
-        const btns = Array.from(document.querySelectorAll('.mode-toggle-segmented .segment-btn'))
+        const zhBtn = document.querySelector('button.segment-btn[data-locale="zh-CN"]')
+        const enBtn = document.querySelector('button.segment-btn[data-locale="en-US"]')
         return {
-          zhActive: btns[0] ? btns[0].classList.contains('active') : false,
-          enActive: btns[1] ? btns[1].classList.contains('active') : false,
+          zhActive: zhBtn ? zhBtn.classList.contains('active') : false,
+          enActive: enBtn ? enBtn.classList.contains('active') : false,
           lang: document.documentElement.getAttribute('lang'),
         }
       })
