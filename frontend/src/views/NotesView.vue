@@ -436,8 +436,8 @@ onMounted(() => {
 
 .filter-pill.active {
   background: var(--primary);
-  color: #fff;
-  border-color: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--primary-border, var(--primary));
   font-weight: 600;
 }
 

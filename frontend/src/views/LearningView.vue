@@ -1178,7 +1178,8 @@ onMounted(async () => {
 }
 
 .btn-toggle-items:hover {
-  color: var(--primary-hover, #1d4ed8);
+  color: var(--primary-fg, var(--primary));
+  text-decoration: underline;
 }
 
 .day-items-list {

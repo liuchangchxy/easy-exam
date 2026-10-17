@@ -1392,22 +1392,23 @@ onMounted(loadData)
 .btn-table-action.primary {
   background: var(--primary);
   border-color: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .btn-table-action.primary:hover {
   background: var(--primary-hover);
+  color: var(--on-primary-hover, var(--on-primary));
 }
 
 .btn-table-action.kill-btn {
   background: var(--danger-light);
   border-color: var(--danger-border);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .btn-table-action.kill-btn:hover {
   background: var(--danger);
-  color: #fff;
+  color: var(--on-danger, #ffffff);
 }
 
 /* ==========================================================================

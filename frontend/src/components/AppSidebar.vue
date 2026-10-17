@@ -283,7 +283,7 @@ onUnmounted(() => {
 
 <style scoped>
 .app-sidebar {
-  width: 220px;
+  width: 260px;
   height: 100vh;
   position: sticky;
   top: 0;
@@ -434,7 +434,7 @@ onUnmounted(() => {
 
 .sidebar-nav-item {
   width: 100%;
-  height: 34px;
+  height: 36px;
   display: flex;
   align-items: center;
   gap: 0.65rem;
@@ -448,7 +448,6 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 80ms ease;
   white-space: nowrap;
-  overflow: hidden;
 }
 
 .sidebar-nav-item:hover {
@@ -491,8 +490,9 @@ onUnmounted(() => {
   color: var(--primary-fg, var(--primary));
   background: var(--primary-light);
   border: 1px solid var(--primary-border);
-  padding: 1px 4px;
+  padding: 1px 5px;
   border-radius: 3px;
+  flex-shrink: 0;
 }
 
 .sidebar-footer {

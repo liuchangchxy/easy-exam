@@ -6,31 +6,31 @@
         <div class="header-titles">
           <h1 class="practice-title">{{ session?.mode === 'ELIMINATION' ? t('ui.k0734') : session?.mode === 'FSRS' ? t('ui.k0735') : session?.mode === 'PRACTICE' ? t('home.sequential_practice') : t('ui.k0736') }}</h1>
           <span v-if="question" class="badge-type-pill">{{ formatType(question.type) }}</span>
-          <button v-if="question" type="button" class="badge-index-pill btn-sheet-trigger-pill" @click="showSheetModal = true" :title="t('ui.k0511')">
-            <small>{{ index + 1 }} / {{ questions.length }}</small> <LinearIcon name="layers" size="13" /> {{ t('ui.k0093') }}
-          </button>
         </div>
+        <button v-if="question" type="button" class="badge-index-pill btn-sheet-trigger-pill" @click="showSheetModal = true" :title="t('ui.k0511')">
+          <small>{{ index + 1 }} / {{ questions.length }}</small> <LinearIcon name="layers" size="13" /> {{ t('ui.k0093') }}
+        </button>
       </div>
       <div class="header-actions">
-        <ThemeToggle compact class="desktop-only-btn" />
-        <LocaleToggle compact class="desktop-only-btn" />
-        <!-- 桌面端平铺操作 -->
-        <button type="button" class="secondary-btn btn-help-guide desktop-only-btn" @click="showHelpTip = !showHelpTip" :title="t('ui.k0512')">
+        <ThemeToggle compact class="header-control-btn" />
+        <LocaleToggle compact class="header-control-btn" />
+        <!-- 桌面端平铺操作 (宽屏 >= 1024px 显示) -->
+        <button type="button" class="secondary-btn btn-help-guide desktop-full-btn" @click="showHelpTip = !showHelpTip" :title="t('ui.k0512')">
           <LinearIcon name="zap" size="13" /> {{ t('ui.k0513') }}
         </button>
-        <button type="button" class="btn-flag desktop-only-btn" :class="{ active: isWeak }" @click="toggleWeak">
+        <button type="button" class="btn-flag desktop-full-btn" :class="{ active: isWeak }" @click="toggleWeak">
           {{ isWeak ? t('ui.k0737') : t('ui.k0738') }}
         </button>
-        <button type="button" class="btn-kill desktop-only-btn" @click="handleKill">
+        <button type="button" class="btn-kill desktop-full-btn" @click="handleKill">
           {{ t('ui.k0486') }}
         </button>
-        <button type="button" class="btn-edit-question desktop-only-btn" @click="toggleEditQuestion">
+        <button type="button" class="btn-edit-question desktop-full-btn" @click="toggleEditQuestion">
           {{ isEditingQuestion ? t('ui.k0739') : t('ui.k0740') }}
         </button>
-        <button type="button" class="primary btn-header-complete desktop-only-btn" @click="complete">{{ t('ui.k0514') }}</button>
+        <button type="button" class="primary btn-header-complete" @click="complete">{{ t('ui.k0514') }}</button>
 
-        <!-- 移动端右上角“更多 ⋯”菜单 -->
-        <div class="mobile-more-wrapper mobile-only-inline">
+        <!-- 移动/平板端“更多 ⋯”菜单 -->
+        <div class="mobile-more-wrapper compact-more-menu">
           <button type="button" class="btn-help-mobile" @click="showHelpTip = !showHelpTip" :title="t('ui.k0513')">
             <LinearIcon name="zap" size="13" />
           </button>
@@ -2090,7 +2090,7 @@ function handleRestartPractice() {
 .quick-verdict-bar.partial {
   background: var(--warning-light);
   border-color: var(--warning-border);
-  color: var(--warning);
+  color: var(--warning-fg, #92400e);
 }
 
 .verdict-status-title {
@@ -2183,7 +2183,7 @@ function handleRestartPractice() {
   color: var(--success);
 }
 .result-header strong.partial {
-  color: var(--warning);
+  color: var(--warning-fg, #92400e);
 }
 .result-header strong.incorrect {
   color: var(--danger);
@@ -2255,7 +2255,7 @@ function handleRestartPractice() {
 }
 
 .rating-btn.hard {
-  color: var(--warning);
+  color: var(--warning-fg, #92400e);
   border-color: var(--warning-border);
 }
 .rating-btn.hard:hover:not(:disabled) {
@@ -2491,7 +2491,7 @@ function handleRestartPractice() {
 
 .conflict-badge {
   font-weight: 600;
-  color: var(--warning-hover);
+  color: var(--warning-fg, #92400e);
   font-size: 0.925rem;
 }
 
@@ -2499,7 +2499,7 @@ function handleRestartPractice() {
   padding: 0.35rem 0.75rem;
   border: 1px solid var(--warning);
   background: var(--warning-light);
-  color: var(--warning);
+  color: var(--warning-fg, #92400e);
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 0.85rem;
@@ -2630,10 +2630,10 @@ function handleRestartPractice() {
 }
 
 /* Visibility utilities */
-.mobile-only-inline, .mobile-only-btn {
+.mobile-only-inline, .mobile-only-btn, .compact-more-menu {
   display: none !important;
 }
-.desktop-only-btn {
+.desktop-only-btn, .desktop-full-btn, .header-control-btn {
   display: inline-flex !important;
 }
 
@@ -3023,9 +3023,31 @@ function handleRestartPractice() {
 }
 
 /* ==========================================================================
-   Mobile Responsive Overhaul (< 768px)
+   Responsive Overhaul: Tablet & Compact Viewports (<= 1024px)
    ========================================================================== */
-@media (max-width: 767px) {
+@media (max-width: 1024px) {
+  .desktop-full-btn {
+    display: none !important;
+  }
+  .compact-more-menu {
+    display: inline-flex !important;
+  }
+  .header-control-btn {
+    display: inline-flex !important;
+  }
+  .hotkey-helper-bar,
+  .hotkey-badge {
+    display: none !important;
+  }
+  .practice-title {
+    max-width: 140px;
+  }
+}
+
+/* ==========================================================================
+   Tablet & Mobile Viewports (<= 768px)
+   ========================================================================== */
+@media (max-width: 768px) {
   .practice-page {
     width: 100%;
     margin: 0;
@@ -3045,8 +3067,6 @@ function handleRestartPractice() {
     border-radius: var(--radius-md) !important;
     box-sizing: border-box !important;
     flex-wrap: nowrap !important;
-    justify-content: space-between !important;
-    align-items: center !important;
   }
 
   .header-left-bar {
@@ -3065,7 +3085,8 @@ function handleRestartPractice() {
     gap: 0.3rem !important;
     white-space: nowrap !important;
     overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    min-width: 0 !important;
+    flex: 0 1 auto !important;
   }
 
   .btn-back {
@@ -3082,23 +3103,31 @@ function handleRestartPractice() {
   }
 
   .practice-title {
-    font-size: 0.95rem !important;
+    font-size: 0.92rem !important;
     font-weight: 600 !important;
     margin: 0 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 110px;
   }
 
   .badge-type-pill {
     font-size: 0.72rem !important;
     padding: 0.15rem 0.35rem !important;
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
   }
 
   .btn-sheet-trigger-pill {
     font-size: 0.75rem !important;
-    padding: 0.2rem 0.5rem !important;
+    padding: 0.2rem 0.45rem !important;
     min-height: 42px !important;
     display: inline-flex !important;
     align-items: center !important;
     border-radius: var(--radius-md) !important;
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
   }
 
   .header-actions {
@@ -3112,20 +3141,22 @@ function handleRestartPractice() {
   }
 
   .btn-header-complete {
-    padding: 0.25rem 0.6rem !important;
-    font-size: 0.8rem !important;
-    height: 2rem !important;
-    min-height: 2rem !important;
-    border-radius: var(--radius-sm) !important;
+    padding: 0.25rem 0.65rem !important;
+    font-size: 0.825rem !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    border-radius: var(--radius-md) !important;
+    flex-shrink: 0 !important;
   }
 
   .desktop-only-btn,
   .desktop-only-block,
+  .desktop-full-btn,
   .practice-answering-placeholder {
     display: none !important;
   }
 
-  /* 消除移动端重复的判分结果头部（已有 quick-verdict-bar 呈现完整判分） */
+  /* 消除移动/平板端重复的判分结果头部（已有 quick-verdict-bar 呈现完整判分） */
   .result-card .result-header {
     display: none !important;
   }
@@ -3151,14 +3182,11 @@ function handleRestartPractice() {
     justify-content: center !important;
   }
 
-  .mobile-only-inline {
-    display: inline-flex !important;
-  }
-  .mobile-only-btn {
+  .compact-more-menu {
     display: inline-flex !important;
   }
 
-  /* 消除桌面端键盘提示框在手机端的空间占用 */
+  /* 消除桌面端键盘提示框在移动/平板端的空间占用 */
   .practice-side-guide,
   .practice-tips {
     display: none !important;
@@ -3241,6 +3269,20 @@ function handleRestartPractice() {
   .hotkey-badge,
   .hotkey-helper-bar {
     display: none !important;
+  }
+}
+
+/* ==========================================================================
+   Narrow Mobile (< 640px, e.g. 375px)
+   ========================================================================== */
+@media (max-width: 640px) {
+  .header-control-btn,
+  .btn-help-mobile {
+    display: none !important;
+  }
+
+  .practice-title {
+    max-width: 80px !important;
   }
 }
 </style>

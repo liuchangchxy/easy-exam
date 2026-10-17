@@ -50,6 +50,7 @@
   --warning-hover: #b45309;
   --warning-light: #fffbeb;
   --warning-border: #fde68a;
+  --warning-fg: #92400e;
   --linear-bg-canvas: var(--bg-page);
   --linear-bg-surface: var(--bg-card);
   --linear-bg-subtle: var(--bg-subtle);
@@ -111,6 +112,7 @@
   --warning-hover: #fcd34d;
   --warning-light: rgba(251, 191, 36, 0.14);
   --warning-border: rgba(251, 191, 36, 0.3);
+  --warning-fg: #fbbf24;
   --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.3);
   --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.3);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
@@ -291,7 +293,7 @@
   --primary-active: #9f1239;
   --primary-light: #fff1f2;
   --primary-border: #fecdd3;
-  --primary-fg: #e11d48;
+  --primary-fg: #be123c;
   --on-primary: #ffffff;
   --on-primary-hover: #ffffff;
   --on-primary-active: #ffffff;
@@ -570,7 +572,7 @@ code {
 }
 
 .warning {
-  color: var(--warning);
+  color: var(--warning-fg, var(--warning));
   font-size: 0.875rem;
 }
 
@@ -1209,7 +1211,7 @@ button.link-button:hover:not(:disabled) {
 
 .legend-badge.flagged {
   box-shadow: inset 0 -3px var(--warning);
-  color: var(--warning-hover);
+  color: var(--warning-fg, var(--warning-hover));
 }
 
 .legend-badge.current {

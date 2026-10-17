@@ -396,6 +396,26 @@ test('status foreground/background pairs guarantee WCAG AA contrast across all m
   assert.ok(calculateContrastRatio('#4ade80', '#090d16') >= 4.5, 'Dark success on dark on-success must meet AA')
   assert.ok(calculateContrastRatio('#f87171', '#090d16') >= 4.5, 'Dark danger on dark on-danger must meet AA')
   assert.ok(calculateContrastRatio('#fbbf24', '#090d16') >= 4.5, 'Dark warning on dark on-warning must meet AA')
+
+  // Text-safe status token --warning-fg:
+  // Must meet AA >= 4.5:1 against white card (#ffffff), subtle (#fef3c7 / #f1f5f9), page (#fffbeb / #f8fafc), and warning-light (#fffbeb)
+  const warningFg = '#92400e'
+  assert.ok(calculateContrastRatio(warningFg, '#ffffff') >= 4.5, 'Warning text --warning-fg on card #ffffff must meet AA')
+  assert.ok(calculateContrastRatio(warningFg, '#fffbeb') >= 4.5, 'Warning text --warning-fg on warning-light #fffbeb must meet AA')
+  assert.ok(calculateContrastRatio(warningFg, '#fef3c7') >= 4.5, 'Warning text --warning-fg on subtle #fef3c7 must meet AA')
+  assert.ok(calculateContrastRatio(warningFg, '#f8fafc') >= 4.5, 'Warning text --warning-fg on page #f8fafc must meet AA')
+  assert.ok(calculateContrastRatio('#fbbf24', '#131b2e') >= 4.5, 'Dark warning text on dark card #131b2e must meet AA')
+})
+
+test('preset --primary-fg tokens guarantee WCAG AA contrast against their respective card, page, subtle and translucent surfaces', () => {
+  // Rose light preset (darkened to #be123c):
+  const roseFg = '#be123c'
+  const roseSurfaces = PALETTE_SURFACES['rose']
+  assert.ok(calculateContrastRatio(roseFg, roseSurfaces.light) >= 4.5, 'Rose fg on card must meet AA')
+  assert.ok(calculateContrastRatio(roseFg, roseSurfaces.lightPage) >= 4.5, 'Rose fg on page must meet AA')
+  assert.ok(calculateContrastRatio(roseFg, roseSurfaces.lightSubtle) >= 4.5, 'Rose fg on subtle must meet AA')
+  const roseTransCard = mixHex(roseSurfaces.light, '#e11d48', 0.14)
+  assert.ok(calculateContrastRatio(roseFg, roseTransCard) >= 4.5, 'Rose fg on primary-light must meet AA')
 })
 
 test('button base, hover, and active states guarantee WCAG AA contrast across presets and custom accents', () => {

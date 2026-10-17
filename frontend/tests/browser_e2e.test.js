@@ -1246,31 +1246,172 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       await page.waitForSelector('.ai-batch-dialog', { state: 'detached' })
       console.log('✓ PracticeView, Active Session Badge, and AI Batch consumers computed contrast verified under Amber palette.')
 
-      // 10. Multi-viewport zero-overflow verification (375px, 768px, 1280px)
-      await page.setViewportSize({ width: 375, height: 667 })
-      await page.waitForTimeout(200)
-      const mobileScroll = await page.evaluate(() => ({
-        scrollWidth: document.documentElement.scrollWidth,
-        clientWidth: document.documentElement.clientWidth,
-      }))
-      assert.ok(mobileScroll.scrollWidth <= mobileScroll.clientWidth + 1, `Mobile 375px zero-overflow: scrollWidth=${mobileScroll.scrollWidth} <= clientWidth=${mobileScroll.clientWidth}`)
+      // 10. True Element-Level Responsive Assertions across 375px, 768px, and 1280px (zh-CN & en-US)
+      // Helper function to test responsive layout at each viewport
+      async function verifyResponsiveViewports(localeName = 'zh-CN') {
+        // --- 10a. 375px Mobile Viewport ---
+        await page.setViewportSize({ width: 375, height: 667 })
+        await page.goto(BASE_URL)
+        await page.waitForSelector('.home-page')
+        await page.waitForSelector('.mobile-nav-bar')
 
-      await page.setViewportSize({ width: 768, height: 1024 })
-      await page.waitForTimeout(200)
-      const tabletScroll = await page.evaluate(() => ({
-        scrollWidth: document.documentElement.scrollWidth,
-        clientWidth: document.documentElement.clientWidth,
-      }))
-      assert.ok(tabletScroll.scrollWidth <= tabletScroll.clientWidth + 1, `Tablet 768px zero-overflow: scrollWidth=${tabletScroll.scrollWidth} <= clientWidth=${tabletScroll.clientWidth}`)
+        // Verify MobileNav labels have no ellipsis/truncation and meet touch targets
+        const mobileNavCheck = await page.evaluate(() => {
+          const items = Array.from(document.querySelectorAll('.mobile-nav-item'))
+          return items.map(item => {
+            const label = item.querySelector('.mobile-nav-label')
+            const rect = item.getBoundingClientRect()
+            return {
+              text: label ? label.textContent.trim() : '',
+              scrollWidth: label ? label.scrollWidth : 0,
+              clientWidth: label ? label.clientWidth : 0,
+              height: rect.height,
+              hasEllipsis: label ? (label.textContent.includes('...') || label.textContent.includes('…')) : false,
+            }
+          })
+        })
+        assert.equal(mobileNavCheck.length, 6, 'Mobile bottom nav must have exactly 6 items')
+        for (const item of mobileNavCheck) {
+          assert.ok(item.text.length > 0, 'Mobile nav item label must not be empty')
+          assert.ok(!item.hasEllipsis, `Mobile nav label "${item.text}" must not be truncated with ellipsis in ${localeName}`)
+          assert.ok(item.scrollWidth <= item.clientWidth + 2, `Mobile nav label "${item.text}" must fit within clientWidth (${item.scrollWidth} <= ${item.clientWidth})`)
+          assert.ok(item.height >= 42, `Mobile nav touch target height (${item.height}px) must be >= 42px`)
+        }
 
-      await page.setViewportSize({ width: 1280, height: 800 })
+        // Navigate to PracticeView at 375px and verify header and controls
+        await page.click('.bank-card button.primary')
+        await page.waitForSelector('.practice-page')
+        await page.waitForSelector('.btn-sheet-trigger-pill')
+
+        const mobilePracticeCheck = await page.evaluate(() => {
+          const sheetTrigger = document.querySelector('.btn-sheet-trigger-pill')
+          const backBtn = document.querySelector('.btn-back')
+          const completeBtn = document.querySelector('.btn-header-complete')
+          const title = document.querySelector('.practice-title')
+          const actionBtn = document.querySelector('.btn-submit-answer, .btn-next-question')
+          const hotkeyBar = document.querySelector('.hotkey-helper-bar')
+
+          const sheetRect = sheetTrigger ? sheetTrigger.getBoundingClientRect() : null
+          const backRect = backBtn ? backBtn.getBoundingClientRect() : null
+          const completeRect = completeBtn ? completeBtn.getBoundingClientRect() : null
+          const actionRect = actionBtn ? actionBtn.getBoundingClientRect() : null
+
+          return {
+            sheetText: sheetTrigger ? sheetTrigger.textContent.trim() : '',
+            sheetVisible: sheetRect ? (sheetRect.width > 0 && sheetRect.height > 0 && sheetRect.right <= 375) : false,
+            backVisible: backRect ? (backRect.width > 0 && backRect.height >= 40) : false,
+            completeVisible: completeRect ? (completeRect.width > 0 && completeRect.height >= 38) : false,
+            actionTargetHeight: actionRect ? actionRect.height : 0,
+            hotkeyBarDisplay: hotkeyBar ? getComputedStyle(hotkeyBar).display : 'none',
+          }
+        })
+        assert.ok(mobilePracticeCheck.sheetVisible, `Practice sheet trigger must be visible and not clipped at 375px in ${localeName}`)
+        assert.ok(mobilePracticeCheck.sheetText.length > 0, 'Practice sheet trigger text must be non-empty')
+        assert.ok(mobilePracticeCheck.backVisible, 'Back button must be visible with adequate touch target')
+        assert.ok(mobilePracticeCheck.completeVisible, 'Complete button must be visible with adequate touch target')
+        assert.ok(mobilePracticeCheck.actionTargetHeight >= 40, `Bottom action button height (${mobilePracticeCheck.actionTargetHeight}px) must meet mobile touch target`)
+        assert.equal(mobilePracticeCheck.hotkeyBarDisplay, 'none', 'Keyboard shortcut strip must be hidden on mobile 375px')
+
+        // --- 10b. 768px Tablet Viewport ---
+        await page.setViewportSize({ width: 768, height: 1024 })
+        await page.waitForTimeout(250)
+
+        // Verify 768px header: boundingClientRect non-overlap and control visibility
+        const tabletPracticeCheck = await page.evaluate(() => {
+          const leftBar = document.querySelector('.header-left-bar')
+          const actions = document.querySelector('.header-actions')
+          const themeToggle = document.querySelector('.header-actions .theme-toggle, .header-actions .header-control-btn')
+          const localeToggle = document.querySelector('.header-actions .locale-toggle')
+          const sheetTrigger = document.querySelector('.btn-sheet-trigger-pill')
+          const completeBtn = document.querySelector('.btn-header-complete')
+          const hotkeyBar = document.querySelector('.hotkey-helper-bar')
+
+          const leftRect = leftBar ? leftBar.getBoundingClientRect() : null
+          const actionsRect = actions ? actions.getBoundingClientRect() : null
+          const themeRect = themeToggle ? themeToggle.getBoundingClientRect() : null
+          const sheetRect = sheetTrigger ? sheetTrigger.getBoundingClientRect() : null
+          const completeRect = completeBtn ? completeBtn.getBoundingClientRect() : null
+
+          return {
+            leftRight: leftRect ? leftRect.right : 0,
+            actionsLeft: actionsRect ? actionsRect.left : 0,
+            themeVisible: themeRect ? (themeRect.width > 0 && themeRect.height > 0) : false,
+            sheetVisible: sheetRect ? (sheetRect.width > 0 && sheetRect.height > 0) : false,
+            completeVisible: completeRect ? (completeRect.width > 0 && completeRect.height > 0) : false,
+            hotkeyBarDisplay: hotkeyBar ? getComputedStyle(hotkeyBar).display : 'none',
+          }
+        })
+        assert.ok(
+          tabletPracticeCheck.leftRight <= tabletPracticeCheck.actionsLeft + 2,
+          `768px tablet: header-left-bar (right=${tabletPracticeCheck.leftRight}) must not overlap header-actions (left=${tabletPracticeCheck.actionsLeft})`
+        )
+        assert.ok(tabletPracticeCheck.themeVisible, 'Theme toggle control must be visible at 768px tablet')
+        assert.ok(tabletPracticeCheck.sheetVisible, 'Answer sheet trigger must be visible at 768px tablet')
+        assert.ok(tabletPracticeCheck.completeVisible, 'Complete button must be visible at 768px tablet')
+        assert.equal(tabletPracticeCheck.hotkeyBarDisplay, 'none', 'Hotkey helper strip must not be squished at 768px tablet')
+
+        // --- 10c. 1280px Desktop Viewport ---
+        await page.setViewportSize({ width: 1280, height: 800 })
+        await page.goto(BASE_URL)
+        await page.waitForSelector('.home-page')
+        await page.waitForSelector('.app-sidebar')
+
+        // Verify desktop sidebar: width >= 240px, items not clipped, primary navigation legible
+        const desktopSidebarCheck = await page.evaluate(() => {
+          const sidebar = document.querySelector('.app-sidebar')
+          const sidebarRect = sidebar ? sidebar.getBoundingClientRect() : null
+          const navItems = Array.from(document.querySelectorAll('.sidebar-nav-item'))
+          const itemChecks = navItems.map(item => {
+            const label = item.querySelector('.nav-item-label')
+            const sub = item.querySelector('.nav-item-sub')
+            const itemRect = item.getBoundingClientRect()
+            const labelRect = label ? label.getBoundingClientRect() : null
+            const subRect = sub ? sub.getBoundingClientRect() : null
+            return {
+              text: label ? label.textContent.trim() : '',
+              labelWidth: labelRect ? labelRect.width : 0,
+              subText: sub ? sub.textContent.trim() : '',
+              subFitsWithinItem: subRect ? (subRect.right <= itemRect.right + 2) : true,
+              fitsWithinSidebar: itemRect ? (itemRect.right <= sidebarRect.right + 2) : true,
+            }
+          })
+
+          return {
+            sidebarWidth: sidebarRect ? sidebarRect.width : 0,
+            itemChecks,
+          }
+        })
+        assert.ok(desktopSidebarCheck.sidebarWidth >= 240, `Desktop sidebar width (${desktopSidebarCheck.sidebarWidth}px) must be >= 240px`)
+        for (const item of desktopSidebarCheck.itemChecks) {
+          if (item.text) {
+            assert.ok(item.labelWidth > 0, `Sidebar nav label "${item.text}" must have positive width`)
+            assert.ok(item.fitsWithinSidebar, `Sidebar nav item "${item.text}" must fit within sidebar boundary`)
+            if (item.subText) {
+              assert.ok(item.subFitsWithinItem, `Sub-label "${item.subText}" must fit within sidebar item without clipping`)
+            }
+          }
+        }
+      }
+
+      // Run verification in default zh-CN
+      await verifyResponsiveViewports('zh-CN')
+      console.log('✓ zh-CN responsive element-level layout verified across 375px, 768px, and 1280px.')
+
+      // Run verification in en-US to prevent English label overflow
+      await page.evaluate(() => {
+        localStorage.setItem('easyexam-locale', 'en-US')
+      })
+      await page.reload()
+      await page.waitForTimeout(300)
+      await verifyResponsiveViewports('en-US')
+      console.log('✓ en-US responsive element-level layout verified across 375px, 768px, and 1280px.')
+
+      // Restore zh-CN locale
+      await page.evaluate(() => {
+        localStorage.setItem('easyexam-locale', 'zh-CN')
+      })
+      await page.reload()
       await page.waitForTimeout(200)
-      const desktopScroll = await page.evaluate(() => ({
-        scrollWidth: document.documentElement.scrollWidth,
-        clientWidth: document.documentElement.clientWidth,
-      }))
-      assert.ok(desktopScroll.scrollWidth <= desktopScroll.clientWidth + 1, `Desktop 1280px zero-overflow: scrollWidth=${desktopScroll.scrollWidth} <= clientWidth=${desktopScroll.clientWidth}`)
-      console.log('✓ Multi-viewport zero-overflow verified across 375px, 768px, and 1280px.')
 
       // Final restore to blue-grey default palette
       await page.goto(`${BASE_URL}/#/settings`)

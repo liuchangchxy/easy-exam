@@ -9,10 +9,10 @@ export default {
     "home": "Home",
     "practice": "Practice",
     "exam": "Mock Exam",
-    "mistakes": "Mistakes Review (Kill Mode)",
-    "mistakes_sub": "Mistakes · FSRS",
-    "learning": "Review Center (Dashboard)",
-    "learning_sub": "Review · Trends",
+    "mistakes": "Mistakes Review",
+    "mistakes_sub": "FSRS",
+    "learning": "Review Center",
+    "learning_sub": "Trends",
     "imports": "Import Bank",
     "notes": "Knowledge Notes",
     "settings": "Settings",
@@ -21,6 +21,14 @@ export default {
     "theme": "Toggle Theme",
     "locale": "Switch Language",
     "search": "Search questions & banks..."
+  },
+  "nav_short": {
+    "home": "Home",
+    "mistakes": "Mistakes",
+    "learning": "Review",
+    "notes": "Notes",
+    "imports": "Import",
+    "actions": "Actions"
   },
   "common": {
     "confirm": "Confirm",

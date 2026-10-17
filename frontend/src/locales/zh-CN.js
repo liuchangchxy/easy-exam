@@ -10,9 +10,9 @@ export default {
     "practice": "题库练习",
     "exam": "模拟考试",
     "mistakes": "错题攻克 (错题斩杀)",
-    "mistakes_sub": "错题攻克 · FSRS",
+    "mistakes_sub": "FSRS",
     "learning": "复习中心 (学习看板)",
-    "learning_sub": "复习中心 · 规划",
+    "learning_sub": "规划",
     "imports": "导入题库",
     "notes": "知识笔记",
     "settings": "系统设置",
@@ -21,6 +21,14 @@ export default {
     "theme": "切换主题",
     "locale": "切换语言",
     "search": "搜索功能与题库..."
+  },
+  "nav_short": {
+    "home": "首页",
+    "mistakes": "错题",
+    "learning": "复习",
+    "notes": "笔记",
+    "imports": "导入",
+    "actions": "操作"
   },
   "common": {
     "confirm": "确定",
