@@ -1658,12 +1658,12 @@ function handleRestartPractice() {
 .ai-badge {
   font-weight: 600;
   font-size: 0.875rem;
-  color: var(--success);
+  color: var(--success-fg, var(--success));
 }
 
 .ai-desc {
   font-size: 0.785rem;
-  color: var(--success-hover);
+  color: var(--success-fg, var(--success-hover));
 }
 
 .btn-toggle-ai-card {
@@ -1672,7 +1672,7 @@ function handleRestartPractice() {
   font-weight: 500;
   background: var(--bg-card);
   border: 1px solid var(--success-border);
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -1795,7 +1795,7 @@ function handleRestartPractice() {
   padding: 0.2rem 0.5rem;
   background: var(--danger-light);
   border: 1px solid var(--danger-border);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border-radius: var(--radius-sm);
   font-size: 0.75rem;
   cursor: pointer;
@@ -1832,17 +1832,18 @@ function handleRestartPractice() {
 .btn-flag.active {
   background: var(--warning-light);
   border-color: var(--warning);
-  color: var(--warning-hover);
+  color: var(--warning-fg, #92400e);
   font-weight: 600;
 }
 
 .btn-kill {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border-color: var(--danger-border);
 }
 .btn-kill:hover:not(:disabled) {
   background: var(--danger-light);
   border-color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .question-card {
@@ -2078,13 +2079,13 @@ function handleRestartPractice() {
 .quick-verdict-bar.correct {
   background: var(--success-light);
   border-color: var(--success-border);
-  color: var(--success);
+  color: var(--success-fg, var(--success));
 }
 
 .quick-verdict-bar.incorrect {
   background: var(--danger-light);
   border-color: var(--danger-border);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .quick-verdict-bar.partial {
@@ -2108,11 +2109,11 @@ function handleRestartPractice() {
 }
 
 .text-correct {
-  color: var(--success);
+  color: var(--success-fg, var(--success));
 }
 
 .text-danger {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .option.option-correct {
@@ -2146,13 +2147,13 @@ function handleRestartPractice() {
 
 .inline-verdict-badge.correct {
   background: var(--success-light);
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   border: 1px solid var(--success-border);
 }
 
 .inline-verdict-badge.wrong {
   background: var(--danger-light);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border: 1px solid var(--danger-border);
 }
 
@@ -2180,13 +2181,13 @@ function handleRestartPractice() {
 }
 
 .result-header strong.correct {
-  color: var(--success);
+  color: var(--success-fg, var(--success));
 }
 .result-header strong.partial {
   color: var(--warning-fg, #92400e);
 }
 .result-header strong.incorrect {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .official-explanation {
@@ -2247,11 +2248,12 @@ function handleRestartPractice() {
 }
 
 .rating-btn.again {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border-color: var(--danger-border);
 }
 .rating-btn.again:hover:not(:disabled) {
   background: var(--danger-light);
+  color: var(--danger-fg, var(--danger));
 }
 
 .rating-btn.hard {
@@ -2260,6 +2262,7 @@ function handleRestartPractice() {
 }
 .rating-btn.hard:hover:not(:disabled) {
   background: var(--warning-light);
+  color: var(--warning-fg, #92400e);
 }
 
 .rating-btn.good {
@@ -2271,11 +2274,12 @@ function handleRestartPractice() {
 }
 
 .rating-btn.easy {
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   border-color: var(--success-border);
 }
 .rating-btn.easy:hover:not(:disabled) {
   background: var(--success-light);
+  color: var(--success-fg, var(--success));
 }
 
 .rating-btn.selected {
@@ -2327,7 +2331,7 @@ function handleRestartPractice() {
 }
 
 .ai-status {
-  color: var(--warning);
+  color: var(--warning-fg, #92400e);
   font-size: 0.875rem;
   margin-bottom: 0.75rem;
 }
@@ -2369,7 +2373,7 @@ function handleRestartPractice() {
 
 .badge-adopted {
   font-size: 0.75rem;
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   font-weight: 700;
   background: var(--success-light);
   border: 1px solid var(--success-border);
@@ -2405,12 +2409,13 @@ function handleRestartPractice() {
 }
 
 .btn-adopt {
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   border-color: var(--success-border);
 }
 .btn-adopt:hover:not(:disabled) {
   background: var(--success-light);
   border-color: var(--success);
+  color: var(--success-fg, var(--success));
 }
 
 .version-edit-box textarea {
@@ -2507,7 +2512,7 @@ function handleRestartPractice() {
 
 .conflict-resolved-msg {
   margin-top: 0.5rem;
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   font-weight: 600;
   font-size: 0.9rem;
 }
@@ -2569,7 +2574,7 @@ function handleRestartPractice() {
   background: var(--danger-light);
   border: 1px solid var(--danger-border);
   border-radius: var(--radius-md);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2581,7 +2586,7 @@ function handleRestartPractice() {
   padding: 0.3rem 0.65rem;
   border: 1px solid var(--danger);
   background: var(--bg-card);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 0.85rem;
@@ -2759,7 +2764,7 @@ function handleRestartPractice() {
   display: inline-block;
   padding: 0.25rem 0.75rem;
   background: var(--success-light);
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   border: 1px solid var(--success-border);
   border-radius: 9999px;
   font-size: 0.85rem;

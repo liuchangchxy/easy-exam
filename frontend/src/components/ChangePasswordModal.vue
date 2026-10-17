@@ -161,13 +161,13 @@ async function handleSubmit() {
 
 .alert-box.error {
   background: var(--danger-light);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border: 1px solid var(--danger-border);
 }
 
 .alert-box.success {
   background: var(--success-light);
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   border: 1px solid rgba(16, 185, 129, 0.28);
 }
 

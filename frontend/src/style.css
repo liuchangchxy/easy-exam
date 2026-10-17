@@ -42,10 +42,12 @@
   --success-hover: #166534;
   --success-light: #f0fdf4;
   --success-border: #bbf7d0;
+  --success-fg: #15803d;
   --danger: #dc2626;
   --danger-hover: #b91c1c;
   --danger-light: #fef2f2;
   --danger-border: #fecaca;
+  --danger-fg: #b91c1c;
   --warning: #d97706;
   --warning-hover: #b45309;
   --warning-light: #fffbeb;
@@ -104,10 +106,12 @@
   --success-hover: #86efac;
   --success-light: rgba(74, 222, 128, 0.14);
   --success-border: rgba(74, 222, 128, 0.3);
+  --success-fg: #4ade80;
   --danger: #f87171;
   --danger-hover: #fca5a5;
   --danger-light: rgba(248, 113, 113, 0.14);
   --danger-border: rgba(248, 113, 113, 0.3);
+  --danger-fg: #f87171;
   --warning: #fbbf24;
   --warning-hover: #fcd34d;
   --warning-light: rgba(251, 191, 36, 0.14);
@@ -562,12 +566,12 @@ code {
 }
 
 .error {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   font-size: 0.875rem;
 }
 
 .success {
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   font-size: 0.875rem;
 }
 
@@ -974,7 +978,7 @@ button.link-button:hover:not(:disabled) {
 
 .auth-card .error {
   background: var(--danger-light);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border: 1px solid var(--danger-border);
   border-radius: var(--radius-md);
   padding: 0.625rem 0.85rem;
@@ -1206,7 +1210,7 @@ button.link-button:hover:not(:disabled) {
 .legend-badge.answered {
   border-color: var(--success);
   background: var(--success-light);
-  color: var(--success);
+  color: var(--success-fg, var(--success));
 }
 
 .legend-badge.flagged {
@@ -1225,7 +1229,7 @@ button.link-button:hover:not(:disabled) {
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   font-weight: 600;
   text-decoration: underline;
   cursor: pointer;
@@ -1233,7 +1237,7 @@ button.link-button:hover:not(:disabled) {
 }
 
 .btn-link-jump:hover {
-  color: var(--danger-hover);
+  color: var(--danger-fg, var(--danger-hover));
   background: transparent;
 }
 
@@ -1516,7 +1520,7 @@ button.link-button:hover:not(:disabled) {
 }
 
 .btn-ghost-danger {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   background: transparent;
   border: 1px solid var(--danger-border);
   border-radius: var(--radius-md);
@@ -1530,7 +1534,7 @@ button.link-button:hover:not(:disabled) {
 .btn-ghost-danger:hover:not(:disabled) {
   background: var(--danger-light);
   border-color: var(--danger);
-  color: var(--danger-hover);
+  color: var(--danger-fg, var(--danger-hover));
 }
 
 .btn-ghost-danger:disabled {
@@ -1617,7 +1621,7 @@ button.link-button:hover:not(:disabled) {
   border-radius: var(--radius-md);
   padding: 0.6rem 0.75rem;
   font-size: 0.85rem;
-  color: var(--success);
+  color: var(--success-fg, var(--success));
 }
 
 .blueprint-summary-sub {

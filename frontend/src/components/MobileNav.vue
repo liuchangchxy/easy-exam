@@ -118,6 +118,7 @@ defineEmits(['navigate', 'open-palette'])
     justify-content: center;
     background: transparent;
     border: none;
+    padding: 2px 2px;
     color: var(--text-muted);
     flex: 1 1 0;
     min-width: 0;

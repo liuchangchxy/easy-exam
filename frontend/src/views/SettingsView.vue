@@ -180,7 +180,7 @@
             <LinearIcon name="user" size="18" />
             <h2>{{ t('settings.tab_account') }}</h2>
           </div>
-          <p class="section-desc">{{ t('sidebar.desc_profile') }}</p>
+          <p class="section-desc">{{ t('ui.k0027') }}</p>
         </div>
 
         <div class="account-card-body">
@@ -220,6 +220,7 @@
             <button
               type="button"
               class="segment-btn"
+              data-locale="zh-CN"
               :class="{ active: currentLocale === 'zh-CN' }"
               @click="setLocale('zh-CN')"
             >
@@ -228,6 +229,7 @@
             <button
               type="button"
               class="segment-btn"
+              data-locale="en-US"
               :class="{ active: currentLocale === 'en-US' }"
               @click="setLocale('en-US')"
             >
@@ -292,7 +294,7 @@ const props = defineProps({
 
 defineEmits(['logout'])
 
-const { t, currentLocale, setLocale } = useLocale()
+const { t, locale: currentLocale, setLocale } = useLocale()
 const { theme, mode, palette, customAccent, setMode, setPalette, setCustomAccent, resetCustomAccent } = useTheme()
 
 const showPasswordModal = ref(false)
@@ -701,7 +703,7 @@ function handleHexInputChange(e) {
 .contrast-badge {
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   background: var(--success-light);
   border: 1px solid var(--success-border);
   padding: 0.25rem 0.6rem;

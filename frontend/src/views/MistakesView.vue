@@ -834,7 +834,7 @@ onMounted(loadData)
 
 .badge-due.due {
   background: var(--danger-light);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border: 1px solid var(--danger-border);
   font-weight: 600;
 }
@@ -880,13 +880,14 @@ onMounted(loadData)
 }
 
 .kill-btn {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border-color: var(--danger-border);
 }
 
 .kill-btn:hover:not(:disabled) {
   background: var(--danger-light);
   border-color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .header-left {
@@ -1046,7 +1047,7 @@ onMounted(loadData)
 
 .attack-gem {
   background: var(--warning-light);
-  color: var(--warning);
+  color: var(--warning-fg, #92400e);
   border: 1px solid var(--warning-border);
 }
 
@@ -1131,7 +1132,7 @@ onMounted(loadData)
   padding: 2px 8px;
   border-radius: 12px;
   background: var(--success-light);
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   font-weight: 600;
 }
 
@@ -1345,13 +1346,13 @@ onMounted(loadData)
 
 .stat-tag.error-tag {
   background: var(--danger-light);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border: 1px solid var(--danger-border);
 }
 
 .stat-tag.due-tag {
   background: var(--warning-light);
-  color: var(--warning);
+  color: var(--warning-fg, #92400e);
   border: 1px solid var(--warning-border);
 }
 

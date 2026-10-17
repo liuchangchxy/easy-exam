@@ -405,6 +405,30 @@ test('status foreground/background pairs guarantee WCAG AA contrast across all m
   assert.ok(calculateContrastRatio(warningFg, '#fef3c7') >= 4.5, 'Warning text --warning-fg on subtle #fef3c7 must meet AA')
   assert.ok(calculateContrastRatio(warningFg, '#f8fafc') >= 4.5, 'Warning text --warning-fg on page #f8fafc must meet AA')
   assert.ok(calculateContrastRatio('#fbbf24', '#131b2e') >= 4.5, 'Dark warning text on dark card #131b2e must meet AA')
+
+  // Text-safe status token --danger-fg:
+  const dangerFg = '#b91c1c'
+  assert.ok(calculateContrastRatio(dangerFg, '#ffffff') >= 4.5, 'Danger text --danger-fg on card #ffffff must meet AA')
+  assert.ok(calculateContrastRatio(dangerFg, '#fef2f2') >= 4.5, 'Danger text --danger-fg on danger-light #fef2f2 must meet AA')
+  assert.ok(calculateContrastRatio(dangerFg, '#f8fafc') >= 4.5, 'Danger text --danger-fg on page #f8fafc must meet AA')
+  assert.ok(calculateContrastRatio('#f87171', '#131b2e') >= 4.5, 'Dark danger text on dark card #131b2e must meet AA')
+
+  // Text-safe status token --success-fg:
+  const successFg = '#15803d'
+  assert.ok(calculateContrastRatio(successFg, '#ffffff') >= 4.5, 'Success text --success-fg on card #ffffff must meet AA')
+  assert.ok(calculateContrastRatio(successFg, '#f0fdf4') >= 4.5, 'Success text --success-fg on success-light #f0fdf4 must meet AA')
+  assert.ok(calculateContrastRatio(successFg, '#f8fafc') >= 4.5, 'Success text --success-fg on page #f8fafc must meet AA')
+  assert.ok(calculateContrastRatio('#4ade80', '#131b2e') >= 4.5, 'Dark success text on dark card #131b2e must meet AA')
+
+  // Verify style.css definitions match without drift
+  const cssPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/style.css')
+  const css = fs.readFileSync(cssPath, 'utf8')
+  assert.ok(css.includes('--warning-fg: #92400e;'), 'style.css must define light --warning-fg')
+  assert.ok(css.includes('--warning-fg: #fbbf24;'), 'style.css must define dark --warning-fg')
+  assert.ok(css.includes('--danger-fg: #b91c1c;'), 'style.css must define light --danger-fg')
+  assert.ok(css.includes('--danger-fg: #f87171;'), 'style.css must define dark --danger-fg')
+  assert.ok(css.includes('--success-fg: #15803d;'), 'style.css must define light --success-fg')
+  assert.ok(css.includes('--success-fg: #4ade80;'), 'style.css must define dark --success-fg')
 })
 
 test('preset --primary-fg tokens guarantee WCAG AA contrast against their respective card, page, subtle and translucent surfaces', () => {

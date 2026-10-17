@@ -315,7 +315,7 @@
             </button>
           </div>
         </label>
-        <div v-if="selectedProfileBlueprintSummary" style="background: var(--success-light); border: 1px solid var(--success-border); border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.85rem; color: var(--success);">
+        <div v-if="selectedProfileBlueprintSummary" style="background: var(--success-light); border: 1px solid var(--success-border); border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.85rem; color: var(--success-fg, var(--success));">
           <strong>{{ t('ui.k0156') }}</strong>
           {{ t('ui.k0157') }} {{ selectedProfileBlueprintSummary.sectionsCount }} {{ t('ui.k0158') }} {{ selectedProfileBlueprintSummary.totalQuestions }} {{ t('ui.k0101') }}
           <span v-if="selectedProfileBlueprintSummary.negativeMark > 0">{{ t('ui.k0159') }} {{ selectedProfileBlueprintSummary.negativeMark }} {{ t('ui.k0160') }}</span>
@@ -389,7 +389,7 @@
               type="button"
               class="btn-remove-opt"
               :title="t('ui.k0178')"
-              style="border: none; background: var(--danger-light); color: var(--danger); border-radius: 4px; padding: 0.35rem 0.6rem; cursor: pointer; font-size: 0.85rem;"
+              style="border: none; background: var(--danger-light); color: var(--danger-fg, var(--danger)); border-radius: 4px; padding: 0.35rem 0.6rem; cursor: pointer; font-size: 0.85rem;"
               @click="addQuestionForm.options.splice(idx, 1)"
             >✕</button>
           </div>
@@ -431,7 +431,7 @@
                 <span style="font-size: 0.75rem; padding: 0.1rem 0.4rem; background: var(--bg-subtle); border-radius: 4px;">
                   {{ m.role === 'ADMIN' ? t('ui.k0643') : m.role === 'EDITOR' ? t('ui.k0670') : t('ui.k0671') }}
                 </span>
-                <button v-if="m.role !== 'ADMIN' && m.user_id !== user?.id" type="button" style="color: var(--danger); border: none; background: none; cursor: pointer; font-size: 0.75rem;" @click="handleRemoveMember(m.user_id)">
+                <button v-if="m.role !== 'ADMIN' && m.user_id !== user?.id" type="button" style="color: var(--danger-fg, var(--danger)); border: none; background: none; cursor: pointer; font-size: 0.75rem;" @click="handleRemoveMember(m.user_id)">
                   {{ t('ui.k0190') }}
                 </button>
               </div>
@@ -521,7 +521,7 @@
           </div>
           <div style="background: var(--bg-subtle); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border); text-align: center;">
             <small style="color: var(--text-muted); font-size: 0.75rem;">{{ t('home.batch_ai_has_expl') }}</small>
-            <strong style="display: block; font-size: 1.25rem; font-family: var(--linear-mono); color: var(--success, #16a34a);">{{ aiBatchStatus?.with_explanation ?? 0 }}</strong>
+            <strong style="display: block; font-size: 1.25rem; font-family: var(--linear-mono); color: var(--success-fg, var(--success));">{{ aiBatchStatus?.with_explanation ?? 0 }}</strong>
           </div>
           <div style="background: var(--bg-subtle); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border); text-align: center;">
             <small style="color: var(--text-muted); font-size: 0.75rem;">{{ t('home.batch_ai_missing') }}</small>
@@ -581,7 +581,7 @@
           <button
             v-if="aiBatchStatus?.status === 'running'"
             type="button"
-            style="color: var(--danger); border: 1px solid var(--danger-border); background: var(--bg-card); border-radius: 6px; padding: 0.4rem 0.85rem; font-size: 0.85rem; cursor: pointer;"
+            style="color: var(--danger-fg, var(--danger)); border: 1px solid var(--danger-border); background: var(--bg-card); border-radius: 6px; padding: 0.4rem 0.85rem; font-size: 0.85rem; cursor: pointer;"
             @click="handleStopAiBatch"
           >
             {{ t('home.batch_ai_stop') }}
@@ -1424,13 +1424,13 @@ defineExpose({
 }
 
 .btn-util.btn-logout {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .btn-util.btn-logout:hover {
   background: var(--danger-light);
   border-color: var(--danger-border);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .bank-card-title-row {
@@ -1669,7 +1669,7 @@ defineExpose({
 
 .btn-abandon-single {
   font-size: 0.85rem;
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   background: none;
   border: none;
   cursor: pointer;
@@ -1678,7 +1678,7 @@ defineExpose({
 }
 
 .btn-abandon-single:hover {
-  color: var(--danger-hover);
+  color: var(--danger-fg, var(--danger-hover));
 }
 
 @media (max-width: 1080px) {
@@ -1732,8 +1732,10 @@ defineExpose({
   }
   .home-brand-area {
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+    min-width: 0;
   }
   .home-brand-title h1 {
     font-size: 1.05rem;
@@ -1741,6 +1743,7 @@ defineExpose({
   .home-user-pill {
     font-size: 0.72rem;
     padding: 0.15rem 0.45rem;
+    white-space: nowrap;
   }
   .home-actions-area {
     display: flex;
@@ -1831,7 +1834,7 @@ defineExpose({
 }
 
 .btn-restart-sequential:hover {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border-color: var(--danger-border);
 }
 
@@ -1906,7 +1909,7 @@ button.quick-hub-card:focus-visible {
 
 .hub-icon-wrap.mistakes-icon {
   background: var(--danger-light);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border: 1px solid var(--danger-border);
 }
 

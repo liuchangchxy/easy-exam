@@ -490,6 +490,26 @@ async function main() {
     await page.screenshot({ path: notesShot, fullPage: false })
     console.log(`Saved screenshot 6: ${notesShot}`)
 
+    // Switch to English in Settings to verify locale wiring and capture English UI
+    await page.goto(`${BASE_URL}/#/settings`)
+    await page.waitForSelector('.settings-page')
+    const enBtn = page.locator('.mode-toggle-segmented button.segment-btn:has-text("English")')
+    await enBtn.click()
+    await page.waitForTimeout(400)
+    const currentLang = await page.evaluate(() => document.documentElement.lang)
+    const storedLocale = await page.evaluate(() => localStorage.getItem('easyexam_locale'))
+    if (currentLang !== 'en-US' || storedLocale !== 'en-US') {
+      throw new Error(`Locale switch to English failed: lang=${currentLang}, storedLocale=${storedLocale}`)
+    }
+    const enActive = await enBtn.evaluate(el => el.classList.contains('active'))
+    if (!enActive) {
+      throw new Error('English button missing .active class after click')
+    }
+    // Capture 11: Desktop Settings in English
+    const desktopSettingsEnShot = path.join(outputDir, '11_desktop_settings_en.png')
+    await page.screenshot({ path: desktopSettingsEnShot, fullPage: false })
+    console.log(`Saved screenshot 11: ${desktopSettingsEnShot}`)
+
     await desktopContext.close()
 
     // 2. Tablet Context (768x1024 iPad)
@@ -563,6 +583,30 @@ async function main() {
     }
     console.log(`✓ Mobile zero-overflow check passed: scrollWidth=${scrollWidth} == clientWidth=${clientWidth}`)
 
+    // Mobile English Home View (375px)
+    await mobilePage.goto(BASE_URL)
+    await mobilePage.evaluate(() => {
+      localStorage.setItem('easyexam_locale', 'en-US')
+      document.documentElement.lang = 'en-US'
+    })
+    await mobilePage.reload()
+    await mobilePage.waitForSelector('.home-page')
+    await mobilePage.waitForTimeout(400)
+    const mobileEnLang = await mobilePage.evaluate(() => document.documentElement.lang)
+    const mobileEnStored = await mobilePage.evaluate(() => localStorage.getItem('easyexam_locale'))
+    if (mobileEnLang !== 'en-US' || mobileEnStored !== 'en-US') {
+      throw new Error(`Mobile English switch failed: lang=${mobileEnLang}, storedLocale=${mobileEnStored}`)
+    }
+    const mobileEnScrollWidth = await mobilePage.evaluate(() => document.documentElement.scrollWidth)
+    const mobileEnClientWidth = await mobilePage.evaluate(() => document.documentElement.clientWidth)
+    if (mobileEnScrollWidth > mobileEnClientWidth + 1) {
+      throw new Error(`Mobile English overflow detected: scrollWidth=${mobileEnScrollWidth} > clientWidth=${mobileEnClientWidth}`)
+    }
+    // Capture 12: Mobile Home View in English (375px)
+    const mobileHomeEnShot = path.join(outputDir, '12_mobile_home_375px_en.png')
+    await mobilePage.screenshot({ path: mobileHomeEnShot, fullPage: false })
+    console.log(`Saved screenshot 12: ${mobileHomeEnShot}`)
+
     await mobileContext.close()
     await browser.close()
 
@@ -580,6 +624,8 @@ async function main() {
       ['07_tablet_practice_768px.png', '08_tablet_practice_768px.png'],
       ['08_mobile_home_375px.png', '09_mobile_home_375px.png'],
       ['09_mobile_practice_375px.png', '10_mobile_practice_375px.png'],
+      ['11_desktop_settings_en.png', '11_desktop_settings_en.png'],
+      ['12_mobile_home_375px_en.png', '12_mobile_home_375px_en.png'],
     ]
     for (const [srcName, destName] of copyMap) {
       const srcPath = path.join(outputDir, srcName)

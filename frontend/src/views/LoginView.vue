@@ -349,7 +349,7 @@ async function submit() {
   background: var(--danger-light);
   border: 1px solid var(--danger-border);
   border-radius: 0.5rem;
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   font-size: 0.825rem;
 }
 

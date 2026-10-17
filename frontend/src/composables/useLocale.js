@@ -108,6 +108,7 @@ export function useLocale() {
   initializeLocale()
   return {
     locale: currentLocale,
+    currentLocale,
     supportedLocales: SUPPORTED_LOCALES,
     setLocale,
     toggleLocale,

@@ -502,7 +502,7 @@ onBeforeUnmount(() => {
 .exam-header h1 { font-size: 1.25rem; }
 .exam-header p, .exam-answer-sheet p, .question-meta { color: var(--text-muted); }
 .exam-clock { min-width: 5.5rem; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 0.65rem; background: var(--bg-card); text-align: center; font-variant-numeric: tabular-nums; font-weight: 700; }
-.exam-clock.warning { color: var(--danger); }
+.exam-clock.warning { color: var(--danger-fg, var(--danger)); }
 .exam-layout { display: grid; grid-template-columns: minmax(0, 1fr) 17rem; gap: 1.25rem; align-items: start; }
 .exam-question-card { padding: 1.5rem; border: 1px solid var(--border); border-radius: 1rem; background: var(--bg-card); box-shadow: var(--shadow-sm); }
 .exam-report {
@@ -604,7 +604,7 @@ onBeforeUnmount(() => {
 .btn-flag-toggle[aria-pressed="true"] {
   background: var(--warning-light);
   border-color: var(--warning);
-  color: var(--warning-hover);
+  color: var(--warning-fg, #92400e);
 }
 
 .exam-nav-btns {
@@ -670,7 +670,7 @@ onBeforeUnmount(() => {
   color: var(--on-primary-active, var(--on-primary));
 }
 .primary:disabled { opacity: 0.55; cursor: wait; }
-.exam-error { margin: 0.75rem 0; color: var(--danger); }
+.exam-error { margin: 0.75rem 0; color: var(--danger-fg, var(--danger)); }
 .exam-loading { padding: 2rem; text-align: center; color: var(--text-muted); }
 .exam-report h2, .exam-report h3 { margin-bottom: 1rem; }
 .report-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin: 1rem 0; }

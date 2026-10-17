@@ -1004,7 +1004,7 @@ onMounted(async () => {
 .rank-num {
   font-weight: 700;
   font-size: 0.78rem;
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   width: 1.2rem;
   flex-shrink: 0;
   font-family: var(--linear-mono);
@@ -1022,7 +1022,7 @@ onMounted(async () => {
 
 .mistake-count {
   font-size: 0.75rem;
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   background: var(--danger-light);
   padding: 0.15rem 0.45rem;
   border-radius: 4px;
@@ -1289,12 +1289,12 @@ onMounted(async () => {
 }
 
 .trend-up {
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   background: var(--success-light);
 }
 
 .trend-down {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   background: var(--danger-light);
 }
 

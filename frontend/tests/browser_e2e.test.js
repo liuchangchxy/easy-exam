@@ -1246,10 +1246,122 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       await page.waitForSelector('.ai-batch-dialog', { state: 'detached' })
       console.log('✓ PracticeView, Active Session Badge, and AI Batch consumers computed contrast verified under Amber palette.')
 
-      // 10. True Element-Level Responsive Assertions across 375px, 768px, and 1280px (zh-CN & en-US)
-      // Helper function to test responsive layout at each viewport
+      // 10. Semantic Status Foreground Contrast Audit across Pages
+      // 10a. Due review item in MistakesView
+      await page.goto(`${BASE_URL}/#/mistakes`)
+      await page.waitForSelector('.mistakes-page', { timeout: 8000 })
+      const tableToggle = page.locator('button.mode-btn:has-text("表格"), button.mode-btn[title*="表格"], button.mode-btn[title*="Table"]')
+      if (await tableToggle.isVisible()) {
+        await tableToggle.click()
+        await page.waitForTimeout(250)
+      }
+      await page.waitForSelector('.stat-tag.due-tag, .badge-due.due', { timeout: 8000 })
+      const dueStyles = await page.evaluate(() => {
+        const tag = document.querySelector('.stat-tag.due-tag, .badge-due.due')
+        const cs = tag ? getComputedStyle(tag) : null
+        return {
+          color: cs ? cs.color : '',
+          bg: cs ? cs.backgroundColor : '',
+        }
+      })
+      assert.ok(dueStyles.color, 'Due review item tag must be present in MistakesView')
+      const dueRatio = calcContrast(dueStyles.color, dueStyles.bg, [255, 255, 255])
+      assert.ok(dueRatio >= 4.5, `Due review tag contrast ${dueRatio.toFixed(2)}:1 must meet AA >= 4.5:1`)
+
+      // 10b. Mistake summary note pill in NotesView
+      await page.goto(`${BASE_URL}/#/notes`)
+      await page.waitForSelector('.notes-page', { timeout: 8000 })
+      await page.click('.notes-header .header-actions button.primary-btn, .empty-state button.primary-btn')
+      await page.waitForSelector('.add-note-card', { timeout: 5000 })
+      await page.selectOption('.select-type', 'MISTAKE_SUMMARY')
+      await page.fill('.note-textarea', 'E2E verified mistake summary note content')
+      await page.click('.add-note-card .action-buttons button.primary-btn')
+      await page.waitForSelector('.type-pill.mistake_summary', { timeout: 8000 })
+      const noteStyles = await page.evaluate(() => {
+        const pill = document.querySelector('.type-pill.mistake_summary')
+        const cs = pill ? getComputedStyle(pill) : null
+        return {
+          color: cs ? cs.color : '',
+          bg: cs ? cs.backgroundColor : '',
+        }
+      })
+      assert.ok(noteStyles.color, 'Mistake summary pill must be present in NotesView')
+      const noteRatio = calcContrast(noteStyles.color, noteStyles.bg, [255, 255, 255])
+      assert.ok(noteRatio >= 4.5, `Mistake summary pill contrast ${noteRatio.toFixed(2)}:1 must meet AA >= 4.5:1`)
+
+      // 10c. AI status message in PracticeView
+      await page.goto(BASE_URL)
+      await page.waitForSelector('.home-page', { timeout: 8000 })
+      await page.click('.bank-card:first-child button.primary')
+      await page.waitForSelector('.practice-page', { timeout: 8000 })
+      const aiStatusStyles = await page.evaluate(() => {
+        const p = document.createElement('p')
+        p.className = 'ai-status'
+        p.textContent = 'AI服务未配置，降级使用本地题库'
+        const host = document.querySelector('.ai-dialog-card, .practice-page')
+        host.appendChild(p)
+        const cs = getComputedStyle(p)
+        const res = {
+          color: cs ? cs.color : '',
+          bg: cs ? cs.backgroundColor : '',
+        }
+        p.remove()
+        return res
+      })
+      assert.ok(aiStatusStyles.color, 'AI status element must have valid color')
+      const aiStatusRatio = calcContrast(aiStatusStyles.color, aiStatusStyles.bg, [255, 255, 255])
+      assert.ok(aiStatusRatio >= 4.5, `AI status contrast ${aiStatusRatio.toFixed(2)}:1 must meet AA >= 4.5:1`)
+
+      // 10d. Uncertain import state in ImportView
+      await page.goto(`${BASE_URL}/#/import`)
+      await page.waitForSelector('.import-page', { timeout: 8000 })
+      const importStatusStyles = await page.evaluate(() => {
+        const host = document.querySelector('.import-page') || document.body
+        const badge = document.createElement('span')
+        badge.style.fontSize = '0.8rem'
+        badge.style.padding = '0.25rem 0.6rem'
+        badge.style.borderRadius = '4px'
+        badge.style.fontWeight = 'bold'
+        badge.style.background = 'var(--warning-light)'
+        badge.style.color = 'var(--warning-fg, #92400e)'
+        badge.textContent = 'MEDIUM'
+
+        const uncertainBox = document.createElement('div')
+        uncertainBox.style.padding = '0.4rem 0.6rem'
+        uncertainBox.style.background = 'var(--warning-light)'
+        uncertainBox.style.border = '1px solid var(--warning-border)'
+        uncertainBox.style.borderRadius = '4px'
+        uncertainBox.style.fontSize = '0.8rem'
+        uncertainBox.style.color = 'var(--warning-fg, #92400e)'
+        uncertainBox.textContent = '候选解析不确定'
+
+        host.appendChild(badge)
+        host.appendChild(uncertainBox)
+        const bCs = getComputedStyle(badge)
+        const uCs = getComputedStyle(uncertainBox)
+        const res = {
+          badgeColor: bCs.color,
+          badgeBg: bCs.backgroundColor,
+          boxColor: uCs.color,
+          boxBg: uCs.backgroundColor,
+        }
+        badge.remove()
+        uncertainBox.remove()
+        return res
+      })
+      const importBadgeRatio = calcContrast(importStatusStyles.badgeColor, importStatusStyles.badgeBg, [255, 255, 255])
+      assert.ok(importBadgeRatio >= 4.5, `Import PDF confidence badge contrast ${importBadgeRatio.toFixed(2)}:1 must meet AA >= 4.5:1`)
+      const importBoxRatio = calcContrast(importStatusStyles.boxColor, importStatusStyles.boxBg, [255, 255, 255])
+      assert.ok(importBoxRatio >= 4.5, `Import uncertain box contrast ${importBoxRatio.toFixed(2)}:1 must meet AA >= 4.5:1`)
+      console.log('✓ Due item, mistake summary, AI status, and uncertain import computed contrast verified >= 4.5:1.')
+
+      // 11. True Element-Level Responsive Assertions across 375px, 768px, and 1280px (zh-CN & en-US)
       async function verifyResponsiveViewports(localeName = 'zh-CN') {
-        // --- 10a. 375px Mobile Viewport ---
+        // Assert locale matches expected lang before testing responsive layout
+        const currentLang = await page.evaluate(() => document.documentElement.getAttribute('lang'))
+        assert.equal(currentLang, localeName, `Document lang attribute must be ${localeName} before running responsive assertions`)
+
+        // --- 11a. 375px Mobile Viewport ---
         await page.setViewportSize({ width: 375, height: 667 })
         await page.goto(BASE_URL)
         await page.waitForSelector('.home-page')
@@ -1312,7 +1424,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
         assert.ok(mobilePracticeCheck.actionTargetHeight >= 40, `Bottom action button height (${mobilePracticeCheck.actionTargetHeight}px) must meet mobile touch target`)
         assert.equal(mobilePracticeCheck.hotkeyBarDisplay, 'none', 'Keyboard shortcut strip must be hidden on mobile 375px')
 
-        // --- 10b. 768px Tablet Viewport ---
+        // --- 11b. 768px Tablet Viewport ---
         await page.setViewportSize({ width: 768, height: 1024 })
         await page.waitForTimeout(250)
 
@@ -1350,7 +1462,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
         assert.ok(tabletPracticeCheck.completeVisible, 'Complete button must be visible at 768px tablet')
         assert.equal(tabletPracticeCheck.hotkeyBarDisplay, 'none', 'Hotkey helper strip must not be squished at 768px tablet')
 
-        // --- 10c. 1280px Desktop Viewport ---
+        // --- 11c. 1280px Desktop Viewport ---
         await page.setViewportSize({ width: 1280, height: 800 })
         await page.goto(BASE_URL)
         await page.waitForSelector('.home-page')
@@ -1394,28 +1506,90 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       }
 
       // Run verification in default zh-CN
+      await page.goto(`${BASE_URL}/#/settings`)
+      await page.waitForSelector('.settings-page', { timeout: 8000 })
+      const initialZhActive = await page.evaluate(() => {
+        const btns = Array.from(document.querySelectorAll('.mode-toggle-segmented .segment-btn'))
+        return {
+          zhActive: btns[0] ? btns[0].classList.contains('active') : false,
+          enActive: btns[1] ? btns[1].classList.contains('active') : false,
+          lang: document.documentElement.getAttribute('lang'),
+        }
+      })
+      assert.ok(initialZhActive.zhActive, 'Settings Chinese language button must have active class initially')
+      assert.ok(!initialZhActive.enActive, 'Settings English language button must not have active class initially')
+      assert.equal(initialZhActive.lang, 'zh-CN', 'Document lang must be zh-CN initially')
+
       await verifyResponsiveViewports('zh-CN')
       console.log('✓ zh-CN responsive element-level layout verified across 375px, 768px, and 1280px.')
 
-      // Run verification in en-US to prevent English label overflow
-      await page.evaluate(() => {
-        localStorage.setItem('easyexam-locale', 'en-US')
-      })
-      await page.reload()
+      // Switch to en-US via real Settings UI control
+      await page.goto(`${BASE_URL}/#/settings`)
+      await page.waitForSelector('.settings-page', { timeout: 8000 })
+      const enBtn = page.locator('button.segment-btn[data-locale="en-US"]')
+      await enBtn.click()
       await page.waitForTimeout(300)
+
+      const switchedEnState = await page.evaluate(() => {
+        const langSection = Array.from(document.querySelectorAll('.settings-card')).find(card => card.textContent.includes('语言偏好') || card.textContent.includes('Language'))
+        const btns = langSection ? Array.from(langSection.querySelectorAll('.mode-toggle-segmented .segment-btn')) : []
+        return {
+          zhActive: btns[0] ? btns[0].classList.contains('active') : false,
+          enActive: btns[1] ? btns[1].classList.contains('active') : false,
+          lang: document.documentElement.getAttribute('lang'),
+          storedLocale: localStorage.getItem('easyexam_locale'),
+        }
+      })
+      assert.ok(!switchedEnState.zhActive, 'Chinese button must be inactive after clicking English')
+      assert.ok(switchedEnState.enActive, 'English button must be active after clicking English')
+      assert.equal(switchedEnState.lang, 'en-US', 'Document lang must be updated to en-US')
+      assert.equal(switchedEnState.storedLocale, 'en-US', 'localStorage easyexam_locale must be en-US')
+
+      // Verify reload persistence
+      await page.reload()
+      await page.waitForSelector('.settings-page', { timeout: 8000 })
+      const persistedEnState = await page.evaluate(() => {
+        const langSection = Array.from(document.querySelectorAll('.settings-card')).find(card => card.textContent.includes('语言偏好') || card.textContent.includes('Language'))
+        const btns = langSection ? Array.from(langSection.querySelectorAll('.mode-toggle-segmented .segment-btn')) : []
+        return {
+          enActive: btns[1] ? btns[1].classList.contains('active') : false,
+          lang: document.documentElement.getAttribute('lang'),
+          storedLocale: localStorage.getItem('easyexam_locale'),
+        }
+      })
+      assert.ok(persistedEnState.enActive, 'English button must remain active after reload')
+      assert.equal(persistedEnState.lang, 'en-US', 'Document lang must persist as en-US after reload')
+      assert.equal(persistedEnState.storedLocale, 'en-US', 'localStorage must persist easyexam_locale as en-US')
+
+      // Assert representative visible translated text
+      const englishVisibleText = await page.evaluate(() => {
+        const navLabels = Array.from(document.querySelectorAll('.sidebar-nav-item .nav-item-label')).map(el => el.textContent.trim())
+        return {
+          hasHome: navLabels.some(l => l.includes('Home') || l.includes('首页')),
+          hasMistakes: navLabels.some(l => l.includes('Mistakes Review') || l.includes('Mistakes')),
+          hasReview: navLabels.some(l => l.includes('Review Center') || l.includes('Review')),
+        }
+      })
+      assert.ok(englishVisibleText.hasMistakes, 'Sidebar must display English "Mistakes Review"')
+      assert.ok(englishVisibleText.hasReview, 'Sidebar must display English "Review Center"')
+
+      // Run responsive verification in true en-US
       await verifyResponsiveViewports('en-US')
       console.log('✓ en-US responsive element-level layout verified across 375px, 768px, and 1280px.')
 
-      // Restore zh-CN locale
-      await page.evaluate(() => {
-        localStorage.setItem('easyexam-locale', 'zh-CN')
-      })
+      // Restore zh-CN locale via real Settings UI control
+      await page.goto(`${BASE_URL}/#/settings`)
+      await page.waitForSelector('.settings-page', { timeout: 8000 })
+      const zhBtn = page.locator('button.segment-btn[data-locale="zh-CN"]')
+      await zhBtn.click()
+      await page.waitForTimeout(300)
+      assert.equal(await page.evaluate(() => document.documentElement.getAttribute('lang')), 'zh-CN')
+      assert.equal(await page.evaluate(() => localStorage.getItem('easyexam_locale')), 'zh-CN')
       await page.reload()
-      await page.waitForTimeout(200)
+      await page.waitForSelector('.settings-page', { timeout: 8000 })
+      assert.equal(await page.evaluate(() => document.documentElement.getAttribute('lang')), 'zh-CN')
 
       // Final restore to blue-grey default palette
-      await page.goto(`${BASE_URL}/#/settings`)
-      await page.waitForSelector('.settings-page')
       await page.click('.palette-preview-card[data-preview-palette="blue-grey"]')
       const resetBtn = page.locator('.btn-reset-accent')
       if (await resetBtn.isVisible().catch(() => false)) {

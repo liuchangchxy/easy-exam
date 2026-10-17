@@ -36,7 +36,7 @@
             <textarea v-model="d.explanation" rows="2" style="font-size: 0.85rem; margin-top: 0.2rem;"></textarea>
           </label>
           <div style="display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 0.75rem;">
-            <button type="button" style="color: var(--danger);" :disabled="d.processing" @click="handleDiscardDraft(d.id)">
+            <button type="button" style="color: var(--danger-fg, var(--danger));" :disabled="d.processing" @click="handleDiscardDraft(d.id)">
               {{ t('ui.k0214') }}
             </button>
             <button type="button" class="primary" :disabled="d.processing" @click="handleAcceptDraft(d)">

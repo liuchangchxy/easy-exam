@@ -155,7 +155,7 @@
                 <option :value="4">{{ t('ui.k0171') }}</option>
                 <option :value="5">{{ t('ui.k0172') }}</option>
               </select>
-              <button type="button" style="color: var(--danger); border: none; background: none; cursor: pointer; padding: 0 0.3rem;" :title="t('ui.k0243')" @click="blueprintConfig.sections.splice(sIdx, 1)">✕</button>
+              <button type="button" style="color: var(--danger-fg, var(--danger)); border: none; background: none; cursor: pointer; padding: 0 0.3rem;" :title="t('ui.k0243')" @click="blueprintConfig.sections.splice(sIdx, 1)">✕</button>
             </div>
             <div style="display: flex; gap: 0.4rem; align-items: center; font-size: 0.75rem;">
               <input v-model.trim="sec.chapter_id" :placeholder="t('ui.k0244')" style="flex: 1; font-size: 0.75rem;" />

@@ -696,11 +696,12 @@ onUnmounted(() => {
 }
 
 .popover-action-item.logout {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .popover-action-item.logout:hover {
   background: var(--danger-light);
+  color: var(--danger-fg, var(--danger));
 }
 
 .user-info {
@@ -746,12 +747,12 @@ onUnmounted(() => {
 }
 
 .sidebar-logout-btn:hover .logout-label {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .sidebar-logout-btn:hover {
   background: var(--danger-light);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .collapsed .sidebar-header {
