@@ -24,9 +24,12 @@
 | [xzs-mysql](https://github.com/mindskip/xzs) `097ef86` | AGPL-3.0 | `ExamPaperAnswerServiceImpl.java`；项目测试目录只发现事件序列化测试 | **中国题库/考试业务行为参考**，特别是考试答题服务边界；代码栈、Spring/MySQL 与本项目不适配，且没有充分测试佐证，不移植 | 否 |
 | [Razzia](https://github.com/Ralex91/Razzia) `277a338` | MIT | 多人实时竞赛/活动式问答 | 不是个人长期刷题与复习主线；只可能参考轻交互，不引入实时竞赛子系统 | 否 |
 | [pdf-exam-bank](https://github.com/hzhsec/pdf-exam-bank) `4af4e76` | **未发现 LICENSE 文件** | `backend/.../pdf_parser_v2.py` 使用行切片/正则解析 | **不复制代码**。许可证缺失；其规则只可用于测试样例/行为启发，当前 PDF 以可识别性校验为先 | 否 |
+| [Radix Colors](https://github.com/radix-ui/primitives/tree/main/packages/colors) `c934271` | MIT | `packages/colors` 调色板阶梯数值（Blue, Slate, Cyan, Violet, Ruby, Amber 等） | **设计参考与色彩 Token 映射**：全站 8 组主题预设调色板（蓝灰、雾蓝、海盐、紫晶、玫瑰、琥珀）借鉴 Radix 色阶梯度，用于 CSS 变量与 WCAG AA 对比度；未直接引入其 npm 依赖或组件代码 | **配色参考**；非源码依赖 |
+| [Catppuccin](https://github.com/catppuccin/catppuccin) `52f9a71` | MIT | 调色盘主色（Latte/Mocha 暖地色与森林绿调） | **设计参考与色彩 Token 映射**：森林、摩卡主题中的暖地底色与表面色参考 Catppuccin 色系，保持护眼低饱和度视觉；未引入组件或字体包 | **配色参考**；非源码依赖 |
 
 ## 当前项目对应实现证据（不是外部移植证据）
 
+- 主题与设计系统 Token：全站 8 组预设调色板与设计 Token 定义在 `frontend/src/style.css` 与 `frontend/src/design/themePreference.js`，色彩梯度参考了 Radix Colors 与 Catppuccin 开源配色（MIT），并通过 `getContrastTextColor` 与 `getAccessibleForeground` 进行数学算法保证 WCAG AA 对比度，未引入大型外部 UI 框架依赖。
 - 题目版本、作答和复习：`backend/app/application/practice_service.py`、`backend/app/infrastructure/db/repositories/practice_repository.py`、`backend/app/domain/learning/`。
 - 外部模型调用边界：`backend/app/infrastructure/ai/provider.py` 是本项目旧服务适配器，不是外部候选项目适配器。
 - XLSX 与 CSV 表格导入：`backend/app/infrastructure/importers/spreadsheet_importer.py` 已移植 Exameow 表头别名识别、组合选项分隔符提取、前缀剥离与难度归一化算法；前端 `ImportView.vue` 与 API `/preview-file` 提供了列映射预览与手工修正，分发物包含完整 Apache-2.0 副本与第三方声明。

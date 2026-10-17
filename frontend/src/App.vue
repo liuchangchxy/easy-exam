@@ -131,7 +131,7 @@ async function handleForceChangePassword() {
   display: inline-block;
   padding: 0.25rem 0.6rem;
   background: var(--danger-light);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   font-size: 0.75rem;
   font-weight: 600;
   border-radius: 9999px;
@@ -152,12 +152,12 @@ async function handleForceChangePassword() {
 }
 .force-pwd-alert.error {
   background: var(--danger-light);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border: 1px solid var(--danger-border);
 }
 .force-pwd-alert.success {
   background: var(--success-light);
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   border: 1px solid var(--success-border);
 }
 .force-pwd-field {

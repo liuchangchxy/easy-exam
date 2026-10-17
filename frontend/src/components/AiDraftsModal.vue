@@ -5,14 +5,14 @@
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
         {{ t('ui.k0207') }}
       </p>
-      <div v-if="loadingDrafts" style="text-align: center; color: var(--text-tertiary); padding: 1.5rem;">{{ t('ui.k0208') }}</div>
-      <div v-else-if="!draftsList.length" style="text-align: center; color: var(--text-tertiary); padding: 2rem;">
+      <div v-if="loadingDrafts" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">{{ t('ui.k0208') }}</div>
+      <div v-else-if="!draftsList.length" style="text-align: center; color: var(--text-muted); padding: 2rem;">
         {{ t('ui.k0209') }}
       </div>
       <div v-else style="display: flex; flex-direction: column; gap: 1rem;">
         <div v-for="d in draftsList" :key="d.id" style="border: 1px solid var(--border); border-radius: 8px; padding: 1rem; background: var(--bg-subtle);">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <span style="font-size: 0.75rem; padding: 0.15rem 0.4rem; background: var(--primary-light); color: var(--linear-cyan); border-radius: 4px; font-weight: 600; font-family: var(--linear-mono);">
+            <span style="font-size: 0.75rem; padding: 0.15rem 0.4rem; background: var(--primary-light); color: var(--linear-cyan); border: 1px solid var(--primary-border); border-radius: 4px; font-weight: 600; font-family: var(--linear-mono);">
               {{ d.type }} {{ t('ui.k0210') }} {{ d.difficulty }}
             </span>
             <span style="font-size: 0.75rem; color: var(--text-tertiary);">{{ d.created_at }}</span>
@@ -36,7 +36,7 @@
             <textarea v-model="d.explanation" rows="2" style="font-size: 0.85rem; margin-top: 0.2rem;"></textarea>
           </label>
           <div style="display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 0.75rem;">
-            <button type="button" style="color: var(--danger);" :disabled="d.processing" @click="handleDiscardDraft(d.id)">
+            <button type="button" style="color: var(--danger-fg, var(--danger));" :disabled="d.processing" @click="handleDiscardDraft(d.id)">
               {{ t('ui.k0214') }}
             </button>
             <button type="button" class="primary" :disabled="d.processing" @click="handleAcceptDraft(d)">

@@ -215,7 +215,7 @@
       <section v-if="pdfPreview" class="column-mapping-panel pdf-correction-panel" style="margin-top: 1rem; border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; background: var(--bg-card);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
           <h3 style="color: var(--text-main);">{{ t('ui.k0360') }}</h3>
-          <span :style="{ fontSize: '0.8rem', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 'bold', background: pdfPreview.confidence === 'HIGH' ? 'var(--success-light)' : 'var(--warning-light)', color: pdfPreview.confidence === 'HIGH' ? 'var(--success)' : 'var(--warning)' }">
+          <span class="pdf-confidence-badge" :style="{ fontSize: '0.8rem', padding: '0.25rem 0.6rem', borderRadius: '4px', fontWeight: 'bold', background: pdfPreview.confidence === 'HIGH' ? 'var(--success-light)' : 'var(--warning-light)', color: pdfPreview.confidence === 'HIGH' ? 'var(--success-fg, var(--success))' : 'var(--warning-fg, #92400e)' }">
             {{ pdfPreview.confidence === 'HIGH' ? t('ui.k0693') : t('ui.k0694') }}
           </span>
         </div>
@@ -230,11 +230,11 @@
               <div style="display: flex; gap: 0.5rem;">
                 <button v-if="cIdx > 0" type="button" class="action-link-btn" style="font-size: 0.75rem;" @click="mergeWithPrev(cIdx)">{{ t('ui.k0363') }}</button>
                 <button type="button" class="action-link-btn" style="font-size: 0.75rem;" @click="splitCandidate(cIdx)">{{ t('ui.k0364') }}</button>
-                <button type="button" class="action-link-btn" style="font-size: 0.75rem; color: var(--danger);" @click="removeCandidate(cIdx)">{{ t('ui.k0256') }}</button>
+                <button type="button" class="action-link-btn" style="font-size: 0.75rem; color: var(--danger-fg, var(--danger));" @click="removeCandidate(cIdx)">{{ t('ui.k0256') }}</button>
               </div>
             </div>
 
-            <div v-if="cand.is_uncertain" style="padding: 0.4rem 0.6rem; background: var(--warning-light); border: 1px solid var(--warning-border); border-radius: 4px; font-size: 0.8rem; color: var(--warning); margin-bottom: 0.5rem;">
+            <div v-if="cand.is_uncertain" class="pdf-uncertain-box" style="padding: 0.4rem 0.6rem; background: var(--warning-light); border: 1px solid var(--warning-border); border-radius: 4px; font-size: 0.8rem; color: var(--warning-fg, #92400e); margin-bottom: 0.5rem;">
               {{ t('ui.k0365') }}{{ cand.uncertain_reason }}
             </div>
 
@@ -264,7 +264,7 @@
               <div v-for="(opt, optIdx) in cand.options" :key="optIdx" style="display: flex; gap: 0.4rem; margin-top: 0.25rem;">
                 <input v-model="opt.key" style="width: 3rem;" placeholder="A" />
                 <input v-model="opt.content" style="flex: 1;" :placeholder="t('ui.k0177')" />
-                <button type="button" style="color: var(--danger); border: none; background: none; cursor: pointer;" @click="cand.options.splice(optIdx, 1)">×</button>
+                <button type="button" style="color: var(--danger-fg, var(--danger)); border: none; background: none; cursor: pointer;" @click="cand.options.splice(optIdx, 1)">×</button>
               </div>
             </div>
 
@@ -601,7 +601,7 @@ async function submit() {
 }
 
 .file-upload-card.drag-over {
-  border-color: var(--primary);
+  border-color: var(--primary-fg, var(--primary));
   background: var(--bg-hover, rgba(37, 99, 235, 0.08));
   transform: scale(1.01);
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
@@ -620,7 +620,7 @@ async function submit() {
   justify-content: center;
   padding: 1rem;
   gap: 0.5rem;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   pointer-events: none;
 }
 
@@ -704,7 +704,7 @@ async function submit() {
   font-size: 0.725rem;
   padding: 0.15rem 0.45rem;
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-weight: 600;
   border-radius: 4px;
 }

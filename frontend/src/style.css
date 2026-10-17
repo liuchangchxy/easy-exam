@@ -6,16 +6,393 @@
   --radius-xl: 0.75rem;
 }
 
-/* Direction A: warm paper and pine in daylight, a quiet forest palette at night. */
-:root {
+/* ==========================================================================
+   EasyExam Design System · 8 Multi-Theme Palettes (16 Full Appearances)
+   Attribution: Color palettes referenced from Radix Colors (MIT) &
+   Catppuccin (MIT) under open-source licenses. See docs/research/OSS_REUSE_AUDIT.md.
+   ========================================================================== */
+
+/* 1. 蓝灰 · Neutral Blue-Grey (DEFAULT) · Light */
+:root,
+:root[data-theme-palette="blue-grey"] {
   color-scheme: light;
+  --bg-page: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-subtle: #f1f5f9;
+  --bg-muted: #e2e8f0;
+  --text-main: #0f172a;
+  --text-muted: #475569;
+  --text-tertiary: #59697d;
+  --border: #cbd5e1;
+  --border-subtle: #e2e8f0;
+  --border-strong: #94a3b8;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-active: #1e40af;
+  --primary-light: #eff6ff;
+  --primary-border: #bfdbfe;
+  --primary-fg: #2563eb;
+  --on-primary: #ffffff;
+  --on-primary-hover: #ffffff;
+  --on-primary-active: #ffffff;
+  --on-success: #ffffff;
+  --on-danger: #ffffff;
+  --on-warning: #1c1408;
+  --success: #15803d;
+  --success-hover: #166534;
+  --success-light: #f0fdf4;
+  --success-border: #bbf7d0;
+  --success-fg: #15803d;
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
+  --danger-light: #fef2f2;
+  --danger-border: #fecaca;
+  --danger-fg: #b91c1c;
+  --warning: #d97706;
+  --warning-hover: #b45309;
+  --warning-light: #fffbeb;
+  --warning-border: #fde68a;
+  --warning-fg: #92400e;
+  --linear-bg-canvas: var(--bg-page);
+  --linear-bg-surface: var(--bg-card);
+  --linear-bg-subtle: var(--bg-subtle);
+  --linear-bg-hover: var(--bg-muted);
+  --linear-border: var(--border);
+  --linear-border-subtle: var(--border-subtle);
+  --linear-border-focus: var(--border-strong);
+  --linear-brand: var(--primary-fg, var(--primary));
+  --linear-brand-hover: var(--primary-hover);
+  --linear-brand-light: var(--primary-light);
+  --linear-brand-border: var(--primary-border);
+  --linear-cyan: var(--primary-fg, var(--primary));
+  --linear-text-main: var(--text-main);
+  --linear-text-primary: var(--text-main);
+  --linear-text-muted: var(--text-muted);
+  --linear-text-dim: var(--text-tertiary);
+  --shadow-xs: 0 1px 2px rgb(15 23 42 / 0.05);
+  --shadow-sm: 0 1px 3px rgb(15 23 42 / 0.08), 0 1px 2px -1px rgb(15 23 42 / 0.06);
+  --shadow-md: 0 4px 6px -1px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.06);
+  --shadow-lg: 0 10px 15px -3px rgb(15 23 42 / 0.08), 0 4px 6px -4px rgb(15 23 42 / 0.06);
+  --shadow-xl: 0 20px 25px -5px rgb(15 23 42 / 0.1), 0 8px 10px -6px rgb(15 23 42 / 0.06);
+}
+
+/* 1. 蓝灰 · Neutral Blue-Grey (DEFAULT) · Dark */
+:root[data-theme="dark"],
+:root[data-theme-palette="blue-grey"][data-theme="dark"] {
+  color-scheme: dark;
+  --bg-page: #090d16;
+  --bg-card: #131b2e;
+  --bg-subtle: #1e293b;
+  --bg-muted: #2d3748;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-tertiary: #8490a3;
+  --border: #293548;
+  --border-subtle: #1e293b;
+  --border-strong: #3e4c63;
+  --primary: #60a5fa;
+  --primary-hover: #93c5fd;
+  --primary-active: #3b82f6;
+  --primary-light: rgba(96, 165, 250, 0.16);
+  --primary-border: rgba(96, 165, 250, 0.32);
+  --primary-fg: #60a5fa;
+  --on-primary: #090d16;
+  --on-primary-hover: #090d16;
+  --on-primary-active: #090d16;
+  --on-success: #090d16;
+  --on-danger: #090d16;
+  --on-warning: #090d16;
+  --success: #4ade80;
+  --success-hover: #86efac;
+  --success-light: rgba(74, 222, 128, 0.14);
+  --success-border: rgba(74, 222, 128, 0.3);
+  --success-fg: #4ade80;
+  --danger: #f87171;
+  --danger-hover: #fca5a5;
+  --danger-light: rgba(248, 113, 113, 0.14);
+  --danger-border: rgba(248, 113, 113, 0.3);
+  --danger-fg: #f87171;
+  --warning: #fbbf24;
+  --warning-hover: #fcd34d;
+  --warning-light: rgba(251, 191, 36, 0.14);
+  --warning-border: rgba(251, 191, 36, 0.3);
+  --warning-fg: #fbbf24;
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.45), 0 4px 6px -4px rgb(0 0 0 / 0.35);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.55), 0 8px 10px -6px rgb(0 0 0 / 0.45);
+}
+
+/* 2. 雾蓝 · Mist Blue · Light */
+:root[data-theme-palette="mist"] {
+  --bg-page: #f4f6f8;
+  --bg-card: #ffffff;
+  --bg-subtle: #eaeff4;
+  --bg-muted: #dfe5ed;
+  --text-main: #192533;
+  --text-muted: #526375;
+  --text-tertiary: #526375;
+  --border: #d2dce6;
+  --border-subtle: #e3ebf2;
+  --border-strong: #a6b8cc;
+  --primary: #3b6978;
+  --primary-hover: #2f5461;
+  --primary-active: #25434d;
+  --primary-light: #e8f1f5;
+  --primary-border: #bdd2dc;
+  --primary-fg: #3b6978;
+  --on-primary: #ffffff;
+  --on-primary-hover: #ffffff;
+  --on-primary-active: #ffffff;
+  --on-success: #ffffff;
+  --on-danger: #ffffff;
+  --on-warning: #1c1408;
+}
+
+/* 2. 雾蓝 · Mist Blue · Dark */
+:root[data-theme-palette="mist"][data-theme="dark"] {
+  --bg-page: #10171d;
+  --bg-card: #18222a;
+  --bg-subtle: #22303c;
+  --bg-muted: #2d3e4d;
+  --text-main: #eef3f7;
+  --text-muted: #a0b3c2;
+  --text-tertiary: #8698a6;
+  --border: #2b3e4f;
+  --border-subtle: #1f2d3a;
+  --border-strong: #3c546b;
+  --primary: #7eb6cb;
+  --primary-hover: #9ecee0;
+  --primary-active: #64a1b7;
+  --primary-light: rgba(126, 182, 203, 0.16);
+  --primary-border: rgba(126, 182, 203, 0.32);
+  --primary-fg: #7eb6cb;
+  --on-primary: #10171d;
+  --on-primary-hover: #10171d;
+  --on-primary-active: #10171d;
+  --on-success: #090d16;
+  --on-danger: #090d16;
+  --on-warning: #090d16;
+}
+
+/* 3. 海盐 · Sea Salt / Ocean · Light */
+:root[data-theme-palette="ocean"] {
+  --bg-page: #f0f9fa;
+  --bg-card: #ffffff;
+  --bg-subtle: #e1f3f5;
+  --bg-muted: #d1ebef;
+  --text-main: #0c2830;
+  --text-muted: #3d6673;
+  --text-tertiary: #3d6673;
+  --border: #c4e3e8;
+  --border-subtle: #daf0f3;
+  --border-strong: #95cdd6;
+  --primary: #0891b2;
+  --primary-hover: #0e7490;
+  --primary-active: #155e75;
+  --primary-light: #ecfeff;
+  --primary-border: #a5f3fc;
+  --primary-fg: #0e7490;
+  --on-primary: #09181c;
+  --on-primary-hover: #ffffff;
+  --on-primary-active: #ffffff;
+  --on-success: #ffffff;
+  --on-danger: #ffffff;
+  --on-warning: #1c1408;
+}
+
+/* 3. 海盐 · Sea Salt / Ocean · Dark */
+:root[data-theme-palette="ocean"][data-theme="dark"] {
+  --bg-page: #09181c;
+  --bg-card: #10242b;
+  --bg-subtle: #18353f;
+  --bg-muted: #214753;
+  --text-main: #ecfeff;
+  --text-muted: #93c7d3;
+  --text-tertiary: #6ea1ae;
+  --border: #204955;
+  --border-subtle: #14323c;
+  --border-strong: #2f6575;
+  --primary: #22d3ee;
+  --primary-hover: #67e8f9;
+  --primary-active: #06b6d4;
+  --primary-light: rgba(34, 211, 238, 0.16);
+  --primary-border: rgba(34, 211, 238, 0.32);
+  --primary-fg: #22d3ee;
+  --on-primary: #09181c;
+  --on-primary-hover: #09181c;
+  --on-primary-active: #09181c;
+  --on-success: #09181c;
+  --on-danger: #09181c;
+  --on-warning: #09181c;
+}
+
+/* 4. 紫晶 · Amethyst / Violet · Light */
+:root[data-theme-palette="amethyst"] {
+  --bg-page: #faf5ff;
+  --bg-card: #ffffff;
+  --bg-subtle: #f3e8ff;
+  --bg-muted: #e9d5ff;
+  --text-main: #24143d;
+  --text-muted: #5e4a78;
+  --text-tertiary: #5e4a78;
+  --border: #dac2f7;
+  --border-subtle: #ede0fc;
+  --border-strong: #bfa2ea;
+  --primary: #7c3aed;
+  --primary-hover: #6d28d9;
+  --primary-active: #5b21b6;
+  --primary-light: #f5f3ff;
+  --primary-border: #ddd6fe;
+  --primary-fg: #7c3aed;
+  --on-primary: #ffffff;
+  --on-primary-hover: #ffffff;
+  --on-primary-active: #ffffff;
+  --on-success: #ffffff;
+  --on-danger: #ffffff;
+  --on-warning: #1c1408;
+}
+
+/* 4. 紫晶 · Amethyst / Violet · Dark */
+:root[data-theme-palette="amethyst"][data-theme="dark"] {
+  --bg-page: #130c22;
+  --bg-card: #1d1433;
+  --bg-subtle: #2b1d4a;
+  --bg-muted: #3b2964;
+  --text-main: #f5f3ff;
+  --text-muted: #bcaad8;
+  --text-tertiary: #9784ae;
+  --border: #3a2862;
+  --border-subtle: #261845;
+  --border-strong: #523a85;
+  --primary: #a78bfa;
+  --primary-hover: #c4b5fd;
+  --primary-active: #8b5cf6;
+  --primary-light: rgba(167, 139, 250, 0.16);
+  --primary-border: rgba(167, 139, 250, 0.32);
+  --primary-fg: #a78bfa;
+  --on-primary: #130c22;
+  --on-primary-hover: #130c22;
+  --on-primary-active: #130c22;
+  --on-success: #090d16;
+  --on-danger: #090d16;
+  --on-warning: #090d16;
+}
+
+/* 5. 玫瑰 · Rose · Light */
+:root[data-theme-palette="rose"] {
+  --bg-page: #fff1f2;
+  --bg-card: #ffffff;
+  --bg-subtle: #ffe4e6;
+  --bg-muted: #fecdd3;
+  --text-main: #3b111a;
+  --text-muted: #783d49;
+  --text-tertiary: #783d49;
+  --border: #f8b4c0;
+  --border-subtle: #fde2e6;
+  --border-strong: #f48b9f;
+  --primary: #e11d48;
+  --primary-hover: #be123c;
+  --primary-active: #9f1239;
+  --primary-light: #fff1f2;
+  --primary-border: #fecdd3;
+  --primary-fg: #be123c;
+  --on-primary: #ffffff;
+  --on-primary-hover: #ffffff;
+  --on-primary-active: #ffffff;
+  --on-success: #ffffff;
+  --on-danger: #ffffff;
+  --on-warning: #1c1408;
+}
+
+/* 5. 玫瑰 · Rose · Dark */
+:root[data-theme-palette="rose"][data-theme="dark"] {
+  --bg-page: #1f0b11;
+  --bg-card: #2c121a;
+  --bg-subtle: #3f1b26;
+  --bg-muted: #552434;
+  --text-main: #ffe4e6;
+  --text-muted: #dca3af;
+  --text-tertiary: #b3808c;
+  --border: #521f2f;
+  --border-subtle: #36131f;
+  --border-strong: #732f45;
+  --primary: #fb7185;
+  --primary-hover: #fda4af;
+  --primary-active: #f43f5e;
+  --primary-light: rgba(251, 113, 133, 0.16);
+  --primary-border: rgba(251, 113, 133, 0.32);
+  --primary-fg: #fb7185;
+  --on-primary: #1f0b11;
+  --on-primary-hover: #1f0b11;
+  --on-primary-active: #1f0b11;
+  --on-success: #090d16;
+  --on-danger: #090d16;
+  --on-warning: #090d16;
+}
+
+/* 6. 琥珀 · Amber · Light */
+:root[data-theme-palette="amber"] {
+  --bg-page: #fffbeb;
+  --bg-card: #ffffff;
+  --bg-subtle: #fef3c7;
+  --bg-muted: #fde68a;
+  --text-main: #382305;
+  --text-muted: #78531a;
+  --text-tertiary: #78531a;
+  --border: #fcd34d;
+  --border-subtle: #fef08a;
+  --border-strong: #f59e0b;
+  --primary: #d97706;
+  --primary-hover: #b45309;
+  --primary-active: #92400e;
+  --primary-light: #fef3c7;
+  --primary-border: #fde68a;
+  --primary-fg: #b45309;
+  --on-primary: #1c1408;
+  --on-primary-hover: #ffffff;
+  --on-primary-active: #ffffff;
+  --on-success: #ffffff;
+  --on-danger: #ffffff;
+  --on-warning: #1c1408;
+}
+
+/* 6. 琥珀 · Amber · Dark */
+:root[data-theme-palette="amber"][data-theme="dark"] {
+  --bg-page: #1c1408;
+  --bg-card: #2a1d0b;
+  --bg-subtle: #3c2a12;
+  --bg-muted: #523a1a;
+  --text-main: #fef3c7;
+  --text-muted: #d7ba8d;
+  --text-tertiary: #ad9065;
+  --border: #4e3617;
+  --border-subtle: #33220d;
+  --border-strong: #704e1f;
+  --primary: #fbbf24;
+  --primary-hover: #fcd34d;
+  --primary-active: #f59e0b;
+  --primary-light: rgba(251, 191, 36, 0.16);
+  --primary-border: rgba(251, 191, 36, 0.32);
+  --primary-fg: #fbbf24;
+  --on-primary: #1c1408;
+  --on-primary-hover: #1c1408;
+  --on-primary-active: #1c1408;
+  --on-success: #1c1408;
+  --on-danger: #1c1408;
+  --on-warning: #1c1408;
+}
+
+/* 7. 森林 · Forest (Preserving original green) · Light */
+:root[data-theme-palette="forest"] {
   --bg-page: #f5f3eb;
   --bg-card: #fffefa;
   --bg-subtle: #ecefe7;
   --bg-muted: #e5eae2;
   --text-main: #20332b;
   --text-muted: #66756e;
-  --text-tertiary: #89948c;
+  --text-tertiary: #5c6b63;
   --border: #d9e1d9;
   --border-subtle: #e5e9e2;
   --border-strong: #c9d5cc;
@@ -24,51 +401,28 @@
   --primary-active: #1d4c3c;
   --primary-light: #e4efe8;
   --primary-border: #bad2c2;
+  --primary-fg: #286b53;
   --on-primary: #ffffff;
+  --on-primary-hover: #ffffff;
+  --on-primary-active: #ffffff;
+  --on-success: #ffffff;
+  --on-danger: #ffffff;
+  --on-warning: #1c1408;
   --success: #2f7d5b;
   --success-hover: #28684c;
   --success-light: #e5f1e9;
   --success-border: #c2ddcb;
-  --danger: #bd4f4b;
-  --danger-hover: #a83f3b;
-  --danger-light: #faecea;
-  --danger-border: #efc9c5;
-  --warning: #a86b2d;
-  --warning-hover: #8f5720;
-  --warning-light: #f8f0e4;
-  --warning-border: #e9d6b5;
-  --linear-bg-canvas: var(--bg-page);
-  --linear-bg-surface: var(--bg-card);
-  --linear-bg-subtle: var(--bg-subtle);
-  --linear-bg-hover: var(--bg-muted);
-  --linear-border: var(--border);
-  --linear-border-subtle: var(--border-subtle);
-  --linear-border-focus: var(--border-strong);
-  --linear-brand: var(--primary);
-  --linear-brand-hover: var(--primary-hover);
-  --linear-brand-light: var(--primary-light);
-  --linear-brand-border: var(--primary-border);
-  --linear-cyan: var(--primary);
-  --linear-text-main: var(--text-main);
-  --linear-text-primary: var(--text-main);
-  --linear-text-muted: var(--text-muted);
-  --linear-text-dim: var(--text-tertiary);
-  --shadow-xs: 0 1px 2px rgb(32 51 43 / 0.04);
-  --shadow-sm: 0 1px 3px rgb(32 51 43 / 0.06), 0 1px 2px -1px rgb(32 51 43 / 0.05);
-  --shadow-md: 0 4px 8px -2px rgb(32 51 43 / 0.08), 0 2px 4px -2px rgb(32 51 43 / 0.04);
-  --shadow-lg: 0 12px 24px -8px rgb(32 51 43 / 0.12), 0 4px 8px -4px rgb(32 51 43 / 0.05);
-  --shadow-xl: 0 20px 36px -14px rgb(32 51 43 / 0.16);
 }
 
-:root[data-theme="dark"] {
-  color-scheme: dark;
+/* 7. 森林 · Forest (Preserving original green) · Dark */
+:root[data-theme-palette="forest"][data-theme="dark"] {
   --bg-page: #151d19;
   --bg-card: #1d2822;
   --bg-subtle: #28352e;
   --bg-muted: #314037;
   --text-main: #eff4f0;
   --text-muted: #a9b7ad;
-  --text-tertiary: #7f9185;
+  --text-tertiary: #8e9e93;
   --border: #38483e;
   --border-subtle: #2b3931;
   --border-strong: #4c5d51;
@@ -77,24 +431,69 @@
   --primary-active: #83b995;
   --primary-light: #2b4034;
   --primary-border: #42634d;
+  --primary-fg: #98c8a8;
   --on-primary: #20332b;
+  --on-primary-hover: #20332b;
+  --on-primary-active: #20332b;
+  --on-success: #20332b;
+  --on-danger: #20332b;
+  --on-warning: #20332b;
   --success: #8ed0a2;
   --success-hover: #a0dcb1;
   --success-light: #283f30;
   --success-border: #3b6047;
-  --danger: #efaaa4;
-  --danger-hover: #f4bdb7;
-  --danger-light: #482d2b;
-  --danger-border: #70413e;
-  --warning: #e3bd83;
-  --warning-hover: #efd09e;
-  --warning-light: #453a2a;
-  --warning-border: #6a5538;
-  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.18);
-  --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.22), 0 1px 2px -1px rgb(0 0 0 / 0.16);
-  --shadow-md: 0 4px 8px -2px rgb(0 0 0 / 0.24), 0 2px 4px -2px rgb(0 0 0 / 0.18);
-  --shadow-lg: 0 12px 24px -8px rgb(0 0 0 / 0.3), 0 4px 8px -4px rgb(0 0 0 / 0.2);
-  --shadow-xl: 0 20px 36px -14px rgb(0 0 0 / 0.38);
+}
+
+/* 8. 摩卡 · Mocha · Light */
+:root[data-theme-palette="mocha"] {
+  --bg-page: #f5f0eb;
+  --bg-card: #ffffff;
+  --bg-subtle: #ebe3db;
+  --bg-muted: #ded3c7;
+  --text-main: #2b1f1a;
+  --text-muted: #68554d;
+  --text-tertiary: #68554d;
+  --border: #d8c8ba;
+  --border-subtle: #e7dbcf;
+  --border-strong: #bfa895;
+  --primary: #845339;
+  --primary-hover: #6c432c;
+  --primary-active: #543321;
+  --primary-light: #f3eae3;
+  --primary-border: #d4bfb0;
+  --primary-fg: #845339;
+  --on-primary: #ffffff;
+  --on-primary-hover: #ffffff;
+  --on-primary-active: #ffffff;
+  --on-success: #ffffff;
+  --on-danger: #ffffff;
+  --on-warning: #1c1408;
+}
+
+/* 8. 摩卡 · Mocha · Dark */
+:root[data-theme-palette="mocha"][data-theme="dark"] {
+  --bg-page: #181210;
+  --bg-card: #241c19;
+  --bg-subtle: #332824;
+  --bg-muted: #443631;
+  --text-main: #f5eee8;
+  --text-muted: #bfaba0;
+  --text-tertiary: #9f8e84;
+  --border: #42342e;
+  --border-subtle: #2c211c;
+  --border-strong: #5c4941;
+  --primary: #d99b79;
+  --primary-hover: #e8b497;
+  --primary-active: #c7835d;
+  --primary-light: rgba(217, 155, 121, 0.16);
+  --primary-border: rgba(217, 155, 121, 0.32);
+  --primary-fg: #d99b79;
+  --on-primary: #181210;
+  --on-primary-hover: #181210;
+  --on-primary-active: #181210;
+  --on-success: #090d16;
+  --on-danger: #090d16;
+  --on-warning: #090d16;
 }
 
 * {
@@ -117,7 +516,7 @@ body {
 
 ::selection {
   background-color: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
 }
 
 #app {
@@ -167,17 +566,17 @@ code {
 }
 
 .error {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   font-size: 0.875rem;
 }
 
 .success {
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   font-size: 0.875rem;
 }
 
 .warning {
-  color: var(--warning);
+  color: var(--warning-fg, var(--warning));
   font-size: 0.875rem;
 }
 
@@ -201,8 +600,8 @@ input, textarea, select {
 
 input:focus, textarea:focus, select:focus {
   outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
+  border-color: var(--primary-fg, var(--primary));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-fg, var(--primary)) 22%, transparent);
 }
 
 .btn-back {
@@ -274,7 +673,7 @@ button:active:not(:disabled) {
 
 button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 28%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-fg, var(--primary)) 28%, transparent);
 }
 
 button:disabled {
@@ -320,13 +719,13 @@ button.primary:hover:not(:disabled),
 .primary-btn:hover:not(:disabled) {
   background: var(--primary-hover);
   border-color: transparent;
-  color: var(--on-primary);
+  color: var(--on-primary-hover, var(--on-primary));
 }
 
 button.primary:active:not(:disabled),
 .primary-btn:active:not(:disabled) {
   background: var(--primary-active);
-  color: var(--on-primary);
+  color: var(--on-primary-active, var(--on-primary));
 }
 
 button.theme-toggle {
@@ -379,12 +778,13 @@ button.theme-toggle.theme-toggle-compact {
 button.link-button {
   border: none;
   background: transparent;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   padding: 0.25rem 0.5rem;
 }
 
 button.link-button:hover:not(:disabled) {
   background: transparent;
+  color: var(--primary-fg, var(--primary));
   text-decoration: underline;
 }
 
@@ -563,10 +963,12 @@ button.link-button:hover:not(:disabled) {
 
 .auth-card form button[type="submit"]:hover:not(:disabled) {
   background: var(--primary-hover);
+  color: var(--on-primary-hover, var(--on-primary));
 }
 
 .auth-card form button[type="submit"]:active:not(:disabled) {
   background: var(--primary-active);
+  color: var(--on-primary-active, var(--on-primary));
 }
 
 .auth-card .link-button {
@@ -576,7 +978,7 @@ button.link-button:hover:not(:disabled) {
 
 .auth-card .error {
   background: var(--danger-light);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border: 1px solid var(--danger-border);
   border-radius: var(--radius-md);
   padding: 0.625rem 0.85rem;
@@ -808,17 +1210,17 @@ button.link-button:hover:not(:disabled) {
 .legend-badge.answered {
   border-color: var(--success);
   background: var(--success-light);
-  color: var(--success);
+  color: var(--success-fg, var(--success));
 }
 
 .legend-badge.flagged {
   box-shadow: inset 0 -3px var(--warning);
-  color: var(--warning-hover);
+  color: var(--warning-fg, var(--warning-hover));
 }
 
 .legend-badge.current {
-  border-color: var(--primary);
-  outline: 2px solid var(--primary);
+  border-color: var(--primary-fg, var(--primary));
+  outline: 2px solid var(--primary-fg, var(--primary));
   outline-offset: 1px;
 }
 
@@ -827,7 +1229,7 @@ button.link-button:hover:not(:disabled) {
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   font-weight: 600;
   text-decoration: underline;
   cursor: pointer;
@@ -835,7 +1237,7 @@ button.link-button:hover:not(:disabled) {
 }
 
 .btn-link-jump:hover {
-  color: var(--danger-hover);
+  color: var(--danger-fg, var(--danger-hover));
   background: transparent;
 }
 
@@ -1056,7 +1458,7 @@ button.link-button:hover:not(:disabled) {
   padding: 0.15rem 0.5rem;
   border-radius: var(--radius-sm);
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-family: var(--linear-mono);
 }
 
@@ -1118,7 +1520,7 @@ button.link-button:hover:not(:disabled) {
 }
 
 .btn-ghost-danger {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   background: transparent;
   border: 1px solid var(--danger-border);
   border-radius: var(--radius-md);
@@ -1132,7 +1534,7 @@ button.link-button:hover:not(:disabled) {
 .btn-ghost-danger:hover:not(:disabled) {
   background: var(--danger-light);
   border-color: var(--danger);
-  color: var(--danger-hover);
+  color: var(--danger-fg, var(--danger-hover));
 }
 
 .btn-ghost-danger:disabled {
@@ -1219,7 +1621,7 @@ button.link-button:hover:not(:disabled) {
   border-radius: var(--radius-md);
   padding: 0.6rem 0.75rem;
   font-size: 0.85rem;
-  color: var(--success);
+  color: var(--success-fg, var(--success));
 }
 
 .blueprint-summary-sub {
@@ -1266,6 +1668,172 @@ button.link-button:hover:not(:disabled) {
   select {
     min-height: 42px;
   }
+}
+
+/* ==========================================================================
+   Global Modal & Dialog System
+   ========================================================================== */
+.exam-setup-backdrop,
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--text-main) 44%, transparent);
+  backdrop-filter: blur(4px);
+  overflow-y: auto;
+}
+
+.exam-setup-dialog,
+.modal-dialog {
+  width: min(100%, 32rem);
+  display: grid;
+  gap: 1.15rem;
+  padding: 1.75rem;
+  border-radius: var(--radius-xl);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  position: relative;
+  box-sizing: border-box;
+}
+
+.exam-setup-dialog h2,
+.modal-dialog h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.exam-setup-dialog label,
+.modal-dialog label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.exam-setup-dialog input:not([type="checkbox"]):not([type="radio"]),
+.exam-setup-dialog textarea,
+.exam-setup-dialog select,
+.modal-dialog input:not([type="checkbox"]):not([type="radio"]),
+.modal-dialog textarea,
+.modal-dialog select {
+  width: 100%;
+}
+
+.exam-setup-dialog label.exam-option-checkbox,
+.exam-setup-dialog label.ctrl-check,
+.modal-dialog label.ctrl-check {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 0.6rem !important;
+}
+
+.exam-setup-dialog input[type="checkbox"],
+.exam-setup-dialog input[type="radio"],
+.modal-dialog input[type="checkbox"],
+.modal-dialog input[type="radio"] {
+  width: auto !important;
+  margin: 0 !important;
+  flex: 0 0 auto !important;
+}
+
+.modal-dialog-large {
+  width: min(100%, 46rem) !important;
+}
+
+.dialog-header-flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.btn-close-icon,
+.btn-close-modal {
+  border: none;
+  background: var(--bg-subtle);
+  width: 2rem;
+  height: 2rem;
+  min-width: 2rem;
+  min-height: 2rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 1rem;
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+
+.btn-close-icon:hover,
+.btn-close-modal:hover {
+  background: var(--bg-muted);
+  color: var(--text-main);
+}
+
+.dialog-actions-row,
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+/* ==========================================================================
+   Loading & Feedback Components
+   ========================================================================== */
+.loading-state-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2.5rem 1.5rem;
+  color: var(--text-muted);
+  font-size: 0.925rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  margin: 1rem 0;
+}
+
+.loading-spinner {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--border);
+  border-top-color: var(--primary-fg, var(--primary));
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.remember-label {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  min-height: 44px !important;
+  cursor: pointer !important;
+  user-select: none !important;
+}
+
+.remember-label input[type="checkbox"] {
+  width: 18px !important;
+  height: 18px !important;
+  cursor: pointer !important;
 }
 
 

@@ -54,7 +54,7 @@
       >
         <LinearIcon name="target" size="16" />
         <span v-if="!isCollapsed" class="nav-item-label">{{ t('nav.mistakes') }}</span>
-        <span v-if="!isCollapsed" class="nav-item-sub">FSRS</span>
+        <span v-if="!isCollapsed" class="nav-item-sub">{{ t('nav.mistakes_sub') }}</span>
       </button>
 
       <button
@@ -66,6 +66,7 @@
       >
         <LinearIcon name="chart" size="16" />
         <span v-if="!isCollapsed" class="nav-item-label">{{ t('nav.learning') }}</span>
+        <span v-if="!isCollapsed" class="nav-item-sub">{{ t('nav.learning_sub') }}</span>
       </button>
 
       <button
@@ -88,6 +89,17 @@
       >
         <LinearIcon name="edit" size="16" />
         <span v-if="!isCollapsed" class="nav-item-label">{{ t('nav.notes') }}</span>
+      </button>
+
+      <button
+        type="button"
+        class="sidebar-nav-item"
+        :class="{ active: currentPage === 'settings' }"
+        @click="$emit('navigate', 'settings')"
+        :title="isCollapsed ? t('nav.settings') : ''"
+      >
+        <LinearIcon name="settings" size="16" />
+        <span v-if="!isCollapsed" class="nav-item-label">{{ t('nav.settings') }}</span>
       </button>
     </nav>
 
@@ -154,6 +166,10 @@
           </div>
         </div>
         <div class="popover-actions">
+          <button type="button" class="popover-action-item" @click="handleSettings">
+            <LinearIcon name="settings" size="14" />
+            <span>{{ t('nav.settings') }}</span>
+          </button>
           <button type="button" class="popover-action-item" @click="handleChangePassword">
             <LinearIcon name="key" size="14" />
             <span>{{ t('ui.k0002') }}</span>
@@ -205,6 +221,11 @@ const userInitial = computed(() => {
 
 function toggleUserMenu() {
   showUserMenu.value = !showUserMenu.value
+}
+
+function handleSettings() {
+  showUserMenu.value = false
+  emit('navigate', 'settings')
 }
 
 function handleChangePassword() {
@@ -262,7 +283,7 @@ onUnmounted(() => {
 
 <style scoped>
 .app-sidebar {
-  width: 220px;
+  width: 260px;
   height: 100vh;
   position: sticky;
   top: 0;
@@ -306,7 +327,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   flex-shrink: 0;
 }
 
@@ -413,7 +434,7 @@ onUnmounted(() => {
 
 .sidebar-nav-item {
   width: 100%;
-  height: 34px;
+  height: 36px;
   display: flex;
   align-items: center;
   gap: 0.65rem;
@@ -427,7 +448,6 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 80ms ease;
   white-space: nowrap;
-  overflow: hidden;
 }
 
 .sidebar-nav-item:hover {
@@ -437,7 +457,7 @@ onUnmounted(() => {
 
 .sidebar-nav-item.active {
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-weight: 600;
 }
 
@@ -467,10 +487,12 @@ onUnmounted(() => {
 .nav-item-sub {
   font-size: 0.65rem;
   font-family: var(--linear-mono, monospace);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   background: var(--primary-light);
-  padding: 1px 4px;
+  border: 1px solid var(--primary-border);
+  padding: 1px 5px;
   border-radius: 3px;
+  flex-shrink: 0;
 }
 
 .sidebar-footer {
@@ -534,9 +556,9 @@ onUnmounted(() => {
 }
 
 .user-avatar-badge.role-admin {
-  background: rgba(37, 99, 235, 0.12);
-  color: var(--primary);
-  border: 1px solid rgba(37, 99, 235, 0.28);
+  background: var(--primary-light);
+  color: var(--primary-fg, var(--primary));
+  border: 1px solid var(--primary-border);
 }
 
 .user-avatar-badge.role-user {
@@ -602,9 +624,9 @@ onUnmounted(() => {
 }
 
 .popover-avatar.role-admin {
-  background: rgba(37, 99, 235, 0.12);
-  color: var(--primary);
-  border: 1px solid rgba(37, 99, 235, 0.28);
+  background: var(--primary-light);
+  color: var(--primary-fg, var(--primary));
+  border: 1px solid var(--primary-border);
 }
 
 .popover-avatar.role-user {
@@ -638,7 +660,8 @@ onUnmounted(() => {
 
 .popover-badge.admin {
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
+  border: 1px solid var(--primary-border);
 }
 
 .popover-badge.user {
@@ -673,11 +696,12 @@ onUnmounted(() => {
 }
 
 .popover-action-item.logout {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .popover-action-item.logout:hover {
   background: var(--danger-light);
+  color: var(--danger-fg, var(--danger));
 }
 
 .user-info {
@@ -723,12 +747,12 @@ onUnmounted(() => {
 }
 
 .sidebar-logout-btn:hover .logout-label {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .sidebar-logout-btn:hover {
   background: var(--danger-light);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .collapsed .sidebar-header {

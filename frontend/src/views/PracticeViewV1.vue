@@ -6,31 +6,31 @@
         <div class="header-titles">
           <h1 class="practice-title">{{ session?.mode === 'ELIMINATION' ? t('ui.k0734') : session?.mode === 'FSRS' ? t('ui.k0735') : session?.mode === 'PRACTICE' ? t('home.sequential_practice') : t('ui.k0736') }}</h1>
           <span v-if="question" class="badge-type-pill">{{ formatType(question.type) }}</span>
-          <button v-if="question" type="button" class="badge-index-pill btn-sheet-trigger-pill" @click="showSheetModal = true" :title="t('ui.k0511')">
-            <small>{{ index + 1 }} / {{ questions.length }}</small> <LinearIcon name="layers" size="13" /> {{ t('ui.k0093') }}
-          </button>
         </div>
+        <button v-if="question" type="button" class="badge-index-pill btn-sheet-trigger-pill" @click="showSheetModal = true" :title="t('ui.k0511')">
+          <small>{{ index + 1 }} / {{ questions.length }}</small> <LinearIcon name="layers" size="13" /> {{ t('ui.k0093') }}
+        </button>
       </div>
       <div class="header-actions">
-        <ThemeToggle compact class="desktop-only-btn" />
-        <LocaleToggle compact class="desktop-only-btn" />
-        <!-- 桌面端平铺操作 -->
-        <button type="button" class="secondary-btn btn-help-guide desktop-only-btn" @click="showHelpTip = !showHelpTip" :title="t('ui.k0512')">
+        <ThemeToggle compact class="header-control-btn" />
+        <LocaleToggle compact class="header-control-btn" />
+        <!-- 桌面端平铺操作 (宽屏 >= 1024px 显示) -->
+        <button type="button" class="secondary-btn btn-help-guide desktop-full-btn" @click="showHelpTip = !showHelpTip" :title="t('ui.k0512')">
           <LinearIcon name="zap" size="13" /> {{ t('ui.k0513') }}
         </button>
-        <button type="button" class="btn-flag desktop-only-btn" :class="{ active: isWeak }" @click="toggleWeak">
+        <button type="button" class="btn-flag desktop-full-btn" :class="{ active: isWeak }" @click="toggleWeak">
           {{ isWeak ? t('ui.k0737') : t('ui.k0738') }}
         </button>
-        <button type="button" class="btn-kill desktop-only-btn" @click="handleKill">
+        <button type="button" class="btn-kill desktop-full-btn" @click="handleKill">
           {{ t('ui.k0486') }}
         </button>
-        <button type="button" class="btn-edit-question desktop-only-btn" @click="toggleEditQuestion">
+        <button type="button" class="btn-edit-question desktop-full-btn" @click="toggleEditQuestion">
           {{ isEditingQuestion ? t('ui.k0739') : t('ui.k0740') }}
         </button>
-        <button type="button" class="primary btn-header-complete desktop-only-btn" @click="complete">{{ t('ui.k0514') }}</button>
+        <button type="button" class="primary btn-header-complete" @click="complete">{{ t('ui.k0514') }}</button>
 
-        <!-- 移动端右上角“更多 ⋯”菜单 -->
-        <div class="mobile-more-wrapper mobile-only-inline">
+        <!-- 移动/平板端“更多 ⋯”菜单 -->
+        <div class="mobile-more-wrapper compact-more-menu">
           <button type="button" class="btn-help-mobile" @click="showHelpTip = !showHelpTip" :title="t('ui.k0513')">
             <LinearIcon name="zap" size="13" />
           </button>
@@ -1658,12 +1658,12 @@ function handleRestartPractice() {
 .ai-badge {
   font-weight: 600;
   font-size: 0.875rem;
-  color: var(--success);
+  color: var(--success-fg, var(--success));
 }
 
 .ai-desc {
   font-size: 0.785rem;
-  color: var(--success-hover);
+  color: var(--success-fg, var(--success-hover));
 }
 
 .btn-toggle-ai-card {
@@ -1672,7 +1672,7 @@ function handleRestartPractice() {
   font-weight: 500;
   background: var(--bg-card);
   border: 1px solid var(--success-border);
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -1684,7 +1684,7 @@ function handleRestartPractice() {
 
 .btn-toggle-ai-card.active {
   background: var(--success);
-  color: var(--on-primary);
+  color: var(--on-success, #ffffff);
 }
 
 /* 专注作答状态占位卡 */
@@ -1795,7 +1795,7 @@ function handleRestartPractice() {
   padding: 0.2rem 0.5rem;
   background: var(--danger-light);
   border: 1px solid var(--danger-border);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border-radius: var(--radius-sm);
   font-size: 0.75rem;
   cursor: pointer;
@@ -1822,22 +1822,28 @@ function handleRestartPractice() {
 }
 .header-actions .btn-header-complete:hover:not(:disabled) {
   background: var(--primary-hover);
+  color: var(--on-primary-hover, var(--on-primary));
+}
+.header-actions .btn-header-complete:active:not(:disabled) {
+  background: var(--primary-active);
+  color: var(--on-primary-active, var(--on-primary));
 }
 
 .btn-flag.active {
   background: var(--warning-light);
   border-color: var(--warning);
-  color: var(--warning-hover);
+  color: var(--warning-fg, #92400e);
   font-weight: 600;
 }
 
 .btn-kill {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border-color: var(--danger-border);
 }
 .btn-kill:hover:not(:disabled) {
   background: var(--danger-light);
   border-color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .question-card {
@@ -1958,10 +1964,10 @@ function handleRestartPractice() {
 }
 
 .option.selected {
-  border-color: var(--primary);
+  border-color: var(--primary-fg, var(--primary));
   background: var(--primary-light);
   color: var(--text-main);
-  box-shadow: 0 0 0 1px var(--primary);
+  box-shadow: 0 0 0 1px var(--primary-border, var(--primary));
 }
 
 .option.selected .key-cap {
@@ -2073,19 +2079,19 @@ function handleRestartPractice() {
 .quick-verdict-bar.correct {
   background: var(--success-light);
   border-color: var(--success-border);
-  color: var(--success);
+  color: var(--success-fg, var(--success));
 }
 
 .quick-verdict-bar.incorrect {
   background: var(--danger-light);
   border-color: var(--danger-border);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .quick-verdict-bar.partial {
   background: var(--warning-light);
   border-color: var(--warning-border);
-  color: var(--warning);
+  color: var(--warning-fg, #92400e);
 }
 
 .verdict-status-title {
@@ -2103,11 +2109,11 @@ function handleRestartPractice() {
 }
 
 .text-correct {
-  color: var(--success);
+  color: var(--success-fg, var(--success));
 }
 
 .text-danger {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .option.option-correct {
@@ -2141,13 +2147,13 @@ function handleRestartPractice() {
 
 .inline-verdict-badge.correct {
   background: var(--success-light);
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   border: 1px solid var(--success-border);
 }
 
 .inline-verdict-badge.wrong {
   background: var(--danger-light);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border: 1px solid var(--danger-border);
 }
 
@@ -2175,13 +2181,13 @@ function handleRestartPractice() {
 }
 
 .result-header strong.correct {
-  color: var(--success);
+  color: var(--success-fg, var(--success));
 }
 .result-header strong.partial {
-  color: var(--warning);
+  color: var(--warning-fg, #92400e);
 }
 .result-header strong.incorrect {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .official-explanation {
@@ -2202,7 +2208,7 @@ function handleRestartPractice() {
 
 .btn-ai-toggle.active {
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   border-color: var(--primary-border);
 }
 
@@ -2242,23 +2248,25 @@ function handleRestartPractice() {
 }
 
 .rating-btn.again {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border-color: var(--danger-border);
 }
 .rating-btn.again:hover:not(:disabled) {
   background: var(--danger-light);
+  color: var(--danger-fg, var(--danger));
 }
 
 .rating-btn.hard {
-  color: var(--warning);
+  color: var(--warning-fg, #92400e);
   border-color: var(--warning-border);
 }
 .rating-btn.hard:hover:not(:disabled) {
   background: var(--warning-light);
+  color: var(--warning-fg, #92400e);
 }
 
 .rating-btn.good {
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   border-color: var(--primary-border);
 }
 .rating-btn.good:hover:not(:disabled) {
@@ -2266,11 +2274,12 @@ function handleRestartPractice() {
 }
 
 .rating-btn.easy {
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   border-color: var(--success-border);
 }
 .rating-btn.easy:hover:not(:disabled) {
   background: var(--success-light);
+  color: var(--success-fg, var(--success));
 }
 
 .rating-btn.selected {
@@ -2286,7 +2295,7 @@ function handleRestartPractice() {
 .fsrs-status {
   margin-top: 0.5rem;
   font-size: 0.85rem;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
 }
 
 .ai-panel {
@@ -2322,7 +2331,7 @@ function handleRestartPractice() {
 }
 
 .ai-status {
-  color: var(--warning);
+  color: var(--warning-fg, #92400e);
   font-size: 0.875rem;
   margin-bottom: 0.75rem;
 }
@@ -2364,7 +2373,7 @@ function handleRestartPractice() {
 
 .badge-adopted {
   font-size: 0.75rem;
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   font-weight: 700;
   background: var(--success-light);
   border: 1px solid var(--success-border);
@@ -2400,12 +2409,13 @@ function handleRestartPractice() {
 }
 
 .btn-adopt {
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   border-color: var(--success-border);
 }
 .btn-adopt:hover:not(:disabled) {
   background: var(--success-light);
   border-color: var(--success);
+  color: var(--success-fg, var(--success));
 }
 
 .version-edit-box textarea {
@@ -2486,7 +2496,7 @@ function handleRestartPractice() {
 
 .conflict-badge {
   font-weight: 600;
-  color: var(--warning-hover);
+  color: var(--warning-fg, #92400e);
   font-size: 0.925rem;
 }
 
@@ -2494,7 +2504,7 @@ function handleRestartPractice() {
   padding: 0.35rem 0.75rem;
   border: 1px solid var(--warning);
   background: var(--warning-light);
-  color: var(--warning);
+  color: var(--warning-fg, #92400e);
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 0.85rem;
@@ -2502,7 +2512,7 @@ function handleRestartPractice() {
 
 .conflict-resolved-msg {
   margin-top: 0.5rem;
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   font-weight: 600;
   font-size: 0.9rem;
 }
@@ -2521,8 +2531,8 @@ function handleRestartPractice() {
 }
 
 .conflict-version-item.active {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 1px var(--primary);
+  border-color: var(--primary-fg, var(--primary));
+  box-shadow: 0 0 0 1px var(--primary-border, var(--primary));
 }
 
 .conflict-version-meta {
@@ -2535,7 +2545,8 @@ function handleRestartPractice() {
 .badge-current {
   font-size: 0.75rem;
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
+  border: 1px solid var(--primary-border);
   padding: 0.1rem 0.4rem;
   border-radius: var(--radius-sm);
   font-weight: 600;
@@ -2563,7 +2574,7 @@ function handleRestartPractice() {
   background: var(--danger-light);
   border: 1px solid var(--danger-border);
   border-radius: var(--radius-md);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -2575,7 +2586,7 @@ function handleRestartPractice() {
   padding: 0.3rem 0.65rem;
   border: 1px solid var(--danger);
   background: var(--bg-card);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 0.85rem;
@@ -2624,17 +2635,17 @@ function handleRestartPractice() {
 }
 
 /* Visibility utilities */
-.mobile-only-inline, .mobile-only-btn {
+.mobile-only-inline, .mobile-only-btn, .compact-more-menu {
   display: none !important;
 }
-.desktop-only-btn {
+.desktop-only-btn, .desktop-full-btn, .header-control-btn {
   display: inline-flex !important;
 }
 
 .btn-sheet-trigger-pill {
   border: 1px solid var(--primary-border);
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -2753,7 +2764,7 @@ function handleRestartPractice() {
   display: inline-block;
   padding: 0.25rem 0.75rem;
   background: var(--success-light);
-  color: var(--success);
+  color: var(--success-fg, var(--success));
   border: 1px solid var(--success-border);
   border-radius: 9999px;
   font-size: 0.85rem;
@@ -2939,8 +2950,8 @@ function handleRestartPractice() {
   justify-content: center;
   padding: 0.55rem;
   background: var(--primary-light);
-  border: 1px dashed var(--primary);
-  color: var(--primary);
+  border: 1px dashed var(--primary-fg, var(--primary));
+  color: var(--primary-fg, var(--primary));
   border-radius: var(--radius-md);
   font-weight: 600;
   font-size: 0.875rem;
@@ -2993,7 +3004,7 @@ function handleRestartPractice() {
   transition: all 0.15s ease;
 }
 .sheet-num-btn.current {
-  border: 2px solid var(--primary) !important;
+  border: 2px solid var(--primary-fg, var(--primary)) !important;
   box-shadow: 0 0 0 2px var(--primary-border);
 }
 .sheet-num-btn.answered {
@@ -3003,23 +3014,45 @@ function handleRestartPractice() {
 .sheet-num-btn.correct {
   background: var(--success);
   border-color: var(--success-hover);
-  color: var(--on-primary);
+  color: var(--on-success, #ffffff);
 }
 .sheet-num-btn.incorrect {
   background: var(--danger);
   border-color: var(--danger-hover);
-  color: var(--on-primary);
+  color: var(--on-danger, #ffffff);
 }
 .sheet-num-btn.partial {
   background: var(--warning);
   border-color: var(--warning-hover);
-  color: var(--on-primary);
+  color: var(--on-warning, #1c1408);
 }
 
 /* ==========================================================================
-   Mobile Responsive Overhaul (< 768px)
+   Responsive Overhaul: Tablet & Compact Viewports (<= 1024px)
    ========================================================================== */
-@media (max-width: 767px) {
+@media (max-width: 1024px) {
+  .desktop-full-btn {
+    display: none !important;
+  }
+  .compact-more-menu {
+    display: inline-flex !important;
+  }
+  .header-control-btn {
+    display: inline-flex !important;
+  }
+  .hotkey-helper-bar,
+  .hotkey-badge {
+    display: none !important;
+  }
+  .practice-title {
+    max-width: 140px;
+  }
+}
+
+/* ==========================================================================
+   Tablet & Mobile Viewports (<= 768px)
+   ========================================================================== */
+@media (max-width: 768px) {
   .practice-page {
     width: 100%;
     margin: 0;
@@ -3039,8 +3072,6 @@ function handleRestartPractice() {
     border-radius: var(--radius-md) !important;
     box-sizing: border-box !important;
     flex-wrap: nowrap !important;
-    justify-content: space-between !important;
-    align-items: center !important;
   }
 
   .header-left-bar {
@@ -3059,7 +3090,8 @@ function handleRestartPractice() {
     gap: 0.3rem !important;
     white-space: nowrap !important;
     overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    min-width: 0 !important;
+    flex: 0 1 auto !important;
   }
 
   .btn-back {
@@ -3076,23 +3108,31 @@ function handleRestartPractice() {
   }
 
   .practice-title {
-    font-size: 0.95rem !important;
+    font-size: 0.92rem !important;
     font-weight: 600 !important;
     margin: 0 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 110px;
   }
 
   .badge-type-pill {
     font-size: 0.72rem !important;
     padding: 0.15rem 0.35rem !important;
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
   }
 
   .btn-sheet-trigger-pill {
     font-size: 0.75rem !important;
-    padding: 0.2rem 0.5rem !important;
+    padding: 0.2rem 0.45rem !important;
     min-height: 42px !important;
     display: inline-flex !important;
     align-items: center !important;
     border-radius: var(--radius-md) !important;
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
   }
 
   .header-actions {
@@ -3106,20 +3146,22 @@ function handleRestartPractice() {
   }
 
   .btn-header-complete {
-    padding: 0.25rem 0.6rem !important;
-    font-size: 0.8rem !important;
-    height: 2rem !important;
-    min-height: 2rem !important;
-    border-radius: var(--radius-sm) !important;
+    padding: 0.25rem 0.65rem !important;
+    font-size: 0.825rem !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    border-radius: var(--radius-md) !important;
+    flex-shrink: 0 !important;
   }
 
   .desktop-only-btn,
   .desktop-only-block,
+  .desktop-full-btn,
   .practice-answering-placeholder {
     display: none !important;
   }
 
-  /* 消除移动端重复的判分结果头部（已有 quick-verdict-bar 呈现完整判分） */
+  /* 消除移动/平板端重复的判分结果头部（已有 quick-verdict-bar 呈现完整判分） */
   .result-card .result-header {
     display: none !important;
   }
@@ -3145,14 +3187,11 @@ function handleRestartPractice() {
     justify-content: center !important;
   }
 
-  .mobile-only-inline {
-    display: inline-flex !important;
-  }
-  .mobile-only-btn {
+  .compact-more-menu {
     display: inline-flex !important;
   }
 
-  /* 消除桌面端键盘提示框在手机端的空间占用 */
+  /* 消除桌面端键盘提示框在移动/平板端的空间占用 */
   .practice-side-guide,
   .practice-tips {
     display: none !important;
@@ -3235,6 +3274,20 @@ function handleRestartPractice() {
   .hotkey-badge,
   .hotkey-helper-bar {
     display: none !important;
+  }
+}
+
+/* ==========================================================================
+   Narrow Mobile (< 640px, e.g. 375px)
+   ========================================================================== */
+@media (max-width: 640px) {
+  .header-control-btn,
+  .btn-help-mobile {
+    display: none !important;
+  }
+
+  .practice-title {
+    max-width: 80px !important;
   }
 }
 </style>

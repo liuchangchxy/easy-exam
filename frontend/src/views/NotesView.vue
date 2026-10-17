@@ -118,7 +118,7 @@
     <div v-else class="notes-grid">
       <article v-for="item in filteredAssets" :key="item.id" class="note-card">
         <div class="note-card-top">
-          <span class="type-pill" :class="item.asset_type.toLowerCase()">
+          <span class="type-pill" :class="[item.asset_type.toLowerCase(), item.asset_type.toUpperCase() === 'SUMMARY' ? 'mistake_summary' : '', item.asset_type.toUpperCase() === 'MNEMONIC' ? 'knowledge' : '']">
             {{ formatType(item.asset_type) }}
           </span>
           <div class="card-top-right">
@@ -181,8 +181,9 @@ async function handleCreateAsset() {
   if (!newAssetContent.value.trim()) return
   savingAsset.value = true
   try {
+    const apiType = newAssetType.value === 'MISTAKE_SUMMARY' ? 'SUMMARY' : (newAssetType.value === 'KNOWLEDGE' ? 'MNEMONIC' : newAssetType.value)
     await createAsset(props.token, {
-      asset_type: newAssetType.value,
+      asset_type: apiType,
       content: newAssetContent.value.trim()
     })
     newAssetContent.value = ''
@@ -200,7 +201,8 @@ async function handleFileUpload(e) {
   if (!file) return
   uploadingAsset.value = true
   try {
-    await uploadAssetFile(props.token, file, newAssetType.value)
+    const apiType = newAssetType.value === 'MISTAKE_SUMMARY' ? 'SUMMARY' : (newAssetType.value === 'KNOWLEDGE' ? 'MNEMONIC' : newAssetType.value)
+    await uploadAssetFile(props.token, file, apiType)
     showAddModal.value = false
     await fetchAssets()
   } catch (err) {
@@ -222,8 +224,8 @@ async function handleDelete(id) {
 }
 
 function formatType(type) {
-  if (type === 'MISTAKE_SUMMARY') return t('notes.type_summary')
-  if (type === 'KNOWLEDGE') return t('notes.type_knowledge')
+  if (type === 'MISTAKE_SUMMARY' || type === 'SUMMARY') return t('notes.type_summary')
+  if (type === 'KNOWLEDGE' || type === 'MNEMONIC') return t('notes.type_knowledge')
   return t('notes.type_note')
 }
 
@@ -239,8 +241,11 @@ function formatDate(isoStr) {
 
 const filteredAssets = computed(() => {
   return assetsList.value.filter(item => {
-    if (filterType.value !== 'ALL' && item.asset_type !== filterType.value) {
-      return false
+    if (filterType.value !== 'ALL') {
+      const match = (filterType.value === item.asset_type) ||
+        (filterType.value === 'MISTAKE_SUMMARY' && item.asset_type === 'SUMMARY') ||
+        (filterType.value === 'KNOWLEDGE' && item.asset_type === 'MNEMONIC')
+      if (!match) return false
     }
     if (searchQuery.value.trim()) {
       const q = searchQuery.value.toLowerCase()
@@ -279,7 +284,7 @@ onMounted(() => {
 }
 
 .header-icon {
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
 }
 
 .notes-header h1 {
@@ -391,7 +396,7 @@ onMounted(() => {
   align-items: center;
   gap: 0.4rem;
   font-size: 0.82rem;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   background: var(--primary-light);
   padding: 0.45rem 0.8rem;
   border-radius: var(--radius-md);
@@ -436,8 +441,8 @@ onMounted(() => {
 
 .filter-pill.active {
   background: var(--primary);
-  color: #fff;
-  border-color: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--primary-border, var(--primary));
   font-weight: 600;
 }
 
@@ -498,17 +503,19 @@ onMounted(() => {
 
 .type-pill.note {
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
 }
 
-.type-pill.mistake_summary {
+.type-pill.mistake_summary,
+.type-pill.summary {
   background: var(--warning-light, #fef3c7);
-  color: var(--warning, #d97706);
+  color: var(--warning-fg, #92400e);
 }
 
-.type-pill.knowledge {
+.type-pill.knowledge,
+.type-pill.mnemonic {
   background: var(--success-light, #d1fae5);
-  color: var(--success, #059669);
+  color: var(--success-fg, #15803d);
 }
 
 .card-top-right {
@@ -534,7 +541,7 @@ onMounted(() => {
 }
 
 .btn-delete:hover {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   background: var(--danger-light);
 }
 

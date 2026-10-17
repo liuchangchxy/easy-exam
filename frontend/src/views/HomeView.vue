@@ -11,7 +11,7 @@
         <p class="home-user-pill">
           <span class="user-role-dot" :class="user?.is_admin ? 'role-admin' : 'role-user'"></span>
           {{ user?.username }}
-          <span v-if="user?.is_admin" class="user-role-badge">{{ user?.is_admin ? t('sidebar.role_admin') : t('sidebar.role_user') }}</span>
+          <span v-if="user" class="user-role-badge">{{ user?.is_admin ? t('sidebar.role_admin') : t('sidebar.role_user') }}</span>
         </p>
       </div>
 
@@ -120,7 +120,62 @@
 
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="loading" class="muted" style="padding: 2rem; text-align: center; font-family: var(--linear-mono);">{{ t('ui.k0135') }}</p>
-    <section v-else class="bank-grid">
+    <template v-else>
+      <!-- 学习主路径优先级看板 (EE-053: 继续练习 / FSRS复习 / 错题 / 题库) -->
+      <section v-if="banks.length > 0" class="learning-quick-hub">
+        <button
+          type="button"
+          class="quick-hub-card hub-fsrs-card"
+          @click="emit('learning')"
+          @keydown.enter="emit('learning')"
+          @keydown.space.prevent="emit('learning')"
+        >
+          <div class="hub-icon-wrap fsrs-icon">
+            <LinearIcon name="chart" size="18" />
+          </div>
+          <div class="hub-text-wrap">
+            <span class="hub-card-label">{{ t('nav.learning') }}</span>
+            <strong class="hub-card-val">{{ dueMistakesCount }} <small>{{ t('ui.k0101') }}</small></strong>
+            <span class="hub-card-hint">{{ t('home.mistake_review') }}</span>
+          </div>
+          <div class="hub-arrow-icon">
+            <LinearIcon name="chevron-right" size="14" />
+          </div>
+        </button>
+
+        <button
+          type="button"
+          class="quick-hub-card hub-mistakes-card"
+          @click="emit('mistakes')"
+          @keydown.enter="emit('mistakes')"
+          @keydown.space.prevent="emit('mistakes')"
+        >
+          <div class="hub-icon-wrap mistakes-icon">
+            <LinearIcon name="target" size="18" />
+          </div>
+          <div class="hub-text-wrap">
+            <span class="hub-card-label">{{ t('nav.mistakes') }}</span>
+            <strong class="hub-card-val">{{ mistakesCount }} <small>{{ t('ui.k0101') }}</small></strong>
+            <span class="hub-card-hint">{{ t('nav.mistakes_sub') }}</span>
+          </div>
+          <div class="hub-arrow-icon">
+            <LinearIcon name="chevron-right" size="14" />
+          </div>
+        </button>
+
+        <div class="quick-hub-card hub-banks-card">
+          <div class="hub-icon-wrap banks-icon">
+            <LinearIcon name="layers" size="18" />
+          </div>
+          <div class="hub-text-wrap">
+            <span class="hub-card-label">{{ t('home.all_banks_title') }}</span>
+            <strong class="hub-card-val">{{ banks.length }} <small>{{ t('ui.k0146') }}</small></strong>
+            <span class="hub-card-hint">{{ t('home.all_banks_count', { count: banks.length }) }}</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="bank-grid">
       <article v-for="bank in banks" :key="bank.id" class="bank-card" :class="{ 'has-active-session': Boolean(getActiveSessionForBank(bank.id)) }">
         <div class="bank-card-title-row">
           <h2>{{ bank.name }}</h2>
@@ -213,6 +268,7 @@
         </div>
       </div>
     </section>
+  </template>
 
     <!-- 创建题库对话框 -->
     <div v-if="showCreateDialog" class="exam-setup-backdrop" @click.self="showCreateDialog = false" @keydown.esc="showCreateDialog = false">
@@ -259,7 +315,7 @@
             </button>
           </div>
         </label>
-        <div v-if="selectedProfileBlueprintSummary" style="background: var(--success-light); border: 1px solid var(--success-border); border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.85rem; color: var(--success);">
+        <div v-if="selectedProfileBlueprintSummary" style="background: var(--success-light); border: 1px solid var(--success-border); border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.85rem; color: var(--success-fg, var(--success));">
           <strong>{{ t('ui.k0156') }}</strong>
           {{ t('ui.k0157') }} {{ selectedProfileBlueprintSummary.sectionsCount }} {{ t('ui.k0158') }} {{ selectedProfileBlueprintSummary.totalQuestions }} {{ t('ui.k0101') }}
           <span v-if="selectedProfileBlueprintSummary.negativeMark > 0">{{ t('ui.k0159') }} {{ selectedProfileBlueprintSummary.negativeMark }} {{ t('ui.k0160') }}</span>
@@ -333,7 +389,7 @@
               type="button"
               class="btn-remove-opt"
               :title="t('ui.k0178')"
-              style="border: none; background: var(--danger-light); color: var(--danger); border-radius: 4px; padding: 0.35rem 0.6rem; cursor: pointer; font-size: 0.85rem;"
+              style="border: none; background: var(--danger-light); color: var(--danger-fg, var(--danger)); border-radius: 4px; padding: 0.35rem 0.6rem; cursor: pointer; font-size: 0.85rem;"
               @click="addQuestionForm.options.splice(idx, 1)"
             >✕</button>
           </div>
@@ -375,7 +431,7 @@
                 <span style="font-size: 0.75rem; padding: 0.1rem 0.4rem; background: var(--bg-subtle); border-radius: 4px;">
                   {{ m.role === 'ADMIN' ? t('ui.k0643') : m.role === 'EDITOR' ? t('ui.k0670') : t('ui.k0671') }}
                 </span>
-                <button v-if="m.role !== 'ADMIN' && m.user_id !== user?.id" type="button" style="color: var(--danger); border: none; background: none; cursor: pointer; font-size: 0.75rem;" @click="handleRemoveMember(m.user_id)">
+                <button v-if="m.role !== 'ADMIN' && m.user_id !== user?.id" type="button" style="color: var(--danger-fg, var(--danger)); border: none; background: none; cursor: pointer; font-size: 0.75rem;" @click="handleRemoveMember(m.user_id)">
                   {{ t('ui.k0190') }}
                 </button>
               </div>
@@ -412,7 +468,7 @@
               {{ copyingQuestion ? t('ui.k0674') : t('ui.k0675') }}
             </button>
           </div>
-          <p v-if="copyNotice" style="font-size: 0.85rem; color: var(--primary); margin: 0.3rem 0 0 0;">{{ copyNotice }}</p>
+          <p v-if="copyNotice" style="font-size: 0.85rem; color: var(--primary-fg, var(--primary)); margin: 0.3rem 0 0 0;">{{ copyNotice }}</p>
         </div>
 
         <div class="bank-actions" style="margin-top: 1rem;">
@@ -465,11 +521,11 @@
           </div>
           <div style="background: var(--bg-subtle); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border); text-align: center;">
             <small style="color: var(--text-muted); font-size: 0.75rem;">{{ t('home.batch_ai_has_expl') }}</small>
-            <strong style="display: block; font-size: 1.25rem; font-family: var(--linear-mono); color: var(--success, #16a34a);">{{ aiBatchStatus?.with_explanation ?? 0 }}</strong>
+            <strong style="display: block; font-size: 1.25rem; font-family: var(--linear-mono); color: var(--success-fg, var(--success));">{{ aiBatchStatus?.with_explanation ?? 0 }}</strong>
           </div>
           <div style="background: var(--bg-subtle); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border); text-align: center;">
             <small style="color: var(--text-muted); font-size: 0.75rem;">{{ t('home.batch_ai_missing') }}</small>
-            <strong style="display: block; font-size: 1.25rem; font-family: var(--linear-mono); color: var(--primary);">{{ aiBatchStatus?.without_explanation ?? 0 }}</strong>
+            <strong style="display: block; font-size: 1.25rem; font-family: var(--linear-mono); color: var(--primary-fg, var(--primary));">{{ aiBatchStatus?.without_explanation ?? 0 }}</strong>
           </div>
         </div>
 
@@ -488,7 +544,7 @@
         <!-- 正在执行中的进度状态条 -->
         <div v-if="aiBatchStatus?.status === 'running' || (aiBatchStatus?.processed || 0) > 0" style="margin-bottom: 1.25rem; background: var(--bg-subtle); padding: 0.85rem; border-radius: 8px; border: 1px solid var(--border);">
           <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; margin-bottom: 0.4rem;">
-            <span style="color: var(--primary); font-weight: 600;">
+            <span style="color: var(--primary-fg, var(--primary)); font-weight: 600;">
               {{ aiBatchStatus?.status === 'running' ? t('home.batch_ai_status_running') : (aiBatchStatus?.status === 'stopped' ? t('home.batch_ai_status_stopped') : t('home.batch_ai_status_completed')) }}
             </span>
             <span style="font-family: var(--linear-mono); color: var(--text-muted);">
@@ -525,7 +581,7 @@
           <button
             v-if="aiBatchStatus?.status === 'running'"
             type="button"
-            style="color: var(--danger); border: 1px solid var(--danger-border); background: var(--bg-card); border-radius: 6px; padding: 0.4rem 0.85rem; font-size: 0.85rem; cursor: pointer;"
+            style="color: var(--danger-fg, var(--danger)); border: 1px solid var(--danger-border); background: var(--bg-card); border-radius: 6px; padding: 0.4rem 0.85rem; font-size: 0.85rem; cursor: pointer;"
             @click="handleStopAiBatch"
           >
             {{ t('home.batch_ai_stop') }}
@@ -552,6 +608,7 @@ import LinearIcon from '../components/LinearIcon.vue'
 import { listBanks, createBank, createQuestion, addBankMember, listBankMembers, removeBankMember, copyQuestionToBank } from '../api/banks'
 import { startExam, listProfiles, getBlueprint } from '../api/exams'
 import { listActiveSessions, getSession, abandonSession, abandonAllSessions } from '../api/practice'
+import { listDueMistakes, listMistakes } from '../api/mistakes'
 import { getAiBatchStatus, startAiBatchGenerate, stopAiBatchGenerate } from '../api/ai'
 import { triggerSyncEvent } from '../api/sync'
 import { useLocale } from '../composables/useLocale.js'
@@ -570,6 +627,25 @@ const showActiveSessionsModal = ref(false)
 const abandoningSession = ref(false)
 const loading = ref(true)
 const error = ref('')
+
+const dueMistakesCount = ref(0)
+const mistakesCount = ref(0)
+
+async function refreshLearningStats() {
+  if (!props.token) return
+  try {
+    const dueRes = await listDueMistakes(props.token)
+    dueMistakesCount.value = Array.isArray(dueRes) ? dueRes.length : 0
+  } catch (_) {
+    dueMistakesCount.value = 0
+  }
+  try {
+    const misRes = await listMistakes(props.token)
+    mistakesCount.value = Array.isArray(misRes) ? misRes.length : 0
+  } catch (_) {
+    mistakesCount.value = 0
+  }
+}
 
 function getActiveSessionForBank(bankId) {
   return activeSessions.value.find(s => s.bank_id === bankId) || null
@@ -1165,6 +1241,7 @@ onMounted(async () => {
   } catch (_) {
     activeSessions.value = []
   }
+  refreshLearningStats()
 })
 
 watch(() => route.query.action, (act) => {
@@ -1263,7 +1340,7 @@ defineExpose({
 
 .user-role-badge {
   font-size: 0.7rem;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-weight: 600;
   margin-left: 0.15rem;
 }
@@ -1292,11 +1369,11 @@ defineExpose({
 .main-nav-tab:hover {
   background: var(--bg-muted);
   border-color: var(--border);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
 }
 
 .main-nav-tab.featured {
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-weight: 600;
 }
 
@@ -1347,13 +1424,13 @@ defineExpose({
 }
 
 .btn-util.btn-logout {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .btn-util.btn-logout:hover {
   background: var(--danger-light);
   border-color: var(--danger-border);
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
 }
 
 .bank-card-title-row {
@@ -1379,7 +1456,7 @@ defineExpose({
   font-weight: 600;
   padding: 0.2rem 0.5rem;
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   border: 1px solid var(--primary-border);
   border-radius: 9999px;
   white-space: nowrap;
@@ -1444,7 +1521,7 @@ defineExpose({
 }
 
 .btn-util-link:hover {
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   border-color: var(--primary-border);
   background: var(--primary-light);
 }
@@ -1592,7 +1669,7 @@ defineExpose({
 
 .btn-abandon-single {
   font-size: 0.85rem;
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   background: none;
   border: none;
   cursor: pointer;
@@ -1601,7 +1678,7 @@ defineExpose({
 }
 
 .btn-abandon-single:hover {
-  color: var(--danger-hover);
+  color: var(--danger-fg, var(--danger-hover));
 }
 
 @media (max-width: 1080px) {
@@ -1655,8 +1732,10 @@ defineExpose({
   }
   .home-brand-area {
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+    min-width: 0;
   }
   .home-brand-title h1 {
     font-size: 1.05rem;
@@ -1664,6 +1743,7 @@ defineExpose({
   .home-user-pill {
     font-size: 0.72rem;
     padding: 0.15rem 0.45rem;
+    white-space: nowrap;
   }
   .home-actions-area {
     display: flex;
@@ -1717,12 +1797,12 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
 }
 
 .sequential-progress-header .progress-percent {
   font-family: var(--linear-mono);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
 }
 
 .sequential-progress-box .progress-track {
@@ -1754,16 +1834,140 @@ defineExpose({
 }
 
 .btn-restart-sequential:hover {
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   border-color: var(--danger-border);
 }
 
 .btn-ai-batch {
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-weight: 500;
 }
 
 .btn-ai-batch:hover {
   background: var(--primary-light);
+}
+
+/* ==========================================================================
+   Learning Quick Hub · 首页优先级核心看板 (EE-053)
+   ========================================================================== */
+.learning-quick-hub {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.quick-hub-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1rem 1.15rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  transition: all 150ms ease;
+  user-select: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+  width: 100%;
+}
+
+.quick-hub-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+button.quick-hub-card:focus-visible {
+  outline: none;
+  border-color: var(--primary-fg, var(--primary));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-fg, var(--primary)) 28%, transparent);
+}
+
+.hub-banks-card {
+  cursor: default;
+}
+
+.hub-icon-wrap {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.hub-icon-wrap.fsrs-icon {
+  background: var(--primary-light);
+  color: var(--primary-fg, var(--primary));
+  border: 1px solid var(--primary-border);
+}
+
+.hub-icon-wrap.mistakes-icon {
+  background: var(--danger-light);
+  color: var(--danger-fg, var(--danger));
+  border: 1px solid var(--danger-border);
+}
+
+.hub-icon-wrap.banks-icon {
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.hub-text-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.hub-card-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.hub-card-val {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.2;
+}
+
+.hub-card-val small {
+  font-size: 0.75rem;
+  font-weight: normal;
+  color: var(--text-muted);
+}
+
+.hub-card-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hub-arrow-icon {
+  color: var(--text-tertiary);
+  opacity: 0.6;
+}
+
+@media (max-width: 768px) {
+  .learning-quick-hub {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+  }
+  .quick-hub-card {
+    padding: 0.75rem 0.95rem;
+  }
 }
 </style>

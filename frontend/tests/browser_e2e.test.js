@@ -15,6 +15,59 @@ const repoRoot = path.resolve(__dirname, '../..')
 let serverProcess = null
 let tempDbPath = ''
 
+function parseRgb(str, parentRgb = [255, 255, 255]) {
+  if (!str) return parentRgb
+  str = str.trim()
+  if (str.startsWith('color(srgb')) {
+    const parts = str.slice(10, -1).trim().split(/[\s/]+/).map(Number)
+    const r = Math.round(parts[0] * 255)
+    const g = Math.round(parts[1] * 255)
+    const b = Math.round(parts[2] * 255)
+    const a = parts.length > 3 ? parts[3] : 1
+    if (a < 1) {
+      return [
+        Math.round(r * a + parentRgb[0] * (1 - a)),
+        Math.round(g * a + parentRgb[1] * (1 - a)),
+        Math.round(b * a + parentRgb[2] * (1 - a)),
+      ]
+    }
+    return [r, g, b]
+  }
+  const m = str.match(/rgba?\(([^)]+)\)/)
+  if (m) {
+    const parts = m[1].split(/[\s,]+/).filter(Boolean).map(Number)
+    const r = parts[0], g = parts[1], b = parts[2]
+    const a = parts.length > 3 ? parts[3] : 1
+    if (a < 1) {
+      return [
+        Math.round(r * a + parentRgb[0] * (1 - a)),
+        Math.round(g * a + parentRgb[1] * (1 - a)),
+        Math.round(b * a + parentRgb[2] * (1 - a)),
+      ]
+    }
+    return [r, g, b]
+  }
+  const digits = (str || '').match(/\d+/g)
+  if (digits && digits.length >= 3) {
+    return [Number(digits[0]), Number(digits[1]), Number(digits[2])]
+  }
+  return [15, 23, 42]
+}
+
+function calcLum([r, g, b]) {
+  const [lr, lg, lb] = [r, g, b].map(c => {
+    const s = c / 255
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
+  })
+  return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb
+}
+
+function calcContrast(color1, color2, parentRgb = [255, 255, 255]) {
+  const l1 = calcLum(Array.isArray(color1) ? color1 : parseRgb(color1, parentRgb))
+  const l2 = calcLum(Array.isArray(color2) ? color2 : parseRgb(color2, parentRgb))
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)
+}
+
 async function getFreePort() {
   return new Promise((resolve, reject) => {
     const srv = net.createServer()
@@ -332,8 +385,32 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       // Answer correctly
       await answerCurrentQuestion(false)
 
-      // FSRS rating buttons are shown: deliberately select non-default '4 - 简单 (Easy)'
+      // FSRS rating buttons are shown: verify computed contrast meets WCAG AA >= 4.5:1
       await page.waitForSelector('.fsrs-rating-box')
+      const ratingBtnStyles = await page.evaluate(() => {
+        const againBtn = document.querySelector('.rating-btn.again')
+        const goodBtn = document.querySelector('.rating-btn.good')
+        const easyBtn = document.querySelector('.rating-btn.easy')
+        const csAgain = againBtn ? getComputedStyle(againBtn) : null
+        const csGood = goodBtn ? getComputedStyle(goodBtn) : null
+        const csEasy = easyBtn ? getComputedStyle(easyBtn) : null
+        return {
+          againColor: csAgain ? csAgain.color : '',
+          againBg: csAgain ? csAgain.backgroundColor : '',
+          goodColor: csGood ? csGood.color : '',
+          goodBg: csGood ? csGood.backgroundColor : '',
+          easyColor: csEasy ? csEasy.color : '',
+          easyBg: csEasy ? csEasy.backgroundColor : '',
+        }
+      })
+      assert.ok(ratingBtnStyles.againColor && ratingBtnStyles.againBg, 'Again button must be rendered')
+      assert.ok(calcContrast(ratingBtnStyles.againColor, ratingBtnStyles.againBg) >= 4.5, 'Again rating button contrast >= 4.5')
+      assert.ok(ratingBtnStyles.goodColor && ratingBtnStyles.goodBg, 'Good button must be rendered')
+      assert.ok(calcContrast(ratingBtnStyles.goodColor, ratingBtnStyles.goodBg) >= 4.5, 'Good rating button contrast >= 4.5')
+      assert.ok(ratingBtnStyles.easyColor && ratingBtnStyles.easyBg, 'Easy button must be rendered')
+      assert.ok(calcContrast(ratingBtnStyles.easyColor, ratingBtnStyles.easyBg) >= 4.5, 'Easy rating button contrast >= 4.5')
+
+      // Deliberately select non-default '4 - 简单 (Easy)'
       await page.click('button.rating-btn.easy')
       await page.waitForSelector('text=已更新 FSRS 评级')
 
@@ -819,6 +896,761 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       const restoredTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
       assert.equal(restoredTheme, 'light')
       console.log('✓ Restored locale and theme to clean baseline.')
+    })
+
+    await t.test('14. Theme System Production Path, Computed Contrast & Appearance Verification', async () => {
+      // 1. Log in to access settings and workspace
+      await page.fill('input[placeholder="用户名"]', 'e2e_student')
+      await page.fill('input[placeholder="密码（至少 8 位）"]', 'password-123456')
+      await page.click('button:has-text("登录")')
+      await page.waitForSelector('.home-page')
+
+      // 2. Navigate to Settings View
+      await page.goto(`${BASE_URL}/#/settings`)
+      await page.waitForSelector('.settings-page')
+
+      // 3. Live System Mode Media Changes
+      await page.click('.segment-btn:has-text("跟随系统")')
+      await page.emulateMedia({ colorScheme: 'dark' })
+      await page.waitForTimeout(200)
+      const systemDarkAttr = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
+      assert.equal(systemDarkAttr, 'dark', 'Live system dark mode must reflect on document element')
+
+      await page.emulateMedia({ colorScheme: 'light' })
+      await page.waitForTimeout(200)
+      const systemLightAttr = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
+      assert.equal(systemLightAttr, 'light', 'Live system light mode must reflect on document element')
+      console.log('✓ System mode live media query changes verified in real browser.')
+
+      // 4. Custom Accent #ffffff in Light Mode: contrast and borders
+      await page.click('.segment-btn:has-text("浅色模式")')
+      const hexInput = page.locator('.accent-hex-input')
+      await hexInput.fill('#ffffff')
+      await hexInput.dispatchEvent('change')
+      await page.waitForTimeout(300)
+
+      const lightAccentVerification = await page.evaluate(() => {
+        const badge = document.querySelector('.sample-badge')
+        const badgeCs = badge ? getComputedStyle(badge) : null
+        const segBtn = document.querySelector('.segment-btn.active')
+        const segCs = segBtn ? getComputedStyle(segBtn) : null
+        const palCard = document.querySelector('.palette-preview-card.active')
+        const palCs = palCard ? getComputedStyle(palCard) : null
+        const sidebarActive = document.querySelector('.sidebar-nav-item.active')
+        const sidebarCs = sidebarActive ? getComputedStyle(sidebarActive) : null
+
+        return {
+          primary: document.documentElement.style.getPropertyValue('--primary').trim(),
+          onPrimary: document.documentElement.style.getPropertyValue('--on-primary').trim(),
+          badgeColor: badgeCs ? badgeCs.color : '',
+          badgeBg: badgeCs ? badgeCs.backgroundColor : '',
+          segColor: segCs ? segCs.color : '',
+          segBg: segCs ? segCs.backgroundColor : '',
+          segBorder: segCs ? segCs.borderColor : '',
+          palBorder: palCs ? palCs.borderColor : '',
+          sidebarColor: sidebarCs ? sidebarCs.color : '',
+          sidebarBg: sidebarCs ? sidebarCs.backgroundColor : '',
+        }
+      })
+
+      assert.equal(lightAccentVerification.primary, '#ffffff')
+      assert.equal(lightAccentVerification.onPrimary, '#0f172a')
+      const lightBadgeRatio = calcContrast(lightAccentVerification.badgeColor, lightAccentVerification.badgeBg, [241, 245, 249])
+      const lightSegRatio = calcContrast(lightAccentVerification.segColor, lightAccentVerification.segBg)
+      const lightSidebarRatio = calcContrast(lightAccentVerification.sidebarColor, lightAccentVerification.sidebarBg, [248, 250, 252])
+
+      assert.ok(lightBadgeRatio >= 4.5, `Sample badge contrast ${lightBadgeRatio.toFixed(2)}:1 must meet AA`)
+      assert.ok(lightSegRatio >= 4.5, `Segment button active contrast ${lightSegRatio.toFixed(2)}:1 must meet AA`)
+      assert.ok(lightSidebarRatio >= 4.5, `Sidebar selected item contrast ${lightSidebarRatio.toFixed(2)}:1 must meet AA`)
+      assert.notEqual(lightAccentVerification.segBorder, 'rgb(255, 255, 255)', 'Segment button active border must be visible against white')
+      assert.notEqual(lightAccentVerification.palBorder, 'rgb(255, 255, 255)', 'Palette card active border must be visible against white')
+      console.log('✓ Light mode custom accent #ffffff: computed badge, segment-btn, palette border, and sidebar meet WCAG AA.')
+
+      // 4b. HomeView consumers under custom accent #ffffff
+      await page.goto(BASE_URL)
+      await page.waitForSelector('.home-page')
+      const homeStyles = await page.evaluate(() => {
+        const roleBadge = document.querySelector('.user-role-badge')
+        const roleCs = roleBadge ? getComputedStyle(roleBadge) : null
+        const navTab = document.querySelector('.main-nav-tab')
+        const navCs = navTab ? getComputedStyle(navTab) : null
+        return {
+          roleColor: roleCs ? roleCs.color : '',
+          navColor: navCs ? navCs.color : '',
+        }
+      })
+      assert.ok(homeStyles.roleColor, 'Home user-role-badge must be rendered')
+      const roleRatio = calcContrast(homeStyles.roleColor, 'rgb(255, 255, 255)')
+      assert.ok(roleRatio >= 4.5, `Home user-role-badge contrast ${roleRatio.toFixed(2)}:1 must meet AA`)
+      // Return to settings
+      await page.goto(`${BASE_URL}/#/settings`)
+      await page.waitForSelector('.settings-page')
+
+      // 5. Custom Accent #000000 in Dark Mode: contrast and borders
+      await page.click('.segment-btn:has-text("深色模式")')
+      await hexInput.fill('#000000')
+      await hexInput.dispatchEvent('change')
+      await page.waitForTimeout(300)
+
+      const darkAccentVerification = await page.evaluate(() => {
+        const badge = document.querySelector('.sample-badge')
+        const badgeCs = badge ? getComputedStyle(badge) : null
+        const segBtn = document.querySelector('.segment-btn.active')
+        const segCs = segBtn ? getComputedStyle(segBtn) : null
+        const palCard = document.querySelector('.palette-preview-card.active')
+        const palCs = palCard ? getComputedStyle(palCard) : null
+
+        return {
+          primary: document.documentElement.style.getPropertyValue('--primary').trim(),
+          onPrimary: document.documentElement.style.getPropertyValue('--on-primary').trim(),
+          badgeColor: badgeCs ? badgeCs.color : '',
+          badgeBg: badgeCs ? badgeCs.backgroundColor : '',
+          segColor: segCs ? segCs.color : '',
+          segBg: segCs ? segCs.backgroundColor : '',
+          segBorder: segCs ? segCs.borderColor : '',
+          palBorder: palCs ? palCs.borderColor : '',
+        }
+      })
+
+      assert.equal(darkAccentVerification.primary, '#000000')
+      assert.equal(darkAccentVerification.onPrimary, '#ffffff')
+      const darkBadgeRatio = calcContrast(darkAccentVerification.badgeColor, darkAccentVerification.badgeBg, [30, 41, 59])
+      const darkSegRatio = calcContrast(darkAccentVerification.segColor, darkAccentVerification.segBg)
+      assert.ok(darkBadgeRatio >= 4.5, `Dark sample badge contrast ${darkBadgeRatio.toFixed(2)}:1 must meet AA`)
+      assert.ok(darkSegRatio >= 4.5, `Dark segment button active contrast ${darkSegRatio.toFixed(2)}:1 must meet AA`)
+      console.log('✓ Dark mode custom accent #000000: computed badge, segment-btn, and palette border meet WCAG AA.')
+
+      // 5b. Confirmed Reviewer Counterexamples in Real Browser DOM Computed Styles
+      // (1) Forest light + custom #ffff00
+      await page.click('.palette-preview-card[data-preview-palette="forest"]')
+      await page.click('.segment-btn:has-text("浅色模式")')
+      await hexInput.fill('#ffff00')
+      await hexInput.dispatchEvent('change')
+      await page.waitForTimeout(250)
+      const forestVerification = await page.evaluate(() => {
+        const badge = document.querySelector('.sample-badge')
+        const badgeCs = badge ? getComputedStyle(badge) : null
+        const seg = document.querySelector('.segment-btn.active')
+        const segCs = seg ? getComputedStyle(seg) : null
+        return {
+          badgeColor: badgeCs ? badgeCs.color : '',
+          badgeBg: badgeCs ? badgeCs.backgroundColor : '',
+          segColor: segCs ? segCs.color : '',
+          segBg: segCs ? segCs.backgroundColor : '',
+        }
+      })
+      const forestBadgeRatio = calcContrast(forestVerification.badgeColor, forestVerification.badgeBg, [236, 239, 231])
+      const forestSegRatio = calcContrast(forestVerification.segColor, forestVerification.segBg)
+      assert.ok(forestBadgeRatio >= 4.5, `Forest light + #ffff00 badge contrast ${forestBadgeRatio.toFixed(2)}:1 must meet AA`)
+      assert.ok(forestSegRatio >= 4.5, `Forest light + #ffff00 segment contrast ${forestSegRatio.toFixed(2)}:1 must meet AA`)
+
+      // (2) Mocha light + custom #cccc66
+      await page.click('.palette-preview-card[data-preview-palette="mocha"]')
+      await hexInput.fill('#cccc66')
+      await hexInput.dispatchEvent('change')
+      await page.waitForTimeout(250)
+      const mochaVerification = await page.evaluate(() => {
+        const badge = document.querySelector('.sample-badge')
+        const badgeCs = badge ? getComputedStyle(badge) : null
+        const seg = document.querySelector('.segment-btn.active')
+        const segCs = seg ? getComputedStyle(seg) : null
+        return {
+          badgeColor: badgeCs ? badgeCs.color : '',
+          badgeBg: badgeCs ? badgeCs.backgroundColor : '',
+          segColor: segCs ? segCs.color : '',
+          segBg: segCs ? segCs.backgroundColor : '',
+        }
+      })
+      const mochaBadgeRatio = calcContrast(mochaVerification.badgeColor, mochaVerification.badgeBg, [235, 227, 219])
+      const mochaSegRatio = calcContrast(mochaVerification.segColor, mochaVerification.segBg)
+      assert.ok(mochaBadgeRatio >= 4.5, `Mocha light + #cccc66 badge contrast ${mochaBadgeRatio.toFixed(2)}:1 must meet AA`)
+      assert.ok(mochaSegRatio >= 4.5, `Mocha light + #cccc66 segment contrast ${mochaSegRatio.toFixed(2)}:1 must meet AA`)
+
+      // (3) Amber dark + custom #338833
+      await page.click('.palette-preview-card[data-preview-palette="amber"]')
+      await page.click('.segment-btn:has-text("深色模式")')
+      await hexInput.fill('#338833')
+      await hexInput.dispatchEvent('change')
+      await page.waitForTimeout(250)
+      const amberDarkVerification = await page.evaluate(() => {
+        const badge = document.querySelector('.sample-badge')
+        const badgeCs = badge ? getComputedStyle(badge) : null
+        const seg = document.querySelector('.segment-btn.active')
+        const segCs = seg ? getComputedStyle(seg) : null
+        return {
+          badgeColor: badgeCs ? badgeCs.color : '',
+          badgeBg: badgeCs ? badgeCs.backgroundColor : '',
+          segColor: segCs ? segCs.color : '',
+          segBg: segCs ? segCs.backgroundColor : '',
+        }
+      })
+      const amberDarkBadgeRatio = calcContrast(amberDarkVerification.badgeColor, amberDarkVerification.badgeBg, [60, 42, 18])
+      const amberDarkSegRatio = calcContrast(amberDarkVerification.segColor, amberDarkVerification.segBg)
+      assert.ok(amberDarkBadgeRatio >= 4.5, `Amber dark + #338833 badge contrast ${amberDarkBadgeRatio.toFixed(2)}:1 must meet AA`)
+      assert.ok(amberDarkSegRatio >= 4.5, `Amber dark + #338833 segment contrast ${amberDarkSegRatio.toFixed(2)}:1 must meet AA`)
+      console.log('✓ Confirmed reviewer counterexamples verified in real browser DOM computed styles.')
+
+      // 6. Invalid custom accent input and reset button fallback
+      await hexInput.fill('invalid-hex-code')
+      await hexInput.dispatchEvent('change')
+      await page.waitForTimeout(200)
+      const afterInvalidPrimary = await page.evaluate(() => document.documentElement.style.getPropertyValue('--primary'))
+      assert.equal(afterInvalidPrimary, '', 'Invalid hex input must clear inline --primary style override')
+
+      // Set accent again, then click Reset button
+      await hexInput.fill('#e11d48')
+      await hexInput.dispatchEvent('change')
+      await page.click('.btn-reset-accent')
+      await page.waitForTimeout(200)
+      const afterResetPrimary = await page.evaluate(() => document.documentElement.style.getPropertyValue('--primary'))
+      assert.equal(afterResetPrimary, '', 'Reset button must remove custom accent override')
+      console.log('✓ Invalid custom accent input and reset button fallback verified.')
+
+      // 7. Reload persistence with Ocean palette and custom accent
+      await page.click('.palette-preview-card[data-preview-palette="ocean"]')
+      await hexInput.fill('#0891b2')
+      await hexInput.dispatchEvent('change')
+      await page.reload()
+      await page.waitForSelector('.settings-page')
+
+      const reloadPersisted = await page.evaluate(() => ({
+        palette: document.documentElement.getAttribute('data-theme-palette'),
+        primary: document.documentElement.style.getPropertyValue('--primary').trim(),
+      }))
+      assert.equal(reloadPersisted.palette, 'ocean')
+      assert.equal(reloadPersisted.primary, '#0891b2')
+      console.log('✓ Reload persistence verified for palette and custom accent.')
+
+      // 8. Legacy theme restoration
+      await page.evaluate(() => {
+        localStorage.removeItem('easyexam-theme-mode')
+        localStorage.setItem('easyexam-theme', 'dark')
+      })
+      await page.reload()
+      await page.waitForSelector('.settings-page')
+      const restoredLegacyTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
+      assert.equal(restoredLegacyTheme, 'dark', 'Legacy easyexam-theme dark must restore dark mode')
+      console.log('✓ Legacy theme restoration verified.')
+
+      // Restore clean baseline: light mode, blue-grey, reset accent
+      await page.click('.segment-btn:has-text("浅色模式")')
+      await page.click('.btn-reset-accent')
+      await page.click('.palette-preview-card[data-preview-palette="blue-grey"]')
+
+      // 9. PracticeView computed contrast on actual components & Amber light hover
+      // Switch to Amber palette to test Amber hover cascade
+      await page.click('.palette-preview-card[data-preview-palette="amber"]')
+      await page.goto(BASE_URL)
+      await page.waitForSelector('.home-page')
+      await page.click('.bank-card:has-text("E2E真实浏览器题库") button.primary')
+      await page.waitForSelector('.practice-page')
+      // Check header complete button contrast under Amber theme
+      const completeBtnStyles = await page.evaluate(() => {
+        const btn = document.querySelector('.header-actions .btn-header-complete')
+        const cs = btn ? getComputedStyle(btn) : null
+        return {
+          color: cs ? cs.color : '',
+          bg: cs ? cs.backgroundColor : '',
+        }
+      })
+      assert.ok(completeBtnStyles.color && completeBtnStyles.bg, 'Complete button must be rendered')
+      const completeRatio = calcContrast(completeBtnStyles.color, completeBtnStyles.bg)
+      assert.ok(completeRatio >= 4.5, `Complete button contrast ${completeRatio.toFixed(2)}:1 must meet AA`)
+
+      // Test Amber hover cascade specificity on .btn-header-complete
+      const completeBtnLocator = page.locator('.header-actions .btn-header-complete')
+      await completeBtnLocator.hover()
+      await page.waitForTimeout(300)
+      const hoverCascade = await page.evaluate(() => {
+        const btn = document.querySelector('.header-actions .btn-header-complete')
+        const cs = getComputedStyle(btn)
+        return {
+          bg: cs.backgroundColor,
+          color: cs.color,
+        }
+      })
+      const hoverRatio = calcContrast(hoverCascade.color, hoverCascade.bg)
+      assert.ok(hoverRatio >= 4.5, `Amber hover cascade contrast ${hoverRatio.toFixed(2)}:1 (${hoverCascade.color} on ${hoverCascade.bg}) must meet AA`)
+
+      // Deterministically answer question to inspect result state
+      await page.waitForSelector('.question-card', { timeout: 8000 })
+      const opt = page.locator('label.option').first()
+      await opt.click()
+      await page.click('button:has-text("提交答案")')
+      await page.waitForSelector('.result-card', { timeout: 8000 })
+
+      const resultVerdictStyles = await page.evaluate(() => {
+        const verdict = document.querySelector('.result-header strong')
+        const card = document.querySelector('.result-card')
+        const verdictCs = verdict ? getComputedStyle(verdict) : null
+        const cardCs = card ? getComputedStyle(card) : null
+        return {
+          color: verdictCs ? verdictCs.color : '',
+          bg: cardCs ? cardCs.backgroundColor : '',
+        }
+      })
+      assert.ok(resultVerdictStyles.color && resultVerdictStyles.bg, 'Verdict header and card must be present')
+      const verdictRatio = calcContrast(resultVerdictStyles.color, resultVerdictStyles.bg)
+      assert.ok(verdictRatio >= 4.5, `Verdict text contrast ${verdictRatio.toFixed(2)}:1 must meet AA`)
+
+      // Deterministically inspect answer sheet drawer and number button contrast
+      await page.click('.btn-sheet-trigger-pill')
+      await page.waitForSelector('.sheet-numbers-grid .sheet-num-btn', { timeout: 8000 })
+      const sheetBtnStyles = await page.evaluate(() => {
+        const numBtn = document.querySelector('.sheet-num-btn')
+        const cs = numBtn ? getComputedStyle(numBtn) : null
+        return {
+          color: cs ? cs.color : '',
+          bg: cs ? cs.backgroundColor : '',
+        }
+      })
+      assert.ok(sheetBtnStyles.color, 'Sheet number button must be rendered')
+      const sheetBtnRatio = calcContrast(sheetBtnStyles.color, sheetBtnStyles.bg)
+      assert.ok(sheetBtnRatio >= 4.5, `Sheet number button contrast ${sheetBtnRatio.toFixed(2)}:1 must meet AA`)
+      await page.click('.btn-close-sheet')
+      await page.waitForSelector('.sheet-modal-backdrop', { state: 'detached' })
+
+      // Navigate back to HomeView with active session and verify active-session badge
+      await page.click('button.btn-back')
+      await page.waitForSelector('.home-page')
+      await page.waitForSelector('.badge-active-progress', { timeout: 8000 })
+      const activeBadgeStyles = await page.evaluate(() => {
+        const badge = document.querySelector('.badge-active-progress')
+        const cs = badge ? getComputedStyle(badge) : null
+        return {
+          color: cs ? cs.color : '',
+          bg: cs ? cs.backgroundColor : '',
+        }
+      })
+      assert.ok(activeBadgeStyles.color, 'Active session badge must be present on bank card')
+      const activeBadgeRatio = calcContrast(activeBadgeStyles.color, activeBadgeStyles.bg, [255, 255, 255])
+      assert.ok(activeBadgeRatio >= 4.5, `Active session badge contrast ${activeBadgeRatio.toFixed(2)}:1 must meet AA`)
+
+      // Verify AI batch status consumer in modal dialog
+      await page.click('.btn-ai-batch')
+      await page.waitForSelector('.ai-batch-dialog', { timeout: 8000 })
+      const aiBatchStyles = await page.evaluate(() => {
+        const num = document.querySelector('.ai-batch-dialog strong')
+        const dialog = document.querySelector('.ai-batch-dialog')
+        const numCs = num ? getComputedStyle(num) : null
+        const dialogCs = dialog ? getComputedStyle(dialog) : null
+        return {
+          color: numCs ? numCs.color : '',
+          bg: dialogCs ? dialogCs.backgroundColor : '',
+        }
+      })
+      assert.ok(aiBatchStyles.color, 'AI batch status consumer must be present')
+      const aiBatchRatio = calcContrast(aiBatchStyles.color, aiBatchStyles.bg)
+      assert.ok(aiBatchRatio >= 4.5, `AI batch status number contrast ${aiBatchRatio.toFixed(2)}:1 must meet AA`)
+      await page.click('.ai-batch-dialog button.secondary-btn')
+      await page.waitForSelector('.ai-batch-dialog', { state: 'detached' })
+      console.log('✓ PracticeView, Active Session Badge, and AI Batch consumers computed contrast verified under Amber palette.')
+
+      // 10. Semantic Status Foreground Contrast Audit across Pages
+      // 10a. Due review item in MistakesView
+      await page.goto(`${BASE_URL}/#/mistakes`)
+      await page.waitForSelector('.mistakes-page', { timeout: 8000 })
+      const tableToggle = page.locator('button.mode-btn:has-text("表格"), button.mode-btn[title*="表格"], button.mode-btn[title*="Table"]')
+      if (await tableToggle.isVisible()) {
+        await tableToggle.click()
+        await page.waitForTimeout(250)
+      }
+      await page.waitForSelector('.stat-tag.due-tag, .badge-due.due', { timeout: 8000 })
+      const dueStyles = await page.evaluate(() => {
+        const tag = document.querySelector('.stat-tag.due-tag, .badge-due.due')
+        const cs = tag ? getComputedStyle(tag) : null
+        return {
+          color: cs ? cs.color : '',
+          bg: cs ? cs.backgroundColor : '',
+        }
+      })
+      assert.ok(dueStyles.color, 'Due review item tag must be present in MistakesView')
+      const dueRatio = calcContrast(dueStyles.color, dueStyles.bg, [255, 255, 255])
+      assert.ok(dueRatio >= 4.5, `Due review tag contrast ${dueRatio.toFixed(2)}:1 must meet AA >= 4.5:1`)
+
+      // 10b. Mistake summary note pill in NotesView
+      await page.goto(`${BASE_URL}/#/notes`)
+      await page.waitForSelector('.notes-page', { timeout: 8000 })
+      await page.click('.notes-header .header-actions button.primary-btn, .empty-state button.primary-btn')
+      await page.waitForSelector('.add-note-card', { timeout: 5000 })
+      await page.selectOption('.select-type', 'MISTAKE_SUMMARY')
+      await page.fill('.note-textarea', 'E2E verified mistake summary note content')
+      await page.click('.add-note-card .action-buttons button.primary-btn')
+      await page.waitForSelector('.type-pill.mistake_summary', { timeout: 8000 })
+      const noteStyles = await page.evaluate(() => {
+        const pill = document.querySelector('.type-pill.mistake_summary')
+        const cs = pill ? getComputedStyle(pill) : null
+        return {
+          color: cs ? cs.color : '',
+          bg: cs ? cs.backgroundColor : '',
+        }
+      })
+      assert.ok(noteStyles.color, 'Mistake summary pill must be present in NotesView')
+      const noteRatio = calcContrast(noteStyles.color, noteStyles.bg, [255, 255, 255])
+      assert.ok(noteRatio >= 4.5, `Mistake summary pill contrast ${noteRatio.toFixed(2)}:1 must meet AA >= 4.5:1`)
+
+      // 10c. AI status message in PracticeView
+      await page.goto(BASE_URL)
+      await page.waitForSelector('.home-page', { timeout: 8000 })
+      await page.click('.bank-card:first-child button.primary')
+      await page.waitForSelector('.practice-page', { timeout: 8000 })
+
+      // Select option and submit to reveal result card and AI entry block
+      await page.click('label.option')
+      await page.click('button:has-text("提交答案"), .btn-submit-answer')
+      await page.waitForSelector('.btn-toggle-ai-card', { timeout: 8000 })
+
+      // Open AI assistant panel
+      await page.click('.btn-toggle-ai-card')
+      await page.waitForSelector('.ai-panel', { timeout: 8000 })
+
+      // Route AI generation to return deterministic error payload triggering aiStatusMessage
+      await page.route('**/ai/questions/*/generate', async route => {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ detail: 'AI service unconfigured' }),
+        })
+      })
+
+      // Trigger AI explanation generation (fails because AI provider is unconfigured, populating aiStatusMessage)
+      await page.click('.ai-btn-group button:first-child')
+      await page.waitForSelector('.ai-status', { timeout: 8000 })
+
+      const aiStatusStyles = await page.evaluate(() => {
+        const el = document.querySelector('.ai-status')
+        const cs = el ? getComputedStyle(el) : null
+        return {
+          color: cs ? cs.color : '',
+          bg: cs ? cs.backgroundColor : '',
+          text: el ? el.textContent.trim() : '',
+        }
+      })
+      assert.ok(aiStatusStyles.color, 'AI status element must have valid color')
+      assert.ok(aiStatusStyles.text.length > 0, 'AI status element must contain actual status message')
+      const aiStatusRatio = calcContrast(aiStatusStyles.color, aiStatusStyles.bg, [255, 255, 255])
+      assert.ok(aiStatusRatio >= 4.5, `AI status contrast ${aiStatusRatio.toFixed(2)}:1 must meet AA >= 4.5:1`)
+
+      // 10d. Uncertain import state in ImportView
+      await page.route('**/*pdf-preview*', async route => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            draft_id: 'test_pdf_draft_001',
+            confidence: 'MEDIUM',
+            candidates: [
+              {
+                candidate_id: 1,
+                type: 'SINGLE',
+                stem: '关于微服务架构的描述，下列哪项是不正确的？',
+                options: [
+                  { key: 'A', content: '服务间通过轻量级机制通信' },
+                  { key: 'B', content: '每个服务应具备独立的数据存储' },
+                ],
+                answer: 'C',
+                explanation: '微服务强调服务自治与独立存储',
+                difficulty: 3,
+                tags: ['系统架构'],
+                is_uncertain: true,
+                uncertain_reason: '候选解析置信度偏低，请核对标准答案',
+              },
+            ],
+          }),
+        })
+      })
+
+      await page.goto(`${BASE_URL}/#/import`)
+      await page.waitForSelector('.import-page', { timeout: 8000 })
+
+      // Select bank
+      const importBankSelect = page.locator('form.import-form select').first()
+      await importBankSelect.waitFor({ state: 'visible' })
+      const firstBankOpt = importBankSelect.locator('option:not([disabled])').first()
+      await firstBankOpt.waitFor({ state: 'attached', timeout: 8000 })
+      const bVal = await firstBankOpt.getAttribute('value')
+      await importBankSelect.selectOption(bVal)
+
+      // Provide mock PDF file to activate PDF inspection actions
+      const importFileInput = page.locator('input[type="file"]')
+      await importFileInput.setInputFiles({
+        name: 'sample_exam.pdf',
+        mimeType: 'application/pdf',
+        buffer: Buffer.from('%PDF-1.4 sample content'),
+      })
+
+      // Click genuine inspect button to trigger real PDF preview render
+      const inspectPdfBtn = page.locator('.preview-actions button:has-text("解析并校对 PDF"), .preview-actions button.preview-btn')
+      await inspectPdfBtn.click()
+
+      await page.waitForSelector('.pdf-correction-panel', { timeout: 8000 })
+      await page.waitForSelector('.pdf-confidence-badge', { timeout: 8000 })
+      await page.waitForSelector('.pdf-uncertain-box', { timeout: 8000 })
+
+      const importStatusStyles = await page.evaluate(() => {
+        const badge = document.querySelector('.pdf-confidence-badge')
+        const box = document.querySelector('.pdf-uncertain-box')
+        const bCs = badge ? getComputedStyle(badge) : null
+        const uCs = box ? getComputedStyle(box) : null
+        return {
+          badgeColor: bCs ? bCs.color : '',
+          badgeBg: bCs ? bCs.backgroundColor : '',
+          badgeText: badge ? badge.textContent.trim() : '',
+          boxColor: uCs ? uCs.color : '',
+          boxBg: uCs ? uCs.backgroundColor : '',
+          boxText: box ? box.textContent.trim() : '',
+        }
+      })
+      assert.ok(importStatusStyles.badgeText.length > 0, 'PDF confidence badge must contain text')
+      assert.ok(importStatusStyles.boxText.length > 0, 'PDF uncertain box must contain text')
+      const importBadgeRatio = calcContrast(importStatusStyles.badgeColor, importStatusStyles.badgeBg, [255, 255, 255])
+      assert.ok(importBadgeRatio >= 4.5, `Import PDF confidence badge contrast ${importBadgeRatio.toFixed(2)}:1 must meet AA >= 4.5:1`)
+      const importBoxRatio = calcContrast(importStatusStyles.boxColor, importStatusStyles.boxBg, [255, 255, 255])
+      assert.ok(importBoxRatio >= 4.5, `Import uncertain box contrast ${importBoxRatio.toFixed(2)}:1 must meet AA >= 4.5:1`)
+      console.log('✓ Due item, mistake summary, AI status, and uncertain import computed contrast verified >= 4.5:1.')
+
+      // 11. True Element-Level Responsive Assertions across 375px, 768px, and 1280px (zh-CN & en-US)
+      async function verifyResponsiveViewports(localeName = 'zh-CN') {
+        // Assert locale matches expected lang before testing responsive layout
+        const currentLang = await page.evaluate(() => document.documentElement.getAttribute('lang'))
+        assert.equal(currentLang, localeName, `Document lang attribute must be ${localeName} before running responsive assertions`)
+
+        // --- 11a. 375px Mobile Viewport ---
+        await page.setViewportSize({ width: 375, height: 667 })
+        await page.goto(BASE_URL)
+        await page.waitForSelector('.home-page')
+        await page.waitForSelector('.mobile-nav-bar')
+
+        // Verify MobileNav labels have no ellipsis/truncation and meet touch targets
+        const mobileNavCheck = await page.evaluate(() => {
+          const items = Array.from(document.querySelectorAll('.mobile-nav-item'))
+          return items.map(item => {
+            const label = item.querySelector('.mobile-nav-label')
+            const rect = item.getBoundingClientRect()
+            return {
+              text: label ? label.textContent.trim() : '',
+              scrollWidth: label ? label.scrollWidth : 0,
+              clientWidth: label ? label.clientWidth : 0,
+              height: rect.height,
+              hasEllipsis: label ? (label.textContent.includes('...') || label.textContent.includes('…')) : false,
+            }
+          })
+        })
+        assert.equal(mobileNavCheck.length, 6, 'Mobile bottom nav must have exactly 6 items')
+        for (const item of mobileNavCheck) {
+          assert.ok(item.text.length > 0, 'Mobile nav item label must not be empty')
+          assert.ok(!item.hasEllipsis, `Mobile nav label "${item.text}" must not be truncated with ellipsis in ${localeName}`)
+          assert.ok(item.scrollWidth <= item.clientWidth + 2, `Mobile nav label "${item.text}" must fit within clientWidth (${item.scrollWidth} <= ${item.clientWidth})`)
+          assert.ok(item.height >= 42, `Mobile nav touch target height (${item.height}px) must be >= 42px`)
+        }
+
+        // Navigate to PracticeView at 375px and verify header and controls
+        await page.click('.bank-card button.primary')
+        await page.waitForSelector('.practice-page')
+        await page.waitForSelector('.btn-sheet-trigger-pill')
+
+        const mobilePracticeCheck = await page.evaluate(() => {
+          const sheetTrigger = document.querySelector('.btn-sheet-trigger-pill')
+          const backBtn = document.querySelector('.btn-back')
+          const completeBtn = document.querySelector('.btn-header-complete')
+          const title = document.querySelector('.practice-title')
+          const actionBtn = document.querySelector('.btn-submit-answer, .btn-next-question')
+          const hotkeyBar = document.querySelector('.hotkey-helper-bar')
+
+          const sheetRect = sheetTrigger ? sheetTrigger.getBoundingClientRect() : null
+          const backRect = backBtn ? backBtn.getBoundingClientRect() : null
+          const completeRect = completeBtn ? completeBtn.getBoundingClientRect() : null
+          const actionRect = actionBtn ? actionBtn.getBoundingClientRect() : null
+
+          return {
+            sheetText: sheetTrigger ? sheetTrigger.textContent.trim() : '',
+            sheetVisible: sheetRect ? (sheetRect.width > 0 && sheetRect.height > 0 && sheetRect.right <= 375) : false,
+            backVisible: backRect ? (backRect.width > 0 && backRect.height >= 40) : false,
+            completeVisible: completeRect ? (completeRect.width > 0 && completeRect.height >= 38) : false,
+            actionTargetHeight: actionRect ? actionRect.height : 0,
+            hotkeyBarDisplay: hotkeyBar ? getComputedStyle(hotkeyBar).display : 'none',
+          }
+        })
+        assert.ok(mobilePracticeCheck.sheetVisible, `Practice sheet trigger must be visible and not clipped at 375px in ${localeName}`)
+        assert.ok(mobilePracticeCheck.sheetText.length > 0, 'Practice sheet trigger text must be non-empty')
+        assert.ok(mobilePracticeCheck.backVisible, 'Back button must be visible with adequate touch target')
+        assert.ok(mobilePracticeCheck.completeVisible, 'Complete button must be visible with adequate touch target')
+        assert.ok(mobilePracticeCheck.actionTargetHeight >= 40, `Bottom action button height (${mobilePracticeCheck.actionTargetHeight}px) must meet mobile touch target`)
+        assert.equal(mobilePracticeCheck.hotkeyBarDisplay, 'none', 'Keyboard shortcut strip must be hidden on mobile 375px')
+
+        // --- 11b. 768px Tablet Viewport ---
+        await page.setViewportSize({ width: 768, height: 1024 })
+        await page.waitForTimeout(250)
+
+        // Verify 768px header: boundingClientRect non-overlap and control visibility
+        const tabletPracticeCheck = await page.evaluate(() => {
+          const leftBar = document.querySelector('.header-left-bar')
+          const actions = document.querySelector('.header-actions')
+          const themeToggle = document.querySelector('.header-actions .theme-toggle, .header-actions .header-control-btn')
+          const localeToggle = document.querySelector('.header-actions .locale-toggle')
+          const sheetTrigger = document.querySelector('.btn-sheet-trigger-pill')
+          const completeBtn = document.querySelector('.btn-header-complete')
+          const hotkeyBar = document.querySelector('.hotkey-helper-bar')
+
+          const leftRect = leftBar ? leftBar.getBoundingClientRect() : null
+          const actionsRect = actions ? actions.getBoundingClientRect() : null
+          const themeRect = themeToggle ? themeToggle.getBoundingClientRect() : null
+          const sheetRect = sheetTrigger ? sheetTrigger.getBoundingClientRect() : null
+          const completeRect = completeBtn ? completeBtn.getBoundingClientRect() : null
+
+          return {
+            leftRight: leftRect ? leftRect.right : 0,
+            actionsLeft: actionsRect ? actionsRect.left : 0,
+            themeVisible: themeRect ? (themeRect.width > 0 && themeRect.height > 0) : false,
+            sheetVisible: sheetRect ? (sheetRect.width > 0 && sheetRect.height > 0) : false,
+            completeVisible: completeRect ? (completeRect.width > 0 && completeRect.height > 0) : false,
+            hotkeyBarDisplay: hotkeyBar ? getComputedStyle(hotkeyBar).display : 'none',
+          }
+        })
+        assert.ok(
+          tabletPracticeCheck.leftRight <= tabletPracticeCheck.actionsLeft + 2,
+          `768px tablet: header-left-bar (right=${tabletPracticeCheck.leftRight}) must not overlap header-actions (left=${tabletPracticeCheck.actionsLeft})`
+        )
+        assert.ok(tabletPracticeCheck.themeVisible, 'Theme toggle control must be visible at 768px tablet')
+        assert.ok(tabletPracticeCheck.sheetVisible, 'Answer sheet trigger must be visible at 768px tablet')
+        assert.ok(tabletPracticeCheck.completeVisible, 'Complete button must be visible at 768px tablet')
+        assert.equal(tabletPracticeCheck.hotkeyBarDisplay, 'none', 'Hotkey helper strip must not be squished at 768px tablet')
+
+        // --- 11c. 1280px Desktop Viewport ---
+        await page.setViewportSize({ width: 1280, height: 800 })
+        await page.goto(BASE_URL)
+        await page.waitForSelector('.home-page')
+        await page.waitForSelector('.app-sidebar')
+
+        // Verify desktop sidebar: width >= 240px, items not clipped, primary navigation legible
+        const desktopSidebarCheck = await page.evaluate(() => {
+          const sidebar = document.querySelector('.app-sidebar')
+          const sidebarRect = sidebar ? sidebar.getBoundingClientRect() : null
+          const navItems = Array.from(document.querySelectorAll('.sidebar-nav-item'))
+          const itemChecks = navItems.map(item => {
+            const label = item.querySelector('.nav-item-label')
+            const sub = item.querySelector('.nav-item-sub')
+            const itemRect = item.getBoundingClientRect()
+            const labelRect = label ? label.getBoundingClientRect() : null
+            const subRect = sub ? sub.getBoundingClientRect() : null
+            return {
+              text: label ? label.textContent.trim() : '',
+              labelWidth: labelRect ? labelRect.width : 0,
+              subText: sub ? sub.textContent.trim() : '',
+              subFitsWithinItem: subRect ? (subRect.right <= itemRect.right + 2) : true,
+              fitsWithinSidebar: itemRect ? (itemRect.right <= sidebarRect.right + 2) : true,
+            }
+          })
+
+          return {
+            sidebarWidth: sidebarRect ? sidebarRect.width : 0,
+            itemChecks,
+          }
+        })
+        assert.ok(desktopSidebarCheck.sidebarWidth >= 240, `Desktop sidebar width (${desktopSidebarCheck.sidebarWidth}px) must be >= 240px`)
+        for (const item of desktopSidebarCheck.itemChecks) {
+          if (item.text) {
+            assert.ok(item.labelWidth > 0, `Sidebar nav label "${item.text}" must have positive width`)
+            assert.ok(item.fitsWithinSidebar, `Sidebar nav item "${item.text}" must fit within sidebar boundary`)
+            if (item.subText) {
+              assert.ok(item.subFitsWithinItem, `Sub-label "${item.subText}" must fit within sidebar item without clipping`)
+            }
+          }
+        }
+      }
+
+      // Run verification in default zh-CN
+      await page.goto(`${BASE_URL}/#/settings`)
+      await page.waitForSelector('.settings-page', { timeout: 8000 })
+      const initialZhActive = await page.evaluate(() => {
+        const zhBtn = document.querySelector('button.segment-btn[data-locale="zh-CN"]')
+        const enBtn = document.querySelector('button.segment-btn[data-locale="en-US"]')
+        return {
+          zhActive: zhBtn ? zhBtn.classList.contains('active') : false,
+          enActive: enBtn ? enBtn.classList.contains('active') : false,
+          lang: document.documentElement.getAttribute('lang'),
+        }
+      })
+      assert.ok(initialZhActive.zhActive, 'Settings Chinese language button must have active class initially')
+      assert.ok(!initialZhActive.enActive, 'Settings English language button must not have active class initially')
+      assert.equal(initialZhActive.lang, 'zh-CN', 'Document lang must be zh-CN initially')
+
+      await verifyResponsiveViewports('zh-CN')
+      console.log('✓ zh-CN responsive element-level layout verified across 375px, 768px, and 1280px.')
+
+      // Switch to en-US via real Settings UI control
+      await page.goto(`${BASE_URL}/#/settings`)
+      await page.waitForSelector('.settings-page', { timeout: 8000 })
+      const enBtn = page.locator('button.segment-btn[data-locale="en-US"]')
+      await enBtn.click()
+      await page.waitForTimeout(300)
+
+      const switchedEnState = await page.evaluate(() => {
+        const langSection = Array.from(document.querySelectorAll('.settings-card')).find(card => card.textContent.includes('语言偏好') || card.textContent.includes('Language'))
+        const btns = langSection ? Array.from(langSection.querySelectorAll('.mode-toggle-segmented .segment-btn')) : []
+        return {
+          zhActive: btns[0] ? btns[0].classList.contains('active') : false,
+          enActive: btns[1] ? btns[1].classList.contains('active') : false,
+          lang: document.documentElement.getAttribute('lang'),
+          storedLocale: localStorage.getItem('easyexam_locale'),
+        }
+      })
+      assert.ok(!switchedEnState.zhActive, 'Chinese button must be inactive after clicking English')
+      assert.ok(switchedEnState.enActive, 'English button must be active after clicking English')
+      assert.equal(switchedEnState.lang, 'en-US', 'Document lang must be updated to en-US')
+      assert.equal(switchedEnState.storedLocale, 'en-US', 'localStorage easyexam_locale must be en-US')
+
+      // Verify reload persistence
+      await page.reload()
+      await page.waitForSelector('.settings-page', { timeout: 8000 })
+      const persistedEnState = await page.evaluate(() => {
+        const langSection = Array.from(document.querySelectorAll('.settings-card')).find(card => card.textContent.includes('语言偏好') || card.textContent.includes('Language'))
+        const btns = langSection ? Array.from(langSection.querySelectorAll('.mode-toggle-segmented .segment-btn')) : []
+        return {
+          enActive: btns[1] ? btns[1].classList.contains('active') : false,
+          lang: document.documentElement.getAttribute('lang'),
+          storedLocale: localStorage.getItem('easyexam_locale'),
+        }
+      })
+      assert.ok(persistedEnState.enActive, 'English button must remain active after reload')
+      assert.equal(persistedEnState.lang, 'en-US', 'Document lang must persist as en-US after reload')
+      assert.equal(persistedEnState.storedLocale, 'en-US', 'localStorage must persist easyexam_locale as en-US')
+
+      // Assert representative visible translated text
+      const englishVisibleText = await page.evaluate(() => {
+        const navLabels = Array.from(document.querySelectorAll('.sidebar-nav-item .nav-item-label')).map(el => el.textContent.trim())
+        return {
+          hasHome: navLabels.some(l => l.includes('Home') || l.includes('首页')),
+          hasMistakes: navLabels.some(l => l.includes('Mistakes Review') || l.includes('Mistakes')),
+          hasReview: navLabels.some(l => l.includes('Review Center') || l.includes('Review')),
+        }
+      })
+      assert.ok(englishVisibleText.hasMistakes, 'Sidebar must display English "Mistakes Review"')
+      assert.ok(englishVisibleText.hasReview, 'Sidebar must display English "Review Center"')
+
+      // Run responsive verification in true en-US
+      await verifyResponsiveViewports('en-US')
+      console.log('✓ en-US responsive element-level layout verified across 375px, 768px, and 1280px.')
+
+      // Restore zh-CN locale via real Settings UI control
+      await page.goto(`${BASE_URL}/#/settings`)
+      await page.waitForSelector('.settings-page', { timeout: 8000 })
+      const zhBtn = page.locator('button.segment-btn[data-locale="zh-CN"]')
+      await zhBtn.click()
+      await page.waitForTimeout(300)
+      assert.equal(await page.evaluate(() => document.documentElement.getAttribute('lang')), 'zh-CN')
+      assert.equal(await page.evaluate(() => localStorage.getItem('easyexam_locale')), 'zh-CN')
+      await page.reload()
+      await page.waitForSelector('.settings-page', { timeout: 8000 })
+      assert.equal(await page.evaluate(() => document.documentElement.getAttribute('lang')), 'zh-CN')
+
+      // Final restore to blue-grey default palette
+      await page.click('.palette-preview-card[data-preview-palette="blue-grey"]')
+      const resetBtn = page.locator('.btn-reset-accent')
+      if (await resetBtn.isVisible().catch(() => false)) {
+        await resetBtn.click()
+      }
+      console.log('✓ Cleaned up and restored baseline settings.')
     })
   } finally {
     if (browser) {

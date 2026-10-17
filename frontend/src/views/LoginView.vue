@@ -247,7 +247,7 @@ async function submit() {
 
 .tab-btn.active {
   background: var(--bg-card);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-weight: 600;
   box-shadow: var(--shadow-sm);
 }
@@ -290,9 +290,9 @@ async function submit() {
 
 .input-wrapper input:focus {
   outline: none;
-  border-color: var(--primary);
+  border-color: var(--primary-fg, var(--primary));
   background: var(--bg-card);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-fg, var(--primary)) 20%, transparent);
 }
 
 .input-wrapper.has-trailing-action input {
@@ -349,7 +349,7 @@ async function submit() {
   background: var(--danger-light);
   border: 1px solid var(--danger-border);
   border-radius: 0.5rem;
-  color: var(--danger);
+  color: var(--danger-fg, var(--danger));
   font-size: 0.825rem;
 }
 
@@ -390,7 +390,7 @@ async function submit() {
 .link-button {
   border: none;
   background: transparent;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-size: 0.85rem;
   cursor: pointer;
   font-weight: 500;
@@ -398,6 +398,7 @@ async function submit() {
 }
 
 .link-button:hover {
+  color: var(--primary-fg, var(--primary));
   text-decoration: underline;
 }
 </style>

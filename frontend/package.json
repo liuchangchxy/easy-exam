@@ -12,7 +12,8 @@
     "check:localization": "node scripts/check_localization_config.js && node scripts/scan_localized_templates.js",
     "check:localization:catalog": "node --test tests/locale.test.js",
     "test:e2e": "node tests/browser_e2e.test.js",
-    "test:localization:e2e": "node tests/localization_e2e.test.js"
+    "test:localization:e2e": "node tests/localization_e2e.test.js",
+    "test:visual": "node scripts/verify_and_capture_ui.mjs"
   },
   "dependencies": {
     "vue": "^3.4.21",

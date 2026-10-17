@@ -250,7 +250,7 @@ defineExpose({ open, close })
 }
 
 .cmd-search-icon {
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   flex-shrink: 0;
 }
 
@@ -315,7 +315,7 @@ defineExpose({ open, close })
 }
 
 .cmd-palette-item.active .cmd-item-title {
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
 }
 
 .cmd-item-left {
@@ -338,7 +338,7 @@ defineExpose({ open, close })
 
 .bank-gem {
   background: var(--primary-light);
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   border: 1px solid var(--primary-border);
 }
 
@@ -350,7 +350,7 @@ defineExpose({ open, close })
 
 .cmd-palette-item.active .action-gem {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   border-color: var(--primary);
 }
 
@@ -411,7 +411,7 @@ defineExpose({ open, close })
 
 .cmd-action-hint {
   font-size: 0.72rem;
-  color: var(--primary);
+  color: var(--primary-fg, var(--primary));
   font-weight: 500;
   opacity: 0;
   transition: opacity 100ms ease;

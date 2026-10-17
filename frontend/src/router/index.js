@@ -7,6 +7,7 @@ import LearningView from '../views/LearningView.vue'
 import MistakesView from '../views/MistakesView.vue'
 import ImportView from '../views/ImportView.vue'
 import NotesView from '../views/NotesView.vue'
+import SettingsView from '../views/SettingsView.vue'
 import PracticeViewV1 from '../views/PracticeViewV1.vue'
 import ExamView from '../features/exam/ExamView.vue'
 
@@ -44,6 +45,12 @@ const routes = [
         name: 'notes',
         component: NotesView,
         meta: { title: '知识笔记' }
+      },
+      {
+        path: 'settings',
+        name: 'settings',
+        component: SettingsView,
+        meta: { title: '系统设置' }
       }
     ]
   },

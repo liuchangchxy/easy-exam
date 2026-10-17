@@ -4,59 +4,71 @@
       type="button"
       class="mobile-nav-item"
       :class="{ active: currentPage === 'home' }"
+      :aria-label="t('nav.home')"
+      :title="t('nav.home')"
       @click="$emit('navigate', 'home')"
     >
       <LinearIcon name="layers" size="18" />
-      <span class="mobile-nav-label">{{ t('nav.home') }}</span>
+      <span class="mobile-nav-label">{{ t('nav_short.home') }}</span>
     </button>
 
     <button
       type="button"
       class="mobile-nav-item"
       :class="{ active: currentPage === 'mistakes' }"
+      :aria-label="t('nav.mistakes')"
+      :title="t('nav.mistakes')"
       @click="$emit('navigate', 'mistakes')"
     >
       <LinearIcon name="target" size="18" />
-      <span class="mobile-nav-label">{{ t('nav.mistakes') }}</span>
+      <span class="mobile-nav-label">{{ t('nav_short.mistakes') }}</span>
     </button>
 
     <button
       type="button"
       class="mobile-nav-item"
       :class="{ active: currentPage === 'learning' }"
+      :aria-label="t('nav.learning')"
+      :title="t('nav.learning')"
       @click="$emit('navigate', 'learning')"
     >
       <LinearIcon name="chart" size="18" />
-      <span class="mobile-nav-label">{{ t('nav.learning') }}</span>
+      <span class="mobile-nav-label">{{ t('nav_short.learning') }}</span>
     </button>
 
     <button
       type="button"
       class="mobile-nav-item"
       :class="{ active: currentPage === 'notes' }"
+      :aria-label="t('nav.notes')"
+      :title="t('nav.notes')"
       @click="$emit('navigate', 'notes')"
     >
       <LinearIcon name="edit" size="18" />
-      <span class="mobile-nav-label">{{ t('nav.notes') }}</span>
+      <span class="mobile-nav-label">{{ t('nav_short.notes') }}</span>
     </button>
 
     <button
       type="button"
       class="mobile-nav-item"
       :class="{ active: currentPage === 'import' }"
+      :aria-label="t('nav.imports')"
+      :title="t('nav.imports')"
       @click="$emit('navigate', 'import')"
     >
       <LinearIcon name="inbox" size="18" />
-      <span class="mobile-nav-label">{{ t('nav.imports') }}</span>
+      <span class="mobile-nav-label">{{ t('nav_short.imports') }}</span>
     </button>
 
     <button
       type="button"
       class="mobile-nav-item"
+      :aria-label="t('common.actions')"
+      :title="t('common.actions')"
       @click="$emit('open-palette')"
     >
       <LinearIcon name="command" size="18" />
-      <span class="mobile-nav-label">{{ t('common.actions') }}</span>
+      <span class="mobile-nav-label">{{ t('nav_short.actions') }}</span>
     </button>
   </nav>
 </template>
@@ -106,6 +118,7 @@ defineEmits(['navigate', 'open-palette'])
     justify-content: center;
     background: transparent;
     border: none;
+    padding: 2px 2px;
     color: var(--text-muted);
     flex: 1 1 0;
     min-width: 0;
@@ -116,12 +129,17 @@ defineEmits(['navigate', 'open-palette'])
   }
 
   .mobile-nav-item.active {
-    color: var(--primary);
+    color: var(--primary-fg, var(--primary));
   }
 
   .mobile-nav-label {
-    font-size: 0.65rem;
+    font-size: 0.68rem;
     font-weight: 500;
+    white-space: nowrap;
+    line-height: 1.1;
+    max-width: 100%;
+    padding: 0 1px;
+    text-align: center;
   }
 }
 </style>
