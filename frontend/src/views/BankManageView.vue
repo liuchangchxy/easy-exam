@@ -66,6 +66,9 @@
       <div class="alert-content">
         <LinearIcon name="award" size="16" />
         <span>{{ conflictAlert }}</span>
+        <button type="button" class="btn-conflict-reload" @click="loadData">
+          {{ t('bank_manage.reload_latest') }}
+        </button>
       </div>
       <button type="button" class="btn-close-toast" @click="conflictAlert = ''">
         <LinearIcon name="x" size="12" />
@@ -249,6 +252,7 @@
       :token="token"
       @close="activeModalQuestion = null"
       @saved="handleQuestionSaved"
+      @conflict="handleConflictDetected"
     />
   </main>
 </template>
@@ -384,6 +388,11 @@ function handleQuestionSaved(updatedQ) {
       successToast.value = ''
     }, 4000)
   }
+}
+
+function handleConflictDetected() {
+  conflictAlert.value = t('bank_manage.conflict_detected')
+  successToast.value = ''
 }
 
 async function loadData() {
@@ -597,6 +606,24 @@ onMounted(() => {
   align-items: center;
   gap: 0.5rem;
 }
+
+.btn-conflict-reload {
+  margin-left: 0.5rem;
+  padding: 0.25rem 0.6rem;
+  background: var(--warning, #f59e0b);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-conflict-reload:hover {
+  opacity: 0.9;
+}
+
 
 .conflict-alert-banner .btn-close-toast {
   background: transparent;

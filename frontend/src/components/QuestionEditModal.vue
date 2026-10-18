@@ -30,7 +30,16 @@
 
       <form class="modal-body-form" @submit.prevent="handleSave">
         <div v-if="errorMsg" class="form-alert-error" role="alert">
-          {{ errorMsg }}
+          <span>{{ errorMsg }}</span>
+          <button
+            v-if="isConflict"
+            type="button"
+            class="btn-reload-latest-inline"
+            :disabled="saving"
+            @click="handleReloadLatest"
+          >
+            {{ t('bank_manage.reload_latest') }}
+          </button>
         </div>
 
         <!-- 题干 -->
@@ -216,9 +225,9 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import LinearIcon from './LinearIcon.vue'
-import { updateQuestion, getQuestionConflict } from '../api/questions'
+import { updateQuestion, getQuestion, getQuestionConflict } from '../api/questions'
 import { useLocale } from '../composables/useLocale'
-import { validateQuestionEdit, sanitizeAnswerOnOptionRemove } from '../domain/bankManage'
+import { validateQuestionEdit, sanitizeAnswerOnOptionRemove, adaptAnswerOnTypeChange } from '../domain/bankManage'
 
 const props = defineProps({
   show: {
@@ -243,7 +252,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['close', 'saved'])
+const emit = defineEmits(['close', 'saved', 'conflict'])
 
 const { t } = useLocale()
 
@@ -257,6 +266,7 @@ const explanation = ref('')
 const tagsInput = ref('')
 const saving = ref(false)
 const errorMsg = ref('')
+const isConflict = ref(false)
 
 const isChoiceType = computed(() => {
   return ['SINGLE', 'MULTI', 'JUDGE'].includes(type.value)
@@ -294,6 +304,7 @@ watch(
       }
       tagsInput.value = Array.isArray(q.tags) ? q.tags.join(', ') : ''
       errorMsg.value = ''
+      isConflict.value = false
     }
   },
   { immediate: true }
@@ -309,11 +320,7 @@ watch(type, (newType, oldType) => {
       { key: 'T', content: t('bank_manage.judge_true') },
       { key: 'F', content: t('bank_manage.judge_false') },
     ]
-    if (answer.value && answer.value.trim()) {
-      const upper = answer.value.trim().toUpperCase()
-      answer.value = (upper === 'T' || upper === 'F') ? upper : 'T'
-    }
-  } else if (newType === 'SINGLE') {
+  } else if (['SINGLE', 'MULTI'].includes(newType)) {
     if (!options.value.length || options.value.length < 2) {
       options.value = [
         { key: 'A', content: '' },
@@ -321,30 +328,16 @@ watch(type, (newType, oldType) => {
         { key: 'C', content: '' },
         { key: 'D', content: '' },
       ]
-    }
-    if (answer.value && answer.value.trim()) {
-      const validKeys = options.value.map(o => o.key.trim()).filter(Boolean)
-      if (!validKeys.includes(answer.value.trim())) {
-        answer.value = validKeys[0] || 'A'
-      }
-    }
-  } else if (newType === 'MULTI') {
-    if (!options.value.length || options.value.length < 2) {
-      options.value = [
-        { key: 'A', content: '' },
-        { key: 'B', content: '' },
-        { key: 'C', content: '' },
-        { key: 'D', content: '' },
-      ]
-    }
-    if (answer.value && answer.value.trim()) {
-      const validKeys = new Set(options.value.map(o => o.key.trim()).filter(Boolean))
-      const parts = answer.value.split(/[,;\s]+/).map(k => k.trim()).filter(Boolean)
-      const validParts = parts.filter(k => validKeys.has(k))
-      answer.value = validParts.length ? validParts.join(',') : (options.value[0]?.key || 'A')
     }
   } else if (newType === 'ESSAY') {
     options.value = []
+  }
+
+  const prevAnswer = answer.value
+  const adapted = adaptAnswerOnTypeChange(newType, prevAnswer, options.value)
+  answer.value = adapted
+  if (prevAnswer && prevAnswer.trim() && !adapted) {
+    errorMsg.value = t('bank_manage.answer_reset_prompt')
   }
 })
 
@@ -365,6 +358,39 @@ function removeOption(idx) {
 function handleClose() {
   if (!saving.value) {
     emit('close')
+  }
+}
+
+async function handleReloadLatest() {
+  if (!props.question) return
+  saving.value = true
+  errorMsg.value = ''
+  try {
+    const latestQ = await getQuestion(props.token, props.question.id)
+    if (latestQ) {
+      props.question.version_number = latestQ.version_number
+      stem.value = latestQ.stem || ''
+      type.value = latestQ.type || 'SINGLE'
+      difficulty.value = latestQ.difficulty !== undefined && latestQ.difficulty !== null ? Number(latestQ.difficulty) : 3
+      chapterId.value = latestQ.chapter_id || ''
+      answer.value = latestQ.answer || ''
+      explanation.value = latestQ.explanation || ''
+      if (Array.isArray(latestQ.options) && latestQ.options.length > 0) {
+        options.value = latestQ.options.map(opt => ({
+          key: opt.key || '',
+          content: opt.content !== undefined ? opt.content : (opt.text || ''),
+        }))
+      } else {
+        options.value = []
+      }
+      tagsInput.value = Array.isArray(latestQ.tags) ? latestQ.tags.join(', ') : ''
+      isConflict.value = false
+      errorMsg.value = ''
+    }
+  } catch (err) {
+    errorMsg.value = err?.message || 'Failed to reload latest question'
+  } finally {
+    saving.value = false
   }
 }
 
@@ -416,7 +442,13 @@ async function handleSave() {
     emit('saved', conflictInfo ? { ...updated, conflict: conflictInfo } : updated)
     emit('close')
   } catch (err) {
-    errorMsg.value = err?.detail || err?.message || t('bank_manage.save_error', { error: 'Request failed' })
+    if (err?.status === 409 || err?.detail?.error === 'version_conflict') {
+      isConflict.value = true
+      errorMsg.value = t('bank_manage.conflict_detected')
+      emit('conflict', { questionId: props.question.id, error: err })
+    } else {
+      errorMsg.value = err?.detail?.message || err?.detail || err?.message || t('bank_manage.save_error', { error: 'Request failed' })
+    }
   } finally {
     saving.value = false
   }
@@ -609,6 +641,25 @@ async function handleSave() {
 .opt-content-field {
   flex: 1;
 }
+
+.btn-reload-latest-inline {
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.85rem;
+  background: var(--primary, #3b82f6);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-block;
+  align-self: flex-start;
+}
+
+.btn-reload-latest-inline:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
 
 .btn-del-sm {
   background: transparent;

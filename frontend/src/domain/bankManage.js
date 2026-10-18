@@ -130,3 +130,41 @@ export function validateQuestionEdit(type, options, answer) {
 
   return { valid: true }
 }
+
+export function adaptAnswerOnTypeChange(newType, currentAnswer, options = []) {
+  if (!currentAnswer || !String(currentAnswer).trim()) return ''
+  const t = String(newType || '').toUpperCase()
+  const trimmedAns = String(currentAnswer).trim()
+
+  if (t === 'JUDGE') {
+    const upper = trimmedAns.toUpperCase()
+    if (upper === 'T' || upper === 'F') {
+      return upper
+    }
+    return ''
+  }
+
+  if (t === 'SINGLE') {
+    const validKeys = Array.isArray(options) ? options.map(o => o.key?.trim()).filter(Boolean) : []
+    if (validKeys.includes(trimmedAns)) {
+      return trimmedAns
+    }
+    return ''
+  }
+
+  if (t === 'MULTI') {
+    const validKeys = new Set(Array.isArray(options) ? options.map(o => o.key?.trim()).filter(Boolean) : [])
+    const parts = trimmedAns.split(/[,;\s]+/).map(k => k.trim()).filter(Boolean)
+    const validParts = parts.filter(k => validKeys.has(k))
+    if (validParts.length > 0) {
+      return validParts.join(',')
+    }
+    return ''
+  }
+
+  if (t === 'ESSAY') {
+    return ''
+  }
+
+  return trimmedAns
+}

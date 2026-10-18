@@ -1316,6 +1316,7 @@ async function saveQuestionEdit() {
     base_version_number: question.value.version_number,
     regrade_history: editRegradeHistory.value,
     apply_fsrs: true,
+    allow_stale_branch: true,
   }
   const storageKey = 'easyexam_offline_question_edits'
   const userScopedKey = getOfflineQueueKey()
@@ -1443,6 +1444,7 @@ async function handleAdoptQuestionVersion(targetVer) {
         explanation: targetVer.explanation || question.value.explanation || '',
         difficulty: targetVer.difficulty ?? question.value.difficulty ?? 3,
         tags: targetVer.tags || question.value.tags || [],
+        allow_stale_branch: true,
       })
     }
     conflictResolvedMessage.value = `${t('ui.k0636')}${targetVer.version_number} ${t('ui.k0637')}`

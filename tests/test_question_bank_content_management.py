@@ -201,7 +201,7 @@ class BankContentManagementTests(unittest.TestCase):
         )
         bank_id = bank_resp.json()["id"]
 
-        # Create chapter
+        # Create chapter 1 and chapter 2
         chap_resp = self.client.post(
             f"/api/v1/banks/{bank_id}/chapters",
             json={"name": "Chapter 1", "order_num": 1},
@@ -210,7 +210,15 @@ class BankContentManagementTests(unittest.TestCase):
         assert chap_resp.status_code == 201
         chap_id = chap_resp.json()["id"]
 
-        # Create question with chapter
+        chap2_resp = self.client.post(
+            f"/api/v1/banks/{bank_id}/chapters",
+            json={"name": "Chapter 2", "order_num": 2},
+            headers=admin_headers,
+        )
+        assert chap2_resp.status_code == 201
+        chap2_id = chap2_resp.json()["id"]
+
+        # Create question with chapter 1
         q_resp = self.client.post(
             f"/api/v1/banks/{bank_id}/questions",
             json={
@@ -226,7 +234,38 @@ class BankContentManagementTests(unittest.TestCase):
         qid = q_resp.json()["id"]
         assert q_resp.json().get("chapter_id") == chap_id
 
-        # Update question explicitly clearing chapter
+        # 1. Update without chapter_id (PracticeView edit path) -> retains chapter 1
+        practice_edit_resp = self.client.put(
+            f"/api/v1/questions/{qid}",
+            json={
+                "stem": "Stem updated from practice view",
+                "type": "SINGLE",
+                "options": [{"key": "A", "content": "1"}],
+                "answer": "A",
+                "base_version_number": 1,
+            },
+            headers=admin_headers,
+        )
+        assert practice_edit_resp.status_code == 200, practice_edit_resp.text
+        assert practice_edit_resp.json().get("chapter_id") == chap_id
+
+        # 2. Update with explicit new chapter ID -> updates to chapter 2
+        update_chap2_resp = self.client.put(
+            f"/api/v1/questions/{qid}",
+            json={
+                "stem": "Question moved to chapter 2",
+                "type": "SINGLE",
+                "options": [{"key": "A", "content": "1"}],
+                "answer": "A",
+                "chapter_id": chap2_id,
+                "base_version_number": 2,
+            },
+            headers=admin_headers,
+        )
+        assert update_chap2_resp.status_code == 200, update_chap2_resp.text
+        assert update_chap2_resp.json().get("chapter_id") == chap2_id
+
+        # 3. Update question explicitly clearing chapter (chapter_id: None) -> cleared to None
         update_resp = self.client.put(
             f"/api/v1/questions/{qid}",
             json={
@@ -235,7 +274,7 @@ class BankContentManagementTests(unittest.TestCase):
                 "options": [{"key": "A", "content": "1"}],
                 "answer": "A",
                 "chapter_id": None,
-                "base_version_number": 1,
+                "base_version_number": 3,
             },
             headers=admin_headers,
         )
@@ -280,6 +319,7 @@ class BankContentManagementTests(unittest.TestCase):
         )
 
         # Now simulate concurrent edit based on outdated v1 (when current is v2)
+        # Without allow_stale_branch, server MUST reject with HTTP 409 conflict
         conflict_edit_resp = self.client.put(
             f"/api/v1/questions/{qid}",
             json={
@@ -291,9 +331,19 @@ class BankContentManagementTests(unittest.TestCase):
             },
             headers=admin_headers,
         )
-        assert conflict_edit_resp.status_code == 200
+        assert conflict_edit_resp.status_code == 409
+        err_detail = conflict_edit_resp.json()["detail"]
+        assert err_detail["error"] == "version_conflict"
+        assert err_detail["base_version_number"] == 1
+        assert err_detail["current_version_number"] == 2
 
-        # Verify active conflict record exists
+        # Verify current version on server is STILL version 2 and stem was NOT overwritten
+        server_q = self.client.get(f"/api/v1/questions/{qid}", headers=admin_headers)
+        assert server_q.status_code == 200
+        assert server_q.json()["version_number"] == 2
+        assert server_q.json()["stem"] == "Updated to version 2"
+
+        # Verify active conflict record exists in DB
         conflict_check = self.client.get(f"/api/v1/questions/{qid}/conflict", headers=admin_headers)
         assert conflict_check.status_code == 200
         conf_data = conflict_check.json()

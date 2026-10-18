@@ -16,6 +16,15 @@
 
 ---
 
+### [2026-10-19] PR #55 第二轮 Review 阻断修复：章节更新三元语义、409 并发覆盖拦截与避免伪造答案
+- **触发背景**：PR #55 独立 Reviewer 第二轮审查提出两项 BLOCKER 和一项 MINOR：1. `QuestionUpdate.chapter_id` 默认 None 导致 `payload.model_dump()` 吞没未提供语义并清空章节；2. 过期 `base_version_number` 返回 200 并生成新版本静默覆盖当前最新版本；3. 题型切换若旧答案不兼容时自动选取首选项伪造正确答案。
+- **核心决策**：
+  1. **章节更新三元语义**：通过 `payload.model_fields_set` 严格区分未提供（从 update 字典中排除，仓储层保留原章节）、显式 null/空（清空章节为 None）与显式 ID（更新章节）；既有 PracticeView 编辑路径不发 chapter_id，百分之百保留既有章节；
+  2. **409 并发覆盖拦截与版本历史保护**：若提交的 `base_version_number` 小于当前最新版本，默认直接记录冲突并抛出 `VersionConflictError` 返回 HTTP 409，严禁生成新版本覆盖最新内容；针对 PracticeView 离线多版本分支合并工作流支持 `allow_stale_branch=True` 兼容模式；前端编辑弹窗与管理页均提供醒目冲突警报及一键“重新加载最新版本”；
+  3. **不兼容答案安全置空**：抽取 `adaptAnswerOnTypeChange` 纯领域函数，当题型切换答案不兼容时坚决清空答案并提示用户重新选择，杜绝自动伪造首选项为正确答案。
+- **对应 SPEC 章节**：EASYEXAM_QUESTION_BANK_CONTENT_MANAGEMENT_V1_FROZEN.
+- **影响范围**：`backend/app/infrastructure/db/repositories/question_repository.py`, `backend/app/api/routes/questions.py`, `frontend/src/domain/bankManage.js`, `frontend/src/components/QuestionEditModal.vue`, `frontend/src/views/BankManageView.vue`, `frontend/src/views/PracticeViewV1.vue`, `frontend/src/locales/*`, `frontend/tests/bank_manage.test.js`, `frontend/tests/bank_manage_e2e.test.js`, `tests/test_question_bank_content_management.py`。
+
 ### [2026-10-19] PR #55 题库内容管理 v1 审查反馈修复与测试框架对齐
 - **触发背景**：PR #55 独立 Review 提出 4 项必须修复和 4 项细节完善：1. `test_question_bank_content_management.py` 使用 pytest 导致无 pytest 环境的 CI 失败；2. 浏览器 CI 未纳管 `bank_manage_e2e.test.js` 且需补齐模考脱敏断言；3. `QuestionEditModal.vue` 题型切换/选项清理与校验；4. 并发编辑冲突提示与保留；5. 允许清空章节、中英文判断题支持、移动端弹窗背景加固。
 - **核心决策**：

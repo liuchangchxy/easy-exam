@@ -1226,7 +1226,9 @@
     "judge_true": "True",
     "judge_false": "False",
     "invalid_answer": "Answer cannot be empty and must match a valid option",
-    "conflict_detected": "Concurrent editing conflict detected: Your changes were saved as a new version, but were based on an older version. All historical versions are preserved."
+    "answer_reset_prompt": "Question type changed. Please select the correct answer.",
+    "reload_latest": "Reload Latest Version",
+    "conflict_detected": "Concurrent edit conflict detected: Question was modified. Server latest version preserved. Please reload."
   },
   "theme": {
     "blue_grey": "Neutral Blue-Grey (Default)",

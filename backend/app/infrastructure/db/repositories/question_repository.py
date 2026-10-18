@@ -6,6 +6,22 @@ from typing import Any, Dict, List
 from backend.app.infrastructure.db.connection import transaction
 
 
+class VersionConflictError(Exception):
+    def __init__(self, message: str, base_version_number: int, current_version_number: int):
+        super().__init__(message)
+        self.message = message
+        self.base_version_number = base_version_number
+        self.current_version_number = current_version_number
+
+    def to_dict(self) -> dict:
+        return {
+            "error": "version_conflict",
+            "message": self.message,
+            "base_version_number": self.base_version_number,
+            "current_version_number": self.current_version_number,
+        }
+
+
 class QuestionRepository:
     def __init__(self, db_path: str):
         self.db_path = db_path
@@ -327,6 +343,21 @@ class QuestionRepository:
             if question_id in self._get_active_exam_question_ids(conn, user_id):
                 raise PermissionError("cannot edit question while exam is active")
             current = conn.execute("SELECT COALESCE(MAX(version_number), 0) FROM question_versions WHERE question_id = ?", (question_id,)).fetchone()[0]
+            base_ver = payload.get("base_version_number")
+            if base_ver is not None and int(base_ver) < current:
+                if not payload.get("allow_stale_branch"):
+                    conflict_id = str(uuid.uuid4())
+                    conn.execute(
+                        """INSERT INTO question_conflicts(id, question_id, user_id, base_version_number, server_version_number, client_version_number, is_resolved)
+                           VALUES (?, ?, ?, ?, ?, ?, 0)""",
+                        (conflict_id, question_id, user_id, int(base_ver), current, current),
+                    )
+                    conn.commit()
+                    raise VersionConflictError(
+                        message="Question has been modified by another user. Reload the latest version before editing.",
+                        base_version_number=int(base_ver),
+                        current_version_number=current,
+                    )
             next_ver = current + 1
             version_id = str(uuid.uuid4())
             prev_chap = conn.execute("SELECT chapter_id FROM question_versions WHERE question_id = ? AND version_number = ?", (question_id, current)).fetchone()

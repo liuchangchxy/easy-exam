@@ -8,6 +8,7 @@ import {
   filterBankQuestions,
   validateQuestionEdit,
   sanitizeAnswerOnOptionRemove,
+  adaptAnswerOnTypeChange,
 } from '../src/domain/bankManage.js'
 
 const sampleQuestions = [
@@ -190,4 +191,39 @@ test('sanitizeAnswerOnOptionRemove cleans up deleted options in answers', () => 
   assert.equal(sanitizeAnswerOnOptionRemove('MULTI', 'A,B,C', 'B'), 'A,C')
   assert.equal(sanitizeAnswerOnOptionRemove('MULTI', 'B', 'B'), '')
   assert.equal(sanitizeAnswerOnOptionRemove('MULTI', 'A,C', 'B'), 'A,C')
+})
+
+test('adaptAnswerOnTypeChange resets incompatible answers to empty string and never auto-picks default option', () => {
+  const choiceOpts = [{ key: 'A', content: '1' }, { key: 'B', content: '2' }, { key: 'C', content: '3' }]
+  const judgeOpts = [{ key: 'T', content: 'True' }, { key: 'F', content: 'False' }]
+
+  // Switching to JUDGE:
+  // Valid judge answer is preserved
+  assert.equal(adaptAnswerOnTypeChange('JUDGE', 'T', judgeOpts), 'T')
+  assert.equal(adaptAnswerOnTypeChange('JUDGE', 'f', judgeOpts), 'F')
+  // Incompatible answer (e.g. from SINGLE/MULTI) is cleared, NOT defaulted to 'T'
+  assert.equal(adaptAnswerOnTypeChange('JUDGE', 'A', judgeOpts), '')
+  assert.equal(adaptAnswerOnTypeChange('JUDGE', 'B', judgeOpts), '')
+  assert.equal(adaptAnswerOnTypeChange('JUDGE', 'A,B', judgeOpts), '')
+
+  // Switching to SINGLE:
+  // Valid option key is preserved
+  assert.equal(adaptAnswerOnTypeChange('SINGLE', 'B', choiceOpts), 'B')
+  // Incompatible answer (e.g. from JUDGE 'T' or MULTI 'A,B') is cleared, NOT defaulted to 'A'
+  assert.equal(adaptAnswerOnTypeChange('SINGLE', 'T', choiceOpts), '')
+  assert.equal(adaptAnswerOnTypeChange('SINGLE', 'F', choiceOpts), '')
+  assert.equal(adaptAnswerOnTypeChange('SINGLE', 'X', choiceOpts), '')
+  assert.equal(adaptAnswerOnTypeChange('SINGLE', 'A,B', choiceOpts), '')
+
+  // Switching to MULTI:
+  // Overlapping option keys are preserved
+  assert.equal(adaptAnswerOnTypeChange('MULTI', 'A,B', choiceOpts), 'A,B')
+  assert.equal(adaptAnswerOnTypeChange('MULTI', 'B', choiceOpts), 'B')
+  // Incompatible answer (e.g. from JUDGE 'T') is cleared, NOT defaulted to 'A'
+  assert.equal(adaptAnswerOnTypeChange('MULTI', 'T', choiceOpts), '')
+  assert.equal(adaptAnswerOnTypeChange('MULTI', 'Z', choiceOpts), '')
+
+  // Switching to ESSAY:
+  assert.equal(adaptAnswerOnTypeChange('ESSAY', 'A', choiceOpts), '')
+  assert.equal(adaptAnswerOnTypeChange('ESSAY', '', choiceOpts), '')
 })

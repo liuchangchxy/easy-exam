@@ -416,7 +416,7 @@ test('Bank Content Management E2E: Full Lifecycle, Killed Retention, Active Exam
     await page.waitForSelector(`[data-testid="edit-btn-${q3.id}"]`, { timeout: 5000 })
 
     // Simulate concurrent client editing based on outdated base_version_number=1
-    // (by calling PUT with base_version_number: 1 directly or via mock)
+    // Server MUST reject stale submission with HTTP 409 conflict and NOT overwrite
     const conflictPutRes = await fetch(`${BASE_URL}/api/v1/questions/${q3.id}`, {
       method: 'PUT',
       headers: {
@@ -431,7 +431,17 @@ test('Bank Content Management E2E: Full Lifecycle, Killed Retention, Active Exam
         base_version_number: 1,
       }),
     })
-    assert.equal(conflictPutRes.status, 200)
+    assert.equal(conflictPutRes.status, 409, 'Stale base_version submission must be rejected with HTTP 409')
+    const conflictErrBody = await conflictPutRes.json()
+    assert.equal(conflictErrBody.detail.error, 'version_conflict')
+
+    // Verify current version on server is STILL version 3 and stem was NOT overwritten
+    const checkQ3Res = await fetch(`${BASE_URL}/api/v1/questions/${q3.id}`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    })
+    const q3Data = await checkQ3Res.json()
+    assert.equal(q3Data.version_number, 3, 'Latest version must remain 3')
+    assert.equal(q3Data.stem, 'Is UDP connectionless? (Intermediary edit v3)', 'Stem must not be overwritten by stale update')
 
     // Check conflict endpoint
     const conflictRes = await fetch(`${BASE_URL}/api/v1/questions/${q3.id}/conflict`, {
