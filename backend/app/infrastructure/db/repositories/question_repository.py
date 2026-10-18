@@ -261,6 +261,34 @@ class QuestionRepository:
                 result.append(item)
             return result
 
+    def list_content_for_bank(self, bank_id: str, user_id: str) -> List[dict]:
+        """Return all questions belonging to the bank for content management without personal study/kill filtering."""
+        with transaction(self.db_path) as conn:
+            rows = conn.execute(
+                """SELECT q.id, qv.id AS version_id, qv.version_number, qv.type,
+                          qv.stem, qv.options_json, qv.answer, qv.explanation,
+                          qv.difficulty, qv.tags_json, qv.chapter_id, i.bank_id
+                   FROM bank_question_items i
+                   JOIN questions q ON q.id = i.question_id
+                   JOIN question_versions qv ON qv.question_id = q.id
+                   JOIN question_bank_members m ON m.bank_id = i.bank_id AND m.user_id = ?
+                   WHERE i.bank_id = ? AND qv.version_number = (
+                     SELECT MAX(version_number) FROM question_versions WHERE question_id = q.id
+                   ) ORDER BY q.created_at ASC, q.rowid ASC""",
+                (user_id, bank_id),
+            ).fetchall()
+            result = []
+            active_qids = self._get_active_exam_question_ids(conn, user_id)
+            for row in rows:
+                item = dict(row)
+                item["options"] = json.loads(item.pop("options_json"))
+                item["tags"] = json.loads(item.pop("tags_json"))
+                if item["id"] in active_qids:
+                    item["answer"] = ""
+                    item["explanation"] = ""
+                result.append(item)
+            return result
+
     def list_for_elimination(self, bank_id: str, user_id: str) -> List[dict]:
         """Return only questions explicitly killed by this user in an accessible bank."""
         with transaction(self.db_path) as conn:
@@ -296,6 +324,8 @@ class QuestionRepository:
             ).fetchone()
             if not access:
                 raise PermissionError("user cannot edit this question")
+            if question_id in self._get_active_exam_question_ids(conn, user_id):
+                raise PermissionError("cannot edit question while exam is active")
             current = conn.execute("SELECT COALESCE(MAX(version_number), 0) FROM question_versions WHERE question_id = ?", (question_id,)).fetchone()[0]
             next_ver = current + 1
             version_id = str(uuid.uuid4())

@@ -72,6 +72,14 @@ def list_questions(bank_id: str, request: Request, user=Depends(current_user)):
     return request.app.state.services.questions.list_for_bank(bank_id, user["id"])
 
 
+@router.get("/{bank_id}/content/questions")
+def list_content_questions(bank_id: str, request: Request, user=Depends(current_user)):
+    bank = request.app.state.services.banks.get_for_user(bank_id, user["id"])
+    if not bank:
+        raise HTTPException(status_code=404, detail="bank not found")
+    return request.app.state.services.questions.list_content_for_bank(bank_id, user["id"])
+
+
 @router.post("/{bank_id}/questions/{question_id}/copy", status_code=201)
 def copy_question(bank_id: str, question_id: str, request: Request, user=Depends(current_user)):
     try:
