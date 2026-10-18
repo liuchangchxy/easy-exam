@@ -21,7 +21,8 @@ class QuestionUpdate(BaseModel):
     chapter_id: str | None = None
     regrade_history: bool = False
     apply_fsrs: bool = True
-    allow_stale_branch: bool = False
+    allow_stale_branch: bool = True
+    reject_stale: bool = False
 
 
 class RegradePayload(BaseModel):

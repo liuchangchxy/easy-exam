@@ -429,6 +429,8 @@ test('Bank Content Management E2E: Full Lifecycle, Killed Retention, Active Exam
         options: [{ key: 'T', content: 'True' }, { key: 'F', content: 'False' }],
         answer: 'F',
         base_version_number: 1,
+        allow_stale_branch: false,
+        reject_stale: true,
       }),
     })
     assert.equal(conflictPutRes.status, 409, 'Stale base_version submission must be rejected with HTTP 409')

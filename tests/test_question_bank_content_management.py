@@ -328,6 +328,8 @@ class BankContentManagementTests(unittest.TestCase):
                 "options": [{"key": "A", "content": "1"}],
                 "answer": "A",
                 "base_version_number": 1,
+                "allow_stale_branch": False,
+                "reject_stale": True,
             },
             headers=admin_headers,
         )
@@ -350,6 +352,22 @@ class BankContentManagementTests(unittest.TestCase):
         assert conf_data.get("has_conflict") is True
         assert conf_data["conflict"]["base_version_number"] == 1
         assert conf_data["conflict"]["server_version_number"] == 2
+
+        # Verify backward compatibility: when allow_stale_branch=True, creating a branch succeeds with 200
+        branch_resp = self.client.put(
+            f"/api/v1/questions/{qid}",
+            json={
+                "stem": "Branch edit based on v1",
+                "type": "SINGLE",
+                "options": [{"key": "A", "content": "1"}],
+                "answer": "A",
+                "base_version_number": 1,
+                "allow_stale_branch": True,
+            },
+            headers=admin_headers,
+        )
+        assert branch_resp.status_code == 200
+        assert branch_resp.json()["version_number"] == 3
 
 
 if __name__ == "__main__":

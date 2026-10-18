@@ -426,6 +426,8 @@ async function handleSave() {
     chapter_id: chapterId.value ? chapterId.value : null,
     base_version_number: props.question.version_number,
     regrade_history: false,
+    allow_stale_branch: false,
+    reject_stale: true,
   }
 
   try {

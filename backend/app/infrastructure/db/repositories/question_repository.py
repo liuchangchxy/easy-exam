@@ -345,7 +345,8 @@ class QuestionRepository:
             current = conn.execute("SELECT COALESCE(MAX(version_number), 0) FROM question_versions WHERE question_id = ?", (question_id,)).fetchone()[0]
             base_ver = payload.get("base_version_number")
             if base_ver is not None and int(base_ver) < current:
-                if not payload.get("allow_stale_branch"):
+                should_reject = payload.get("reject_stale", False) or not payload.get("allow_stale_branch", True)
+                if should_reject:
                     conflict_id = str(uuid.uuid4())
                     conn.execute(
                         """INSERT INTO question_conflicts(id, question_id, user_id, base_version_number, server_version_number, client_version_number, is_resolved)
