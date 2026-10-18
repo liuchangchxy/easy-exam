@@ -33,3 +33,20 @@ export const copyQuestionToBank = (token, sourceBankId, questionId, targetBankId
   method: 'POST',
   headers: authHeaders(token),
 })
+
+export const getBank = (token, bankId) => request(`/banks/${bankId}`, {
+  headers: authHeaders(token),
+})
+
+export const listBankQuestionsContent = (token, bankId) => request(`/banks/${bankId}/content/questions`, {
+  headers: authHeaders(token),
+})
+
+export const listChapters = (token, bankId) => request(`/banks/${bankId}/chapters`, {
+  headers: authHeaders(token),
+})
+
+export const listTags = (token, bankId) => request(`/banks/${bankId}/tags`, {
+  headers: authHeaders(token),
+})
+
