@@ -49,4 +49,3 @@ export const listChapters = (token, bankId) => request(`/banks/${bankId}/chapter
 export const listTags = (token, bankId) => request(`/banks/${bankId}/tags`, {
   headers: authHeaders(token),
 })
-
