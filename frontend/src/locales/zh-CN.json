@@ -1222,7 +1222,11 @@
     "type_judge": "判断题",
     "type_essay": "问答题",
     "empty_bank": "当前题库暂无题目",
-    "exam_readonly_tip": "模考进行中不可编辑"
+    "exam_readonly_tip": "模考进行中不可编辑",
+    "judge_true": "正确",
+    "judge_false": "错误",
+    "invalid_answer": "答案不能为空且必须是有效选项",
+    "conflict_detected": "检测到多端并发编辑冲突：您的修改已作为新版本保存，但基于的版本早于服务器最新版本。历史版本已完整保留。"
   },
   "theme": {
     "blue_grey": "蓝灰 (默认)",

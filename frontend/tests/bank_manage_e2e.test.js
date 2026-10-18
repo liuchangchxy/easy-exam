@@ -274,6 +274,7 @@ test('Bank Content Management E2E: Full Lifecycle, Killed Retention, Active Exam
     const editBtnQ3 = page.locator(`[data-testid="edit-btn-${q3.id}"]`)
     await editBtnQ3.click()
     await page.waitForSelector('.question-edit-dialog', { timeout: 5000 })
+    await page.waitForTimeout(300)
 
     // Visual Capture 3: 1280px edit modal
     await page.screenshot({ path: path.join(screenshotsDir, 'bank_manage_1280_edit_modal.png') })
@@ -316,6 +317,7 @@ test('Bank Content Management E2E: Full Lifecycle, Killed Retention, Active Exam
     // Open edit modal on mobile
     await page.locator(`[data-testid="edit-btn-${q3.id}"]`).click()
     await page.waitForSelector('.question-edit-dialog', { timeout: 5000 })
+    await page.waitForTimeout(300)
 
     // Visual Capture 5: 375px mobile edit modal
     await page.screenshot({ path: path.join(screenshotsDir, 'bank_manage_375_edit_modal.png') })
@@ -328,7 +330,7 @@ test('Bank Content Management E2E: Full Lifecycle, Killed Retention, Active Exam
     await page.waitForURL(`**/`, { timeout: 5000 })
     console.log('[E2E] Mobile 375px responsiveness and navigation verified.')
 
-    // Step J: Active Exam Protection Verification
+    // Step J: Active Exam Protection & Masking Verification
     // Start active exam with Q2
     const startExamRes = await fetch(`${BASE_URL}/api/v1/practice/sessions`, {
       method: 'POST',
@@ -344,6 +346,16 @@ test('Bank Content Management E2E: Full Lifecycle, Killed Retention, Active Exam
       }),
     })
     assert.equal(startExamRes.status, 201)
+    const examSession = await startExamRes.json()
+
+    // Assert backend API masks answer and explanation during active exam
+    const contentCheckRes = await fetch(`${BASE_URL}/api/v1/banks/${bankId}/content/questions`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    })
+    const contentQuestions = await contentCheckRes.json()
+    const q2Content = contentQuestions.find(q => q.id === q2.id)
+    assert.equal(q2Content.answer, '', 'Backend API must mask question answer during active exam')
+    assert.equal(q2Content.explanation, '', 'Backend API must mask question explanation during active exam')
 
     // Re-visit bank manage page
     await page.setViewportSize({ width: 1280, height: 800 })
@@ -366,9 +378,70 @@ test('Bank Content Management E2E: Full Lifecycle, Killed Retention, Active Exam
     await page.waitForSelector('.question-edit-dialog', { timeout: 5000 })
     const saveBtnVisible = await page.locator('.btn-submit-edit').isVisible()
     assert.equal(saveBtnVisible, false, 'Save button must not exist in read-only modal')
-    await page.click('.btn-close-modal')
 
-    console.log('[E2E] Active exam safety verified: answers masked, view-only mode enforced.')
+    // Assert DOM input fields are masked in the modal
+    const ansVal = await page.inputValue('#edit-answer')
+    assert.equal(ansVal, '', 'DOM input #edit-answer must be empty (masked) during active exam')
+    const expVal = await page.inputValue('#edit-explanation')
+    assert.equal(expVal, '', 'DOM textarea #edit-explanation must be empty (masked) during active exam')
+
+    await page.click('.btn-close-modal')
+    console.log('[E2E] Active exam safety verified: answers masked in API and DOM, view-only mode enforced.')
+
+    // Step K: Concurrent Conflict Detection Verification
+    // Complete the exam session first so editing is re-enabled
+    await fetch(`${BASE_URL}/api/v1/practice/sessions/${examSession.id}/complete`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}` },
+    })
+
+    // Advance Q3 to version 3 on backend directly
+    await fetch(`${BASE_URL}/api/v1/questions/${q3.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({
+        stem: 'Is UDP connectionless? (Intermediary edit v3)',
+        type: 'JUDGE',
+        options: [{ key: 'T', content: 'True' }, { key: 'F', content: 'False' }],
+        answer: 'F',
+        base_version_number: 2,
+      }),
+    })
+
+    // Reload bank manage page so UI has latest data
+    await page.reload()
+    await page.waitForSelector(`[data-testid="edit-btn-${q3.id}"]`, { timeout: 5000 })
+
+    // Simulate concurrent client editing based on outdated base_version_number=1
+    // (by calling PUT with base_version_number: 1 directly or via mock)
+    const conflictPutRes = await fetch(`${BASE_URL}/api/v1/questions/${q3.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({
+        stem: 'Outdated client concurrent update',
+        type: 'JUDGE',
+        options: [{ key: 'T', content: 'True' }, { key: 'F', content: 'False' }],
+        answer: 'F',
+        base_version_number: 1,
+      }),
+    })
+    assert.equal(conflictPutRes.status, 200)
+
+    // Check conflict endpoint
+    const conflictRes = await fetch(`${BASE_URL}/api/v1/questions/${q3.id}/conflict`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    })
+    const confJson = await conflictRes.json()
+    assert.equal(confJson.has_conflict, true, 'Conflict endpoint must report has_conflict=true')
+    assert.equal(confJson.conflict.base_version_number, 1)
+    console.log('[E2E] Concurrent conflict tracking verified.')
+
     console.log('[E2E] All browser E2E acceptance criteria successfully passed!')
   } finally {
     if (browser) await browser.close()

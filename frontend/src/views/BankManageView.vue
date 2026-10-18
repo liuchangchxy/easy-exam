@@ -61,6 +61,17 @@
       <span>{{ successToast }}</span>
     </div>
 
+    <!-- 冲突警告消息 -->
+    <div v-if="conflictAlert" class="conflict-alert-banner" role="alert" data-testid="conflict-alert-banner">
+      <div class="alert-content">
+        <LinearIcon name="award" size="16" />
+        <span>{{ conflictAlert }}</span>
+      </div>
+      <button type="button" class="btn-close-toast" @click="conflictAlert = ''">
+        <LinearIcon name="x" size="12" />
+      </button>
+    </div>
+
     <!-- 错误提示 -->
     <div v-if="error" class="alert-error-banner" role="alert">
       {{ error }}
@@ -282,6 +293,7 @@ const hasActiveExam = ref(false)
 const loading = ref(true)
 const error = ref('')
 const successToast = ref('')
+const conflictAlert = ref('')
 
 const filters = ref(createEmptyBankFilters())
 const activeModalQuestion = ref(null)
@@ -362,10 +374,16 @@ function handleQuestionSaved(updatedQ) {
   } else {
     questions.value.unshift(updatedQ)
   }
-  successToast.value = t('bank_manage.save_success')
-  setTimeout(() => {
+  if (updatedQ.conflict) {
+    conflictAlert.value = t('bank_manage.conflict_detected')
     successToast.value = ''
-  }, 4000)
+  } else {
+    conflictAlert.value = ''
+    successToast.value = t('bank_manage.save_success')
+    setTimeout(() => {
+      successToast.value = ''
+    }, 4000)
+  }
 }
 
 async function loadData() {
@@ -560,6 +578,35 @@ onMounted(() => {
   border-radius: 6px;
   color: #10b981;
   font-size: 0.875rem;
+}
+
+.conflict-alert-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 8px;
+  color: var(--warning-fg, #b45309);
+  font-size: 0.875rem;
+}
+
+.conflict-alert-banner .alert-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.conflict-alert-banner .btn-close-toast {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  padding: 0.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .alert-error-banner {

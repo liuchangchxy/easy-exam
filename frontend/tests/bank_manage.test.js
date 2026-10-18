@@ -6,6 +6,8 @@ import {
   canEditBankContent,
   canEditQuestionInBank,
   filterBankQuestions,
+  validateQuestionEdit,
+  sanitizeAnswerOnOptionRemove,
 } from '../src/domain/bankManage.js'
 
 const sampleQuestions = [
@@ -151,4 +153,41 @@ test('filterBankQuestions returns full array when filters are empty or null', ()
   assert.equal(res.length, 4)
   const emptyRes = filterBankQuestions(null, {})
   assert.deepEqual(emptyRes, [])
+})
+
+test('validateQuestionEdit validates SINGLE choice answers strictly', () => {
+  const opts = [{ key: 'A', content: '1' }, { key: 'B', content: '2' }]
+  assert.equal(validateQuestionEdit('SINGLE', opts, 'A').valid, true)
+  assert.equal(validateQuestionEdit('SINGLE', opts, 'B').valid, true)
+  assert.equal(validateQuestionEdit('SINGLE', opts, 'C').valid, false)
+  assert.equal(validateQuestionEdit('SINGLE', opts, '').valid, false)
+  assert.equal(validateQuestionEdit('SINGLE', opts, null).valid, false)
+})
+
+test('validateQuestionEdit validates MULTI choice answers strictly', () => {
+  const opts = [{ key: 'A', content: '1' }, { key: 'B', content: '2' }, { key: 'C', content: '3' }]
+  assert.equal(validateQuestionEdit('MULTI', opts, 'A,B').valid, true)
+  assert.equal(validateQuestionEdit('MULTI', opts, 'A, C').valid, true)
+  assert.equal(validateQuestionEdit('MULTI', opts, 'A,D').valid, false)
+  assert.equal(validateQuestionEdit('MULTI', opts, '').valid, false)
+  assert.equal(validateQuestionEdit('MULTI', opts, '   ').valid, false)
+})
+
+test('validateQuestionEdit validates JUDGE answers strictly', () => {
+  const opts = [{ key: 'T', content: 'True' }, { key: 'F', content: 'False' }]
+  assert.equal(validateQuestionEdit('JUDGE', opts, 'T').valid, true)
+  assert.equal(validateQuestionEdit('JUDGE', opts, 'f').valid, true)
+  assert.equal(validateQuestionEdit('JUDGE', opts, 'X').valid, false)
+  assert.equal(validateQuestionEdit('JUDGE', opts, '').valid, false)
+})
+
+test('sanitizeAnswerOnOptionRemove cleans up deleted options in answers', () => {
+  // SINGLE: if answer was deleted key, clears it
+  assert.equal(sanitizeAnswerOnOptionRemove('SINGLE', 'B', 'B'), '')
+  assert.equal(sanitizeAnswerOnOptionRemove('SINGLE', 'A', 'B'), 'A')
+
+  // MULTI: removes deleted key from comma-separated list
+  assert.equal(sanitizeAnswerOnOptionRemove('MULTI', 'A,B,C', 'B'), 'A,C')
+  assert.equal(sanitizeAnswerOnOptionRemove('MULTI', 'B', 'B'), '')
+  assert.equal(sanitizeAnswerOnOptionRemove('MULTI', 'A,C', 'B'), 'A,C')
 })

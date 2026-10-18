@@ -84,3 +84,49 @@ export function filterBankQuestions(questions, filters) {
     return true
   })
 }
+
+export function sanitizeAnswerOnOptionRemove(type, currentAnswer, removedKey) {
+  if (!currentAnswer || !removedKey) return currentAnswer || ''
+  const t = String(type || '').toUpperCase()
+  if (t === 'SINGLE') {
+    return currentAnswer.trim() === removedKey.trim() ? '' : currentAnswer
+  }
+  if (t === 'MULTI') {
+    const parts = currentAnswer.split(/[,;\s]+/).map(k => k.trim()).filter(Boolean)
+    return parts.filter(k => k !== removedKey.trim()).join(',')
+  }
+  return currentAnswer
+}
+
+export function validateQuestionEdit(type, options, answer) {
+  const t = String(type || '').toUpperCase()
+  const trimmedAns = answer ? String(answer).trim() : ''
+
+  if (t === 'SINGLE') {
+    const validKeys = Array.isArray(options) ? options.map(o => o.key?.trim()).filter(Boolean) : []
+    if (!trimmedAns || !validKeys.includes(trimmedAns)) {
+      return { valid: false, error: 'invalid_answer' }
+    }
+    return { valid: true }
+  }
+
+  if (t === 'MULTI') {
+    const validKeys = new Set(Array.isArray(options) ? options.map(o => o.key?.trim()).filter(Boolean) : [])
+    const parts = trimmedAns.split(/[,;\s]+/).map(k => k.trim()).filter(Boolean)
+    if (!parts.length || !parts.every(k => validKeys.has(k))) {
+      return { valid: false, error: 'invalid_answer' }
+    }
+    return { valid: true }
+  }
+
+  if (t === 'JUDGE') {
+    const upper = trimmedAns.toUpperCase()
+    const validKeys = Array.isArray(options) ? options.map(o => o.key?.trim().toUpperCase()).filter(Boolean) : []
+    if (!upper || (!validKeys.includes(upper) && !['T', 'F'].includes(upper))) {
+      return { valid: false, error: 'invalid_answer' }
+    }
+    return { valid: true }
+  }
+
+  return { valid: true }
+}

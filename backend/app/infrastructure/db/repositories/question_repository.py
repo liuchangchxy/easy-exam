@@ -330,7 +330,10 @@ class QuestionRepository:
             next_ver = current + 1
             version_id = str(uuid.uuid4())
             prev_chap = conn.execute("SELECT chapter_id FROM question_versions WHERE question_id = ? AND version_number = ?", (question_id, current)).fetchone()
-            chap_id = payload.get("chapter_id") if "chapter_id" in payload and payload.get("chapter_id") is not None else (prev_chap[0] if prev_chap else None)
+            if "chapter_id" in payload:
+                chap_id = payload.get("chapter_id") or None
+            else:
+                chap_id = prev_chap[0] if prev_chap else None
             conn.execute(
                 """INSERT INTO question_versions(
                     id, question_id, version_number, type, stem, options_json, answer,

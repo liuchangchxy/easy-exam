@@ -16,6 +16,16 @@
 
 ---
 
+### [2026-10-19] PR #55 题库内容管理 v1 审查反馈修复与测试框架对齐
+- **触发背景**：PR #55 独立 Review 提出 4 项必须修复和 4 项细节完善：1. `test_question_bank_content_management.py` 使用 pytest 导致无 pytest 环境的 CI 失败；2. 浏览器 CI 未纳管 `bank_manage_e2e.test.js` 且需补齐模考脱敏断言；3. `QuestionEditModal.vue` 题型切换/选项清理与校验；4. 并发编辑冲突提示与保留；5. 允许清空章节、中英文判断题支持、移动端弹窗背景加固。
+- **核心决策**：
+  1. **测试框架标准对齐**：将 `test_question_bank_content_management.py` 转为标准 `unittest.TestCase`，兼容 CI 的 `python -m unittest discover -s tests -v`；
+  2. **E2E 纳入门禁与脱敏实断言**：在 `frontend/package.json` 的 `test:e2e` 中串联 `bank_manage_e2e.test.js`，增加模考期间 API 与 DOM 脱敏的真实断言；
+  3. **前端表单严校验与清理**：在 `bankManage.js` 增加 `validateQuestionEdit` 与 `sanitizeAnswerOnOptionRemove`，杜绝空/无效答案，类型转换不兼容时合理重置；
+  4. **并发冲突持久化追踪与显式警报**：保存基于过期 `base_version_number` 时保留冲突快照，管理页展示醒目黄色冲突提示 Banner。
+- **对应 SPEC 章节**：EASYEXAM_QUESTION_BANK_CONTENT_MANAGEMENT_V1_FROZEN.
+- **影响范围**：`backend/app/infrastructure/db/repositories/question_repository.py`, `frontend/src/components/QuestionEditModal.vue`, `frontend/src/domain/bankManage.js`, `frontend/src/views/BankManageView.vue`, `frontend/src/locales/*`, `frontend/tests/bank_manage.test.js`, `frontend/tests/bank_manage_e2e.test.js`, `tests/test_question_bank_content_management.py`, `tests/visual_smoke/*`。
+
 ### [2026-10-02] v1.0.16: 工具弹窗顶层调度（彻底消除背景跳转）、用户账户纯净解耦与首页幽灵代码彻底清理
 - **触发背景**：用户反馈：1. 在复习中心、错题、笔记等非首页视图点击侧边栏的“配置与工具”（智能组卷/AI出题/AI配置）时，背景会强行跳回首页概览；2. 用户中心气泡菜单中依然混杂着“知识笔记”链接，与侧边栏独立一级“知识笔记”工作区重复混淆；3. 首页存在大量已被全局替代的旧版内联弹窗代码和冗余状态。
 - **核心决策**：

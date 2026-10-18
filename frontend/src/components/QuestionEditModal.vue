@@ -102,7 +102,7 @@
           <div class="options-header-row">
             <label class="form-label">{{ t('bank_manage.options_label') }}</label>
             <button
-              v-if="!readOnly"
+              v-if="!readOnly && type !== 'JUDGE'"
               type="button"
               class="btn-util-sm"
               :disabled="saving"
@@ -123,7 +123,7 @@
                 type="text"
                 class="form-input opt-key-field"
                 :placeholder="t('bank_manage.option_key_placeholder')"
-                :disabled="readOnly || saving"
+                :disabled="readOnly || saving || type === 'JUDGE'"
                 required
               />
               <input
@@ -135,7 +135,7 @@
                 required
               />
               <button
-                v-if="!readOnly"
+                v-if="!readOnly && type !== 'JUDGE'"
                 type="button"
                 class="btn-del-sm"
                 :disabled="saving || options.length <= 2"
@@ -216,8 +216,9 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import LinearIcon from './LinearIcon.vue'
-import { updateQuestion } from '../api/questions'
+import { updateQuestion, getQuestionConflict } from '../api/questions'
 import { useLocale } from '../composables/useLocale'
+import { validateQuestionEdit, sanitizeAnswerOnOptionRemove } from '../domain/bankManage'
 
 const props = defineProps({
   show: {
@@ -267,7 +268,7 @@ watch(
     if (q) {
       stem.value = q.stem || ''
       type.value = q.type || 'SINGLE'
-      difficulty.value = Number(q.difficulty) || 3
+      difficulty.value = q.difficulty !== undefined && q.difficulty !== null ? Number(q.difficulty) : 3
       chapterId.value = q.chapter_id || ''
       answer.value = q.answer || ''
       explanation.value = q.explanation || ''
@@ -285,8 +286,8 @@ watch(
         ]
       } else if (type.value === 'JUDGE') {
         options.value = [
-          { key: 'T', content: '正确' },
-          { key: 'F', content: '错误' },
+          { key: 'T', content: t('bank_manage.judge_true') },
+          { key: 'F', content: t('bank_manage.judge_false') },
         ]
       } else {
         options.value = []
@@ -298,6 +299,55 @@ watch(
   { immediate: true }
 )
 
+// Type switching logic
+watch(type, (newType, oldType) => {
+  if (props.readOnly) return
+  if (!oldType || newType === oldType) return
+
+  if (newType === 'JUDGE') {
+    options.value = [
+      { key: 'T', content: t('bank_manage.judge_true') },
+      { key: 'F', content: t('bank_manage.judge_false') },
+    ]
+    if (answer.value && answer.value.trim()) {
+      const upper = answer.value.trim().toUpperCase()
+      answer.value = (upper === 'T' || upper === 'F') ? upper : 'T'
+    }
+  } else if (newType === 'SINGLE') {
+    if (!options.value.length || options.value.length < 2) {
+      options.value = [
+        { key: 'A', content: '' },
+        { key: 'B', content: '' },
+        { key: 'C', content: '' },
+        { key: 'D', content: '' },
+      ]
+    }
+    if (answer.value && answer.value.trim()) {
+      const validKeys = options.value.map(o => o.key.trim()).filter(Boolean)
+      if (!validKeys.includes(answer.value.trim())) {
+        answer.value = validKeys[0] || 'A'
+      }
+    }
+  } else if (newType === 'MULTI') {
+    if (!options.value.length || options.value.length < 2) {
+      options.value = [
+        { key: 'A', content: '' },
+        { key: 'B', content: '' },
+        { key: 'C', content: '' },
+        { key: 'D', content: '' },
+      ]
+    }
+    if (answer.value && answer.value.trim()) {
+      const validKeys = new Set(options.value.map(o => o.key.trim()).filter(Boolean))
+      const parts = answer.value.split(/[,;\s]+/).map(k => k.trim()).filter(Boolean)
+      const validParts = parts.filter(k => validKeys.has(k))
+      answer.value = validParts.length ? validParts.join(',') : (options.value[0]?.key || 'A')
+    }
+  } else if (newType === 'ESSAY') {
+    options.value = []
+  }
+})
+
 function addOption() {
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
   const nextKey = letters[options.value.length] || `Option${options.value.length + 1}`
@@ -306,7 +356,9 @@ function addOption() {
 
 function removeOption(idx) {
   if (options.value.length > 2) {
+    const removedKey = options.value[idx]?.key
     options.value.splice(idx, 1)
+    answer.value = sanitizeAnswerOnOptionRemove(type.value, answer.value, removedKey)
   }
 }
 
@@ -319,6 +371,16 @@ function handleClose() {
 async function handleSave() {
   if (props.readOnly || !props.question) return
   if (!stem.value.trim()) return
+
+  // Strict answer validation per question type
+  const validation = validateQuestionEdit(type.value, options.value, answer.value)
+  if (!validation.valid) {
+    errorMsg.value = t('bank_manage.invalid_answer')
+    return
+  }
+  if (type.value === 'JUDGE') {
+    answer.value = answer.value.trim().toUpperCase()
+  }
 
   saving.value = true
   errorMsg.value = ''
@@ -335,17 +397,26 @@ async function handleSave() {
     explanation: explanation.value.trim(),
     difficulty: Number(difficulty.value),
     tags: parsedTags,
-    chapter_id: chapterId.value || null,
+    chapter_id: chapterId.value ? chapterId.value : null,
     base_version_number: props.question.version_number,
     regrade_history: false,
   }
 
   try {
     const updated = await updateQuestion(props.token, props.question.id, payload)
-    emit('saved', updated)
+    let conflictInfo = null
+    try {
+      const confRes = await getQuestionConflict(props.token, props.question.id)
+      if (confRes?.has_conflict) {
+        conflictInfo = confRes.conflict
+      }
+    } catch {
+      // Non-blocking conflict lookup
+    }
+    emit('saved', conflictInfo ? { ...updated, conflict: conflictInfo } : updated)
     emit('close')
   } catch (err) {
-    errorMsg.value = err.message || t('bank_manage.save_error', { error: 'Request failed' })
+    errorMsg.value = err?.detail || err?.message || t('bank_manage.save_error', { error: 'Request failed' })
   } finally {
     saving.value = false
   }
@@ -366,7 +437,7 @@ async function handleSave() {
 }
 
 .question-edit-dialog {
-  background: var(--bg-card);
+  background: var(--bg-card, #ffffff);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg, 12px);
   width: 100%;
@@ -375,12 +446,6 @@ async function handleSave() {
   display: flex;
   flex-direction: column;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
-  animation: modalFadeIn 0.18s ease-out;
-}
-
-@keyframes modalFadeIn {
-  from { opacity: 0; transform: scale(0.97); }
-  to { opacity: 1; transform: scale(1); }
 }
 
 .modal-header {
