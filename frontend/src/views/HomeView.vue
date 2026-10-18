@@ -246,6 +246,14 @@
             </button>
           </div>
           <div class="bank-utility-actions">
+            <button
+              type="button"
+              class="btn-util-link btn-manage-bank"
+              :data-testid="`manage-bank-${bank.id}`"
+              @click="router.push(`/banks/${bank.id}`)"
+            >
+              <LinearIcon name="list" size="12" /> {{ t('home.manage_questions') }}
+            </button>
             <button type="button" class="btn-util-link btn-ai-batch" @click="openAiBatchModal(bank)">
               <LinearIcon name="zap" size="12" /> {{ t('home.batch_ai_btn') }}
             </button>

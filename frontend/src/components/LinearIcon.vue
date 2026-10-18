@@ -120,6 +120,19 @@
     <g v-else-if="name === 'chevron-right'">
       <polyline points="9 18 15 12 9 6" />
     </g>
+    <!-- chevron-left / arrow-left -->
+    <g v-else-if="name === 'chevron-left' || name === 'arrow-left'">
+      <polyline points="15 18 9 12 15 6" />
+    </g>
+    <!-- list -->
+    <g v-else-if="name === 'list'">
+      <line x1="8" y1="6" x2="21" y2="6" />
+      <line x1="8" y1="12" x2="21" y2="12" />
+      <line x1="8" y1="18" x2="21" y2="18" />
+      <line x1="3" y1="6" x2="3.01" y2="6" />
+      <line x1="3" y1="12" x2="3.01" y2="12" />
+      <line x1="3" y1="18" x2="3.01" y2="18" />
+    </g>
     <!-- edit / note -->
     <g v-else-if="name === 'edit'">
       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />

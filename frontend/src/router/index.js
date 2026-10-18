@@ -51,6 +51,12 @@ const routes = [
         name: 'settings',
         component: SettingsView,
         meta: { title: '系统设置' }
+      },
+      {
+        path: 'banks/:bankId',
+        name: 'bank-manage',
+        component: () => import('../views/BankManageView.vue'),
+        meta: { title: '题库管理' }
       }
     ]
   },
