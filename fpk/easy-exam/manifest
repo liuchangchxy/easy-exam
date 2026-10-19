@@ -1,7 +1,7 @@
 appname               = easy-exam
-version               = 1.0.17
+version               = 1.0.19
 display_name          = 易考宝 (EasyExam)
-desc                  = 专为飞牛私有云 (fnOS) 打造的高效智能题库与全真模考系统：支持 Markdown/Excel 批量导入、错题靶向 2 次连对斩杀消除、FSRS 遗忘曲线间隔复习与本地 AI 智能伴学解惑。
+desc                  = 专为飞牛私有云 (fnOS) 打造的高效智能题库与全真模考系统：支持 Markdown/Excel 批量导入、题库内容管理与多维检索筛选、错题靶向 2 次连对斩杀消除、FSRS 遗忘曲线间隔复习与本地 AI 智能伴学解惑。
 platform              = x86
 source                = thirdparty
 maintainer            = liuchangchxy
@@ -14,5 +14,5 @@ service_port          = 3000
 checkport             = true
 ctl_stop              = true
 os_min_version        = 1.2.0
-changelog             = v1.0.17：<br/>1. 深度对抗性 UI 全面修复：修复超长无空格文本/代码导致的横向破版撑宽，多视口统一引入 overflow-wrap 与 word-break 兜底；<br/>2. 移动端触控安全区与人体工学治理：底部固定操作栏自适应安全区（env(safe-area-inset-bottom)），保证核心操作零遮挡；<br/>3. 触控面积强化：全站返回、关闭、跳转胶囊按钮统一满足 ≥42px 触控标准；<br/>4. 复杂下拉框与长选项防溢出约束：限制学习与错题页面选择器最大宽度，彻底消除视口横向穿透。
+changelog             = v1.0.19：<br/>1. 独立题库内容管理：题库首页增加「管理题目」入口，直达独立管理页面，脱离嵌套弹窗；<br/>2. 题库全量题目浏览：解耦个人错题/斩杀状态，斩杀题完整保留浏览；<br/>3. 多维实时检索与组合筛选：支持题干与标签关键词、题型、难度、章节等多条件组合筛选；<br/>4. 版本化题目在线编辑：ADMIN/EDITOR 支持在线编辑题干、题型、选项、答案与解析，内置严格答案校验与并发冲突检测保护；<br/>5. MEMBER 权限安全隔离与 Active Exam 进行中模考答案保护。
 

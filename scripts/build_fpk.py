@@ -269,7 +269,7 @@ def build_fpk(
             if check.returncode != 0:
                 print(f"[BUILD] Image {image_tag} not found locally, building from Dockerfile...")
                 b_res = subprocess.run(
-                    ["docker", "build", "-t", image_tag, "."],
+                    ["docker", "build", "--platform", "linux/amd64", "-t", image_tag, "."],
                     cwd=str(REPO_ROOT),
                     capture_output=True,
                     text=True,
