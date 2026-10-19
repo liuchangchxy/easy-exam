@@ -429,6 +429,15 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
 
       // Return to mistakes view
       await page.click('button:has-text("返回")')
+      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
+      // Verify cancel retains session (Issue #57 Defect 4)
+      await page.click('[data-testid="exit-confirm-modal"] .btn-cancel-exit')
+      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { state: 'hidden', timeout: 3000 })
+      assert.ok(await page.locator('.practice-page').isVisible(), 'Canceling exit must preserve session')
+      // Now confirm exit
+      await page.click('button:has-text("返回")')
+      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
+      await page.click('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
       await page.waitForSelector('.mistakes-page')
       console.log('✓ Verified mistake cause persistence, scoped practice, and physical FSRS rating=4 update.')
     })
@@ -451,6 +460,8 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       // Answer the weak question
       await answerCurrentQuestion(false)
       await page.click('button:has-text("返回")')
+      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
+      await page.click('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
       await page.waitForSelector('.mistakes-page')
 
       // Reset filter to all banks
@@ -477,6 +488,8 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
 
       // Return to mistakes view
       await page.click('button:has-text("返回")')
+      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
+      await page.click('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
       await page.waitForSelector('.mistakes-page')
 
       // Switch to '斩杀题库' tab and verify question was restored (killed list is now empty)
@@ -559,6 +572,8 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
 
       // Return from practice to LearningView, then return to HomeView
       await page.click('header button:has-text("返回")')
+      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
+      await page.click('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
       await page.waitForSelector('.learning-page', { timeout: 8000 })
       await page.click('header button:has-text("返回")')
       await page.waitForSelector('.home-page', { timeout: 8000 })
@@ -763,6 +778,10 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
 
       // 9. Device A navigates to practice and sees conflict banner as well
       await page.click('header button:has-text("返回")')
+      const confirmExit10 = page.locator('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
+      if (await confirmExit10.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await confirmExit10.click()
+      }
       await page.waitForSelector('.home-page')
       await page.click('.bank-card:has-text("E2E真实浏览器题库") button:has-text("开始刷题")')
       await page.waitForSelector('.practice-page', { timeout: 8000 })
@@ -806,6 +825,8 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       // Clean up Device B and return Device A to home
       await contextB.close()
       await page.click('header button:has-text("返回")')
+      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
+      await page.click('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
       await page.waitForSelector('.home-page')
     })
 
@@ -1212,6 +1233,8 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
 
       // Navigate back to HomeView with active session and verify active-session badge
       await page.click('button.btn-back')
+      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
+      await page.click('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
       await page.waitForSelector('.home-page')
       await page.waitForSelector('.badge-active-progress', { timeout: 8000 })
       const activeBadgeStyles = await page.evaluate(() => {
