@@ -180,7 +180,8 @@
         <div class="bank-card-title-row">
           <h2>{{ bank.name }}</h2>
           <span v-if="getActiveSessionForBank(bank.id)" class="badge-active-progress">
-            <LinearIcon name="clock" size="12" /> {{ t('home.active_session_badge') }} ({{ getActiveSessionForBank(bank.id).answered_count }}/{{ getActiveSessionForBank(bank.id).total_questions }})
+            <LinearIcon :name="getActiveSessionForBank(bank.id).mode === 'EXAM' ? 'award' : 'clock'" size="12" />
+            {{ getActiveSessionForBank(bank.id).mode === 'EXAM' ? t('home.mock_exam') : t('home.active_session_badge') }} ({{ getActiveSessionForBank(bank.id).answered_count }}/{{ getActiveSessionForBank(bank.id).total_questions }})
           </span>
         </div>
         <p>{{ bank.description || t('home.no_description') }}</p>
@@ -189,12 +190,12 @@
           <span v-if="bank.category" class="bank-category-pill">{{ bank.category }}</span>
         </div>
         <div class="bank-actions-container">
-          <!-- 顺序通刷进度展示 (当存在进行中会话时显示) -->
+          <!-- 顺序通刷 / 模拟考试 进度展示 (当存在进行中会话时显示) -->
           <div v-if="getActiveSessionForBank(bank.id)" class="sequential-progress-box">
             <div class="sequential-progress-header">
               <span class="progress-title">
-                <LinearIcon name="play" size="11" />
-                {{ t('home.sequential_practice') }}
+                <LinearIcon :name="getActiveSessionForBank(bank.id).mode === 'EXAM' ? 'award' : 'play'" size="11" />
+                {{ getActiveSessionForBank(bank.id).mode === 'EXAM' ? t('home.mock_exam') : t('home.sequential_practice') }}
               </span>
               <span class="progress-percent">
                 {{ getActiveSessionForBank(bank.id).total_questions ? Math.min(100, Math.round((getActiveSessionForBank(bank.id).answered_count / getActiveSessionForBank(bank.id).total_questions) * 100)) : 0 }}%
@@ -221,19 +222,25 @@
                 class="primary btn-resume-direct"
                 @click="handleResume(getActiveSessionForBank(bank.id))"
               >
-                <LinearIcon name="play" size="13" />
-                {{ t('home.resume_sequential', {
-                  answered: getActiveSessionForBank(bank.id).answered_count,
-                  total: getActiveSessionForBank(bank.id).total_questions
-                }) }}
+                <LinearIcon :name="getActiveSessionForBank(bank.id).mode === 'EXAM' ? 'award' : 'play'" size="13" />
+                {{ getActiveSessionForBank(bank.id).mode === 'EXAM'
+                  ? t('home.resume_mock_exam', {
+                      answered: getActiveSessionForBank(bank.id).answered_count,
+                      total: getActiveSessionForBank(bank.id).total_questions
+                    })
+                  : t('home.resume_sequential', {
+                      answered: getActiveSessionForBank(bank.id).answered_count,
+                      total: getActiveSessionForBank(bank.id).total_questions
+                    })
+                }}
               </button>
               <button
                 type="button"
                 class="secondary-btn btn-restart-sequential"
-                :title="t('home.restart_sequential')"
+                :title="getActiveSessionForBank(bank.id).mode === 'EXAM' ? t('home.restart_mock_exam_tip') : t('home.restart_sequential')"
                 @click="handleRestartSequential(bank)"
               >
-                <LinearIcon name="rotate-ccw" size="12" /> {{ t('home.restart_sequential') }}
+                <LinearIcon name="rotate-ccw" size="12" /> {{ getActiveSessionForBank(bank.id).mode === 'EXAM' ? t('home.restart_mock_exam') : t('home.restart_sequential') }}
               </button>
             </template>
             <template v-else>
@@ -826,6 +833,11 @@ async function handleResume(sessionSummary) {
     const fullSession = await getSession(props.token, sessionSummary.id)
     showActiveSessionsModal.value = false
     emit('resume-session', fullSession)
+    if (fullSession?.mode === 'EXAM') {
+      router.push(`/exam/${fullSession.id}`)
+    } else {
+      router.push(`/practice/${fullSession.id}`)
+    }
   } catch (err) {
     alert(`${t('ui.k0275')}${err.detail || err.message}`)
   }

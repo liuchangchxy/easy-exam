@@ -52,7 +52,17 @@ def create_bank(payload: BankPayload, request: Request, user=Depends(current_use
 @router.post("/{bank_id}/questions", status_code=201)
 def create_question(bank_id: str, payload: QuestionPayload, request: Request, user=Depends(current_user)):
     try:
-        return request.app.state.services.bank_service.create_question(user["id"], bank_id, payload.model_dump())
+        from backend.app.domain.content.validators import validate_question_invariants
+        norm_type, norm_ans, norm_opts = validate_question_invariants(
+            payload.type, payload.stem, payload.options, payload.answer
+        )
+        data = payload.model_dump()
+        data["type"] = norm_type
+        data["answer"] = norm_ans
+        data["options"] = norm_opts
+        return request.app.state.services.bank_service.create_question(user["id"], bank_id, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 

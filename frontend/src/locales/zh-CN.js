@@ -128,7 +128,11 @@ export default {
     "start_sequential": "开始刷题 · 顺序通刷 ({total} 题)",
     "restart_sequential": "重新通刷",
     "sequential_progress": "通刷进度：{answered} / {total} 题 ({percent}%)",
-    "sequential_completed": "已通关全部 {total} 题"
+    "sequential_completed": "已通关全部 {total} 题",
+    "mock_exam": "模拟考试",
+    "resume_mock_exam": "继续模拟考试 ({answered}/{total} 题)",
+    "restart_mock_exam": "重新模考",
+    "restart_mock_exam_tip": "放弃并重新模考"
   },
   "practice": {
     "title": "练习模式",
@@ -161,7 +165,11 @@ export default {
     "result_partial": "部分正确 (得分: {score})",
     "finished_title": "恭喜！本轮练习已完成",
     "restart": "再来一组",
-    "back_home": "返回首页"
+    "back_home": "返回首页",
+    "exit_confirm_title": "退出练习？",
+    "exit_confirm_desc": "当前答题进度将被保存，随时可继续刷题。",
+    "continue_practice": "继续刷题",
+    "confirm_exit": "确认退出"
   },
   "exam": {
     "title": "模拟考试",
@@ -175,6 +183,10 @@ export default {
     "submit_confirm_content": "您还有 {count} 道题目未作答，提交后将无法修改作答结果。",
     "submit_exam": "立即交卷",
     "result_title": "考试成绩报告",
+    "exit_confirm_title": "退出模拟考试？",
+    "exit_confirm_desc": "当前答题进度将被自动保存，考试倒计时仍在后台持续进行。",
+    "continue_exam": "继续考试",
+    "confirm_exit": "确认退出",
     "score": "最终得分：{score} 分",
     "total_score": "满分：{total} 分",
     "pass_score": "及格线：{pass} 分",

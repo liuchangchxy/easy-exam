@@ -69,6 +69,7 @@ const ALLOWLIST = {
     'SUMMARY': 'Question-type enum.',
     'running': 'AI batch status enum.',
     'stopped': 'AI batch status enum.',
+    'EXAM': 'Exam session mode enum.',
     'https://api.openai.com/v1': 'Example endpoint URL entered by the operator.',
     'sk-...': 'API key format example, not translatable prose.',
     'http://localhost:8000/v1/search': 'Example endpoint URL entered by the operator.',

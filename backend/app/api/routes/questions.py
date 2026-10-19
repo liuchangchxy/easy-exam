@@ -36,10 +36,19 @@ class ResolveConflictPayload(BaseModel):
 @router.put("/{question_id}")
 def update_question(question_id: str, payload: QuestionUpdate, request: Request, user=Depends(current_user)):
     try:
+        from backend.app.domain.content.validators import validate_question_invariants
+        norm_type, norm_ans, norm_opts = validate_question_invariants(
+            payload.type, payload.stem, payload.options, payload.answer
+        )
         update_data = payload.model_dump()
+        update_data["type"] = norm_type
+        update_data["answer"] = norm_ans
+        update_data["options"] = norm_opts
         if "chapter_id" not in payload.model_fields_set:
             update_data.pop("chapter_id", None)
         return request.app.state.services.questions.create_next_version(user["id"], question_id, update_data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except VersionConflictError as exc:

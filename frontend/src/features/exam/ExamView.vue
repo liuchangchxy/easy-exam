@@ -207,6 +207,17 @@
         </div>
       </section>
     </div>
+
+    <div v-if="showExitConfirmModal" class="exam-confirm-backdrop" @click.self="handleCancelExit" data-testid="exam-exit-confirm-modal">
+      <section class="exam-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="exit-confirm-title">
+        <h2 id="exit-confirm-title">{{ t('exam.exit_confirm_title') }}</h2>
+        <p>{{ t('exam.exit_confirm_desc') }}</p>
+        <div class="exam-question-actions">
+          <button type="button" class="btn-cancel-exit" @click="handleCancelExit">{{ t('exam.continue_exam') }}</button>
+          <button type="button" class="primary btn-confirm-exit" @click="handleConfirmExit">{{ t('exam.confirm_exit') }}</button>
+        </div>
+      </section>
+    </div>
   </main>
 </template>
 
@@ -226,7 +237,27 @@ const router = useRouter()
 const props = defineProps({ token: { type: String, required: true }, sessionId: { type: String, required: true } })
 const emit = defineEmits(['back'])
 
+const showExitConfirmModal = ref(false)
+
 function handleBack() {
+  if (report.value || session.value?.is_completed) {
+    doExit()
+    return
+  }
+  showExitConfirmModal.value = true
+}
+
+async function handleConfirmExit() {
+  showExitConfirmModal.value = false
+  await persistDraft(true)
+  doExit()
+}
+
+function handleCancelExit() {
+  showExitConfirmModal.value = false
+}
+
+function doExit() {
   emit('back')
   if (router && window.history.length > 1) {
     router.back()
@@ -371,15 +402,20 @@ async function submitExam(automatic) {
     for (const item of questions.value) {
       const answer = normalizeExamAnswer(item.type, answerValue(item.id))
       if (!examAnswerState(item.id, { [item.id]: answer }, []).answered) continue
-      await submitAttempt(props.token, props.sessionId, { question_id: item.id, user_answer: answer })
+      try {
+        await submitAttempt(props.token, props.sessionId, { question_id: item.id, user_answer: answer })
+      } catch (attErr) {
+        console.warn('submitAttempt fallback to completeSession auto-score:', attErr)
+      }
     }
     report.value = await completeSession(props.token, props.sessionId)
     report.value.time_spent = elapsedSeconds.value
     if (automatic) error.value = t('ui.k0114')
   } catch (err) {
     error.value = `${t('ui.k0115')}${err.detail || err.message}`
-    isSubmitting.value = false
     tickHandle = setInterval(tick, 1000)
+  } finally {
+    isSubmitting.value = false
   }
 }
 
@@ -465,6 +501,10 @@ onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown)
   try {
     session.value = await getSession(props.token, props.sessionId)
+    if (session.value?.mode !== 'EXAM') {
+      router.replace(`/practice/${props.sessionId}`)
+      return
+    }
     questions.value = await getSessionQuestions(props.token, props.sessionId)
     answers.value = { ...(session.value.answers || {}) }
     flags.value = [...(session.value.flags || [])]

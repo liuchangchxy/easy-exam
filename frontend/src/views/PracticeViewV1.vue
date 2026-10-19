@@ -182,6 +182,24 @@
       </div>
     </div>
 
+    <!-- 退出练习确认提示弹窗 (Defect 4) -->
+    <div v-if="showExitConfirmModal" class="sheet-modal-backdrop" @click.self="handleCancelExit" data-testid="exit-confirm-modal">
+      <div class="confirm-submit-dialog">
+        <h3>{{ t('practice.exit_confirm_title') }}</h3>
+        <p class="confirm-info-desc">
+          {{ t('practice.exit_confirm_desc') }}
+        </p>
+        <div class="confirm-dialog-actions">
+          <button type="button" class="secondary-btn btn-cancel-exit" @click="handleCancelExit">
+            {{ t('practice.continue_practice') }}
+          </button>
+          <button type="button" class="primary btn-confirm-exit" @click="handleConfirmExit">
+            {{ t('practice.confirm_exit') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
 
     <p v-if="loading">{{ t('ui.k0549') }}</p>
     <section v-else-if="question" class="question-card">
@@ -664,7 +682,35 @@ const auth = useAuthStore()
 const { t } = useLocale()
 const authToken = computed(() => props.token || auth.token?.value || (typeof localStorage !== 'undefined' ? localStorage.getItem('easyexam_token') : '') || '')
 
+const showExitConfirmModal = ref(false)
+
 function handleBack() {
+  if (practiceReport.value || session.value?.is_completed) {
+    doExit()
+    return
+  }
+  showExitConfirmModal.value = true
+}
+
+async function handleConfirmExit() {
+  showExitConfirmModal.value = false
+  saveCurrentQuestionState()
+  if (props.sessionId && props.token) {
+    try {
+      await syncDraft(props.token, props.sessionId, {
+        current_index: index.value,
+        time_spent: null,
+      })
+    } catch (_) {}
+  }
+  doExit()
+}
+
+function handleCancelExit() {
+  showExitConfirmModal.value = false
+}
+
+function doExit() {
   emit('back')
   if (router && window.history.length > 1) {
     router.back()
@@ -870,6 +916,10 @@ onMounted(async () => {
   window.addEventListener('easyexam:events-synced', handleSyncedEvents)
   try {
     session.value = await getSession(props.token, props.sessionId)
+    if (session.value?.mode === 'EXAM') {
+      router.replace(`/exam/${props.sessionId}`)
+      return
+    }
     questions.value = await getSessionQuestions(props.token, props.sessionId)
     if (session.value) {
       const hydrated = hydrateSessionPractice(session.value, questions.value?.length || 0)

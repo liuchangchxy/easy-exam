@@ -321,7 +321,8 @@ watch(type, (newType, oldType) => {
       { key: 'F', content: t('bank_manage.judge_false') },
     ]
   } else if (['SINGLE', 'MULTI'].includes(newType)) {
-    if (!options.value.length || options.value.length < 2) {
+    const isFromJudge = oldType === 'JUDGE' || options.value.some(o => ['T', 'F'].includes(String(o?.key || '').toUpperCase()))
+    if (isFromJudge || !options.value.length || options.value.length < 2) {
       options.value = [
         { key: 'A', content: '' },
         { key: 'B', content: '' },

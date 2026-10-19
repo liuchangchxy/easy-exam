@@ -128,7 +128,11 @@ export default {
     "start_sequential": "Start Practice · Sequential ({total} Qs)",
     "restart_sequential": "Restart Sequential",
     "sequential_progress": "Progress: {answered} / {total} Qs ({percent}%)",
-    "sequential_completed": "Completed all {total} questions"
+    "sequential_completed": "Completed all {total} questions",
+    "mock_exam": "Mock Exam",
+    "resume_mock_exam": "Resume Mock Exam ({answered}/{total} Qs)",
+    "restart_mock_exam": "Restart Exam",
+    "restart_mock_exam_tip": "Abandon and start a new mock exam"
   },
   "practice": {
     "title": "Practice Mode",
@@ -161,7 +165,11 @@ export default {
     "result_partial": "Partially Correct (Score: {score})",
     "finished_title": "Congratulations! Session Completed",
     "restart": "Practice Again",
-    "back_home": "Back to Home"
+    "back_home": "Back to Home",
+    "exit_confirm_title": "Exit practice?",
+    "exit_confirm_desc": "Your progress has been saved. You can resume anytime.",
+    "continue_practice": "Continue",
+    "confirm_exit": "Exit"
   },
   "exam": {
     "title": "Mock Examination",
@@ -175,6 +183,10 @@ export default {
     "submit_confirm_content": "You have {count} unanswered questions. Once submitted, answers cannot be altered.",
     "submit_exam": "Submit Now",
     "result_title": "Exam Performance Report",
+    "exit_confirm_title": "Exit mock exam?",
+    "exit_confirm_desc": "Your progress is saved, but the exam timer will continue running in the background.",
+    "continue_exam": "Continue Exam",
+    "confirm_exit": "Exit",
     "score": "Final Score: {score}",
     "total_score": "Total: {total}",
     "pass_score": "Passing Line: {pass}",

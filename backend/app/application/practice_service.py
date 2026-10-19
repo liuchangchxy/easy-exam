@@ -232,6 +232,29 @@ class PracticeService:
         return flags
 
     def complete_session(self, user_id: str, session_id: str) -> dict:
+        raw_session = self.practices.get_session(session_id, user_id)
+        if not raw_session:
+            raise LookupError("practice session not found")
+
+        # If not yet completed, score and save any unsubmitted answers from draft before marking complete
+        if not raw_session.get("is_completed"):
+            attempts = self.practices.list_attempts(user_id, session_id)
+            latest = {attempt["question_id"]: attempt for attempt in attempts}
+            import json
+            answers_map = json.loads(raw_session.get("answers_json") or "{}")
+            if answers_map:
+                snapshot = json.loads(raw_session.get("questions_json") or "[]")
+                for q_id, ans_val in answers_map.items():
+                    if q_id not in latest:
+                        raw_ans = ans_val.get("user_answer", ans_val.get("answer")) if isinstance(ans_val, dict) else ans_val
+                        if raw_ans is not None and raw_ans != "":
+                            v_ref = next((item for item in snapshot if item["question_id"] == q_id), None)
+                            if v_ref:
+                                question = self.questions.get_version_for_user(q_id, v_ref["version_id"], user_id)
+                                if question:
+                                    scored = score_answer(question["type"], raw_ans, question["answer"])
+                                    self.practices.save_attempt(user_id, raw_session, question, raw_ans, scored, None, None)
+
         session = self.practices.complete(user_id, session_id)
         if not session:
             raise LookupError("practice session not found")
