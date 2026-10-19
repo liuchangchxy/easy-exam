@@ -121,4 +121,3 @@ test('Review Finding 4: ApiError resolves EXAM_ACTIVE_PROTECTED and rawDetail fa
   const errFallback = new ApiError(400, 'UNKNOWN_ERROR', {}, null, 'Custom backend error')
   assert.equal(errFallback.message, 'Custom backend error')
 })
-
