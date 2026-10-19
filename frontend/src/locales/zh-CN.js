@@ -132,7 +132,14 @@ export default {
     "mock_exam": "模拟考试",
     "resume_mock_exam": "继续模拟考试 ({answered}/{total} 题)",
     "restart_mock_exam": "重新模考",
-    "restart_mock_exam_tip": "放弃并重新模考"
+    "restart_mock_exam_tip": "放弃并重新模考",
+    "fsrs_review": "FSRS 复习",
+    "resume_fsrs": "继续复习 ({answered}/{total} 题)",
+    "mistake_sprint": "错题攻坚",
+    "resume_mistake": "继续错题攻坚 ({answered}/{total} 题)",
+    "restart_session": "重新开始",
+    "restart_session_tip": "放弃并重新开始本次训练",
+    "session_progress": "{mode}进度：{answered} / {total} 题 ({percent}%)"
   },
   "practice": {
     "title": "练习模式",
@@ -374,7 +381,11 @@ export default {
   "api_errors": {
     "REQUEST_FAILED": "请求失败，请稍后重试",
     "NETWORK_ERROR": "网络连接失败，请检查网络设置",
-    "AUTH_INVALID_CREDENTIALS": "账号或密码错误"
+    "AUTH_INVALID_CREDENTIALS": "账号或密码错误",
+    "AUTH_ACCOUNT_EXISTS": "用户名已存在",
+    "EXAM_ACTIVE_PROTECTED": "模考进行中：题库当前存在活动模拟考试，已被锁定保护，暂无法编辑或导入",
+    "QUESTION_INVALID_MULTI": "多选题必须至少包含2个选项且至少有2个不同的正确答案",
+    "VALIDATION_FAILED": "输入校验失败：{detail}"
   },
   "blueprint": {
     "mode_simple": "简易模式",

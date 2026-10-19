@@ -15,7 +15,7 @@ class TestV1Learning(unittest.TestCase):
             token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "标记薄弱"}).json()
-            question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "薄弱题", "answer": "A"}).json()
+            question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "薄弱题", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
             marked = client.post(f"/api/v1/learning/weak/{question['id']}", headers=headers)
             self.assertEqual(marked.status_code, 201)
             recommendations = client.get(f"/api/v1/learning/recommendations?bank_id={bank['id']}", headers=headers).json()
@@ -35,7 +35,7 @@ class TestV1Learning(unittest.TestCase):
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "计划题库"}).json()
             questions = [
-                client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": f"题 {index}", "answer": "A"}).json()
+                client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": f"题 {index}", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
                 for index in range(3)
             ]
             client.post(f"/api/v1/learning/weak/{questions[0]['id']}", headers=headers)
@@ -56,7 +56,7 @@ class TestV1Learning(unittest.TestCase):
             token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "FSRS 评级"}).json()
-            question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A"}).json()
+            question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
             session = client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
             client.post(f"/api/v1/practice/sessions/{session['id']}/attempts", headers=headers, json={"question_id": question["id"], "user_answer": "B"})
             review = client.post(
@@ -87,7 +87,7 @@ class TestV1Learning(unittest.TestCase):
             token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "FSRS 新题"}).json()
-            question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A"}).json()
+            question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
             session = client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
             client.post(f"/api/v1/practice/sessions/{session['id']}/attempts", headers=headers, json={"question_id": question["id"], "user_answer": "A"})
             conn = sqlite3.connect(db_path)
@@ -104,8 +104,8 @@ class TestV1Learning(unittest.TestCase):
             token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "趋势题库"}).json()
-            first = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "一", "answer": "A"}).json()
-            client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "二", "answer": "A"})
+            first = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "一", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
+            client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "二", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]})
             session = client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
             client.post(
                 f"/api/v1/practice/sessions/{session['id']}/attempts",
@@ -126,8 +126,8 @@ class TestV1Learning(unittest.TestCase):
             token = client.post("/api/v1/auth/login", json={"username": "trend_user", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "全维趋势题库"}).json()
-            q1 = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "法律题", "answer": "A", "tags": ["民法"]}).json()
-            q2 = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "行测题", "answer": "B", "tags": ["数量关系"]}).json()
+            q1 = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "法律题", "answer": "A", "tags": ["民法"], "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
+            q2 = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "行测题", "answer": "B", "tags": ["数量关系"], "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
 
             session = client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
             client.post(f"/api/v1/practice/sessions/{session['id']}/attempts", headers=headers, json={"question_id": q1["id"], "user_answer": "C"})
@@ -147,7 +147,7 @@ class TestV1Learning(unittest.TestCase):
             token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "新题推荐"}).json()
-            question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "新题", "answer": "A"}).json()
+            question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "新题", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
             response = client.get(f"/api/v1/learning/recommendations?bank_id={bank['id']}&limit=1", headers=headers)
             self.assertEqual(response.status_code, 200)
             self.assertEqual(len(response.json()), 1)
@@ -166,7 +166,7 @@ class TestV1Learning(unittest.TestCase):
             token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "正确题库"}).json()
-            question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A"}).json()
+            question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
             session = client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
             client.post(
                 f"/api/v1/practice/sessions/{session['id']}/attempts",
@@ -183,7 +183,7 @@ class TestV1Learning(unittest.TestCase):
             token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "错题结构"}).json()
-            question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A"}).json()
+            question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
             session = client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
             attempt = client.post(
                 f"/api/v1/practice/sessions/{session['id']}/attempts",
@@ -211,7 +211,7 @@ class TestV1Learning(unittest.TestCase):
             token = client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "推荐题库"}).json()
-            question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A", "tags": ["网络"]}).json()
+            question = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A", "tags": ["网络"], "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
             session = client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
             client.post(f"/api/v1/practice/sessions/{session['id']}/attempts", headers=headers, json={"question_id": question["id"], "user_answer": "B"})
             response = client.get(f"/api/v1/learning/recommendations?bank_id={bank['id']}", headers=headers)
@@ -233,11 +233,11 @@ class TestV1Learning(unittest.TestCase):
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "难度题库"}).json()
 
             # q_easy: explicit difficulty 1
-            q_easy = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "简单题", "answer": "A", "difficulty": 1}).json()
+            q_easy = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "简单题", "answer": "A", "difficulty": 1, "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
             # q_med: explicit difficulty 3
-            q_med = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "中等题", "answer": "B", "difficulty": 3}).json()
+            q_med = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "中等题", "answer": "B", "difficulty": 3, "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
             # q_unrated: no difficulty specified (unclassified)
-            q_unrated = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "未分级题", "answer": "C"}).json()
+            q_unrated = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "未分级题", "answer": "C", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}, {"key": "C", "content": "3"}]}).json()
 
             # 1. Query with specific difficulty=3: unrated must be EXCLUDED, easy excluded, med included
             res_diff3 = client.get(f"/api/v1/learning/recommendations?bank_id={bank['id']}&difficulty=3", headers=headers)
@@ -271,9 +271,9 @@ class TestV1Learning(unittest.TestCase):
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "章节比例题库"}).json()
 
-            q_law1 = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "法律题1", "answer": "A", "tags": ["法律", "民法"]}).json()
-            q_law2 = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "法律题2", "answer": "B", "tags": ["法律", "刑法"]}).json()
-            q_math = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "数学题", "answer": "C", "tags": ["数量关系"]}).json()
+            q_law1 = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "法律题1", "answer": "A", "tags": ["法律", "民法"], "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
+            q_law2 = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "法律题2", "answer": "B", "tags": ["法律", "刑法"], "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
+            q_math = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "数学题", "answer": "C", "tags": ["数量关系"], "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}, {"key": "C", "content": "3"}]}).json()
 
             # Make law1 a mistake (review item)
             session = client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
@@ -304,7 +304,7 @@ class TestV1Learning(unittest.TestCase):
             token = client.post("/api/v1/auth/login", json={"username": "plan_user", "password": "password-123456"}).json()["token"]
             headers = {"Authorization": f"Bearer {token}"}
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "契约题库"}).json()
-            client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题1", "answer": "A"}).json()
+            client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题1", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
 
             res = client.get(f"/api/v1/learning/plan?bank_id={bank['id']}&minutes_per_day=30&days=3", headers=headers)
             self.assertEqual(res.status_code, 200)
@@ -323,7 +323,7 @@ class TestV1Learning(unittest.TestCase):
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "冲刺题库"}).json()
             # Create 25 questions
             for i in range(25):
-                client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": f"题目{i+1}", "answer": "A"})
+                client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": f"题目{i+1}", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]})
 
             # 1. When questions_per_day is explicitly set to 25 for a 1-day sprint: Day 1 schedules all 25 questions!
             res_sprint = client.get(f"/api/v1/learning/plan?bank_id={bank['id']}&days=1&questions_per_day=25", headers=headers)
@@ -347,7 +347,7 @@ class TestV1Learning(unittest.TestCase):
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "超百题题库"}).json()
             # Batch create 120 questions
             for i in range(120):
-                client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": f"题目 {i+1}", "answer": "A"})
+                client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": f"题目 {i+1}", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]})
 
             # Recommendations with limit=120 should return all 120 questions, not capped at 100
             recs_res = client.get(f"/api/v1/learning/recommendations?bank_id={bank['id']}&limit=120", headers=headers)

@@ -88,7 +88,7 @@ class TestV1Architecture(unittest.TestCase):
         token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "错题题库"}).json()
-        question = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "答案？", "answer": "A"}).json()
+        question = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "答案？", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
         session = self.client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
         self.client.post(f"/api/v1/practice/sessions/{session['id']}/attempts", headers=headers, json={"question_id": question["id"], "user_answer": "B"})
         mistakes = self.client.get("/api/v1/mistakes", headers=headers)
@@ -104,7 +104,7 @@ class TestV1Architecture(unittest.TestCase):
         token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "错题题库"}).json()
-        question = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "答案？", "answer": "A"}).json()
+        question = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "答案？", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
         session = self.client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
         self.client.post(f"/api/v1/practice/sessions/{session['id']}/attempts", headers=headers, json={"question_id": question["id"], "user_answer": "B"})
 
@@ -120,9 +120,9 @@ class TestV1Architecture(unittest.TestCase):
         token = self.client.post("/api/v1/auth/login", json={"username": "bob-scoped", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "专项题库"}).json()
-        q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题1", "answer": "A"}).json()
-        q2 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题2", "answer": "B"}).json()
-        q3 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题3", "answer": "C"}).json()
+        q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题1", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
+        q2 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题2", "answer": "B", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
+        q3 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题3", "answer": "C", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}, {"key": "C", "content": "3"}]}).json()
 
         # Normal session: answer q1 right, q2 wrong
         sess1 = self.client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
@@ -151,7 +151,7 @@ class TestV1Architecture(unittest.TestCase):
         token = self.client.post("/api/v1/auth/login", json={"username": "carol-kill", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "斩杀题库测试"}).json()
-        q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "斩杀题目", "answer": "A"}).json()
+        q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "斩杀题目", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
 
         # Kill question
         self.client.post(f"/api/v1/kills/{q1['id']}", headers=headers)
@@ -173,7 +173,7 @@ class TestV1Architecture(unittest.TestCase):
         token = self.client.post("/api/v1/auth/login", json={"username": "dave-fsrs", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "FSRS题库"}).json()
-        q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "FSRS题", "answer": "A"}).json()
+        q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "FSRS题", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
         # Initial practice attempt: wrong answer creates a mistake/card
         init_sess = self.client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
         self.client.post(f"/api/v1/practice/sessions/{init_sess['id']}/attempts", headers=headers, json={"question_id": q1["id"], "user_answer": "B"})
@@ -214,7 +214,7 @@ class TestV1Architecture(unittest.TestCase):
         token = self.client.post("/api/v1/auth/login", json={"username": "frank-rating", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "评级更新题库"}).json()
-        q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "评级更新题", "answer": "A"}).json()
+        q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "评级更新题", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
         sess = self.client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
 
         # Step 1: User submits answer "A" without rating first (as happens on practice page)
@@ -249,7 +249,7 @@ class TestV1Architecture(unittest.TestCase):
         token = self.client.post("/api/v1/auth/login", json={"username": "terminal-guard", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "终态保护"}).json()
-        question = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "终态题", "answer": "A"}).json()
+        question = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "终态题", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
         session = self.client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
         self.assertEqual(self.client.post(f"/api/v1/practice/sessions/{session['id']}/complete", headers=headers).status_code, 200)
         attempt = self.client.post(f"/api/v1/practice/sessions/{session['id']}/attempts", headers=headers, json={"question_id": question["id"], "user_answer": "A"})
@@ -277,7 +277,7 @@ class TestV1Architecture(unittest.TestCase):
         token = self.client.post("/api/v1/auth/login", json={"username": "eve-idempotent", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "幂等测试题库"}).json()
-        q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "幂等题", "answer": "A"}).json()
+        q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "幂等题", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
         sess = self.client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"], "mode": "EXAM"}).json()
 
         # Submit attempt
@@ -387,7 +387,7 @@ class TestV1Architecture(unittest.TestCase):
             json={"blueprint": {"negative_mark": 0.25}},
         )
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "负分题库"}).json()
-        question = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A"}).json()
+        question = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
         session = self.client.post("/api/v1/exams/sessions", headers=headers, json={"bank_id": bank["id"], "profile_id": profile["id"]}).json()
         attempt = self.client.post(
             f"/api/v1/practice/sessions/{session['id']}/attempts", headers=headers,
@@ -403,8 +403,8 @@ class TestV1Architecture(unittest.TestCase):
         token = self.client.post("/api/v1/auth/login", json={"username": "exam_student", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "保密考试题库"}).json()
-        q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "第一题", "type": "SINGLE", "answer": "B", "explanation": "机密解析1", "tags": ["常识"]}).json()
-        q2 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "第二题", "type": "MULTI", "answer": "CD", "explanation": "机密解析2", "tags": ["逻辑"]}).json()
+        q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "第一题", "type": "SINGLE", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}], "answer": "B", "explanation": "机密解析1", "tags": ["常识"]}).json()
+        q2 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "第二题", "type": "MULTI", "options": [{"key": "C", "content": "1"}, {"key": "D", "content": "2"}], "answer": "C,D", "explanation": "机密解析2", "tags": ["逻辑"]}).json()
 
         # Start exam session
         session = self.client.post("/api/v1/exams/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
@@ -450,7 +450,7 @@ class TestV1Architecture(unittest.TestCase):
         token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "斩杀题库"}).json()
-        question = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A"}).json()
+        question = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
         killed = self.client.post(f"/api/v1/kills/{question['id']}", headers=headers)
         self.assertEqual(killed.status_code, 201)
         self.assertEqual(len(self.client.get("/api/v1/kills", headers=headers).json()), 1)
@@ -484,8 +484,8 @@ class TestV1Architecture(unittest.TestCase):
         token = self.client.post("/api/v1/auth/login", json={"username": "sync_user", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "同步题库"}).json()
-        q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题1", "answer": "A"}).json()
-        q2 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题2", "answer": "B"}).json()
+        q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题1", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
+        q2 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题2", "answer": "B", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
 
         session = self.client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
         session_id = session["id"]
@@ -562,7 +562,7 @@ class TestV1Architecture(unittest.TestCase):
             json={
                 "stem": "HTTP 默认端口是什么？",
                 "type": "SINGLE",
-                "options": [{"key": "A", "content": "80"}],
+                "options": [{"key": "A", "content": "80"}, {"key": "B", "content": "443"}],
                 "answer": "A",
                 "explanation": "HTTP 默认端口为 80。",
             },
@@ -617,7 +617,7 @@ class TestV1Architecture(unittest.TestCase):
         question = self.client.post(
             f"/api/v1/banks/{bank['id']}/questions",
             headers=headers,
-            json={"stem": "1+1=?", "type": "SINGLE", "options": [], "answer": "2"},
+            json={"stem": "1+1=?", "type": "SINGLE", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}], "answer": "A"},
         ).json()
 
         candidate = self.client.post(
@@ -642,7 +642,7 @@ class TestV1Architecture(unittest.TestCase):
         token = self.client.post("/api/v1/auth/login", json={"username": "alice", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "AI离线题库"}).json()
-        question = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A"}).json()
+        question = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
         generated = self.client.post(f"/api/v1/ai/questions/{question['id']}/generate", headers=headers, json={"query": "解释一下"})
         self.assertEqual(generated.status_code, 201)
         self.assertEqual(generated.json()["source"], "AI")
@@ -655,7 +655,7 @@ class TestV1Architecture(unittest.TestCase):
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "联网核查"}).json()
         question = self.client.post(
             f"/api/v1/banks/{bank['id']}/questions", headers=headers,
-            json={"stem": "题目", "answer": "A"},
+            json={"stem": "题目", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]},
         ).json()
         verified = self.client.post(
             f"/api/v1/ai/questions/{question['id']}/verify-web", headers=headers,
@@ -675,12 +675,12 @@ class TestV1Architecture(unittest.TestCase):
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "版本题库"}).json()
         question = self.client.post(
             f"/api/v1/banks/{bank['id']}/questions", headers=headers,
-            json={"stem": "旧题干", "type": "SINGLE", "answer": "A"},
+            json={"stem": "旧题干", "type": "SINGLE", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}], "answer": "A"},
         ).json()
 
         updated = self.client.put(
             f"/api/v1/questions/{question['id']}", headers=headers,
-            json={"stem": "新题干", "type": "SINGLE", "answer": "B"},
+            json={"stem": "新题干", "type": "SINGLE", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}], "answer": "B"},
         )
         self.assertEqual(updated.status_code, 200)
         self.assertEqual(updated.json()["version_number"], 2)
@@ -695,12 +695,12 @@ class TestV1Architecture(unittest.TestCase):
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "会话题目快照"}).json()
         question = self.client.post(
             f"/api/v1/banks/{bank['id']}/questions", headers=headers,
-            json={"stem": "启动时题干", "answer": "A"},
+            json={"stem": "启动时题干", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]},
         ).json()
         session = self.client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
         updated = self.client.put(
             f"/api/v1/questions/{question['id']}", headers=headers,
-            json={"stem": "修改後題干", "answer": "B"},
+            json={"stem": "修改後題干", "answer": "B", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]},
         )
         self.assertEqual(updated.status_code, 200)
         session_questions = self.client.get(f"/api/v1/practice/sessions/{session['id']}/questions", headers=headers)
@@ -721,7 +721,7 @@ class TestV1Architecture(unittest.TestCase):
         source_question = self.client.post(
             f"/api/v1/banks/{source_bank['id']}/questions",
             headers=headers,
-            json={"stem": "可复制题", "answer": "A"},
+            json={"stem": "可复制题", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]},
         ).json()
         copied = self.client.post(
             f"/api/v1/banks/{target_bank['id']}/questions/{source_question['id']}/copy",
@@ -744,7 +744,7 @@ class TestV1Architecture(unittest.TestCase):
         self.client.post(
             f"/api/v1/banks/{bank['id']}/questions",
             headers=headers,
-            json={"stem": "单选题", "type": "SINGLE", "answer": "A", "tags": ["基础"]},
+            json={"stem": "单选题", "type": "SINGLE", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}], "answer": "A", "tags": ["基础"]},
         )
         session = self.client.post(
             "/api/v1/exams/sessions", headers=headers,
@@ -775,7 +775,7 @@ class TestV1Architecture(unittest.TestCase):
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "保密模考"}).json()
         question = self.client.post(
             f"/api/v1/banks/{bank['id']}/questions", headers=headers,
-            json={"stem": "题目", "answer": "SECRET-ANSWER", "explanation": "SECRET-EXPLANATION"},
+            json={"stem": "题目", "type": "ESSAY", "answer": "SECRET-ANSWER", "explanation": "SECRET-EXPLANATION"},
         ).json()
         session = self.client.post(
             "/api/v1/exams/sessions", headers=headers,
@@ -804,11 +804,11 @@ class TestV1Architecture(unittest.TestCase):
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "专项防绕过题库"}).json()
         q1 = self.client.post(
             f"/api/v1/banks/{bank['id']}/questions", headers=headers,
-            json={"stem": "题目1", "answer": "A"},
+            json={"stem": "题目1", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]},
         ).json()
         q2 = self.client.post(
             f"/api/v1/banks/{bank['id']}/questions", headers=headers,
-            json={"stem": "题目2", "answer": "B"},
+            json={"stem": "题目2", "answer": "B", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]},
         ).json()
 
         # q1 与 q2 目前均不是错题，尝试以 MISTAKE 模式传入 q1 作为 question_ids 必须被拒绝（400）
@@ -924,14 +924,14 @@ class TestV1Architecture(unittest.TestCase):
         token_a = self.client.post("/api/v1/auth/login", json={"username": "user_single_step", "password": "password-123456"}).json()["token"]
         headers_a = {"Authorization": f"Bearer {token_a}"}
         bank_a = self.client.post("/api/v1/banks", headers=headers_a, json={"name": "题库A"}).json()
-        q_a = self.client.post(f"/api/v1/banks/{bank_a['id']}/questions", headers=headers_a, json={"stem": "测试题A", "answer": "A"}).json()
+        q_a = self.client.post(f"/api/v1/banks/{bank_a['id']}/questions", headers=headers_a, json={"stem": "测试题A", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
 
         # 用户 B：两步流程（先提交答案，再提交 rating=4）
         self.client.post("/api/v1/auth/register", json={"username": "user_two_step", "password": "password-123456"})
         token_b = self.client.post("/api/v1/auth/login", json={"username": "user_two_step", "password": "password-123456"}).json()["token"]
         headers_b = {"Authorization": f"Bearer {token_b}"}
         bank_b = self.client.post("/api/v1/banks", headers=headers_b, json={"name": "题库B"}).json()
-        q_b = self.client.post(f"/api/v1/banks/{bank_b['id']}/questions", headers=headers_b, json={"stem": "测试题B", "answer": "A"}).json()
+        q_b = self.client.post(f"/api/v1/banks/{bank_b['id']}/questions", headers=headers_b, json={"stem": "测试题B", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
 
         # 给两个用户制造完全相同的卡片初始基线状态
         sess_init_a = self.client.post("/api/v1/practice/sessions", headers=headers_a, json={"bank_id": bank_a["id"]}).json()
@@ -989,6 +989,7 @@ class TestV1Architecture(unittest.TestCase):
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "旧题库"}).json()
         q = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={
             "stem": "旧题目",
+            "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}],
             "answer": "A",
         }).json()
 
@@ -1047,6 +1048,7 @@ class TestV1Architecture(unittest.TestCase):
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "已调度旧题库"}).json()
         q = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={
             "stem": "已调度旧题目",
+            "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}],
             "answer": "A",
         }).json()
 
@@ -1105,8 +1107,8 @@ class TestV1Architecture(unittest.TestCase):
         token = self.client.post("/api/v1/auth/login", json={"username": "mistake_user", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "模考错题策略库"}).json()
-        q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题1", "type": "SINGLE", "answer": "A"}).json()
-        q2 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题2", "type": "SINGLE", "answer": "B"}).json()
+        q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题1", "type": "SINGLE", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}], "answer": "A"}).json()
+        q2 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题2", "type": "SINGLE", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}], "answer": "B"}).json()
 
         # 1. 模考 session 指定 record_mistakes = False
         sess_no_record = self.client.post("/api/v1/exams/sessions", headers=headers, json={
@@ -1145,10 +1147,10 @@ class TestV1Architecture(unittest.TestCase):
         # Add 2 JUDGE, 3 SINGLE, 1 MULTI
         self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "判断1", "type": "JUDGE", "answer": "T"})
         self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "判断2", "type": "JUDGE", "answer": "F"})
-        self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "单选1", "type": "SINGLE", "answer": "A"})
-        self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "单选2", "type": "SINGLE", "answer": "B"})
-        self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "单选3", "type": "SINGLE", "answer": "C"})
-        self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "多选1", "type": "MULTI", "answer": "AB"})
+        self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "单选1", "type": "SINGLE", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}], "answer": "A"})
+        self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "单选2", "type": "SINGLE", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}], "answer": "B"})
+        self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "单选3", "type": "SINGLE", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}, {"key": "C", "content": "3"}], "answer": "C"})
+        self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "多选1", "type": "MULTI", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}], "answer": "A,B"})
 
         # Create Profile with Blueprint: 1 JUDGE, 2 SINGLE
         profile = self.client.post("/api/v1/exams/profiles", headers=headers, json={"name": "专项模拟档案"}).json()
@@ -1200,7 +1202,7 @@ class TestV1Architecture(unittest.TestCase):
         token = self.client.post("/api/v1/auth/login", json={"username": "active_user", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "未完成会话测试库"}).json()
-        self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题A", "answer": "A"}).json()
+        self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "题A", "answer": "A", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]}).json()
 
         # Start a session
         sess = self.client.post("/api/v1/practice/sessions", headers=headers, json={"bank_id": bank["id"]}).json()
@@ -1226,7 +1228,7 @@ class TestV1Architecture(unittest.TestCase):
         headers = {"Authorization": f"Bearer {token}"}
         bank = self.client.post("/api/v1/banks", headers=headers, json={"name": "导出测试题库"}).json()
         self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={
-            "stem": "导出题目1", "type": "SINGLE", "answer": "A", "options": [{"key": "A", "text": "甲"}]
+            "stem": "导出题目1", "type": "SINGLE", "answer": "A", "options": [{"key": "A", "text": "甲"}, {"key": "B", "text": "乙"}]
         })
 
         # JSON export
@@ -1293,7 +1295,7 @@ class TestV1Architecture(unittest.TestCase):
 
         # Create another question with NO assets -> Graceful fallback
         q2 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers_a, json={
-            "stem": "无资料关联的题目", "type": "SINGLE", "answer": "A"
+            "stem": "无资料关联的题目", "type": "SINGLE", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}], "answer": "A"
         }).json()
         gen_res2 = self.client.post(f"/api/v1/ai/questions/{q2['id']}/generate", headers=headers_a, json={})
         self.assertEqual(gen_res2.status_code, 201)
@@ -1422,13 +1424,13 @@ class TestV1Architecture(unittest.TestCase):
 
         # Add 2 questions in chap_01, 1 question in chap_02
         q1 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={
-            "stem": "体系结构题1", "type": "SINGLE", "answer": "A", "chapter_id": "chap_01"
+            "stem": "体系结构题1", "type": "SINGLE", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}], "answer": "A", "chapter_id": "chap_01"
         }).json()
         q2 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={
-            "stem": "体系结构题2", "type": "SINGLE", "answer": "B", "chapter_id": "chap_01"
+            "stem": "体系结构题2", "type": "SINGLE", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}], "answer": "B", "chapter_id": "chap_01"
         }).json()
         q3 = self.client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={
-            "stem": "操作系统题1", "type": "SINGLE", "answer": "C", "chapter_id": "chap_02"
+            "stem": "操作系统题1", "type": "SINGLE", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}, {"key": "C", "content": "3"}], "answer": "C", "chapter_id": "chap_02"
         }).json()
 
         # Verify list_for_bank returns chapter_id
@@ -1807,6 +1809,7 @@ class TestV1Architecture(unittest.TestCase):
         # 2. Modify candidate in manual correction step
         candidates = prev_data["candidates"]
         candidates[0]["stem"] = "【校对核准】" + candidates[0]["stem"]
+        candidates[0]["answer"] = "A"
 
         # 3. Confirm import into bank (Atomic single transaction with draft status update)
         confirm_res = self.client.post(
@@ -1852,6 +1855,7 @@ class TestV1Architecture(unittest.TestCase):
         draft2_id = prev2_res.json()["draft_id"]
         cands2 = prev2_res.json()["candidates"]
         cands2[0]["stem"] = "【并发CAS测试】" + cands2[0]["stem"]
+        cands2[0]["answer"] = "A"
 
         import threading
         results = []

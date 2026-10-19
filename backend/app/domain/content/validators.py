@@ -56,43 +56,79 @@ def validate_question_invariants(
     for opt in raw_options:
         if not isinstance(opt, dict):
             continue
-        key = str(opt.get("key") or "").strip()
+        opt_copy = dict(opt)
+        if "content" not in opt_copy and "text" in opt_copy:
+            opt_copy["content"] = opt_copy["text"]
+        elif "text" not in opt_copy and "content" in opt_copy:
+            opt_copy["text"] = opt_copy["content"]
+        key = str(opt_copy.get("key") or "").strip()
         if key:
             if key in option_keys:
                 raise ValueError(f"选项键 '{key}' 重复，选项键必须唯一")
             option_keys.append(key)
-        clean_options.append(opt)
+        clean_options.append(opt_copy)
 
     valid_keys_set = set(option_keys)
 
     if norm_type == "MULTI":
-        if clean_options and len(option_keys) < 2:
+        if len(option_keys) < 2:
             raise ValueError("多选题必须至少包含2个选项")
         ans_keys = normalize_answer_keys(answer)
         if len(ans_keys) < 2:
             raise ValueError("多选题必须至少包含两个不同的正确答案选项")
-        if option_keys:
-            for k in ans_keys:
-                if k not in valid_keys_set:
+        resolved_keys = []
+        for k in ans_keys:
+            if k in valid_keys_set:
+                resolved_keys.append(k)
+            else:
+                found = False
+                for opt in clean_options:
+                    text_val = str(opt.get("content") or opt.get("text") or "").strip()
+                    if text_val == k:
+                        resolved_keys.append(opt["key"])
+                        found = True
+                        break
+                if not found:
                     raise ValueError(f"多选题答案包含不存在的选项键 '{k}'，合法选项: {option_keys}")
-        norm_ans = ",".join(sorted(ans_keys))
+        if len(set(resolved_keys)) < 2:
+            raise ValueError("多选题必须至少包含两个不同的正确答案选项")
+        norm_ans = ",".join(sorted(set(resolved_keys)))
         return norm_type, norm_ans, clean_options
 
+    if norm_type == "SINGLE":
+        if len(option_keys) < 2:
+            raise ValueError("单选题必须至少包含2个选项")
+        clean_ans = str(answer or "").strip()
+        if not clean_ans:
+            raise ValueError("单选题答案不能为空")
+        ans_keys = normalize_answer_keys(clean_ans)
+        if len(ans_keys) != 1:
+            raise ValueError("单选题必须恰好有一个正确答案")
+        single_key = ans_keys[0]
+        if single_key not in valid_keys_set:
+            for opt in clean_options:
+                text_val = str(opt.get("content") or opt.get("text") or "").strip()
+                if text_val == clean_ans:
+                    single_key = opt["key"]
+                    break
+        if single_key not in valid_keys_set:
+            raise ValueError(f"单选题答案包含不存在的选项键 '{single_key}'，合法选项: {option_keys}")
+        return norm_type, single_key, clean_options
+
     if norm_type == "JUDGE":
-        clean_ans = str(answer or "").strip().upper()
-        if clean_ans in {"T", "TRUE", "1", "对", "正确"}:
+        clean_raw = str(answer or "").strip().upper()
+        if clean_raw in {"T", "TRUE", "1", "对", "正确"}:
             clean_ans = "T"
-        elif clean_ans in {"F", "FALSE", "0", "错", "错误"}:
+        elif clean_raw in {"F", "FALSE", "0", "错", "错误"}:
             clean_ans = "F"
         else:
-            clean_ans = str(answer or "").strip()
-        if not clean_options:
-            clean_options = [
-                {"key": "T", "content": "正确"},
-                {"key": "F", "content": "错误"},
-            ]
-        return norm_type, clean_ans, clean_options
+            raise ValueError(f"判断题答案必须为正确(T)或错误(F)，当前为 '{answer}'")
+        judge_options = [
+            {"key": "T", "content": "正确"},
+            {"key": "F", "content": "错误"},
+        ]
+        return norm_type, clean_ans, judge_options
 
-    # SINGLE or FILL or ESSAY
+    # FILL or ESSAY or other subjective types
     clean_ans = str(answer or "").strip()
     return norm_type, clean_ans, clean_options

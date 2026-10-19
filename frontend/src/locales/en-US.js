@@ -132,7 +132,14 @@ export default {
     "mock_exam": "Mock Exam",
     "resume_mock_exam": "Resume Mock Exam ({answered}/{total} Qs)",
     "restart_mock_exam": "Restart Exam",
-    "restart_mock_exam_tip": "Abandon and start a new mock exam"
+    "restart_mock_exam_tip": "Abandon and start a new mock exam",
+    "fsrs_review": "FSRS Review",
+    "resume_fsrs": "Resume Review ({answered}/{total} Qs)",
+    "mistake_sprint": "Mistakes Sprint",
+    "resume_mistake": "Resume Mistakes Sprint ({answered}/{total} Qs)",
+    "restart_session": "Restart Session",
+    "restart_session_tip": "Abandon and restart current session",
+    "session_progress": "{mode} Progress: {answered} / {total} Qs ({percent}%)"
   },
   "practice": {
     "title": "Practice Mode",
@@ -374,7 +381,11 @@ export default {
   "api_errors": {
     "REQUEST_FAILED": "Request failed, please try again later",
     "NETWORK_ERROR": "Network connection error, please check your network",
-    "AUTH_INVALID_CREDENTIALS": "Invalid username or password"
+    "AUTH_INVALID_CREDENTIALS": "Invalid username or password",
+    "AUTH_ACCOUNT_EXISTS": "Username already exists",
+    "EXAM_ACTIVE_PROTECTED": "Mock exam in progress: The question bank is currently locked to protect active exams and cannot be modified or imported.",
+    "QUESTION_INVALID_MULTI": "Multiple-choice questions must contain at least 2 options and at least 2 distinct correct answers.",
+    "VALIDATION_FAILED": "Validation failed: {detail}"
   },
   "blueprint": {
     "mode_simple": "Simple Mode",

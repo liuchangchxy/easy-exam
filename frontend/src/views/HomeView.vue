@@ -190,12 +190,12 @@
           <span v-if="bank.category" class="bank-category-pill">{{ bank.category }}</span>
         </div>
         <div class="bank-actions-container">
-          <!-- 顺序通刷 / 模拟考试 进度展示 (当存在进行中会话时显示) -->
+          <!-- 会话进度展示 (当存在进行中会话时动态匹配真实 session.mode) -->
           <div v-if="getActiveSessionForBank(bank.id)" class="sequential-progress-box">
             <div class="sequential-progress-header">
               <span class="progress-title">
-                <LinearIcon :name="getActiveSessionForBank(bank.id).mode === 'EXAM' ? 'award' : 'play'" size="11" />
-                {{ getActiveSessionForBank(bank.id).mode === 'EXAM' ? t('home.mock_exam') : t('home.sequential_practice') }}
+                <LinearIcon :name="getSessionModeIcon(getActiveSessionForBank(bank.id).mode)" size="11" />
+                {{ getSessionModeTitle(getActiveSessionForBank(bank.id).mode) }}
               </span>
               <span class="progress-percent">
                 {{ getActiveSessionForBank(bank.id).total_questions ? Math.min(100, Math.round((getActiveSessionForBank(bank.id).answered_count / getActiveSessionForBank(bank.id).total_questions) * 100)) : 0 }}%
@@ -208,7 +208,8 @@
               ></div>
             </div>
             <small class="progress-detail-text">
-              {{ t('home.sequential_progress', {
+              {{ t('home.session_progress', {
+                mode: getSessionModeTitle(getActiveSessionForBank(bank.id).mode),
                 answered: getActiveSessionForBank(bank.id).answered_count,
                 total: getActiveSessionForBank(bank.id).total_questions,
                 percent: getActiveSessionForBank(bank.id).total_questions ? Math.min(100, Math.round((getActiveSessionForBank(bank.id).answered_count / getActiveSessionForBank(bank.id).total_questions) * 100)) : 0
@@ -222,25 +223,16 @@
                 class="primary btn-resume-direct"
                 @click="handleResume(getActiveSessionForBank(bank.id))"
               >
-                <LinearIcon :name="getActiveSessionForBank(bank.id).mode === 'EXAM' ? 'award' : 'play'" size="13" />
-                {{ getActiveSessionForBank(bank.id).mode === 'EXAM'
-                  ? t('home.resume_mock_exam', {
-                      answered: getActiveSessionForBank(bank.id).answered_count,
-                      total: getActiveSessionForBank(bank.id).total_questions
-                    })
-                  : t('home.resume_sequential', {
-                      answered: getActiveSessionForBank(bank.id).answered_count,
-                      total: getActiveSessionForBank(bank.id).total_questions
-                    })
-                }}
+                <LinearIcon :name="getSessionModeIcon(getActiveSessionForBank(bank.id).mode)" size="13" />
+                {{ getResumeButtonText(getActiveSessionForBank(bank.id)) }}
               </button>
               <button
                 type="button"
                 class="secondary-btn btn-restart-sequential"
-                :title="getActiveSessionForBank(bank.id).mode === 'EXAM' ? t('home.restart_mock_exam_tip') : t('home.restart_sequential')"
-                @click="handleRestartSequential(bank)"
+                :title="getRestartButtonTip(getActiveSessionForBank(bank.id).mode)"
+                @click="handleRestartBankSession(bank)"
               >
-                <LinearIcon name="rotate-ccw" size="12" /> {{ getActiveSessionForBank(bank.id).mode === 'EXAM' ? t('home.restart_mock_exam') : t('home.restart_sequential') }}
+                <LinearIcon name="rotate-ccw" size="12" /> {{ getRestartButtonText(getActiveSessionForBank(bank.id).mode) }}
               </button>
             </template>
             <template v-else>
@@ -666,6 +658,48 @@ function getActiveSessionForBank(bankId) {
   return activeSessions.value.find(s => s.bank_id === bankId) || null
 }
 
+function getSessionModeIcon(mode) {
+  if (mode === 'EXAM') return 'award'
+  if (mode === 'FSRS') return 'chart'
+  if (mode === 'MISTAKE') return 'target'
+  return 'play'
+}
+
+function getSessionModeTitle(mode) {
+  if (mode === 'EXAM') return t('home.mock_exam')
+  if (mode === 'FSRS') return t('home.fsrs_review')
+  if (mode === 'MISTAKE') return t('home.mistake_sprint')
+  return t('home.sequential_practice')
+}
+
+function getResumeButtonText(session) {
+  if (!session) return ''
+  const answered = session.answered_count || 0
+  const total = session.total_questions || 0
+  if (session.mode === 'EXAM') {
+    return t('home.resume_mock_exam', { answered, total })
+  }
+  if (session.mode === 'FSRS') {
+    return t('home.resume_fsrs', { answered, total })
+  }
+  if (session.mode === 'MISTAKE') {
+    return t('home.resume_mistake', { answered, total })
+  }
+  return t('home.resume_sequential', { answered, total })
+}
+
+function getRestartButtonText(mode) {
+  if (mode === 'EXAM') return t('home.restart_mock_exam')
+  if (mode === 'PRACTICE') return t('home.restart_sequential')
+  return t('home.restart_session')
+}
+
+function getRestartButtonTip(mode) {
+  if (mode === 'EXAM') return t('home.restart_mock_exam_tip')
+  if (mode === 'PRACTICE') return t('home.restart_sequential')
+  return t('home.restart_session_tip')
+}
+
 const examBank = ref(null)
 const examProfiles = ref([])
 const selectedProfileId = ref('')
@@ -804,15 +838,32 @@ async function handleStopAiBatch() {
   }
 }
 
-async function handleRestartSequential(bank) {
+async function handleRestartBankSession(bank) {
   const active = getActiveSessionForBank(bank.id)
   if (active) {
+    const isExam = active.mode === 'EXAM'
+    const confirmMsg = isExam
+      ? (t('home.restart_mock_exam_tip') || '放弃并重新模考')
+      : (t('home.restart_sequential') || '放弃并重新开始本次训练')
+    if (!window.confirm(confirmMsg)) {
+      return
+    }
     try {
       await abandonSession(props.token, active.id)
       activeSessions.value = activeSessions.value.filter(s => s.id !== active.id)
     } catch (_) {}
+    if (isExam) {
+      await openExamSetup(bank)
+    } else {
+      emit('start', bank)
+    }
+    return
   }
   emit('start', bank)
+}
+
+async function handleRestartSequential(bank) {
+  return handleRestartBankSession(bank)
 }
 
 function openActiveSessionsModal() {

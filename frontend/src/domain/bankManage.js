@@ -175,3 +175,40 @@ export function adaptAnswerOnTypeChange(newType, currentAnswer, options = []) {
 
   return trimmedAns
 }
+
+export function adaptOptionsOnTypeChange(newType, currentOptions = [], tHelper = null) {
+  const t = String(newType || '').toUpperCase()
+  const trueLabel = tHelper ? tHelper('bank_manage.judge_true') : '正确'
+  const falseLabel = tHelper ? tHelper('bank_manage.judge_false') : '错误'
+
+  if (t === 'JUDGE') {
+    return [
+      { key: 'T', content: trueLabel },
+      { key: 'F', content: falseLabel },
+    ]
+  }
+
+  if (['SINGLE', 'MULTI'].includes(t)) {
+    const isFromJudge = !currentOptions.length ||
+      currentOptions.length < 2 ||
+      currentOptions.some(o => ['T', 'F'].includes(String(o?.key || '').trim().toUpperCase()))
+    if (isFromJudge) {
+      return [
+        { key: 'A', content: '' },
+        { key: 'B', content: '' },
+        { key: 'C', content: '' },
+        { key: 'D', content: '' },
+      ]
+    }
+    return currentOptions.map(opt => ({
+      key: opt.key || '',
+      content: opt.content !== undefined ? opt.content : (opt.text || ''),
+    }))
+  }
+
+  if (t === 'ESSAY') {
+    return []
+  }
+
+  return currentOptions
+}

@@ -224,7 +224,7 @@ class BankContentManagementTests(unittest.TestCase):
             json={
                 "stem": "Question in chapter 1",
                 "type": "SINGLE",
-                "options": [{"key": "A", "content": "1"}],
+                "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}],
                 "answer": "A",
                 "chapter_id": chap_id,
             },
@@ -240,7 +240,7 @@ class BankContentManagementTests(unittest.TestCase):
             json={
                 "stem": "Stem updated from practice view",
                 "type": "SINGLE",
-                "options": [{"key": "A", "content": "1"}],
+                "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}],
                 "answer": "A",
                 "base_version_number": 1,
             },
@@ -255,7 +255,7 @@ class BankContentManagementTests(unittest.TestCase):
             json={
                 "stem": "Question moved to chapter 2",
                 "type": "SINGLE",
-                "options": [{"key": "A", "content": "1"}],
+                "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}],
                 "answer": "A",
                 "chapter_id": chap2_id,
                 "base_version_number": 2,
@@ -271,7 +271,7 @@ class BankContentManagementTests(unittest.TestCase):
             json={
                 "stem": "Question with cleared chapter",
                 "type": "SINGLE",
-                "options": [{"key": "A", "content": "1"}],
+                "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}],
                 "answer": "A",
                 "chapter_id": None,
                 "base_version_number": 3,
@@ -298,7 +298,7 @@ class BankContentManagementTests(unittest.TestCase):
             json={
                 "stem": "Initial version 1",
                 "type": "SINGLE",
-                "options": [{"key": "A", "content": "1"}],
+                "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}],
                 "answer": "A",
             },
             headers=admin_headers,
@@ -311,7 +311,7 @@ class BankContentManagementTests(unittest.TestCase):
             json={
                 "stem": "Updated to version 2",
                 "type": "SINGLE",
-                "options": [{"key": "A", "content": "1"}],
+                "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}],
                 "answer": "A",
                 "base_version_number": 1,
             },
@@ -325,7 +325,7 @@ class BankContentManagementTests(unittest.TestCase):
             json={
                 "stem": "Conflicting edit based on v1",
                 "type": "SINGLE",
-                "options": [{"key": "A", "content": "1"}],
+                "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}],
                 "answer": "A",
                 "base_version_number": 1,
                 "allow_stale_branch": False,
@@ -359,7 +359,7 @@ class BankContentManagementTests(unittest.TestCase):
             json={
                 "stem": "Branch edit based on v1",
                 "type": "SINGLE",
-                "options": [{"key": "A", "content": "1"}],
+                "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}],
                 "answer": "A",
                 "base_version_number": 1,
                 "allow_stale_branch": True,

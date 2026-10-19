@@ -164,7 +164,8 @@ class TestV1Sync(unittest.TestCase):
             json={
                 "stem": "Device A update",
                 "type": "SINGLE",
-                "options": [{"key": "A", "content": "1"}],
+                "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}],
+                "answer": "A",
                 "base_version_number": 1,
             },
         )
@@ -178,7 +179,8 @@ class TestV1Sync(unittest.TestCase):
             json={
                 "stem": "Device B concurrent update",
                 "type": "SINGLE",
-                "options": [{"key": "B", "content": "2"}],
+                "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}],
+                "answer": "B",
                 "base_version_number": 1,
             },
         )

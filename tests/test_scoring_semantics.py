@@ -54,7 +54,7 @@ class TestScoringSemantics(unittest.TestCase):
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "混合题库"}).json()
 
             # Create 1 objective question and 1 essay question
-            q_obj = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "客观单选", "type": "SINGLE", "answer": "A"}).json()
+            q_obj = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "客观单选", "type": "SINGLE", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}], "answer": "A"}).json()
             q_sub = client.post(f"/api/v1/banks/{bank['id']}/questions", headers=headers, json={"stem": "主观论述", "type": "ESSAY", "answer": "论述参考要点"}).json()
 
             # Start session

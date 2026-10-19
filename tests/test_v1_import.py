@@ -20,8 +20,8 @@ class TestV1Import(unittest.TestCase):
             bank = client.post("/api/v1/banks", headers=headers, json={"name": "表格题库"}).json()
             workbook = Workbook()
             sheet = workbook.active
-            sheet.append(["题干", "答案", "题型", "解析"])
-            sheet.append(["Excel 题", "A", "SINGLE", "表格解析"])
+            sheet.append(["题干", "选项A", "选项B", "答案", "题型", "解析"])
+            sheet.append(["Excel 题", "80", "443", "A", "SINGLE", "表格解析"])
             buffer = BytesIO()
             workbook.save(buffer)
             response = client.post(

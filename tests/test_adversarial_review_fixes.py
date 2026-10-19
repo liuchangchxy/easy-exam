@@ -112,7 +112,7 @@ class TestAdversarialReviewFixes(unittest.TestCase):
         q1 = self.bank_service.create_question(self.user_id, self.bank_id, {
             "stem": "限时题目",
             "type": "SINGLE",
-            "options": [{"key": "A", "content": "A"}],
+            "options": [{"key": "A", "content": "A"}, {"key": "B", "content": "B"}],
             "answer": "A",
         })
         session = self.practice_service.start_session(
@@ -161,7 +161,7 @@ class TestAdversarialReviewFixes(unittest.TestCase):
         q = self.bank_service.create_question(self.user_id, self.bank_id, {
             "stem": "章节考题",
             "type": "SINGLE",
-            "options": [{"key": "A", "content": "A"}],
+            "options": [{"key": "A", "content": "A"}, {"key": "B", "content": "B"}],
             "answer": "A",
             "chapter_id": ch["id"],
         })
@@ -178,7 +178,7 @@ class TestAdversarialReviewFixes(unittest.TestCase):
         q = self.bank_service.create_question(self.user_id, self.bank_id, {
             "stem": "多版本错题",
             "type": "SINGLE",
-            "options": [{"key": "A", "content": "A"}],
+            "options": [{"key": "A", "content": "A"}, {"key": "B", "content": "B"}],
             "answer": "A",
             "tags": ["高频考点"],
         })
@@ -187,8 +187,8 @@ class TestAdversarialReviewFixes(unittest.TestCase):
         self.practice_service.submit_attempt(self.user_id, sess["id"], q["id"], "B")
 
         # 产生两个新版本（共3个版本）
-        self.questions.create_next_version(self.user_id, q["id"], {"stem": "v2", "type": "SINGLE", "options": [{"key": "A", "content": "A"}], "answer": "A", "tags": ["高频考点"]})
-        self.questions.create_next_version(self.user_id, q["id"], {"stem": "v3", "type": "SINGLE", "options": [{"key": "A", "content": "A"}], "answer": "A", "tags": ["高频考点"]})
+        self.questions.create_next_version(self.user_id, q["id"], {"stem": "v2", "type": "SINGLE", "options": [{"key": "A", "content": "A"}, {"key": "B", "content": "B"}], "answer": "A", "tags": ["高频考点"]})
+        self.questions.create_next_version(self.user_id, q["id"], {"stem": "v3", "type": "SINGLE", "options": [{"key": "A", "content": "A"}, {"key": "B", "content": "B"}], "answer": "A", "tags": ["高频考点"]})
 
         trends = self.learning_service.trends(self.user_id, self.bank_id)
         weak = next(item for item in trends["weak_points"] if item["name"] == "高频考点")
@@ -199,7 +199,7 @@ class TestAdversarialReviewFixes(unittest.TestCase):
         q = self.bank_service.create_question(self.user_id, self.bank_id, {
             "stem": "到期题",
             "type": "SINGLE",
-            "options": [{"key": "A", "content": "A"}],
+            "options": [{"key": "A", "content": "A"}, {"key": "B", "content": "B"}],
             "answer": "A",
         })
         self.practices.mark_weak(self.user_id, q["id"])
@@ -216,7 +216,7 @@ class TestAdversarialReviewFixes(unittest.TestCase):
         q = self.bank_service.create_question(self.user_id, self.bank_id, {
             "stem": "普通练习题",
             "type": "SINGLE",
-            "options": [{"key": "A", "content": "A"}],
+            "options": [{"key": "A", "content": "A"}, {"key": "B", "content": "B"}],
             "answer": "A",
         })
         sess = self.practice_service.start_session(self.user_id, self.bank_id, mode="PRACTICE", total_questions=1)
@@ -272,7 +272,7 @@ class TestAdversarialReviewFixes(unittest.TestCase):
         q1 = self.bank_service.create_question(self.user_id, self.bank_id, {
             "stem": "会话内题目",
             "type": "SINGLE",
-            "options": [{"key": "A", "content": "A"}],
+            "options": [{"key": "A", "content": "A"}, {"key": "B", "content": "B"}],
             "answer": "A",
         })
         sess = self.practice_service.start_session(self.user_id, self.bank_id, mode="PRACTICE", total_questions=1, question_ids=[q1["id"]])
@@ -298,7 +298,7 @@ class TestAdversarialReviewFixes(unittest.TestCase):
         q = self.bank_service.create_question(self.user_id, self.bank_id, {
             "stem": "考题_全版本",
             "type": "SINGLE",
-            "options": [{"key": "A", "content": "选项A"}],
+            "options": [{"key": "A", "content": "选项A"}, {"key": "B", "content": "选项B"}],
             "answer": "A",
             "explanation": "深度解析A",
         })
@@ -306,7 +306,7 @@ class TestAdversarialReviewFixes(unittest.TestCase):
         self.questions.create_next_version(self.user_id, q["id"], {
             "stem": "考题_全版本_v2",
             "type": "SINGLE",
-            "options": [{"key": "A", "content": "选项A"}],
+            "options": [{"key": "A", "content": "选项A"}, {"key": "B", "content": "选项B"}],
             "answer": "A",
             "explanation": "深度解析A_v2",
         })
@@ -338,13 +338,13 @@ class TestAdversarialReviewFixes(unittest.TestCase):
         q = self.bank_service.create_question(self.user_id, self.bank_id, {
             "stem": "保护题目",
             "type": "SINGLE",
-            "options": [{"key": "A", "content": "A"}],
+            "options": [{"key": "A", "content": "A"}, {"key": "B", "content": "B"}],
             "answer": "A",
         })
 
         # 1. 尝试修改版本 -> 必须 403 / PermissionError
         with self.assertRaises(PermissionError):
-            self.questions.create_next_version(u2, q["id"], {"stem": "被篡改题干", "type": "SINGLE", "options": [{"key": "A", "content": "A"}], "answer": "A"})
+            self.questions.create_next_version(u2, q["id"], {"stem": "被篡改题干", "type": "SINGLE", "options": [{"key": "A", "content": "A"}, {"key": "B", "content": "B"}], "answer": "A"})
 
         # 2. 尝试重判历史 -> 必须 403 / PermissionError
         with self.assertRaises(PermissionError):
@@ -359,7 +359,7 @@ class TestAdversarialReviewFixes(unittest.TestCase):
         q = self.bank_service.create_question(self.user_id, self.bank_id, {
             "stem": "单题复习题",
             "type": "SINGLE",
-            "options": [{"key": "A", "content": "A"}],
+            "options": [{"key": "A", "content": "A"}, {"key": "B", "content": "B"}],
             "answer": "A",
         })
 
@@ -378,7 +378,7 @@ class TestAdversarialReviewFixes(unittest.TestCase):
         q = self.bank_service.create_question(self.user_id, self.bank_id, {
             "stem": "绝密私有题干",
             "type": "SINGLE",
-            "options": [{"key": "A", "content": "A"}],
+            "options": [{"key": "A", "content": "A"}, {"key": "B", "content": "B"}],
             "answer": "A",
         })
 
@@ -395,7 +395,7 @@ class TestAdversarialReviewFixes(unittest.TestCase):
         q_obj = self.bank_service.create_question(self.user_id, self.bank_id, {
             "stem": "客观题",
             "type": "SINGLE",
-            "options": [{"key": "A", "content": "A"}],
+            "options": [{"key": "A", "content": "A"}, {"key": "B", "content": "B"}],
             "answer": "A",
         })
         q_sub = self.bank_service.create_question(self.user_id, self.bank_id, {

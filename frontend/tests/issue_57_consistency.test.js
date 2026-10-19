@@ -3,8 +3,11 @@ import assert from 'node:assert/strict'
 import {
   validateQuestionEdit,
   adaptAnswerOnTypeChange,
+  adaptOptionsOnTypeChange,
   sanitizeAnswerOnOptionRemove,
 } from '../src/domain/bankManage.js'
+import { ApiError } from '../src/api/client.js'
+import { setLocale } from '../src/composables/useLocale.js'
 
 test('Defect 1: validateQuestionEdit rejects MULTI with only 1 correct answer', () => {
   const options = [
@@ -74,3 +77,48 @@ test('Defect 2: adaptAnswerOnTypeChange clears T/F when converting JUDGE to SING
   const resMulti = adaptAnswerOnTypeChange('MULTI', 'T', options)
   assert.equal(resMulti, '', 'T should not be kept as answer for MULTI with A/B options')
 })
+
+test('Review Finding 2: adaptOptionsOnTypeChange produces standard options on type conversion', () => {
+  // JUDGE produces T/F options
+  const judgeOpts = adaptOptionsOnTypeChange('JUDGE', [])
+  assert.equal(judgeOpts.length, 2)
+  assert.equal(judgeOpts[0].key, 'T')
+  assert.equal(judgeOpts[1].key, 'F')
+
+  // Switching from JUDGE to SINGLE resets to standard A, B, C, D
+  const singleOpts = adaptOptionsOnTypeChange('SINGLE', judgeOpts)
+  assert.equal(singleOpts.length, 4)
+  assert.deepEqual(singleOpts.map(o => o.key), ['A', 'B', 'C', 'D'])
+
+  // Switching from SINGLE to MULTI preserves existing options
+  const existingSingle = [
+    { key: 'A', content: 'Apple' },
+    { key: 'B', content: 'Banana' },
+    { key: 'C', content: 'Cherry' },
+  ]
+  const multiOpts = adaptOptionsOnTypeChange('MULTI', existingSingle)
+  assert.equal(multiOpts.length, 3)
+  assert.equal(multiOpts[0].content, 'Apple')
+
+  // ESSAY produces empty options
+  const essayOpts = adaptOptionsOnTypeChange('ESSAY', existingSingle)
+  assert.equal(essayOpts.length, 0)
+})
+
+test('Review Finding 4: ApiError resolves EXAM_ACTIVE_PROTECTED and rawDetail fallback', () => {
+  setLocale('zh-CN')
+  const errActiveZh = new ApiError(403, 'EXAM_ACTIVE_PROTECTED')
+  assert.match(errActiveZh.message, /存在活动模拟考试/)
+
+  setLocale('en-US')
+  const errActiveEn = new ApiError(403, 'EXAM_ACTIVE_PROTECTED')
+  assert.match(errActiveEn.message, /Mock exam in progress/)
+
+  // Reset locale back to zh-CN
+  setLocale('zh-CN')
+
+  // When error code is unknown, fall back to rawDetail if present
+  const errFallback = new ApiError(400, 'UNKNOWN_ERROR', {}, null, 'Custom backend error')
+  assert.equal(errFallback.message, 'Custom backend error')
+})
+

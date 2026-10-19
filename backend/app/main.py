@@ -77,15 +77,25 @@ def create_app(db_path: str | None = None, dist_dir: str | Path | None = None) -
 
     @app.exception_handler(HTTPException)
     async def localized_http_error(request: Request, exc: HTTPException):
-        if not request.headers.get("Accept-Language"):
-            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=exc.headers)
+        detail_text = str(exc.detail) if isinstance(exc.detail, str) else ""
         code = f"HTTP_{exc.status_code}"
+        params = {}
         if request.url.path == "/api/v1/auth/login" and exc.status_code == 401:
             code = "AUTH_INVALID_CREDENTIALS"
         elif request.url.path == "/api/v1/auth/register" and exc.status_code == 409:
             code = "AUTH_ACCOUNT_EXISTS"
-        body = {"error_code": code, "params": {}}
-        if exc.status_code == 409 and isinstance(exc.detail, dict):
+        elif exc.status_code == 403 and "cannot edit question while exam is active" in detail_text.lower():
+            code = "EXAM_ACTIVE_PROTECTED"
+            params = {"detail": detail_text}
+        elif exc.status_code in (400, 422) and detail_text:
+            code = f"HTTP_{exc.status_code}"
+            params = {"detail": detail_text}
+
+        if not request.headers.get("Accept-Language"):
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=exc.headers)
+
+        body = {"error_code": code, "params": params}
+        if exc.detail is not None:
             body["detail"] = exc.detail
         return JSONResponse(status_code=exc.status_code, content=body, headers=exc.headers)
 
@@ -93,7 +103,7 @@ def create_app(db_path: str | None = None, dist_dir: str | Path | None = None) -
     async def localized_validation_error(request: Request, exc: RequestValidationError):
         if not request.headers.get("Accept-Language"):
             return JSONResponse(status_code=422, content={"detail": exc.errors()})
-        return JSONResponse(status_code=422, content={"error_code": "HTTP_422", "params": {}})
+        return JSONResponse(status_code=422, content={"error_code": "HTTP_422", "params": {}, "detail": str(exc.errors())})
 
     @app.middleware("http")
     async def add_no_cache_for_html(request, call_next):
