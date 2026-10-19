@@ -267,5 +267,46 @@ EE-001 至 EE-021 **全部 21 项**已完成源码级修复、单元测试、前
   - 接口与静态资源：探测 `http://192.168.100.11:3000/api/v1/health` 返回 HTTP 200 OK，SPA 入口加载产物 `index-MYI6nOVw.js` 与 `index-CmqIdZCy.css` 正确无误；
   - 数据库实体零损失校验：users (10), question_banks (6), questions (147), practice_sessions (31), answer_attempts (33), mistake_records (15) 升级前后 100% 保持一致，零数据丢失。
 
+**2026-10-17 EasyExam 1.0.18 全新 8 主题系统、无障碍对比度与双语全栈升级 FPK 打包与飞牛生产部署**：
+- **交付内容**：
+  1. **8 套主题配色系统**：经典蓝、森林绿、优雅紫、温暖橙、深邃夜空、极简灰、樱花粉、深海青，支持日夜切换与自定义强调色；
+  2. **无障碍对比度保障**：全面符合 WCAG AA 标准（≥4.5:1）；
+  3. **移动端触控人体工学与防破版**：多视口与安全边距自适应；
+  4. **全栈中英双语国际化与设置中心全面升级**。
+- **全量门禁实测验证**：
+  - 前端单元测试：`npm --prefix frontend run test` → **50/50 通过，0 失败，0 跳过**；
+  - 前端生产构建：`npm --prefix frontend run build` → 成功产出 `index-z9qoKWiC.css` (163.83 kB) 与 `index-B6tmGIx0.js` (422.29 kB)；
+  - FPK 规范校验：`tests/test_fpk_packaging.py` → **8/8 全通过**；
+  - 门禁脚本审计：`scan_hardcoded_paths.py` (通过) 与 `guard_test_tampering.py` (通过)；
+  - 版本号单一来源对齐：`manifest`、`docker-compose.yaml`、`frontend/package.json`、`SettingsView.vue` 同步至 `1.0.18`。
+- **Docker 镜像与 FPK 交付物**：
+  - 生产镜像：`docker build --platform linux/amd64 -t ailm32442/easy-exam:1.0.18 .` 构建成功（linux/amd64）；
+  - FPK 离线自包含安装包：`python scripts/build_fpk.py --bundle-image` 成功生成 `dist/easy-exam-1.0.18.fpk`（40,024.9 KB，SHA-256: `0022f39d63145f9d976fc8a544a05f04c8e6012f4c64e449e6099923031f43cb`）。
+- **NAS 实机生产部署与端到端核验（全部通过）**：
+  - 目标主机：fnOS 6.18（`192.168.100.11:3000` / `Host nas`），SSH 密钥联通；
+  - 备份保障：更新前自动备份生产数据库 `/vol4/@appdata/easy-exam/easyexam-v1.db.backup-20261017-2322` 及 `.env.backup-20261017-2322`；
+  - 安装包同步：`dist/easy-exam-1.0.18.fpk` 传输至 `/tmp/easy-exam-1.0.18.fpk` 及 `/vol4/@appdata/easy-exam/easy-exam-1.0.18.fpk`，SHA-256 两端一致；
+  - 镜像与配置：Docker 载入 `ailm32442/easy-exam:1.0.18`，同步更新 `/var/apps/easy-exam/manifest` 及 `/var/apps/easy-exam/target/docker/docker-compose.yaml`；
+  - 容器服务热更新：通过 `cmd/main stop` 与 `cmd/main start` 平滑重启 `easy-exam-fpk`，状态确认：`Up (healthy)`；
+  - 接口与静态资源：探测 `http://192.168.100.11:3000/api/v1/health` 返回 HTTP 200 OK，SPA 入口加载产物 `index-B6tmGIx0.js` 与 `index-z9qoKWiC.css` 正确无误；
+  - 数据库实体零损失校验：users (10), question_banks (6), questions (147) 升级前后 100% 保持一致，零数据丢失；
+  - 真实 Chrome 浏览器端到端全链路冒烟（`frontend/tests/physical_fnos_browser_e2e.mjs`）：8 个完整流程（用户注册登录、新建题库、文件批量导入、键盘快捷刷题与底部固定条、错题斩杀与恢复、全真模考交卷判分、学习看板诊断）全部实机通过。
 
-
+**2026-10-19 EasyExam Question Bank Content Management v1 独立题库内容管理闭环**：
+- **交付内容**：
+  1. **独立题库管理入口与路由**：首页（`HomeView.vue`）每个题库卡片增设明确「管理题目 / Manage」入口，直达独立管理页面 `/banks/:bankId`，脱离大弹窗嵌套；
+  2. **内容全集解耦读取 API**：新增 `GET /api/v1/banks/{bank_id}/content/questions`，返回题库全量题目最新版本，与个人斩杀/FSRS/错题等学习状态解耦，斩杀题目在管理页 100% 保留展示；
+  3. **实时多维检索与组合筛选**：纯前端领域模块（`bankManage.js`）支持题干及标签关键词模糊检索、题型、难度（1-5 星）、章节、标签多条件 AND 组合筛选，并支持一键恢复重置；
+  4. **版本化题目编辑**：ADMIN / EDITOR 可在线修改题干、题型、选项、标准答案、解析、难度、标签及章节，提交 `base_version_number` 生成新版本 `v(N+1)`；默认 `regrade_history = false`，不自动重判历史答题记录；
+  5. **MEMBER 权限严格隔离**：普通成员前端仅可检索与浏览，不显示可编辑入口；后端 `PUT /questions/{id}` 强制角色门禁返回 403 阻断；
+  6. **进行中模考 Active Exam 安全保护**：当用户在当前题库存在未完成 EXAM 会话时，管理页面自动挂载只读保护警示横幅，答案及解析被脱敏隐藏，编辑操作自动禁用；后端 `QuestionRepository.create_next_version` 针对进行中模考题目进行 403 阻断，杜绝空答案意外覆盖原题目真实数据；
+  7. **响应式与无障碍人体工学**：桌面端（1280px）采用高密度列表与侧边动作；移动端（375px）自适应堆叠卡片，触控目标均 $\ge 42\text{px}$，横向滚动溢出彻底为 0；
+  8. **中英双语国际化 100% 对齐**：`zh-CN` 与 `en-US` 词典及 JSON 目录 100% 键对齐与动态占位符一致，并通过无裸字符串严格门禁。
+- **全量门禁实测验证**：
+  - 后端接口与安全门禁：`python -m pytest tests/test_question_bank_content_management.py` → **1/1 通过** (覆盖成员读取、非成员 404/403、斩杀题保留、只读不污染学习状态、版本自增、MEMBER 编辑拦截、模考答案脱敏与写入拦截全部 7 场景)；
+  - 前端领域单元测试：`node --test frontend/tests/bank_manage.test.js` → **12/12 通过**；
+  - 前端全套单元/本地化测试：`npm --prefix frontend run test` → **62/62 通过，0 失败，0 跳过** (275ms)；
+  - 本地化配置与模板扫描门禁：`npm --prefix frontend run check:localization` → 4 个交付阶段配置全部有效，Vue 模板零裸中文/裸英文；
+  - 前端生产构建：`npm --prefix frontend run build` → Vite v5.4.21 成功，打包产物 `BankManageView-BY23LVKu.js` 与 `BankManageView-TvKcH3Ob.css`，exit code 0；
+  - 真实 Chrome 浏览器端到端 E2E（`frontend/tests/bank_manage_e2e.test.js`）：真实无头浏览器实跑通过，完成从题库进入、斩杀留存验证、搜索与复合筛选、版本编辑与刷新持久化、375px 移动端防破版与触控验证、到模考答案保护与编辑拦截全流程闭环；
+  - 视觉冒烟核验：成功捕获并核验 5 份高保真截图（`bank_manage_1280_full.png`、`bank_manage_1280_filtered.png`、`bank_manage_1280_edit_modal.png`、`bank_manage_375_list.png`、`bank_manage_375_edit_modal.png`）。

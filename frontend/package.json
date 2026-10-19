@@ -1,17 +1,17 @@
 {
   "name": "fn-exam-frontend",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test tests/exam.test.js tests/sync.test.js tests/practice.test.js tests/theme.test.js tests/locale.test.js",
-    "test:unit": "npm run check:localization && node --test tests/exam.test.js tests/sync.test.js tests/practice.test.js tests/theme.test.js tests/locale.test.js",
+    "test": "node --test tests/exam.test.js tests/sync.test.js tests/practice.test.js tests/theme.test.js tests/locale.test.js tests/bank_manage.test.js",
+    "test:unit": "npm run check:localization && node --test tests/exam.test.js tests/sync.test.js tests/practice.test.js tests/theme.test.js tests/locale.test.js tests/bank_manage.test.js",
     "check:localization": "node scripts/check_localization_config.js && node scripts/scan_localized_templates.js",
     "check:localization:catalog": "node --test tests/locale.test.js",
-    "test:e2e": "node tests/browser_e2e.test.js",
+    "test:e2e": "node tests/browser_e2e.test.js && node tests/bank_manage_e2e.test.js",
     "test:localization:e2e": "node tests/localization_e2e.test.js",
     "test:visual": "node scripts/verify_and_capture_ui.mjs"
   },

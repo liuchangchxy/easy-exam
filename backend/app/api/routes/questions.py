@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.app.dependencies import current_user
+from backend.app.infrastructure.db.repositories.question_repository import VersionConflictError
 
 router = APIRouter(prefix="/questions", tags=["questions"])
 
@@ -20,6 +21,8 @@ class QuestionUpdate(BaseModel):
     chapter_id: str | None = None
     regrade_history: bool = False
     apply_fsrs: bool = True
+    allow_stale_branch: bool = True
+    reject_stale: bool = False
 
 
 class RegradePayload(BaseModel):
@@ -33,9 +36,14 @@ class ResolveConflictPayload(BaseModel):
 @router.put("/{question_id}")
 def update_question(question_id: str, payload: QuestionUpdate, request: Request, user=Depends(current_user)):
     try:
-        return request.app.state.services.questions.create_next_version(user["id"], question_id, payload.model_dump())
+        update_data = payload.model_dump()
+        if "chapter_id" not in payload.model_fields_set:
+            update_data.pop("chapter_id", None)
+        return request.app.state.services.questions.create_next_version(user["id"], question_id, update_data)
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except VersionConflictError as exc:
+        raise HTTPException(status_code=409, detail=exc.to_dict()) from exc
 
 
 @router.post("/{question_id}/regrade")
