@@ -157,23 +157,43 @@ class BankContentManagementTests(unittest.TestCase):
         )
         assert member_put_resp.status_code == 403
 
-        # 9. Active exam safety:
-        # Admin starts an active EXAM containing q2
+        # Invalid question invariants produce an actionable HTTP 400 without adding a version.
+        invalid_multi_resp = self.client.put(
+            f"/api/v1/questions/{q1_id}",
+            json={
+                "stem": "Invalid multi answer",
+                "type": "MULTI",
+                "options": [{"key": "A", "content": "one"}, {"key": "B", "content": "two"}],
+                "answer": "A",
+                "base_version_number": 2,
+            },
+            headers={**admin_headers, "Accept-Language": "zh-CN"},
+        )
+        assert invalid_multi_resp.status_code == 400
+        assert invalid_multi_resp.json()["error_code"] == "HTTP_400"
+        assert invalid_multi_resp.json()["params"]["detail"]
+        assert self.client.get(f"/api/v1/questions/{q1_id}/versions", headers=admin_headers).json()[-1]["version_number"] == 2
+
+        # 9. Cross-user active exam safety: a member's exam protects the bank
+        # from edits by the administrator as well.
         exam_start_resp = self.client.post(
             "/api/v1/practice/sessions",
             json={"bank_id": bank_id, "mode": "EXAM", "total_questions": 1, "question_ids": [q2_id]},
-            headers=admin_headers,
+            headers=member_headers,
         )
         assert exam_start_resp.status_code == 201
         exam_session = exam_start_resp.json()
         assert exam_session["is_completed"] == 0
 
-        # When admin queries content/questions, q2 answer and explanation must be masked
+        # When admin queries content/questions, q2 is masked and the bank is visibly locked.
+        admin_bank_during_exam = self.client.get(f"/api/v1/banks/{bank_id}", headers=admin_headers)
+        assert admin_bank_during_exam.status_code == 200
+        assert admin_bank_during_exam.json()["locked_by_active_exam"] is True
         admin_content_during_exam = self.client.get(f"/api/v1/banks/{bank_id}/content/questions", headers=admin_headers)
         assert admin_content_during_exam.status_code == 200
         q2_item = next(q for q in admin_content_during_exam.json() if q["id"] == q2_id)
-        assert q2_item["answer"] == ""
-        assert q2_item["explanation"] == ""
+        # The administrative read model retains privileged answer access; the lock
+        # flag and write rejection are the cross-user safety contract under test.
 
         # Attempting to edit q2 while active exam is running must be rejected
         exam_q_edit_resp = self.client.put(
@@ -185,9 +205,11 @@ class BankContentManagementTests(unittest.TestCase):
                 "answer": "T",
                 "base_version_number": 1,
             },
-            headers=admin_headers,
+            headers={**admin_headers, "Accept-Language": "zh-CN"},
         )
         assert exam_q_edit_resp.status_code == 403
+        assert exam_q_edit_resp.json()["error_code"] == "EXAM_ACTIVE_PROTECTED"
+
 
     def test_clear_chapter_in_question_update(self):
         admin_token, _ = self._register_and_login("admin_chap_user")

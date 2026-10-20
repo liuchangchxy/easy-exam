@@ -206,12 +206,13 @@
       <!-- 离线暂存提示 -->
       <div v-if="offlineNotice" class="offline-banner" data-testid="offline-banner">
         <span>{{ offlineNotice }}</span>
-        <button type="button" class="btn-sync-offline" @click="syncOfflineEdits">{{ t('ui.k0550') }}</button>
+        <button v-if="offlineRetryAvailable" type="button" class="btn-sync-offline" @click="syncOfflineEdits">{{ t('ui.k0550') }}</button>
       </div>
 
       <!-- 题目编辑面板 (EE-011: 支持完整题干、选项、题型、答案、难度、解析与标签编辑) -->
       <div v-if="isEditingQuestion" class="question-edit-panel" data-testid="question-edit-panel">
         <h3>{{ t('ui.k0551') }}{{ question.version_number }})</h3>
+        <p v-if="editSaveError" class="question-edit-error" role="alert" data-testid="question-edit-error">{{ editSaveError }}</p>
         <div class="edit-form-grid">
           <label class="form-row">
             <span>{{ t('ui.k0211') }}</span>
@@ -764,6 +765,8 @@ const editDifficulty = ref(3)
 const editTags = ref('')
 const editRegradeHistory = ref(false)
 const offlineNotice = ref('')
+const offlineRetryAvailable = ref(false)
+const editSaveError = ref('')
 
 
 const question = computed(() => questions.value[index.value])
@@ -1330,6 +1333,7 @@ function toggleEditQuestion() {
   if (!question.value) return
   isEditingQuestion.value = !isEditingQuestion.value
   if (isEditingQuestion.value) {
+    editSaveError.value = ''
     editStem.value = question.value.stem || ''
     editType.value = question.value.type || 'SINGLE'
     editOptions.value = normalizeQuestionOptions(question.value.options)
@@ -1378,26 +1382,53 @@ async function saveQuestionEdit() {
     localStorage.setItem(storageKey, JSON.stringify(queue))
     localStorage.setItem(userScopedKey, JSON.stringify(queue))
     offlineNotice.value = t('ui.k0631')
+    offlineRetryAvailable.value = true
+    editSaveError.value = ''
     isEditingQuestion.value = false
     return
   }
+  let updated
   try {
     const currentToken = authToken.value
-    const updated = await updateQuestion(currentToken, question.value.id, payload)
-    triggerSyncEvent('QUESTION_UPDATED', 'QUESTION', updated.id, { version_number: updated.version_number })
-    isEditingQuestion.value = false
-    questions.value[index.value] = updated
+    updated = await updateQuestion(currentToken, question.value.id, payload)
+  } catch (err) {
+    if (isNetworkFailure(err)) {
+      const queue = JSON.parse(localStorage.getItem(storageKey) || '[]')
+      queue.push(queueItem)
+      localStorage.setItem(storageKey, JSON.stringify(queue))
+      localStorage.setItem(userScopedKey, JSON.stringify(queue))
+      offlineNotice.value = t('ui.k0632')
+      offlineRetryAvailable.value = true
+      editSaveError.value = ''
+      isEditingQuestion.value = false
+    } else {
+      offlineNotice.value = ''
+      offlineRetryAvailable.value = false
+      editSaveError.value = err?.message || t('api_errors.REQUEST_FAILED')
+      isEditingQuestion.value = true
+    }
+    return
+  }
+  const currentToken = authToken.value
+  triggerSyncEvent('QUESTION_UPDATED', 'QUESTION', updated.id, { version_number: updated.version_number })
+  isEditingQuestion.value = false
+  editSaveError.value = ''
+  questions.value[index.value] = updated
+  const queue = JSON.parse(localStorage.getItem(storageKey) || '[]').filter(item =>
+    !(item.blocked && item.questionId === updated.id))
+  localStorage.setItem(storageKey, JSON.stringify(queue))
+  localStorage.setItem(userScopedKey, JSON.stringify(queue))
+  try {
     questionVersions.value = await listQuestionVersions(currentToken, updated.id)
     const conf = await getQuestionConflict(currentToken, updated.id)
     activeConflict.value = conf?.has_conflict ? conf.conflict : null
-  } catch {
-    const queue = JSON.parse(localStorage.getItem(storageKey) || '[]')
-    queue.push(queueItem)
-    localStorage.setItem(storageKey, JSON.stringify(queue))
-    localStorage.setItem(userScopedKey, JSON.stringify(queue))
-    offlineNotice.value = t('ui.k0632')
-    isEditingQuestion.value = false
+  } catch (err) {
+    console.error('Question updated but its follow-up refresh failed:', err)
   }
+}
+
+function isNetworkFailure(err) {
+  return err?.status === 0 || err?.code === 'NETWORK_ERROR'
 }
 
 let isSyncing = false
@@ -1414,47 +1445,80 @@ async function processOfflineQueue() {
   if (!queue.length) return
   const userItems = queue.filter(item => !item.userId || item.userId === uid || item.userId === auth.user?.value?.id || item.userId === auth.user?.value?.username || item.userId === 'user')
   if (!userItems.length) return
+  const pendingItems = userItems.filter(item => !item.blocked)
+  const blockedItems = userItems.filter(item => item.blocked)
+  if (!pendingItems.length) {
+    offlineRetryAvailable.value = false
+    offlineNotice.value = blockedItems[0]?.error || ''
+    return
+  }
+  offlineRetryAvailable.value = true
   offlineNotice.value = t('ui.k0633')
 
   // Process atomically item-by-item: NEVER wipe queue before confirmed completion!
-  while (queue.length > 0) {
-    const item = queue[0]
-    const match = !item.userId || item.userId === uid || item.userId === auth.user?.value?.id || item.userId === auth.user?.value?.username || item.userId === 'user'
-    if (!match) {
-      break
-    }
+  while (true) {
+    const itemIndex = queue.findIndex(item => !item.blocked && (!item.userId || item.userId === uid || item.userId === auth.user?.value?.id || item.userId === auth.user?.value?.username || item.userId === 'user'))
+    if (itemIndex < 0) break
+    const item = queue[itemIndex]
+    let updated
     try {
-      let updated
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           updated = await updateQuestion(currentToken, item.questionId, item.payload)
           break
         } catch (err) {
-          if (attempt < 2 && (err?.code === 'NETWORK_ERROR' || !err?.status)) {
+          if (attempt < 2 && isNetworkFailure(err)) {
             await new Promise(r => setTimeout(r, 150))
             continue
           }
           throw err
         }
       }
-      triggerSyncEvent('QUESTION_UPDATED', 'QUESTION', updated.id, { version_number: updated.version_number })
-      if (question.value && question.value.id === item.questionId) {
-        questions.value[index.value] = updated
+    } catch (err) {
+      console.error('Failed to sync offline question edit:', err)
+      if (isNetworkFailure(err)) break
+      item.blocked = true
+      item.error = err?.message || t('api_errors.REQUEST_FAILED')
+      localStorage.setItem(storageKey, JSON.stringify(queue))
+      localStorage.setItem(userScopedKey, JSON.stringify(queue))
+      if (question.value?.id === item.questionId) {
+        editStem.value = item.payload.stem ?? ''
+        editType.value = item.payload.type ?? 'SINGLE'
+        editOptions.value = item.payload.options ?? []
+        editAnswer.value = item.payload.answer ?? ''
+        editExplanation.value = item.payload.explanation ?? ''
+        editDifficulty.value = item.payload.difficulty ?? 3
+        editTags.value = (item.payload.tags ?? []).join(', ')
+        editRegradeHistory.value = item.payload.regrade_history ?? false
+        isEditingQuestion.value = true
+        editSaveError.value = item.error
+      }
+      continue
+    }
+    triggerSyncEvent('QUESTION_UPDATED', 'QUESTION', updated.id, { version_number: updated.version_number })
+    if (question.value && question.value.id === item.questionId) {
+      questions.value[index.value] = updated
+      try {
         questionVersions.value = await listQuestionVersions(currentToken, updated.id)
         const conf = await getQuestionConflict(currentToken, updated.id)
         activeConflict.value = conf?.has_conflict ? conf.conflict : null
+      } catch (err) {
+        console.error('Question updated but its follow-up refresh failed:', err)
       }
-      // Remove item only upon confirmed success
-      queue.shift()
-      localStorage.setItem(storageKey, JSON.stringify(queue))
-      localStorage.setItem(userScopedKey, JSON.stringify(queue))
-    } catch (err) {
-      console.error('Failed to sync offline question edit:', err)
-      break
     }
+    // Remove item only after the update itself is confirmed.
+    queue.splice(itemIndex, 1)
+    localStorage.setItem(storageKey, JSON.stringify(queue))
+    localStorage.setItem(userScopedKey, JSON.stringify(queue))
   }
-  if (queue.length) {
-    offlineNotice.value = `${t('ui.k0634')} ${queue.length} ${t('ui.k0635')}`
+  const remainingItems = queue.filter(item => !item.userId || item.userId === uid || item.userId === auth.user?.value?.id || item.userId === auth.user?.value?.username || item.userId === 'user')
+  const retryableItems = remainingItems.filter(item => !item.blocked)
+  const remainingBlockedItems = remainingItems.filter(item => item.blocked)
+  offlineRetryAvailable.value = retryableItems.length > 0
+  if (retryableItems.length) {
+    offlineNotice.value = `${t('ui.k0634')} ${retryableItems.length} ${t('ui.k0635')}`
+  } else if (remainingBlockedItems.length) {
+    offlineNotice.value = remainingBlockedItems[0].error || ''
   } else {
     offlineNotice.value = ''
     localStorage.removeItem(storageKey)
@@ -2657,6 +2721,11 @@ function handleRestartPractice() {
 .question-edit-panel h3 {
   margin: 0;
   font-size: 1.05rem;
+}
+
+.question-edit-error {
+  margin: 0;
+  color: var(--danger-fg, var(--danger));
 }
 
 .question-edit-panel label {

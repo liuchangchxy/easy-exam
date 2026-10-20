@@ -796,6 +796,73 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       assert.ok(resolvedMsg.includes('已成功确认采用版本 v2 内容'), 'Resolution confirmation must display in UI')
       console.log(`✓ Device A user adopted Version 2 via UI: ${resolvedMsg}`)
 
+      // A durable HTTP rejection stays in the editor; only transport failures enter the offline queue.
+      await page.route(`**/api/v1/questions/${targetQId}`, async route => {
+        if (route.request().method() === 'PUT') {
+          await route.fulfill({ status: 403, contentType: 'application/json',
+            body: JSON.stringify({ error_code: 'EXAM_ACTIVE_PROTECTED', params: {} }) })
+        } else {
+          await route.continue()
+        }
+      })
+      await page.click('button.btn-edit-question')
+      await page.waitForSelector('.question-edit-panel')
+      await page.fill('.input-edit-stem', '受保护考试中的拒绝修改')
+      const activeExamRejection = page.waitForResponse(response =>
+        response.url().endsWith(`/api/v1/questions/${targetQId}`) && response.request().method() === 'PUT')
+      await page.click('button.btn-save-question-edit')
+      assert.equal((await activeExamRejection).status(), 403, 'The edit must reach the active-exam rejection response')
+      await page.waitForSelector('[data-testid="question-edit-error"]')
+      assert.match(await page.locator('[data-testid="question-edit-error"]').textContent(), /存在活动模拟考试/)
+      assert.equal(await page.locator('.question-edit-panel').isVisible(), true, 'Rejected edits remain open for correction')
+      assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('easyexam_offline_question_edits') || '[]').length), 0,
+        'HTTP rejections must not be stored as offline edits')
+
+      // A validation HTTP 400 is also a permanent rejection: show its reason and keep the editor open.
+      await page.unroute(`**/api/v1/questions/${targetQId}`)
+      await page.route(`**/api/v1/questions/${targetQId}`, async route => {
+        if (route.request().method() === 'PUT') {
+          await route.fulfill({ status: 400, contentType: 'application/json',
+            body: JSON.stringify({ error_code: 'HTTP_400', params: { detail: 'MULTI 至少需要两个正确答案' }, detail: 'MULTI 至少需要两个正确答案' }) })
+        } else {
+          await route.continue()
+        }
+      })
+      await page.fill('.input-edit-stem', '无效答案修改')
+      await page.click('button.btn-save-question-edit')
+      await page.waitForFunction(() => document.querySelector('[data-testid="question-edit-error"]')?.textContent.includes('至少需要两个正确答案'))
+      assert.equal(await page.locator('.question-edit-panel').isVisible(), true, 'Validation rejection keeps the editor open')
+      assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('easyexam_offline_question_edits') || '[]').length), 0,
+        'HTTP 400 validation failures must not enter the offline queue')
+
+      // A previously queued edit that gets the same permanent rejection is retained as blocked,
+      // surfaced with its reason, and is no longer offered for automatic retry.
+      await page.unroute(`**/api/v1/questions/${targetQId}`)
+      await page.route(`**/api/v1/questions/${targetQId}`, async route => {
+        if (route.request().method() === 'PUT') {
+          await route.fulfill({ status: 403, contentType: 'application/json',
+            body: JSON.stringify({ error_code: 'EXAM_ACTIVE_PROTECTED', params: { detail: 'cannot edit question while exam is active' }, detail: 'cannot edit question while exam is active' }) })
+        } else {
+          await route.continue()
+        }
+      })
+      await page.click('.question-edit-panel .edit-actions button:first-child')
+      await context.setOffline(true)
+      await page.click('button.btn-edit-question')
+      await page.waitForSelector('.question-edit-panel')
+      await page.fill('.input-edit-stem', '离线暂存后被考试保护拒绝')
+      await page.click('button.btn-save-question-edit')
+      await page.waitForSelector('[data-testid="offline-banner"]')
+      await context.setOffline(false)
+      await page.locator('button.btn-sync-offline').evaluate(button => button.click())
+      await page.waitForSelector('[data-testid="question-edit-error"]')
+      const rejectedQueue = await page.evaluate(() => JSON.parse(localStorage.getItem('easyexam_offline_question_edits') || '[]'))
+      assert.equal(rejectedQueue.length, 1)
+      assert.equal(rejectedQueue[0].blocked, true)
+      assert.match(await page.locator('[data-testid="offline-banner"]').textContent(), /存在活动模拟考试/)
+      assert.equal(await page.locator('.btn-sync-offline').count(), 0, 'Permanently rejected edits are not retried as pending work')
+      await page.unroute(`**/api/v1/questions/${targetQId}`)
+
       // 11. Verify SQLite physical database state: all 4 versions intact, conflict marked resolved
       const sqlCheck = execSync(
         `python -c "import sqlite3, json; conn=sqlite3.connect(r'${tempDbPath}'); ` +
