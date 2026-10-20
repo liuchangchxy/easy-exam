@@ -26,7 +26,13 @@ class QuestionRepository:
     def __init__(self, db_path: str):
         self.db_path = db_path
 
-    def create_versioned_question(self, user_id: str, bank_id: str, payload: Dict[str, Any]) -> dict:
+    def create_versioned_question(self, user_id: str, bank_id: str, payload: Dict[str, Any], conn=None) -> dict:
+        if conn is not None:
+            return self._create_versioned_question_on_conn(conn, user_id, bank_id, payload)
+        with transaction(self.db_path) as c:
+            return self._create_versioned_question_on_conn(c, user_id, bank_id, payload)
+
+    def _create_versioned_question_on_conn(self, conn, user_id: str, bank_id: str, payload: Dict[str, Any]) -> dict:
         from backend.app.domain.content.validators import validate_question_invariants
         norm_type, norm_ans, norm_opts = validate_question_invariants(
             payload.get("type", "SINGLE"),
@@ -37,48 +43,47 @@ class QuestionRepository:
         payload = {**payload, "type": norm_type, "answer": norm_ans, "options": norm_opts}
         question_id = str(uuid.uuid4())
         version_id = str(uuid.uuid4())
-        with transaction(self.db_path) as conn:
-            member = conn.execute(
-                "SELECT role FROM question_bank_members WHERE bank_id = ? AND user_id = ?",
-                (bank_id, user_id),
-            ).fetchone()
-            if not member or member[0] not in ("ADMIN", "EDITOR"):
-                raise PermissionError("user cannot edit this question bank")
-            if payload.get("chapter_id"):
-                chap = conn.execute("SELECT 1 FROM chapters WHERE id = ? AND bank_id = ?", (payload["chapter_id"], bank_id)).fetchone()
-                if not chap:
-                    raise ValueError(f"Chapter '{payload['chapter_id']}' does not belong to bank '{bank_id}'")
-            conn.execute("INSERT INTO questions(id, created_by) VALUES (?, ?)", (question_id, user_id))
-            conn.execute(
-                """INSERT INTO question_versions(
-                    id, question_id, version_number, type, stem, options_json, answer,
-                    explanation, difficulty, tags_json, created_by, chapter_id
-                ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    version_id,
-                    question_id,
-                    payload.get("type", "SINGLE"),
-                    payload["stem"],
-                    json.dumps(payload.get("options", []), ensure_ascii=False),
-                    payload.get("answer", ""),
-                    payload.get("explanation", ""),
-                    int(payload["difficulty"]) if payload.get("difficulty") is not None else 0,
-                    json.dumps(payload.get("tags", []), ensure_ascii=False),
-                    user_id,
-                    payload.get("chapter_id"),
-                ),
-            )
-            # EE-007: Entity-based knowledge tags mapping
-            for tag_name in (payload.get("tags") or []):
-                t_row = conn.execute("SELECT id FROM knowledge_tags WHERE bank_id = ? AND name = ?", (bank_id, tag_name)).fetchone()
-                if not t_row:
-                    tag_id = str(uuid.uuid4())
-                    conn.execute("INSERT INTO knowledge_tags(id, bank_id, name) VALUES (?, ?, ?)", (tag_id, bank_id, tag_name))
-                else:
-                    tag_id = t_row[0]
-                conn.execute("INSERT OR IGNORE INTO question_tag_items(question_version_id, tag_id) VALUES (?, ?)", (version_id, tag_id))
-            conn.execute("INSERT INTO bank_question_items(bank_id, question_id) VALUES (?, ?)", (bank_id, question_id))
-        return self.get_for_user(question_id, user_id)
+        member = conn.execute(
+            "SELECT role FROM question_bank_members WHERE bank_id = ? AND user_id = ?",
+            (bank_id, user_id),
+        ).fetchone()
+        if not member or member[0] not in ("ADMIN", "EDITOR"):
+            raise PermissionError("user cannot edit this question bank")
+        if payload.get("chapter_id"):
+            chap = conn.execute("SELECT 1 FROM chapters WHERE id = ? AND bank_id = ?", (payload["chapter_id"], bank_id)).fetchone()
+            if not chap:
+                raise ValueError(f"Chapter '{payload['chapter_id']}' does not belong to bank '{bank_id}'")
+        conn.execute("INSERT INTO questions(id, created_by) VALUES (?, ?)", (question_id, user_id))
+        conn.execute(
+            """INSERT INTO question_versions(
+                id, question_id, version_number, type, stem, options_json, answer,
+                explanation, difficulty, tags_json, created_by, chapter_id
+            ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                version_id,
+                question_id,
+                payload.get("type", "SINGLE"),
+                payload["stem"],
+                json.dumps(payload.get("options", []), ensure_ascii=False),
+                payload.get("answer", ""),
+                payload.get("explanation", ""),
+                int(payload["difficulty"]) if payload.get("difficulty") is not None else 0,
+                json.dumps(payload.get("tags", []), ensure_ascii=False),
+                user_id,
+                payload.get("chapter_id"),
+            ),
+        )
+        # EE-007: Entity-based knowledge tags mapping
+        for tag_name in (payload.get("tags") or []):
+            t_row = conn.execute("SELECT id FROM knowledge_tags WHERE bank_id = ? AND name = ?", (bank_id, tag_name)).fetchone()
+            if not t_row:
+                tag_id = str(uuid.uuid4())
+                conn.execute("INSERT INTO knowledge_tags(id, bank_id, name) VALUES (?, ?, ?)", (tag_id, bank_id, tag_name))
+            else:
+                tag_id = t_row[0]
+            conn.execute("INSERT OR IGNORE INTO question_tag_items(question_version_id, tag_id) VALUES (?, ?)", (version_id, tag_id))
+        conn.execute("INSERT INTO bank_question_items(bank_id, question_id) VALUES (?, ?)", (bank_id, question_id))
+        return self.get_for_user(question_id, user_id, conn=conn)
 
     def batch_create_or_update_questions(
         self,

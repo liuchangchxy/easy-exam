@@ -352,6 +352,7 @@ class PracticeRepository:
 
             merged_answers = json.loads(current.get("answers_json") or "{}")
             if answers is not None:
+                has_non_empty_incoming = any(not _is_empty(_raw(v)) for v in answers.values())
                 for q_id, incoming_val in answers.items():
                     if allowed_qids and q_id not in allowed_qids:
                         continue
@@ -359,9 +360,10 @@ class PracticeRepository:
                     existing_raw = _raw(existing_val)
                     incoming_raw = _raw(incoming_val)
                     if _is_empty(incoming_raw):
-                        # P2-3: Empty string is only accepted if there is no existing non-empty answer or explicitly clearing,
-                        # but never silently overwrite existing valid answers from other devices (sync conflict prevention)
-                        if _is_empty(existing_raw):
+                        # P2-3: If all incoming answers in this sync request are empty (e.g. {q: ""}),
+                        # it represents an explicit user clearing action; if some answers are non-empty
+                        # (e.g. device syncing {q1: "", q2: "B"}), do not overwrite existing valid answers.
+                        if not has_non_empty_incoming or _is_empty(existing_raw):
                             merged_answers[q_id] = ""
                         continue
                     if not _is_empty(existing_raw) and existing_raw != incoming_raw:

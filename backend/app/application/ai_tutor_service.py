@@ -222,8 +222,7 @@ class AiTutorService:
         if not original:
             raise LookupError("original question not found")
 
-        from backend.app.infrastructure.ai.provider import CompatibleAiProvider
-        provider = self.provider or CompatibleAiProvider()
+        provider = self._get_provider_for_user(user_id)
 
         variant_prompt = [
             {
@@ -242,29 +241,19 @@ class AiTutorService:
         ]
 
         raw_output = provider.chat_complete(variant_prompt)
-        draft_payload = None
+        cleaned = raw_output.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
         try:
-            cleaned = raw_output.strip()
-            if cleaned.startswith("```"):
-                cleaned = cleaned.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
             draft_payload = json.loads(cleaned)
-            if not isinstance(draft_payload, dict) or not draft_payload.get("stem"):
-                raise ValueError("模型未返回有效变式题内容")
-            # 题型契约归一化: MULTIPLE -> MULTI
-            if draft_payload.get("type") == "MULTIPLE":
-                draft_payload["type"] = "MULTI"
-        except Exception:
-            # 如果处于离线/未配置或者大模型未能返回有效JSON，使用确定的备选变式模板生成草稿，而不是抛出异常阻断草稿箱流程
-            stem = original.get("stem", "")
-            draft_payload = {
-                "stem": f"【变式】{stem}",
-                "type": "MULTI" if original.get("type") in ("MULTI", "MULTIPLE") else original.get("type", "SINGLE"),
-                "options": original.get("options", []),
-                "answer": original.get("answer", ""),
-                "explanation": f"基于原题考点的变式题解析：{original.get('explanation', '')}",
-                "difficulty": original.get("difficulty", 3),
-                "tags": original.get("tags", []),
-            }
+        except Exception as exc:
+            raise ValueError(f"AI 变式题生成失败，模型输出解析异常: {exc}") from exc
+
+        if not isinstance(draft_payload, dict) or not draft_payload.get("stem"):
+            raise ValueError("模型未返回有效变式题内容")
+        # 题型契约归一化: MULTIPLE -> MULTI
+        if draft_payload.get("type") == "MULTIPLE":
+            draft_payload["type"] = "MULTI"
 
         return self.drafts.create_draft(user_id, original_question_id, target_bank_id, draft_payload)
 
@@ -284,37 +273,35 @@ class AiTutorService:
     def accept_variant_draft(self, user_id: str, draft_id: str, modifications: Optional[dict] = None) -> dict:
         if not self.drafts:
             raise LookupError("AiDraftRepository is not configured")
-        draft = self.drafts.get_draft(user_id, draft_id)
-        if not draft or draft.get("status") != "DRAFT":
-            raise LookupError("draft not found or already processed")
+        
+        # 在同一个数据库事务内原子完成草稿状态抢占与正式题目创建，杜绝补偿回滚和状态不一致
+        from backend.app.infrastructure.db.connection import transaction
+        with transaction(self.drafts.db_path) as conn:
+            draft = self.drafts.get_draft(user_id, draft_id)
+            if not draft or draft.get("status") != "DRAFT":
+                raise LookupError("draft not found or already processed")
 
-        # 原子抢占更新草稿状态为 ACCEPTED，避免并发重复接受
-        updated_draft = self.drafts.update_status(user_id, draft_id, "ACCEPTED", expected_status="DRAFT")
-        if not updated_draft:
-            raise LookupError("draft not found or already processed by another request")
+            updated_draft = self.drafts.update_status(user_id, draft_id, "ACCEPTED", expected_status="DRAFT", conn=conn)
+            if not updated_draft:
+                raise LookupError("draft not found or already processed by another request")
 
-        payload = {
-            "stem": (modifications.get("stem") if modifications and "stem" in modifications else draft["stem"]),
-            "type": (modifications.get("type") if modifications and "type" in modifications else draft["type"]),
-            "options": (modifications.get("options") if modifications and "options" in modifications else draft["options"]),
-            "answer": (modifications.get("answer") if modifications and "answer" in modifications else draft["answer"]),
-            "explanation": (modifications.get("explanation") if modifications and "explanation" in modifications else draft["explanation"]),
-            "difficulty": (modifications.get("difficulty") if modifications and "difficulty" in modifications else draft["difficulty"]),
-            "tags": (modifications.get("tags") if modifications and "tags" in modifications else draft["tags"]),
-        }
+            payload = {
+                "stem": (modifications.get("stem") if modifications and "stem" in modifications else draft["stem"]),
+                "type": (modifications.get("type") if modifications and "type" in modifications else draft["type"]),
+                "options": (modifications.get("options") if modifications and "options" in modifications else draft["options"]),
+                "answer": (modifications.get("answer") if modifications and "answer" in modifications else draft["answer"]),
+                "explanation": (modifications.get("explanation") if modifications and "explanation" in modifications else draft["explanation"]),
+                "difficulty": (modifications.get("difficulty") if modifications and "difficulty" in modifications else draft["difficulty"]),
+                "tags": (modifications.get("tags") if modifications and "tags" in modifications else draft["tags"]),
+            }
 
-        # Create question into target bank; if it fails, roll back draft status to DRAFT to preserve consistency
-        try:
-            official_question = self.questions.create_versioned_question(user_id, draft["target_bank_id"], payload)
-        except Exception:
-            self.drafts.update_status(user_id, draft_id, "DRAFT", expected_status="ACCEPTED")
-            raise
+            official_question = self.questions.create_versioned_question(user_id, draft["target_bank_id"], payload, conn=conn)
 
-        return {
-            "status": "ACCEPTED",
-            "draft_id": draft_id,
-            "question": official_question,
-        }
+            return {
+                "status": "ACCEPTED",
+                "draft_id": draft_id,
+                "question": official_question,
+            }
 
     def discard_variant_draft(self, user_id: str, draft_id: str) -> dict:
         if not self.drafts:
