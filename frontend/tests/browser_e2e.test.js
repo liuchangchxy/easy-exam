@@ -796,15 +796,36 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       assert.ok(resolvedMsg.includes('已成功确认采用版本 v2 内容'), 'Resolution confirmation must display in UI')
       console.log(`✓ Device A user adopted Version 2 via UI: ${resolvedMsg}`)
 
-      // A durable HTTP rejection stays in the editor; only transport failures enter the offline queue.
-      await page.route(`**/api/v1/questions/${targetQId}`, async route => {
-        if (route.request().method() === 'PUT') {
-          await route.fulfill({ status: 403, contentType: 'application/json',
-            body: JSON.stringify({ error_code: 'EXAM_ACTIVE_PROTECTED', params: {} }) })
-        } else {
-          await route.continue()
-        }
+      // A separate bank member holds the real active exam while the owner edits inline.
+      const crossExamUser = 'e2e_cross_exam'
+      const crossExamPassword = 'password-123456'
+      const crossExamRegister = await fetch(`${BASE_URL}/api/v1/auth/register`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: crossExamUser, password: crossExamPassword }),
       })
+      assert.equal(crossExamRegister.status, 201)
+      const crossExamLogin = await fetch(`${BASE_URL}/api/v1/auth/login`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: crossExamUser, password: crossExamPassword }),
+      })
+      assert.equal(crossExamLogin.status, 200)
+      const crossExamToken = (await crossExamLogin.json()).token
+      const addExamMember = await fetch(`${BASE_URL}/api/v1/banks/${bankId}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ username: crossExamUser, role: 'MEMBER' }),
+      })
+      assert.equal(addExamMember.status, 201)
+      const crossExamStart = await fetch(`${BASE_URL}/api/v1/practice/sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${crossExamToken}` },
+        body: JSON.stringify({ bank_id: bankId, mode: 'EXAM', total_questions: 1, question_ids: [targetQId] }),
+      })
+      const crossExamSession = await crossExamStart.json()
+      assert.equal(crossExamStart.status, 201, JSON.stringify(crossExamSession))
+      const crossExamSessionId = crossExamSession.id
+
+      // A durable HTTP rejection stays in the editor; only transport failures enter the offline queue.
       await page.click('button.btn-edit-question')
       await page.waitForSelector('.question-edit-panel')
       await page.fill('.input-edit-stem', '受保护考试中的拒绝修改')
@@ -819,33 +840,20 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
         'HTTP rejections must not be stored as offline edits')
 
       // A validation HTTP 400 is also a permanent rejection: show its reason and keep the editor open.
-      await page.unroute(`**/api/v1/questions/${targetQId}`)
-      await page.route(`**/api/v1/questions/${targetQId}`, async route => {
-        if (route.request().method() === 'PUT') {
-          await route.fulfill({ status: 400, contentType: 'application/json',
-            body: JSON.stringify({ error_code: 'HTTP_400', params: { detail: 'MULTI 至少需要两个正确答案' }, detail: 'MULTI 至少需要两个正确答案' }) })
-        } else {
-          await route.continue()
-        }
-      })
+      await page.selectOption('.select-edit-type', 'MULTI')
+      await page.fill('.input-edit-answer', 'A')
       await page.fill('.input-edit-stem', '无效答案修改')
+      const validationRejection = page.waitForResponse(response =>
+        response.url().endsWith(`/api/v1/questions/${targetQId}`) && response.request().method() === 'PUT')
       await page.click('button.btn-save-question-edit')
-      await page.waitForFunction(() => document.querySelector('[data-testid="question-edit-error"]')?.textContent.includes('至少需要两个正确答案'))
+      assert.equal((await validationRejection).status(), 400, 'The invalid MULTI edit must reach backend validation')
+      await page.waitForFunction(() => document.querySelector('[data-testid="question-edit-error"]')?.textContent.includes('至少包含两个不同的正确答案'))
       assert.equal(await page.locator('.question-edit-panel').isVisible(), true, 'Validation rejection keeps the editor open')
       assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('easyexam_offline_question_edits') || '[]').length), 0,
         'HTTP 400 validation failures must not enter the offline queue')
 
       // A previously queued edit that gets the same permanent rejection is retained as blocked,
       // surfaced with its reason, and is no longer offered for automatic retry.
-      await page.unroute(`**/api/v1/questions/${targetQId}`)
-      await page.route(`**/api/v1/questions/${targetQId}`, async route => {
-        if (route.request().method() === 'PUT') {
-          await route.fulfill({ status: 403, contentType: 'application/json',
-            body: JSON.stringify({ error_code: 'EXAM_ACTIVE_PROTECTED', params: { detail: 'cannot edit question while exam is active' }, detail: 'cannot edit question while exam is active' }) })
-        } else {
-          await route.continue()
-        }
-      })
       await page.click('.question-edit-panel .edit-actions button:first-child')
       await context.setOffline(true)
       await page.click('button.btn-edit-question')
@@ -861,7 +869,10 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       assert.equal(rejectedQueue[0].blocked, true)
       assert.match(await page.locator('[data-testid="offline-banner"]').textContent(), /存在活动模拟考试/)
       assert.equal(await page.locator('.btn-sync-offline').count(), 0, 'Permanently rejected edits are not retried as pending work')
-      await page.unroute(`**/api/v1/questions/${targetQId}`)
+      const completeCrossExam = await fetch(`${BASE_URL}/api/v1/practice/sessions/${crossExamSessionId}/complete`, {
+        method: 'POST', headers: { Authorization: `Bearer ${crossExamToken}` },
+      })
+      assert.equal(completeCrossExam.status, 200)
 
       // 11. Verify SQLite physical database state: all 4 versions intact, conflict marked resolved
       const sqlCheck = execSync(
