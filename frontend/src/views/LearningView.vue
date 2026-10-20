@@ -535,22 +535,29 @@ async function updatePlan() {
   }
 }
 
-async function startDayPlan(day) {
+async function startDayPlan(day, specificTask = null) {
   selectedDrawerDay.value = null
-  if (!day.question_ids || !day.question_ids.length) {
+  const questionIds = specificTask ? specificTask.question_ids : day.question_ids
+  if (!questionIds || !questionIds.length) {
     alert(t('ui.k0459'))
     return
   }
-  const targetBankId = day.bank_id || planBankId.value || selectedBankId.value || banks.value[0]?.id
+  // If specific task provided, use its bank; otherwise prefer first bank task or day's bank_id
+  const targetBankId = (specificTask && specificTask.bank_id) || (day.bank_tasks && day.bank_tasks[0]?.bank_id) || day.bank_id || planBankId.value || selectedBankId.value || banks.value[0]?.id
   if (!targetBankId) {
     alert(t('ui.k0460'))
     return
   }
+  // Ensure we only pass question_ids that actually belong to the chosen bank
+  const finalQuestionIds = specificTask
+    ? specificTask.question_ids
+    : (day.bank_tasks?.find(t => t.bank_id === targetBankId)?.question_ids || day.items?.filter(it => it.bank_id === targetBankId).map(it => it.question_id) || questionIds)
+
   try {
     const sess = await startSession(props.token, {
       bank_id: targetBankId,
       mode: 'PRACTICE',
-      question_ids: day.question_ids,
+      question_ids: finalQuestionIds,
     })
     emit('start-session', sess)
   } catch (err) {

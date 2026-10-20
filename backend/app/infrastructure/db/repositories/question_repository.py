@@ -26,7 +26,13 @@ class QuestionRepository:
     def __init__(self, db_path: str):
         self.db_path = db_path
 
-    def create_versioned_question(self, user_id: str, bank_id: str, payload: Dict[str, Any]) -> dict:
+    def create_versioned_question(self, user_id: str, bank_id: str, payload: Dict[str, Any], conn=None) -> dict:
+        if conn is not None:
+            return self._create_versioned_question_on_conn(conn, user_id, bank_id, payload)
+        with transaction(self.db_path) as c:
+            return self._create_versioned_question_on_conn(c, user_id, bank_id, payload)
+
+    def _create_versioned_question_on_conn(self, conn, user_id: str, bank_id: str, payload: Dict[str, Any]) -> dict:
         from backend.app.domain.content.validators import validate_question_invariants
         norm_type, norm_ans, norm_opts = validate_question_invariants(
             payload.get("type", "SINGLE"),
@@ -37,44 +43,47 @@ class QuestionRepository:
         payload = {**payload, "type": norm_type, "answer": norm_ans, "options": norm_opts}
         question_id = str(uuid.uuid4())
         version_id = str(uuid.uuid4())
-        with transaction(self.db_path) as conn:
-            member = conn.execute(
-                "SELECT role FROM question_bank_members WHERE bank_id = ? AND user_id = ?",
-                (bank_id, user_id),
-            ).fetchone()
-            if not member or member[0] not in ("ADMIN", "EDITOR"):
-                raise PermissionError("user cannot edit this question bank")
-            conn.execute("INSERT INTO questions(id, created_by) VALUES (?, ?)", (question_id, user_id))
-            conn.execute(
-                """INSERT INTO question_versions(
-                    id, question_id, version_number, type, stem, options_json, answer,
-                    explanation, difficulty, tags_json, created_by, chapter_id
-                ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    version_id,
-                    question_id,
-                    payload.get("type", "SINGLE"),
-                    payload["stem"],
-                    json.dumps(payload.get("options", []), ensure_ascii=False),
-                    payload.get("answer", ""),
-                    payload.get("explanation", ""),
-                    int(payload["difficulty"]) if payload.get("difficulty") is not None else 0,
-                    json.dumps(payload.get("tags", []), ensure_ascii=False),
-                    user_id,
-                    payload.get("chapter_id"),
-                ),
-            )
-            # EE-007: Entity-based knowledge tags mapping
-            for tag_name in (payload.get("tags") or []):
-                t_row = conn.execute("SELECT id FROM knowledge_tags WHERE bank_id = ? AND name = ?", (bank_id, tag_name)).fetchone()
-                if not t_row:
-                    tag_id = str(uuid.uuid4())
-                    conn.execute("INSERT INTO knowledge_tags(id, bank_id, name) VALUES (?, ?, ?)", (tag_id, bank_id, tag_name))
-                else:
-                    tag_id = t_row[0]
-                conn.execute("INSERT OR IGNORE INTO question_tag_items(question_version_id, tag_id) VALUES (?, ?)", (version_id, tag_id))
-            conn.execute("INSERT INTO bank_question_items(bank_id, question_id) VALUES (?, ?)", (bank_id, question_id))
-        return self.get_for_user(question_id, user_id)
+        member = conn.execute(
+            "SELECT role FROM question_bank_members WHERE bank_id = ? AND user_id = ?",
+            (bank_id, user_id),
+        ).fetchone()
+        if not member or member[0] not in ("ADMIN", "EDITOR"):
+            raise PermissionError("user cannot edit this question bank")
+        if payload.get("chapter_id"):
+            chap = conn.execute("SELECT 1 FROM chapters WHERE id = ? AND bank_id = ?", (payload["chapter_id"], bank_id)).fetchone()
+            if not chap:
+                raise ValueError(f"Chapter '{payload['chapter_id']}' does not belong to bank '{bank_id}'")
+        conn.execute("INSERT INTO questions(id, created_by) VALUES (?, ?)", (question_id, user_id))
+        conn.execute(
+            """INSERT INTO question_versions(
+                id, question_id, version_number, type, stem, options_json, answer,
+                explanation, difficulty, tags_json, created_by, chapter_id
+            ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                version_id,
+                question_id,
+                payload.get("type", "SINGLE"),
+                payload["stem"],
+                json.dumps(payload.get("options", []), ensure_ascii=False),
+                payload.get("answer", ""),
+                payload.get("explanation", ""),
+                int(payload["difficulty"]) if payload.get("difficulty") is not None else 0,
+                json.dumps(payload.get("tags", []), ensure_ascii=False),
+                user_id,
+                payload.get("chapter_id"),
+            ),
+        )
+        # EE-007: Entity-based knowledge tags mapping
+        for tag_name in (payload.get("tags") or []):
+            t_row = conn.execute("SELECT id FROM knowledge_tags WHERE bank_id = ? AND name = ?", (bank_id, tag_name)).fetchone()
+            if not t_row:
+                tag_id = str(uuid.uuid4())
+                conn.execute("INSERT INTO knowledge_tags(id, bank_id, name) VALUES (?, ?, ?)", (tag_id, bank_id, tag_name))
+            else:
+                tag_id = t_row[0]
+            conn.execute("INSERT OR IGNORE INTO question_tag_items(question_version_id, tag_id) VALUES (?, ?)", (version_id, tag_id))
+        conn.execute("INSERT INTO bank_question_items(bank_id, question_id) VALUES (?, ?)", (bank_id, question_id))
+        return self.get_for_user(question_id, user_id, conn=conn)
 
     def batch_create_or_update_questions(
         self,
@@ -197,18 +206,35 @@ class QuestionRepository:
         return results
 
     def _get_active_exam_question_ids(self, c, user_id: str | None = None) -> set:
+        from datetime import datetime, timezone
+        now_dt = datetime.now(timezone.utc)
+
+        def _is_active(row):
+            q_json, time_limit, created_at_str = row
+            if time_limit and int(time_limit) > 0 and created_at_str:
+                try:
+                    c_dt = datetime.fromisoformat(str(created_at_str).replace("Z", "+00:00"))
+                    if c_dt.tzinfo is None:
+                        c_dt = c_dt.replace(tzinfo=timezone.utc)
+                    # 允许 60 秒缓冲区，超出则视为超时失效会话，不再锁定题库题目
+                    if (now_dt - c_dt).total_seconds() > int(time_limit) * 60 + 60:
+                        return False
+                except Exception:
+                    pass
+            return True
+
         if user_id:
             rows = c.execute(
-                "SELECT questions_json FROM practice_sessions WHERE user_id = ? AND mode = 'EXAM' AND is_completed = 0",
+                "SELECT questions_json, time_limit, created_at FROM practice_sessions WHERE user_id = ? AND mode = 'EXAM' AND is_completed = 0",
                 (user_id,),
             ).fetchall()
         else:
             rows = c.execute(
-                "SELECT questions_json FROM practice_sessions WHERE mode = 'EXAM' AND is_completed = 0",
+                "SELECT questions_json, time_limit, created_at FROM practice_sessions WHERE mode = 'EXAM' AND is_completed = 0",
             ).fetchall()
         exam_qids = set()
         for r in rows:
-            if r[0]:
+            if r[0] and _is_active(r):
                 try:
                     for item in json.loads(r[0]):
                         qid = item.get("question_id")
@@ -270,9 +296,14 @@ class QuestionRepository:
 
     def list_for_snapshot(self, snapshot: list[dict], user_id: str) -> list[dict]:
         result = []
+        with transaction(self.db_path) as conn:
+            active_exam_qids = self._get_active_exam_question_ids(conn, user_id)
         for ref in snapshot:
             question = self.get_version_for_user(ref["question_id"], ref["version_id"], user_id)
             if question:
+                if question["id"] in active_exam_qids:
+                    question["answer"] = ""
+                    question["explanation"] = ""
                 result.append(question)
         return result
 
@@ -398,8 +429,13 @@ class QuestionRepository:
             next_ver = current + 1
             version_id = str(uuid.uuid4())
             prev_chap = conn.execute("SELECT chapter_id FROM question_versions WHERE question_id = ? AND version_number = ?", (question_id, current)).fetchone()
+            bank_id = access[0]
             if "chapter_id" in payload:
                 chap_id = payload.get("chapter_id") or None
+                if chap_id:
+                    chap = conn.execute("SELECT 1 FROM chapters WHERE id = ? AND bank_id = ?", (chap_id, bank_id)).fetchone()
+                    if not chap:
+                        raise ValueError(f"Chapter '{chap_id}' does not belong to bank '{bank_id}'")
             else:
                 chap_id = prev_chap[0] if prev_chap else None
             conn.execute(
@@ -676,6 +712,14 @@ class QuestionRepository:
 
     def get_active_conflict(self, question_id: str, user_id: str) -> dict | None:
         with transaction(self.db_path) as conn:
+            access = conn.execute(
+                """SELECT i.bank_id FROM bank_question_items i
+                   JOIN question_bank_members m ON m.bank_id = i.bank_id AND m.user_id = ?
+                   WHERE i.question_id = ? LIMIT 1""",
+                (user_id, question_id),
+            ).fetchone()
+            if not access:
+                raise PermissionError("user has no access to this question bank")
             row = conn.execute(
                 """SELECT id, question_id, user_id, base_version_number, server_version_number, client_version_number, is_resolved, created_at
                    FROM question_conflicts

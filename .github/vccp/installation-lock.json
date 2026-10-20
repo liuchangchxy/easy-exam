@@ -2,13 +2,13 @@
   "lock_schema_version": 1,
   "vccp": {
     "source": "liuchangchxy/vibe-coding-control-plane",
-    "revision": "810bb8a1be9f4fa84cfe436a92fc6cb058cdb0fb"
+    "revision": "5bff7e346f9606a8ed018933ca7e6767644efd3d"
   },
   "artifacts": [
     {
       "path": ".github/vccp/reviewer-task-prompt.md",
       "component": "reviewer-task-prompt",
-      "component_revision": "810bb8a1be9f4fa84cfe436a92fc6cb058cdb0fb",
+      "component_revision": "5bff7e346f9606a8ed018933ca7e6767644efd3d",
       "sha256": "f7528cc224a64ef9e09b6c8468f67ef4140c45ee469904d45ab1c21102d231dd"
     }
   ]

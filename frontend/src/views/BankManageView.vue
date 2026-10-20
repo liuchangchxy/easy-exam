@@ -401,22 +401,18 @@ async function loadData() {
   error.value = ''
 
   try {
-    const [bankRes, questionsRes, chaptersRes, examSessionsRes] = await Promise.all([
+    const [bankRes, questionsRes, chaptersRes] = await Promise.all([
       getBank(props.token, bankId.value),
       listBankQuestionsContent(props.token, bankId.value),
       listChapters(props.token, bankId.value).catch(() => []),
-      listActiveSessions(props.token, 'EXAM').catch(() => []),
     ])
 
     bank.value = bankRes
     questions.value = Array.isArray(questionsRes) ? questionsRes : []
     chapters.value = Array.isArray(chaptersRes) ? chaptersRes : []
 
-    // Check if any active exam session is associated with this bank (authoritative cross-user server check + client fallback)
-    const examSessions = Array.isArray(examSessionsRes) ? examSessionsRes : []
-    const clientHasActive = examSessions.some(s => s.bank_id === bankId.value && !s.is_completed)
-    const serverHasActive = Boolean(bankRes?.locked_by_active_exam || bankRes?.has_active_exam || questions.value.some(q => q.locked_by_active_exam))
-    hasActiveExam.value = serverHasActive || clientHasActive
+    // 服务端下发的锁定状态为单一权威事实源 (O-7 治理)
+    hasActiveExam.value = Boolean(bankRes?.locked_by_active_exam || bankRes?.has_active_exam || questions.value.some(q => q.locked_by_active_exam))
   } catch (err) {
     error.value = err.message || t('common.error')
   } finally {

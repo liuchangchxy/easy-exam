@@ -58,8 +58,10 @@ export function useSyncLoop(tokenRef, userRef) {
 
       if (Array.isArray(events) && events.length > 0) {
         const latest = events[events.length - 1]
-        if (latest.created_at) {
-          syncCursor.value = latest.created_at
+        // Prefer monotonic event ID cursor to prevent skipping events sharing the same second
+        const newCursor = latest.id || latest.created_at
+        if (newCursor) {
+          syncCursor.value = newCursor
           localStorage.setItem(storageKey, syncCursor.value)
         }
         lastSyncTime.value = new Date()
