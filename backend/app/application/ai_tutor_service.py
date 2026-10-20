@@ -50,16 +50,17 @@ class AiTutorService:
         return self.provider or CompatibleAiProvider()
 
     def _get_search_for_user(self, user_id: str):
-        if self.web_search:
-            return self.web_search
         if self.ai_configs:
             cfg = self.ai_configs.get_config(user_id, mask_secrets=False)
-            if cfg.get("search_provider") == "open-webSearch":
-                from backend.app.infrastructure.ai.web_search import OpenWebSearchAdapter
-                return OpenWebSearchAdapter(endpoint_url=cfg.get("search_api_base"))
-            elif cfg.get("search_provider") == "offline":
+            provider = cfg.get("search_provider")
+            if provider == "offline":
                 from backend.app.infrastructure.ai.web_search import OfflineWebSearch
                 return OfflineWebSearch()
+            elif provider == "open-webSearch":
+                from backend.app.infrastructure.ai.web_search import OpenWebSearchAdapter
+                return OpenWebSearchAdapter(endpoint_url=cfg.get("search_api_base"))
+        if self.web_search:
+            return self.web_search
         from backend.app.infrastructure.ai.web_search import OfflineWebSearch
         return OfflineWebSearch()
 
@@ -228,7 +229,7 @@ class AiTutorService:
                 "role": "system",
                 "content": (
                     "你是一位严谨的出题专家。请基于给出的原题生成一道考查相同知识点的变式题。"
-                    "要求输出纯 JSON 对象，格式包含：stem (题干字符串), type (SINGLE 或 MULTIPLE 或 JUDGE 或 QA), "
+                    "要求输出纯 JSON 对象，格式包含：stem (题干字符串), type (SINGLE 或 MULTI 或 JUDGE 或 QA), "
                     "options (选项列表，格式如 [{'key': 'A', 'text': '...'}, {'key': 'B', 'text': '...'}]), "
                     "answer (正确答案), explanation (详细解析), difficulty (1-5 整数), tags (字符串标签列表)。"
                 ),
@@ -246,16 +247,13 @@ class AiTutorService:
             if cleaned.startswith("```"):
                 cleaned = cleaned.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
             draft_payload = json.loads(cleaned)
-        except Exception:
-            draft_payload = {
-                "stem": f"【变式】{original.get('stem')}",
-                "type": original.get("type", "SINGLE"),
-                "options": original.get("options", []),
-                "answer": original.get("answer", ""),
-                "explanation": f"基于原题考点的变式题解析：{original.get('explanation', '')}",
-                "difficulty": original.get("difficulty", 3),
-                "tags": original.get("tags", []),
-            }
+            if not isinstance(draft_payload, dict) or not draft_payload.get("stem"):
+                raise ValueError("模型未返回有效变式题内容")
+            # 题型契约归一化: MULTIPLE -> MULTI
+            if draft_payload.get("type") == "MULTIPLE":
+                draft_payload["type"] = "MULTI"
+        except Exception as exc:
+            raise ValueError(f"AI 变式题生成失败，模型输出解析异常: {exc}") from exc
 
         return self.drafts.create_draft(user_id, original_question_id, target_bank_id, draft_payload)
 
@@ -279,6 +277,11 @@ class AiTutorService:
         if not draft or draft.get("status") != "DRAFT":
             raise LookupError("draft not found or already processed")
 
+        # 原子抢占更新草稿状态为 ACCEPTED，避免并发重复接受
+        updated_draft = self.drafts.update_status(user_id, draft_id, "ACCEPTED", expected_status="DRAFT")
+        if not updated_draft:
+            raise LookupError("draft not found or already processed by another request")
+
         payload = {
             "stem": (modifications.get("stem") if modifications and "stem" in modifications else draft["stem"]),
             "type": (modifications.get("type") if modifications and "type" in modifications else draft["type"]),
@@ -291,7 +294,6 @@ class AiTutorService:
 
         # Create question into target bank
         official_question = self.questions.create_versioned_question(user_id, draft["target_bank_id"], payload)
-        self.drafts.update_status(user_id, draft_id, "ACCEPTED")
         return {
             "status": "ACCEPTED",
             "draft_id": draft_id,

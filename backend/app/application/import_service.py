@@ -40,11 +40,17 @@ class ImportService:
     def _find_duplicates(self, user_id: str, bank_id: str, items: list[dict]) -> list[dict]:
         existing = self.questions.list_for_bank(bank_id, user_id)
         by_key = {self._key(item): item for item in existing}
+        seen_batch = {}
         duplicates = []
         for index, item in enumerate(items):
-            match = by_key.get(self._key(item))
+            key = self._key(item)
+            match = by_key.get(key)
             if match:
                 duplicates.append({"index": index, "question_id": match["id"], "stem": item.get("stem", "")})
+            elif key in seen_batch:
+                duplicates.append({"index": index, "question_id": seen_batch[key], "stem": item.get("stem", "")})
+            else:
+                seen_batch[key] = f"batch_{index}"
         return duplicates
 
     def _parse(self, fmt: str, content: str) -> list[dict]:

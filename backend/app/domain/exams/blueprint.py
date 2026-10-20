@@ -71,11 +71,16 @@ def select_questions_by_blueprint(
     # gracefully degrade by drawing remaining questions from candidates.
     target_total = total_questions if total_questions > 0 else sum(int(s.get("count") or 0) for s in sections)
     if target_total > len(selected):
-        for q in candidate_questions:
-            if q["id"] not in selected_ids:
-                selected.append(q)
-                selected_ids.add(q["id"])
-                if len(selected) >= target_total:
-                    break
+        # Blueprint constraints are strictly enforced: do not silently dilute distributions
+        allow_fallback = bool(blueprint_config.get("allow_fallback", False))
+        if allow_fallback:
+            for q in candidate_questions:
+                if q["id"] not in selected_ids:
+                    selected.append(q)
+                    selected_ids.add(q["id"])
+                    if len(selected) >= target_total:
+                        break
+        else:
+            raise ValueError(f"蓝图题目配比不足: 期望 {target_total} 道，实际仅匹配到 {len(selected)} 道")
 
     return selected

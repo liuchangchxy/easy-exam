@@ -73,12 +73,20 @@ class AiDraftRepository:
             res["tags"] = json.loads(res.pop("tags_json") or "[]")
             return res
 
-    def update_status(self, user_id: str, draft_id: str, status: str) -> Optional[dict]:
+    def update_status(self, user_id: str, draft_id: str, status: str, expected_status: str | None = None) -> Optional[dict]:
         with transaction(self.db_path) as conn:
-            conn.execute(
-                "UPDATE ai_question_drafts SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?",
-                (status, draft_id, user_id),
-            )
+            if expected_status:
+                cur = conn.execute(
+                    "UPDATE ai_question_drafts SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ? AND status = ?",
+                    (status, draft_id, user_id, expected_status),
+                )
+                if cur.rowcount == 0:
+                    return None
+            else:
+                conn.execute(
+                    "UPDATE ai_question_drafts SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?",
+                    (status, draft_id, user_id),
+                )
             return self.get_draft(user_id, draft_id)
 
     def delete_draft(self, user_id: str, draft_id: str) -> bool:

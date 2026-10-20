@@ -44,6 +44,10 @@ class QuestionRepository:
             ).fetchone()
             if not member or member[0] not in ("ADMIN", "EDITOR"):
                 raise PermissionError("user cannot edit this question bank")
+            if payload.get("chapter_id"):
+                chap = conn.execute("SELECT 1 FROM chapters WHERE id = ? AND bank_id = ?", (payload["chapter_id"], bank_id)).fetchone()
+                if not chap:
+                    raise ValueError(f"Chapter '{payload['chapter_id']}' does not belong to bank '{bank_id}'")
             conn.execute("INSERT INTO questions(id, created_by) VALUES (?, ?)", (question_id, user_id))
             conn.execute(
                 """INSERT INTO question_versions(
@@ -197,18 +201,35 @@ class QuestionRepository:
         return results
 
     def _get_active_exam_question_ids(self, c, user_id: str | None = None) -> set:
+        from datetime import datetime, timezone
+        now_dt = datetime.now(timezone.utc)
+
+        def _is_active(row):
+            q_json, time_limit, created_at_str = row
+            if time_limit and int(time_limit) > 0 and created_at_str:
+                try:
+                    c_dt = datetime.fromisoformat(str(created_at_str).replace("Z", "+00:00"))
+                    if c_dt.tzinfo is None:
+                        c_dt = c_dt.replace(tzinfo=timezone.utc)
+                    # 允许 60 秒缓冲区，超出则视为超时失效会话，不再锁定题库题目
+                    if (now_dt - c_dt).total_seconds() > int(time_limit) * 60 + 60:
+                        return False
+                except Exception:
+                    pass
+            return True
+
         if user_id:
             rows = c.execute(
-                "SELECT questions_json FROM practice_sessions WHERE user_id = ? AND mode = 'EXAM' AND is_completed = 0",
+                "SELECT questions_json, time_limit, created_at FROM practice_sessions WHERE user_id = ? AND mode = 'EXAM' AND is_completed = 0",
                 (user_id,),
             ).fetchall()
         else:
             rows = c.execute(
-                "SELECT questions_json FROM practice_sessions WHERE mode = 'EXAM' AND is_completed = 0",
+                "SELECT questions_json, time_limit, created_at FROM practice_sessions WHERE mode = 'EXAM' AND is_completed = 0",
             ).fetchall()
         exam_qids = set()
         for r in rows:
-            if r[0]:
+            if r[0] and _is_active(r):
                 try:
                     for item in json.loads(r[0]):
                         qid = item.get("question_id")
@@ -270,9 +291,14 @@ class QuestionRepository:
 
     def list_for_snapshot(self, snapshot: list[dict], user_id: str) -> list[dict]:
         result = []
+        with transaction(self.db_path) as conn:
+            active_exam_qids = self._get_active_exam_question_ids(conn, user_id)
         for ref in snapshot:
             question = self.get_version_for_user(ref["question_id"], ref["version_id"], user_id)
             if question:
+                if question["id"] in active_exam_qids:
+                    question["answer"] = ""
+                    question["explanation"] = ""
                 result.append(question)
         return result
 
@@ -398,8 +424,13 @@ class QuestionRepository:
             next_ver = current + 1
             version_id = str(uuid.uuid4())
             prev_chap = conn.execute("SELECT chapter_id FROM question_versions WHERE question_id = ? AND version_number = ?", (question_id, current)).fetchone()
+            bank_id = access[0]
             if "chapter_id" in payload:
                 chap_id = payload.get("chapter_id") or None
+                if chap_id:
+                    chap = conn.execute("SELECT 1 FROM chapters WHERE id = ? AND bank_id = ?", (chap_id, bank_id)).fetchone()
+                    if not chap:
+                        raise ValueError(f"Chapter '{chap_id}' does not belong to bank '{bank_id}'")
             else:
                 chap_id = prev_chap[0] if prev_chap else None
             conn.execute(
@@ -676,6 +707,14 @@ class QuestionRepository:
 
     def get_active_conflict(self, question_id: str, user_id: str) -> dict | None:
         with transaction(self.db_path) as conn:
+            access = conn.execute(
+                """SELECT i.bank_id FROM bank_question_items i
+                   JOIN question_bank_members m ON m.bank_id = i.bank_id AND m.user_id = ?
+                   WHERE i.question_id = ? LIMIT 1""",
+                (user_id, question_id),
+            ).fetchone()
+            if not access:
+                raise PermissionError("user has no access to this question bank")
             row = conn.execute(
                 """SELECT id, question_id, user_id, base_version_number, server_version_number, client_version_number, is_resolved, created_at
                    FROM question_conflicts
