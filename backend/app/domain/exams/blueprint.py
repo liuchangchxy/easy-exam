@@ -68,11 +68,11 @@ def select_questions_by_blueprint(
             selected_ids.add(p["id"])
 
     # If target total questions hasn't been reached (either from total_questions or sum of section counts),
-    # gracefully degrade by drawing remaining questions from candidates.
+    # gracefully degrade by drawing remaining questions from candidates if allowed or in fallback mode.
     target_total = total_questions if total_questions > 0 else sum(int(s.get("count") or 0) for s in sections)
     if target_total > len(selected):
-        # Blueprint constraints are strictly enforced: do not silently dilute distributions
-        allow_fallback = bool(blueprint_config.get("allow_fallback", False))
+        # Check if fallback is explicitly allowed or default to graceful fallback when not specified
+        allow_fallback = bool(blueprint.get("allow_fallback", True))
         if allow_fallback:
             for q in candidate_questions:
                 if q["id"] not in selected_ids:

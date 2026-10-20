@@ -359,7 +359,10 @@ class PracticeRepository:
                     existing_raw = _raw(existing_val)
                     incoming_raw = _raw(incoming_val)
                     if _is_empty(incoming_raw):
-                        merged_answers[q_id] = ""
+                        # P2-3: Empty string is only accepted if there is no existing non-empty answer or explicitly clearing,
+                        # but never silently overwrite existing valid answers from other devices (sync conflict prevention)
+                        if _is_empty(existing_raw):
+                            merged_answers[q_id] = ""
                         continue
                     if not _is_empty(existing_raw) and existing_raw != incoming_raw:
                         conflicts.append({

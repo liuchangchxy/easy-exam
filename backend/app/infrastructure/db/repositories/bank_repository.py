@@ -1,3 +1,4 @@
+import json
 import uuid
 from typing import List
 
@@ -180,9 +181,30 @@ class BankRepository:
             member = conn.execute("SELECT role FROM question_bank_members WHERE bank_id = ? AND user_id = ?", (bank_id, user_id)).fetchone()
             if not member or member[0] not in ("ADMIN", "EDITOR"):
                 raise PermissionError("user cannot edit this bank")
+            old_tag = conn.execute("SELECT name FROM knowledge_tags WHERE id = ? AND bank_id = ?", (tag_id, bank_id)).fetchone()
+            if not old_tag:
+                raise LookupError("tag not found")
+            old_name = old_tag[0]
             cur = conn.execute("UPDATE knowledge_tags SET name = ? WHERE id = ? AND bank_id = ?", (tag_name, tag_id, bank_id))
             if cur.rowcount == 0:
                 raise LookupError("tag not found")
+            # Cascade update to question_versions.tags_json to prevent dual-source divergence
+            v_rows = conn.execute(
+                """SELECT qv.id, qv.tags_json FROM question_versions qv
+                   JOIN bank_question_items bqi ON bqi.question_id = qv.question_id
+                   WHERE bqi.bank_id = ? AND qv.tags_json LIKE ?""",
+                (bank_id, f'%"{old_name}"%')
+            ).fetchall()
+            for v_id, tags_json_str in v_rows:
+                try:
+                    tags = json.loads(tags_json_str or "[]")
+                    if old_name in tags:
+                        new_tags = [tag_name if t == old_name else t for t in tags]
+                        # deduplicate while preserving order
+                        deduped = list(dict.fromkeys(new_tags))
+                        conn.execute("UPDATE question_versions SET tags_json = ? WHERE id = ?", (json.dumps(deduped, ensure_ascii=False), v_id))
+                except Exception:
+                    pass
             return dict(conn.execute("SELECT * FROM knowledge_tags WHERE id = ?", (tag_id,)).fetchone())
 
     def delete_tag(self, bank_id: str, user_id: str, tag_id: str) -> bool:
@@ -190,7 +212,28 @@ class BankRepository:
             member = conn.execute("SELECT role FROM question_bank_members WHERE bank_id = ? AND user_id = ?", (bank_id, user_id)).fetchone()
             if not member or member[0] not in ("ADMIN", "EDITOR"):
                 raise PermissionError("user cannot edit this bank")
+            old_tag = conn.execute("SELECT name FROM knowledge_tags WHERE id = ? AND bank_id = ?", (tag_id, bank_id)).fetchone()
+            if not old_tag:
+                return False
+            old_name = old_tag[0]
+            # Remove association from question_tag_items
+            conn.execute("DELETE FROM question_tag_items WHERE tag_id = ?", (tag_id,))
             cur = conn.execute("DELETE FROM knowledge_tags WHERE id = ? AND bank_id = ?", (tag_id, bank_id))
+            # Cascade remove from question_versions.tags_json
+            v_rows = conn.execute(
+                """SELECT qv.id, qv.tags_json FROM question_versions qv
+                   JOIN bank_question_items bqi ON bqi.question_id = qv.question_id
+                   WHERE bqi.bank_id = ? AND qv.tags_json LIKE ?""",
+                (bank_id, f'%"{old_name}"%')
+            ).fetchall()
+            for v_id, tags_json_str in v_rows:
+                try:
+                    tags = json.loads(tags_json_str or "[]")
+                    if old_name in tags:
+                        new_tags = [t for t in tags if t != old_name]
+                        conn.execute("UPDATE question_versions SET tags_json = ? WHERE id = ?", (json.dumps(new_tags, ensure_ascii=False), v_id))
+                except Exception:
+                    pass
             return cur.rowcount > 0
 
     def list_tags(self, bank_id: str, user_id: str) -> list[dict]:

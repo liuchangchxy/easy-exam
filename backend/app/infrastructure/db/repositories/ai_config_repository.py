@@ -70,8 +70,10 @@ class AiConfigRepository:
                     "search_api_key": "",
                     "search_api_base": "http://localhost:8000/v1/search",
                     "is_configured": False,
+                    "has_custom_config": False,
                 }
             data = dict(row)
+            data["has_custom_config"] = True
             stored_ai_key = data.get("ai_api_key") or ""
             stored_search_key = data.get("search_api_key") or ""
             plain_ai_key = decrypt_secret(stored_ai_key)

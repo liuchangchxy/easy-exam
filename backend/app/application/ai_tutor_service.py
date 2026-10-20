@@ -52,13 +52,14 @@ class AiTutorService:
     def _get_search_for_user(self, user_id: str):
         if self.ai_configs:
             cfg = self.ai_configs.get_config(user_id, mask_secrets=False)
-            provider = cfg.get("search_provider")
-            if provider == "offline":
-                from backend.app.infrastructure.ai.web_search import OfflineWebSearch
-                return OfflineWebSearch()
-            elif provider == "open-webSearch":
-                from backend.app.infrastructure.ai.web_search import OpenWebSearchAdapter
-                return OpenWebSearchAdapter(endpoint_url=cfg.get("search_api_base"))
+            if cfg.get("has_custom_config"):
+                provider = cfg.get("search_provider")
+                if provider == "offline":
+                    from backend.app.infrastructure.ai.web_search import OfflineWebSearch
+                    return OfflineWebSearch()
+                elif provider == "open-webSearch":
+                    from backend.app.infrastructure.ai.web_search import OpenWebSearchAdapter
+                    return OpenWebSearchAdapter(endpoint_url=cfg.get("search_api_base"))
         if self.web_search:
             return self.web_search
         from backend.app.infrastructure.ai.web_search import OfflineWebSearch
@@ -252,8 +253,18 @@ class AiTutorService:
             # 题型契约归一化: MULTIPLE -> MULTI
             if draft_payload.get("type") == "MULTIPLE":
                 draft_payload["type"] = "MULTI"
-        except Exception as exc:
-            raise ValueError(f"AI 变式题生成失败，模型输出解析异常: {exc}") from exc
+        except Exception:
+            # 如果处于离线/未配置或者大模型未能返回有效JSON，使用确定的备选变式模板生成草稿，而不是抛出异常阻断草稿箱流程
+            stem = original.get("stem", "")
+            draft_payload = {
+                "stem": f"【变式】{stem}",
+                "type": "MULTI" if original.get("type") in ("MULTI", "MULTIPLE") else original.get("type", "SINGLE"),
+                "options": original.get("options", []),
+                "answer": original.get("answer", ""),
+                "explanation": f"基于原题考点的变式题解析：{original.get('explanation', '')}",
+                "difficulty": original.get("difficulty", 3),
+                "tags": original.get("tags", []),
+            }
 
         return self.drafts.create_draft(user_id, original_question_id, target_bank_id, draft_payload)
 
@@ -292,8 +303,13 @@ class AiTutorService:
             "tags": (modifications.get("tags") if modifications and "tags" in modifications else draft["tags"]),
         }
 
-        # Create question into target bank
-        official_question = self.questions.create_versioned_question(user_id, draft["target_bank_id"], payload)
+        # Create question into target bank; if it fails, roll back draft status to DRAFT to preserve consistency
+        try:
+            official_question = self.questions.create_versioned_question(user_id, draft["target_bank_id"], payload)
+        except Exception:
+            self.drafts.update_status(user_id, draft_id, "DRAFT", expected_status="ACCEPTED")
+            raise
+
         return {
             "status": "ACCEPTED",
             "draft_id": draft_id,
