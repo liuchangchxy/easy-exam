@@ -199,7 +199,8 @@ class PracticeRepository:
                     json.dumps(user_answer, ensure_ascii=False), result["score_ratio"], result["correctness"], result["mastery_status"], fsrs_rating, mistake_cause, card_snapshot_json, now.isoformat(),
                 ),
             )
-            answers = json.loads(session.get("answers_json") or "{}")
+            current_sess_row = conn.execute("SELECT answers_json FROM practice_sessions WHERE id = ?", (session["id"],)).fetchone()
+            answers = json.loads((current_sess_row[0] if current_sess_row else session.get("answers_json")) or "{}")
             answers[question["id"]] = {
                 "answer": user_answer,
                 "user_answer": user_answer,
@@ -350,7 +351,8 @@ class PracticeRepository:
             allowed_qids = {item["question_id"] for item in session_questions} if session_questions else set()
 
             merged_answers = json.loads(current.get("answers_json") or "{}")
-            if answers:
+            if answers is not None:
+                has_non_empty_incoming = any(not _is_empty(_raw(v)) for v in answers.values())
                 for q_id, incoming_val in answers.items():
                     if allowed_qids and q_id not in allowed_qids:
                         continue
@@ -358,6 +360,11 @@ class PracticeRepository:
                     existing_raw = _raw(existing_val)
                     incoming_raw = _raw(incoming_val)
                     if _is_empty(incoming_raw):
+                        # P2-3: If all incoming answers in this sync request are empty (e.g. {q: ""}),
+                        # it represents an explicit user clearing action; if some answers are non-empty
+                        # (e.g. device syncing {q1: "", q2: "B"}), do not overwrite existing valid answers.
+                        if not has_non_empty_incoming or _is_empty(existing_raw):
+                            merged_answers[q_id] = ""
                         continue
                     if not _is_empty(existing_raw) and existing_raw != incoming_raw:
                         conflicts.append({
@@ -367,10 +374,11 @@ class PracticeRepository:
                         })
                     merged_answers[q_id] = incoming_val
 
-            merged_flags = json.loads(current.get("flags_json") or "[]")
             if flags is not None:
                 valid_flags = [f for f in flags if not allowed_qids or f in allowed_qids]
-                merged_flags = list(dict.fromkeys(list(merged_flags) + valid_flags))
+                merged_flags = list(dict.fromkeys(valid_flags))
+            else:
+                merged_flags = json.loads(current.get("flags_json") or "[]")
 
             if current_index is not None:
                 max_idx = max(0, len(session_questions) - 1) if session_questions else 0
@@ -440,6 +448,21 @@ class PracticeRepository:
 
     def list_mistakes(self, user_id: str, bank_id: str | None = None) -> list[dict]:
         with transaction(self.db_path) as conn:
+            exam_rows = conn.execute(
+                "SELECT questions_json FROM practice_sessions WHERE user_id = ? AND mode = 'EXAM' AND is_completed = 0",
+                (user_id,),
+            ).fetchall()
+            active_exam_qids = set()
+            for er in exam_rows:
+                if er[0]:
+                    try:
+                        for item in json.loads(er[0]):
+                            qid = item.get("question_id")
+                            if qid:
+                                active_exam_qids.add(qid)
+                    except Exception:
+                        pass
+
             sql = """SELECT m.user_id, m.question_id, m.mistake_count, m.consecutive_correct,
                              l.mastery_status, m.is_cleared, l.last_attempt_at, m.mistake_cause,
                              i.bank_id, qv.stem, qv.type, qv.answer, f.due_at,
@@ -449,6 +472,7 @@ class PracticeRepository:
                       FROM mistake_records m
                       JOIN learning_records l ON l.user_id = m.user_id AND l.question_id = m.question_id
                       JOIN bank_question_items i ON i.question_id = m.question_id
+                      JOIN question_bank_members qbm ON qbm.bank_id = i.bank_id AND qbm.user_id = m.user_id
                       JOIN question_versions qv ON qv.question_id = l.question_id
                       LEFT JOIN fsrs_cards f ON f.user_id = m.user_id AND f.question_id = m.question_id
                       WHERE m.user_id = ? AND m.is_cleared = 0
@@ -459,7 +483,13 @@ class PracticeRepository:
                 params.append(bank_id)
             sql += " ORDER BY l.last_attempt_at DESC"
             rows = conn.execute(sql, params).fetchall()
-            return [dict(row) for row in rows]
+            results = []
+            for row in rows:
+                item = dict(row)
+                if item["question_id"] in active_exam_qids:
+                    item["answer"] = ""
+                results.append(item)
+            return results
 
     def update_mistake_cause(self, user_id: str, question_id: str, mistake_cause: str) -> dict:
         with transaction(self.db_path) as conn:
@@ -500,6 +530,7 @@ class PracticeRepository:
             if cursor.rowcount:
                 conn.execute(
                     """DELETE FROM fsrs_cards WHERE user_id = ? AND question_id = ?
+                       AND last_review_at IS NULL
                        AND NOT EXISTS (SELECT 1 FROM mistake_records WHERE user_id = ? AND question_id = ? AND is_cleared = 0)""",
                     (user_id, question_id, user_id, question_id),
                 )
@@ -772,9 +803,20 @@ class PracticeRepository:
     def list_events(self, user_id: str, after: str | None = None) -> list[dict]:
         with transaction(self.db_path) as conn:
             if after:
-                rows = conn.execute("SELECT id, event_type, aggregate_type, aggregate_id, payload_json, created_at FROM learning_events WHERE user_id = ? AND created_at > ? ORDER BY created_at ASC", (user_id, after)).fetchall()
+                # 检查 after 是否是事件的 id
+                target_row = conn.execute("SELECT rowid, created_at FROM learning_events WHERE user_id = ? AND id = ?", (user_id, after)).fetchone()
+                if target_row:
+                    rows = conn.execute(
+                        "SELECT id, event_type, aggregate_type, aggregate_id, payload_json, created_at FROM learning_events WHERE user_id = ? AND rowid > ? ORDER BY rowid ASC",
+                        (user_id, target_row[0])
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        "SELECT id, event_type, aggregate_type, aggregate_id, payload_json, created_at FROM learning_events WHERE user_id = ? AND (created_at > ? OR rowid > (SELECT COALESCE(MAX(rowid), 0) FROM learning_events WHERE user_id = ? AND created_at <= ?)) ORDER BY rowid ASC",
+                        (user_id, after, user_id, after)
+                    ).fetchall()
             else:
-                rows = conn.execute("SELECT id, event_type, aggregate_type, aggregate_id, payload_json, created_at FROM learning_events WHERE user_id = ? ORDER BY created_at ASC", (user_id,)).fetchall()
+                rows = conn.execute("SELECT id, event_type, aggregate_type, aggregate_id, payload_json, created_at FROM learning_events WHERE user_id = ? ORDER BY rowid ASC", (user_id,)).fetchall()
             result = []
             for row in rows:
                 value = dict(row)

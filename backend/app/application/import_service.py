@@ -40,11 +40,18 @@ class ImportService:
     def _find_duplicates(self, user_id: str, bank_id: str, items: list[dict]) -> list[dict]:
         existing = self.questions.list_for_bank(bank_id, user_id)
         by_key = {self._key(item): item for item in existing}
+        seen_batch = {}
         duplicates = []
         for index, item in enumerate(items):
-            match = by_key.get(self._key(item))
+            key = self._key(item)
+            match = by_key.get(key)
             if match:
                 duplicates.append({"index": index, "question_id": match["id"], "stem": item.get("stem", "")})
+            elif key in seen_batch:
+                # 批内重复题：记录其首现的批内索引，不伪造数据库 ID
+                duplicates.append({"index": index, "batch_target_index": seen_batch[key], "stem": item.get("stem", "")})
+            else:
+                seen_batch[key] = index
         return duplicates
 
     def _parse(self, fmt: str, content: str) -> list[dict]:
@@ -88,14 +95,32 @@ class ImportService:
 
         duplicate_by_index = {item["index"]: item for item in duplicates}
         operations = []
+        # 用 items_to_create 暂存未重复或归并后的本批题目
+        merged_batch_items: dict[int, dict] = {}
+
         for index, item in enumerate(items):
             duplicate = duplicate_by_index.get(index)
             if duplicate and duplicate_strategy == "skip":
                 continue
+
             if duplicate and duplicate_strategy == "merge":
-                operations.append({"op": "merge", "question_id": duplicate["question_id"], "payload": item})
+                # 如果是批内重复题目（没有真实 question_id，只有 batch_target_index）
+                if "batch_target_index" in duplicate:
+                    first_idx = duplicate["batch_target_index"]
+                    # 直接归并到第一条待创建的记录中，覆盖/补充其属性
+                    target_payload = merged_batch_items.get(first_idx, items[first_idx])
+                    merged_payload = {**target_payload, **item}
+                    merged_batch_items[first_idx] = merged_payload
+                    continue
+                else:
+                    # 数据库既有题目的合并
+                    operations.append({"op": "merge", "question_id": duplicate["question_id"], "payload": item})
             else:
-                operations.append({"op": "create", "payload": item})
+                merged_batch_items[index] = item
+
+        # 将归并好的新题目加入 operations
+        for idx in sorted(merged_batch_items.keys()):
+            operations.append({"op": "create", "payload": merged_batch_items[idx]})
 
         try:
             created = self.questions.batch_create_or_update_questions(user_id, bank_id, operations, conn=conn) if operations else []

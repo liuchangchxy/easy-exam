@@ -73,13 +73,35 @@ class AiDraftRepository:
             res["tags"] = json.loads(res.pop("tags_json") or "[]")
             return res
 
-    def update_status(self, user_id: str, draft_id: str, status: str) -> Optional[dict]:
+    def update_status(self, user_id: str, draft_id: str, status: str, expected_status: str | None = None, conn=None) -> Optional[dict]:
+        def _exec(c):
+            if expected_status:
+                cur = c.execute(
+                    "UPDATE ai_question_drafts SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ? AND status = ?",
+                    (status, draft_id, user_id, expected_status),
+                )
+                if cur.rowcount == 0:
+                    return None
+            else:
+                c.execute(
+                    "UPDATE ai_question_drafts SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?",
+                    (status, draft_id, user_id),
+                )
+            row = c.execute(
+                "SELECT * FROM ai_question_drafts WHERE id = ? AND user_id = ?",
+                (draft_id, user_id),
+            ).fetchone()
+            if not row:
+                return None
+            res = dict(row)
+            res["options"] = json.loads(res.pop("options_json") or "[]")
+            res["tags"] = json.loads(res.pop("tags_json") or "[]")
+            return res
+
+        if conn is not None:
+            return _exec(conn)
         with transaction(self.db_path) as conn:
-            conn.execute(
-                "UPDATE ai_question_drafts SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?",
-                (status, draft_id, user_id),
-            )
-            return self.get_draft(user_id, draft_id)
+            return _exec(conn)
 
     def delete_draft(self, user_id: str, draft_id: str) -> bool:
         with transaction(self.db_path) as conn:

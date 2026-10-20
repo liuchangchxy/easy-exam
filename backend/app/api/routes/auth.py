@@ -39,7 +39,9 @@ def logout(request: Request, authorization: str | None = None):
 
 @router.get("/me")
 def me(user=Depends(current_user)):
-    return user
+    user_data = dict(user)
+    user_data.pop("password_hash", None)
+    return user_data
 
 
 class ChangePasswordPayload(BaseModel):

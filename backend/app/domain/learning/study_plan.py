@@ -30,38 +30,42 @@ def build_study_plan(
         else:
             return "抗遗忘冲刺", "到期艾宾浩斯复习与综合提分"
 
+    def format_day_schedule(day_number: int, day_items: list[dict]) -> dict:
+        focus_name, focus_desc = get_phase_focus(day_number, days)
+        # Group items by bank_id to support multi-bank study tasks
+        bank_tasks_map: dict[str, list[str]] = {}
+        for it in day_items:
+            bid = it.get("bank_id") or "unknown"
+            qid = it.get("question_id")
+            if qid:
+                bank_tasks_map.setdefault(bid, []).append(qid)
+        bank_tasks = [
+            {"bank_id": bid, "question_ids": qids, "question_count": len(qids)}
+            for bid, qids in bank_tasks_map.items()
+        ]
+        return {
+            "day_number": day_number,
+            "title": f"第 {day_number} 天 · {focus_name}",
+            "focus": focus_name,
+            "focus_description": focus_desc,
+            "estimated_minutes": len(day_items) * minutes_per_question,
+            "question_count": len(day_items),
+            "question_ids": [it.get("question_id") for it in day_items if it.get("question_id")],
+            "bank_id": day_items[0].get("bank_id") if day_items else None,
+            "bank_tasks": bank_tasks,
+            "items": [
+                {**it, "estimated_minutes": minutes_per_question}
+                for it in day_items
+            ],
+        }
+
     if total_available == 0:
         for day_number in range(1, days + 1):
-            focus_name, focus_desc = get_phase_focus(day_number, days)
-            schedule.append({
-                "day_number": day_number,
-                "title": f"第 {day_number} 天 · {focus_name}",
-                "focus": focus_name,
-                "focus_description": focus_desc,
-                "estimated_minutes": 0,
-                "question_count": 0,
-                "question_ids": [],
-                "bank_id": None,
-                "items": [],
-            })
+            schedule.append(format_day_schedule(day_number, []))
     elif total_available < days:
         for day_number in range(1, days + 1):
             day_items = [recommendations[day_number - 1]] if day_number <= total_available else []
-            focus_name, focus_desc = get_phase_focus(day_number, days)
-            schedule.append({
-                "day_number": day_number,
-                "title": f"第 {day_number} 天 · {focus_name}",
-                "focus": focus_name,
-                "focus_description": focus_desc,
-                "estimated_minutes": len(day_items) * minutes_per_question,
-                "question_count": len(day_items),
-                "question_ids": [it.get("question_id") for it in day_items if it.get("question_id")],
-                "bank_id": day_items[0].get("bank_id") if day_items else None,
-                "items": [
-                    {**it, "estimated_minutes": minutes_per_question}
-                    for it in day_items
-                ],
-            })
+            schedule.append(format_day_schedule(day_number, day_items))
     elif total_available < target_capacity:
         base_count = total_available // days
         rem = total_available % days
@@ -70,41 +74,13 @@ def build_study_plan(
             take = base_count + (1 if day_number <= rem else 0)
             day_items = recommendations[cursor:cursor + take]
             cursor += len(day_items)
-            focus_name, focus_desc = get_phase_focus(day_number, days)
-            schedule.append({
-                "day_number": day_number,
-                "title": f"第 {day_number} 天 · {focus_name}",
-                "focus": focus_name,
-                "focus_description": focus_desc,
-                "estimated_minutes": len(day_items) * minutes_per_question,
-                "question_count": len(day_items),
-                "question_ids": [it.get("question_id") for it in day_items if it.get("question_id")],
-                "bank_id": day_items[0].get("bank_id") if day_items else None,
-                "items": [
-                    {**it, "estimated_minutes": minutes_per_question}
-                    for it in day_items
-                ],
-            })
+            schedule.append(format_day_schedule(day_number, day_items))
     else:
         cursor = 0
         for day_number in range(1, days + 1):
             day_items = recommendations[cursor:cursor + per_day]
             cursor += len(day_items)
-            focus_name, focus_desc = get_phase_focus(day_number, days)
-            schedule.append({
-                "day_number": day_number,
-                "title": f"第 {day_number} 天 · {focus_name}",
-                "focus": focus_name,
-                "focus_description": focus_desc,
-                "estimated_minutes": len(day_items) * minutes_per_question,
-                "question_count": len(day_items),
-                "question_ids": [it.get("question_id") for it in day_items if it.get("question_id")],
-                "bank_id": day_items[0].get("bank_id") if day_items else None,
-                "items": [
-                    {**it, "estimated_minutes": minutes_per_question}
-                    for it in day_items
-                ],
-            })
+            schedule.append(format_day_schedule(day_number, day_items))
 
     assigned = sum(len(day["items"]) for day in schedule)
     return {

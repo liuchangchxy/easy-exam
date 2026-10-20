@@ -1327,6 +1327,19 @@ class TestV1Architecture(unittest.TestCase):
 
     def test_ai_variant_draft_full_lifecycle(self):
         # EE-005: AI variant draft lifecycle (generate -> draft -> accept / discard)
+        class MockVariantProvider:
+            def chat_complete(self, messages):
+                return json.dumps({
+                    "stem": "已知直角三角形两直角边长为6和8，求斜边长？",
+                    "type": "SINGLE",
+                    "options": [{"key": "A", "text": "10"}, {"key": "B", "text": "12"}],
+                    "answer": "A",
+                    "explanation": "勾股定理 6^2 + 8^2 = 10^2",
+                    "difficulty": 3,
+                    "tags": ["数学", "几何"],
+                })
+
+        self.app.state.services.ai.provider = MockVariantProvider()
         self.client.post("/api/v1/auth/register", json={"username": "variant_user", "password": "password-123456"})
         token = self.client.post("/api/v1/auth/login", json={"username": "variant_user", "password": "password-123456"}).json()["token"]
         headers = {"Authorization": f"Bearer {token}"}
