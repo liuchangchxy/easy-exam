@@ -24,7 +24,7 @@ class TestAiBatchAndSequential(unittest.TestCase):
                 q = client.post(
                     f"/api/v1/banks/{bank['id']}/questions",
                     headers=headers,
-                    json={"stem": f"题目第{i+1}道", "answer": "A", "options": [{"key": "A", "content": "对"}]},
+                    json={"stem": f"题目第{i+1}道", "answer": "A", "options": [{"key": "A", "content": "对"}, {"key": "B", "content": "错"}]},
                 ).json()
                 q_ids.append(q["id"])
 
@@ -71,17 +71,17 @@ class TestAiBatchAndSequential(unittest.TestCase):
             client.post(
                 f"/api/v1/banks/{bank['id']}/questions",
                 headers=headers,
-                json={"stem": "已有官方解析题目", "answer": "A", "explanation": "官方详细说明"},
+                json={"stem": "已有官方解析题目", "answer": "A", "explanation": "官方详细说明", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]},
             )
             q2 = client.post(
                 f"/api/v1/banks/{bank['id']}/questions",
                 headers=headers,
-                json={"stem": "缺少解析题目一", "answer": "B"},
+                json={"stem": "缺少解析题目一", "answer": "B", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}]},
             ).json()
             q3 = client.post(
                 f"/api/v1/banks/{bank['id']}/questions",
                 headers=headers,
-                json={"stem": "缺少解析题目二", "answer": "C"},
+                json={"stem": "缺少解析题目二", "answer": "C", "options": [{"key": "A", "content": "1"}, {"key": "B", "content": "2"}, {"key": "C", "content": "3"}]},
             ).json()
 
             # Check initial batch status

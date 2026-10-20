@@ -429,6 +429,15 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
 
       // Return to mistakes view
       await page.click('button:has-text("返回")')
+      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
+      // Verify cancel retains session (Issue #57 Defect 4)
+      await page.click('[data-testid="exit-confirm-modal"] .btn-cancel-exit')
+      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { state: 'hidden', timeout: 3000 })
+      assert.ok(await page.locator('.practice-page').isVisible(), 'Canceling exit must preserve session')
+      // Now confirm exit
+      await page.click('button:has-text("返回")')
+      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
+      await page.click('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
       await page.waitForSelector('.mistakes-page')
       console.log('✓ Verified mistake cause persistence, scoped practice, and physical FSRS rating=4 update.')
     })
@@ -451,6 +460,8 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       // Answer the weak question
       await answerCurrentQuestion(false)
       await page.click('button:has-text("返回")')
+      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
+      await page.click('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
       await page.waitForSelector('.mistakes-page')
 
       // Reset filter to all banks
@@ -477,6 +488,8 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
 
       // Return to mistakes view
       await page.click('button:has-text("返回")')
+      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
+      await page.click('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
       await page.waitForSelector('.mistakes-page')
 
       // Switch to '斩杀题库' tab and verify question was restored (killed list is now empty)
@@ -559,6 +572,8 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
 
       // Return from practice to LearningView, then return to HomeView
       await page.click('header button:has-text("返回")')
+      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
+      await page.click('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
       await page.waitForSelector('.learning-page', { timeout: 8000 })
       await page.click('header button:has-text("返回")')
       await page.waitForSelector('.home-page', { timeout: 8000 })
@@ -763,6 +778,10 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
 
       // 9. Device A navigates to practice and sees conflict banner as well
       await page.click('header button:has-text("返回")')
+      const confirmExit10 = page.locator('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
+      if (await confirmExit10.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await confirmExit10.click()
+      }
       await page.waitForSelector('.home-page')
       await page.click('.bank-card:has-text("E2E真实浏览器题库") button:has-text("开始刷题")')
       await page.waitForSelector('.practice-page', { timeout: 8000 })
@@ -776,6 +795,84 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       const resolvedMsg = await page.locator('.conflict-resolved-msg').textContent()
       assert.ok(resolvedMsg.includes('已成功确认采用版本 v2 内容'), 'Resolution confirmation must display in UI')
       console.log(`✓ Device A user adopted Version 2 via UI: ${resolvedMsg}`)
+
+      // A separate bank member holds the real active exam while the owner edits inline.
+      const crossExamUser = 'e2e_cross_exam'
+      const crossExamPassword = 'password-123456'
+      const crossExamRegister = await fetch(`${BASE_URL}/api/v1/auth/register`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: crossExamUser, password: crossExamPassword }),
+      })
+      assert.equal(crossExamRegister.status, 201)
+      const crossExamLogin = await fetch(`${BASE_URL}/api/v1/auth/login`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: crossExamUser, password: crossExamPassword }),
+      })
+      assert.equal(crossExamLogin.status, 200)
+      const crossExamToken = (await crossExamLogin.json()).token
+      const addExamMember = await fetch(`${BASE_URL}/api/v1/banks/${bankId}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ username: crossExamUser, role: 'MEMBER' }),
+      })
+      assert.equal(addExamMember.status, 201)
+      const crossExamStart = await fetch(`${BASE_URL}/api/v1/practice/sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${crossExamToken}` },
+        body: JSON.stringify({ bank_id: bankId, mode: 'EXAM', total_questions: 1, question_ids: [targetQId] }),
+      })
+      const crossExamSession = await crossExamStart.json()
+      assert.equal(crossExamStart.status, 201, JSON.stringify(crossExamSession))
+      const crossExamSessionId = crossExamSession.id
+
+      // A durable HTTP rejection stays in the editor; only transport failures enter the offline queue.
+      await page.click('button.btn-edit-question')
+      await page.waitForSelector('.question-edit-panel')
+      await page.fill('.input-edit-stem', '受保护考试中的拒绝修改')
+      const activeExamRejection = page.waitForResponse(response =>
+        response.url().endsWith(`/api/v1/questions/${targetQId}`) && response.request().method() === 'PUT')
+      await page.click('button.btn-save-question-edit')
+      assert.equal((await activeExamRejection).status(), 403, 'The edit must reach the active-exam rejection response')
+      await page.waitForSelector('[data-testid="question-edit-error"]')
+      assert.match(await page.locator('[data-testid="question-edit-error"]').textContent(), /存在活动模拟考试/)
+      assert.equal(await page.locator('.question-edit-panel').isVisible(), true, 'Rejected edits remain open for correction')
+      assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('easyexam_offline_question_edits') || '[]').length), 0,
+        'HTTP rejections must not be stored as offline edits')
+
+      // A validation HTTP 400 is also a permanent rejection: show its reason and keep the editor open.
+      await page.selectOption('.select-edit-type', 'MULTI')
+      await page.fill('.input-edit-answer', 'A')
+      await page.fill('.input-edit-stem', '无效答案修改')
+      const validationRejection = page.waitForResponse(response =>
+        response.url().endsWith(`/api/v1/questions/${targetQId}`) && response.request().method() === 'PUT')
+      await page.click('button.btn-save-question-edit')
+      assert.equal((await validationRejection).status(), 400, 'The invalid MULTI edit must reach backend validation')
+      await page.waitForFunction(() => document.querySelector('[data-testid="question-edit-error"]')?.textContent.includes('至少包含两个不同的正确答案'))
+      assert.equal(await page.locator('.question-edit-panel').isVisible(), true, 'Validation rejection keeps the editor open')
+      assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('easyexam_offline_question_edits') || '[]').length), 0,
+        'HTTP 400 validation failures must not enter the offline queue')
+
+      // A previously queued edit that gets the same permanent rejection is retained as blocked,
+      // surfaced with its reason, and is no longer offered for automatic retry.
+      await page.click('.question-edit-panel .edit-actions button:first-child')
+      await context.setOffline(true)
+      await page.click('button.btn-edit-question')
+      await page.waitForSelector('.question-edit-panel')
+      await page.fill('.input-edit-stem', '离线暂存后被考试保护拒绝')
+      await page.click('button.btn-save-question-edit')
+      await page.waitForSelector('[data-testid="offline-banner"]')
+      await context.setOffline(false)
+      await page.locator('button.btn-sync-offline').evaluate(button => button.click())
+      await page.waitForSelector('[data-testid="question-edit-error"]')
+      const rejectedQueue = await page.evaluate(() => JSON.parse(localStorage.getItem('easyexam_offline_question_edits') || '[]'))
+      assert.equal(rejectedQueue.length, 1)
+      assert.equal(rejectedQueue[0].blocked, true)
+      assert.match(await page.locator('[data-testid="offline-banner"]').textContent(), /存在活动模拟考试/)
+      assert.equal(await page.locator('.btn-sync-offline').count(), 0, 'Permanently rejected edits are not retried as pending work')
+      const completeCrossExam = await fetch(`${BASE_URL}/api/v1/practice/sessions/${crossExamSessionId}/complete`, {
+        method: 'POST', headers: { Authorization: `Bearer ${crossExamToken}` },
+      })
+      assert.equal(completeCrossExam.status, 200)
 
       // 11. Verify SQLite physical database state: all 4 versions intact, conflict marked resolved
       const sqlCheck = execSync(
@@ -806,6 +903,8 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       // Clean up Device B and return Device A to home
       await contextB.close()
       await page.click('header button:has-text("返回")')
+      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
+      await page.click('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
       await page.waitForSelector('.home-page')
     })
 
@@ -1212,6 +1311,8 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
 
       // Navigate back to HomeView with active session and verify active-session badge
       await page.click('button.btn-back')
+      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
+      await page.click('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
       await page.waitForSelector('.home-page')
       await page.waitForSelector('.badge-active-progress', { timeout: 8000 })
       const activeBadgeStyles = await page.evaluate(() => {

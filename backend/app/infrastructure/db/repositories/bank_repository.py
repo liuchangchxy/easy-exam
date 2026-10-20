@@ -33,7 +33,16 @@ class BankRepository:
                    GROUP BY b.id, m.role""",
                 (user_id, bank_id),
             ).fetchone()
-            return dict(row) if row else None
+            if not row:
+                return None
+            result = dict(row)
+            active_exam = conn.execute(
+                "SELECT 1 FROM practice_sessions WHERE bank_id = ? AND mode = 'EXAM' AND is_completed = 0 LIMIT 1",
+                (bank_id,),
+            ).fetchone()
+            result["has_active_exam"] = bool(active_exam)
+            result["locked_by_active_exam"] = bool(active_exam)
+            return result
 
     def list_for_user(self, user_id: str) -> List[dict]:
         with transaction(self.db_path) as conn:
@@ -47,7 +56,19 @@ class BankRepository:
                    GROUP BY b.id, m.role ORDER BY b.created_at DESC""",
                 (user_id,),
             ).fetchall()
-            return [dict(row) for row in rows]
+            active_banks = {
+                r[0]
+                for r in conn.execute(
+                    "SELECT DISTINCT bank_id FROM practice_sessions WHERE mode = 'EXAM' AND is_completed = 0"
+                ).fetchall()
+            }
+            results = []
+            for row in rows:
+                d = dict(row)
+                d["has_active_exam"] = d["id"] in active_banks
+                d["locked_by_active_exam"] = d["id"] in active_banks
+                results.append(d)
+            return results
 
     def add_member(self, bank_id: str, owner_id: str, username: str, role: str = "MEMBER") -> dict:
         if role not in {"MEMBER", "EDITOR"}:

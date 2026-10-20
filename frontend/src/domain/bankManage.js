@@ -103,17 +103,24 @@ export function validateQuestionEdit(type, options, answer) {
   const trimmedAns = answer ? String(answer).trim() : ''
 
   if (t === 'SINGLE') {
-    const validKeys = Array.isArray(options) ? options.map(o => o.key?.trim()).filter(Boolean) : []
-    if (!trimmedAns || !validKeys.includes(trimmedAns)) {
+    const rawKeys = (Array.isArray(options) ? options.map(o => (o.key ? String(o.key).trim() : '')) : []).filter(Boolean)
+    if (rawKeys.length < 2 || new Set(rawKeys).size !== rawKeys.length) {
+      return { valid: false, error: 'invalid_options' }
+    }
+    if (!trimmedAns || !rawKeys.includes(trimmedAns)) {
       return { valid: false, error: 'invalid_answer' }
     }
     return { valid: true }
   }
 
   if (t === 'MULTI') {
-    const validKeys = new Set(Array.isArray(options) ? options.map(o => o.key?.trim()).filter(Boolean) : [])
-    const parts = trimmedAns.split(/[,;\s]+/).map(k => k.trim()).filter(Boolean)
-    if (!parts.length || !parts.every(k => validKeys.has(k))) {
+    const rawKeys = (Array.isArray(options) ? options.map(o => (o.key ? String(o.key).trim() : '')) : []).filter(Boolean)
+    if (rawKeys.length < 2 || new Set(rawKeys).size !== rawKeys.length) {
+      return { valid: false, error: 'invalid_options' }
+    }
+    const validKeys = new Set(rawKeys)
+    const parts = [...new Set(trimmedAns.split(/[,;\s]+/).map(k => k.trim()).filter(Boolean))]
+    if (parts.length < 2 || !parts.every(k => validKeys.has(k))) {
       return { valid: false, error: 'invalid_answer' }
     }
     return { valid: true }
@@ -121,8 +128,7 @@ export function validateQuestionEdit(type, options, answer) {
 
   if (t === 'JUDGE') {
     const upper = trimmedAns.toUpperCase()
-    const validKeys = Array.isArray(options) ? options.map(o => o.key?.trim().toUpperCase()).filter(Boolean) : []
-    if (!upper || (!validKeys.includes(upper) && !['T', 'F'].includes(upper))) {
+    if (upper !== 'T' && upper !== 'F') {
       return { valid: false, error: 'invalid_answer' }
     }
     return { valid: true }
@@ -145,8 +151,9 @@ export function adaptAnswerOnTypeChange(newType, currentAnswer, options = []) {
   }
 
   if (t === 'SINGLE') {
+    // T/F from JUDGE does not adapt to SINGLE with A/B/C/D
     const validKeys = Array.isArray(options) ? options.map(o => o.key?.trim()).filter(Boolean) : []
-    if (validKeys.includes(trimmedAns)) {
+    if (validKeys.includes(trimmedAns) && !['T', 'F'].includes(trimmedAns.toUpperCase())) {
       return trimmedAns
     }
     return ''
@@ -154,8 +161,8 @@ export function adaptAnswerOnTypeChange(newType, currentAnswer, options = []) {
 
   if (t === 'MULTI') {
     const validKeys = new Set(Array.isArray(options) ? options.map(o => o.key?.trim()).filter(Boolean) : [])
-    const parts = trimmedAns.split(/[,;\s]+/).map(k => k.trim()).filter(Boolean)
-    const validParts = parts.filter(k => validKeys.has(k))
+    const parts = [...new Set(trimmedAns.split(/[,;\s]+/).map(k => k.trim()).filter(Boolean))]
+    const validParts = parts.filter(k => validKeys.has(k) && !['T', 'F'].includes(k.toUpperCase()))
     if (validParts.length > 0) {
       return validParts.join(',')
     }
@@ -167,4 +174,41 @@ export function adaptAnswerOnTypeChange(newType, currentAnswer, options = []) {
   }
 
   return trimmedAns
+}
+
+export function adaptOptionsOnTypeChange(newType, currentOptions = [], tHelper = null) {
+  const t = String(newType || '').toUpperCase()
+  const trueLabel = tHelper ? tHelper('bank_manage.judge_true') : '正确'
+  const falseLabel = tHelper ? tHelper('bank_manage.judge_false') : '错误'
+
+  if (t === 'JUDGE') {
+    return [
+      { key: 'T', content: trueLabel },
+      { key: 'F', content: falseLabel },
+    ]
+  }
+
+  if (['SINGLE', 'MULTI'].includes(t)) {
+    const isFromJudge = !currentOptions.length ||
+      currentOptions.length < 2 ||
+      currentOptions.some(o => ['T', 'F'].includes(String(o?.key || '').trim().toUpperCase()))
+    if (isFromJudge) {
+      return [
+        { key: 'A', content: '' },
+        { key: 'B', content: '' },
+        { key: 'C', content: '' },
+        { key: 'D', content: '' },
+      ]
+    }
+    return currentOptions.map(opt => ({
+      key: opt.key || '',
+      content: opt.content !== undefined ? opt.content : (opt.text || ''),
+    }))
+  }
+
+  if (t === 'ESSAY') {
+    return []
+  }
+
+  return currentOptions
 }

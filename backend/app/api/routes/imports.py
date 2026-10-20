@@ -20,6 +20,8 @@ def import_bank(bank_id: str, payload: ImportPayload, request: Request, user=Dep
         return request.app.state.services.importer.import_content(user["id"], bank_id, payload.format, payload.content, payload.duplicate_strategy)
     except DuplicateImportError as exc:
         raise HTTPException(status_code=409, detail=exc.preview) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -32,6 +34,8 @@ def import_bank(bank_id: str, payload: ImportPayload, request: Request, user=Dep
 def preview_import(bank_id: str, payload: ImportPayload, request: Request, user=Depends(current_user)):
     try:
         return request.app.state.services.importer.preview_content(user["id"], bank_id, payload.format, payload.content)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -55,6 +59,8 @@ async def preview_file(bank_id: str, request: Request, file: UploadFile = File(.
     content = await file.read()
     try:
         return request.app.state.services.importer.preview_spreadsheet(user["id"], bank_id, file.filename, content, mapping)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -82,6 +88,8 @@ async def import_file(bank_id: str, request: Request, duplicate_strategy: str = 
         )
     except DuplicateImportError as exc:
         raise HTTPException(status_code=409, detail=exc.preview) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -103,6 +111,8 @@ async def preview_pdf_file(bank_id: str, request: Request, file: UploadFile = Fi
     content = await file.read()
     try:
         return request.app.state.services.importer.preview_pdf(user["id"], bank_id, file.filename, content)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -119,6 +129,8 @@ def confirm_pdf_import(bank_id: str, payload: PdfConfirmPayload, request: Reques
         )
     except DuplicateImportError as exc:
         raise HTTPException(status_code=409, detail=exc.preview) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

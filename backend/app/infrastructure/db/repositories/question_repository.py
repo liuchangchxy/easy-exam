@@ -27,6 +27,14 @@ class QuestionRepository:
         self.db_path = db_path
 
     def create_versioned_question(self, user_id: str, bank_id: str, payload: Dict[str, Any]) -> dict:
+        from backend.app.domain.content.validators import validate_question_invariants
+        norm_type, norm_ans, norm_opts = validate_question_invariants(
+            payload.get("type", "SINGLE"),
+            payload.get("stem", ""),
+            payload.get("options", []),
+            payload.get("answer", ""),
+        )
+        payload = {**payload, "type": norm_type, "answer": norm_ans, "options": norm_opts}
         question_id = str(uuid.uuid4())
         version_id = str(uuid.uuid4())
         with transaction(self.db_path) as conn:
@@ -97,11 +105,22 @@ class QuestionRepository:
         if not member or member[0] not in ("ADMIN", "EDITOR"):
             raise PermissionError("user cannot edit this question bank")
 
+        active_exam_qids = self._get_active_exam_question_ids(conn)
         for op_info in operations:
             op = op_info.get("op", "create")
             payload = op_info["payload"]
+            from backend.app.domain.content.validators import validate_question_invariants
+            norm_type, norm_ans, norm_opts = validate_question_invariants(
+                payload.get("type", "SINGLE"),
+                payload.get("stem", ""),
+                payload.get("options", []),
+                payload.get("answer", ""),
+            )
+            payload = {**payload, "type": norm_type, "answer": norm_ans, "options": norm_opts}
             if op == "merge":
                 target_qid = op_info["question_id"]
+                if target_qid in active_exam_qids:
+                    raise PermissionError("cannot edit question while exam is active")
                 current_max = conn.execute(
                     "SELECT COALESCE(MAX(version_number), 0) FROM question_versions WHERE question_id = ?",
                     (target_qid,),
@@ -177,17 +196,24 @@ class QuestionRepository:
                 results.append(q)
         return results
 
-    def _get_active_exam_question_ids(self, c, user_id: str) -> set:
-        rows = c.execute(
-            "SELECT questions_json FROM practice_sessions WHERE user_id = ? AND mode = 'EXAM' AND is_completed = 0",
-            (user_id,),
-        ).fetchall()
+    def _get_active_exam_question_ids(self, c, user_id: str | None = None) -> set:
+        if user_id:
+            rows = c.execute(
+                "SELECT questions_json FROM practice_sessions WHERE user_id = ? AND mode = 'EXAM' AND is_completed = 0",
+                (user_id,),
+            ).fetchall()
+        else:
+            rows = c.execute(
+                "SELECT questions_json FROM practice_sessions WHERE mode = 'EXAM' AND is_completed = 0",
+            ).fetchall()
         exam_qids = set()
         for r in rows:
             if r[0]:
                 try:
                     for item in json.loads(r[0]):
-                        exam_qids.add(item.get("question_id"))
+                        qid = item.get("question_id")
+                        if qid:
+                            exam_qids.add(qid)
                 except Exception:
                     pass
         return exam_qids
@@ -215,6 +241,7 @@ class QuestionRepository:
             if result["id"] in self._get_active_exam_question_ids(c, user_id):
                 result["answer"] = ""
                 result["explanation"] = ""
+            result["locked_by_active_exam"] = result["id"] in self._get_active_exam_question_ids(c)
             return result
 
         if conn is not None:
@@ -295,6 +322,7 @@ class QuestionRepository:
             ).fetchall()
             result = []
             active_qids = self._get_active_exam_question_ids(conn, user_id)
+            global_active_qids = self._get_active_exam_question_ids(conn)
             for row in rows:
                 item = dict(row)
                 item["options"] = json.loads(item.pop("options_json"))
@@ -302,6 +330,7 @@ class QuestionRepository:
                 if item["id"] in active_qids:
                     item["answer"] = ""
                     item["explanation"] = ""
+                item["locked_by_active_exam"] = item["id"] in global_active_qids
                 result.append(item)
             return result
 
@@ -340,8 +369,15 @@ class QuestionRepository:
             ).fetchone()
             if not access:
                 raise PermissionError("user cannot edit this question")
-            if question_id in self._get_active_exam_question_ids(conn, user_id):
+            if question_id in self._get_active_exam_question_ids(conn):
                 raise PermissionError("cannot edit question while exam is active")
+            from backend.app.domain.content.validators import validate_question_invariants
+            norm_type, norm_ans, norm_opts = validate_question_invariants(
+                payload.get("type", "SINGLE"), payload.get("stem", ""), payload.get("options", []), payload.get("answer", "")
+            )
+            payload["type"] = norm_type
+            payload["answer"] = norm_ans
+            payload["options"] = norm_opts
             current = conn.execute("SELECT COALESCE(MAX(version_number), 0) FROM question_versions WHERE question_id = ?", (question_id,)).fetchone()[0]
             base_ver = payload.get("base_version_number")
             if base_ver is not None and int(base_ver) < current:
@@ -659,8 +695,10 @@ class QuestionRepository:
             ).fetchone()
             if not access:
                 raise PermissionError("user cannot edit this question")
+            if question_id in self._get_active_exam_question_ids(conn):
+                raise PermissionError("cannot edit question while exam is active")
             target = conn.execute(
-                """SELECT type, stem, options_json, answer, explanation, difficulty, tags_json
+                """SELECT type, stem, options_json, answer, explanation, difficulty, tags_json, chapter_id
                    FROM question_versions WHERE question_id = ? AND version_number = ?""",
                 (question_id, adopt_version_number),
             ).fetchone()
@@ -671,13 +709,26 @@ class QuestionRepository:
             conn.execute(
                 """INSERT INTO question_versions(
                     id, question_id, version_number, type, stem, options_json, answer,
-                    explanation, difficulty, tags_json, created_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    explanation, difficulty, tags_json, created_by, chapter_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     new_version_id, question_id, current + 1, target[0], target[1],
                     target[2], target[3], target[4], target[5], target[6], user_id,
+                    target[7],
                 ),
             )
+            # Re-associate knowledge tags
+            bank_id = access[0]
+            tags = json.loads(target[6] or "[]")
+            for tag_name in tags:
+                t_row = conn.execute("SELECT id FROM knowledge_tags WHERE bank_id = ? AND name = ?", (bank_id, tag_name)).fetchone()
+                if not t_row:
+                    t_id = str(uuid.uuid4())
+                    conn.execute("INSERT INTO knowledge_tags(id, bank_id, name) VALUES (?, ?, ?)", (t_id, bank_id, tag_name))
+                else:
+                    t_id = t_row[0]
+                conn.execute("INSERT OR IGNORE INTO question_tag_items(question_version_id, tag_id) VALUES (?, ?)", (new_version_id, t_id))
+
             conn.execute(
                 """UPDATE question_conflicts
                    SET is_resolved = 1, resolved_version_number = ?, resolved_at = CURRENT_TIMESTAMP

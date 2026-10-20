@@ -192,7 +192,11 @@ function handleResumeSession(session) {
 }
 
 function handleStartSession(session) {
-  router.push(`/practice/${session.id}`)
+  if (session?.mode === 'EXAM') {
+    router.push(`/exam/${session.id}`)
+  } else {
+    router.push(`/practice/${session.id}`)
+  }
 }
 
 function handleBack() {

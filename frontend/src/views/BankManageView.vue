@@ -412,9 +412,11 @@ async function loadData() {
     questions.value = Array.isArray(questionsRes) ? questionsRes : []
     chapters.value = Array.isArray(chaptersRes) ? chaptersRes : []
 
-    // Check if any active exam session is associated with this bank
+    // Check if any active exam session is associated with this bank (authoritative cross-user server check + client fallback)
     const examSessions = Array.isArray(examSessionsRes) ? examSessionsRes : []
-    hasActiveExam.value = examSessions.some(s => s.bank_id === bankId.value && !s.is_completed)
+    const clientHasActive = examSessions.some(s => s.bank_id === bankId.value && !s.is_completed)
+    const serverHasActive = Boolean(bankRes?.locked_by_active_exam || bankRes?.has_active_exam || questions.value.some(q => q.locked_by_active_exam))
+    hasActiveExam.value = serverHasActive || clientHasActive
   } catch (err) {
     error.value = err.message || t('common.error')
   } finally {

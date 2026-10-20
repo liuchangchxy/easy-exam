@@ -128,7 +128,18 @@ export default {
     "start_sequential": "Start Practice · Sequential ({total} Qs)",
     "restart_sequential": "Restart Sequential",
     "sequential_progress": "Progress: {answered} / {total} Qs ({percent}%)",
-    "sequential_completed": "Completed all {total} questions"
+    "sequential_completed": "Completed all {total} questions",
+    "mock_exam": "Mock Exam",
+    "resume_mock_exam": "Resume Mock Exam ({answered}/{total} Qs)",
+    "restart_mock_exam": "Restart Exam",
+    "restart_mock_exam_tip": "Abandon and start a new mock exam",
+    "fsrs_review": "FSRS Review",
+    "resume_fsrs": "Resume Review ({answered}/{total} Qs)",
+    "mistake_sprint": "Mistakes Sprint",
+    "resume_mistake": "Resume Mistakes Sprint ({answered}/{total} Qs)",
+    "restart_session": "Restart Session",
+    "restart_session_tip": "Abandon and restart current session",
+    "session_progress": "{mode} Progress: {answered} / {total} Qs ({percent}%)"
   },
   "practice": {
     "title": "Practice Mode",
@@ -161,7 +172,11 @@ export default {
     "result_partial": "Partially Correct (Score: {score})",
     "finished_title": "Congratulations! Session Completed",
     "restart": "Practice Again",
-    "back_home": "Back to Home"
+    "back_home": "Back to Home",
+    "exit_confirm_title": "Exit practice?",
+    "exit_confirm_desc": "Your progress has been saved. You can resume anytime.",
+    "continue_practice": "Continue",
+    "confirm_exit": "Exit"
   },
   "exam": {
     "title": "Mock Examination",
@@ -175,6 +190,10 @@ export default {
     "submit_confirm_content": "You have {count} unanswered questions. Once submitted, answers cannot be altered.",
     "submit_exam": "Submit Now",
     "result_title": "Exam Performance Report",
+    "exit_confirm_title": "Exit mock exam?",
+    "exit_confirm_desc": "Your progress is saved, but the exam timer will continue running in the background.",
+    "continue_exam": "Continue Exam",
+    "confirm_exit": "Exit",
     "score": "Final Score: {score}",
     "total_score": "Total: {total}",
     "pass_score": "Passing Line: {pass}",
@@ -362,7 +381,11 @@ export default {
   "api_errors": {
     "REQUEST_FAILED": "Request failed, please try again later",
     "NETWORK_ERROR": "Network connection error, please check your network",
-    "AUTH_INVALID_CREDENTIALS": "Invalid username or password"
+    "AUTH_INVALID_CREDENTIALS": "Invalid username or password",
+    "AUTH_ACCOUNT_EXISTS": "Username already exists",
+    "EXAM_ACTIVE_PROTECTED": "Mock exam in progress: The question bank is currently locked to protect active exams and cannot be modified or imported.",
+    "QUESTION_INVALID_MULTI": "Multiple-choice questions must contain at least 2 options and at least 2 distinct correct answers.",
+    "VALIDATION_FAILED": "Validation failed: {detail}"
   },
   "blueprint": {
     "mode_simple": "Simple Mode",

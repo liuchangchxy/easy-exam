@@ -3,23 +3,30 @@ import { getCurrentLocale, t } from '../composables/useLocale.js'
 const API_PREFIX = '/api/v1'
 
 export class ApiError extends Error {
-  constructor(status, code = 'REQUEST_FAILED', params = {}, structuredDetail = null) {
+  constructor(status, code = 'REQUEST_FAILED', params = {}, structuredDetail = null, rawDetail = null) {
     super('')
     this.status = status
     this.code = code
     this.params = params
     this.structuredDetail = structuredDetail
+    this.rawDetail = rawDetail
     Object.defineProperty(this, 'message', { configurable: true, get: () => this.localizedMessage() })
   }
 
   localizedMessage() {
     const key = `api_errors.${this.code}`
     const translated = t(key, this.params)
-    return translated === key ? t('api_errors.REQUEST_FAILED') : translated
+    if (translated !== key) {
+      return translated
+    }
+    if (this.rawDetail && typeof this.rawDetail === 'string' && this.rawDetail.trim()) {
+      return this.rawDetail
+    }
+    return t('api_errors.REQUEST_FAILED')
   }
 
   get detail() {
-    return this.structuredDetail ?? this.message
+    return this.structuredDetail ?? (this.rawDetail && typeof this.rawDetail === 'string' ? this.rawDetail : this.message)
   }
 }
 
@@ -46,8 +53,9 @@ export async function parseApiResponse(response) {
     try { body = await response.json() } catch (_) {}
     const code = typeof body.error_code === 'string' ? body.error_code : `HTTP_${response.status}`
     const params = body.params && typeof body.params === 'object' && !Array.isArray(body.params) ? body.params : {}
-    const structuredDetail = response.status === 409 && body.detail && typeof body.detail === 'object' && !Array.isArray(body.detail) ? body.detail : null
-    throw new ApiError(response.status, code, params, structuredDetail)
+    const structuredDetail = body.detail && typeof body.detail === 'object' && !Array.isArray(body.detail) ? body.detail : null
+    const rawDetail = typeof body.detail === 'string' ? body.detail : (typeof body.message === 'string' ? body.message : null)
+    throw new ApiError(response.status, code, params, structuredDetail, rawDetail)
   }
   if (response.status === 204) return null
   return response.json()

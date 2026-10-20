@@ -1772,8 +1772,11 @@ class ClosureV1WatchdogContinuousPollingAndHeadFencingTests(unittest.TestCase):
         dispatcher.DISPATCH_AUDIT_PATH = Path(self.audit_path)
         self.mock_open_issues = patch.object(dispatcher, "get_open_issues", return_value=[])
         self.mock_open_issues.start()
+        self.mock_issue_details = patch.object(dispatcher, "get_issue_details", return_value={"state": "OPEN", "labels": [{"name": "frozen-spec"}, {"name": "agent-working"}]})
+        self.mock_issue_details.start()
 
     def tearDown(self):
+        self.mock_issue_details.stop()
         self.mock_open_issues.stop()
         self.ledger.close()
         dispatcher._GLOBAL_LEDGER = self.orig_ledger
