@@ -399,6 +399,15 @@ async function submitExam(automatic) {
   clearInterval(tickHandle)
   try {
     await persistDraft(true)
+    for (const item of questions.value) {
+      const answer = normalizeExamAnswer(item.type, answerValue(item.id))
+      if (!examAnswerState(item.id, { [item.id]: answer }, []).answered) continue
+      try {
+        await submitAttempt(props.token, props.sessionId, { question_id: item.id, user_answer: answer })
+      } catch (attErr) {
+        console.warn('submitAttempt fallback to completeSession auto-score:', attErr)
+      }
+    }
     report.value = await completeSession(props.token, props.sessionId)
     report.value.time_spent = elapsedSeconds.value
     if (automatic) error.value = t('ui.k0114')

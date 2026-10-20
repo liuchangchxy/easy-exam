@@ -477,58 +477,18 @@ function mergeWithPrev(idx) {
 
 function splitCandidate(idx) {
   const item = pdfCandidates.value[idx]
-  const stem = item.stem || ''
-  
-  // Find a reasonable split boundary (newline, question boundary, or punctuation)
-  let splitIndex = -1
-  
-  // 1. Look for newline followed by number or question pattern
-  const newlineMatch = stem.search(/\n(?=[0-9]+[.\s、\)])/)
-  if (newlineMatch > 0) {
-    splitIndex = newlineMatch + 1
-  } else {
-    // 2. Look for any newline
-    const anyNewline = stem.indexOf('\n')
-    if (anyNewline > 0) {
-      splitIndex = anyNewline + 1
-    } else {
-      // 3. Look for sentence terminator near the middle
-      const mid = Math.floor(stem.length / 2)
-      const terminators = ['。', '？', '！', '?', '!', '；', ';', '. ']
-      let bestDist = Infinity
-      for (const t of terminators) {
-        let pos = stem.indexOf(t)
-        while (pos !== -1) {
-          const cutPos = pos + t.length
-          const dist = Math.abs(cutPos - mid)
-          if (dist < bestDist && cutPos < stem.length) {
-            bestDist = dist
-            splitIndex = cutPos
-          }
-          pos = stem.indexOf(t, pos + 1)
-        }
-      }
-    }
-  }
-
-  // Fallback to midpoint only if no natural delimiter is found
-  if (splitIndex <= 0 || splitIndex >= stem.length) {
-    splitIndex = Math.floor(stem.length / 2)
-  }
-
-  const firstStem = stem.slice(0, splitIndex).trim()
-  const secondStem = stem.slice(splitIndex).trim() || t('ui.k0383')
-
-  item.stem = firstStem
+  const half = Math.floor(item.stem.length / 2)
+  const newStem = item.stem.slice(half).trim() || t('ui.k0383')
+  item.stem = item.stem.slice(0, half).trim()
   pdfCandidates.value.splice(idx + 1, 0, {
     candidate_id: pdfCandidates.value.length + 1,
     type: item.type,
-    stem: secondStem,
+    stem: newStem,
     options: [],
     answer: '',
     explanation: '',
     difficulty: item.difficulty || 3,
-    tags: item.tags ? [...item.tags] : [],
+    tags: item.tags || [],
     is_uncertain: true,
     uncertain_reason: t('ui.k0384'),
   })

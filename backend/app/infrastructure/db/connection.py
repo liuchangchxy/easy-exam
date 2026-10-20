@@ -394,17 +394,9 @@ def migrate(db_path: str) -> None:
         for version in sorted(MIGRATIONS):
             if version in applied:
                 continue
-            conn.execute("BEGIN IMMEDIATE")
-            try:
-                for stmt in MIGRATIONS[version].split(";"):
-                    stmt = stmt.strip()
-                    if stmt:
-                        conn.execute(stmt)
+            with conn:
+                conn.executescript(MIGRATIONS[version])
                 conn.execute("INSERT INTO schema_migrations(version) VALUES (?)", (version,))
-                conn.commit()
-            except Exception:
-                conn.rollback()
-                raise
     finally:
         conn.close()
 

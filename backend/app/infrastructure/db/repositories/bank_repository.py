@@ -1,4 +1,3 @@
-import json
 import uuid
 from typing import List
 
@@ -191,8 +190,6 @@ class BankRepository:
             member = conn.execute("SELECT role FROM question_bank_members WHERE bank_id = ? AND user_id = ?", (bank_id, user_id)).fetchone()
             if not member or member[0] not in ("ADMIN", "EDITOR"):
                 raise PermissionError("user cannot edit this bank")
-            # Remove association from question_tag_items
-            conn.execute("DELETE FROM question_tag_items WHERE tag_id = ?", (tag_id,))
             cur = conn.execute("DELETE FROM knowledge_tags WHERE id = ? AND bank_id = ?", (tag_id, bank_id))
             return cur.rowcount > 0
 

@@ -13,9 +13,7 @@ class AuthService:
             raise ValueError("username is required")
         if self.users.get_by_username(normalized):
             raise ValueError("username already exists")
-        created = self.users.create(normalized, hash_password(password))
-        created.pop("password_hash", None)
-        return created
+        return self.users.create(normalized, hash_password(password))
 
     def login(self, username: str, password: str) -> tuple[dict, str]:
         user = self.users.get_by_username(username.strip().lower())

@@ -72,11 +72,8 @@ def list_versions(question_id: str, request: Request, user=Depends(current_user)
 
 @router.get("/{question_id}/conflict")
 def get_conflict(question_id: str, request: Request, user=Depends(current_user)):
-    try:
-        conflict = request.app.state.services.questions.get_active_conflict(question_id, user["id"])
-        return {"has_conflict": conflict is not None, "conflict": conflict}
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    conflict = request.app.state.services.questions.get_active_conflict(question_id, user["id"])
+    return {"has_conflict": conflict is not None, "conflict": conflict}
 
 
 @router.post("/{question_id}/resolve-conflict")

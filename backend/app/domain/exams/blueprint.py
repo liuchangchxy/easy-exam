@@ -68,19 +68,14 @@ def select_questions_by_blueprint(
             selected_ids.add(p["id"])
 
     # If target total questions hasn't been reached (either from total_questions or sum of section counts),
-    # gracefully degrade by drawing remaining questions from candidates if allowed or in fallback mode.
+    # gracefully degrade by drawing remaining questions from candidates.
     target_total = total_questions if total_questions > 0 else sum(int(s.get("count") or 0) for s in sections)
     if target_total > len(selected):
-        # Check if fallback is explicitly allowed or default to graceful fallback when not specified
-        allow_fallback = bool(blueprint.get("allow_fallback", True))
-        if allow_fallback:
-            for q in candidate_questions:
-                if q["id"] not in selected_ids:
-                    selected.append(q)
-                    selected_ids.add(q["id"])
-                    if len(selected) >= target_total:
-                        break
-        else:
-            raise ValueError(f"蓝图题目配比不足: 期望 {target_total} 道，实际仅匹配到 {len(selected)} 道")
+        for q in candidate_questions:
+            if q["id"] not in selected_ids:
+                selected.append(q)
+                selected_ids.add(q["id"])
+                if len(selected) >= target_total:
+                    break
 
     return selected
