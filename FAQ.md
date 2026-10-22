@@ -44,11 +44,11 @@ Common questions, root causes, and solutions for deploying, configuring, and usi
 **1. Active-exam lock (HTTP 403 / error code `EXAM_ACTIVE_PROTECTED`)**
 * **When it triggers**: any user has an unfinished mock-exam session on that bank and the session drew the question you are trying to change. There is no administrator bypass — a bank administrator is rejected exactly the same way.
 * **What you will see**: the bank management page shows a "Cannot edit during active exam" read-only banner and Edit turns into a read-only View. The server refuses to save a new version for questions actually drawn by that exam, and batch imports using the `merge` strategy against those questions also return 403.
-* **What to do next**: ask the person sitting the exam to submit it, or have them choose "Abandon Session" in the "Unfinished Sessions" list on the home page, then reload the management page and retry the edit. A timed exam stops blocking writes to those questions once the time limit plus a roughly 60-second grace period has passed, but the read-only banner only clears after the session is submitted or abandoned.
+* **What to do next**: ask the person sitting the exam to submit it, or have them choose "Abandon Session" in the "In-Progress Sessions" list on the home page, then reload the management page and retry the edit. A timed exam stops blocking writes to those questions once the time limit plus a roughly 60-second grace period has passed, but the read-only banner only clears after the session is submitted or abandoned.
 
 **2. Multiple-choice content validation failure (HTTP 400 / error code `HTTP_400`)**
 * Unrelated to exams; retrying will not help, the content must be fixed first. Current constraints:
-  1. At least 2 options, and every option must have a key;
+  1. At least 2 options, and at least 2 of them must carry a key (options without a key are accepted);
   2. Option keys must be unique;
   3. At least 2 distinct correct answers;
   4. Answers must be existing option keys (option text is also accepted and converted to its key). Separate multiple answers with commas, semicolons or spaces, or write them together (e.g. `AB`).
