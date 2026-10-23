@@ -95,7 +95,7 @@ EE-001 至 EE-021 **全部 21 项**已完成源码级修复、单元测试、前
 
 **仍未关闭的验证缺口（不属于 EE 台账，单列跟踪）**：
 
-1. `tests/test_remote_fnos_e2e.py` 因远程环境当前不可达而跳过（`skipped=1`）。属**环境性跳过**，按 `AGENTS.md` 避坑第 16 条不阻断收敛；NAS 可达时需另行执行并单独登记结果。
+1. `tests/test_remote_fnos_e2e.py` 因远程环境当前不可达而跳过（`skipped=1`）。属**环境性跳过**，按 `AGENTS.md` 避坑第 16 条不阻断收敛；NAS 可达时需另行执行并单独登记结果。（**2026-10-23 已实机执行并登记，见文末 Issue #11 章节**）
 2. 外部真实商业搜索服务仍未联调（无生产 API Key），仅验证了 `UNAVAILABLE` 降级路径。
 
 以上 2 项均为环境性缺口，必须逐项登记。按 [TESTING.md](../TESTING.md) 第 1 节门禁与避坑第 16 条，**不得笼统宣称"测试全绿"**，但收敛判定不受环境性跳过阻断。
@@ -312,3 +312,14 @@ EE-001 至 EE-021 **全部 21 项**已完成源码级修复、单元测试、前
   - 视觉冒烟核验：成功捕获并核验 5 份高保真截图（`bank_manage_1280_full.png`、`bank_manage_1280_filtered.png`、`bank_manage_1280_edit_modal.png`、`bank_manage_375_list.png`、`bank_manage_375_edit_modal.png`）。
 
 - **PR #58 Reviewer 回归证据（2026-10-20）**：`tests/test_question_bank_content_management.py` 由成员 B 启动 EXAM，验证管理员 A 的题库读模型报告 `locked_by_active_exam=true`、编辑同题返回 `403 / EXAM_ACTIVE_PROTECTED`；使用 `Accept-Language: zh-CN` 更新只有一个正确答案的 MULTI 题，实际返回结构化 `400 / HTTP_400`，带 detail 且版本未增加。`frontend/tests/browser_e2e.test.js` 的真实 Chrome 流程由第二名真实题库成员启动活动 EXAM，管理员在编辑页真实提交并收到 403；再提交一个正确答案的 MULTI 编辑并收到真实 400。两种拒绝均展示原因、保留编辑器且不新增离线队列；离线暂存后遭遇真实 403 会被标记阻塞且不再提供重试按钮。证据结果：`python -m pytest tests/test_question_bank_content_management.py -q` **3 passed**；`node --test frontend/tests/browser_e2e.test.js` **15 passed, 0 failed, 0 skipped**；`node frontend/tests/bank_manage_e2e.test.js` **1 passed**；`npm --prefix frontend test` **75 passed, 0 failed, 0 skipped**。
+
+**2026-10-23 Issue #11 fnOS 物理验收（真实实机，环境性缺口关闭）**：
+- **目标环境**：fnOS 6.18 `http://192.168.100.11:3000`（SSH `Host nas`），容器 `easy-exam-fpk`，镜像 `ailm32442/easy-exam:1.0.19`。
+- **测试入口修复**：`tests/test_remote_fnos_e2e.py` 与 `frontend/tests/physical_fnos_browser_e2e.mjs` 从历史 `/api/` 无认证契约与旧版扁平导航，改为 `/api/v1` + Bearer 认证与侧边栏路由；`FNOS_BASE_URL` 必填，`CHROME_PATH` 可选，测试密码每次生成。详见 `DECISIONS.md` 2026-10-23。
+- **实跑结果**：
+  - `FNOS_E2E_PHASE=chain python -m pytest tests/test_remote_fnos_e2e.py -q -rs` → **2 passed, 1 skipped**（skip 为 post-restart 阶段门控）；
+  - NAS 上 `cmd/main stop` / `cmd/main start` 后 `/api/v1/health` 返回 200，容器健康；
+  - `FNOS_E2E_PHASE=post-restart ...` → **1 passed, 2 skipped**（skip 为 chain 阶段门控）：题库、题目答案与题型、已清除/未清除错题、已提交模考报告全部保持；
+  - `node frontend/tests/physical_fnos_browser_e2e.mjs` → 8 步全过：注册登录、建题库、文件导入 2 题、键盘刷题与底部固定条、错题斩杀/恢复、模考交卷判分、复习中心指标。
+- **部署漂移（已记录，不改业务代码）**：`1.0.19` 对应分支提交 `1797a03`，`/api/v1/auth/me` 仍返回 `password_hash`；JUDGE 选项未归一化为 T/F（提交 `A` 判错，`T` 判对）。两项在 `main` 已由 #61 修复，需重新构建部署后复验。
+- **跳过口径**：上述 skip 全部为阶段门控，不是断言性跳过；本链路无未执行的目标用例。
