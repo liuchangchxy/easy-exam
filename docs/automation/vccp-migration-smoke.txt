@@ -3,3 +3,14 @@ Controller: Windows Production Operator
 Provider: AntiGravity
 Consumer: liuchangchxy/easy-exam
 Migration status: SUCCESS
+
+## Windows VCCP deployment state (verified 2026-10-23)
+
+VCCP revision: 28698a297d12d09c379a1113f5d7314b2eb20036
+Windows deploy: PASS
+Task Scheduler: PASS
+Runner: PASS
+Runtime checkout: clean
+Config: match
+Final state: READY
+remove/redeploy: NOT VERIFIED
