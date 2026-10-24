@@ -115,7 +115,8 @@ git diff --check
 | `frontend/tests/mobile_interaction_suite.mjs` | 移动端交互 E2E：判分文案、切题、跳题、答题卡抽屉、滑动切题 |
 | `frontend/tests/capture_mobile.mjs` | 移动端物理度量与截图采集（非断言类） |
 | `tests/test_fpk_packaging.py` | FPK manifest/权限/compose 镜像 tag 与版本一致性 |
-| `tests/test_remote_fnos_e2e.py` | 远程 fnOS 实机 API E2E（环境不可达时 skip） |
+| `tests/test_remote_fnos_e2e.py` | 远程 fnOS 实机 API E2E：`FNOS_BASE_URL` 必填，两阶段（`FNOS_E2E_PHASE=chain` / `post-restart`）验证核心链路与重启持久性 |
+| `frontend/tests/physical_fnos_browser_e2e.mjs` | 远程 fnOS 真实浏览器 E2E：`FNOS_BASE_URL` 必填，`CHROME_PATH` 可选（缺省 bundled Chromium） |
 | `tests/visual_smoke/run.mjs` + `shot.mjs` | 视觉冒烟：四道正身信号 + 白屏判据（否定判据，不替代 E2E） |
 
 ## 7. 当前工作区运行证据（2026-09-27）
@@ -161,4 +162,22 @@ git diff --check
 ### 7.5 交付验收仍然成立的核心项（2026-09-27 实机复核）
 
 FPK 离线安装时序修复已在 fnOS 6.18 实机（`192.168.x.x`）验证：`appcenter-cli install-fpk` 安装成功且不再回滚；容器 `easy-exam-fpk` 起在 3000 端口，`/api/v1/health` 返回 200；`stop`/`start` 重启后已注册账号仍可登录，`var/.env` 主密钥 md5 不变。这部分证据由物理执行产生，不依赖本地测试套件。
+
+### 7.6 Issue #11 fnOS 物理验收（2026-10-23 实机实跑）
+
+目标：fnOS 6.18，`http://192.168.100.11:3000`（SSH `Host nas`），容器 `easy-exam-fpk`，镜像 `ailm32442/easy-exam:1.0.19`。
+
+| 层级 | 命令 | 实际结果 | 状态 |
+|---|---|---|---|
+| 实机 API 链路 | `FNOS_BASE_URL=... FNOS_E2E_PHASE=chain python -m pytest tests/test_remote_fnos_e2e.py -q -rs` | **2 passed, 1 skipped**（skip 为 phase 门控，非断言跳过） | 通过 |
+| NAS 重启 | `cmd/main stop` → `cmd/main start`，等待 `/api/v1/health` 200 | 容器 `Up (healthy)`；健康响应 `{"status":"ok","app":"easy-exam","version":"v1"}` | 通过 |
+| 重启持久性 | `FNOS_BASE_URL=... FNOS_E2E_PHASE=post-restart python -m pytest tests/test_remote_fnos_e2e.py -q -rs` | **1 passed, 2 skipped**（2 个 skip 为 chain 阶段用例被 phase 门控） | 通过 |
+| 实机浏览器链路 | `FNOS_BASE_URL=... node frontend/tests/physical_fnos_browser_e2e.mjs` | 8 个步骤全部通过：注册登录 → 建题库 → 文件导入 2 题 → 键盘刷题与底部固定条 → 错题斩杀/恢复 → 模考交卷判分 → 复习中心 4 个指标卡 | 通过 |
+| 硬编码路径门禁 | `python scripts/scan_hardcoded_paths.py` | 排除 VCCP 运行目录生成的 gitignored `scratch/vccp-status-baseline.json` 后 **exit 0**；该文件不在任何提交中 | 通过（附环境说明） |
+| 守卫自证 | `python -m unittest discover -s tests -p test_guard_checks.py -v` | **3 passed**（同样需排除上述 VCCP 运行产物） | 通过 |
+| 防测试篡改门禁 | `python scripts/guard_test_tampering.py` | **本地告警 1 条**：重写 `test_remote_fnos_e2e.py` 时旧健康断言行被替换。断言未放宽，已在 `DECISIONS.md` 2026-10-23 条目登记；CI 在干净 checkout 上运行该脚本无 diff | 已登记，不阻断 |
+
+**跳过口径**：两阶段各出现的 skip 全部是 `_require_phase` 的主动门控（另一阶段用例不在本轮执行范围），不是断言被跳过，也不存在目标用例未真正执行的情况。两阶段合计 `3 passed, 3 skipped`，覆盖同一批实体在重启前后的读写。
+
+**本次发现的部署漂移（不修改业务代码）**：部署镜像 `1.0.19` 对应分支提交 `1797a03`，其 `/api/v1/auth/me` 仍返回 `password_hash`，且 JUDGE 题的选项未归一化为 T/F（UI 提交 `A` 判错，只有 `T` 判对）。两项在 `main` 已由 #61 修复；本次物理链路因此使用 SINGLE + MULTI，JUDGE 缺陷记录为待重新部署验证项。
 
