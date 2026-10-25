@@ -313,13 +313,16 @@ EE-001 至 EE-021 **全部 21 项**已完成源码级修复、单元测试、前
 
 - **PR #58 Reviewer 回归证据（2026-10-20）**：`tests/test_question_bank_content_management.py` 由成员 B 启动 EXAM，验证管理员 A 的题库读模型报告 `locked_by_active_exam=true`、编辑同题返回 `403 / EXAM_ACTIVE_PROTECTED`；使用 `Accept-Language: zh-CN` 更新只有一个正确答案的 MULTI 题，实际返回结构化 `400 / HTTP_400`，带 detail 且版本未增加。`frontend/tests/browser_e2e.test.js` 的真实 Chrome 流程由第二名真实题库成员启动活动 EXAM，管理员在编辑页真实提交并收到 403；再提交一个正确答案的 MULTI 编辑并收到真实 400。两种拒绝均展示原因、保留编辑器且不新增离线队列；离线暂存后遭遇真实 403 会被标记阻塞且不再提供重试按钮。证据结果：`python -m pytest tests/test_question_bank_content_management.py -q` **3 passed**；`node --test frontend/tests/browser_e2e.test.js` **15 passed, 0 failed, 0 skipped**；`node frontend/tests/bank_manage_e2e.test.js` **1 passed**；`npm --prefix frontend test` **75 passed, 0 failed, 0 skipped**。
 
-**2026-10-23 Issue #11 fnOS 物理验收（真实实机，环境性缺口关闭）**：
-- **目标环境**：fnOS 6.18 `http://192.168.100.11:3000`（SSH `Host nas`），容器 `easy-exam-fpk`，镜像 `ailm32442/easy-exam:1.0.19`。
-- **测试入口修复**：`tests/test_remote_fnos_e2e.py` 与 `frontend/tests/physical_fnos_browser_e2e.mjs` 从历史 `/api/` 无认证契约与旧版扁平导航，改为 `/api/v1` + Bearer 认证与侧边栏路由；`FNOS_BASE_URL` 必填，`CHROME_PATH` 可选，测试密码每次生成。详见 `DECISIONS.md` 2026-10-23。
-- **实跑结果**：
+**2026-10-26 Issue #11 fnOS 物理验收（真实实机，exact-head 构建，证据归属已修正）**：
+- **目标环境**：fnOS 6.18 `http://192.168.100.11:3000`（SSH `Host nas`），容器 `easy-exam-fpk`。
+- **验收对象与版本核对**：目标 SHA `dedea6c5dd926b9e46a75bbfd1b28b1b02a19885`（PR #81 exact HEAD）。用 `git archive dedea6c…` 取树（tar SHA-256 `d72d6caac20efbd7cd67a5ee8994427d55300bab1975e4f491e8a6bf432580d1`）在 fnOS 上构建 `easyexam-exacthead:dedea6c5dd926b9e46a75bbfd1b28b1b02a19885` 并部署；实机 `GET /api/v1/health` → `commit_sha` = `dedea6c5dd926b9e46a75bbfd1b28b1b02a19885`，**与目标 SHA 相等**。镜像内 `backend/**.py` 95 个文件与前端 4 个产物逐个 SHA-256 与 exact-head 完全一致。
+- **测试入口修复**：`tests/test_remote_fnos_e2e.py` 与 `frontend/tests/physical_fnos_browser_e2e.mjs` 从历史 `/api/` 无认证契约与旧版扁平导航，改为 `/api/v1` + Bearer 认证与侧边栏路由；`FNOS_BASE_URL` 必填，`CHROME_PATH` 可选，测试密码每次生成。本轮再补两处：新增必填 `FNOS_E2E_EXPECTED_SHA` 并对实机 `commit_sha` 强断言（防止再用错误版本产生"通过"）；浏览器脚本改为等待 `.answer-grid button` 而非 `.exam-page`（后者先于题目渲染，会读到空答题卡）。详见 `DECISIONS.md` 2026-10-26。
+- **实跑结果（均在该 exact-head 构建上）**：
   - `FNOS_E2E_PHASE=chain python -m pytest tests/test_remote_fnos_e2e.py -q -rs` → **2 passed, 1 skipped**（skip 为 post-restart 阶段门控）；
-  - NAS 上 `cmd/main stop` / `cmd/main start` 后 `/api/v1/health` 返回 200，容器健康；
+  - NAS 上 `cmd/main stop` / `cmd/main start` 后 `/api/v1/health` 返回 200 且 `commit_sha` 仍为 `dedea6c…`，容器健康；
   - `FNOS_E2E_PHASE=post-restart ...` → **1 passed, 2 skipped**（skip 为 chain 阶段门控）：题库、题目答案与题型、已清除/未清除错题、已提交模考报告全部保持；
-  - `node frontend/tests/physical_fnos_browser_e2e.mjs` → 8 步全过：注册登录、建题库、文件导入 2 题、键盘刷题与底部固定条、错题斩杀/恢复、模考交卷判分、复习中心指标。
-- **部署漂移（已记录，不改业务代码）**：`1.0.19` 对应分支提交 `1797a03`，`/api/v1/auth/me` 仍返回 `password_hash`；JUDGE 选项未归一化为 T/F（提交 `A` 判错，`T` 判对）。两项在 `main` 已由 #61 修复，需重新构建部署后复验。
+  - `node frontend/tests/physical_fnos_browser_e2e.mjs` → 8 步全过：注册登录、建题库、文件导入 2 题、键盘刷题与底部固定条、错题斩杀/恢复、模考交卷判分、复习中心指标；
+  - 既有生产数据在部署后完好：users 40 / question_banks 30 / questions 192 / practice_sessions 73 / answer_attempts 91 / mistake_records 37（部署前备份 `easyexam-v1.db.backup-issue11-20261026-062502`）。
+- **revision 门禁红色实证**：在旧部署（`commit_sha="unknown"`）上实跑，pytest 与浏览器脚本均以 `'unknown' != 'dedea6c…'` 失败、exit 1；不设 `FNOS_E2E_EXPECTED_SHA` 同样拒绝执行。切到 exact-head 构建后转绿。
+- **旧镜像问题已不适用**：`1.0.19` / `1797a03` 的 `/auth/me` 泄露 `password_hash` 与 JUDGE 未归一化，在 exact-head 代码中均已修复（`backend/app/api/routes/auth.py:40-44`、`backend/app/domain/content/validators.py:118-130`、`backend/app/domain/learning/scoring.py`）。上一轮把旧镜像结果当作本 PR 验收证据属归属错误，已由本轮替换。
 - **跳过口径**：上述 skip 全部为阶段门控，不是断言性跳过；本链路无未执行的目标用例。

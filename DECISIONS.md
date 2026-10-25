@@ -27,6 +27,16 @@
 - **对应 SPEC 章节**：SPEC.md 验收与测试口径（真实物理环境不得以 Mock/API 冒充）。
 - **影响范围**：`tests/test_remote_fnos_e2e.py`, `frontend/tests/physical_fnos_browser_e2e.mjs`, `TESTING.md`, `docs/REQUIREMENTS_TRACEABILITY.md`。
 
+### [2026-10-26] Issue #11 修复：证据必须归属于被验收的那一个 revision
+- **触发背景**：上一轮把镜像 `ailm32442/easy-exam:1.0.19`（分支提交 `1797a03`）上的实跑结果写成了本 PR 的验收证据。维护者冻结补充要求"从 exact HEAD 构建部署、核对实机 revision 等于目标 SHA、三项验证都在该构建上做"，并明确旧镜像结果不作数。两个入口本身并不检查自己连的是哪个版本，所以"跑通了"和"证明了本 PR"之间原本没有任何强制关联。
+- **核心决策**：
+  1. **revision 成为硬门禁而非口头约定**：两个入口新增必填 `FNOS_E2E_EXPECTED_SHA`，读实机 `/api/v1/health` 的 `commit_sha` 并强断言相等；未设置该变量一律拒绝执行。理由：版本不符时最危险的失败形态是"全绿但证明不了任何东西"，因此必须让它当场变红，而不是依赖执行者自觉核对。
+  2. **重新从 exact HEAD 构建部署，不复用旧产物**：用 `git archive dedea6c…` 取树在 fnOS 上构建，并用镜像内 95 个后端文件 + 4 个前端产物的逐个 SHA-256 证明产物与 exact-head 一致；`commit_sha` 通过 `EASYEXAM_BUILD_SHA` 注入部署编排。
+  3. **旧镜像的两个缺陷不写入本 PR 结论**：`/auth/me` 泄露 `password_hash` 与 JUDGE 未归一化在 exact-head 代码中已修复（#61），它们是旧镜像的事实；本轮不再以"待重新部署验证项"的形式与本 PR 证据混写。
+  4. **浏览器脚本等待正确信号**：模考段原先等 `.exam-page`，而该容器先于题目渲染（`ExamView.vue` 中 `.answer-grid` 位于 `v-else-if="question"` 分支），导致读到 0 题。改为等待 `.answer-grid button`。这属于入口自身的过时假设，不改业务代码。
+- **对应 SPEC 章节**：SPEC.md 验收与测试口径；Frozen Issue #11「验收对象澄清」节。
+- **影响范围**：`tests/test_remote_fnos_e2e.py`, `frontend/tests/physical_fnos_browser_e2e.mjs`, `TESTING.md`, `docs/REQUIREMENTS_TRACEABILITY.md`, `DECISIONS.md`。
+
 ---
 
 ### [2026-10-19] PR #55 第二轮 Review 阻断修复：章节更新三元语义、409 并发覆盖拦截与避免伪造答案

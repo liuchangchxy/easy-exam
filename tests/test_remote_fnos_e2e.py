@@ -19,6 +19,10 @@ The suite deliberately does not delete the bank it creates: the data left behind
 
 Required environment:
     FNOS_BASE_URL        deployed instance base URL, e.g. http://<NAS_IP>:3000
+    FNOS_E2E_EXPECTED_SHA  the revision the deployed build was made from; the
+                         instance's reported ``commit_sha`` must equal it, so the
+                         result is attributable to that revision and not to
+                         whatever happened to be running
 Optional environment:
     FNOS_E2E_PHASE       "chain" (default) or "post-restart"
     FNOS_E2E_STATE_FILE  where phase 1 writes the state phase 2 reads
@@ -44,6 +48,11 @@ STATE_FILE = Path(
     os.environ.get("FNOS_E2E_STATE_FILE")
     or (Path(tempfile.gettempdir()) / "easyexam_fnos_e2e_state.json")
 )
+
+# The revision the deployed instance is expected to run. Accepting an unlabelled
+# build here is how a previous run ended up reporting a *different* revision as
+# acceptance evidence, so the running ``commit_sha`` is asserted against it.
+EXPECTED_SHA = (os.environ.get("FNOS_E2E_EXPECTED_SHA") or "").strip().lower()
 
 SINGLE_STEM = "fnOS 物理验收：题库系统使用什么存储引擎？"
 MULTI_STEM = "fnOS 物理验收：核心刷题能力包含哪些？"
@@ -137,6 +146,24 @@ class TestRemoteFnOsE2E(unittest.TestCase):
                 "restart EasyExam on the NAS and rerun with FNOS_E2E_PHASE=post-restart"
             )
 
+    def _assert_running_revision(self):
+        """Fail unless the deployed build reports ``FNOS_E2E_EXPECTED_SHA``.
+
+        Both SHAs are printed so the run itself carries the target/revision pair.
+        """
+        running = str(self.health.get("commit_sha") or "").strip()
+        print(f"\n[revision] target={EXPECTED_SHA or '<unset>'} running={running or '<empty>'}")
+        if not EXPECTED_SHA:
+            raise AssertionError(
+                "FNOS_E2E_EXPECTED_SHA is required: set it to the revision this build was made "
+                f"from, otherwise the result cannot be attributed to that revision (running={running!r})"
+            )
+        self.assertEqual(
+            running.lower(), EXPECTED_SHA,
+            f"deployed revision {running!r} is not the target revision {EXPECTED_SHA!r}; "
+            "the evidence would not belong to this revision",
+        )
+
     def _login(self, username: str, password: str) -> None:
         status, body = self.api.call("POST", "/auth/login", {"username": username, "password": password})
         self.assertEqual(status, 200, f"login failed for {username}: {body}")
@@ -170,6 +197,7 @@ class TestRemoteFnOsE2E(unittest.TestCase):
     def test_01_health_and_pwa_web_shell(self):
         """The deployed instance answers /api/v1/health and serves the PWA shell."""
         self._require_phase("chain")
+        self._assert_running_revision()
 
         self.assertEqual(self.health.get("status"), "ok", self.health)
         self.assertEqual(self.health.get("app"), "easy-exam", self.health)
@@ -372,6 +400,7 @@ class TestRemoteFnOsE2E(unittest.TestCase):
     def test_03_data_survives_restart(self):
         """Everything created before the restart is still readable and unchanged."""
         self._require_phase("post-restart")
+        self._assert_running_revision()
         if not STATE_FILE.exists():
             self.skipTest(
                 f"no captured state at {STATE_FILE}; run FNOS_E2E_PHASE=chain first"

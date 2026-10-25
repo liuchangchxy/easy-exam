@@ -163,21 +163,36 @@ git diff --check
 
 FPK 离线安装时序修复已在 fnOS 6.18 实机（`192.168.x.x`）验证：`appcenter-cli install-fpk` 安装成功且不再回滚；容器 `easy-exam-fpk` 起在 3000 端口，`/api/v1/health` 返回 200；`stop`/`start` 重启后已注册账号仍可登录，`var/.env` 主密钥 md5 不变。这部分证据由物理执行产生，不依赖本地测试套件。
 
-### 7.6 Issue #11 fnOS 物理验收（2026-10-23 实机实跑）
+### 7.6 Issue #11 fnOS 物理验收（2026-10-26 实机实跑，exact-head 构建）
 
-目标：fnOS 6.18，`http://192.168.100.11:3000`（SSH `Host nas`），容器 `easy-exam-fpk`，镜像 `ailm32442/easy-exam:1.0.19`。
+目标：fnOS 6.18，`http://192.168.100.11:3000`（SSH `Host nas`），容器 `easy-exam-fpk`。
+
+**版本核对（证据归属的前提）**：验收对象是 PR #81 的 exact HEAD，必须先确认实机运行的正是该 revision，否则结果不能证明本 PR。
+
+| 项 | 值 |
+|---|---|
+| 目标 SHA（验收对象） | `dedea6c5dd926b9e46a75bbfd1b28b1b02a19885` |
+| 构建来源 | `git archive dedea6c5dd926b9e46a75bbfd1b28b1b02a19885`（tar SHA-256 `d72d6caac20efbd7cd67a5ee8994427d55300bab1975e4f491e8a6bf432580d1`），在 fnOS 上 `docker build` |
+| 构建产物 | `easyexam-exacthead:dedea6c5dd926b9e46a75bbfd1b28b1b02a19885`，label `org.opencontainers.image.revision=dedea6c…` |
+| 产物与源码一致性 | 镜像内 `backend/**.py` 共 95 个文件逐个 SHA-256 与 exact-head 工作树**全部一致**（0 差异、0 缺失） |
+| 前端产物一致性 | 镜像内 `frontend/dist/assets` 4 个文件与本地 exact-head `npm run build` 产物 SHA-256 **全部一致** |
+| 实机运行 revision | `GET /api/v1/health` → `commit_sha` = `dedea6c5dd926b9e46a75bbfd1b28b1b02a19885` |
+| 一致性判定 | **目标 SHA == 实际运行 revision**（相等） |
+
+`commit_sha` 由 `EASYEXAM_BUILD_SHA` 注入（`backend/app/api/routes/system.py:9-23`），部署编排中已写入同一 SHA；两个测试入口现在都强制校验该值，不一致直接失败（见下方「revision 门禁红色实证」）。
 
 | 层级 | 命令 | 实际结果 | 状态 |
 |---|---|---|---|
-| 实机 API 链路 | `FNOS_BASE_URL=... FNOS_E2E_PHASE=chain python -m pytest tests/test_remote_fnos_e2e.py -q -rs` | **2 passed, 1 skipped**（skip 为 phase 门控，非断言跳过） | 通过 |
-| NAS 重启 | `cmd/main stop` → `cmd/main start`，等待 `/api/v1/health` 200 | 容器 `Up (healthy)`；健康响应 `{"status":"ok","app":"easy-exam","version":"v1"}` | 通过 |
+| 实机 API 链路 | `FNOS_BASE_URL=... FNOS_E2E_EXPECTED_SHA=dedea6c… FNOS_E2E_PHASE=chain python -m pytest tests/test_remote_fnos_e2e.py -q -rs` | **2 passed, 1 skipped**（skip 为 phase 门控，非断言跳过） | 通过 |
+| NAS 重启 | `cmd/main stop` → `cmd/main start`，等待 `/api/v1/health` 200 | 容器 `Up (healthy)`；健康响应 `{"status":"ok","app":"easy-exam","version":"v1","commit_sha":"dedea6c…"}` | 通过 |
 | 重启持久性 | `FNOS_BASE_URL=... FNOS_E2E_PHASE=post-restart python -m pytest tests/test_remote_fnos_e2e.py -q -rs` | **1 passed, 2 skipped**（2 个 skip 为 chain 阶段用例被 phase 门控） | 通过 |
-| 实机浏览器链路 | `FNOS_BASE_URL=... node frontend/tests/physical_fnos_browser_e2e.mjs` | 8 个步骤全部通过：注册登录 → 建题库 → 文件导入 2 题 → 键盘刷题与底部固定条 → 错题斩杀/恢复 → 模考交卷判分 → 复习中心 4 个指标卡 | 通过 |
-| 硬编码路径门禁 | `python scripts/scan_hardcoded_paths.py` | 排除 VCCP 运行目录生成的 gitignored `scratch/vccp-status-baseline.json` 后 **exit 0**；该文件不在任何提交中 | 通过（附环境说明） |
-| 守卫自证 | `python -m unittest discover -s tests -p test_guard_checks.py -v` | **3 passed**（同样需排除上述 VCCP 运行产物） | 通过 |
-| 防测试篡改门禁 | `python scripts/guard_test_tampering.py` | **本地告警 1 条**：重写 `test_remote_fnos_e2e.py` 时旧健康断言行被替换。断言未放宽，已在 `DECISIONS.md` 2026-10-23 条目登记；CI 在干净 checkout 上运行该脚本无 diff | 已登记，不阻断 |
+| 实机浏览器链路 | `FNOS_BASE_URL=... FNOS_E2E_EXPECTED_SHA=dedea6c… node frontend/tests/physical_fnos_browser_e2e.mjs` | 8 个步骤全部通过：注册登录 → 建题库 → 文件导入 2 题 → 键盘刷题与底部固定条 → 错题斩杀/恢复 → 模考交卷判分（2 题答题卡、得分 2）→ 复习中心 4 个指标卡 | 通过 |
+| 既有数据未被替换破坏 | 部署前后统计 | 容器内 SQLite 计数 users 40 / question_banks 30 / questions 192 / practice_sessions 73 / answer_attempts 91 / mistake_records 37，部署前已备份 `easyexam-v1.db.backup-issue11-20261026-062502` | 通过 |
+
+**revision 门禁红色实证**：新增的 `_assert_running_revision()` / `assertRunningRevision()` 在旧部署（`commit_sha="unknown"`）上实跑失败，原文为
+`AssertionError: 'unknown' != 'dedea6c5dd926b9e46a75bbfd1b28b1b02a19885'`，pytest `exit 1`、浏览器脚本 `exit 1`；不设 `FNOS_E2E_EXPECTED_SHA` 时同样拒绝执行。切到 exact-head 构建后同一命令变绿。即：若再次用错版本实跑，证据会当场变红，而不是被记录成通过。
 
 **跳过口径**：两阶段各出现的 skip 全部是 `_require_phase` 的主动门控（另一阶段用例不在本轮执行范围），不是断言被跳过，也不存在目标用例未真正执行的情况。两阶段合计 `3 passed, 3 skipped`，覆盖同一批实体在重启前后的读写。
 
-**本次发现的部署漂移（不修改业务代码）**：部署镜像 `1.0.19` 对应分支提交 `1797a03`，其 `/api/v1/auth/me` 仍返回 `password_hash`，且 JUDGE 题的选项未归一化为 T/F（UI 提交 `A` 判错，只有 `T` 判对）。两项在 `main` 已由 #61 修复；本次物理链路因此使用 SINGLE + MULTI，JUDGE 缺陷记录为待重新部署验证项。
+**已解决的部署漂移（不再适用于本轮）**：上一轮记录中 `ailm32442/easy-exam:1.0.19`（分支提交 `1797a03`）存在 `/api/v1/auth/me` 返回 `password_hash` 与 JUDGE 选项未归一化两个问题。exact-head 代码中二者均已修复（`backend/app/api/routes/auth.py:40-44` 显式 `pop("password_hash")`；`backend/app/domain/content/validators.py:118-130` 与 `backend/app/domain/learning/scoring.py` 将 JUDGE 归一化为 T/F），且本轮运行的正是该 exact-head 构建。这两项因此是**旧镜像的事实，不是本 PR 的事实**；上一轮把它们写成"待重新部署验证项"并同时把旧镜像结果当作验收证据，属于证据归属错误，本轮已按 exact-head 重新实跑并替换。
 

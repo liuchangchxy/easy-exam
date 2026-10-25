@@ -5,14 +5,36 @@ import os from 'node:os'
 import { chromium } from 'playwright'
 
 // Physical browser acceptance run against a deployed fnOS instance.
-//   FNOS_BASE_URL=http://<NAS_IP>:3000 node frontend/tests/physical_fnos_browser_e2e.mjs
+//   FNOS_BASE_URL=http://<NAS_IP>:3000 FNOS_E2E_EXPECTED_SHA=<revision> \
+//     node frontend/tests/physical_fnos_browser_e2e.mjs
 //
 // FNOS_BASE_URL is required: this script must never silently point at localhost
-// or at someone else's NAS. Set CHROME_PATH only to use a specific Chrome build;
-// otherwise Playwright's bundled Chromium is used.
+// or at someone else's NAS. FNOS_E2E_EXPECTED_SHA is required and must equal the
+// commit_sha the instance reports, so the run is attributable to one revision.
+// Set CHROME_PATH only to use a specific Chrome build; otherwise Playwright's
+// bundled Chromium is used.
 const BASE_URL = (process.env.FNOS_BASE_URL || '').trim().replace(/\/+$/, '')
 const CHROME_PATH = (process.env.CHROME_PATH || '').trim()
 const PASSWORD = process.env.FNOS_E2E_PASSWORD || `Fn0sE2E!${Date.now()}`
+
+// The revision the deployed instance is expected to run. A run whose target
+// revision is unverified cannot serve as acceptance evidence for a specific
+// build, so the instance's reported commit_sha must equal this value.
+const EXPECTED_SHA = (process.env.FNOS_E2E_EXPECTED_SHA || '').trim().toLowerCase()
+
+async function assertRunningRevision() {
+  if (!EXPECTED_SHA) {
+    throw new Error('FNOS_E2E_EXPECTED_SHA is required: set it to the revision this build was made from, '
+      + 'otherwise the result cannot be attributed to that revision')
+  }
+  const res = await fetch(`${BASE_URL}/api/v1/health`)
+  assert.equal(res.status, 200, 'health endpoint must answer 200')
+  const health = await res.json()
+  const running = String(health.commit_sha || '').trim().toLowerCase()
+  console.log(`[revision] target=${EXPECTED_SHA} running=${running || '<empty>'}`)
+  assert.equal(running, EXPECTED_SHA,
+    `deployed revision ${JSON.stringify(running)} is not the target revision ${JSON.stringify(EXPECTED_SHA)}`)
+}
 
 async function runBrowserE2E() {
   if (!BASE_URL) {
@@ -46,6 +68,9 @@ async function runBrowserE2E() {
   }
 
   try {
+    // 0. Refuse to run against an unverified revision
+    await assertRunningRevision()
+
     // 1. Visit Login Page
     console.log('[STEP 1] Navigating to fnOS web shell...')
     await page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 15000 })
@@ -229,8 +254,11 @@ D. 物理层
     await page.waitForSelector('.exam-setup-dialog', { timeout: 5000 })
     await page.click('.exam-setup-dialog button[type="submit"]')
 
-    // Wait for exam view
+    // Wait for the exam view. ``.exam-page`` is rendered before the session's
+    // questions arrive, so wait for the answer sheet's buttons themselves;
+    // counting on ``.exam-page`` alone reads an empty grid.
     await page.waitForSelector('.exam-page', { timeout: 8000 })
+    await page.waitForSelector('.answer-grid button', { timeout: 8000 })
     const examQuestionsCount = await page.locator('.answer-grid button').count()
     console.log(`  -> Exam started with ${examQuestionsCount} questions on answer sheet`)
     assert(examQuestionsCount === 2, 'Exam sheet must display 2 questions')
