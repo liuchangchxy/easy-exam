@@ -21,7 +21,7 @@
 - **核心决策**：
   1. **测试入口对齐真实现行契约，而非回退产品**：API 入口改用 `/api/v1` 与注册/登录后的 Bearer Token；浏览器入口改用侧边栏导航（导入题库 / 错题攻克 / 复习中心）、真实交卷与返回按钮文案、注册页双密码字段。
   2. **环境参数显式化**：`FNOS_BASE_URL` 变为必填（缺省即 `SkipTest` / exit 2），不再回退到某个固定内网地址；`CHROME_PATH` 改为可选，缺省使用 Playwright 自带 Chromium；测试密码默认每次运行生成，不再假设固定的 `Password123!`。
-  3. **重启持久性拆为两阶段**：`FNOS_E2E_PHASE=chain` 建数据并写状态文件，运维在 NAS 上执行 `cmd/main stop/start` 后，`FNOS_E2E_PHASE=post-restart` 用同一账号复验题库、题目、错题与已提交模考报告；不引入自托管 Runner 或排班。
+  3. **重启持久性拆为两阶段**：`FNOS_E2E_PHASE=chain` 建数据并写状态文件，运维在 NAS 上执行 `cmd/main stop/start` 后，`FNOS_E2E_PHASE=post-restart` 用同一账号复验题库、题目、错题与已提交模考报告；不引入自托管 Runner 或排班。（两个阶段都必须同时带 `FNOS_E2E_EXPECTED_SHA`，见下方 2026-10-26 条目；缺该变量时 `test_01` / `test_03` 会直接失败而不是 skip。）
   4. **不把已修复缺陷写成新断言**：部署镜像 `1.0.19`（分支 `1797a03`）上 `/auth/me` 仍泄露 `password_hash`、JUDGE 选项未归一化；这两项在 `main` 已由 #61 修复。本次物理链路改用 SINGLE + MULTI，不为此修改业务代码，缺陷作为部署漂移在 PR 中报告。
   5. **断言强度不降低**：旧健康检查断言被保留为 `self.health.get("status") == "ok"`；`guard_test_tampering.py` 因断言行重排会告警，按该门禁要求在此登记：这是合法测试契约重写（旧测试从未执行过），不是放宽预期。
 - **对应 SPEC 章节**：SPEC.md 验收与测试口径（真实物理环境不得以 Mock/API 冒充）。
@@ -31,7 +31,7 @@
 - **触发背景**：上一轮把镜像 `ailm32442/easy-exam:1.0.19`（分支提交 `1797a03`）上的实跑结果写成了本 PR 的验收证据。维护者冻结补充要求"从 exact HEAD 构建部署、核对实机 revision 等于目标 SHA、三项验证都在该构建上做"，并明确旧镜像结果不作数。两个入口本身并不检查自己连的是哪个版本，所以"跑通了"和"证明了本 PR"之间原本没有任何强制关联。
 - **核心决策**：
   1. **revision 成为硬门禁而非口头约定**：两个入口新增必填 `FNOS_E2E_EXPECTED_SHA`，读实机 `/api/v1/health` 的 `commit_sha` 并强断言相等；未设置该变量一律拒绝执行。理由：版本不符时最危险的失败形态是"全绿但证明不了任何东西"，因此必须让它当场变红，而不是依赖执行者自觉核对。
-  2. **重新从 exact HEAD 构建部署，不复用旧产物**：用 `git archive dedea6c…` 取树在 fnOS 上构建，并用镜像内 95 个后端文件 + 4 个前端产物的逐个 SHA-256 证明产物与 exact-head 一致；`commit_sha` 通过 `EASYEXAM_BUILD_SHA` 注入部署编排。
+  2. **重新从 exact HEAD 构建部署，不复用旧产物**：用 `git archive` 取被验收 revision 的树在 fnOS 上构建，并用镜像内 95 个后端文件 + 前端产物的逐个 SHA-256 证明产物与该 revision 一致；`commit_sha` 通过 `EASYEXAM_BUILD_SHA` 注入部署编排。被验收 revision 必须是**当轮 HEAD 本身**，不能是上一轮 HEAD：入口脚本就在 HEAD 上，若拿旧 HEAD 的构建配新 HEAD 的脚本，验的仍是旧入口。因此每次入口脚本变更后都要重新构建部署并重新实跑。
   3. **旧镜像的两个缺陷不写入本 PR 结论**：`/auth/me` 泄露 `password_hash` 与 JUDGE 未归一化在 exact-head 代码中已修复（#61），它们是旧镜像的事实；本轮不再以"待重新部署验证项"的形式与本 PR 证据混写。
   4. **浏览器脚本等待正确信号**：模考段原先等 `.exam-page`，而该容器先于题目渲染（`ExamView.vue` 中 `.answer-grid` 位于 `v-else-if="question"` 分支），导致读到 0 题。改为等待 `.answer-grid button`。这属于入口自身的过时假设，不改业务代码。
 - **对应 SPEC 章节**：SPEC.md 验收与测试口径；Frozen Issue #11「验收对象澄清」节。
