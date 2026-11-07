@@ -56,244 +56,262 @@
           </div>
         </div>
 
-        <!-- 计划参数快速调优工具条 -->
-        <div class="hero-toolbar">
-          <div class="toolbar-item">
-            <span class="toolbar-label">{{ t('ui.k0432') }}</span>
-            <select v-model="planBankId" @change="updatePlan">
-              <option value="">{{ t('ui.k0433') }}</option>
-              <option v-for="b in banks" :key="b.id" :value="b.id">{{ b.name }}</option>
-            </select>
-          </div>
-          <div class="toolbar-item">
-            <span class="toolbar-label">{{ t('ui.k0434') }}</span>
-            <select v-model.number="days" @change="updatePlan">
-              <option :value="1">{{ t('ui.k0435') }} ({{ t('learning.day_sprint') }})</option>
-              <option :value="3">{{ t('ui.k0436') }}</option>
-              <option :value="7">{{ t('ui.k0437') }}</option>
-              <option :value="14">{{ t('ui.k0438') }}</option>
-              <option :value="21">{{ t('ui.k0439') }}</option>
-              <option :value="30">{{ t('ui.k0440') }}</option>
-            </select>
-          </div>
-          <div class="toolbar-item toolbar-item-quota">
-            <div class="toolbar-mode-switch">
-              <button
-                type="button"
-                :class="{ active: planMode === 'quota' }"
-                @click="planMode = 'quota'; updatePlan()"
-              >{{ t('learning.plan_mode_quota') }}</button>
-              <button
-                type="button"
-                :class="{ active: planMode === 'time' }"
-                @click="planMode = 'time'; updatePlan()"
-              >{{ t('learning.plan_mode_time') }}</button>
+        <!-- 第二层：计划参数快速调优工具条 (折叠收纳) -->
+        <details class="plan-adjust-accordion">
+          <summary class="plan-adjust-summary">
+            <LinearIcon name="calendar" size="14" />
+            <span>{{ t('learning.plan_adjust_title') }}</span>
+            <LinearIcon name="chevron-right" size="13" class="summary-chevron" />
+          </summary>
+          <div class="hero-toolbar">
+            <div class="toolbar-item">
+              <span class="toolbar-label">{{ t('ui.k0432') }}</span>
+              <select v-model="planBankId" @change="updatePlan">
+                <option value="">{{ t('ui.k0433') }}</option>
+                <option v-for="b in banks" :key="b.id" :value="b.id">{{ b.name }}</option>
+              </select>
             </div>
-            <select v-if="planMode === 'quota'" v-model="questionsPerDay" @change="updatePlan">
-              <option :value="15">{{ t('learning.quota_15') }}</option>
-              <option :value="30">{{ t('learning.quota_30') }}</option>
-              <option :value="50">{{ t('learning.quota_50') }}</option>
-              <option :value="100">{{ t('learning.quota_100') }}</option>
-              <option value="all">{{ t('learning.quota_all') }}</option>
-            </select>
-            <select v-else v-model.number="minutesPerDay" @change="updatePlan">
-              <option :value="15">{{ t('ui.k0442') }}</option>
-              <option :value="30">{{ t('ui.k0443') }}</option>
-              <option :value="45">{{ t('ui.k0444') }}</option>
-              <option :value="60">{{ t('ui.k0445') }}</option>
-              <option :value="90">{{ t('ui.k0446') }}</option>
-            </select>
+            <div class="toolbar-item">
+              <span class="toolbar-label">{{ t('ui.k0434') }}</span>
+              <select v-model.number="days" @change="updatePlan">
+                <option :value="1">{{ t('ui.k0435') }} ({{ t('learning.day_sprint') }})</option>
+                <option :value="3">{{ t('ui.k0436') }}</option>
+                <option :value="7">{{ t('ui.k0437') }}</option>
+                <option :value="14">{{ t('ui.k0438') }}</option>
+                <option :value="21">{{ t('ui.k0439') }}</option>
+                <option :value="30">{{ t('ui.k0440') }}</option>
+              </select>
+            </div>
+            <div class="toolbar-item toolbar-item-quota">
+              <div class="toolbar-mode-switch">
+                <button
+                  type="button"
+                  :class="{ active: planMode === 'quota' }"
+                  @click="planMode = 'quota'; updatePlan()"
+                >{{ t('learning.plan_mode_quota') }}</button>
+                <button
+                  type="button"
+                  :class="{ active: planMode === 'time' }"
+                  @click="planMode = 'time'; updatePlan()"
+                >{{ t('learning.plan_mode_time') }}</button>
+              </div>
+              <select v-if="planMode === 'quota'" v-model="questionsPerDay" @change="updatePlan">
+                <option :value="15">{{ t('learning.quota_15') }}</option>
+                <option :value="30">{{ t('learning.quota_30') }}</option>
+                <option :value="50">{{ t('learning.quota_50') }}</option>
+                <option :value="100">{{ t('learning.quota_100') }}</option>
+                <option value="all">{{ t('learning.quota_all') }}</option>
+              </select>
+              <select v-else v-model.number="minutesPerDay" @change="updatePlan">
+                <option :value="15">{{ t('ui.k0442') }}</option>
+                <option :value="30">{{ t('ui.k0443') }}</option>
+                <option :value="45">{{ t('ui.k0444') }}</option>
+                <option :value="60">{{ t('ui.k0445') }}</option>
+                <option :value="90">{{ t('ui.k0446') }}</option>
+              </select>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <!-- 第二层：学习规划日程时间线 -->
+      <section class="bank-card plan-timeline-panel plan-layer-timeline">
+        <div class="panel-header">
+          <h3>
+            <LinearIcon name="calendar" size="16" />
+            <span>{{ t('learning.timeline_title') }}</span>
+            <span v-if="store.plan.value?.days?.length" class="badge font-mono-code">{{ store.plan.value.days.length }} {{ t('ui.k0447') }}</span>
+          </h3>
+        </div>
+
+        <div v-if="store.plan.value?.days?.length" class="days-container">
+          <div
+            v-for="day in store.plan.value.days"
+            :key="day.day_number"
+            class="day-card"
+            :class="{ 'day-empty': !day.question_count, 'day-today': day.day_number === 1 }"
+          >
+            <div class="day-card-header">
+              <div class="day-info">
+                <span class="day-badge">{{ t('ui.k0082') }} {{ day.day_number }} {{ t('ui.k0447') }}</span>
+                <h4>{{ day.title }}</h4>
+                <span v-if="day.focus" class="day-focus-pill">{{ day.focus }}</span>
+              </div>
+              <div class="day-meta">
+                <span class="day-stats">{{ day.question_count }} {{ t('ui.k0448') }} {{ day.estimated_minutes }} {{ t('ui.k0231') }}</span>
+                <button
+                  type="button"
+                  class="primary btn-start-day"
+                  :disabled="!day.question_ids?.length"
+                  @click="startDayPlan(day)"
+                >
+                  {{ t('ui.k0449') }} {{ day.day_number }} {{ t('ui.k0450') }}{{ day.question_count }} {{ t('ui.k0123') }}
+                </button>
+              </div>
+            </div>
+
+            <p class="day-focus-desc">{{ day.focus_description }}</p>
+
+            <!-- 题目清单专属抽屉触发按钮 -->
+            <div v-if="day.items?.length" class="day-items-section">
+              <button
+                type="button"
+                class="btn-toggle-items"
+                @click="selectedDrawerDay = day"
+              >
+                <LinearIcon name="layers" size="13" />
+                <span>{{ `${t('ui.k0708')}${day.items.length} ${t('ui.k0709')}` }}</span>
+              </button>
+            </div>
           </div>
         </div>
+        <p v-else class="muted empty-plan-hint">{{ t('learning.no_questions_in_plan') }}</p>
       </section>
 
-      <!-- 2. 紧凑概览指标条 -->
-      <section class="metrics-grid">
-        <article class="bank-card stat-box">
-          <small>{{ t('ui.k0386') }}</small>
-          <strong>{{ store.trends.value.coverage_percent ?? 0 }}%</strong>
-          <p>{{ store.trends.value.attempted_questions ?? 0 }} / {{ store.trends.value.total_questions ?? 0 }} {{ t('ui.k0387') }}</p>
-        </article>
-        <article class="bank-card stat-box">
-          <small>{{ t('ui.k0388') }}</small>
-          <strong>{{ store.trends.value.review_completion_rate ?? 100 }}%</strong>
-          <p>{{ t('ui.k0389') }} {{ store.trends.value.reviews_completed ?? 0 }} {{ t('ui.k0390') }} {{ store.trends.value.due_reviews ?? 0 }} {{ t('ui.k0101') }}</p>
-        </article>
-        <article class="bank-card stat-box">
-          <small>{{ t('ui.k0391') }}</small>
-          <strong>{{ store.trends.value.recent?.correct_rate ?? 0 }}%</strong>
-          <p>{{ t('ui.k0392') }} {{ store.trends.value.window_days ?? 7 }} {{ t('ui.k0393') }} {{ store.trends.value.recent?.attempts ?? 0 }} {{ t('ui.k0394') }}</p>
-        </article>
-        <article class="bank-card stat-box">
-          <small>{{ t('ui.k0395') }}</small>
-          <strong>{{ store.trends.value.recent?.avg_time_per_question ?? 0 }} {{ t('ui.k0396') }}</strong>
-          <p>{{ t('ui.k0397') }} {{ Math.round((store.trends.value.recent?.time_spent || 0) / 60) }} {{ t('ui.k0231') }}</p>
-        </article>
-      </section>
-
-      <!-- 3. 双栏工作区 (主栏：学习计划日程；侧栏：薄弱点榜单与提分推荐) -->
-      <div class="learning-two-column-layout">
-        <!-- 左侧主栏：学习规划日程 -->
-        <section class="bank-card plan-timeline-panel">
-          <div class="panel-header">
-            <h3>
-              <LinearIcon name="calendar" size="16" />
-              <span>{{ t('learning.timeline_title') }}</span>
-              <span v-if="store.plan.value?.days?.length" class="badge font-mono-code">{{ store.plan.value.days.length }} {{ t('ui.k0447') }}</span>
-            </h3>
+      <!-- 第三层：分析 (紧凑指标、薄弱点榜单、提分推荐、基线对比统一下沉可折叠) -->
+      <details class="learning-analytics-accordion">
+        <summary class="analytics-accordion-summary">
+          <div class="summary-left">
+            <LinearIcon name="chart" size="16" />
+            <span class="summary-title">{{ t('learning.analytics_fold_title') }}</span>
+            <span class="summary-sub-hint">({{ store.trends.value.coverage_percent ?? 0 }}% {{ t('ui.k0386') }} · {{ store.trends.value.recent?.correct_rate ?? 0 }}% {{ t('ui.k0391') }})</span>
           </div>
+          <LinearIcon name="chevron-right" size="14" class="summary-chevron" />
+        </summary>
 
-          <div v-if="store.plan.value?.days?.length" class="days-container">
-            <div
-              v-for="day in store.plan.value.days"
-              :key="day.day_number"
-              class="day-card"
-              :class="{ 'day-empty': !day.question_count, 'day-today': day.day_number === 1 }"
-            >
-              <div class="day-card-header">
-                <div class="day-info">
-                  <span class="day-badge">{{ t('ui.k0082') }} {{ day.day_number }} {{ t('ui.k0447') }}</span>
-                  <h4>{{ day.title }}</h4>
-                  <span v-if="day.focus" class="day-focus-pill">{{ day.focus }}</span>
+        <div class="analytics-accordion-body">
+          <!-- 紧凑概览指标条 -->
+          <section class="metrics-grid">
+            <article class="bank-card stat-box">
+              <small>{{ t('ui.k0386') }}</small>
+              <strong>{{ store.trends.value.coverage_percent ?? 0 }}%</strong>
+              <p>{{ store.trends.value.attempted_questions ?? 0 }} / {{ store.trends.value.total_questions ?? 0 }} {{ t('ui.k0387') }}</p>
+            </article>
+            <article class="bank-card stat-box">
+              <small>{{ t('ui.k0388') }}</small>
+              <strong>{{ store.trends.value.review_completion_rate ?? 100 }}%</strong>
+              <p>{{ t('ui.k0389') }} {{ store.trends.value.reviews_completed ?? 0 }} {{ t('ui.k0390') }} {{ store.trends.value.due_reviews ?? 0 }} {{ t('ui.k0101') }}</p>
+            </article>
+            <article class="bank-card stat-box">
+              <small>{{ t('ui.k0391') }}</small>
+              <strong>{{ store.trends.value.recent?.correct_rate ?? 0 }}%</strong>
+              <p>{{ t('ui.k0392') }} {{ store.trends.value.window_days ?? 7 }} {{ t('ui.k0393') }} {{ store.trends.value.recent?.attempts ?? 0 }} {{ t('ui.k0394') }}</p>
+            </article>
+            <article class="bank-card stat-box">
+              <small>{{ t('ui.k0395') }}</small>
+              <strong>{{ store.trends.value.recent?.avg_time_per_question ?? 0 }} {{ t('ui.k0396') }}</strong>
+              <p>{{ t('ui.k0397') }} {{ Math.round((store.trends.value.recent?.time_spent || 0) / 60) }} {{ t('ui.k0231') }}</p>
+            </article>
+          </section>
+
+          <!-- 薄弱点榜单与提分推荐工作区 -->
+          <div class="learning-diagnostics-layout">
+            <!-- 薄弱知识点排行 -->
+            <section class="bank-card weak-section">
+              <div class="panel-header">
+                <h3>
+                  <LinearIcon name="alert-triangle" size="15" />
+                  <span>{{ t('learning.weak_points_title') }}</span>
+                </h3>
+              </div>
+              <ul v-if="store.trends.value.weak_points?.length" class="weak-list">
+                <li v-for="(item, idx) in store.trends.value.weak_points" :key="idx" class="weak-item">
+                  <span class="rank-num">{{ idx + 1 }}</span>
+                  <span class="point-name" :title="item.name">{{ item.name }}</span>
+                  <span class="mistake-count">{{ item.mistakes }} {{ t('ui.k0394') }}</span>
+                </li>
+              </ul>
+              <p v-else class="muted empty-sidebar-hint">{{ t('common.empty') }}</p>
+            </section>
+
+            <!-- 提分推荐 -->
+            <section class="bank-card recommendations-section">
+              <div class="panel-header rec-header-row">
+                <div class="rec-title-group">
+                  <LinearIcon name="zap" size="16" />
+                  <h3>{{ t('learning.recs_title') }}</h3>
+                  <span v-if="store.recommendations.value?.length" class="badge-rec-count font-mono-code">
+                    {{ store.recommendations.value.length }} {{ t('ui.k0101') }}
+                  </span>
                 </div>
-                <div class="day-meta">
-                  <span class="day-stats">{{ day.question_count }} {{ t('ui.k0448') }} {{ day.estimated_minutes }} {{ t('ui.k0231') }}</span>
+                <div v-if="recsByBank.length" class="rec-actions">
                   <button
+                    v-for="group in recsByBank"
+                    :key="group.bank_id"
                     type="button"
-                    class="primary btn-start-day"
-                    :disabled="!day.question_ids?.length"
-                    @click="startDayPlan(day)"
+                    class="primary btn-start-rec"
+                    @click="startRecommendedPractice(group)"
                   >
-                    {{ t('ui.k0449') }} {{ day.day_number }} {{ t('ui.k0450') }}{{ day.question_count }} {{ t('ui.k0123') }}
+                    <LinearIcon name="play" size="12" />
+                    <span>{{ recsByBank.length > 1 ? `${group.bank_name} (${group.items.length})` : `${t('ui.k0704')}${group.items.length}` }}</span>
                   </button>
                 </div>
               </div>
 
-              <p class="day-focus-desc">{{ day.focus_description }}</p>
+              <!-- 紧凑响应式筛选栏 -->
+              <div class="rec-controls-bar">
+                <select id="select-rec-type" v-model="filterType" class="rec-filter-select" :title="t('ui.k0366')" @change="applyFilters">
+                  <option value="">{{ t('ui.k0414') }}</option>
+                  <option value="SINGLE">{{ t('ui.k0050') }}</option>
+                  <option value="MULTI">{{ t('ui.k0051') }}</option>
+                  <option value="JUDGE">{{ t('ui.k0052') }}</option>
+                </select>
+                <select id="select-rec-ratio" v-model.number="filterNewRatio" class="rec-filter-select" :title="t('ui.k0410')" @change="applyFilters">
+                  <option :value="0.5">{{ t('ui.k0421') }}</option>
+                  <option :value="0.3">{{ t('ui.k0422') }}</option>
+                  <option :value="0.7">{{ t('ui.k0423') }}</option>
+                  <option :value="1.0">{{ t('ui.k0424') }}</option>
+                  <option :value="0.0">{{ t('ui.k0425') }}</option>
+                </select>
+              </div>
+              <ul v-if="store.recommendations.value?.length" class="rec-list">
+                <li v-for="item in store.recommendations.value" :key="item.question_id" class="rec-item">
+                  <span class="rec-reason">{{ item.reason }}</span>
+                  <span class="rec-stem" :title="item.stem">{{ item.stem }}</span>
+                  <small class="muted">{{ item.type }}</small>
+                </li>
+              </ul>
+              <p v-else class="muted empty-sidebar-hint">{{ t('ui.k0426') }}</p>
+            </section>
+          </div>
 
-              <!-- 题目清单专属抽屉触发按钮 (告别行内挤压溢出) -->
-              <div v-if="day.items?.length" class="day-items-section">
-                <button
-                  type="button"
-                  class="btn-toggle-items"
-                  @click="selectedDrawerDay = day"
-                >
-                  <LinearIcon name="layers" size="13" />
-                  <span>{{ `${t('ui.k0708')}${day.items.length} ${t('ui.k0709')}` }}</span>
-                </button>
+          <!-- 底部基线对比卡片 -->
+          <section class="bank-card collapsible-baseline-section">
+            <div class="baseline-toggle-header" @click="toggleBaseline">
+              <div class="toggle-header-left">
+                <LinearIcon name="activity" size="16" />
+                <h3>{{ t('learning.baseline_title') }}</h3>
+                <span :class="trendClass" class="trend-badge">{{ trendText || t('ui.k0700') }}</span>
+              </div>
+              <button type="button" class="btn-toggle-baseline">
+                <span>{{ showBaseline ? t('ui.k0707') : t('learning.toggle_baseline') }}</span>
+                <LinearIcon name="chevron-right" size="14" :style="{ transform: showBaseline ? 'rotate(90deg)' : 'none', transition: 'transform 150ms ease' }" />
+              </button>
+            </div>
+
+            <div v-if="showBaseline" class="comparison-grid">
+              <div class="comp-col recent">
+                <h4>{{ t('ui.k0399') }} {{ store.trends.value.window_days ?? 7 }} {{ t('ui.k0400') }}</h4>
+                <ul>
+                  <li><span>{{ t('ui.k0401') }}</span><strong>{{ store.trends.value.recent?.attempts ?? 0 }} {{ t('ui.k0394') }}</strong></li>
+                  <li><span>{{ t('ui.k0402') }}</span><strong>{{ store.trends.value.recent?.correct_rate ?? 0 }}%</strong></li>
+                  <li><span>{{ t('ui.k0403') }}</span><strong>{{ store.trends.value.recent?.avg_time_per_question ?? 0 }} {{ t('ui.k0396') }}</strong></li>
+                  <li><span>{{ t('ui.k0404') }}</span><strong>{{ store.trends.value.recent?.attempted_questions ?? 0 }} {{ t('ui.k0101') }}</strong></li>
+                </ul>
+              </div>
+              <div class="comp-col baseline">
+                <h4>{{ t('ui.k0405') }}</h4>
+                <ul>
+                  <li><span>{{ t('ui.k0401') }}</span><strong>{{ store.trends.value.baseline?.attempts ?? 0 }} {{ t('ui.k0394') }}</strong></li>
+                  <li><span>{{ t('ui.k0402') }}</span><strong>{{ store.trends.value.baseline?.correct_rate ?? 0 }}%</strong></li>
+                  <li><span>{{ t('ui.k0403') }}</span><strong>{{ store.trends.value.baseline?.avg_time_per_question ?? 0 }} {{ t('ui.k0396') }}</strong></li>
+                  <li><span>{{ t('ui.k0406') }}</span><strong :class="trendClass">{{ trendText || t('ui.k0700') }}</strong></li>
+                </ul>
               </div>
             </div>
-          </div>
-          <p v-else class="muted empty-plan-hint">{{ t('learning.no_questions_in_plan') }}</p>
-        </section>
-
-        <!-- 右侧边栏：薄弱考点与智能推荐 -->
-        <aside class="learning-sidebar">
-          <!-- 薄弱知识点排行 -->
-          <section class="bank-card weak-section">
-            <div class="panel-header">
-              <h3>
-                <LinearIcon name="alert-triangle" size="15" />
-                <span>{{ t('learning.weak_points_title') }}</span>
-              </h3>
-            </div>
-            <ul v-if="store.trends.value.weak_points?.length" class="weak-list">
-              <li v-for="(item, idx) in store.trends.value.weak_points" :key="idx" class="weak-item">
-                <span class="rank-num">{{ idx + 1 }}</span>
-                <span class="point-name" :title="item.name">{{ item.name }}</span>
-                <span class="mistake-count">{{ item.mistakes }} {{ t('ui.k0394') }}</span>
-              </li>
-            </ul>
-            <p v-else class="muted empty-sidebar-hint">{{ t('common.empty') }}</p>
           </section>
-
-          <!-- 提分推荐 -->
-          <section class="bank-card recommendations-section">
-            <div class="panel-header rec-header-row">
-              <div class="rec-title-group">
-                <LinearIcon name="zap" size="16" />
-                <h3>{{ t('learning.recs_title') }}</h3>
-                <span v-if="store.recommendations.value?.length" class="badge-rec-count font-mono-code">
-                  {{ store.recommendations.value.length }} {{ t('ui.k0101') }}
-                </span>
-              </div>
-              <div v-if="recsByBank.length" class="rec-actions">
-                <button
-                  v-for="group in recsByBank"
-                  :key="group.bank_id"
-                  type="button"
-                  class="primary btn-start-rec"
-                  @click="startRecommendedPractice(group)"
-                >
-                  <LinearIcon name="play" size="12" />
-                  <span>{{ recsByBank.length > 1 ? `${group.bank_name} (${group.items.length})` : `${t('ui.k0704')}${group.items.length}` }}</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- 紧凑响应式筛选栏 (完全消除横向挤压与溢出) -->
-            <div class="rec-controls-bar">
-              <select id="select-rec-type" v-model="filterType" class="rec-filter-select" :title="t('ui.k0366')" @change="applyFilters">
-                <option value="">{{ t('ui.k0414') }}</option>
-                <option value="SINGLE">{{ t('ui.k0050') }}</option>
-                <option value="MULTI">{{ t('ui.k0051') }}</option>
-                <option value="JUDGE">{{ t('ui.k0052') }}</option>
-              </select>
-              <select id="select-rec-ratio" v-model.number="filterNewRatio" class="rec-filter-select" :title="t('ui.k0410')" @change="applyFilters">
-                <option :value="0.5">{{ t('ui.k0421') }}</option>
-                <option :value="0.3">{{ t('ui.k0422') }}</option>
-                <option :value="0.7">{{ t('ui.k0423') }}</option>
-                <option :value="1.0">{{ t('ui.k0424') }}</option>
-                <option :value="0.0">{{ t('ui.k0425') }}</option>
-              </select>
-            </div>
-            <ul v-if="store.recommendations.value?.length" class="rec-list">
-              <li v-for="item in store.recommendations.value" :key="item.question_id" class="rec-item">
-                <span class="rec-reason">{{ item.reason }}</span>
-                <span class="rec-stem" :title="item.stem">{{ item.stem }}</span>
-                <small class="muted">{{ item.type }}</small>
-              </li>
-            </ul>
-            <p v-else class="muted empty-sidebar-hint">{{ t('ui.k0426') }}</p>
-          </section>
-        </aside>
-      </div>
-
-      <!-- 4. 底部可折叠基线对比卡片 -->
-      <section class="bank-card collapsible-baseline-section">
-        <div class="baseline-toggle-header" @click="toggleBaseline">
-          <div class="toggle-header-left">
-            <LinearIcon name="activity" size="16" />
-            <h3>{{ t('learning.baseline_title') }}</h3>
-            <span :class="trendClass" class="trend-badge">{{ trendText || t('ui.k0700') }}</span>
-          </div>
-          <button type="button" class="btn-toggle-baseline">
-            <span>{{ showBaseline ? t('ui.k0707') : t('learning.toggle_baseline') }}</span>
-            <LinearIcon name="chevron-right" size="14" :style="{ transform: showBaseline ? 'rotate(90deg)' : 'none', transition: 'transform 150ms ease' }" />
-          </button>
         </div>
-
-        <div v-if="showBaseline" class="comparison-grid">
-          <div class="comp-col recent">
-            <h4>{{ t('ui.k0399') }} {{ store.trends.value.window_days ?? 7 }} {{ t('ui.k0400') }}</h4>
-            <ul>
-              <li><span>{{ t('ui.k0401') }}</span><strong>{{ store.trends.value.recent?.attempts ?? 0 }} {{ t('ui.k0394') }}</strong></li>
-              <li><span>{{ t('ui.k0402') }}</span><strong>{{ store.trends.value.recent?.correct_rate ?? 0 }}%</strong></li>
-              <li><span>{{ t('ui.k0403') }}</span><strong>{{ store.trends.value.recent?.avg_time_per_question ?? 0 }} {{ t('ui.k0396') }}</strong></li>
-              <li><span>{{ t('ui.k0404') }}</span><strong>{{ store.trends.value.recent?.attempted_questions ?? 0 }} {{ t('ui.k0101') }}</strong></li>
-            </ul>
-          </div>
-          <div class="comp-col baseline">
-            <h4>{{ t('ui.k0405') }}</h4>
-            <ul>
-              <li><span>{{ t('ui.k0401') }}</span><strong>{{ store.trends.value.baseline?.attempts ?? 0 }} {{ t('ui.k0394') }}</strong></li>
-              <li><span>{{ t('ui.k0402') }}</span><strong>{{ store.trends.value.baseline?.correct_rate ?? 0 }}%</strong></li>
-              <li><span>{{ t('ui.k0403') }}</span><strong>{{ store.trends.value.baseline?.avg_time_per_question ?? 0 }} {{ t('ui.k0396') }}</strong></li>
-              <li><span>{{ t('ui.k0406') }}</span><strong :class="trendClass">{{ trendText || t('ui.k0700') }}</strong></li>
-            </ul>
-          </div>
-        </div>
-      </section>
+      </details>
     </template>
 
     <!-- 专属任务题目清单抽屉 (Slide-over Drawer，彻底杜绝行内溢出) -->
@@ -1544,6 +1562,121 @@ onMounted(async () => {
     width: 36px;
     height: 36px;
     font-size: 1.1rem;
+  }
+}
+
+/* Layer 2: 计划参数快速调优折叠栏 */
+.plan-adjust-accordion {
+  border-top: 1px dashed var(--border-subtle, var(--border));
+  margin-top: 1rem;
+  padding-top: 0.65rem;
+}
+
+.plan-adjust-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+  list-style: none;
+}
+
+.plan-adjust-summary::-webkit-details-marker {
+  display: none;
+}
+
+.plan-adjust-summary:hover {
+  color: var(--text-main);
+  background: var(--bg-muted);
+}
+
+.plan-adjust-accordion .hero-toolbar {
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: none;
+}
+
+.plan-layer-timeline {
+  margin-top: 1rem;
+}
+
+/* Layer 3: 分析折叠面板 */
+.learning-analytics-accordion {
+  margin-top: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  overflow: hidden;
+}
+
+.analytics-accordion-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.25rem;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  background: var(--bg-subtle, var(--bg-page));
+  transition: background 0.15s ease;
+}
+
+.analytics-accordion-summary::-webkit-details-marker {
+  display: none;
+}
+
+.analytics-accordion-summary:hover {
+  background: var(--bg-muted);
+}
+
+.summary-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.summary-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.summary-sub-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-left: 0.25rem;
+}
+
+.summary-chevron {
+  color: var(--text-muted);
+  transition: transform 0.18s ease;
+}
+
+details[open] > summary .summary-chevron {
+  transform: rotate(90deg);
+}
+
+.analytics-accordion-body {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.learning-diagnostics-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 900px) {
+  .learning-diagnostics-layout {
+    grid-template-columns: 1fr;
   }
 }
 </style>

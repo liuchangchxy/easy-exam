@@ -48,37 +48,52 @@
       <span class="mobile-nav-label">{{ t('nav_short.notes') }}</span>
     </button>
 
-    <button
-      type="button"
-      class="mobile-nav-item"
-      :class="{ active: currentPage === 'import' }"
-      :aria-label="t('nav.imports')"
-      :title="t('nav.imports')"
-      @click="$emit('navigate', 'import')"
-    >
-      <LinearIcon name="inbox" size="18" />
-      <span class="mobile-nav-label">{{ t('nav_short.imports') }}</span>
-    </button>
+    <!-- 更多/设置次级弹出菜单 (收纳导入与设置，彻底减负一级底栏) -->
+    <div class="mobile-nav-more-container">
+      <button
+        type="button"
+        class="mobile-nav-item mobile-nav-item-more"
+        :class="{ active: currentPage === 'import' || currentPage === 'settings' || showMorePopup }"
+        :aria-label="t('nav_short.actions')"
+        :title="t('nav_short.actions')"
+        @click="showMorePopup = !showMorePopup"
+      >
+        <LinearIcon name="settings" size="18" />
+        <span class="mobile-nav-label">{{ t('nav_short.actions') }}</span>
+      </button>
 
-    <button
-      type="button"
-      class="mobile-nav-item"
-      :class="{ active: currentPage === 'settings' }"
-      :aria-label="t('nav.settings')"
-      :title="t('nav.settings')"
-      @click="$emit('navigate', 'settings')"
-    >
-      <LinearIcon name="settings" size="18" />
-      <span class="mobile-nav-label">{{ t('nav_short.actions') }}</span>
-    </button>
+      <!-- 优雅紧凑的次级菜单卡片 -->
+      <div v-if="showMorePopup" class="mobile-nav-more-popup" @click="showMorePopup = false">
+        <button
+          type="button"
+          class="more-popup-item"
+          :class="{ active: currentPage === 'import' }"
+          @click="$emit('navigate', 'import')"
+        >
+          <LinearIcon name="inbox" size="16" />
+          <span>{{ t('nav.imports') }}</span>
+        </button>
+        <button
+          type="button"
+          class="more-popup-item"
+          :class="{ active: currentPage === 'settings' }"
+          @click="$emit('navigate', 'settings')"
+        >
+          <LinearIcon name="settings" size="16" />
+          <span>{{ t('nav.settings') }}</span>
+        </button>
+      </div>
+    </div>
   </nav>
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import LinearIcon from './LinearIcon.vue'
 import { useLocale } from '../composables/useLocale.js'
 
 const { t } = useLocale()
+const showMorePopup = ref(false)
 
 defineProps({
   currentPage: {
@@ -129,6 +144,17 @@ defineEmits(['navigate', 'open-palette'])
     transition: color 100ms ease;
   }
 
+  .mobile-nav-more-container {
+    flex: 1 1 0;
+    display: flex;
+    position: relative;
+    justify-content: center;
+  }
+
+  .mobile-nav-item-more {
+    width: 100%;
+  }
+
   .mobile-nav-item.active {
     color: var(--primary-fg, var(--primary));
   }
@@ -141,6 +167,50 @@ defineEmits(['navigate', 'open-palette'])
     max-width: 100%;
     padding: 0 1px;
     text-align: center;
+  }
+
+  .mobile-nav-more-popup {
+    position: absolute;
+    bottom: 100%;
+    right: 0.5rem;
+    margin-bottom: 0.5rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    flex-direction: column;
+    min-width: 8rem;
+    z-index: 950;
+    overflow: hidden;
+  }
+
+  .more-popup-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 0.9rem;
+    font-size: 0.85rem;
+    color: var(--text-main);
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--border-subtle);
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .more-popup-item:last-child {
+    border-bottom: none;
+  }
+
+  .more-popup-item:hover, .more-popup-item:active {
+    background: var(--bg-muted);
+  }
+
+  .more-popup-item.active {
+    color: var(--primary-fg, var(--primary));
+    font-weight: 600;
   }
 }
 </style>

@@ -12,8 +12,6 @@
         </button>
       </div>
       <div class="header-actions">
-        <ThemeToggle compact class="header-control-btn" />
-        <LocaleToggle compact class="header-control-btn" />
         <button type="button" class="btn-flag" :class="{ active: isWeak }" @click="toggleWeak">
           {{ isWeak ? t('ui.k0737') : t('ui.k0738') }}
         </button>
@@ -28,6 +26,10 @@
             <button type="button" class="dropdown-item btn-help-guide" @click="showHelpTip = !showHelpTip">
               <LinearIcon name="zap" size="13" /> {{ t('ui.k0513') }}
             </button>
+            <div class="dropdown-item dropdown-toggle-item">
+              <ThemeToggle compact class="header-control-btn" />
+              <LocaleToggle compact class="header-control-btn" />
+            </div>
             <button type="button" class="dropdown-item btn-edit-question" @click="toggleEditQuestion">
               {{ isEditingQuestion ? t('ui.k0739') : t('ui.k0740') }}
             </button>
@@ -2820,6 +2822,13 @@ function handleRestartPractice() {
 }
 .dropdown-item:active {
   background: var(--bg-muted);
+}
+.dropdown-toggle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.85rem;
 }
 
 /* Question Sheet Drawer (答题卡) & Modals */
