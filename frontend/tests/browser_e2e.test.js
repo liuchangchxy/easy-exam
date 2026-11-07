@@ -536,12 +536,11 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       await page.waitForSelector('.learning-page')
       await page.waitForSelector('.learning-analytics-accordion', { timeout: 8000 })
 
-      // Open folded analysis section to access metrics grid and recommendations
-      await page.evaluate(() => {
-        const details = document.querySelector('.learning-analytics-accordion')
-        if (details) details.setAttribute('open', '')
-      })
-      await page.waitForTimeout(300)
+      // Open folded analysis section via natural user click on the accordion summary
+      const summaryBtn = page.locator('.learning-analytics-accordion summary.analytics-accordion-summary')
+      await summaryBtn.scrollIntoViewIfNeeded()
+      await summaryBtn.click()
+      await page.waitForSelector('.learning-analytics-accordion[open]', { timeout: 5000 })
 
       await page.waitForSelector('.metrics-grid', { timeout: 8000 })
       await page.waitForSelector('text=题库覆盖率', { timeout: 5000 })
@@ -575,7 +574,8 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
 
       // Click "开始推荐刷题" to launch real practice session from recommendations
       const recBtn = page.locator('button.btn-start-rec').first()
-      await recBtn.evaluate(b => b.click())
+      await recBtn.scrollIntoViewIfNeeded()
+      await recBtn.click()
       await page.waitForSelector('.practice-page', { timeout: 8000 })
       await page.waitForSelector('.practice-page .stem-box', { timeout: 8000 })
       assert.ok(await page.locator('.stem-box').isVisible(), 'Should enter PracticeViewV1 from recommendations')

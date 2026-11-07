@@ -1611,7 +1611,6 @@ onMounted(async () => {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-card);
-  overflow: hidden;
 }
 
 .analytics-accordion-summary {
