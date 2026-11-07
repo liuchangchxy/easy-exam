@@ -28,7 +28,7 @@ export default {
     "learning": "Review",
     "notes": "Notes",
     "imports": "Import",
-    "actions": "Settings"
+    "actions": "More"
   },
   "common": {
     "confirm": "Confirm",

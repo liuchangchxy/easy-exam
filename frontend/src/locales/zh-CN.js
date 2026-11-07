@@ -28,7 +28,7 @@ export default {
     "learning": "复习",
     "notes": "笔记",
     "imports": "导入",
-    "actions": "设置"
+    "actions": "更多"
   },
   "common": {
     "confirm": "确定",
