@@ -11,7 +11,7 @@
       </div>
       <ThemeToggle compact />
       <LocaleToggle compact />
-      <button v-if="!report" type="button" class="primary" :disabled="loading || isSubmitting || Boolean(report)" @click="showSubmitConfirm = true">{{ t('exam.submit_exam') }}</button>
+      <button v-if="!report" type="button" class="primary btn-exam-submit-subtle" :disabled="loading || isSubmitting || Boolean(report)" @click="showSubmitConfirm = true">{{ t('exam.submit_exam') }}</button>
     </header>
 
 
@@ -692,6 +692,20 @@ onBeforeUnmount(() => {
 .answer-grid button.flagged { box-shadow: inset 0 -3px var(--warning); }
 .answer-grid button.current { outline: 2px solid var(--primary-fg, var(--primary)); outline-offset: 1px; }
 .primary { padding: 0.65rem 0.9rem; border-radius: 0.6rem; background: var(--primary); color: var(--on-primary); }
+.btn-exam-submit-subtle {
+  background: var(--bg-card) !important;
+  color: var(--primary-fg, var(--primary)) !important;
+  border: 1px solid var(--border-strong) !important;
+  font-size: 0.85rem !important;
+  font-weight: 500 !important;
+  padding: 0.4rem 0.85rem !important;
+  transition: all 0.15s ease !important;
+}
+.btn-exam-submit-subtle:hover:not(:disabled) {
+  background: var(--primary-light) !important;
+  border-color: var(--primary-border) !important;
+  color: var(--primary-fg, var(--primary)) !important;
+}
 .primary:hover:not(:disabled) {
   background: var(--primary-hover);
   color: var(--on-primary-hover, var(--on-primary));

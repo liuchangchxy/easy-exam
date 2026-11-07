@@ -156,7 +156,7 @@
           <div class="hub-text-wrap">
             <span class="hub-card-label">{{ t('nav.mistakes') }}</span>
             <strong class="hub-card-val">{{ mistakesCount }} <small>{{ t('ui.k0101') }}</small></strong>
-            <span class="hub-card-hint">{{ t('nav.mistakes_sub') }}</span>
+            <span class="hub-card-hint">{{ t('mistakes.launchpad_attack_title') }}</span>
           </div>
           <div class="hub-arrow-icon">
             <LinearIcon name="chevron-right" size="14" />
@@ -236,30 +236,37 @@
               </button>
             </template>
             <template v-else>
-              <button class="primary" :disabled="!bank.question_count" @click="$emit('start', bank)">
+              <button class="primary btn-start-practice" data-testid="start-practice-btn" :disabled="!bank.question_count" @click="$emit('start', bank)">
                 <LinearIcon name="play" size="13" /> {{ t('home.start_sequential', { total: bank.question_count }) }}
               </button>
             </template>
-            <button class="secondary-btn" :disabled="!bank.question_count" @click="openExamSetup(bank)">
+            <button class="secondary-btn btn-start-mock-exam" data-testid="start-mock-exam-btn" :disabled="!bank.question_count" @click="openExamSetup(bank)">
               <LinearIcon name="award" size="13" /> {{ t('home.start_mock_exam') }}
             </button>
           </div>
-          <div class="bank-utility-actions">
-            <button
-              type="button"
-              class="btn-util-link btn-manage-bank"
-              :data-testid="`manage-bank-${bank.id}`"
-              @click="router.push(`/banks/${bank.id}`)"
-            >
-              <LinearIcon name="list" size="12" /> {{ t('home.manage_questions') }}
-            </button>
-            <button type="button" class="btn-util-link btn-ai-batch" @click="openAiBatchModal(bank)">
-              <LinearIcon name="zap" size="12" /> {{ t('home.batch_ai_btn') }}
-            </button>
-            <button type="button" class="btn-util-link" @click="openAddQuestion(bank)">{{ t('home.add_question') }}</button>
-            <button type="button" class="btn-util-link" @click="openShareDialog(bank)">{{ t('home.share') }}</button>
-            <button type="button" class="btn-util-link" @click="openExportDialog(bank)">{{ t('home.export') }}</button>
-          </div>
+          <details class="bank-manage-accordion">
+            <summary class="bank-manage-summary">
+              <LinearIcon name="settings" size="12" />
+              <span>{{ t('home.bank_actions_menu') || t('common.advanced_settings') }}</span>
+              <LinearIcon name="chevron-right" size="11" class="summary-chevron" />
+            </summary>
+            <div class="bank-utility-actions">
+              <button
+                type="button"
+                class="btn-util-link btn-manage-bank"
+                :data-testid="`manage-bank-${bank.id}`"
+                @click="router.push(`/banks/${bank.id}`)"
+              >
+                <LinearIcon name="list" size="12" /> {{ t('home.manage_questions') }}
+              </button>
+              <button type="button" class="btn-util-link btn-ai-batch" @click="openAiBatchModal(bank)">
+                <LinearIcon name="zap" size="12" /> {{ t('home.batch_ai_btn') }}
+              </button>
+              <button type="button" class="btn-util-link" @click="openAddQuestion(bank)">{{ t('home.add_question') }}</button>
+              <button type="button" class="btn-util-link" @click="openShareDialog(bank)">{{ t('home.share') }}</button>
+              <button type="button" class="btn-util-link" @click="openExportDialog(bank)">{{ t('home.export') }}</button>
+            </div>
+          </details>
         </div>
       </article>
       <div v-if="!banks.length" class="empty-state-card">
@@ -309,31 +316,39 @@
         <label>{{ t('ui.k0153') }}
           <input v-model.number="timeLimitMinutes" type="number" min="0" max="600" required />
         </label>
-        <label>{{ t('ui.k0154') }}
-          <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <select v-model="selectedProfileId" style="flex: 1;" @change="onExamProfileChange">
-              <option value="">{{ t('ui.k0155') }}</option>
-              <option v-for="p in examProfiles" :key="p.id" :value="p.id">
-                {{ p.name }} {{ p.latest_blueprint ? t('ui.k0665') : t('ui.k0666') }}
-              </option>
-            </select>
-            <button type="button" class="action-link-btn" style="white-space: nowrap; font-size: 0.8rem; padding: 0.35rem 0.6rem;" @click="openBlueprintDialogFromExam">
-              {{ t('ui.k0038') }}
-            </button>
+        <details class="exam-advanced-accordion">
+          <summary class="exam-advanced-summary">
+            <span>{{ t('common.advanced_settings') }}</span>
+            <LinearIcon name="chevron-right" size="12" class="summary-chevron" />
+          </summary>
+          <div class="exam-advanced-content">
+            <label>{{ t('ui.k0154') }}
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <select v-model="selectedProfileId" style="flex: 1;" @change="onExamProfileChange">
+                  <option value="">{{ t('ui.k0155') }}</option>
+                  <option v-for="p in examProfiles" :key="p.id" :value="p.id">
+                    {{ p.name }} {{ p.latest_blueprint ? t('ui.k0665') : t('ui.k0666') }}
+                  </option>
+                </select>
+                <button type="button" class="action-link-btn" style="white-space: nowrap; font-size: 0.8rem; padding: 0.35rem 0.6rem;" @click="openBlueprintDialogFromExam">
+                  {{ t('ui.k0038') }}
+                </button>
+              </div>
+            </label>
+            <div v-if="selectedProfileBlueprintSummary" style="background: var(--success-light); border: 1px solid var(--success-border); border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.85rem; color: var(--success-fg, var(--success)); margin-top: 0.5rem;">
+              <strong>{{ t('ui.k0156') }}</strong>
+              {{ t('ui.k0157') }} {{ selectedProfileBlueprintSummary.sectionsCount }} {{ t('ui.k0158') }} {{ selectedProfileBlueprintSummary.totalQuestions }} {{ t('ui.k0101') }}
+              <span v-if="selectedProfileBlueprintSummary.negativeMark > 0">{{ t('ui.k0159') }} {{ selectedProfileBlueprintSummary.negativeMark }} {{ t('ui.k0160') }}</span>
+              <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem;">
+                {{ t('ui.k0161') }}{{ totalQuestions }} {{ t('ui.k0123') }}
+              </div>
+            </div>
+            <label class="ctrl-check exam-option-checkbox" style="margin-top: 0.5rem;">
+              <input v-model="recordMistakes" type="checkbox" />
+              <span>{{ t('ui.k0162') }}</span>
+            </label>
           </div>
-        </label>
-        <div v-if="selectedProfileBlueprintSummary" style="background: var(--success-light); border: 1px solid var(--success-border); border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.85rem; color: var(--success-fg, var(--success));">
-          <strong>{{ t('ui.k0156') }}</strong>
-          {{ t('ui.k0157') }} {{ selectedProfileBlueprintSummary.sectionsCount }} {{ t('ui.k0158') }} {{ selectedProfileBlueprintSummary.totalQuestions }} {{ t('ui.k0101') }}
-          <span v-if="selectedProfileBlueprintSummary.negativeMark > 0">{{ t('ui.k0159') }} {{ selectedProfileBlueprintSummary.negativeMark }} {{ t('ui.k0160') }}</span>
-          <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem;">
-            {{ t('ui.k0161') }}{{ totalQuestions }} {{ t('ui.k0123') }}
-          </div>
-        </div>
-        <label class="ctrl-check exam-option-checkbox">
-          <input v-model="recordMistakes" type="checkbox" />
-          <span>{{ t('ui.k0162') }}</span>
-        </label>
+        </details>
         <p v-if="examError" class="error">{{ examError }}</p>
         <div class="dialog-actions-row">
           <button type="button" class="secondary-btn" @click="examBank = null">{{ t('ui.k0149') }}</button>
@@ -2041,4 +2056,55 @@ button.quick-hub-card:focus-visible {
     padding: 0.75rem 0.95rem;
   }
 }
+
+.bank-manage-accordion {
+  border-top: 1px dashed var(--border);
+  padding-top: 0.4rem;
+  margin-top: 0.15rem;
+}
+.bank-manage-summary,
+.exam-advanced-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  padding: 0.2rem 0.4rem;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s ease, background 0.15s ease;
+  list-style: none;
+}
+.bank-manage-summary::-webkit-details-marker,
+.exam-advanced-summary::-webkit-details-marker {
+  display: none;
+}
+.bank-manage-summary:hover,
+.exam-advanced-summary:hover {
+  color: var(--text-main);
+  background: var(--bg-muted);
+}
+.summary-chevron {
+  transition: transform 0.18s ease;
+}
+details[open] .summary-chevron {
+  transform: rotate(90deg);
+}
+.bank-manage-accordion .bank-utility-actions {
+  border-top: none;
+  padding-top: 0.45rem;
+}
+.exam-advanced-accordion {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-subtle, var(--bg-page));
+}
+.exam-advanced-content {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.65rem;
+}
+
 </style>

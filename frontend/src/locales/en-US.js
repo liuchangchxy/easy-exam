@@ -6,13 +6,13 @@ export default {
     "subtitle": "Private Cloud Intelligent Exam & Study System"
   },
   "nav": {
-    "home": "Home",
+    "home": "Question Banks",
     "practice": "Practice",
     "exam": "Mock Exam",
     "mistakes": "Mistakes Review",
-    "mistakes_sub": "FSRS",
-    "learning": "Review Center",
-    "learning_sub": "Trends",
+    "mistakes_sub": "",
+    "learning": "Review Planning",
+    "learning_sub": "",
     "imports": "Import Bank",
     "notes": "Knowledge Notes",
     "settings": "Settings",
@@ -23,12 +23,12 @@ export default {
     "search": "Search questions & banks..."
   },
   "nav_short": {
-    "home": "Home",
+    "home": "Banks",
     "mistakes": "Mistakes",
     "learning": "Review",
     "notes": "Notes",
     "imports": "Import",
-    "actions": "Actions"
+    "actions": "More"
   },
   "common": {
     "confirm": "Confirm",
@@ -52,7 +52,8 @@ export default {
     "select": "Please select",
     "status": "Status",
     "total": "{count} total",
-    "none": "None"
+    "none": "None",
+    "advanced_settings": "Advanced Settings"
   },
   "home": {
     "welcome": "Welcome back",
@@ -204,31 +205,31 @@ export default {
   },
   "mistakes": {
     "title": "Mistakes Review",
-    "subtitle": "Eradicate knowledge blind spots; eliminated items are removed from notebook",
+    "subtitle": "Eradicate weak spots; mastered questions are removed from the notebook",
     "total_mistakes": "Total Mistakes: {count}",
-    "kill_button": "Eliminate This Question",
-    "kill_success": "Eliminated! Removed from priority review queue.",
+    "kill_button": "Mark as Mastered",
+    "kill_success": "Marked as mastered! Moved to mastered list.",
     "empty_hint": "Awesome! Zero mistakes currently recorded. Keep it up!",
     "filter_bank": "Filter by Bank",
-    "start_kill_practice": "Start Mistakes Sprint",
-    "launchpad_attack_tag": "Focused Attack",
-    "launchpad_attack_title": "Mistake Attack Sprint",
-    "launchpad_attack_desc": "Targeted intensive drill for mistaken questions to eliminate weak spots.",
+    "start_kill_practice": "Start Mistakes Practice",
+    "launchpad_attack_tag": "Targeted Practice",
+    "launchpad_attack_title": "Mistake Practice",
+    "launchpad_attack_desc": "Targeted intensive drill for mistaken questions to reinforce memory.",
     "launchpad_unit_questions": "Mistakes Remaining",
-    "btn_start_attack": "Start Mistake Attack ({count} Qs) →",
-    "launchpad_fsrs_tag": "Memory Scheduling",
-    "launchpad_fsrs_title": "FSRS Due Review",
-    "launchpad_fsrs_desc": "Scheduled at forgetting curve threshold with Free Spaced Repetition.",
+    "btn_start_attack": "Start Mistake Practice ({count} Qs) →",
+    "launchpad_fsrs_tag": "Due Schedule",
+    "launchpad_fsrs_title": "Today's Review",
+    "launchpad_fsrs_desc": "Scheduled at forgetting curve threshold with spaced repetition.",
     "launchpad_unit_due": "Questions Due Today",
     "fsrs_all_clear": "All Clear Today",
-    "btn_start_fsrs": "Review Due Questions ({count} Qs) →",
+    "btn_start_fsrs": "Start Today's Review ({count} Qs) →",
     "launchpad_kill_tag": "Gap Filling",
-    "launchpad_kill_title": "Mastered Review Scan",
-    "launchpad_kill_desc": "Revisit eliminated questions to verify long-term retention.",
+    "launchpad_kill_title": "Mastered Review Visit",
+    "launchpad_kill_desc": "Revisit mastered questions to verify long-term retention.",
     "launchpad_unit_killed": "Questions Mastered",
-    "btn_start_kill_review": "Start Retention Scan ({count} Qs) →",
+    "btn_start_kill_review": "Start Retention Practice ({count} Qs) →",
     "detail_list_title": "Question Details & Attribution",
-    "killed_list_title": "Eliminated Questions Archive",
+    "killed_list_title": "Mastered Questions List",
     "detail_list_hint": "Review stems, edit error attribution, or practice individually",
     "collapse_list": "Collapse List",
     "expand_list": "Expand Question List",
@@ -282,7 +283,9 @@ export default {
     "time_budget_label": "Daily Time",
     "all_questions_sprint": "Single-Day Sprint ({count} Qs)",
     "no_questions_in_plan": "No questions available for current plan criteria",
-    "start_weak_focus": "Attack This Topic"
+    "start_weak_focus": "Attack This Topic",
+    "plan_adjust_title": "Adjust Review Plan",
+    "analytics_fold_title": "Learning Diagnostics & Analytics"
   },
   "imports": {
     "title": "Import Banks & Questions",
@@ -312,8 +315,22 @@ export default {
     "regenerate": "Regenerate Explanation"
   },
   "theme": {
-    "toggle_to_dark": "Switch to Dark Mode",
-    "toggle_to_light": "Switch to Light Mode"
+    "blue_grey": "Neutral Blue-Grey (Default)",
+    "mist": "Mist Blue",
+    "ocean": "Sea Salt",
+    "amethyst": "Amethyst",
+    "rose": "Rose",
+    "amber": "Amber",
+    "forest": "Forest (Original Green)",
+    "mocha": "Mocha",
+    "blue_grey_desc": "Clean neutral blue-grey, high contrast",
+    "mist_desc": "Refined slate blue, calm & focused",
+    "ocean_desc": "Crisp sea salt and cyan breeze",
+    "amethyst_desc": "Elegant purple, deep & scholarly",
+    "rose_desc": "Warm rose blush & velvet crimson",
+    "amber_desc": "Golden amber & warm calm sand",
+    "forest_desc": "Evergreen pine & warm paper, easy on the eyes",
+    "mocha_desc": "Warm espresso & rich cocoa tones"
   },
   "locale": {
     "switch_language": "Switch Language",
@@ -495,23 +512,5 @@ export default {
     "answer_reset_prompt": "Question type changed. Please select the correct answer.",
     "reload_latest": "Reload Latest Version",
     "conflict_detected": "Concurrent edit conflict detected: Question was modified. Server latest version preserved. Please reload."
-  },
-  "theme": {
-    "blue_grey": "Neutral Blue-Grey (Default)",
-    "mist": "Mist Blue",
-    "ocean": "Sea Salt",
-    "amethyst": "Amethyst",
-    "rose": "Rose",
-    "amber": "Amber",
-    "forest": "Forest (Original Green)",
-    "mocha": "Mocha",
-    "blue_grey_desc": "Clean neutral blue-grey, high contrast",
-    "mist_desc": "Refined slate blue, calm & focused",
-    "ocean_desc": "Crisp sea salt and cyan breeze",
-    "amethyst_desc": "Elegant purple, deep & scholarly",
-    "rose_desc": "Warm rose blush & velvet crimson",
-    "amber_desc": "Golden amber & warm calm sand",
-    "forest_desc": "Evergreen pine & warm paper, easy on the eyes",
-    "mocha_desc": "Warm espresso & rich cocoa tones"
   }
 }

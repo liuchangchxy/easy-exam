@@ -218,7 +218,11 @@ test('Bank Content Management E2E: Full Lifecycle, Killed Retention, Active Exam
     await page.waitForSelector('.home-page', { timeout: 10000 })
     console.log('[E2E] Logged into HomeView.')
 
-    // Step B: Home bank card has "管理题目" button
+    // Step B: Home bank card has "管理题目" button (inside bank actions accordion)
+    const accordion = page.locator('.bank-manage-accordion').first()
+    if (await accordion.isVisible().catch(() => false)) {
+      await page.click('.bank-manage-summary')
+    }
     const manageBtn = page.locator(`[data-testid="manage-bank-${bankId}"]`)
     await manageBtn.waitFor({ state: 'visible', timeout: 5000 })
     await manageBtn.click()

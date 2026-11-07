@@ -12,43 +12,32 @@
         </button>
       </div>
       <div class="header-actions">
-        <ThemeToggle compact class="header-control-btn" />
-        <LocaleToggle compact class="header-control-btn" />
-        <!-- 桌面端平铺操作 (宽屏 >= 1024px 显示) -->
-        <button type="button" class="secondary-btn btn-help-guide desktop-full-btn" @click="showHelpTip = !showHelpTip" :title="t('ui.k0512')">
-          <LinearIcon name="zap" size="13" /> {{ t('ui.k0513') }}
-        </button>
-        <button type="button" class="btn-flag desktop-full-btn" :class="{ active: isWeak }" @click="toggleWeak">
+        <button type="button" class="btn-flag desktop-only-btn" :class="{ active: isWeak }" @click="toggleWeak">
           {{ isWeak ? t('ui.k0737') : t('ui.k0738') }}
-        </button>
-        <button type="button" class="btn-kill desktop-full-btn" @click="handleKill">
-          {{ t('ui.k0486') }}
-        </button>
-        <button type="button" class="btn-edit-question desktop-full-btn" @click="toggleEditQuestion">
-          {{ isEditingQuestion ? t('ui.k0739') : t('ui.k0740') }}
         </button>
         <button type="button" class="primary btn-header-complete" @click="complete">{{ t('ui.k0514') }}</button>
 
-        <!-- 移动/平板端“更多 ⋯”菜单 -->
-        <div class="mobile-more-wrapper compact-more-menu">
-          <button type="button" class="btn-help-mobile" @click="showHelpTip = !showHelpTip" :title="t('ui.k0513')">
-            <LinearIcon name="zap" size="13" />
-          </button>
+        <!-- 更多操作下拉菜单 (桌面端与移动端统一收纳管理及辅助操作) -->
+        <div class="mobile-more-wrapper practice-more-dropdown-wrapper">
           <button type="button" class="btn-more-menu" @click="showMoreMenu = !showMoreMenu" :aria-label="t('ui.k0515')">
             ⋯
           </button>
           <div v-if="showMoreMenu" class="mobile-dropdown-menu" @click="showMoreMenu = false">
-            <button type="button" class="dropdown-item" :class="{ active: isWeak }" @click="toggleWeak">
-              {{ isWeak ? t('ui.k0741') : t('ui.k0738') }}
+            <button type="button" class="dropdown-item btn-flag-mobile mobile-only-item" :class="{ active: isWeak }" @click="toggleWeak">
+              <LinearIcon name="flag" size="13" /> {{ isWeak ? t('ui.k0737') : t('ui.k0738') }}
             </button>
-            <button type="button" class="dropdown-item text-danger" @click="handleKill">
-              {{ t('ui.k0486') }}
+            <button type="button" class="dropdown-item btn-help-guide" @click="showHelpTip = !showHelpTip">
+              <LinearIcon name="zap" size="13" /> {{ t('ui.k0513') }}
             </button>
-            <button type="button" class="dropdown-item" @click="toggleEditQuestion">
+            <div class="dropdown-item dropdown-toggle-item">
+              <ThemeToggle compact class="header-control-btn" />
+              <LocaleToggle compact class="header-control-btn" />
+            </div>
+            <button type="button" class="dropdown-item btn-edit-question" @click="toggleEditQuestion">
               {{ isEditingQuestion ? t('ui.k0739') : t('ui.k0740') }}
             </button>
-            <button type="button" class="dropdown-item text-danger" @click="complete">
-              {{ t('ui.k0516') }}
+            <button type="button" class="dropdown-item btn-kill text-danger" @click="handleKill">
+              {{ t('ui.k0486') }}
             </button>
           </div>
         </div>
@@ -1930,11 +1919,17 @@ function handleRestartPractice() {
 }
 
 .header-actions .btn-header-complete {
-  background: var(--primary);
-  color: var(--on-primary);
-  border-color: var(--primary);
-  font-weight: 600;
-  padding: 0 1rem;
+  background: var(--bg-card);
+  color: var(--primary-fg, var(--primary));
+  border: 1px solid var(--border-strong);
+  font-weight: 500;
+  padding: 0 0.85rem;
+  transition: all 0.15s ease;
+}
+.header-actions .btn-header-complete:hover:not(:disabled) {
+  background: var(--primary-light);
+  border-color: var(--primary-border);
+  color: var(--primary-fg, var(--primary));
 }
 .header-actions .btn-header-complete:hover:not(:disabled) {
   background: var(--primary-hover);
@@ -1953,13 +1948,15 @@ function handleRestartPractice() {
 }
 
 .btn-kill {
-  color: var(--danger-fg, var(--danger));
-  border-color: var(--danger-border);
+  color: var(--text-muted);
+  border-color: var(--border);
+  opacity: 0.85;
 }
 .btn-kill:hover:not(:disabled) {
   background: var(--danger-light);
   border-color: var(--danger);
   color: var(--danger-fg, var(--danger));
+  opacity: 1;
 }
 
 .question-card {
@@ -2759,6 +2756,9 @@ function handleRestartPractice() {
 .mobile-only-inline, .mobile-only-btn, .compact-more-menu {
   display: none !important;
 }
+.practice-more-dropdown-wrapper {
+  display: inline-flex !important;
+}
 .desktop-only-btn, .desktop-full-btn, .header-control-btn {
   display: inline-flex !important;
 }
@@ -2825,6 +2825,13 @@ function handleRestartPractice() {
 }
 .dropdown-item:active {
   background: var(--bg-muted);
+}
+.dropdown-toggle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.85rem;
 }
 
 /* Question Sheet Drawer (答题卡) & Modals */
@@ -3202,6 +3209,7 @@ function handleRestartPractice() {
     gap: 0.35rem !important;
     flex: 1 1 auto !important;
     min-width: 0 !important;
+    overflow: hidden !important;
   }
 
   .header-titles {
@@ -3212,7 +3220,7 @@ function handleRestartPractice() {
     white-space: nowrap !important;
     overflow: hidden !important;
     min-width: 0 !important;
-    flex: 0 1 auto !important;
+    flex: 1 1 auto !important;
   }
 
   .btn-back {
@@ -3229,13 +3237,13 @@ function handleRestartPractice() {
   }
 
   .practice-title {
-    font-size: 0.92rem !important;
+    font-size: 0.88rem !important;
     font-weight: 600 !important;
     margin: 0 !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
-    max-width: 110px;
+    max-width: 90px !important;
   }
 
   .badge-type-pill {
@@ -3264,6 +3272,11 @@ function handleRestartPractice() {
     flex: 0 0 auto !important;
     width: auto !important;
     flex-wrap: nowrap !important;
+    margin-left: auto !important;
+  }
+
+  .mobile-only-item {
+    display: flex !important;
   }
 
   .btn-header-complete {

@@ -54,7 +54,6 @@
       >
         <LinearIcon name="target" size="16" />
         <span v-if="!isCollapsed" class="nav-item-label">{{ t('nav.mistakes') }}</span>
-        <span v-if="!isCollapsed" class="nav-item-sub">{{ t('nav.mistakes_sub') }}</span>
       </button>
 
       <button
@@ -66,7 +65,6 @@
       >
         <LinearIcon name="chart" size="16" />
         <span v-if="!isCollapsed" class="nav-item-label">{{ t('nav.learning') }}</span>
-        <span v-if="!isCollapsed" class="nav-item-sub">{{ t('nav.learning_sub') }}</span>
       </button>
 
       <button
