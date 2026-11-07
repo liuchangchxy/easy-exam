@@ -63,11 +63,12 @@
     <button
       type="button"
       class="mobile-nav-item"
-      :aria-label="t('common.actions')"
-      :title="t('common.actions')"
-      @click="$emit('open-palette')"
+      :class="{ active: currentPage === 'settings' }"
+      :aria-label="t('nav.settings')"
+      :title="t('nav.settings')"
+      @click="$emit('navigate', 'settings')"
     >
-      <LinearIcon name="command" size="18" />
+      <LinearIcon name="settings" size="18" />
       <span class="mobile-nav-label">{{ t('nav_short.actions') }}</span>
     </button>
   </nav>

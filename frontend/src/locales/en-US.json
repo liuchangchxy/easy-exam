@@ -763,13 +763,13 @@
     "subtitle": "Private Cloud Intelligent Exam & Study System"
   },
   "nav": {
-    "home": "Home",
+    "home": "Question Banks",
     "practice": "Practice",
     "exam": "Mock Exam",
     "mistakes": "Mistakes Review",
-    "mistakes_sub": "FSRS",
-    "learning": "Review Center",
-    "learning_sub": "Trends",
+    "mistakes_sub": "",
+    "learning": "Review Planning",
+    "learning_sub": "",
     "imports": "Import Bank",
     "notes": "Knowledge Notes",
     "settings": "Settings",
@@ -780,12 +780,12 @@
     "search": "Search questions & banks..."
   },
   "nav_short": {
-    "home": "Home",
+    "home": "Banks",
     "mistakes": "Mistakes",
     "learning": "Review",
     "notes": "Notes",
     "imports": "Import",
-    "actions": "Actions"
+    "actions": "Settings"
   },
   "common": {
     "confirm": "Confirm",

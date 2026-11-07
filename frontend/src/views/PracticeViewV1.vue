@@ -15,17 +15,17 @@
         <ThemeToggle compact class="header-control-btn" />
         <LocaleToggle compact class="header-control-btn" />
         <!-- 桌面端平铺操作 (宽屏 >= 1024px 显示) -->
-        <button type="button" class="secondary-btn btn-help-guide desktop-full-btn" @click="showHelpTip = !showHelpTip" :title="t('ui.k0512')">
-          <LinearIcon name="zap" size="13" /> {{ t('ui.k0513') }}
-        </button>
         <button type="button" class="btn-flag desktop-full-btn" :class="{ active: isWeak }" @click="toggleWeak">
           {{ isWeak ? t('ui.k0737') : t('ui.k0738') }}
         </button>
-        <button type="button" class="btn-kill desktop-full-btn" @click="handleKill">
-          {{ t('ui.k0486') }}
+        <button type="button" class="secondary-btn btn-help-guide desktop-full-btn" @click="showHelpTip = !showHelpTip" :title="t('ui.k0512')">
+          <LinearIcon name="zap" size="13" /> {{ t('ui.k0513') }}
         </button>
         <button type="button" class="btn-edit-question desktop-full-btn" @click="toggleEditQuestion">
           {{ isEditingQuestion ? t('ui.k0739') : t('ui.k0740') }}
+        </button>
+        <button type="button" class="btn-kill desktop-full-btn" @click="handleKill">
+          {{ t('ui.k0486') }}
         </button>
         <button type="button" class="primary btn-header-complete" @click="complete">{{ t('ui.k0514') }}</button>
 
@@ -1953,13 +1953,15 @@ function handleRestartPractice() {
 }
 
 .btn-kill {
-  color: var(--danger-fg, var(--danger));
-  border-color: var(--danger-border);
+  color: var(--text-muted);
+  border-color: var(--border);
+  opacity: 0.85;
 }
 .btn-kill:hover:not(:disabled) {
   background: var(--danger-light);
   border-color: var(--danger);
   color: var(--danger-fg, var(--danger));
+  opacity: 1;
 }
 
 .question-card {

@@ -156,7 +156,7 @@
           <div class="hub-text-wrap">
             <span class="hub-card-label">{{ t('nav.mistakes') }}</span>
             <strong class="hub-card-val">{{ mistakesCount }} <small>{{ t('ui.k0101') }}</small></strong>
-            <span class="hub-card-hint">{{ t('nav.mistakes_sub') }}</span>
+            <span class="hub-card-hint">{{ t('mistakes.launchpad_attack_title') }}</span>
           </div>
           <div class="hub-arrow-icon">
             <LinearIcon name="chevron-right" size="14" />

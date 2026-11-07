@@ -763,13 +763,13 @@
     "subtitle": "私有云智能刷题备考系统"
   },
   "nav": {
-    "home": "首页概览",
+    "home": "题库大厅",
     "practice": "题库练习",
     "exam": "模拟考试",
-    "mistakes": "错题攻克 (错题斩杀)",
-    "mistakes_sub": "FSRS",
-    "learning": "复习中心 (学习看板)",
-    "learning_sub": "规划",
+    "mistakes": "错题复习",
+    "mistakes_sub": "",
+    "learning": "复习规划",
+    "learning_sub": "",
     "imports": "导入题库",
     "notes": "知识笔记",
     "settings": "系统设置",
@@ -780,12 +780,12 @@
     "search": "搜索功能与题库..."
   },
   "nav_short": {
-    "home": "首页",
+    "home": "题库",
     "mistakes": "错题",
     "learning": "复习",
     "notes": "笔记",
     "imports": "导入",
-    "actions": "操作"
+    "actions": "设置"
   },
   "common": {
     "confirm": "确定",
