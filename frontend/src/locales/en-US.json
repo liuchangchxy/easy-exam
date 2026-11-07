@@ -809,7 +809,8 @@
     "select": "Please select",
     "status": "Status",
     "total": "{count} total",
-    "none": "None"
+    "none": "None",
+    "advanced_settings": "Advanced Settings"
   },
   "home": {
     "welcome": "Welcome back",
@@ -968,17 +969,17 @@
     "empty_hint": "Awesome! Zero mistakes currently recorded. Keep it up!",
     "filter_bank": "Filter by Bank",
     "start_kill_practice": "Start Mistakes Sprint",
-    "launchpad_attack_tag": "Focused Attack",
-    "launchpad_attack_title": "Mistake Attack Sprint",
+    "launchpad_attack_tag": "Targeted Practice",
+    "launchpad_attack_title": "Mistake Practice",
     "launchpad_attack_desc": "Targeted intensive drill for mistaken questions to eliminate weak spots.",
     "launchpad_unit_questions": "Mistakes Remaining",
-    "btn_start_attack": "Start Mistake Attack ({count} Qs) →",
-    "launchpad_fsrs_tag": "Memory Scheduling",
-    "launchpad_fsrs_title": "FSRS Due Review",
+    "btn_start_attack": "Start Mistake Practice ({count} Qs) →",
+    "launchpad_fsrs_tag": "Due Schedule",
+    "launchpad_fsrs_title": "Today's Review",
     "launchpad_fsrs_desc": "Scheduled at forgetting curve threshold with Free Spaced Repetition.",
     "launchpad_unit_due": "Questions Due Today",
     "fsrs_all_clear": "All Clear Today",
-    "btn_start_fsrs": "Review Due Questions ({count} Qs) →",
+    "btn_start_fsrs": "Start Today's Review ({count} Qs) →",
     "launchpad_kill_tag": "Gap Filling",
     "launchpad_kill_title": "Mastered Review Scan",
     "launchpad_kill_desc": "Revisit eliminated questions to verify long-term retention.",
@@ -1039,7 +1040,9 @@
     "time_budget_label": "Daily Time",
     "all_questions_sprint": "Single-Day Sprint ({count} Qs)",
     "no_questions_in_plan": "No questions available for current plan criteria",
-    "start_weak_focus": "Attack This Topic"
+    "start_weak_focus": "Attack This Topic",
+    "plan_adjust_title": "Adjust Review Plan",
+    "analytics_fold_title": "Learning Diagnostics & Analytics"
   },
   "imports": {
     "title": "Import Banks & Questions",
@@ -1069,8 +1072,22 @@
     "regenerate": "Regenerate Explanation"
   },
   "theme": {
-    "toggle_to_dark": "Switch to Dark Mode",
-    "toggle_to_light": "Switch to Light Mode"
+    "blue_grey": "Neutral Blue-Grey (Default)",
+    "mist": "Mist Blue",
+    "ocean": "Sea Salt",
+    "amethyst": "Amethyst",
+    "rose": "Rose",
+    "amber": "Amber",
+    "forest": "Forest (Original Green)",
+    "mocha": "Mocha",
+    "blue_grey_desc": "Clean neutral blue-grey, high contrast",
+    "mist_desc": "Refined slate blue, calm & focused",
+    "ocean_desc": "Crisp sea salt and cyan breeze",
+    "amethyst_desc": "Elegant purple, deep & scholarly",
+    "rose_desc": "Warm rose blush & velvet crimson",
+    "amber_desc": "Golden amber & warm calm sand",
+    "forest_desc": "Evergreen pine & warm paper, easy on the eyes",
+    "mocha_desc": "Warm espresso & rich cocoa tones"
   },
   "locale": {
     "switch_language": "Switch Language",
@@ -1252,23 +1269,5 @@
     "answer_reset_prompt": "Question type changed. Please select the correct answer.",
     "reload_latest": "Reload Latest Version",
     "conflict_detected": "Concurrent edit conflict detected: Question was modified. Server latest version preserved. Please reload."
-  },
-  "theme": {
-    "blue_grey": "Neutral Blue-Grey (Default)",
-    "mist": "Mist Blue",
-    "ocean": "Sea Salt",
-    "amethyst": "Amethyst",
-    "rose": "Rose",
-    "amber": "Amber",
-    "forest": "Forest (Original Green)",
-    "mocha": "Mocha",
-    "blue_grey_desc": "Clean neutral blue-grey, high contrast",
-    "mist_desc": "Refined slate blue, calm & focused",
-    "ocean_desc": "Crisp sea salt and cyan breeze",
-    "amethyst_desc": "Elegant purple, deep & scholarly",
-    "rose_desc": "Warm rose blush & velvet crimson",
-    "amber_desc": "Golden amber & warm calm sand",
-    "forest_desc": "Evergreen pine & warm paper, easy on the eyes",
-    "mocha_desc": "Warm espresso & rich cocoa tones"
   }
 }

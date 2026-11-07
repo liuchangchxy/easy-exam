@@ -14,41 +14,25 @@
       <div class="header-actions">
         <ThemeToggle compact class="header-control-btn" />
         <LocaleToggle compact class="header-control-btn" />
-        <!-- 桌面端平铺操作 (宽屏 >= 1024px 显示) -->
-        <button type="button" class="btn-flag desktop-full-btn" :class="{ active: isWeak }" @click="toggleWeak">
+        <button type="button" class="btn-flag" :class="{ active: isWeak }" @click="toggleWeak">
           {{ isWeak ? t('ui.k0737') : t('ui.k0738') }}
-        </button>
-        <button type="button" class="secondary-btn btn-help-guide desktop-full-btn" @click="showHelpTip = !showHelpTip" :title="t('ui.k0512')">
-          <LinearIcon name="zap" size="13" /> {{ t('ui.k0513') }}
-        </button>
-        <button type="button" class="btn-edit-question desktop-full-btn" @click="toggleEditQuestion">
-          {{ isEditingQuestion ? t('ui.k0739') : t('ui.k0740') }}
-        </button>
-        <button type="button" class="btn-kill desktop-full-btn" @click="handleKill">
-          {{ t('ui.k0486') }}
         </button>
         <button type="button" class="primary btn-header-complete" @click="complete">{{ t('ui.k0514') }}</button>
 
-        <!-- 移动/平板端“更多 ⋯”菜单 -->
-        <div class="mobile-more-wrapper compact-more-menu">
-          <button type="button" class="btn-help-mobile" @click="showHelpTip = !showHelpTip" :title="t('ui.k0513')">
-            <LinearIcon name="zap" size="13" />
-          </button>
+        <!-- 更多操作下拉菜单 (桌面端与移动端统一收纳管理及辅助操作) -->
+        <div class="mobile-more-wrapper practice-more-dropdown-wrapper">
           <button type="button" class="btn-more-menu" @click="showMoreMenu = !showMoreMenu" :aria-label="t('ui.k0515')">
             ⋯
           </button>
           <div v-if="showMoreMenu" class="mobile-dropdown-menu" @click="showMoreMenu = false">
-            <button type="button" class="dropdown-item" :class="{ active: isWeak }" @click="toggleWeak">
-              {{ isWeak ? t('ui.k0741') : t('ui.k0738') }}
+            <button type="button" class="dropdown-item btn-help-guide" @click="showHelpTip = !showHelpTip">
+              <LinearIcon name="zap" size="13" /> {{ t('ui.k0513') }}
             </button>
-            <button type="button" class="dropdown-item text-danger" @click="handleKill">
-              {{ t('ui.k0486') }}
-            </button>
-            <button type="button" class="dropdown-item" @click="toggleEditQuestion">
+            <button type="button" class="dropdown-item btn-edit-question" @click="toggleEditQuestion">
               {{ isEditingQuestion ? t('ui.k0739') : t('ui.k0740') }}
             </button>
-            <button type="button" class="dropdown-item text-danger" @click="complete">
-              {{ t('ui.k0516') }}
+            <button type="button" class="dropdown-item btn-kill text-danger" @click="handleKill">
+              {{ t('ui.k0486') }}
             </button>
           </div>
         </div>
@@ -1930,11 +1914,17 @@ function handleRestartPractice() {
 }
 
 .header-actions .btn-header-complete {
-  background: var(--primary);
-  color: var(--on-primary);
-  border-color: var(--primary);
-  font-weight: 600;
-  padding: 0 1rem;
+  background: var(--bg-card);
+  color: var(--primary-fg, var(--primary));
+  border: 1px solid var(--border-strong);
+  font-weight: 500;
+  padding: 0 0.85rem;
+  transition: all 0.15s ease;
+}
+.header-actions .btn-header-complete:hover:not(:disabled) {
+  background: var(--primary-light);
+  border-color: var(--primary-border);
+  color: var(--primary-fg, var(--primary));
 }
 .header-actions .btn-header-complete:hover:not(:disabled) {
   background: var(--primary-hover);
@@ -2760,6 +2750,9 @@ function handleRestartPractice() {
 /* Visibility utilities */
 .mobile-only-inline, .mobile-only-btn, .compact-more-menu {
   display: none !important;
+}
+.practice-more-dropdown-wrapper {
+  display: inline-flex !important;
 }
 .desktop-only-btn, .desktop-full-btn, .header-control-btn {
   display: inline-flex !important;

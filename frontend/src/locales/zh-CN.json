@@ -809,7 +809,8 @@
     "select": "请选择",
     "status": "状态",
     "total": "共 {count} 项",
-    "none": "无"
+    "none": "无",
+    "advanced_settings": "高级设置"
   },
   "home": {
     "welcome": "欢迎回来",
@@ -968,17 +969,17 @@
     "empty_hint": "太棒了！当前没有任何错题记录，保持住！",
     "filter_bank": "按题库筛选",
     "start_kill_practice": "进入错题攻坚练习",
-    "launchpad_attack_tag": "重点歼灭",
-    "launchpad_attack_title": "错题攻坚突击",
+    "launchpad_attack_tag": "专项攻克",
+    "launchpad_attack_title": "错题练习",
     "launchpad_attack_desc": "针对做错但未斩杀的高频薄弱试题进行连续集中训练，攻克顽疾。",
     "launchpad_unit_questions": "道错题待歼灭",
-    "btn_start_attack": "立即开始错题攻坚 ({count} 题) →",
-    "launchpad_fsrs_tag": "记忆调度",
-    "launchpad_fsrs_title": "FSRS 到期复习",
+    "btn_start_attack": "开始错题练习 ({count} 题) →",
+    "launchpad_fsrs_tag": "到期计划",
+    "launchpad_fsrs_title": "今日待复习",
     "launchpad_fsrs_desc": "遵循自由间隔重复算法（FSRS），在记忆遗忘临界点精准强化。",
     "launchpad_unit_due": "道到期应复习",
     "fsrs_all_clear": "今日已全部清零",
-    "btn_start_fsrs": "立即复习到期题目 ({count} 题) →",
+    "btn_start_fsrs": "开始今日复习 ({count} 题) →",
     "launchpad_kill_tag": "查漏补缺",
     "launchpad_kill_title": "已斩杀题目回扫",
     "launchpad_kill_desc": "回访已出库试题，验证长期记忆留存率，防止熟题回生。",
@@ -1039,7 +1040,9 @@
     "time_budget_label": "每日用时",
     "all_questions_sprint": "单日全量冲刺 ({count} 题)",
     "no_questions_in_plan": "当前条件下暂无待规划题目",
-    "start_weak_focus": "攻坚此项"
+    "start_weak_focus": "攻坚此项",
+    "plan_adjust_title": "调整复习计划",
+    "analytics_fold_title": "学习数据与薄弱分析"
   },
   "imports": {
     "title": "导入题目与题库",
@@ -1069,8 +1072,22 @@
     "regenerate": "重新生成解析"
   },
   "theme": {
-    "toggle_to_dark": "切换为深色模式",
-    "toggle_to_light": "切换为浅色模式"
+    "blue_grey": "蓝灰 (默认)",
+    "mist": "雾蓝",
+    "ocean": "海盐",
+    "amethyst": "紫晶",
+    "rose": "玫瑰",
+    "amber": "琥珀",
+    "forest": "森林 (原绿)",
+    "mocha": "摩卡",
+    "blue_grey_desc": "中性蓝灰，极简高对比度",
+    "mist_desc": "内敛雾蓝，清爽宁静",
+    "ocean_desc": "海盐青蓝，明快活力",
+    "amethyst_desc": "典雅紫晶，专注深邃",
+    "rose_desc": "温润玫瑰，细腻优雅",
+    "amber_desc": "温暖琥珀，明朗柔和",
+    "forest_desc": "常青松柏，舒缓护眼",
+    "mocha_desc": "浓郁摩卡，沉稳温厚"
   },
   "locale": {
     "switch_language": "切换语言 (Switch Language)",
@@ -1252,23 +1269,5 @@
     "answer_reset_prompt": "题型已变更，请重新选择正确答案",
     "reload_latest": "重新加载最新版本",
     "conflict_detected": "检测到并发编辑冲突：题目已被修改。已保留服务器最新版本，请重新加载。"
-  },
-  "theme": {
-    "blue_grey": "蓝灰 (默认)",
-    "mist": "雾蓝",
-    "ocean": "海盐",
-    "amethyst": "紫晶",
-    "rose": "玫瑰",
-    "amber": "琥珀",
-    "forest": "森林 (原绿)",
-    "mocha": "摩卡",
-    "blue_grey_desc": "中性蓝灰，极简高对比度",
-    "mist_desc": "内敛雾蓝，清爽宁静",
-    "ocean_desc": "海盐青蓝，明快活力",
-    "amethyst_desc": "典雅紫晶，专注深邃",
-    "rose_desc": "温润玫瑰，细腻优雅",
-    "amber_desc": "温暖琥珀，明朗柔和",
-    "forest_desc": "常青松柏，舒缓护眼",
-    "mocha_desc": "浓郁摩卡，沉稳温厚"
   }
 }
