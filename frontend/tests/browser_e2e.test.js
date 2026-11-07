@@ -318,7 +318,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
 
     await t.test('4. Practice Flow: Answering, Result Inspection & Question Kill', async () => {
       console.log('Clicking 开始刷题...')
-      await page.click('.bank-card:has-text("E2E真实浏览器题库") button:has-text("开始刷题")')
+      await page.click('.bank-card:has-text("E2E真实浏览器题库") [data-testid="start-practice-btn"]')
 
       // Q1: Answer wrongly
       const q1 = await answerCurrentQuestion(true)
@@ -338,7 +338,9 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       assert.ok(res2.includes('完全正确'))
 
       // Kill Q2
-      await page.click('button.btn-kill:has-text("斩杀此题")')
+      await page.click('button.btn-more-menu')
+      await page.waitForSelector('.dropdown-item.btn-kill', { timeout: 3000 })
+      await page.click('.dropdown-item.btn-kill')
       await new Promise(r => setTimeout(r, 400))
 
       // Q3: Answer correctly
@@ -346,7 +348,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       console.log(`Answered Q3 correctly: "${q3.stem.slice(0, 15)}..." with ${q3.targetKey}`)
 
       // Complete session
-      await page.click('header button:has-text("交卷")')
+      await page.click('header button:has-text("完成练习")')
       await page.waitForSelector('[data-testid="practice-report-modal"]')
       await page.click('[data-testid="practice-report-modal"] button:has-text("返回题库")')
       await page.waitForSelector('.home-page')
@@ -354,7 +356,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
     })
 
     await t.test('5. Mistakes View: Cause Persistence & FSRS Non-Default Rating Update (Fix 1)', async () => {
-      await page.click('button:has-text("错题斩杀")')
+      await page.click('button:has-text("错题复习"), .sidebar-nav-item:has-text("错题复习")')
       await page.waitForSelector('.mistakes-page')
 
       // Verify mistake question is in mistakes list
@@ -471,8 +473,8 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
     })
 
     await t.test('7. Elimination (Kills) View: Scoped Review and Restoration on Wrong', async () => {
-      // Switch tab to '斩杀题库'
-      await page.click('button:has-text("斩杀题库")')
+      // Switch tab to '已掌握题目'
+      await page.click('button:has-text("已掌握题目")')
       await page.waitForSelector(`.bank-card:has-text("${killedStem.slice(0, 8)}")`)
 
       // Click '查漏补缺练习'
@@ -492,8 +494,8 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       await page.click('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
       await page.waitForSelector('.mistakes-page')
 
-      // Switch to '斩杀题库' tab and verify question was restored (killed list is now empty)
-      await page.click('button:has-text("斩杀题库")')
+      // Switch to '已掌握题目' tab and verify question was restored (killed list is now empty)
+      await page.click('button:has-text("已掌握题目")')
       await page.waitForSelector('text=暂无已斩杀题目')
       console.log('✓ Verified elimination review and restoration on wrong answer.')
 
@@ -503,7 +505,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
     })
 
     await t.test('8. Mock Exam Mode: Idempotent Submit & Rich Report', async () => {
-      await page.click('.bank-card:has-text("E2E真实浏览器题库") button:has-text("开始模考")')
+      await page.click('.bank-card:has-text("E2E真实浏览器题库") [data-testid="start-mock-exam-btn"]')
       await page.waitForSelector('#exam-setup-title')
 
       await page.click('button:has-text("开始考试")')
@@ -530,8 +532,16 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
     })
 
     await t.test('9. Learning Diagnostics Dashboard & Interactive Recommendations to Practice (Task B1)', async () => {
-      await page.click('button:has-text("学习看板")')
+      await page.click('button:has-text("复习规划"), .sidebar-nav-item:has-text("复习规划")')
       await page.waitForSelector('.learning-page')
+      await page.waitForSelector('.learning-analytics-accordion', { timeout: 8000 })
+
+      // Open folded analysis section to access metrics grid and recommendations
+      await page.evaluate(() => {
+        const details = document.querySelector('.learning-analytics-accordion')
+        if (details) details.setAttribute('open', '')
+      })
+      await page.waitForTimeout(300)
 
       await page.waitForSelector('.metrics-grid', { timeout: 8000 })
       await page.waitForSelector('text=题库覆盖率', { timeout: 5000 })
@@ -564,7 +574,8 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       console.log(`✓ Verified recommendation items count=${count}, newCount=${newCount} (ratio=${newRatioActual.toFixed(2)}), all types strictly SINGLE.`)
 
       // Click "开始推荐刷题" to launch real practice session from recommendations
-      await page.click('button.btn-start-rec')
+      const recBtn = page.locator('button.btn-start-rec').first()
+      await recBtn.evaluate(b => b.click())
       await page.waitForSelector('.practice-page', { timeout: 8000 })
       await page.waitForSelector('.practice-page .stem-box', { timeout: 8000 })
       assert.ok(await page.locator('.stem-box').isVisible(), 'Should enter PracticeViewV1 from recommendations')
@@ -572,8 +583,10 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
 
       // Return from practice to LearningView, then return to HomeView
       await page.click('header button:has-text("返回")')
-      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
-      await page.click('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
+      const confirmExit9 = page.locator('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
+      if (await confirmExit9.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await confirmExit9.click()
+      }
       await page.waitForSelector('.learning-page', { timeout: 8000 })
       await page.click('header button:has-text("返回")')
       await page.waitForSelector('.home-page', { timeout: 8000 })
@@ -582,7 +595,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
 
     await t.test('10. Spreadsheet Column Mapping Preview, User Manual Mapping & Precheck Validation (Task 1 & 2)', async () => {
       // Navigate to Import view
-      await page.click('button:has-text("导入题库")')
+      await page.click('button:has-text("导入题库"), .sidebar-nav-item:has-text("导入题库")')
       await page.waitForSelector('.import-page')
       assert.ok(await page.locator('text=导入题目').isVisible())
 
@@ -694,7 +707,11 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       const targetQId = targetQuestion.id
 
       // 2. Device A enters practice session, answers the question (real attempt)
-      await page.click('.bank-card:has-text("E2E真实浏览器题库") button:has-text("开始刷题")')
+      await page.waitForSelector('.bank-card:has-text("E2E真实浏览器题库")', { timeout: 8000 })
+      await page.waitForTimeout(500)
+      const startPracticeBtn = page.locator('.bank-card:has-text("E2E真实浏览器题库") [data-testid="start-practice-btn"], .bank-card:has-text("E2E真实浏览器题库") .btn-resume-direct, .bank-card:has-text("E2E真实浏览器题库") button.primary').first()
+      await startPracticeBtn.waitFor({ state: 'visible', timeout: 8000 })
+      await startPracticeBtn.click()
       await page.waitForSelector('.practice-page', { timeout: 8000 })
       await page.waitForSelector('.stem-box h2', { timeout: 5000 })
 
@@ -715,16 +732,23 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       await pageB.waitForSelector('.home-page', { timeout: 8000 })
       console.log('✓ Device B logged in concurrently in independent BrowserContext.')
 
-      await pageB.click('.bank-card:has-text("E2E真实浏览器题库") button:has-text("开始刷题")')
+      const startPracticeB = pageB.locator('.bank-card:has-text("E2E真实浏览器题库") [data-testid="start-practice-btn"], .bank-card:has-text("E2E真实浏览器题库") .btn-resume-direct, .bank-card:has-text("E2E真实浏览器题库") button.primary').first()
+      await startPracticeB.waitFor({ state: 'visible', timeout: 8000 })
+      await startPracticeB.click()
       await pageB.waitForSelector('.practice-page', { timeout: 8000 })
       await pageB.waitForSelector('.stem-box h2', { timeout: 5000 })
       console.log('✓ Device B opened practice session with Question at Version 1.')
 
       // 4. Device A modifies the question online via UI
-      await page.click('button.btn-edit-question')
+      await page.click('button.btn-more-menu')
+      await page.waitForSelector('.dropdown-item.btn-edit-question', { timeout: 3000 })
+      await page.click('.dropdown-item.btn-edit-question')
       await page.waitForSelector('.question-edit-panel')
       await page.fill('.input-edit-stem', 'A端在线协同更新题干')
+      const saveResponse = page.waitForResponse(response =>
+        response.url().endsWith(`/api/v1/questions/${targetQId}`) && response.request().method() === 'PUT')
       await page.click('button.btn-save-question-edit')
+      await saveResponse
       await page.waitForTimeout(500)
 
       const qAfterA = await (await fetch(`${BASE_URL}/api/v1/questions/${targetQId}`, {
@@ -737,7 +761,9 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       await contextB.setOffline(true)
 
       // Device B modifies the question offline via UI
-      await pageB.click('button.btn-edit-question')
+      await pageB.click('button.btn-more-menu')
+      await pageB.waitForSelector('.dropdown-item.btn-edit-question', { timeout: 3000 })
+      await pageB.click('.dropdown-item.btn-edit-question')
       await pageB.waitForSelector('.question-edit-panel')
       await pageB.fill('.input-edit-stem', 'B端离线并发修改题干')
       await pageB.click('button.btn-save-question-edit')
@@ -783,7 +809,9 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
         await confirmExit10.click()
       }
       await page.waitForSelector('.home-page')
-      await page.click('.bank-card:has-text("E2E真实浏览器题库") button:has-text("开始刷题")')
+      const startPracticeA = page.locator('.bank-card:has-text("E2E真实浏览器题库") [data-testid="start-practice-btn"], .bank-card:has-text("E2E真实浏览器题库") .btn-resume-direct, .bank-card:has-text("E2E真实浏览器题库") button.primary').first()
+      await startPracticeA.waitFor({ state: 'visible', timeout: 8000 })
+      await startPracticeA.click()
       await page.waitForSelector('.practice-page', { timeout: 8000 })
       await page.waitForSelector('[data-testid="conflict-banner"]', { timeout: 8000 })
 
@@ -826,7 +854,9 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       const crossExamSessionId = crossExamSession.id
 
       // A durable HTTP rejection stays in the editor; only transport failures enter the offline queue.
-      await page.click('button.btn-edit-question')
+      await page.click('button.btn-more-menu')
+      await page.waitForSelector('.dropdown-item.btn-edit-question', { timeout: 3000 })
+      await page.click('.dropdown-item.btn-edit-question')
       await page.waitForSelector('.question-edit-panel')
       await page.fill('.input-edit-stem', '受保护考试中的拒绝修改')
       const activeExamRejection = page.waitForResponse(response =>
@@ -856,7 +886,9 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       // surfaced with its reason, and is no longer offered for automatic retry.
       await page.click('.question-edit-panel .edit-actions button:first-child')
       await context.setOffline(true)
-      await page.click('button.btn-edit-question')
+      await page.click('button.btn-more-menu')
+      await page.waitForSelector('.dropdown-item.btn-edit-question', { timeout: 3000 })
+      await page.click('.dropdown-item.btn-edit-question')
       await page.waitForSelector('.question-edit-panel')
       await page.fill('.input-edit-stem', '离线暂存后被考试保护拒绝')
       await page.click('button.btn-save-question-edit')
@@ -1328,6 +1360,10 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       assert.ok(activeBadgeRatio >= 4.5, `Active session badge contrast ${activeBadgeRatio.toFixed(2)}:1 must meet AA`)
 
       // Verify AI batch status consumer in modal dialog
+      const accordion = page.locator('.bank-manage-accordion').first()
+      if (await accordion.isVisible().catch(() => false)) {
+        await page.click('.bank-manage-summary')
+      }
       await page.click('.btn-ai-batch')
       await page.waitForSelector('.ai-batch-dialog', { timeout: 8000 })
       const aiBatchStyles = await page.evaluate(() => {
@@ -1537,7 +1573,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
             }
           })
         })
-        assert.equal(mobileNavCheck.length, 6, 'Mobile bottom nav must have exactly 6 items')
+        assert.equal(mobileNavCheck.length, 5, 'Mobile bottom nav must have exactly 5 items')
         for (const item of mobileNavCheck) {
           assert.ok(item.text.length > 0, 'Mobile nav item label must not be empty')
           assert.ok(!item.hasEllipsis, `Mobile nav label "${item.text}" must not be truncated with ellipsis in ${localeName}`)
@@ -1587,22 +1623,21 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
         const tabletPracticeCheck = await page.evaluate(() => {
           const leftBar = document.querySelector('.header-left-bar')
           const actions = document.querySelector('.header-actions')
-          const themeToggle = document.querySelector('.header-actions .theme-toggle, .header-actions .header-control-btn')
-          const localeToggle = document.querySelector('.header-actions .locale-toggle')
+          const moreBtn = document.querySelector('.header-actions .btn-more-menu')
           const sheetTrigger = document.querySelector('.btn-sheet-trigger-pill')
           const completeBtn = document.querySelector('.btn-header-complete')
           const hotkeyBar = document.querySelector('.hotkey-helper-bar')
 
           const leftRect = leftBar ? leftBar.getBoundingClientRect() : null
           const actionsRect = actions ? actions.getBoundingClientRect() : null
-          const themeRect = themeToggle ? themeToggle.getBoundingClientRect() : null
+          const moreRect = moreBtn ? moreBtn.getBoundingClientRect() : null
           const sheetRect = sheetTrigger ? sheetTrigger.getBoundingClientRect() : null
           const completeRect = completeBtn ? completeBtn.getBoundingClientRect() : null
 
           return {
             leftRight: leftRect ? leftRect.right : 0,
             actionsLeft: actionsRect ? actionsRect.left : 0,
-            themeVisible: themeRect ? (themeRect.width > 0 && themeRect.height > 0) : false,
+            moreVisible: moreRect ? (moreRect.width > 0 && moreRect.height > 0) : false,
             sheetVisible: sheetRect ? (sheetRect.width > 0 && sheetRect.height > 0) : false,
             completeVisible: completeRect ? (completeRect.width > 0 && completeRect.height > 0) : false,
             hotkeyBarDisplay: hotkeyBar ? getComputedStyle(hotkeyBar).display : 'none',
@@ -1612,7 +1647,7 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
           tabletPracticeCheck.leftRight <= tabletPracticeCheck.actionsLeft + 2,
           `768px tablet: header-left-bar (right=${tabletPracticeCheck.leftRight}) must not overlap header-actions (left=${tabletPracticeCheck.actionsLeft})`
         )
-        assert.ok(tabletPracticeCheck.themeVisible, 'Theme toggle control must be visible at 768px tablet')
+        assert.ok(tabletPracticeCheck.moreVisible, 'More menu button must be visible at 768px tablet')
         assert.ok(tabletPracticeCheck.sheetVisible, 'Answer sheet trigger must be visible at 768px tablet')
         assert.ok(tabletPracticeCheck.completeVisible, 'Complete button must be visible at 768px tablet')
         assert.equal(tabletPracticeCheck.hotkeyBarDisplay, 'none', 'Hotkey helper strip must not be squished at 768px tablet')

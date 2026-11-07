@@ -12,7 +12,7 @@
         </button>
       </div>
       <div class="header-actions">
-        <button type="button" class="btn-flag" :class="{ active: isWeak }" @click="toggleWeak">
+        <button type="button" class="btn-flag desktop-only-btn" :class="{ active: isWeak }" @click="toggleWeak">
           {{ isWeak ? t('ui.k0737') : t('ui.k0738') }}
         </button>
         <button type="button" class="primary btn-header-complete" @click="complete">{{ t('ui.k0514') }}</button>
@@ -23,6 +23,9 @@
             ⋯
           </button>
           <div v-if="showMoreMenu" class="mobile-dropdown-menu" @click="showMoreMenu = false">
+            <button type="button" class="dropdown-item btn-flag-mobile mobile-only-item" :class="{ active: isWeak }" @click="toggleWeak">
+              <LinearIcon name="flag" size="13" /> {{ isWeak ? t('ui.k0737') : t('ui.k0738') }}
+            </button>
             <button type="button" class="dropdown-item btn-help-guide" @click="showHelpTip = !showHelpTip">
               <LinearIcon name="zap" size="13" /> {{ t('ui.k0513') }}
             </button>
@@ -3206,6 +3209,7 @@ function handleRestartPractice() {
     gap: 0.35rem !important;
     flex: 1 1 auto !important;
     min-width: 0 !important;
+    overflow: hidden !important;
   }
 
   .header-titles {
@@ -3216,7 +3220,7 @@ function handleRestartPractice() {
     white-space: nowrap !important;
     overflow: hidden !important;
     min-width: 0 !important;
-    flex: 0 1 auto !important;
+    flex: 1 1 auto !important;
   }
 
   .btn-back {
@@ -3233,13 +3237,13 @@ function handleRestartPractice() {
   }
 
   .practice-title {
-    font-size: 0.92rem !important;
+    font-size: 0.88rem !important;
     font-weight: 600 !important;
     margin: 0 !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
-    max-width: 110px;
+    max-width: 90px !important;
   }
 
   .badge-type-pill {
@@ -3268,6 +3272,11 @@ function handleRestartPractice() {
     flex: 0 0 auto !important;
     width: auto !important;
     flex-wrap: nowrap !important;
+    margin-left: auto !important;
+  }
+
+  .mobile-only-item {
+    display: flex !important;
   }
 
   .btn-header-complete {

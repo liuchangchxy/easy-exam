@@ -236,11 +236,11 @@
               </button>
             </template>
             <template v-else>
-              <button class="primary" :disabled="!bank.question_count" @click="$emit('start', bank)">
+              <button class="primary btn-start-practice" data-testid="start-practice-btn" :disabled="!bank.question_count" @click="$emit('start', bank)">
                 <LinearIcon name="play" size="13" /> {{ t('home.start_sequential', { total: bank.question_count }) }}
               </button>
             </template>
-            <button class="secondary-btn" :disabled="!bank.question_count" @click="openExamSetup(bank)">
+            <button class="secondary-btn btn-start-mock-exam" data-testid="start-mock-exam-btn" :disabled="!bank.question_count" @click="openExamSetup(bank)">
               <LinearIcon name="award" size="13" /> {{ t('home.start_mock_exam') }}
             </button>
           </div>
