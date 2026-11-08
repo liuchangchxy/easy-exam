@@ -77,7 +77,8 @@ describe('LearningView component integration', () => {
     const accordion = wrapper.find('details.learning-analytics-accordion')
     expect(accordion.exists()).toBe(true)
 
-    // Initially closed (no open attribute)
+    // Initially closed
+    expect(accordion.element.open).toBe(false)
     expect(accordion.attributes('open')).toBeUndefined()
 
     // Click summary to toggle/expand
@@ -85,8 +86,10 @@ describe('LearningView component integration', () => {
     expect(summary.exists()).toBe(true)
     await summary.trigger('click')
 
-    // In DOM environment, summary click on native details toggles open attribute or child elements exist
-    // Happy-dom toggles the open attribute or we can set it / inspect .metrics-grid
+    // Confirmed expanded via user click
+    expect(accordion.element.open).toBe(true)
+    expect(accordion.attributes('open')).toBeDefined()
+
     const metricsGrid = accordion.find('.metrics-grid')
     expect(metricsGrid.exists()).toBe(true)
 

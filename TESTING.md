@@ -7,7 +7,7 @@
 日常开发与门禁收口统一使用：
 
 ```bash
-# 1. 开发循环与静态守卫（< 3s，单元/契约 + 组件集成测试，不启后端，不启 Chromium）
+# 1. 开发循环与静态守卫（秒级快速反馈，单元/契约 + 组件集成测试，不启后端，不启 Chromium）
 python scripts/verify.py fast
 
 # 2. UI / UX / 交互改动验证（含快速真实浏览器 feature interaction + 移动端交互）
