@@ -2,6 +2,28 @@
 
 本文规定如何证明代码行为，不能替代 [SPEC.md](SPEC.md) 的产品规则，也不能把未运行的测试写成已通过。
 
+## 0. 统一验证入口（Self-Verification Entrypoints）
+
+日常开发与门禁收口统一使用：
+
+```bash
+# 1. 开发循环与静态守卫（< 5s，不含浏览器 mega E2E 与 backend 全量）
+python scripts/verify.py fast
+
+# 2. UI / UX / 交互改动验证（含独立快速 UI interaction + 移动端交互）
+python scripts/verify.py ui
+
+# 3. 准备交付终验门禁（仅在准备交付时跑一次，覆盖 CI 要求的全部门禁）
+python scripts/verify.py full
+```
+
+### 使用规范：
+- **开发中**：运行当前改动最小相关测试。
+- **普通代码阶段**：运行 `python scripts/verify.py fast`。
+- **UI / interaction 改动**：运行 `python scripts/verify.py fast` 和 `python scripts/verify.py ui`。
+- **最终交付**：运行 `python scripts/verify.py full` 一次，全绿后立即停止并交付。
+- 底层具体测试命令继续保留（如下表所示），用于定点排查与专项诊断，平时无需死记所有底层参数。
+
 ## 1. 七条硬门禁
 
 1. **缺陷即测试**：修复缺陷前先增加或定位能复现它的回归测试。

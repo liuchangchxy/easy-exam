@@ -12,7 +12,7 @@ Use this skill for code implementation tasks in this repository.
 3. Confirm the plan is still valid against current source paths and dependencies. If the task needs a new product decision, license decision, external service credential, or undocumented behavior, stop and ask the user.
 4. For each plan task: add a regression test, run it and observe RED, implement, run it GREEN, then inspect sibling paths for the same defect. Do not edit old expected results to get a pass.
 5. Before copying/adapting external source, inspect exact pinned source and license; prefer a suitable existing implementation over rewriting it. Preserve notices and update the OSS audit with exact file mappings. Treat GPL/AGPL, missing-license, and ambiguous files as non-copyable absent explicit approval.
-6. At the end run the plan's acceptance commands. For stage completion run backend unittest, frontend unit, build, real browser E2E, and `git diff --check`; list actual pass/fail/skipped counts and don't claim tests not run.
+6. At the end run verification gates: use `python scripts/verify.py fast` during development, `python scripts/verify.py ui` for UI/interaction changes, and `python scripts/verify.py full` once before claiming completion; list actual pass/fail/skipped counts and don't claim tests not run.
 7. Update traceability and plan checkboxes from observed evidence, not intention. Report changes, source reuse status, tests, skipped cases, remaining gaps, and any blocked decision.
 
 See `docs/ANTIGRAVITY_WORKFLOW.md` for the complete sequence and report format.

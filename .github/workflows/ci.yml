@@ -235,6 +235,11 @@ jobs:
         run: |
           npm --prefix frontend run build
 
+      - name: Run Fast UI Interaction Tests
+        shell: bash
+        run: |
+          node frontend/tests/fast_ui_interaction.test.js
+
       - name: Run Localization Browser E2E
         shell: bash
         run: |
