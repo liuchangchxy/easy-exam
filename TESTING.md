@@ -7,10 +7,10 @@
 日常开发与门禁收口统一使用：
 
 ```bash
-# 1. 开发循环与静态守卫（< 5s，不含浏览器 mega E2E 与 backend 全量）
+# 1. 开发循环与静态守卫（< 3s，单元/契约 + 组件集成测试，不启后端，不启 Chromium）
 python scripts/verify.py fast
 
-# 2. UI / UX / 交互改动验证（含独立快速 UI interaction + 移动端交互）
+# 2. UI / UX / 交互改动验证（含快速真实浏览器 feature interaction + 移动端交互）
 python scripts/verify.py ui
 
 # 3. 准备交付终验门禁（仅在准备交付时跑一次，覆盖 CI 要求的全部门禁）
@@ -49,6 +49,8 @@ python scripts/verify.py full
 | 纯函数/领域单测 | 算法、判分、状态转换 | API、数据库、真实用户流程 |
 | API/Repository 集成测试 | 服务端路由、持久化和事务 | 浏览器交互、真实部署链路 |
 | 前端 Node/契约测试 | 前端领域模型、组件契约 | 浏览器渲染、真实后端 |
+| 前端轻量组件集成测试 | Vue 组件挂载、DOM 交互、事件发射与状态折叠/展开 | 真实浏览器渲染引擎差异、全链路网络与数据库 |
+| 真实浏览器 feature 交互 | 关键真实页面路由及轻量真实浏览器行为 | 生产环境全量复杂分支与全生命周期 |
 | 真实浏览器 E2E | 用户界面到真实后端的物理链路 | 生产环境全部规模与网络条件 |
 | 构建/静态检查 | 编译、打包、格式和空白 | 业务行为正确 |
 | 视觉冒烟（仅 Web） | 路由不白屏、产物正身、宿主挂载 | 业务行为正确、可见内容是否**正确** |
@@ -69,6 +71,9 @@ python -m unittest discover -s tests -v
 
 # 前端单元/契约测试
 npm --prefix frontend run test:unit
+
+# 前端轻量组件集成测试（Vitest + @vue/test-utils + happy-dom，不启后端/不启 Chromium）
+npm --prefix frontend run test:component
 
 # 双语静态/词典完整性门禁（test:unit 和 pre-commit 也会强制执行）
 npm --prefix frontend run check:localization

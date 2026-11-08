@@ -28,13 +28,12 @@ def run_step(name: str, cmd: list[str], env: dict | None = None) -> None:
     print(f"[verify] ✅ Step '{name}' PASSED in {elapsed:.2f}s")
 
 def verify_fast():
-    print("[verify] Mode: FAST (Static guards, frontend unit/contracts, and fast UI interaction)")
+    print("[verify] Mode: FAST (Static guards, frontend unit/contracts, and component integration tests)")
     total_start = time.time()
     run_step("Check Whitespace", [sys.executable, "scripts/check_whitespace.py"])
     run_step("Guard Test Tampering", [sys.executable, "scripts/guard_test_tampering.py"])
     run_step("Scan Hardcoded Paths", [sys.executable, "scripts/scan_hardcoded_paths.py"])
-    run_step("Frontend Unit & Contracts", ["npm", "--prefix", "frontend", "run", "test:unit"])
-    run_step("Fast UI Interaction", ["node", "frontend/tests/fast_ui_interaction.test.js"])
+    run_step("Frontend Unit & Component Tests", ["npm", "--prefix", "frontend", "run", "test:unit"])
     total_elapsed = time.time() - total_start
     print(f"\n[verify] 🟢 verify:fast COMPLETED SUCCESSFULLY in {total_elapsed:.2f}s")
 
@@ -67,8 +66,8 @@ def verify_full():
 
     run_step("Coordination Cleanup Test", ["node", "--test", "tests/coordination-label-cleanup.test.js"])
 
-    # 3. Frontend Unit & Build
-    run_step("Frontend Unit Tests", ["npm", "--prefix", "frontend", "run", "test:unit"])
+    # 3. Frontend Unit, Component & Build
+    run_step("Frontend Unit & Component Tests", ["npm", "--prefix", "frontend", "run", "test:unit"])
     run_step("Production Build", ["npm", "--prefix", "frontend", "run", "build"])
 
     # 4. Browser E2E & Mobile Interaction
