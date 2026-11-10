@@ -446,7 +446,12 @@ test('True Chrome Browser E2E: Editorial Precision Full Lifecycle', async (t) =>
         assert.ok(ratio >= 4.5, `FSRS rating "${style.text}" contrast ${ratio.toFixed(2)}:1 must meet AA`)
       }
 
+      const ratingResponse = page.waitForResponse(response => {
+        if (!response.url().endsWith('/attempts') || response.request().method() !== 'POST') return false
+        try { return response.request().postDataJSON()?.fsrs_rating === 4 } catch { return false }
+      })
       await page.locator('.fsrs-buttons .btn').nth(3).click()
+      assert.equal((await ratingResponse).status(), 201, 'FSRS rating request must succeed')
       await page.waitForSelector('.fsrs-block .hint', { timeout: 5000 })
 
       const ratingInDb = execSync(
