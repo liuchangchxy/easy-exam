@@ -104,7 +104,7 @@ test('English runtime catalog contains no untranslated Chinese copy', () => {
     for (const [key, value] of Object.entries(dictionary)) {
       const keyPath = prefix ? `${prefix}.${key}` : key
       if (typeof value === 'string' && /[\u4e00-\u9fff]/u.test(value)
-          && !['ui.k0645', 'ui.k0646'].includes(keyPath)) untranslated.push(`${keyPath}: ${value}`)
+          && !['ui.k0645', 'ui.k0646', 'ep.settings.lang_zh', 'ep.settings.about_languages_value'].includes(keyPath)) untranslated.push(`${keyPath}: ${value}`)
       else if (value && typeof value === 'object') walk(value, keyPath)
     }
   }
@@ -248,7 +248,7 @@ test('no raw un-localized Chinese characters remain in Vue template markup', () 
         const noComments = templateContent.replace(/<!--[\s\S]*?-->/g, '')
         const lines = noComments.split('\n')
         lines.forEach((line, idx) => {
-          if (chineseRegex.test(line)) {
+          if (chineseRegex.test(line) && !line.includes('class="brand-mark"')) {
             violations.push(`${ent.name}:${idx + 1} -> ${line.trim()}`)
           }
         })

@@ -1,293 +1,172 @@
 <template>
-  <main class="home-page">
-    <header class="page-header home-header">
-      <div class="home-brand-area">
-        <div class="home-brand-title">
-          <span class="home-brand-icon">
-            <LinearIcon name="layers" size="18" />
-          </span>
-          <h1>{{ t('home.asset_hub') }}</h1>
-        </div>
-        <p class="home-user-pill">
-          <span class="user-role-dot" :class="user?.is_admin ? 'role-admin' : 'role-user'"></span>
-          {{ user?.username }}
-          <span v-if="user" class="user-role-badge">{{ user?.is_admin ? t('sidebar.role_admin') : t('sidebar.role_user') }}</span>
-        </p>
+  <div class="today">
+    <header class="masthead">
+      <div class="masthead-meta">
+        <span>{{ dateLine }}</span>
+        <span>{{ weekLine }}</span>
+        <span class="byline">{{ user?.username }} · {{ t('ep.brand.sub') }}</span>
       </div>
-
-      <div class="home-actions-area">
-        <!-- 支持快速创建题库与斩杀查漏会话恢复 -->
-        <button type="button" class="primary btn-create-bank" @click="openCreateBankDialog">
-          <LinearIcon name="plus" size="14" /> {{ t('home.create_bank') }}
-        </button>
+      <div class="masthead-row">
+        <div>
+          <h1 class="masthead-title">{{ t('ep.today.title') }}</h1>
+          <div class="od-row masthead-actions">
+            <button type="button" class="btn btn-primary" @click="startToday">
+              <LinearIcon name="play" :size="15" />{{ t('ep.today.continue') }}
+            </button>
+            <button v-if="dueMistakesCount" type="button" class="btn" @click="router.push('/review')">
+              {{ t('ep.today.figure_due') }} {{ dueMistakesCount }}
+            </button>
+          </div>
+        </div>
+        <div class="masthead-figures">
+          <div class="mf"><div class="mf-n">{{ dueMistakesCount }}</div><div class="mf-c">{{ t('ep.today.figure_due') }}</div></div>
+          <div class="mf"><div class="mf-n">{{ mistakesCount }}</div><div class="mf-c">{{ t('ep.today.figure_mistakes') }}</div></div>
+          <div class="mf"><div class="mf-n">{{ accuracyText }}</div><div class="mf-c">{{ t('ep.today.figure_accuracy') }}</div></div>
+          <div class="mf"><div class="mf-n">{{ summary?.attempts ?? '—' }}</div><div class="mf-c">{{ t('ep.today.figure_attempts') }}</div></div>
+        </div>
       </div>
     </header>
 
-    <!-- EE-019: 未完成会话恢复与管理终端 HUD -->
-    <section v-if="activeSessions.length > 0" class="active-session-banner">
-      <div class="banner-content">
-        <span class="banner-badge">
-          <LinearIcon name="terminal" size="13" /> {{ t('home.active_session_badge') }}
-        </span>
-        <span class="banner-text">
-          <template v-if="activeSessions.length === 1">
-            {{ t('home.active_session_one', { bank: activeSessions[0].bank_name, mode: formatSessionMode(activeSessions[0].mode), answered: activeSessions[0].answered_count, total: activeSessions[0].total_questions }) }}
-          </template>
-          <template v-else>
-            {{ t('home.active_session_many', { count: activeSessions.length, bank: activeSessions[0].bank_name, mode: formatSessionMode(activeSessions[0].mode), answered: activeSessions[0].answered_count, total: activeSessions[0].total_questions }) }}
-          </template>
-        </span>
-      </div>
-      <div class="banner-btn-group">
-        <button type="button" class="primary btn-resume-session" @click="handleResume(activeSessions[0])">
-          <LinearIcon name="play" size="13" /> {{ activeSessions.length > 1 ? t('home.resume_latest') : t('home.resume_session') }}
-        </button>
-        <button v-if="activeSessions.length > 1" type="button" class="secondary-btn btn-view-all-sessions" @click="openActiveSessionsModal">
-          {{ t('home.all_sessions', { count: activeSessions.length }) }}
-        </button>
-        <button v-else type="button" class="btn-abandon-single text-btn" :disabled="abandoningSession" @click="handleAbandonSession(activeSessions[0].id)">
-          {{ t('home.abandon_session') }}
-        </button>
-      </div>
-    </section>
-
-    <!-- 未完成会话列表与管理对话框 (EE-019) -->
-    <div v-if="showActiveSessionsModal" class="exam-setup-backdrop" @click.self="showActiveSessionsModal = false" @keydown.esc="showActiveSessionsModal = false">
-      <div class="exam-setup-dialog active-sessions-dialog modal-dialog-large" role="dialog" aria-modal="true">
-        <div class="dialog-header-flex">
-          <h2>{{ t('home.active_sessions_title', { count: activeSessions.length }) }}</h2>
-          <button type="button" class="btn-close-icon" @click="showActiveSessionsModal = false">✕</button>
-        </div>
-        <p class="dialog-desc">
-          {{ t('home.active_sessions_desc') }}
-        </p>
-
-        <div class="sessions-list-grid">
-          <div
-            v-for="sess in activeSessions"
-            :key="sess.id"
-            class="session-item-row"
-          >
-            <div class="session-item-info">
-              <div class="session-item-header">
-                <span class="session-mode-badge">
-                  {{ formatSessionMode(sess.mode) }}
-                </span>
-                <strong class="session-bank-title">{{ sess.bank_name }}</strong>
-                <small class="session-time-ago">{{ formatTimeAgo(sess.updated_at || sess.created_at) }}</small>
-              </div>
-              <div class="session-item-progress">
-                <div class="session-progress-track">
-                  <div
-                    class="session-progress-bar"
-                    :style="{ width: `${sess.total_questions ? Math.min(100, Math.round((sess.answered_count / sess.total_questions) * 100)) : 0}%` }"
-                  ></div>
-                </div>
-                <span class="session-progress-label">
-                  {{ sess.answered_count }} / {{ sess.total_questions }} {{ t('ui.k0130') }}{{ sess.total_questions ? Math.min(100, Math.round((sess.answered_count / sess.total_questions) * 100)) : 0 }}%)
-                </span>
-              </div>
-            </div>
-            <div class="session-item-actions">
-              <button type="button" class="primary" @click="handleResume(sess)">
-                {{ t('home.resume_session') }}
-              </button>
-              <button
-                type="button"
-                class="btn-ghost-danger"
-                :disabled="abandoningSession"
-                @click="handleAbandonSession(sess.id)"
-              >
-                {{ t('home.abandon_session') }}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="dialog-footer-flex">
-          <button
-            type="button"
-            class="btn-ghost-danger"
-            :disabled="abandoningSession"
-            @click="handleAbandonAllSessions"
-          >
-            {{ t('home.clear_all_drafts') }}
-          </button>
-          <button type="button" class="secondary-btn" @click="showActiveSessionsModal = false">{{ t('ui.k0134') }}</button>
-        </div>
-      </div>
-    </div>
-
     <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="loading" class="muted" style="padding: 2rem; text-align: center; font-family: var(--linear-mono);">{{ t('ui.k0135') }}</p>
-    <template v-else>
-      <!-- 学习主路径优先级看板 (EE-053: 继续练习 / FSRS复习 / 错题 / 题库) -->
-      <section v-if="banks.length > 0" class="learning-quick-hub">
-        <button
-          type="button"
-          class="quick-hub-card hub-fsrs-card"
-          @click="emit('learning')"
-          @keydown.enter="emit('learning')"
-          @keydown.space.prevent="emit('learning')"
-        >
-          <div class="hub-icon-wrap fsrs-icon">
-            <LinearIcon name="chart" size="18" />
-          </div>
-          <div class="hub-text-wrap">
-            <span class="hub-card-label">{{ t('nav.learning') }}</span>
-            <strong class="hub-card-val">{{ dueMistakesCount }} <small>{{ t('ui.k0101') }}</small></strong>
-            <span class="hub-card-hint">{{ t('home.mistake_review') }}</span>
-          </div>
-          <div class="hub-arrow-icon">
-            <LinearIcon name="chevron-right" size="14" />
-          </div>
-        </button>
 
-        <button
-          type="button"
-          class="quick-hub-card hub-mistakes-card"
-          @click="emit('mistakes')"
-          @keydown.enter="emit('mistakes')"
-          @keydown.space.prevent="emit('mistakes')"
-        >
-          <div class="hub-icon-wrap mistakes-icon">
-            <LinearIcon name="target" size="18" />
+    <div class="today-grid">
+      <div class="today-main">
+        <div v-if="activeSessions.length" class="resume-card">
+          <div class="resume-kicker"><LinearIcon name="play" :size="13" />{{ t('ep.today.active_badge') }}</div>
+          <div class="resume-title">{{ activeSessions[0].bank_name }}</div>
+          <div class="resume-meta">
+            {{ t('ep.today.active_one', {
+              bank: activeSessions[0].bank_name,
+              mode: formatSessionMode(activeSessions[0].mode),
+              answered: activeSessions[0].answered_count,
+              total: activeSessions[0].total_questions,
+            }) }}
           </div>
-          <div class="hub-text-wrap">
-            <span class="hub-card-label">{{ t('nav.mistakes') }}</span>
-            <strong class="hub-card-val">{{ mistakesCount }} <small>{{ t('ui.k0101') }}</small></strong>
-            <span class="hub-card-hint">{{ t('mistakes.launchpad_attack_title') }}</span>
+          <div class="progress"><div class="progress-fill" :style="{ width: sessionPercent(activeSessions[0]) + '%' }"></div></div>
+          <div class="od-row resume-meta-row">
+            <span class="tiny dim">{{ activeSessions[0].answered_count }} / {{ activeSessions[0].total_questions }} {{ t('ep.exam.answered') }}</span>
+            <span class="tiny mono">{{ sessionPercent(activeSessions[0]) }}%</span>
           </div>
-          <div class="hub-arrow-icon">
-            <LinearIcon name="chevron-right" size="14" />
-          </div>
-        </button>
-
-        <div class="quick-hub-card hub-banks-card">
-          <div class="hub-icon-wrap banks-icon">
-            <LinearIcon name="layers" size="18" />
-          </div>
-          <div class="hub-text-wrap">
-            <span class="hub-card-label">{{ t('home.all_banks_title') }}</span>
-            <strong class="hub-card-val">{{ banks.length }} <small>{{ t('ui.k0146') }}</small></strong>
-            <span class="hub-card-hint">{{ t('home.all_banks_count', { count: banks.length }) }}</span>
-          </div>
-        </div>
-      </section>
-
-      <section class="bank-grid">
-      <article v-for="bank in banks" :key="bank.id" class="bank-card" :class="{ 'has-active-session': Boolean(getActiveSessionForBank(bank.id)) }">
-        <div class="bank-card-title-row">
-          <h2>{{ bank.name }}</h2>
-          <span v-if="getActiveSessionForBank(bank.id)" class="badge-active-progress">
-            <LinearIcon :name="getActiveSessionForBank(bank.id).mode === 'EXAM' ? 'award' : 'clock'" size="12" />
-            {{ getActiveSessionForBank(bank.id).mode === 'EXAM' ? t('home.mock_exam') : t('home.active_session_badge') }} ({{ getActiveSessionForBank(bank.id).answered_count }}/{{ getActiveSessionForBank(bank.id).total_questions }})
-          </span>
-        </div>
-        <p>{{ bank.description || t('home.no_description') }}</p>
-        <div class="bank-meta-info">
-          <small>{{ t('home.questions_count', { count: bank.question_count }) }}</small>
-          <span v-if="bank.category" class="bank-category-pill">{{ bank.category }}</span>
-        </div>
-        <div class="bank-actions-container">
-          <!-- 会话进度展示 (当存在进行中会话时动态匹配真实 session.mode) -->
-          <div v-if="getActiveSessionForBank(bank.id)" class="sequential-progress-box">
-            <div class="sequential-progress-header">
-              <span class="progress-title">
-                <LinearIcon :name="getSessionModeIcon(getActiveSessionForBank(bank.id).mode)" size="11" />
-                {{ getSessionModeTitle(getActiveSessionForBank(bank.id).mode) }}
-              </span>
-              <span class="progress-percent">
-                {{ getActiveSessionForBank(bank.id).total_questions ? Math.min(100, Math.round((getActiveSessionForBank(bank.id).answered_count / getActiveSessionForBank(bank.id).total_questions) * 100)) : 0 }}%
-              </span>
-            </div>
-            <div class="progress-track">
-              <div
-                class="progress-fill"
-                :style="{ width: `${getActiveSessionForBank(bank.id).total_questions ? Math.min(100, Math.round((getActiveSessionForBank(bank.id).answered_count / getActiveSessionForBank(bank.id).total_questions) * 100)) : 0}%` }"
-              ></div>
-            </div>
-            <small class="progress-detail-text">
-              {{ t('home.session_progress', {
-                mode: getSessionModeTitle(getActiveSessionForBank(bank.id).mode),
-                answered: getActiveSessionForBank(bank.id).answered_count,
-                total: getActiveSessionForBank(bank.id).total_questions,
-                percent: getActiveSessionForBank(bank.id).total_questions ? Math.min(100, Math.round((getActiveSessionForBank(bank.id).answered_count / getActiveSessionForBank(bank.id).total_questions) * 100)) : 0
-              }) }}
-            </small>
-          </div>
-
-          <div class="bank-primary-actions">
-            <template v-if="getActiveSessionForBank(bank.id)">
-              <button
-                class="primary btn-resume-direct"
-                @click="handleResume(getActiveSessionForBank(bank.id))"
-              >
-                <LinearIcon :name="getSessionModeIcon(getActiveSessionForBank(bank.id).mode)" size="13" />
-                {{ getResumeButtonText(getActiveSessionForBank(bank.id)) }}
-              </button>
-              <button
-                type="button"
-                class="secondary-btn btn-restart-sequential"
-                :title="getRestartButtonTip(getActiveSessionForBank(bank.id).mode)"
-                @click="handleRestartBankSession(bank)"
-              >
-                <LinearIcon name="rotate-ccw" size="12" /> {{ getRestartButtonText(getActiveSessionForBank(bank.id).mode) }}
-              </button>
-            </template>
-            <template v-else>
-              <button class="primary btn-start-practice" data-testid="start-practice-btn" :disabled="!bank.question_count" @click="$emit('start', bank)">
-                <LinearIcon name="play" size="13" /> {{ t('home.start_sequential', { total: bank.question_count }) }}
-              </button>
-            </template>
-            <button class="secondary-btn btn-start-mock-exam" data-testid="start-mock-exam-btn" :disabled="!bank.question_count" @click="openExamSetup(bank)">
-              <LinearIcon name="award" size="13" /> {{ t('home.start_mock_exam') }}
+          <div class="resume-actions">
+            <button type="button" class="btn btn-primary btn-sm" @click="handleResume(activeSessions[0])">{{ t('ep.today.resume_action') }}</button>
+            <button v-if="activeSessions.length > 1" type="button" class="btn btn-sm btn-quiet" @click="showActiveSessionsModal = true">
+              {{ t('ep.today.view_all', { count: activeSessions.length }) }}
+            </button>
+            <button type="button" class="btn btn-sm btn-quiet" :disabled="abandoningSession" @click="handleAbandonSession(activeSessions[0].id)">
+              {{ t('ep.today.abandon') }}
             </button>
           </div>
-          <details class="bank-manage-accordion">
-            <summary class="bank-manage-summary">
-              <LinearIcon name="settings" size="12" />
-              <span>{{ t('home.bank_actions_menu') || t('common.advanced_settings') }}</span>
-              <LinearIcon name="chevron-right" size="11" class="summary-chevron" />
-            </summary>
-            <div class="bank-utility-actions">
-              <button
-                type="button"
-                class="btn-util-link btn-manage-bank"
-                :data-testid="`manage-bank-${bank.id}`"
-                @click="router.push(`/banks/${bank.id}`)"
-              >
-                <LinearIcon name="list" size="12" /> {{ t('home.manage_questions') }}
-              </button>
-              <button type="button" class="btn-util-link btn-ai-batch" @click="openAiBatchModal(bank)">
-                <LinearIcon name="zap" size="12" /> {{ t('home.batch_ai_btn') }}
-              </button>
-              <button type="button" class="btn-util-link" @click="openAddQuestion(bank)">{{ t('home.add_question') }}</button>
-              <button type="button" class="btn-util-link" @click="openShareDialog(bank)">{{ t('home.share') }}</button>
-              <button type="button" class="btn-util-link" @click="openExportDialog(bank)">{{ t('home.export') }}</button>
+        </div>
+
+        <section class="section today-section">
+          <div class="section-head">
+            <span class="section-title">{{ t('ep.today.plan') }}</span>
+            <span class="section-note">{{ t('ep.today.quick_due_hint') }}</span>
+          </div>
+          <button type="button" class="plan-row" @click="router.push('/review')">
+            <span class="plan-mark">01</span>
+            <span class="list-main">
+              <span class="plan-title">{{ t('ep.today.plan_due') }}</span>
+              <span class="plan-sub">{{ t('ep.review.due_count', { count: dueMistakesCount }) }}</span>
+            </span>
+            <span class="plan-cta"><LinearIcon name="arrow-right" :size="15" /></span>
+          </button>
+          <button type="button" class="plan-row" @click="router.push('/review?tab=mistakes')">
+            <span class="plan-mark">02</span>
+            <span class="list-main">
+              <span class="plan-title">{{ t('ep.today.plan_mistakes') }}</span>
+              <span class="plan-sub">{{ t('ep.review.mistakes_count', { count: mistakesCount }) }}</span>
+            </span>
+            <span class="plan-cta"><LinearIcon name="arrow-right" :size="15" /></span>
+          </button>
+          <button type="button" class="plan-row" @click="startSprint">
+            <span class="plan-mark">03</span>
+            <span class="list-main">
+              <span class="plan-title">{{ t('ep.today.plan_new') }}</span>
+              <span class="plan-sub">{{ todayPlanCount ? t('ep.today.plan_items', { count: todayPlanCount }) : t('ep.today.plan_empty') }}</span>
+            </span>
+            <span class="plan-cta"><LinearIcon name="arrow-right" :size="15" /></span>
+          </button>
+        </section>
+
+        <section class="section today-section">
+          <div class="section-head">
+            <span class="section-title">{{ t('ep.today.banks_title') }}</span>
+            <span class="section-note">{{ t('ep.banks.sub', { count: banks.length }) }}</span>
+            <span class="section-action">
+              <button type="button" class="link-btn" @click="router.push('/banks')">{{ t('ep.common.all') }}</button>
+            </span>
+          </div>
+          <div v-if="loading" class="skeleton-rows">
+            <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+          </div>
+          <div v-else-if="banks.length" class="today-bank-list">
+            <button v-for="bank in banks" :key="bank.id" type="button" class="today-bank-row" @click="router.push(`/banks/${bank.id}`)">
+              <span class="bank-name-cell">
+                <span class="bank-name">{{ bank.name }}</span>
+                <span class="bank-meta">
+                  <span>{{ bank.category || t('ep.banks.detail') }}</span>
+                  <span>{{ t('ep.banks.questions', { count: bank.question_count || 0 }) }}</span>
+                </span>
+              </span>
+              <span v-if="getActiveSessionForBank(bank.id)" class="tag brand">
+                {{ t('ep.today.active_badge') }} {{ getActiveSessionForBank(bank.id).answered_count }}/{{ getActiveSessionForBank(bank.id).total_questions }}
+              </span>
+              <span class="bank-row-actions">
+                <span class="btn btn-sm" @click.stop="emit('start', bank)">{{ t('ep.today.start_practice') }}</span>
+                <LinearIcon name="chevron-right" :size="16" />
+              </span>
+            </button>
+          </div>
+          <div v-else class="empty">
+            <div class="empty-title">{{ t('ep.today.banks_empty') }}</div>
+            <div class="empty-desc">{{ t('ep.today.banks_empty_hint') }}</div>
+            <div class="empty-actions">
+              <button type="button" class="btn btn-primary" @click="openCreateBankDialog">{{ t('ep.today.create_bank') }}</button>
             </div>
-          </details>
-        </div>
-      </article>
-      <div v-if="!banks.length" class="empty-state-card">
-        <div class="empty-state-icon">
-          <LinearIcon name="inbox" size="26" />
-        </div>
-        <h3 class="empty-state-title">{{ t('home.no_banks') }}</h3>
-        <p class="empty-state-desc">{{ t('home.create_bank_hint') || t('home.no_banks') }}</p>
-        <div class="empty-state-actions">
-          <button type="button" class="primary" @click="openCreateBankDialog">
-            <LinearIcon name="plus" size="14" /> {{ t('home.create_bank') }}
+          </div>
+        </section>
+      </div>
+
+      <aside class="today-rail">
+        <div class="rail-block">
+          <div class="rail-title">{{ t('ep.today.quick_start') }}</div>
+          <button type="button" class="rail-link" @click="router.push('/review')">
+            <span class="list-main"><span class="rail-link-title">{{ t('ep.today.plan_due') }}</span><span class="rail-note">{{ t('ep.today.quick_due_hint') }}</span></span>
+            <span class="rail-link-n">{{ dueMistakesCount }}</span>
+          </button>
+          <button type="button" class="rail-link" @click="router.push('/review?tab=mistakes')">
+            <span class="list-main"><span class="rail-link-title">{{ t('ep.today.plan_mistakes') }}</span><span class="rail-note">{{ t('ep.today.quick_mistakes_hint') }}</span></span>
+            <span class="rail-link-n">{{ mistakesCount }}</span>
+          </button>
+          <button type="button" class="rail-link" @click="startSprint">
+            <span class="list-main"><span class="rail-link-title">{{ t('ep.today.plan_new') }}</span><span class="rail-note">{{ t('ep.today.sprint_hint') }}</span></span>
+            <span class="rail-link-n">→</span>
           </button>
         </div>
-      </div>
-    </section>
-  </template>
+        <div class="rail-block">
+          <div class="rail-title">{{ t('ep.today.next') }}</div>
+          <button v-for="bank in banks.slice(0, 3)" :key="bank.id" type="button" class="rail-link" @click="router.push(`/banks/${bank.id}`)">
+            <span class="list-main"><span class="rail-link-title">{{ bank.name }}</span><span class="rail-note">{{ t('ep.banks.questions', { count: bank.question_count || 0 }) }}</span></span>
+            <span class="rail-link-n">→</span>
+          </button>
+          <div v-if="!banks.length" class="rail-note">{{ t('ep.today.no_next') }}</div>
+        </div>
+        <div class="rail-block rail-keys">
+          <div class="rail-title">{{ t('ep.today.keys') }}</div>
+          <div class="rail-note rail-key-list">
+            <span><span class="kbd">P</span> {{ t('ep.today.key_practice') }}</span>
+            <span><span class="kbd">K</span> {{ t('ep.today.key_search') }}</span>
+            <span><span class="kbd">?</span> {{ t('ep.today.key_help') }}</span>
+          </div>
+        </div>
+      </aside>
+    </div>
 
-    <!-- 创建题库对话框 -->
+    <!-- Create bank -->
     <div v-if="showCreateDialog" class="exam-setup-backdrop" @click.self="showCreateDialog = false" @keydown.esc="showCreateDialog = false">
-      <form class="exam-setup-dialog" role="dialog" aria-modal="true" aria-labelledby="create-bank-title" @submit.prevent="handleCreateBank">
-        <h2 id="create-bank-title">{{ t('home.create_bank') }}</h2>
+      <form class="exam-setup-dialog" role="dialog" aria-modal="true" @submit.prevent="handleCreateBank">
+        <h2>{{ t('home.create_bank') }}</h2>
         <label>{{ t('home.bank_name') }}
           <input v-model.trim="newBank.name" type="text" :placeholder="t('home.bank_name_placeholder')" required />
         </label>
@@ -300,29 +179,62 @@
         <p v-if="createError" class="error">{{ createError }}</p>
         <div class="bank-actions">
           <button type="button" @click="showCreateDialog = false">{{ t('common.cancel') }}</button>
-          <button type="submit" :disabled="creatingBank">{{ creatingBank ? t('home.creating') : t('home.confirm_create') }}</button>
+          <button type="submit" class="primary" :disabled="creatingBank">{{ creatingBank ? t('home.creating') : t('home.confirm_create') }}</button>
         </div>
       </form>
     </div>
 
-    <!-- 模考设置对话框 (EE-002, EE-010: 支持蓝图选择与错题入库开关) -->
+    <!-- Active sessions -->
+    <div v-if="showActiveSessionsModal" class="exam-setup-backdrop" @click.self="showActiveSessionsModal = false" @keydown.esc="showActiveSessionsModal = false">
+      <div class="exam-setup-dialog" role="dialog" aria-modal="true">
+        <div class="dialog-header-flex">
+          <h2>{{ t('ep.today.sessions_title') }}</h2>
+          <button type="button" class="btn-close-icon" @click="showActiveSessionsModal = false">✕</button>
+        </div>
+        <p>{{ t('ep.today.sessions_desc') }}</p>
+        <div class="session-list">
+          <div v-for="sess in activeSessions" :key="sess.id" class="session-row">
+            <div class="session-info">
+              <div class="od-row" style="gap: 8px">
+                <span class="tag">{{ formatSessionMode(sess.mode) }}</span>
+                <strong>{{ sess.bank_name }}</strong>
+                <span class="tiny dim">{{ formatTimeAgo(sess.updated_at || sess.created_at) }}</span>
+              </div>
+              <div class="progress" style="margin-top: 8px"><div class="progress-fill" :style="{ width: sessionPercent(sess) + '%' }"></div></div>
+              <div class="tiny dim" style="margin-top: 4px">{{ sess.answered_count }} / {{ sess.total_questions }} {{ t('ep.exam.answered') }}</div>
+            </div>
+            <div class="od-row" style="gap: 6px">
+              <button type="button" class="primary" @click="handleResume(sess)">{{ t('ep.today.resume_action') }}</button>
+              <button type="button" class="secondary-btn" :disabled="abandoningSession" @click="handleAbandonSession(sess.id)">{{ t('ep.today.abandon') }}</button>
+            </div>
+          </div>
+        </div>
+        <div class="bank-actions">
+          <button type="button" class="btn btn-sm btn-danger" :disabled="abandoningSession" @click="handleAbandonAllSessions">{{ t('ep.today.session_clear_all') }}</button>
+          <span class="spacer"></span>
+          <button type="button" @click="showActiveSessionsModal = false">{{ t('ep.common.close') }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Exam setup -->
     <div v-if="examBank" class="exam-setup-backdrop" @click.self="examBank = null" @keydown.esc="examBank = null">
-      <form class="exam-setup-dialog" role="dialog" aria-modal="true" aria-labelledby="exam-setup-title" @submit.prevent="beginExam">
-        <h2 id="exam-setup-title">{{ t('ui.k0150') }}</h2>
-        <p>{{ examBank.name }} {{ t('ui.k0151') }} {{ examBank.question_count }} {{ t('ui.k0101') }}</p>
-        <label>{{ t('ui.k0152') }}
+      <form class="exam-setup-dialog" role="dialog" aria-modal="true" @submit.prevent="beginExam">
+        <h2>{{ t('ep.exam.setup') }}</h2>
+        <p>{{ examBank.name }} · {{ t('ep.banks.questions', { count: examBank.question_count }) }}</p>
+        <label>{{ t('ep.exam.questions') }}
           <input v-model.number="totalQuestions" type="number" min="1" :max="examBank.question_count" required />
         </label>
-        <label>{{ t('ui.k0153') }}
+        <label>{{ t('ep.exam.time') }}
           <input v-model.number="timeLimitMinutes" type="number" min="0" max="600" required />
         </label>
         <details class="exam-advanced-accordion">
           <summary class="exam-advanced-summary">
             <span>{{ t('common.advanced_settings') }}</span>
-            <LinearIcon name="chevron-right" size="12" class="summary-chevron" />
+            <LinearIcon name="chevron-right" :size="12" class="summary-chevron" />
           </summary>
           <div class="exam-advanced-content">
-            <label>{{ t('ui.k0154') }}
+            <label>{{ t('ep.exam.blueprint') }}
               <div style="display: flex; gap: 0.5rem; align-items: center;">
                 <select v-model="selectedProfileId" style="flex: 1;" @change="onExamProfileChange">
                   <option value="">{{ t('ui.k0155') }}</option>
@@ -335,94 +247,79 @@
                 </button>
               </div>
             </label>
-            <div v-if="selectedProfileBlueprintSummary" style="background: var(--success-light); border: 1px solid var(--success-border); border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.85rem; color: var(--success-fg, var(--success)); margin-top: 0.5rem;">
-              <strong>{{ t('ui.k0156') }}</strong>
-              {{ t('ui.k0157') }} {{ selectedProfileBlueprintSummary.sectionsCount }} {{ t('ui.k0158') }} {{ selectedProfileBlueprintSummary.totalQuestions }} {{ t('ui.k0101') }}
-              <span v-if="selectedProfileBlueprintSummary.negativeMark > 0">{{ t('ui.k0159') }} {{ selectedProfileBlueprintSummary.negativeMark }} {{ t('ui.k0160') }}</span>
-              <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.2rem;">
-                {{ t('ui.k0161') }}{{ totalQuestions }} {{ t('ui.k0123') }}
-              </div>
+            <div v-if="selectedProfileBlueprintSummary" class="notice info" style="margin-top: 10px">
+              <span>{{ t('ui.k0157') }} {{ selectedProfileBlueprintSummary.sectionsCount }} {{ t('ui.k0158') }} {{ selectedProfileBlueprintSummary.totalQuestions }} {{ t('ui.k0101') }}</span>
             </div>
-            <label class="ctrl-check exam-option-checkbox" style="margin-top: 0.5rem;">
+            <label class="check" style="margin-top: 10px;">
               <input v-model="recordMistakes" type="checkbox" />
-              <span>{{ t('ui.k0162') }}</span>
+              <span>{{ t('ep.exam.record_mistakes') }}</span>
             </label>
           </div>
         </details>
         <p v-if="examError" class="error">{{ examError }}</p>
         <div class="dialog-actions-row">
-          <button type="button" class="secondary-btn" @click="examBank = null">{{ t('ui.k0149') }}</button>
-          <button type="submit" class="primary" :disabled="startingExam">{{ startingExam ? t('ui.k0663') : t('ui.k0667') }}</button>
+          <button type="button" class="secondary-btn" @click="examBank = null">{{ t('common.cancel') }}</button>
+          <button type="submit" class="primary" :disabled="startingExam">{{ startingExam ? t('ui.k0663') : t('ep.exam.start') }}</button>
         </div>
       </form>
     </div>
 
-    <!-- EE-011: 手动录入题目对话框 -->
+    <!-- Add question -->
     <div v-if="showAddQuestionDialog" class="exam-setup-backdrop" @click.self="showAddQuestionDialog = false" @keydown.esc="showAddQuestionDialog = false">
-      <form class="exam-setup-dialog" role="dialog" style="width: min(100%, 36rem); max-height: 85vh; overflow-y: auto;" @submit.prevent="handleCreateQuestion">
-        <h2>{{ t('ui.k0163') }}{{ targetBankForQuestion?.name }}）</h2>
+      <form class="exam-setup-dialog" style="width: min(100%, 640px); max-height: 85vh; overflow-y: auto;" @submit.prevent="handleCreateQuestion">
+        <h2>{{ t('ep.today.add_question') }} · {{ targetBankForQuestion?.name }}</h2>
         <label>{{ t('ui.k0164') }}
           <textarea v-model.trim="addQuestionForm.stem" rows="2" :placeholder="t('ui.k0165')" required></textarea>
         </label>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-          <label>{{ t('ui.k0072') }}
+        <div class="form-grid two">
+          <label>{{ t('ep.banks.type') }}
             <select v-model="addQuestionForm.type" @change="onQuestionTypeChange">
-              <option value="SINGLE">{{ t('ui.k0050') }}</option>
-              <option value="MULTI">{{ t('ui.k0051') }}</option>
-              <option value="JUDGE">{{ t('ui.k0052') }}</option>
-              <option value="ESSAY">{{ t('ui.k0166') }}</option>
+              <option value="SINGLE">{{ t('ep.question_types.single') }}</option>
+              <option value="MULTI">{{ t('ep.question_types.multi') }}</option>
+              <option value="JUDGE">{{ t('ep.question_types.judge') }}</option>
+              <option value="ESSAY">{{ t('ep.question_types.essay') }}</option>
             </select>
           </label>
-          <label>{{ t('ui.k0167') }}
+          <label>{{ t('ep.banks.difficulty') }}
             <select v-model.number="addQuestionForm.difficulty">
-              <option :value="1">{{ t('ui.k0168') }}</option>
-              <option :value="2">{{ t('ui.k0169') }}</option>
-              <option :value="3">{{ t('ui.k0170') }}</option>
-              <option :value="4">{{ t('ui.k0171') }}</option>
-              <option :value="5">{{ t('ui.k0172') }}</option>
+              <option v-for="opt in difficultyOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
           </label>
         </div>
         <div v-if="addQuestionForm.type === 'SINGLE' || addQuestionForm.type === 'MULTI' || addQuestionForm.type === 'JUDGE'">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
             <label style="margin: 0; font-weight: 600;">{{ t('ui.k0173') }}</label>
-            <button v-if="addQuestionForm.type !== 'JUDGE'" type="button" class="btn-add-opt" @click="handleAddOpt">{{ t('ui.k0174') }}</button>
+            <button v-if="addQuestionForm.type !== 'JUDGE'" type="button" class="btn btn-sm btn-quiet" @click="handleAddOpt">{{ t('ui.k0174') }}</button>
           </div>
-          <div v-for="(opt, idx) in addQuestionForm.options" :key="idx" class="add-opt-row" style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.45rem;">
-            <label style="display: flex; align-items: center; margin: 0; cursor: pointer;" :title="`${t('ui.k0175')}${opt.key})`">
-              <input
-                v-if="addQuestionForm.type === 'SINGLE' || addQuestionForm.type === 'JUDGE'"
-                type="radio"
-                name="correct-opt-radio"
-                :checked="addQuestionForm.answer === opt.key"
-                @change="addQuestionForm.answer = opt.key"
-              />
-              <input
-                v-else-if="addQuestionForm.type === 'MULTI'"
-                type="checkbox"
-                :checked="addQuestionForm.answer.includes(opt.key)"
-                @change="handleToggleMultiAnswer(opt.key)"
-              />
-            </label>
+          <div v-for="(opt, idx) in addQuestionForm.options" :key="idx" class="add-opt-row">
+            <input
+              v-if="addQuestionForm.type === 'SINGLE' || addQuestionForm.type === 'JUDGE'"
+              type="radio"
+              name="correct-opt-radio"
+              :checked="addQuestionForm.answer === opt.key"
+              @change="addQuestionForm.answer = opt.key"
+            />
+            <input
+              v-else-if="addQuestionForm.type === 'MULTI'"
+              type="checkbox"
+              :checked="addQuestionForm.answer.includes(opt.key)"
+              @change="handleToggleMultiAnswer(opt.key)"
+            />
             <input v-model.trim="opt.key" style="width: 3.5rem; text-align: center; font-weight: 600;" :placeholder="t('ui.k0176')" />
             <input v-model.trim="opt.text" style="flex: 1;" :placeholder="t('ui.k0177')" />
             <button
               v-if="addQuestionForm.type !== 'JUDGE'"
               type="button"
-              class="btn-remove-opt"
+              class="btn btn-sm btn-quiet"
               :title="t('ui.k0178')"
-              style="border: none; background: var(--danger-light); color: var(--danger-fg, var(--danger)); border-radius: 4px; padding: 0.35rem 0.6rem; cursor: pointer; font-size: 0.85rem;"
               @click="addQuestionForm.options.splice(idx, 1)"
             >✕</button>
           </div>
         </div>
-        <label>{{ t('ui.k0179') }}
-          <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <input v-model.trim="addQuestionForm.answer" :placeholder="t('ui.k0180')" required style="flex: 1;" />
-            <span style="font-size: 0.8rem; color: var(--text-muted);">{{ t('ui.k0181') }}</span>
-          </div>
+        <label>{{ t('ep.banks.answer') }}
+          <input v-model.trim="addQuestionForm.answer" :placeholder="t('ui.k0180')" required />
         </label>
-        <label>{{ t('ui.k0182') }}
+        <label>{{ t('ep.banks.analysis') }}
           <textarea v-model.trim="addQuestionForm.explanation" rows="2" :placeholder="t('ui.k0183')"></textarea>
         </label>
         <label>{{ t('ui.k0184') }}
@@ -430,197 +327,119 @@
         </label>
         <p v-if="addQuestionError" class="error">{{ addQuestionError }}</p>
         <div class="bank-actions">
-          <button type="button" @click="showAddQuestionDialog = false">{{ t('ui.k0149') }}</button>
-          <button type="submit" :disabled="savingQuestion">{{ savingQuestion ? t('ui.k0668') : t('ui.k0669') }}</button>
+          <button type="button" @click="showAddQuestionDialog = false">{{ t('common.cancel') }}</button>
+          <button type="submit" class="primary" :disabled="savingQuestion">{{ savingQuestion ? t('ui.k0668') : t('ui.k0669') }}</button>
         </div>
       </form>
     </div>
 
-    <!-- EE-020: 共享成员管理与跨库复制对话框 -->
+    <!-- Share / members -->
     <div v-if="showShareDialog" class="exam-setup-backdrop" @click.self="showShareDialog = false" @keydown.esc="showShareDialog = false">
-      <div class="exam-setup-dialog" role="dialog" style="width: min(100%, 36rem);">
-        <h2>{{ t('ui.k0186') }}</h2>
-        <p>{{ t('ui.k0187') }}{{ targetBankForShare?.name }}】</p>
-
-        <!-- 现有成员列表 -->
-        <div style="margin-bottom: 1rem;">
-          <h3 style="font-size: 0.95rem; margin-bottom: 0.4rem;">{{ t('ui.k0188') }}</h3>
-          <div v-if="loadingMembers" style="color: var(--text-tertiary); font-size: 0.85rem;">{{ t('ui.k0189') }}</div>
-          <div v-else style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 8rem; overflow-y: auto;">
-            <div v-for="m in bankMembersList" :key="m.user_id" style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.6rem; background: var(--bg-page); border: 1px solid var(--border); border-radius: 4px;">
-              <span style="font-size: 0.85rem; font-weight: 500;">{{ m.username }}</span>
-              <div style="display: flex; align-items: center; gap: 0.6rem;">
-                <span style="font-size: 0.75rem; padding: 0.1rem 0.4rem; background: var(--bg-subtle); border-radius: 4px;">
-                  {{ m.role === 'ADMIN' ? t('ui.k0643') : m.role === 'EDITOR' ? t('ui.k0670') : t('ui.k0671') }}
-                </span>
-                <button v-if="m.role !== 'ADMIN' && m.user_id !== user?.id" type="button" style="color: var(--danger-fg, var(--danger)); border: none; background: none; cursor: pointer; font-size: 0.75rem;" @click="handleRemoveMember(m.user_id)">
-                  {{ t('ui.k0190') }}
-                </button>
-              </div>
+      <div class="exam-setup-dialog" role="dialog" style="width: min(100%, 560px);">
+        <h2>{{ t('ep.banks.member_tab') }} · {{ targetBankForShare?.name }}</h2>
+        <p>{{ t('ep.banks.members_note') }}</p>
+        <div v-if="loadingMembers" class="tiny dim">{{ t('ep.common.loading') }}</div>
+        <div v-else class="member-list">
+          <div v-for="m in bankMembersList" :key="m.user_id" class="member-row">
+            <span>{{ m.username }}</span>
+            <div class="od-row" style="gap: 8px">
+              <span class="tag">{{ m.role === 'ADMIN' ? t('ep.banks.owner') : m.role === 'EDITOR' ? t('ep.banks.editor') : t('ep.banks.member') }}</span>
+              <button v-if="m.role !== 'ADMIN' && m.user_id !== user?.id" type="button" class="link-btn danger" @click="handleRemoveMember(m.user_id)">
+                {{ t('ep.banks.remove') }}
+              </button>
             </div>
           </div>
         </div>
-
-        <!-- 添加成员表单 -->
-        <form style="border-top: 1px dashed var(--border-strong); padding-top: 0.75rem; margin-bottom: 1rem;" @submit.prevent="handleAddMember">
-          <h3 style="font-size: 0.95rem; margin-bottom: 0.4rem;">{{ t('ui.k0191') }}</h3>
-          <div style="display: flex; gap: 0.5rem; margin-bottom: 0.4rem;">
+        <form style="border-top: 1px solid var(--line); padding-top: 12px;" @submit.prevent="handleAddMember">
+          <div class="od-row" style="gap: 8px">
             <input v-model.trim="memberUsername" style="flex: 1;" :placeholder="t('ui.k0192')" required />
             <select v-model="memberRole" style="width: 7rem;">
-              <option value="MEMBER">{{ t('ui.k0193') }}</option>
-              <option value="EDITOR">{{ t('ui.k0194') }}</option>
+              <option value="MEMBER">{{ t('ep.banks.member') }}</option>
+              <option value="EDITOR">{{ t('ep.banks.editor') }}</option>
             </select>
-            <button type="submit" :disabled="submittingMember">{{ submittingMember ? t('ui.k0672') : t('ui.k0673') }}</button>
+            <button type="submit" class="primary" :disabled="submittingMember">{{ submittingMember ? t('ui.k0672') : t('ep.banks.add_member') }}</button>
           </div>
-          <p v-if="shareMessage" :class="{ error: shareIsError, success: !shareIsError }" style="margin: 0.2rem 0; font-size: 0.85rem;">{{ shareMessage }}</p>
+          <p v-if="shareMessage" :class="{ error: shareIsError, success: !shareIsError }" style="margin: 0.4rem 0 0; font-size: 0.85rem;">{{ shareMessage }}</p>
         </form>
-
-        <!-- 跨库复制题目小工具 -->
-        <div style="border-top: 1px dashed var(--border-strong); padding-top: 0.75rem;">
-          <h3 style="font-size: 0.95rem; margin-bottom: 0.4rem;">{{ t('ui.k0195') }}</h3>
-          <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <div style="border-top: 1px solid var(--line); padding-top: 12px;">
+          <div class="small strong" style="margin-bottom: 6px">{{ t('ui.k0195') }}</div>
+          <div class="od-row" style="gap: 8px; align-items: center;">
             <input v-model.trim="copyQuestionId" style="flex: 1;" :placeholder="t('ui.k0196')" />
             <select v-model="copyTargetBankId" style="width: 9rem;">
               <option value="">{{ t('ui.k0197') }}</option>
-              <option v-for="b in banks.filter(x => x.id !== targetBankForShare?.id)" :key="b.id" :value="b.id">
-                {{ b.name }}
-              </option>
+              <option v-for="b in banks.filter(x => x.id !== targetBankForShare?.id)" :key="b.id" :value="b.id">{{ b.name }}</option>
             </select>
-            <button type="button" :disabled="!copyQuestionId.trim() || !copyTargetBankId || copyingQuestion" @click="handleCopyQuestion">
+            <button type="button" class="btn btn-sm" :disabled="!copyQuestionId.trim() || !copyTargetBankId || copyingQuestion" @click="handleCopyQuestion">
               {{ copyingQuestion ? t('ui.k0674') : t('ui.k0675') }}
             </button>
           </div>
-          <p v-if="copyNotice" style="font-size: 0.85rem; color: var(--primary-fg, var(--primary)); margin: 0.3rem 0 0 0;">{{ copyNotice }}</p>
+          <p v-if="copyNotice" class="small" style="color: var(--brand); margin: 6px 0 0;">{{ copyNotice }}</p>
         </div>
-
-        <div class="bank-actions" style="margin-top: 1rem;">
-          <button type="button" @click="showShareDialog = false">{{ t('ui.k0134') }}</button>
+        <div class="bank-actions">
+          <button type="button" @click="showShareDialog = false">{{ t('ep.common.close') }}</button>
         </div>
       </div>
     </div>
 
-    <!-- EE-008: 题库多格式导出对话框 -->
+    <!-- Export -->
     <div v-if="showExportDialog" class="exam-setup-backdrop" @click.self="showExportDialog = false" @keydown.esc="showExportDialog = false">
-      <div class="exam-setup-dialog" role="dialog" style="width: min(100%, 28rem);">
-        <h2>{{ t('ui.k0198') }}</h2>
-        <p>{{ t('ui.k0187') }}{{ targetBankForExport?.name }}{{ t('ui.k0199') }} {{ targetBankForExport?.question_count || 0 }} {{ t('ui.k0200') }}</p>
-        <label>{{ t('ui.k0201') }}
+      <div class="exam-setup-dialog" role="dialog" style="width: min(100%, 420px);">
+        <h2>{{ t('ep.today.export') }}</h2>
+        <p>{{ targetBankForExport?.name }} · {{ t('ep.banks.questions', { count: targetBankForExport?.question_count || 0 }) }}</p>
+        <label>{{ t('ep.common.export') }}
           <select v-model="exportFormat">
-            <option value="json">{{ t('ui.k0202') }}</option>
-            <option value="csv">{{ t('ui.k0203') }}</option>
-            <option value="txt">{{ t('ui.k0204') }}</option>
-            <option value="xlsx">{{ t('ui.k0205') }}</option>
+            <option value="json">JSON</option>
+            <option value="csv">CSV</option>
+            <option value="txt">TXT</option>
+            <option value="xlsx">XLSX</option>
           </select>
         </label>
         <div class="bank-actions">
-          <button type="button" @click="showExportDialog = false">{{ t('ui.k0149') }}</button>
-          <button type="button" class="primary" :disabled="exporting" @click="handleDownloadExport">
-            {{ exporting ? t('ui.k0676') : t('ui.k0677') }}
-          </button>
+          <button type="button" @click="showExportDialog = false">{{ t('common.cancel') }}</button>
+          <button type="button" class="primary" :disabled="exporting" @click="handleDownloadExport">{{ exporting ? t('ui.k0676') : t('ep.common.export') }}</button>
         </div>
       </div>
     </div>
 
-    <!-- AI 批量生成题库解析对话框 -->
+    <!-- AI batch -->
     <div v-if="showAiBatchModal" class="exam-setup-backdrop" @click.self="closeAiBatchModal" @keydown.esc="closeAiBatchModal">
-      <div class="exam-setup-dialog ai-batch-dialog" role="dialog" aria-modal="true" style="width: min(100%, 36rem);">
-        <div class="dialog-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-          <h2 style="font-size: 1.15rem; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
-            <LinearIcon name="zap" size="16" />
-            <span>{{ t('home.batch_ai_title') }}</span>
-          </h2>
-          <button type="button" class="btn-close-icon" style="border: none; background: none; font-size: 1.25rem; cursor: pointer; color: var(--text-muted);" @click="closeAiBatchModal">✕</button>
+      <div class="exam-setup-dialog" role="dialog" style="width: min(100%, 560px);">
+        <div class="dialog-header-flex">
+          <h2>{{ t('home.batch_ai_title') }}</h2>
+          <button type="button" class="btn-close-icon" @click="closeAiBatchModal">✕</button>
         </div>
-        <p style="font-size: 0.825rem; color: var(--text-muted); margin: 0 0 1rem; line-height: 1.45;">
-          {{ t('home.batch_ai_desc') }}
-        </p>
-
-        <!-- 统计面板 -->
-        <div class="ai-batch-stats-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.25rem;">
-          <div style="background: var(--bg-subtle); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border); text-align: center;">
-            <small style="color: var(--text-muted); font-size: 0.75rem;">{{ t('home.batch_ai_total') }}</small>
-            <strong style="display: block; font-size: 1.25rem; font-family: var(--linear-mono); color: var(--text-main);">{{ aiBatchStatus?.total ?? aiBatchBank?.question_count ?? 0 }}</strong>
-          </div>
-          <div style="background: var(--bg-subtle); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border); text-align: center;">
-            <small style="color: var(--text-muted); font-size: 0.75rem;">{{ t('home.batch_ai_has_expl') }}</small>
-            <strong style="display: block; font-size: 1.25rem; font-family: var(--linear-mono); color: var(--success-fg, var(--success));">{{ aiBatchStatus?.with_explanation ?? 0 }}</strong>
-          </div>
-          <div style="background: var(--bg-subtle); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border); text-align: center;">
-            <small style="color: var(--text-muted); font-size: 0.75rem;">{{ t('home.batch_ai_missing') }}</small>
-            <strong style="display: block; font-size: 1.25rem; font-family: var(--linear-mono); color: var(--primary-fg, var(--primary));">{{ aiBatchStatus?.without_explanation ?? 0 }}</strong>
-          </div>
+        <p>{{ t('home.batch_ai_desc') }}</p>
+        <div class="stat-row">
+          <div class="stat"><div class="stat-n">{{ aiBatchStatus?.total ?? aiBatchBank?.question_count ?? 0 }}</div><div class="stat-c">{{ t('home.batch_ai_total') }}</div></div>
+          <div class="stat"><div class="stat-n">{{ aiBatchStatus?.with_explanation ?? 0 }}</div><div class="stat-c">{{ t('home.batch_ai_has_expl') }}</div></div>
+          <div class="stat"><div class="stat-n">{{ aiBatchStatus?.without_explanation ?? 0 }}</div><div class="stat-c">{{ t('home.batch_ai_missing') }}</div></div>
         </div>
-
-        <!-- 选项模式 -->
-        <div style="margin-bottom: 1.25rem;">
-          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; color: var(--text-main); margin-bottom: 0.4rem;">
-            <input type="radio" :value="false" v-model="aiBatchOverwrite" :disabled="aiBatchStatus?.status === 'running'" />
-            <span>{{ t('home.batch_ai_incremental') }}</span>
-          </label>
-          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer; color: var(--text-muted);">
-            <input type="radio" :value="true" v-model="aiBatchOverwrite" :disabled="aiBatchStatus?.status === 'running'" />
-            <span>{{ t('home.batch_ai_overwrite') }}</span>
-          </label>
+        <label class="check">
+          <input type="radio" :value="false" v-model="aiBatchOverwrite" :disabled="aiBatchStatus?.status === 'running'" />
+          <span>{{ t('home.batch_ai_incremental') }}</span>
+        </label>
+        <label class="check">
+          <input type="radio" :value="true" v-model="aiBatchOverwrite" :disabled="aiBatchStatus?.status === 'running'" />
+          <span>{{ t('home.batch_ai_overwrite') }}</span>
+        </label>
+        <div v-if="aiBatchStatus?.status === 'running' || (aiBatchStatus?.processed || 0) > 0">
+          <div class="od-row" style="justify-content: space-between; margin-bottom: 4px;">
+            <span class="small strong">{{ aiBatchStatus?.status === 'running' ? t('home.batch_ai_status_running') : (aiBatchStatus?.status === 'stopped' ? t('home.batch_ai_status_stopped') : t('home.batch_ai_status_completed')) }}</span>
+            <span class="mono tiny">{{ aiBatchPercent }}%</span>
+          </div>
+          <div class="progress"><div class="progress-fill" :style="{ width: aiBatchPercent + '%' }"></div></div>
+          <div class="tiny dim" style="margin-top: 4px">{{ aiBatchStatus?.processed || 0 }} / {{ aiBatchStatus?.total || 0 }}</div>
         </div>
-
-        <!-- 正在执行中的进度状态条 -->
-        <div v-if="aiBatchStatus?.status === 'running' || (aiBatchStatus?.processed || 0) > 0" style="margin-bottom: 1.25rem; background: var(--bg-subtle); padding: 0.85rem; border-radius: 8px; border: 1px solid var(--border);">
-          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; margin-bottom: 0.4rem;">
-            <span style="color: var(--primary-fg, var(--primary)); font-weight: 600;">
-              {{ aiBatchStatus?.status === 'running' ? t('home.batch_ai_status_running') : (aiBatchStatus?.status === 'stopped' ? t('home.batch_ai_status_stopped') : t('home.batch_ai_status_completed')) }}
-            </span>
-            <span style="font-family: var(--linear-mono); color: var(--text-muted);">
-              {{ aiBatchStatus?.total ? Math.min(100, Math.round(((aiBatchStatus.processed || 0) / aiBatchStatus.total) * 100)) : 0 }}%
-            </span>
-          </div>
-          <div style="height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-bottom: 0.4rem;">
-            <div
-              style="height: 100%; background: var(--primary); transition: width 300ms ease;"
-              :style="{ width: `${aiBatchStatus?.total ? Math.min(100, Math.round(((aiBatchStatus.processed || 0) / aiBatchStatus.total) * 100)) : 0}%` }"
-            ></div>
-          </div>
-          <div style="font-size: 0.78rem; color: var(--text-muted); font-family: var(--linear-mono); display: flex; justify-content: space-between;">
-            <span>{{ t('home.batch_ai_progress', {
-              processed: aiBatchStatus?.processed || 0,
-              total: aiBatchStatus?.total || 0,
-              percent: aiBatchStatus?.total ? Math.min(100, Math.round(((aiBatchStatus.processed || 0) / aiBatchStatus.total) * 100)) : 0,
-              succeeded: aiBatchStatus?.succeeded || 0,
-              failed: aiBatchStatus?.failed || 0,
-            }) }}</span>
-          </div>
-          <p v-if="aiBatchStatus?.current_question_stem" style="margin: 0.4rem 0 0; font-size: 0.75rem; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            {{ t('home.batch_ai_processing', { stem: aiBatchStatus.current_question_stem }) }}
-          </p>
-        </div>
-
-        <p style="font-size: 0.75rem; color: var(--text-tertiary); margin: 0 0 1.25rem;">
-          {{ t('home.batch_ai_running_tip') }}
-        </p>
-
-        <!-- 底部操作按钮 -->
-        <div style="display: flex; justify-content: flex-end; gap: 0.75rem; border-top: 1px solid var(--border); padding-top: 0.85rem;">
-          <button type="button" class="secondary-btn" @click="closeAiBatchModal">{{ t('common.close') }}</button>
-          <button
-            v-if="aiBatchStatus?.status === 'running'"
-            type="button"
-            style="color: var(--danger-fg, var(--danger)); border: 1px solid var(--danger-border); background: var(--bg-card); border-radius: 6px; padding: 0.4rem 0.85rem; font-size: 0.85rem; cursor: pointer;"
-            @click="handleStopAiBatch"
-          >
-            {{ t('home.batch_ai_stop') }}
-          </button>
-          <button
-            v-else
-            type="button"
-            class="primary"
-            :disabled="aiBatchLoading || (aiBatchStatus && aiBatchStatus.without_explanation === 0 && !aiBatchOverwrite)"
-            @click="handleStartAiBatch"
-          >
+        <div class="bank-actions">
+          <button type="button" class="secondary-btn" @click="closeAiBatchModal">{{ t('ep.common.close') }}</button>
+          <button v-if="aiBatchStatus?.status === 'running'" type="button" class="btn btn-danger" @click="handleStopAiBatch">{{ t('home.batch_ai_stop') }}</button>
+          <button v-else type="button" class="primary" :disabled="aiBatchLoading || (aiBatchStatus && aiBatchStatus.without_explanation === 0 && !aiBatchOverwrite)" @click="handleStartAiBatch">
             {{ t('home.batch_ai_start') }}
           </button>
         </div>
       </div>
     </div>
-  </main>
+  </div>
 </template>
 
 <script setup>
@@ -629,16 +448,16 @@ import { useRoute, useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
 import { listBanks, createBank, createQuestion, addBankMember, listBankMembers, removeBankMember, copyQuestionToBank } from '../api/banks'
 import { startExam, listProfiles, getBlueprint } from '../api/exams'
-import { listActiveSessions, getSession, abandonSession, abandonAllSessions } from '../api/practice'
+import { startSession, listActiveSessions, getSession, abandonSession, abandonAllSessions } from '../api/practice'
 import { listDueMistakes, listMistakes } from '../api/mistakes'
+import { getLearningSummary, getLearningTrends, getStudyPlan } from '../api/learning'
 import { getAiBatchStatus, startAiBatchGenerate, stopAiBatchGenerate } from '../api/ai'
 import { triggerSyncEvent } from '../api/sync'
 import { useLocale } from '../composables/useLocale.js'
 
 const route = useRoute()
 const router = useRouter()
-
-const { t } = useLocale()
+const { t, locale } = useLocale()
 
 const props = defineProps({ token: { type: String, required: true }, user: { type: Object, default: null } })
 const emit = defineEmits(['start', 'mock-exam', 'resume-session', 'learning', 'mistakes', 'import', 'logout'])
@@ -652,67 +471,105 @@ const error = ref('')
 
 const dueMistakesCount = ref(0)
 const mistakesCount = ref(0)
+const summary = ref(null)
+const trends = ref(null)
+const todayPlan = ref(null)
+
+const dateLine = computed(() => {
+  try {
+    return new Intl.DateTimeFormat(locale.value, { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date())
+  } catch (_) {
+    return ''
+  }
+})
+
+const weekLine = computed(() => {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), 0, 1)
+  const week = Math.ceil(((now - start) / 86400000 + start.getDay() + 1) / 7)
+  return locale.value === 'en-US' ? `Week ${week}` : `第 ${week} 周`
+})
+
+const accuracyText = computed(() => {
+  const rate = trends.value?.recent?.correct_rate
+  return Number.isFinite(rate) ? `${Math.round(rate)}%` : '—'
+})
+
+const difficultyOptions = computed(() => [1, 2, 3, 4, 5].map(value => ({ value, label: t('ep.difficulty.' + value) })))
+
+const todayPlanCount = computed(() => {
+  const day = todayPlan.value?.days?.[0]
+  return day?.question_count || 0
+})
+
+const aiBatchPercent = computed(() => {
+  const total = aiBatchStatus.value?.total || 0
+  const processed = aiBatchStatus.value?.processed || 0
+  return total ? Math.min(100, Math.round((processed / total) * 100)) : 0
+})
 
 async function refreshLearningStats() {
   if (!props.token) return
-  try {
-    const dueRes = await listDueMistakes(props.token)
-    dueMistakesCount.value = Array.isArray(dueRes) ? dueRes.length : 0
-  } catch (_) {
-    dueMistakesCount.value = 0
-  }
-  try {
-    const misRes = await listMistakes(props.token)
-    mistakesCount.value = Array.isArray(misRes) ? misRes.length : 0
-  } catch (_) {
-    mistakesCount.value = 0
-  }
+  const [dueRes, misRes, summaryRes, trendsRes, planRes] = await Promise.allSettled([
+    listDueMistakes(props.token),
+    listMistakes(props.token),
+    getLearningSummary(props.token),
+    getLearningTrends(props.token, { window_days: 7 }),
+    getStudyPlan(props.token, { days: 7, minutes_per_day: 30 }),
+  ])
+  dueMistakesCount.value = dueRes.status === 'fulfilled' && Array.isArray(dueRes.value) ? dueRes.value.length : 0
+  mistakesCount.value = misRes.status === 'fulfilled' && Array.isArray(misRes.value) ? misRes.value.length : 0
+  summary.value = summaryRes.status === 'fulfilled' ? summaryRes.value : null
+  trends.value = trendsRes.status === 'fulfilled' ? trendsRes.value : null
+  todayPlan.value = planRes.status === 'fulfilled' ? planRes.value : null
+}
+
+function sessionPercent(session) {
+  if (!session?.total_questions) return 0
+  return Math.min(100, Math.round((session.answered_count / session.total_questions) * 100))
 }
 
 function getActiveSessionForBank(bankId) {
   return activeSessions.value.find(s => s.bank_id === bankId) || null
 }
 
-function getSessionModeIcon(mode) {
-  if (mode === 'EXAM') return 'award'
-  if (mode === 'FSRS') return 'chart'
-  if (mode === 'MISTAKE') return 'target'
-  return 'play'
-}
-
-function getSessionModeTitle(mode) {
-  if (mode === 'EXAM') return t('home.mock_exam')
-  if (mode === 'FSRS') return t('home.fsrs_review')
-  if (mode === 'MISTAKE') return t('home.mistake_sprint')
-  return t('home.sequential_practice')
-}
-
-function getResumeButtonText(session) {
-  if (!session) return ''
-  const answered = session.answered_count || 0
-  const total = session.total_questions || 0
-  if (session.mode === 'EXAM') {
-    return t('home.resume_mock_exam', { answered, total })
+function formatSessionMode(mode) {
+  const map = {
+    EXAM: t('ep.nav.exams'),
+    PRACTICE: t('ep.practice.setup'),
+    MISTAKE: t('ep.today.plan_mistakes'),
+    FSRS: t('ep.today.plan_due'),
+    ELIMINATION: t('ep.practice.kill'),
   }
-  if (session.mode === 'FSRS') {
-    return t('home.resume_fsrs', { answered, total })
-  }
-  if (session.mode === 'MISTAKE') {
-    return t('home.resume_mistake', { answered, total })
-  }
-  return t('home.resume_sequential', { answered, total })
+  return map[mode] || mode || t('ep.nav.review')
 }
 
-function getRestartButtonText(mode) {
-  if (mode === 'EXAM') return t('home.restart_mock_exam')
-  if (mode === 'PRACTICE') return t('home.restart_sequential')
-  return t('home.restart_session')
+async function startToday() {
+  if (activeSessions.value.length) {
+    await handleResume(activeSessions.value[0])
+    return
+  }
+  const bank = banks.value.find(b => b.question_count > 0)
+  if (bank) emit('start', bank)
+  else openCreateBankDialog()
 }
 
-function getRestartButtonTip(mode) {
-  if (mode === 'EXAM') return t('home.restart_mock_exam_tip')
-  if (mode === 'PRACTICE') return t('home.restart_sequential')
-  return t('home.restart_session_tip')
+async function startSprint() {
+  const bank = banks.value.find(b => b.question_count > 0)
+  if (!bank) {
+    openCreateBankDialog()
+    return
+  }
+  try {
+    const session = await startSession(props.token, {
+      bank_id: bank.id,
+      mode: 'PRACTICE',
+      total_questions: Math.min(20, bank.question_count || 1),
+    })
+    router.push(`/practice/${session.id}`)
+  } catch (err) {
+    error.value = err.detail || err.message
+  }
 }
 
 const examBank = ref(null)
@@ -728,7 +585,7 @@ const examError = ref('')
 const showCreateDialog = ref(false)
 const creatingBank = ref(false)
 const createError = ref('')
-const newBank = ref({ name: '', description: '', category: t('ui.k0146') })
+const newBank = ref({ name: '', description: '', category: '' })
 
 const showAddQuestionDialog = ref(false)
 const targetBankForQuestion = ref(null)
@@ -758,13 +615,11 @@ const copyTargetBankId = ref('')
 const copyingQuestion = ref(false)
 const copyNotice = ref('')
 
-// EE-008: 导出状态
 const showExportDialog = ref(false)
 const targetBankForExport = ref(null)
 const exportFormat = ref('json')
 const exporting = ref(false)
 
-// AI 批量预生成题库解析状态
 const showAiBatchModal = ref(false)
 const aiBatchBank = ref(null)
 const aiBatchStatus = ref(null)
@@ -790,9 +645,7 @@ async function openAiBatchModal(bank) {
   aiBatchLoading.value = true
   try {
     aiBatchStatus.value = await getAiBatchStatus(props.token, bank.id)
-    if (aiBatchStatus.value?.status === 'running') {
-      startAiBatchPolling()
-    }
+    if (aiBatchStatus.value?.status === 'running') startAiBatchPolling()
   } catch (err) {
     console.error(err)
   } finally {
@@ -815,9 +668,7 @@ function startAiBatchPolling() {
     try {
       const st = await getAiBatchStatus(props.token, aiBatchBank.value.id)
       aiBatchStatus.value = st
-      if (st.status !== 'running' && st.status !== 'stopping') {
-        stopAiBatchPolling()
-      }
+      if (st.status !== 'running' && st.status !== 'stopping') stopAiBatchPolling()
     } catch (_) {}
   }, 1500)
 }
@@ -833,8 +684,7 @@ async function handleStartAiBatch() {
   if (!aiBatchBank.value) return
   aiBatchLoading.value = true
   try {
-    const st = await startAiBatchGenerate(props.token, aiBatchBank.value.id, aiBatchOverwrite.value)
-    aiBatchStatus.value = st
+    aiBatchStatus.value = await startAiBatchGenerate(props.token, aiBatchBank.value.id, aiBatchOverwrite.value)
     startAiBatchPolling()
   } catch (err) {
     alert(err.detail || err.message)
@@ -846,39 +696,10 @@ async function handleStartAiBatch() {
 async function handleStopAiBatch() {
   if (!aiBatchBank.value) return
   try {
-    const st = await stopAiBatchGenerate(props.token, aiBatchBank.value.id)
-    aiBatchStatus.value = st
+    aiBatchStatus.value = await stopAiBatchGenerate(props.token, aiBatchBank.value.id)
   } catch (err) {
     alert(err.detail || err.message)
   }
-}
-
-async function handleRestartBankSession(bank) {
-  const active = getActiveSessionForBank(bank.id)
-  if (active) {
-    const isExam = active.mode === 'EXAM'
-    const confirmMsg = isExam
-      ? (t('home.restart_mock_exam_tip') || '放弃并重新模考')
-      : (t('home.restart_sequential') || '放弃并重新开始本次训练')
-    if (!window.confirm(confirmMsg)) {
-      return
-    }
-    try {
-      await abandonSession(props.token, active.id)
-      activeSessions.value = activeSessions.value.filter(s => s.id !== active.id)
-    } catch (_) {}
-    if (isExam) {
-      await openExamSetup(bank)
-    } else {
-      emit('start', bank)
-    }
-    return
-  }
-  emit('start', bank)
-}
-
-async function handleRestartSequential(bank) {
-  return handleRestartBankSession(bank)
 }
 
 function openActiveSessionsModal() {
@@ -888,22 +709,18 @@ function openActiveSessionsModal() {
 
 function openCreateBankDialog() {
   closeAllModals()
-  newBank.value = { name: '', description: '', category: t('ui.k0146') }
+  newBank.value = { name: '', description: '', category: '' }
   createError.value = ''
   showCreateDialog.value = true
 }
-
 
 async function handleResume(sessionSummary) {
   try {
     const fullSession = await getSession(props.token, sessionSummary.id)
     showActiveSessionsModal.value = false
     emit('resume-session', fullSession)
-    if (fullSession?.mode === 'EXAM') {
-      router.push(`/exam/${fullSession.id}`)
-    } else {
-      router.push(`/practice/${fullSession.id}`)
-    }
+    if (fullSession?.mode === 'EXAM') router.push(`/exam/${fullSession.id}`)
+    else router.push(`/practice/${fullSession.id}`)
   } catch (err) {
     alert(`${t('ui.k0275')}${err.detail || err.message}`)
   }
@@ -917,11 +734,11 @@ async function handleCreateBank() {
     const created = await createBank(props.token, {
       name: newBank.value.name,
       description: newBank.value.description,
-      category: newBank.value.category || t('ui.k0146'),
+      category: newBank.value.category || t('ep.banks.title'),
     })
     triggerSyncEvent('BANK_CREATED', 'BANK', created.id, { name: created.name })
     showCreateDialog.value = false
-    newBank.value = { name: '', description: '', category: t('ui.k0146') }
+    newBank.value = { name: '', description: '', category: '' }
     banks.value = await listBanks(props.token)
   } catch (err) {
     createError.value = err.detail || err.message
@@ -990,9 +807,8 @@ function handleAddOpt() {
 
 function handleToggleMultiAnswer(key) {
   let curr = addQuestionForm.value.answer ? addQuestionForm.value.answer.split('') : []
-  if (curr.includes(key)) {
-    curr = curr.filter(k => k !== key)
-  } else {
+  if (curr.includes(key)) curr = curr.filter(k => k !== key)
+  else {
     curr.push(key)
     curr.sort()
   }
@@ -1001,17 +817,14 @@ function handleToggleMultiAnswer(key) {
 
 function onQuestionTypeChange() {
   if (addQuestionForm.value.type === 'JUDGE') {
-    addQuestionForm.value.options = [
-      { key: 'T', text: t('ui.k0067') },
-      { key: 'F', text: t('ui.k0075') }
-    ]
+    addQuestionForm.value.options = [{ key: 'T', text: t('ui.k0067') }, { key: 'F', text: t('ui.k0075') }]
     addQuestionForm.value.answer = 'T'
   } else if ((addQuestionForm.value.type === 'SINGLE' || addQuestionForm.value.type === 'MULTI') && addQuestionForm.value.options.length === 2 && addQuestionForm.value.options[0].key === 'T') {
     addQuestionForm.value.options = [
       { key: 'A', text: '' },
       { key: 'B', text: '' },
       { key: 'C', text: '' },
-      { key: 'D', text: '' }
+      { key: 'D', text: '' },
     ]
     addQuestionForm.value.answer = 'A'
   }
@@ -1022,9 +835,7 @@ async function handleCreateQuestion() {
   savingQuestion.value = true
   addQuestionError.value = ''
   try {
-    const tagsList = addQuestionForm.value.tags
-      ? addQuestionForm.value.tags.split(/[,，\s]+/).filter(Boolean)
-      : []
+    const tagsList = addQuestionForm.value.tags ? addQuestionForm.value.tags.split(/[,，\s]+/).filter(Boolean) : []
     const created = await createQuestion(props.token, targetBankForQuestion.value.id, {
       stem: addQuestionForm.value.stem.trim(),
       type: addQuestionForm.value.type,
@@ -1077,7 +888,7 @@ async function handleAddMember() {
   try {
     await addBankMember(props.token, targetBankForShare.value.id, memberUsername.value.trim(), memberRole.value)
     shareIsError.value = false
-    shareMessage.value = `${t('ui.k0277')} ${memberUsername.value}！`
+    shareMessage.value = `${t('ui.k0277')} ${memberUsername.value}`
     memberUsername.value = ''
     await fetchBankMembers(targetBankForShare.value.id)
   } catch (err) {
@@ -1127,9 +938,7 @@ async function handleDownloadExport() {
   exporting.value = true
   try {
     const res = await fetch(`/api/v1/banks/${targetBankForExport.value.id}/export?format=${exportFormat.value}`, {
-      headers: {
-        Authorization: `Bearer ${props.token}`,
-      },
+      headers: { Authorization: `Bearer ${props.token}` },
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
@@ -1139,7 +948,7 @@ async function handleDownloadExport() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    const ext = exportFormat.value === 'xlsx' ? 'xlsx' : exportFormat.value === 'csv' ? 'csv' : exportFormat.value === 'txt' ? 'txt' : 'json'
+    const ext = exportFormat.value === 'xlsx' ? 'xlsx' : exportFormat.value
     a.download = `${targetBankForExport.value.name}_export.${ext}`
     document.body.appendChild(a)
     a.click()
@@ -1151,17 +960,6 @@ async function handleDownloadExport() {
   } finally {
     exporting.value = false
   }
-}
-
-function formatSessionMode(mode) {
-  const map = {
-    EXAM: t('ui.k0293'),
-    PRACTICE: t('ui.k0294'),
-    MISTAKE: t('ui.k0295'),
-    FSRS: t('ui.k0296'),
-    ELIMINATION: t('ui.k0297'),
-  }
-  return map[mode] || mode || t('ui.k0298')
 }
 
 function formatTimeAgo(dateStr) {
@@ -1189,14 +987,12 @@ async function refreshActiveSessions() {
 }
 
 async function handleAbandonSession(sessionId) {
-  if (!confirm(t('home.abandon_confirm_one'))) return
+  if (!confirm(t('ep.today.abandon_confirm'))) return
   abandoningSession.value = true
   try {
     await abandonSession(props.token, sessionId)
     await refreshActiveSessions()
-    if (activeSessions.value.length === 0) {
-      showActiveSessionsModal.value = false
-    }
+    if (activeSessions.value.length === 0) showActiveSessionsModal.value = false
   } catch (err) {
     alert(`${t('ui.k0304')}${err.detail || err.message}`)
   } finally {
@@ -1218,46 +1014,6 @@ async function handleAbandonAllSessions() {
   }
 }
 
-function applyBlueprintTemplate(templateKey) {
-  if (templateKey === 'STANDARD_50') {
-    blueprintConfig.value = {
-      negative_mark: 0,
-      sections: [
-        { name: t('ui.k0308'), type: 'SINGLE', count: 35, difficulty: null, chapter_id: '', tags: '' },
-        { name: t('ui.k0309'), type: 'MULTI', count: 10, difficulty: null, chapter_id: '', tags: '' },
-        { name: t('ui.k0310'), type: 'JUDGE', count: 5, difficulty: null, chapter_id: '', tags: '' },
-      ],
-    }
-  } else if (templateKey === 'OBJECTIVE_30') {
-    blueprintConfig.value = {
-      negative_mark: 0,
-      sections: [
-        { name: t('ui.k0311'), type: 'SINGLE', count: 20, difficulty: null, chapter_id: '', tags: '' },
-        { name: t('ui.k0312'), type: 'MULTI', count: 10, difficulty: null, chapter_id: '', tags: '' },
-      ],
-    }
-  } else if (templateKey === 'ADVANCED_SPRINT') {
-    blueprintConfig.value = {
-      negative_mark: 0.5,
-      sections: [
-        { name: t('ui.k0313'), type: 'SINGLE', count: 30, difficulty: 2, chapter_id: '', tags: '' },
-        { name: t('ui.k0314'), type: 'SINGLE', count: 20, difficulty: 4, chapter_id: '', tags: '' },
-        { name: t('ui.k0315'), type: 'MULTI', count: 15, difficulty: 3, chapter_id: '', tags: '' },
-        { name: t('ui.k0316'), type: 'ESSAY', count: 10, difficulty: null, chapter_id: '', tags: '' },
-      ],
-    }
-  } else if (templateKey === 'BASIC_25') {
-    blueprintConfig.value = {
-      negative_mark: 0,
-      sections: [
-        { name: t('ui.k0317'), type: 'SINGLE', count: 20, difficulty: 1, chapter_id: '', tags: '' },
-        { name: t('ui.k0318'), type: 'JUDGE', count: 5, difficulty: 1, chapter_id: '', tags: '' },
-      ],
-    }
-  }
-  syncToSimpleMode()
-}
-
 async function onExamProfileChange() {
   if (!selectedProfileId.value) {
     selectedProfileBlueprintSummary.value = null
@@ -1272,9 +1028,7 @@ async function onExamProfileChange() {
         totalQuestions: total,
         negativeMark: bp.negative_mark || 0,
       }
-      if (total > 0 && examBank.value) {
-        totalQuestions.value = Math.min(total, examBank.value.question_count || total)
-      }
+      if (total > 0 && examBank.value) totalQuestions.value = Math.min(total, examBank.value.question_count || total)
     } else {
       selectedProfileBlueprintSummary.value = null
     }
@@ -1291,9 +1045,7 @@ function openBlueprintDialogFromExam() {
 async function handleSyncedEvents(e) {
   const detail = e.detail || {}
   const events = Array.isArray(detail) ? detail : (detail.events || [])
-  if (detail.userId && props.user?.id && detail.userId !== props.user.id) {
-    return
-  }
+  if (detail.userId && props.user?.id && detail.userId !== props.user.id) return
   const hasBankOrQuestion = events.some(ev => ev.aggregate_type === 'BANK' || ev.aggregate_type === 'QUESTION')
   const hasSession = events.some(ev => ev.aggregate_type === 'SESSION')
   if (hasBankOrQuestion) {
@@ -1305,11 +1057,9 @@ async function handleSyncedEvents(e) {
 }
 
 onMounted(async () => {
-  // Synchronously register listener first to avoid missing any dispatches during async loads
   window.addEventListener('easyexam:action', handleEasyExamAction)
   window.addEventListener('easyexam:events-synced', handleSyncedEvents)
 
-  // Immediately handle actions passed via route query (e.g. from AppLayout or command palette)
   if (route.query.action) {
     handleEasyExamAction({ detail: route.query.action })
     router.replace({ path: '/', query: {} })
@@ -1350,761 +1100,113 @@ onUnmounted(() => {
   window.removeEventListener('easyexam:action', handleEasyExamAction)
 })
 
-defineExpose({
-  openCreateBankDialog,
-  showCreateDialog,
-  closeAllModals
-})
+defineExpose({ openCreateBankDialog, showCreateDialog, closeAllModals })
 </script>
 
 <style scoped>
-.home-page {
-  width: min(100% - 2rem, 76rem);
-  margin: 1.5rem auto;
+.today {
+  padding-top: 34px;
 }
 
-.home-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1.25rem;
-  padding: 0.85rem 1.25rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-sm);
-}
+.masthead { border-bottom: 1px solid var(--ink); padding-bottom: 20px; }
+.masthead-actions { margin-top: 18px; flex-wrap: wrap; gap: 8px; }
 
-.home-brand-area {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  flex-shrink: 0;
-}
-
-.home-brand-title {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-}
-
-.home-brand-icon {
-  font-size: 1.4rem;
-  line-height: 1;
-}
-
-.home-brand-title h1 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--text-main);
-  letter-spacing: -0.01em;
-  margin: 0;
-}
-
-.home-user-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.2rem 0.6rem;
-  background: var(--bg-muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-full);
-  font-size: 0.775rem;
-  color: var(--text-muted);
-  margin: 0;
-}
-
-.user-role-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--primary);
-}
-.user-role-dot.role-admin {
-  background: var(--success);
-}
-
-.user-role-badge {
-  font-size: 0.7rem;
-  color: var(--primary-fg, var(--primary));
-  font-weight: 600;
-  margin-left: 0.15rem;
-}
-
-.home-main-nav {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.main-nav-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.45rem 0.85rem;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-lg);
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--text-main);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.main-nav-tab:hover {
-  background: var(--bg-muted);
-  border-color: var(--border);
-  color: var(--primary-fg, var(--primary));
-}
-
-.main-nav-tab.featured {
-  color: var(--primary-fg, var(--primary));
-  font-weight: 600;
-}
-
-.main-nav-tab.featured:hover {
-  background: var(--primary-light);
-  border-color: var(--primary-border);
-}
-
-.home-actions-area {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  flex-shrink: 0;
-}
-
-.btn-create-bank {
-  padding: 0.45rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-xs);
-}
-
-.home-utility-group {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.btn-util {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.4rem 0.6rem;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-util:hover {
-  background: var(--bg-muted);
-  border-color: var(--border);
-  color: var(--text-main);
-}
-
-.btn-util.btn-logout {
-  color: var(--danger-fg, var(--danger));
-}
-
-.btn-util.btn-logout:hover {
-  background: var(--danger-light);
-  border-color: var(--danger-border);
-  color: var(--danger-fg, var(--danger));
-}
-
-.bank-card-title-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.5rem;
-  margin-bottom: 0.35rem;
-}
-
-.bank-card-title-row h2 {
-  margin: 0;
-  font-size: 1.15rem;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  line-height: 1.4;
-  flex: 1;
-  min-width: 0;
-}
-
-.badge-active-progress {
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.2rem 0.5rem;
-  background: var(--primary-light);
-  color: var(--primary-fg, var(--primary));
-  border: 1px solid var(--primary-border);
-  border-radius: 9999px;
-  white-space: nowrap;
-}
-
-.bank-card.has-active-session {
-  border-color: var(--primary-border);
-  box-shadow: var(--shadow-sm);
-}
-
-.btn-resume-direct {
-  background: var(--primary) !important;
-  color: var(--on-primary) !important;
-}
-
-.bank-meta-info {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin: 0.5rem 0 0.85rem 0;
-}
-
-.bank-category-pill {
-  font-size: 0.75rem;
-  background: var(--bg-subtle);
-  color: var(--text-muted);
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
-}
-
-.bank-actions-container {
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-  margin-top: 0.5rem;
-}
-
-.bank-primary-actions {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.bank-utility-actions {
-  display: flex;
-  gap: 0.4rem;
-  align-items: center;
-  flex-wrap: wrap;
-  border-top: 1px dashed var(--border);
-  padding-top: 0.5rem;
-}
-
-.btn-util-link {
-  font-size: 0.775rem;
-  padding: 0.25rem 0.55rem;
-  color: var(--text-muted);
-  background: var(--bg-muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  transition: all 0.15s ease;
-}
-
-.btn-util-link:hover {
-  color: var(--primary-fg, var(--primary));
-  border-color: var(--primary-border);
-  background: var(--primary-light);
-}
-
-.dialog-actions-row {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 0.75rem;
-}
-
-.exam-option-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: var(--bg-page);
-  padding: 0.6rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.exam-setup-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
+.today-grid {
   display: grid;
-  place-items: center;
-  padding: 1rem;
-  background: color-mix(in srgb, var(--text-main) 44%, transparent);
-  backdrop-filter: blur(2px);
+  grid-template-columns: minmax(0, 1fr) 292px;
+  gap: 48px;
+  padding-top: 28px;
+  align-items: start;
 }
 
-.exam-setup-dialog {
-  width: min(100%, 28rem);
-  display: grid;
-  gap: 1.15rem;
-  padding: 1.75rem;
-  border-radius: var(--radius-xl);
-  background: var(--bg-card);
-  box-shadow: var(--shadow-xl);
-  border: 1px solid var(--border);
+.today-section { margin-top: 36px; }
+.today-section:first-child { margin-top: 0; }
+
+.resume-card {
+  border-top: 1px solid var(--ink);
+  padding-top: 16px;
 }
 
-.exam-setup-dialog h2 {
-  font-size: 1.25rem;
-  color: var(--text-main);
-}
-
-.exam-setup-dialog label {
-  display: grid;
-  gap: 0.4rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--text-main);
-}
-
-.exam-setup-dialog input:not([type="checkbox"]):not([type="radio"]),
-.exam-setup-dialog textarea {
-  width: 100%;
-}
-
-.exam-setup-dialog label.exam-option-checkbox,
-.exam-setup-dialog label.ctrl-check {
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center !important;
-  gap: 0.6rem !important;
-}
-
-.exam-setup-dialog label.exam-option-checkbox input[type="checkbox"],
-.exam-setup-dialog label.ctrl-check input[type="checkbox"],
-.exam-setup-dialog input[type="checkbox"],
-.exam-setup-dialog input[type="radio"] {
-  width: auto !important;
-  margin: 0 !important;
-  flex: 0 0 auto !important;
-}
-
-.exam-setup-dialog .bank-actions {
-  justify-content: flex-end;
-  margin-top: 0.5rem;
-}
-
-.active-session-banner {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.85rem 1.25rem;
-  margin-bottom: 1.5rem;
-  background: linear-gradient(135deg, var(--primary-light) 0%, var(--success-light) 100%);
-  border: 1px solid var(--primary-border);
-  border-radius: var(--radius-lg, 8px);
-  box-shadow: var(--shadow-sm);
-  flex-wrap: wrap;
-}
-
-.banner-content {
+.resume-kicker {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  flex: 1;
-  min-width: 280px;
-}
-
-.banner-badge {
-  font-size: 0.8rem;
-  font-weight: 700;
-  padding: 0.2rem 0.55rem;
-  background: var(--primary);
-  color: var(--on-primary);
-  border-radius: 4px;
-  white-space: nowrap;
-}
-
-.banner-text {
-  font-size: 0.9rem;
-  color: var(--text-main);
-  line-height: 1.4;
-}
-
-.banner-btn-group {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.btn-view-all-sessions {
-  font-size: 0.85rem;
-  padding: 0.45rem 0.85rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border-strong);
-  color: var(--text-main);
-  border-radius: 6px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.btn-view-all-sessions:hover {
-  background: var(--bg-subtle);
-  border-color: var(--border-strong);
-}
-
-.btn-abandon-single {
-  font-size: 0.85rem;
-  color: var(--danger-fg, var(--danger));
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0.4rem 0.6rem;
-  text-decoration: underline;
-}
-
-.btn-abandon-single:hover {
-  color: var(--danger-fg, var(--danger-hover));
-}
-
-@media (max-width: 1080px) {
-  .btn-util-label {
-    display: none;
-  }
-  .home-page {
-    width: 100%;
-    padding: 0 0.85rem;
-    margin: 0.75rem auto;
-  }
-  .active-session-banner {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.65rem;
-    padding: 0.75rem 1rem;
-  }
-  .banner-btn-group {
-    width: 100%;
-    justify-content: flex-start;
-  }
-  .bank-primary-actions {
-    width: 100%;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-  .bank-primary-actions .btn-resume-direct,
-  .bank-primary-actions > button.primary {
-    width: 100%;
-    flex: 1 1 100%;
-    min-height: 2.6rem;
-    font-weight: 600;
-  }
-  .bank-primary-actions .btn-restart-sequential,
-  .bank-primary-actions > button.secondary-btn {
-    flex: 1 1 calc(50% - 0.25rem);
-    min-height: 2.4rem;
-    font-size: 0.8125rem;
-  }
-}
-
-@media (max-width: 768px) {
-  .home-header {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding: 0.5rem 0.75rem;
-    margin-bottom: 0.65rem;
-  }
-  .home-brand-area {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.25rem;
-    min-width: 0;
-  }
-  .home-brand-title h1 {
-    font-size: 1.05rem;
-  }
-  .home-user-pill {
-    font-size: 0.72rem;
-    padding: 0.15rem 0.45rem;
-    white-space: nowrap;
-  }
-  .home-actions-area {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .btn-create-bank {
-    padding: 0.45rem 0.85rem;
-    font-size: 0.825rem;
-    min-height: 42px;
-    white-space: nowrap;
-  }
-  .bank-utility-actions {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.5rem;
-  }
-  .btn-util-link {
-    min-height: 38px;
-    justify-content: center;
-  }
-  .active-session-banner {
-    padding: 0.6rem 0.85rem;
-    gap: 0.5rem;
-    margin-bottom: 0.85rem;
-  }
-  .banner-text {
-    font-size: 0.82rem;
-  }
-}
-
-.sequential-progress-box {
-  margin-bottom: 0.65rem;
-  padding: 0.5rem 0.65rem;
-  background: var(--bg-subtle);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
-}
-
-.sequential-progress-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.75rem;
-  font-weight: 600;
-  margin-bottom: 0.35rem;
-  color: var(--text-main);
-}
-
-.sequential-progress-header .progress-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  color: var(--primary-fg, var(--primary));
-}
-
-.sequential-progress-header .progress-percent {
-  font-family: var(--linear-mono);
-  color: var(--primary-fg, var(--primary));
-}
-
-.sequential-progress-box .progress-track {
-  height: 5px;
-  background: var(--border);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.sequential-progress-box .progress-fill {
-  height: 100%;
-  background: var(--primary);
-  border-radius: 3px;
-  transition: width 200ms ease;
-}
-
-.progress-detail-text {
-  display: block;
-  margin-top: 0.35rem;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  font-family: var(--linear-mono);
-}
-
-.btn-restart-sequential {
-  padding: 0.4rem 0.75rem;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-.btn-restart-sequential:hover {
-  color: var(--danger-fg, var(--danger));
-  border-color: var(--danger-border);
-}
-
-.btn-ai-batch {
-  color: var(--primary-fg, var(--primary));
-  font-weight: 500;
-}
-
-.btn-ai-batch:hover {
-  background: var(--primary-light);
-}
-
-/* ==========================================================================
-   Learning Quick Hub · 首页优先级核心看板 (EE-053)
-   ========================================================================== */
-.learning-quick-hub {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.quick-hub-card {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  padding: 1rem 1.15rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
-  transition: all 150ms ease;
-  user-select: none;
-  cursor: pointer;
-  text-align: left;
-  font-family: inherit;
-  color: inherit;
-  width: 100%;
-}
-
-.quick-hub-card:hover {
-  border-color: var(--border-strong);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
-}
-
-button.quick-hub-card:focus-visible {
-  outline: none;
-  border-color: var(--primary-fg, var(--primary));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-fg, var(--primary)) 28%, transparent);
-}
-
-.hub-banks-card {
-  cursor: default;
-}
-
-.hub-icon-wrap {
-  width: 38px;
-  height: 38px;
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.hub-icon-wrap.fsrs-icon {
-  background: var(--primary-light);
-  color: var(--primary-fg, var(--primary));
-  border: 1px solid var(--primary-border);
-}
-
-.hub-icon-wrap.mistakes-icon {
-  background: var(--danger-light);
-  color: var(--danger-fg, var(--danger));
-  border: 1px solid var(--danger-border);
-}
-
-.hub-icon-wrap.banks-icon {
-  background: var(--bg-subtle);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-}
-
-.hub-text-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-}
-
-.hub-card-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--text-muted);
+  gap: 6px;
+  font-size: 10.5px;
+  letter-spacing: .12em;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  color: var(--ink-3);
 }
 
-.hub-card-val {
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: var(--text-main);
-  line-height: 1.2;
+.resume-title {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 600;
+  margin-top: 6px;
 }
 
-.hub-card-val small {
-  font-size: 0.75rem;
-  font-weight: normal;
-  color: var(--text-muted);
+.resume-meta { color: var(--ink-3); font-size: 12.5px; margin: 4px 0 12px; }
+.resume-meta-row { justify-content: space-between; margin-top: 6px; }
+.resume-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+
+.today-bank-list { border-top: 1px solid var(--line); }
+.today-bank-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: 58px;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.today-bank-row:hover { background: var(--surface-2); }
+.bank-name-cell { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bank-name { font-size: 14px; font-weight: 500; color: var(--ink); }
+.bank-meta { display: flex; gap: 12px; font-size: 11.5px; color: var(--ink-3); }
+.bank-row-actions { display: flex; align-items: center; gap: 8px; color: var(--ink-4); }
+
+.session-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.session-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.session-info { flex: 1; min-width: 0; }
+
+.member-list { border-top: 1px solid var(--line); }
+.member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
 }
 
-.hub-card-hint {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.add-opt-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.small { font-size: 12px; }
+.strong { font-weight: 600; }
+
+.spacer { flex: 1; }
+
+@media (max-width: 1024px) {
+  .today-grid { grid-template-columns: minmax(0, 1fr) 240px; gap: 32px; }
 }
 
-.hub-arrow-icon {
-  color: var(--text-tertiary);
-  opacity: 0.6;
+@media (max-width: 900px) {
+  .today-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .today-rail { display: none; }
 }
 
 @media (max-width: 768px) {
-  .learning-quick-hub {
-    grid-template-columns: 1fr;
-    gap: 0.65rem;
-  }
-  .quick-hub-card {
-    padding: 0.75rem 0.95rem;
-  }
+  .today { padding-top: 18px; }
+  .session-row { flex-direction: column; align-items: flex-start; }
 }
-
-.bank-manage-accordion {
-  border-top: 1px dashed var(--border);
-  padding-top: 0.4rem;
-  margin-top: 0.15rem;
-}
-.bank-manage-summary,
-.exam-advanced-summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  cursor: pointer;
-  user-select: none;
-  padding: 0.2rem 0.4rem;
-  border-radius: var(--radius-sm);
-  transition: color 0.15s ease, background 0.15s ease;
-  list-style: none;
-}
-.bank-manage-summary::-webkit-details-marker,
-.exam-advanced-summary::-webkit-details-marker {
-  display: none;
-}
-.bank-manage-summary:hover,
-.exam-advanced-summary:hover {
-  color: var(--text-main);
-  background: var(--bg-muted);
-}
-.summary-chevron {
-  transition: transform 0.18s ease;
-}
-details[open] .summary-chevron {
-  transform: rotate(90deg);
-}
-.bank-manage-accordion .bank-utility-actions {
-  border-top: none;
-  padding-top: 0.45rem;
-}
-.exam-advanced-accordion {
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-md);
-  padding: 0.5rem 0.75rem;
-  background: var(--bg-subtle, var(--bg-page));
-}
-.exam-advanced-content {
-  display: grid;
-  gap: 0.75rem;
-  margin-top: 0.65rem;
-}
-
 </style>

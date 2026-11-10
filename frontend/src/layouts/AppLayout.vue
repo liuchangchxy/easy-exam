@@ -1,30 +1,72 @@
 <template>
-  <div class="app-layout">
+  <div class="shell">
     <AppSidebar
-      :current-page="currentRouteName"
+      :current-page="currentPage"
       :user="auth.user.value"
+      :bank-count="banks.length"
+      :review-count="reviewCount"
+      :theme="theme"
       @navigate="handleNavigate"
       @action="handleSidebarAction"
       @change-password="showChangePasswordModal = true"
       @logout="auth.logout"
-      @open-palette="openCommandPalette"
+      @toggle-theme="toggleTheme"
+      @toggle-locale="toggleLocale"
     />
-    <main class="app-content-viewport">
-      <router-view
-        :token="auth.token.value"
-        :user="auth.user.value"
-        @start="handleStart"
-        @mock-exam="handleMockExam"
-        @resume-session="handleResumeSession"
-        @start-session="handleStartSession"
-        @learning="router.push('/learning')"
-        @mistakes="router.push('/mistakes')"
-        @import="router.push('/import')"
-        @logout="auth.logout"
-        @back="handleBack"
-      />
-    </main>
-    <MobileNav v-if="isMobile" :current-page="currentRouteName" @navigate="handleNavigate" @open-palette="openCommandPalette" />
+    <div class="main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <div class="crumb">
+            <span class="here">{{ sectionLabel }}</span>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <button type="button" class="icon-btn" :title="t('ep.action.search')" :aria-label="t('ep.action.search')" @click="openCommandPalette">
+            <LinearIcon name="search" :size="16" />
+          </button>
+          <button type="button" class="icon-btn" :title="t('ep.action.theme')" :aria-label="t('ep.action.theme')" @click="toggleTheme">
+            <LinearIcon :name="theme === 'dark' ? 'sun' : 'moon'" :size="16" />
+          </button>
+          <button type="button" class="icon-btn" :title="t('ep.action.language')" :aria-label="t('ep.action.language')" @click="toggleLocale">
+            <LinearIcon name="globe" :size="16" />
+          </button>
+          <button type="button" class="user-mini" style="width: 34px; padding: 2px" :aria-label="t('ep.account.menu')" @click="router.push('/settings')">
+            <span class="avatar">{{ userInitial }}</span>
+          </button>
+        </div>
+      </header>
+
+      <header class="mobile-top">
+        <span class="brand-mark" aria-hidden="true">易</span>
+        <span class="mt-title">{{ sectionLabel }}</span>
+        <span class="mt-actions">
+          <button type="button" class="icon-btn" :aria-label="t('ep.action.search')" @click="openCommandPalette">
+            <LinearIcon name="search" :size="17" />
+          </button>
+          <button type="button" class="icon-btn" :aria-label="t('ep.account.menu')" @click="router.push('/settings')">
+            <span class="avatar" style="width: 26px; height: 26px; font-size: 11px">{{ userInitial }}</span>
+          </button>
+        </span>
+      </header>
+
+      <main id="main-content" class="content">
+        <router-view
+          :token="auth.token.value"
+          :user="auth.user.value"
+          @start="handleStart"
+          @mock-exam="handleMockExam"
+          @resume-session="handleResumeSession"
+          @start-session="handleStartSession"
+          @learning="router.push('/review')"
+          @mistakes="router.push('/review?tab=mistakes')"
+          @import="router.push('/import')"
+          @logout="auth.logout"
+          @back="handleBack"
+        />
+      </main>
+    </div>
+
+    <MobileNav :current-page="currentPage" @navigate="handleNavigate" />
     <CommandPalette
       ref="commandPaletteRef"
       :commands="commands"
@@ -33,32 +75,15 @@
       @select-bank="handleSelectBank"
     />
 
-    <!-- Global App Shell Modals: Open in-place across all pages without changing background -->
-    <BlueprintModal
-      v-if="activeDialog === 'blueprint'"
-      :token="auth.token.value"
-      @close="activeDialog = null"
-    />
-    <AiDraftsModal
-      v-if="activeDialog === 'drafts'"
-      :token="auth.token.value"
-      @close="activeDialog = null"
-    />
-    <AiConfigModal
-      v-if="activeDialog === 'ai'"
-      :token="auth.token.value"
-      @close="activeDialog = null"
-    />
-    <ChangePasswordModal
-      v-if="showChangePasswordModal"
-      :token="auth.token.value"
-      @close="showChangePasswordModal = false"
-    />
+    <BlueprintModal v-if="activeDialog === 'blueprint'" :token="auth.token.value" @close="activeDialog = null" />
+    <AiDraftsModal v-if="activeDialog === 'drafts'" :token="auth.token.value" @close="activeDialog = null" />
+    <AiConfigModal v-if="activeDialog === 'ai'" :token="auth.token.value" @close="activeDialog = null" />
+    <ChangePasswordModal v-if="showChangePasswordModal" :token="auth.token.value" @close="showChangePasswordModal = false" />
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppSidebar from '../components/AppSidebar.vue'
 import MobileNav from '../components/MobileNav.vue'
@@ -67,8 +92,10 @@ import BlueprintModal from '../components/BlueprintModal.vue'
 import AiDraftsModal from '../components/AiDraftsModal.vue'
 import AiConfigModal from '../components/AiConfigModal.vue'
 import ChangePasswordModal from '../components/ChangePasswordModal.vue'
+import LinearIcon from '../components/LinearIcon.vue'
 import { useAuthStore } from '../stores/authStore'
 import { listBanks } from '../api/banks'
+import { listDueMistakes } from '../api/mistakes'
 import { startSession } from '../api/practice'
 import { useLocale } from '../composables/useLocale.js'
 import { useTheme } from '../composables/useTheme.js'
@@ -77,21 +104,41 @@ const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 const { t, toggleLocale } = useLocale()
-const { toggleTheme } = useTheme()
+const { theme, toggleTheme } = useTheme()
 
 const commandPaletteRef = ref(null)
 const banks = ref([])
-const isMobile = ref(false)
+const reviewCount = ref(0)
 const activeDialog = ref(null)
 const showChangePasswordModal = ref(false)
 
-const currentRouteName = computed(() => {
-  return route.name || 'home'
+const userInitial = computed(() => {
+  const name = auth.user.value?.username
+  return name ? name.charAt(0).toUpperCase() : '?'
 })
 
-function checkMobile() {
-  isMobile.value = window.innerWidth <= 768
-}
+const currentPage = computed(() => {
+  const n = route.name
+  if (n === 'home') return 'today'
+  if (n === 'banks' || n === 'bank-manage' || n === 'bank-detail' || n === 'import') return 'banks'
+  if (n === 'review' || n === 'mistakes' || n === 'learning') return 'review'
+  if (n === 'exams') return 'exam'
+  if (n === 'notes') return 'notes'
+  if (n === 'settings') return 'settings'
+  return 'today'
+})
+
+const sectionLabel = computed(() => {
+  const map = {
+    today: 'ep.nav.today',
+    banks: 'ep.nav.banks',
+    review: 'ep.nav.review',
+    exam: 'ep.nav.exams',
+    notes: 'ep.nav.library',
+    settings: 'ep.nav.settings',
+  }
+  return t(map[currentPage.value] || 'ep.nav.today')
+})
 
 function handleOpenDialogEvent(e) {
   const dlg = e.detail
@@ -99,18 +146,15 @@ function handleOpenDialogEvent(e) {
 }
 
 onMounted(() => {
-  checkMobile()
-  window.addEventListener('resize', checkMobile)
   window.addEventListener('easyexam:open-dialog', handleOpenDialogEvent)
-  if (auth.token.value) loadBanks()
+  if (auth.token.value) loadShellData()
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', checkMobile)
   window.removeEventListener('easyexam:open-dialog', handleOpenDialogEvent)
 })
 
-async function loadBanks() {
+async function loadShellData() {
   if (!auth.token.value) return
   try {
     const res = await listBanks(auth.token.value)
@@ -118,13 +162,19 @@ async function loadBanks() {
   } catch (err) {
     console.error('Failed to load banks for command palette', err)
   }
+  try {
+    const due = await listDueMistakes(auth.token.value)
+    reviewCount.value = Array.isArray(due) ? due.length : 0
+  } catch (_) {
+    reviewCount.value = 0
+  }
 }
 
 function handleNavigate(targetPage) {
-  if (targetPage === 'home') router.push('/')
-  else if (targetPage === 'learning') router.push('/learning')
-  else if (targetPage === 'mistakes') router.push('/mistakes')
-  else if (targetPage === 'import') router.push('/import')
+  if (targetPage === 'today') router.push('/')
+  else if (targetPage === 'banks') router.push('/banks')
+  else if (targetPage === 'review') router.push('/review')
+  else if (targetPage === 'exam') router.push('/exams')
   else if (targetPage === 'notes') router.push('/notes')
   else if (targetPage === 'settings') router.push('/settings')
   else router.push('/')
@@ -132,42 +182,36 @@ function handleNavigate(targetPage) {
 
 function handleSidebarAction(action) {
   if (action === 'blueprint' || action === 'drafts' || action === 'ai') {
-    // Open in-place over whatever current route the user is on! Zero background change!
     activeDialog.value = action
   } else if (action === 'change-password') {
     showChangePasswordModal.value = true
   } else if (action === 'settings') {
     router.push('/settings')
-  } else if (action === 'profile' || action === 'notes') {
-    router.push('/notes')
   }
 }
 
 function openCommandPalette() {
-  if (auth.token.value) loadBanks()
+  if (auth.token.value) loadShellData()
   commandPaletteRef.value?.open()
 }
 
 const commands = computed(() => [
-  { id: 'home', title: t('nav.home'), icon: 'layers', action: () => router.push('/') },
-  { id: 'mistakes', title: t('nav.mistakes'), icon: 'target', action: () => router.push('/mistakes') },
-  { id: 'learning', title: t('nav.learning'), icon: 'chart', action: () => router.push('/learning') },
-  { id: 'notes', title: t('nav.notes'), icon: 'edit', action: () => router.push('/notes') },
-  { id: 'import', title: t('nav.imports'), icon: 'inbox', action: () => router.push('/import') },
-  { id: 'settings', title: t('nav.settings'), icon: 'settings', action: () => router.push('/settings') },
-  { id: 'appearance', title: t('settings.tab_appearance'), icon: 'zap', action: () => router.push('/settings') },
+  { id: 'today', title: t('ep.nav.today'), icon: 'home', action: () => router.push('/') },
+  { id: 'banks', title: t('ep.nav.banks'), icon: 'library', action: () => router.push('/banks') },
+  { id: 'review', title: t('ep.nav.review'), icon: 'review', action: () => router.push('/review') },
+  { id: 'exam', title: t('ep.nav.exams'), icon: 'exam', action: () => router.push('/exams') },
+  { id: 'notes', title: t('ep.nav.library'), icon: 'note', action: () => router.push('/notes') },
+  { id: 'settings', title: t('ep.nav.settings'), icon: 'settings', action: () => router.push('/settings') },
   { id: 'blueprint', title: t('sidebar.blueprint'), icon: 'blueprint', action: () => handleSidebarAction('blueprint') },
   { id: 'drafts', title: t('sidebar.drafts'), icon: 'draft', action: () => handleSidebarAction('drafts') },
   { id: 'ai', title: t('sidebar.ai_search'), icon: 'cpu', action: () => handleSidebarAction('ai') },
-  { id: 'theme', title: t('ui.k0048'), icon: 'zap', action: () => toggleTheme() },
-  { id: 'locale', title: t('locale.switch_language'), icon: 'globe', action: () => toggleLocale() },
-  { id: 'logout', title: t('nav.logout'), icon: 'logout', action: () => auth.logout() },
+  { id: 'theme', title: t('ep.action.theme'), icon: 'moon', action: () => toggleTheme() },
+  { id: 'locale', title: t('ep.action.language'), icon: 'globe', action: () => toggleLocale() },
+  { id: 'logout', title: t('ep.account.logout'), icon: 'logout', action: () => auth.logout() },
 ])
 
 function handleCommandExecute(cmd) {
-  if (typeof cmd.action === 'function') {
-    cmd.action()
-  }
+  if (typeof cmd.action === 'function') cmd.action()
 }
 
 async function handleStart(bank) {
@@ -184,19 +228,13 @@ function handleMockExam(session) {
 }
 
 function handleResumeSession(session) {
-  if (session.mode === 'EXAM') {
-    router.push(`/exam/${session.id}`)
-  } else {
-    router.push(`/practice/${session.id}`)
-  }
+  if (session.mode === 'EXAM') router.push(`/exam/${session.id}`)
+  else router.push(`/practice/${session.id}`)
 }
 
 function handleStartSession(session) {
-  if (session?.mode === 'EXAM') {
-    router.push(`/exam/${session.id}`)
-  } else {
-    router.push(`/practice/${session.id}`)
-  }
+  if (session?.mode === 'EXAM') router.push(`/exam/${session.id}`)
+  else router.push(`/practice/${session.id}`)
 }
 
 function handleBack() {
@@ -207,33 +245,3 @@ function handleSelectBank(bank) {
   handleStart(bank)
 }
 </script>
-
-<style scoped>
-.app-layout {
-  display: flex;
-  width: 100vw;
-  min-height: 100vh;
-  background: var(--bg-page);
-  color: var(--text-main);
-  overflow-x: hidden;
-}
-
-.app-content-viewport {
-  flex: 1;
-  min-width: 0;
-  min-height: 100vh;
-  overflow-y: auto;
-  position: relative;
-  scrollbar-gutter: stable;
-}
-
-@media (max-width: 768px) {
-  .app-layout {
-    flex-direction: column;
-    padding-bottom: 0;
-  }
-  .app-content-viewport {
-    padding-bottom: calc(64px + env(safe-area-inset-bottom, 16px));
-  }
-}
-</style>

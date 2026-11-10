@@ -250,54 +250,33 @@ test('mixHex correctly blends colors across weights', () => {
   assert.equal(mixHex('#ff0000', '#0000ff', 0.5), '#800080')
 })
 
-test('anti-drift: PALETTE_SURFACES exactly matches actual CSS palette variables in style.css', () => {
+test('editorial tokens keep AA-contrast ink on both light and dark paper', () => {
   const __dirname = path.dirname(fileURLToPath(import.meta.url))
   const cssPath = path.resolve(__dirname, '../src/style.css')
   const css = fs.readFileSync(cssPath, 'utf-8')
 
-  // Parse :root[data-theme-palette="..."] blocks from style.css
-  const paletteBlocks = {}
-  const lines = css.split('\n')
-  let curPalette = null
-  let curTheme = 'light'
-  let inBlock = false
+  const rootBlock = css.match(/:root\s*\{([\s\S]*?)\n\}/)
+  const darkBlock = css.match(/(?:^|\n)\[data-theme="dark"\]\s*\{([\s\S]*?)\n\}/)
+  assert.ok(rootBlock, 'light :root token block must exist')
+  assert.ok(darkBlock, 'dark token block must exist')
 
-  for (const line of lines) {
-    const trimmed = line.trim()
-    const match = trimmed.match(/:root(?:\[data-theme-palette="([a-z-]+)"])?(?:\[data-theme="(dark)"])?\s*\{/)
-    if (match) {
-      if (match[1]) curPalette = match[1]
-      else if (trimmed.includes(':root,')) curPalette = 'blue-grey'
-      curTheme = match[2] === 'dark' || trimmed.includes('[data-theme="dark"]') ? 'dark' : 'light'
-      inBlock = true
-      if (curPalette) {
-        if (!paletteBlocks[curPalette]) paletteBlocks[curPalette] = { light: {}, dark: {} }
-      }
-    } else if (trimmed === '}') {
-      inBlock = false
-    } else if (inBlock && curPalette) {
-      const vMatch = trimmed.match(/^(--bg-[a-z]+):\s*([^;]+);/)
-      if (vMatch) {
-        paletteBlocks[curPalette][curTheme][vMatch[1]] = vMatch[2].trim().toLowerCase()
-      }
-    }
+  const read = (block, name) => {
+    const match = block[1].match(new RegExp(`--${name}:\\s*([^;]+);`))
+    assert.ok(match, `--${name} must be defined`)
+    return match[1].trim()
   }
 
-  for (const pal of THEME_PALETTES) {
-    const ps = PALETTE_SURFACES[pal]
-    assert.ok(ps, `Missing PALETTE_SURFACES definition for ${pal}`)
-    const parsed = paletteBlocks[pal]
-    assert.ok(parsed, `Missing style.css definition for ${pal}`)
+  for (const [mode, block] of [['light', rootBlock], ['dark', darkBlock]]) {
+    const paper = read(block, 'paper')
+    const surface = read(block, 'surface')
+    const ink = read(block, 'ink')
+    const ink2 = read(block, 'ink-2')
+    const ink3 = read(block, 'ink-3')
 
-    // Light mode surfaces
-    assert.equal(ps.lightPage, parsed.light['--bg-page'], `${pal} lightPage mismatch with style.css --bg-page`)
-    assert.equal(ps.light, parsed.light['--bg-card'], `${pal} light card mismatch with style.css --bg-card`)
-    assert.equal(ps.lightSubtle, parsed.light['--bg-subtle'], `${pal} lightSubtle mismatch with style.css --bg-subtle`)
-
-    // Dark mode surfaces
-    assert.equal(ps.darkPage, parsed.dark['--bg-page'], `${pal} darkPage mismatch with style.css --bg-page`)
-    assert.equal(ps.dark, parsed.dark['--bg-card'], `${pal} dark card mismatch with style.css --bg-card`)
-    assert.equal(ps.darkSubtle, parsed.dark['--bg-subtle'], `${pal} darkSubtle mismatch with style.css --bg-subtle`)
+    assert.ok(calculateContrastRatio(ink, paper) >= 7, `${mode} ink on paper must reach AAA`)
+    assert.ok(calculateContrastRatio(ink2, paper) >= 4.5, `${mode} ink-2 on paper must reach AA`)
+    assert.ok(calculateContrastRatio(ink3, paper) >= 4.5, `${mode} ink-3 on paper must reach AA`)
+    assert.ok(calculateContrastRatio(ink3, surface) >= 4.5, `${mode} ink-3 on surface must reach AA`)
   }
 })
 
@@ -420,15 +399,29 @@ test('status foreground/background pairs guarantee WCAG AA contrast across all m
   assert.ok(calculateContrastRatio(successFg, '#f8fafc') >= 4.5, 'Success text --success-fg on page #f8fafc must meet AA')
   assert.ok(calculateContrastRatio('#4ade80', '#131b2e') >= 4.5, 'Dark success text on dark card #131b2e must meet AA')
 
-  // Verify style.css definitions match without drift
+  // Verify style.css defines the editorial status tokens for both modes.
   const cssPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/style.css')
   const css = fs.readFileSync(cssPath, 'utf8')
-  assert.ok(css.includes('--warning-fg: #92400e;'), 'style.css must define light --warning-fg')
-  assert.ok(css.includes('--warning-fg: #fbbf24;'), 'style.css must define dark --warning-fg')
-  assert.ok(css.includes('--danger-fg: #b91c1c;'), 'style.css must define light --danger-fg')
-  assert.ok(css.includes('--danger-fg: #f87171;'), 'style.css must define dark --danger-fg')
-  assert.ok(css.includes('--success-fg: #15803d;'), 'style.css must define light --success-fg')
-  assert.ok(css.includes('--success-fg: #4ade80;'), 'style.css must define dark --success-fg')
+  const rootBlock = css.match(/:root\s*\{([\s\S]*?)\n\}/)
+  const darkBlock = css.match(/(?:^|\n)\[data-theme="dark"\]\s*\{([\s\S]*?)\n\}/)
+  const read = (block, name) => block[1].match(new RegExp(`--${name}:\\s*([^;]+);`))?.[1].trim()
+
+  for (const [mode, block] of [['light', rootBlock], ['dark', darkBlock]]) {
+    const paper = read(block, 'paper')
+    const surface = read(block, 'surface')
+    for (const token of ['ok', 'bad', 'warn', 'brand']) {
+      const fg = read(block, token)
+      assert.ok(fg, `style.css must define ${mode} --${token}`)
+      assert.ok(
+        calculateContrastRatio(fg, paper) >= 4.5,
+        `${mode} --${token} on paper must meet AA`
+      )
+      assert.ok(
+        calculateContrastRatio(fg, surface) >= 4.5,
+        `${mode} --${token} on surface must meet AA`
+      )
+    }
+  }
 })
 
 test('preset --primary-fg tokens guarantee WCAG AA contrast against their respective card, page, subtle and translucent surfaces', () => {
@@ -442,62 +435,25 @@ test('preset --primary-fg tokens guarantee WCAG AA contrast against their respec
   assert.ok(calculateContrastRatio(roseFg, roseTransCard) >= 4.5, 'Rose fg on primary-light must meet AA')
 })
 
-test('tertiary text tokens guarantee WCAG AA >= 4.5:1 across all 8 light & dark palettes and surfaces (card, subtle, page)', () => {
+test('tertiary and quiet text tokens keep AA contrast on editorial surfaces', () => {
   const cssPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/style.css')
   const css = fs.readFileSync(cssPath, 'utf8')
+  const rootBlock = css.match(/:root\s*\{([\s\S]*?)\n\}/)
+  const darkBlock = css.match(/(?:^|\n)\[data-theme="dark"\]\s*\{([\s\S]*?)\n\}/)
+  const read = (block, name) => block[1].match(new RegExp(`--${name}:\\s*([^;]+);`))?.[1].trim()
 
-  for (const pal of THEME_PALETTES) {
-    const s = PALETTE_SURFACES[pal]
-
-    // Light mode block
-    const escapedPal = pal.replace('-', '\\-')
-    const palRegex = new RegExp(`:root\\[data-theme-palette="${escapedPal}"\\]\\s*\\{([\\s\\S]*?)\\}`, 'm')
-    const lightBlockMatch = css.match(palRegex)
-    assert.ok(lightBlockMatch, `Light CSS block for ${pal} must exist`)
-    const lightTertMatch = lightBlockMatch[1].match(/--text-tertiary:\s*(#[0-9a-fA-F]{3,8});/)
-    assert.ok(lightTertMatch, `Light --text-tertiary for ${pal} must be defined in style.css`)
-    const lightTert = lightTertMatch[1]
-
-    for (const [sName, sVal] of Object.entries({ page: s.lightPage, card: s.light, subtle: s.lightSubtle })) {
-      const ratio = calculateContrastRatio(lightTert, sVal)
-      assert.ok(
-        ratio >= 4.5,
-        `Light ${pal} --text-tertiary (${lightTert}) on ${sName} (${sVal}) is ${ratio.toFixed(2)}:1 (must be >= 4.5:1)`
-      )
+  for (const [mode, block] of [['light', rootBlock], ['dark', darkBlock]]) {
+    const surfaces = ['paper', 'paper-2', 'surface', 'surface-2']
+    for (const surface of surfaces) {
+      const bg = read(block, surface)
+      for (const token of ['ink-2', 'ink-3']) {
+        const fg = read(block, token)
+        assert.ok(
+          calculateContrastRatio(fg, bg) >= 4.5,
+          `${mode} --${token} on --${surface} must meet AA`
+        )
+      }
     }
-
-    // Dark mode block
-    let darkBlockMatch
-    if (pal === 'blue-grey') {
-      darkBlockMatch = css.match(/:root\[data-theme="dark"\],[^\{]*\{([\s\S]*?)\}/)
-    } else {
-      const escapedPal = pal.replace('-', '\\-')
-      const darkRegex = new RegExp(`:root\\[data-theme-palette="${escapedPal}"\\]\\[data-theme="dark"\\]\\s*\\{([\\s\\S]*?)\\}`, 'm')
-      darkBlockMatch = css.match(darkRegex)
-    }
-    assert.ok(darkBlockMatch, `Dark CSS block for ${pal} must exist`)
-    const darkTertMatch = darkBlockMatch[1].match(/--text-tertiary:\s*(#[0-9a-fA-F]{3,8});/)
-    const darkMutedMatch = darkBlockMatch[1].match(/--text-muted:\s*(#[0-9a-fA-F]{3,8});/)
-    assert.ok(darkTertMatch, `Dark --text-tertiary for ${pal} must be defined in style.css`)
-    assert.ok(darkMutedMatch, `Dark --text-muted for ${pal} must be defined in style.css`)
-    const darkTert = darkTertMatch[1]
-    const darkMuted = darkMutedMatch[1]
-
-    for (const [sName, sVal] of Object.entries({ page: s.darkPage, card: s.dark, subtle: s.darkSubtle })) {
-      const ratio = calculateContrastRatio(darkTert, sVal)
-      assert.ok(
-        ratio >= 4.5,
-        `Dark ${pal} --text-tertiary (${darkTert}) on ${sName} (${sVal}) is ${ratio.toFixed(2)}:1 (must be >= 4.5:1)`
-      )
-    }
-
-    // Dark hierarchy verification
-    const mutedRatio = calculateContrastRatio(darkMuted, s.darkSubtle)
-    const tertRatio = calculateContrastRatio(darkTert, s.darkSubtle)
-    assert.ok(
-      tertRatio < mutedRatio,
-      `Dark ${pal} hierarchy preserved: tertiary contrast (${tertRatio.toFixed(2)}) must be below muted contrast (${mutedRatio.toFixed(2)})`
-    )
   }
 })
 

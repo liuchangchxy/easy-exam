@@ -46,6 +46,23 @@ export const listChapters = (token, bankId) => request(`/banks/${bankId}/chapter
   headers: authHeaders(token),
 })
 
+export const createChapter = (token, bankId, payload) => request(`/banks/${bankId}/chapters`, {
+  method: 'POST',
+  headers: authHeaders(token),
+  body: JSON.stringify(payload),
+})
+
+export const updateChapter = (token, bankId, chapterId, payload) => request(`/banks/${bankId}/chapters/${chapterId}`, {
+  method: 'PUT',
+  headers: authHeaders(token),
+  body: JSON.stringify(payload),
+})
+
+export const deleteChapter = (token, bankId, chapterId) => request(`/banks/${bankId}/chapters/${chapterId}`, {
+  method: 'DELETE',
+  headers: authHeaders(token),
+})
+
 export const listTags = (token, bankId) => request(`/banks/${bankId}/tags`, {
   headers: authHeaders(token),
 })

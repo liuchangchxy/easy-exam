@@ -275,6 +275,13 @@ export function applyAccentPreference(root, hexColor, effectiveTheme = 'light', 
     root.style.setProperty('--primary-active', primaryActive)
     root.style.setProperty('--primary-light', `color-mix(in srgb, ${hex} 14%, transparent)`)
     root.style.setProperty('--primary-border', `color-mix(in srgb, ${primaryFg} 36%, transparent)`)
+    // Editorial Precision uses --brand as the single accent token.
+    root.style.setProperty('--brand', primaryFg)
+    root.style.setProperty('--brand-hover', primaryHover)
+    root.style.setProperty('--brand-ink', primaryFg)
+    root.style.setProperty('--brand-soft', `color-mix(in srgb, ${hex} 12%, var(--surface))`)
+    root.style.setProperty('--brand-line', `color-mix(in srgb, ${primaryFg} 36%, transparent)`)
+    root.style.setProperty('--brand-contrast', onPrimary)
     return hex
   }
 
@@ -287,6 +294,12 @@ export function applyAccentPreference(root, hexColor, effectiveTheme = 'light', 
   root.style.removeProperty('--primary-active')
   root.style.removeProperty('--primary-light')
   root.style.removeProperty('--primary-border')
+  root.style.removeProperty('--brand')
+  root.style.removeProperty('--brand-hover')
+  root.style.removeProperty('--brand-ink')
+  root.style.removeProperty('--brand-soft')
+  root.style.removeProperty('--brand-line')
+  root.style.removeProperty('--brand-contrast')
   return ''
 }
 

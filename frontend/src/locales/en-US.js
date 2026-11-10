@@ -1,6 +1,8 @@
 import ui from './ui-en-US.js'
+import ep from './ep-en-US.js'
 export default {
   ui,
+  ep,
   "app": {
     "name": "EasyExam",
     "subtitle": "Private Cloud Intelligent Exam & Study System"

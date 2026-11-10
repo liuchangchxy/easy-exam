@@ -1,118 +1,95 @@
 <template>
   <div class="exam-setup-backdrop" @click.self="$emit('close')" @keydown.esc="$emit('close')">
-    <div class="exam-setup-dialog" role="dialog" style="width: min(100%, 44rem); max-height: 85vh; overflow-y: auto;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-        <h2 style="margin: 0;">{{ t('ui.k0215') }}</h2>
-        <!-- 模式切换开关 -->
-        <div style="display: flex; gap: 0.25rem; background: var(--bg-subtle); padding: 0.2rem; border-radius: 6px; border: 1px solid var(--border);">
-          <button
-            type="button"
-            style="padding: 0.25rem 0.65rem; font-size: 0.78rem; border-radius: 4px; cursor: pointer; border: none; transition: all 120ms ease;"
-            :style="blueprintMode === 'simple' ? 'background: var(--primary); color: var(--on-primary); font-weight: 600;' : 'background: transparent; color: var(--text-muted);'"
-            @click="blueprintMode = 'simple'"
-          >
+    <section class="exam-setup-dialog blueprint-dialog" role="dialog" aria-modal="true" aria-labelledby="blueprint-title">
+      <div class="dialog-header-flex">
+        <div>
+          <div class="rule-label">{{ t('ep.exam.blueprint') }}</div>
+          <h2 id="blueprint-title">{{ t('ui.k0215') }}</h2>
+        </div>
+        <div class="seg-control">
+          <button type="button" class="seg" :class="{ 'is-on': blueprintMode === 'simple' }" @click="blueprintMode = 'simple'">
             {{ t('blueprint.mode_simple') }}
           </button>
-          <button
-            type="button"
-            style="padding: 0.25rem 0.65rem; font-size: 0.78rem; border-radius: 4px; cursor: pointer; border: none; transition: all 120ms ease;"
-            :style="blueprintMode === 'advanced' ? 'background: var(--primary); color: var(--on-primary); font-weight: 600;' : 'background: transparent; color: var(--text-muted);'"
-            @click="blueprintMode = 'advanced'"
-          >
+          <button type="button" class="seg" :class="{ 'is-on': blueprintMode === 'advanced' }" @click="blueprintMode = 'advanced'">
             {{ t('blueprint.mode_advanced') }}
           </button>
         </div>
+        <button type="button" class="btn-close-icon" :aria-label="t('ep.common.close')" @click="$emit('close')">
+          <LinearIcon name="x" size="16" />
+        </button>
       </div>
 
-      <!-- 蓝图引导卡片 (轻量指引，支持不再提示) -->
-      <div v-if="!hideBlueprintGuide" style="background: var(--linear-bg-subtle); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; position: relative;">
-        <button
-          type="button"
-          style="position: absolute; top: 0.5rem; right: 0.5rem; border: none; background: none; color: var(--text-tertiary); font-size: 0.75rem; cursor: pointer; display: flex; align-items: center; gap: 0.25rem;"
-          @click="dismissBlueprintGuide"
-        >
-          <span>{{ t('blueprint.hide_guide') }}</span> ✕
-        </button>
-        <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
-          <LinearIcon name="blueprint" size="20" style="color: var(--primary-fg, var(--primary)); margin-top: 2px;" />
-          <div style="font-size: 0.85rem; color: var(--text-main); line-height: 1.5; padding-right: 4.5rem;">
-            <strong>{{ t('ui.k0216') }}</strong>
-            <p style="margin: 0.2rem 0 0.4rem; color: var(--text-muted);">
-              {{ t('blueprint.guide_banner') }}
-            </p>
-            <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
-              <span style="font-weight: 600; color: var(--primary-fg, var(--primary));">{{ t('ui.k0218') }}</span>
-              <button type="button" style="font-size: 0.75rem; padding: 0.15rem 0.5rem; background: var(--primary-light); border: 1px solid var(--primary-border); border-radius: 4px; cursor: pointer;" @click="applyBlueprintTemplate('STANDARD_50')">
-                {{ t('ui.k0219') }}
-              </button>
-              <button type="button" style="font-size: 0.75rem; padding: 0.15rem 0.5rem; background: var(--primary-light); border: 1px solid var(--primary-border); border-radius: 4px; cursor: pointer;" @click="applyBlueprintTemplate('OBJECTIVE_30')">
-                {{ t('ui.k0220') }}
-              </button>
-              <button type="button" style="font-size: 0.75rem; padding: 0.15rem 0.5rem; background: var(--primary-light); border: 1px solid var(--primary-border); border-radius: 4px; cursor: pointer;" @click="applyBlueprintTemplate('ADVANCED_SPRINT')">
-                {{ t('ui.k0221') }}
-              </button>
-              <button type="button" style="font-size: 0.75rem; padding: 0.15rem 0.5rem; background: var(--primary-light); border: 1px solid var(--primary-border); border-radius: 4px; cursor: pointer;" @click="applyBlueprintTemplate('BASIC_25')">
-                {{ t('ui.k0222') }}
-              </button>
-            </div>
+      <div v-if="!hideBlueprintGuide" class="blueprint-guide">
+        <LinearIcon name="blueprint" :size="16" />
+        <div class="guide-body">
+          <strong>{{ t('ui.k0216') }}</strong>
+          <p>{{ t('blueprint.guide_banner') }}</p>
+          <div class="guide-templates">
+            <span class="guide-label">{{ t('ui.k0218') }}</span>
+            <button type="button" class="btn btn-sm btn-quiet" @click="applyBlueprintTemplate('STANDARD_50')">{{ t('ui.k0219') }}</button>
+            <button type="button" class="btn btn-sm btn-quiet" @click="applyBlueprintTemplate('OBJECTIVE_30')">{{ t('ui.k0220') }}</button>
+            <button type="button" class="btn btn-sm btn-quiet" @click="applyBlueprintTemplate('ADVANCED_SPRINT')">{{ t('ui.k0221') }}</button>
+            <button type="button" class="btn btn-sm btn-quiet" @click="applyBlueprintTemplate('BASIC_25')">{{ t('ui.k0222') }}</button>
           </div>
         </div>
-      </div>
-      <div v-else style="display: flex; justify-content: flex-end; margin-bottom: 0.5rem;">
-        <button type="button" style="border: none; background: none; font-size: 0.75rem; color: var(--text-tertiary); cursor: pointer; text-decoration: underline;" @click="hideBlueprintGuide = false">
-          {{ t('blueprint.show_guide') }}
+        <button type="button" class="icon-btn guide-dismiss" :aria-label="t('blueprint.hide_guide')" @click="dismissBlueprintGuide">
+          <LinearIcon name="x" :size="13" />
         </button>
       </div>
+      <button v-else type="button" class="link-btn guide-restore" @click="hideBlueprintGuide = false">
+        {{ t('blueprint.show_guide') }}
+      </button>
 
-      <!-- 档案选择与新建 -->
-      <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem;">
-        <select v-model="activeBlueprintProfileId" style="flex: 1;" @change="loadProfileBlueprint">
-          <option value="">{{ t('ui.k0223') }}</option>
-          <option v-for="p in examProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
-        </select>
-        <button type="button" @click="showCreateProfileBox = !showCreateProfileBox">{{ t('ui.k0224') }}</button>
+      <div class="blueprint-profile-row">
+        <label class="field">
+          <span class="label">{{ t('ep.exam.profile_pick') }}</span>
+          <select v-model="activeBlueprintProfileId" class="select" @change="loadProfileBlueprint">
+            <option value="">{{ t('ui.k0223') }}</option>
+            <option v-for="p in examProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
+          </select>
+        </label>
+        <button type="button" class="btn btn-sm" @click="showCreateProfileBox = !showCreateProfileBox">{{ t('ui.k0224') }}</button>
       </div>
 
-      <form v-if="showCreateProfileBox" style="background: var(--bg-subtle); padding: 0.75rem; border-radius: 6px; margin-bottom: 1rem;" @submit.prevent="handleCreateExamProfile">
-        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.4rem;">
-          <input v-model.trim="newProfileName" style="flex: 1;" :placeholder="t('ui.k0225')" required />
-          <button type="submit" :disabled="creatingProfile">{{ creatingProfile ? t('ui.k0680') : t('ui.k0681') }}</button>
+      <form v-if="showCreateProfileBox" class="blueprint-create" @submit.prevent="handleCreateExamProfile">
+        <div class="create-row">
+          <input v-model.trim="newProfileName" class="input" :placeholder="t('ui.k0225')" required />
+          <button type="submit" class="btn btn-sm" :disabled="creatingProfile">{{ creatingProfile ? t('ui.k0680') : t('ui.k0681') }}</button>
         </div>
-        <input v-model.trim="newProfileDesc" :placeholder="t('ui.k0226')" />
+        <input v-model.trim="newProfileDesc" class="input" :placeholder="t('ui.k0226')" />
       </form>
 
-      <div v-if="activeBlueprintProfileId" style="border: 1px solid var(--border); border-radius: 8px; padding: 1rem; background: var(--bg-card);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
-          <h3 style="font-size: 0.95rem; margin: 0; color: var(--text-main);">{{ t('ui.k0227') }}</h3>
-          <span style="font-size: 0.8rem; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 4px; padding: 0.2rem 0.5rem; color: var(--text-muted); font-family: var(--linear-mono);">
-            {{ t('ui.k0228') }} {{ blueprintConfig.sections.length }} {{ t('ui.k0229') }} <strong>{{ computedBlueprintTotal }}</strong> {{ t('ui.k0230') }} {{ Math.round(computedBlueprintTotal * 1.5) }} {{ t('ui.k0231') }}
+      <section v-if="activeBlueprintProfileId" class="blueprint-editor">
+        <header class="editor-head">
+          <h3>{{ t('ui.k0227') }}</h3>
+          <span class="editor-count mono">
+            {{ t('ui.k0228') }} {{ blueprintConfig.sections.length }} {{ t('ui.k0229') }} · {{ computedBlueprintTotal }} {{ t('ui.k0230') }}
           </span>
-        </div>
+        </header>
 
-        <!-- 简易模式配置面板 -->
-        <div v-if="blueprintMode === 'simple'" class="simple-blueprint-panel" style="display: grid; gap: 0.75rem; margin-bottom: 1rem;">
-          <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">{{ t('blueprint.simple_desc') }}</p>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 0.65rem;">
-            <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 6px; padding: 0.65rem 0.75rem;">
-              <label style="font-size: 0.78rem; font-weight: 600; display: block; margin-bottom: 0.35rem;">{{ t('blueprint.sec_single') }}</label>
-              <input v-model.number="simpleBlueprint.single_count" type="number" min="0" max="500" style="width: 100%; font-size: 0.9rem;" @input="syncFromSimpleMode" />
-            </div>
-            <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 6px; padding: 0.65rem 0.75rem;">
-              <label style="font-size: 0.78rem; font-weight: 600; display: block; margin-bottom: 0.35rem;">{{ t('blueprint.sec_multi') }}</label>
-              <input v-model.number="simpleBlueprint.multi_count" type="number" min="0" max="500" style="width: 100%; font-size: 0.9rem;" @input="syncFromSimpleMode" />
-            </div>
-            <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 6px; padding: 0.65rem 0.75rem;">
-              <label style="font-size: 0.78rem; font-weight: 600; display: block; margin-bottom: 0.35rem;">{{ t('blueprint.sec_judge') }}</label>
-              <input v-model.number="simpleBlueprint.judge_count" type="number" min="0" max="500" style="width: 100%; font-size: 0.9rem;" @input="syncFromSimpleMode" />
-            </div>
-            <div style="background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 6px; padding: 0.65rem 0.75rem;">
-              <label style="font-size: 0.78rem; font-weight: 600; display: block; margin-bottom: 0.35rem;">{{ t('blueprint.sec_essay') }}</label>
-              <input v-model.number="simpleBlueprint.essay_count" type="number" min="0" max="500" style="width: 100%; font-size: 0.9rem;" @input="syncFromSimpleMode" />
-            </div>
+        <div v-if="blueprintMode === 'simple'" class="simple-panel">
+          <p class="hint">{{ t('blueprint.simple_desc') }}</p>
+          <div class="simple-grid">
+            <label class="field">
+              <span class="label">{{ t('blueprint.sec_single') }}</span>
+              <input v-model.number="simpleBlueprint.single_count" class="input" type="number" min="0" max="500" @input="syncFromSimpleMode" />
+            </label>
+            <label class="field">
+              <span class="label">{{ t('blueprint.sec_multi') }}</span>
+              <input v-model.number="simpleBlueprint.multi_count" class="input" type="number" min="0" max="500" @input="syncFromSimpleMode" />
+            </label>
+            <label class="field">
+              <span class="label">{{ t('blueprint.sec_judge') }}</span>
+              <input v-model.number="simpleBlueprint.judge_count" class="input" type="number" min="0" max="500" @input="syncFromSimpleMode" />
+            </label>
+            <label class="field">
+              <span class="label">{{ t('blueprint.sec_essay') }}</span>
+              <input v-model.number="simpleBlueprint.essay_count" class="input" type="number" min="0" max="500" @input="syncFromSimpleMode" />
+            </label>
           </div>
-          <div style="display: flex; gap: 0.75rem; align-items: center; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.75rem;">
-            <label style="font-size: 0.8rem; font-weight: 500; white-space: nowrap;">{{ t('blueprint.uniform_difficulty') }}：</label>
-            <select v-model.number="simpleBlueprint.difficulty" style="flex: 1; font-size: 0.8rem;" @change="syncFromSimpleMode">
+          <label class="field simple-difficulty">
+            <span class="label">{{ t('blueprint.uniform_difficulty') }}</span>
+            <select v-model.number="simpleBlueprint.difficulty" class="select" @change="syncFromSimpleMode">
               <option :value="null">{{ t('blueprint.diff_any') }}</option>
               <option :value="1">{{ t('ui.k0168') }}</option>
               <option :value="2">{{ t('ui.k0169') }}</option>
@@ -120,34 +97,35 @@
               <option :value="4">{{ t('ui.k0171') }}</option>
               <option :value="5">{{ t('ui.k0172') }}</option>
             </select>
-          </div>
+          </label>
         </div>
 
-        <!-- 高级模式配置面板 -->
-        <div v-else style="margin-bottom: 0.75rem;">
-          <label style="font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-main); display: block;">{{ t('ui.k0232') }}
-            <input v-model.number="blueprintConfig.negative_mark" type="number" step="0.1" min="0" max="10" style="width: 8rem; margin-left: 0.5rem;" />
-            <span style="font-size: 0.75rem; color: var(--text-tertiary); font-weight: normal; margin-left: 0.5rem;">{{ t('ui.k0233') }}</span>
+        <div v-else class="advanced-panel">
+          <label class="field negative-field">
+            <span class="label">{{ t('ui.k0232') }}</span>
+            <span class="negative-input">
+              <input v-model.number="blueprintConfig.negative_mark" class="input" type="number" step="0.1" min="0" max="10" />
+              <span class="hint">{{ t('ui.k0233') }}</span>
+            </span>
           </label>
 
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
-            <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-main);">{{ t('ui.k0234') }}</span>
-            <button type="button" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;" @click="handleAddBlueprintSection">{{ t('ui.k0235') }}</button>
+          <div class="section-bar">
+            <span class="rule-label">{{ t('ui.k0234') }}</span>
+            <button type="button" class="btn btn-sm btn-quiet" @click="handleAddBlueprintSection">{{ t('ui.k0235') }}</button>
           </div>
-          <div v-if="!blueprintConfig.sections.length" style="font-size: 0.8rem; color: var(--text-muted); padding: 0.5rem; background: var(--bg-subtle); border-radius: 4px; text-align: center;">
-            {{ t('ui.k0236') }}
-          </div>
-          <div v-for="(sec, sIdx) in blueprintConfig.sections" :key="sIdx" style="display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.5rem; padding: 0.6rem; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 6px;">
-            <div style="display: flex; gap: 0.4rem; align-items: center;">
-              <input v-model.trim="sec.name" :placeholder="t('ui.k0237')" style="width: 10rem; font-size: 0.8rem;" />
-              <select v-model="sec.type" style="width: 6.5rem; font-size: 0.8rem;">
+          <p v-if="!blueprintConfig.sections.length" class="hint section-empty">{{ t('ui.k0236') }}</p>
+
+          <div v-for="(sec, sIdx) in blueprintConfig.sections" :key="sIdx" class="section-row">
+            <div class="section-main">
+              <input v-model.trim="sec.name" class="input section-name" :placeholder="t('ui.k0237')" />
+              <select v-model="sec.type" class="select section-type">
                 <option value="SINGLE">{{ t('ui.k0050') }}</option>
                 <option value="MULTI">{{ t('ui.k0051') }}</option>
                 <option value="JUDGE">{{ t('ui.k0052') }}</option>
                 <option value="ESSAY">{{ t('ui.k0238') }}</option>
               </select>
-              <input v-model.number="sec.count" type="number" min="1" :placeholder="t('ui.k0239')" style="width: 4.5rem; font-size: 0.8rem;" :title="t('ui.k0240')" />
-              <select v-model.number="sec.difficulty" style="width: 5.5rem; font-size: 0.8rem;" :title="t('ui.k0241')">
+              <input v-model.number="sec.count" class="input section-count" type="number" min="1" :placeholder="t('ui.k0239')" :title="t('ui.k0240')" />
+              <select v-model.number="sec.difficulty" class="select section-diff" :title="t('ui.k0241')">
                 <option :value="null">{{ t('ui.k0242') }}</option>
                 <option :value="1">{{ t('ui.k0168') }}</option>
                 <option :value="2">{{ t('ui.k0169') }}</option>
@@ -155,26 +133,28 @@
                 <option :value="4">{{ t('ui.k0171') }}</option>
                 <option :value="5">{{ t('ui.k0172') }}</option>
               </select>
-              <button type="button" style="color: var(--danger-fg, var(--danger)); border: none; background: none; cursor: pointer; padding: 0 0.3rem;" :title="t('ui.k0243')" @click="blueprintConfig.sections.splice(sIdx, 1)">✕</button>
+              <button type="button" class="icon-btn section-remove" :title="t('ui.k0243')" :aria-label="t('ui.k0243')" @click="blueprintConfig.sections.splice(sIdx, 1)">
+                <LinearIcon name="x" :size="13" />
+              </button>
             </div>
-            <div style="display: flex; gap: 0.4rem; align-items: center; font-size: 0.75rem;">
-              <input v-model.trim="sec.chapter_id" :placeholder="t('ui.k0244')" style="flex: 1; font-size: 0.75rem;" />
-              <input v-model.trim="sec.tags" :placeholder="t('ui.k0245')" style="flex: 1; font-size: 0.75rem;" />
+            <div class="section-filter">
+              <input v-model.trim="sec.chapter_id" class="input" :placeholder="t('ui.k0244')" />
+              <input v-model.trim="sec.tags" class="input" :placeholder="t('ui.k0245')" />
             </div>
           </div>
         </div>
 
-        <div style="display: flex; justify-content: flex-end; gap: 0.6rem;">
-          <button type="button" class="primary" :disabled="savingBlueprint" @click="handleSaveBlueprint">
+        <div class="editor-actions">
+          <button type="button" class="btn btn-primary" :disabled="savingBlueprint" @click="handleSaveBlueprint">
             {{ savingBlueprint ? t('ui.k0668') : t('ui.k0682') }}
           </button>
         </div>
-      </div>
+      </section>
 
-      <div class="bank-actions" style="margin-top: 1rem;">
-        <button type="button" @click="$emit('close')">{{ t('ui.k0134') }}</button>
+      <div class="dialog-actions">
+        <button type="button" class="btn" @click="$emit('close')">{{ t('ui.k0134') }}</button>
       </div>
-    </div>
+    </section>
   </div>
 </template>
 
@@ -391,3 +371,122 @@ async function handleSaveBlueprint() {
   }
 }
 </script>
+
+<style scoped>
+.blueprint-dialog { width: min(100%, 660px); gap: 0; }
+.blueprint-dialog h2 { margin: 3px 0 0; }
+.seg-control {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  margin-left: auto;
+}
+.seg {
+  border: 0;
+  background: transparent;
+  color: var(--ink-3);
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.seg + .seg { border-left: 1px solid var(--line); }
+.seg.is-on { background: var(--ink); color: var(--paper); }
+.blueprint-guide {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink-3);
+}
+.guide-body { flex: 1; min-width: 0; }
+.guide-body strong { font-family: var(--font-sans); font-size: 12px; color: var(--ink); }
+.guide-body p { margin: 3px 0 8px; font-size: 12px; line-height: 1.6; color: var(--ink-3); }
+.guide-templates { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.guide-label { font-family: var(--font-sans); font-size: 11px; font-weight: 600; color: var(--ink-2); }
+.guide-dismiss { flex-shrink: 0; width: 24px; height: 24px; }
+.guide-restore { align-self: flex-end; margin-top: 10px; font-size: 11px; }
+.link-btn {
+  border: 0;
+  background: transparent;
+  color: var(--brand);
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.blueprint-profile-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+.blueprint-profile-row .field { flex: 1; }
+.blueprint-profile-row .btn { flex-shrink: 0; height: 34px; }
+.blueprint-create {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.create-row { display: flex; gap: 7px; }
+.create-row .input { flex: 1; }
+.blueprint-editor {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.editor-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.editor-head h3 { margin: 0; font-family: var(--font-sans); font-size: 13px; font-weight: 650; }
+.editor-count { font-size: 10.5px; color: var(--ink-3); }
+.simple-panel .hint { margin: 0 0 10px; }
+.simple-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.simple-difficulty { margin-top: 10px; max-width: 240px; }
+.advanced-panel { display: flex; flex-direction: column; gap: 10px; }
+.negative-field { max-width: 300px; }
+.negative-input { display: flex; align-items: center; gap: 8px; }
+.negative-input .input { width: 90px; }
+.negative-input .hint { white-space: nowrap; }
+.section-bar { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+.section-empty { padding: 14px; text-align: center; border: 1px solid var(--line); }
+.section-row {
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.section-main { display: flex; align-items: center; gap: 6px; }
+.section-name { width: 150px; }
+.section-type { width: 84px; }
+.section-count { width: 64px; }
+.section-diff { width: 80px; }
+.section-remove { color: var(--bad); flex-shrink: 0; }
+.section-filter { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+.section-filter .input { font-size: 11.5px; }
+.editor-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+.blueprint-dialog .dialog-actions { margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--line); }
+@media (max-width: 640px) {
+  .simple-grid { grid-template-columns: 1fr 1fr; }
+  .section-main { flex-wrap: wrap; }
+  .section-name { flex: 1; min-width: 120px; }
+  .section-filter { grid-template-columns: 1fr; }
+  .seg-control { margin-left: 0; }
+}
+</style>

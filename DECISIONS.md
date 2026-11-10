@@ -369,3 +369,14 @@
 - **对应 SPEC 章节**：SPEC.md §6, §8。
 - **影响范围**：`scripts/`、`tests/test_guard_checks.py`、`frontend/src/locales/`、`frontend/src/composables/`、`frontend/src/design/`、`frontend/src/components/`、`backend/app/api/routes/ai.py`、`backend/legacy/services/ai_service.py`、`frontend/tests/browser_e2e.test.js`、`DECISIONS.md`、`SPEC.md`。
 
+
+### [2026-11-10] Editorial Precision 全产品 UI 替换，同步更新旧 UI 断言
+
+- **触发背景**：按已确认的 Editorial Precision 原型与设计文档重写产品页面与全局外壳。旧组件测试断言的“更多菜单”结构（`mobile-nav-more-popup`、`mobile-dropdown-menu`）已随移动导航与练习顶栏的信息架构调整而消失，属于设计被正确替换，不是业务回归。
+- **核心决策**：
+  1. 移动导航以 Today / 题库 / 复习 / 模考 / 资料 五个主入口替代“更多”弹层；测试改为验证五个入口与 `navigate` 事件。
+  2. 练习页的更多菜单收敛为编辑题目与斩杀题目两项，帮助与答题卡提升为独立工具；测试改为验证新菜单结构与完成入口。
+  3. 主题测试从旧八色调色板改为 Editorial Precision 的纸色/墨色/状态色对比度断言，并修正浅色与深色三级文字的实际 AA 对比度。
+  4. 品牌字标“易”为 `aria-hidden` 视觉标记，不参与可见文案本地化扫描。
+- **对应 SPEC 章节**：无（UI 呈现层重构，不改变业务语义）。
+- **影响范围**：`frontend/src/components/MobileNav.vue`、`frontend/src/views/PracticeViewV1.vue`、`frontend/src/style.css`、`frontend/tests/components/`、`frontend/tests/theme.test.js`、`frontend/tests/locale.test.js`。

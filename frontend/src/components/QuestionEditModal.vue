@@ -11,30 +11,28 @@
     <div class="modal-dialog question-edit-dialog">
       <header class="modal-header">
         <div class="modal-title-wrap">
+          <div class="rule-label">{{ t('ep.manage.tab_questions') }}</div>
           <h2 id="question-edit-title">
             {{ readOnly ? t('bank_manage.view_question') : t('bank_manage.edit_question') }}
           </h2>
-          <span v-if="question" class="version-pill">
+        </div>
+        <div class="modal-head-right">
+          <span v-if="question" class="version-tag mono">
             {{ t('bank_manage.version_badge', { ver: question.version_number }) }}
           </span>
+          <button type="button" class="icon-btn" :aria-label="t('common.close')" @click="handleClose">
+            <LinearIcon name="x" size="16" />
+          </button>
         </div>
-        <button
-          type="button"
-          class="btn-close-modal"
-          :aria-label="t('common.close')"
-          @click="handleClose"
-        >
-          <LinearIcon name="x" size="14" />
-        </button>
       </header>
 
       <form class="modal-body-form" @submit.prevent="handleSave">
-        <div v-if="errorMsg" class="form-alert-error" role="alert">
+        <div v-if="errorMsg" class="notice bad" role="alert">
           <span>{{ errorMsg }}</span>
           <button
             v-if="isConflict"
             type="button"
-            class="btn-reload-latest-inline"
+            class="btn btn-sm btn-quiet"
             :disabled="saving"
             @click="handleReloadLatest"
           >
@@ -42,95 +40,68 @@
           </button>
         </div>
 
-        <!-- 题干 -->
-        <div class="form-group">
-          <label for="edit-stem" class="form-label">
-            {{ t('bank_manage.stem_label') }} <span class="required">*</span>
-          </label>
+        <label class="field" for="edit-stem">
+          <span class="label">{{ t('bank_manage.stem_label') }} <span class="required">*</span></span>
           <textarea
             id="edit-stem"
             v-model.trim="stem"
             rows="3"
-            class="form-textarea"
+            class="textarea"
             :disabled="readOnly || saving"
             required
           ></textarea>
-        </div>
+        </label>
 
-        <!-- 题型与难度与所属章节 -->
-        <div class="form-row-grid">
-          <div class="form-group">
-            <label for="edit-type" class="form-label">{{ t('bank_manage.type_label') }}</label>
-            <select
-              id="edit-type"
-              v-model="type"
-              class="form-select"
-              :disabled="readOnly || saving"
-            >
+        <div class="qe-grid">
+          <label class="field" for="edit-type">
+            <span class="label">{{ t('bank_manage.type_label') }}</span>
+            <select id="edit-type" v-model="type" class="select" :disabled="readOnly || saving">
               <option value="SINGLE">{{ t('bank_manage.type_single') }}</option>
               <option value="MULTI">{{ t('bank_manage.type_multi') }}</option>
               <option value="JUDGE">{{ t('bank_manage.type_judge') }}</option>
               <option value="ESSAY">{{ t('bank_manage.type_essay') }}</option>
             </select>
-          </div>
+          </label>
 
-          <div class="form-group">
-            <label for="edit-diff" class="form-label">{{ t('bank_manage.difficulty_label') }}</label>
-            <select
-              id="edit-diff"
-              v-model.number="difficulty"
-              class="form-select"
-              :disabled="readOnly || saving"
-            >
+          <label class="field" for="edit-diff">
+            <span class="label">{{ t('bank_manage.difficulty_label') }}</span>
+            <select id="edit-diff" v-model.number="difficulty" class="select" :disabled="readOnly || saving">
               <option :value="1">{{ t('bank_manage.diff_1') }}</option>
               <option :value="2">{{ t('bank_manage.diff_2') }}</option>
               <option :value="3">{{ t('bank_manage.diff_3') }}</option>
               <option :value="4">{{ t('bank_manage.diff_4') }}</option>
               <option :value="5">{{ t('bank_manage.diff_5') }}</option>
             </select>
-          </div>
+          </label>
 
-          <div class="form-group">
-            <label for="edit-chap" class="form-label">{{ t('bank_manage.chapter_label') }}</label>
-            <select
-              id="edit-chap"
-              v-model="chapterId"
-              class="form-select"
-              :disabled="readOnly || saving"
-            >
+          <label class="field" for="edit-chap">
+            <span class="label">{{ t('bank_manage.chapter_label') }}</span>
+            <select id="edit-chap" v-model="chapterId" class="select" :disabled="readOnly || saving">
               <option value="">{{ t('bank_manage.no_chapter') }}</option>
-              <option v-for="c in chapters" :key="c.id" :value="c.id">
-                {{ c.name }}
-              </option>
+              <option v-for="c in chapters" :key="c.id" :value="c.id">{{ c.name }}</option>
             </select>
-          </div>
+          </label>
         </div>
 
-        <!-- 选项编辑 (针对单选、多选与判断) -->
-        <div v-if="isChoiceType" class="form-group options-group">
+        <div v-if="isChoiceType" class="field options-group">
           <div class="options-header-row">
-            <label class="form-label">{{ t('bank_manage.options_label') }}</label>
+            <span class="label">{{ t('bank_manage.options_label') }}</span>
             <button
               v-if="!readOnly && type !== 'JUDGE'"
               type="button"
-              class="btn-util-sm"
+              class="btn btn-sm btn-quiet"
               :disabled="saving"
               @click="addOption"
             >
               {{ t('bank_manage.add_option') }}
             </button>
           </div>
-
           <div class="options-list">
-            <div
-              v-for="(opt, idx) in options"
-              :key="idx"
-              class="option-row"
-            >
+            <div v-for="(opt, idx) in options" :key="idx" class="option-row">
               <input
                 v-model.trim="opt.key"
                 type="text"
-                class="form-input opt-key-field"
+                class="input opt-key-field mono"
                 :placeholder="t('bank_manage.option_key_placeholder')"
                 :disabled="readOnly || saving || type === 'JUDGE'"
                 required
@@ -138,7 +109,7 @@
               <input
                 v-model="opt.content"
                 type="text"
-                class="form-input opt-content-field"
+                class="input opt-content-field"
                 :placeholder="t('bank_manage.option_content_placeholder')"
                 :disabled="readOnly || saving"
                 required
@@ -146,9 +117,10 @@
               <button
                 v-if="!readOnly && type !== 'JUDGE'"
                 type="button"
-                class="btn-del-sm"
+                class="icon-btn btn-del-sm"
                 :disabled="saving || options.length <= 2"
                 :title="t('bank_manage.remove_option')"
+                :aria-label="t('bank_manage.remove_option')"
                 @click="removeOption(idx)"
               >
                 <LinearIcon name="trash" size="13" />
@@ -157,63 +129,24 @@
           </div>
         </div>
 
-        <!-- 标准答案 -->
-        <div class="form-group">
-          <label for="edit-answer" class="form-label">
-            {{ t('bank_manage.answer_label') }}
-          </label>
-          <input
-            id="edit-answer"
-            v-model.trim="answer"
-            type="text"
-            class="form-input"
-            :disabled="readOnly || saving"
-          />
-        </div>
+        <label class="field" for="edit-answer">
+          <span class="label">{{ t('bank_manage.answer_label') }}</span>
+          <input id="edit-answer" v-model.trim="answer" type="text" class="input" :disabled="readOnly || saving" />
+        </label>
 
-        <!-- 解析说明 -->
-        <div class="form-group">
-          <label for="edit-explanation" class="form-label">
-            {{ t('bank_manage.explanation_label') }}
-          </label>
-          <textarea
-            id="edit-explanation"
-            v-model.trim="explanation"
-            rows="3"
-            class="form-textarea"
-            :disabled="readOnly || saving"
-          ></textarea>
-        </div>
+        <label class="field" for="edit-explanation">
+          <span class="label">{{ t('bank_manage.explanation_label') }}</span>
+          <textarea id="edit-explanation" v-model.trim="explanation" rows="3" class="textarea" :disabled="readOnly || saving"></textarea>
+        </label>
 
-        <!-- 知识标签 -->
-        <div class="form-group">
-          <label for="edit-tags" class="form-label">
-            {{ t('bank_manage.tags_label') }}
-          </label>
-          <input
-            id="edit-tags"
-            v-model="tagsInput"
-            type="text"
-            class="form-input"
-            :disabled="readOnly || saving"
-          />
-        </div>
+        <label class="field" for="edit-tags">
+          <span class="label">{{ t('bank_manage.tags_label') }}</span>
+          <input id="edit-tags" v-model="tagsInput" type="text" class="input" :disabled="readOnly || saving" />
+        </label>
 
         <footer class="modal-footer">
-          <button
-            type="button"
-            class="secondary-btn"
-            :disabled="saving"
-            @click="handleClose"
-          >
-            {{ t('common.cancel') }}
-          </button>
-          <button
-            v-if="!readOnly"
-            type="submit"
-            class="primary btn-submit-edit"
-            :disabled="saving"
-          >
+          <button type="button" class="btn" :disabled="saving" @click="handleClose">{{ t('common.cancel') }}</button>
+          <button v-if="!readOnly" type="submit" class="btn btn-primary btn-submit-edit" :disabled="saving">
             {{ saving ? t('common.loading') : t('common.save') }}
           </button>
         </footer>
@@ -462,246 +395,76 @@ async function handleSave() {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   z-index: 1000;
-  padding: 1rem;
-  backdrop-filter: blur(4px);
-}
-
-.question-edit-dialog {
-  background: var(--bg-card, #ffffff);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg, 12px);
-  width: 100%;
-  max-width: 680px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
-}
-
-.modal-header {
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--border-subtle);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.modal-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-}
-
-.modal-title-wrap h2 {
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin: 0;
-  color: var(--fg-default);
-}
-
-.version-pill {
-  font-size: 0.75rem;
-  font-family: var(--linear-mono, monospace);
-  padding: 0.15rem 0.5rem;
-  background: var(--bg-subtle, rgba(255, 255, 255, 0.06));
-  border: 1px solid var(--border-subtle);
-  border-radius: 9999px;
-  color: var(--primary);
-  font-weight: 600;
-}
-
-.btn-close-modal {
-  background: transparent;
-  border: none;
-  color: var(--fg-muted);
-  cursor: pointer;
-  padding: 0.4rem;
-  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 20px;
+  background: color-mix(in srgb, var(--ink) 38%, transparent);
+  backdrop-filter: blur(2px);
 }
-
-.btn-close-modal:hover {
-  background: var(--bg-subtle);
-  color: var(--fg-default);
-}
-
-.modal-body-form {
-  padding: 1.25rem;
-  overflow-y: auto;
+.question-edit-dialog {
+  width: min(100%, 680px);
+  max-height: 88vh;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
 }
-
-.form-alert-error {
-  padding: 0.75rem 1rem;
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
-  color: #ef4444;
-  font-size: 0.875rem;
-}
-
-.form-group {
+.modal-header {
   display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-}
-
-.form-label {
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--fg-muted);
-}
-
-.form-label .required {
-  color: #ef4444;
-}
-
-.form-input,
-.form-textarea,
-.form-select {
-  width: 100%;
-  padding: 0.5rem 0.75rem;
-  background: var(--bg-input, var(--bg-page));
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  color: var(--fg-default);
-  font-size: 0.875rem;
-  font-family: inherit;
-  transition: border-color 0.15s ease;
-}
-
-.form-input:focus,
-.form-textarea:focus,
-.form-select:focus {
-  outline: none;
-  border-color: var(--primary);
-}
-
-.form-input:disabled,
-.form-textarea:disabled,
-.form-select:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
-}
-
-.form-row-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.75rem;
-}
-
-.options-group {
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 0.75rem;
-  background: var(--bg-subtle, rgba(0, 0, 0, 0.02));
-}
-
-.options-header-row {
-  display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 0.5rem;
+  gap: 16px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--line);
 }
-
-.btn-util-sm {
-  font-size: 0.75rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  color: var(--primary);
-  cursor: pointer;
+.modal-title-wrap h2 {
+  margin: 4px 0 0;
+  font-family: var(--font-serif);
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: .01em;
 }
-
-.options-list {
+.modal-head-right { display: flex; align-items: center; gap: 10px; }
+.version-tag { font-size: 10.5px; color: var(--ink-4); letter-spacing: .04em; }
+.modal-body-form {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 14px;
+  padding: 18px 22px 0;
+  overflow-y: auto;
 }
-
-.option-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.opt-key-field {
-  width: 5rem;
-  text-align: center;
-  font-weight: 600;
-}
-
-.opt-content-field {
-  flex: 1;
-}
-
-.btn-reload-latest-inline {
-  margin-top: 0.5rem;
-  padding: 0.4rem 0.85rem;
-  background: var(--primary, #3b82f6);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-block;
-  align-self: flex-start;
-}
-
-.btn-reload-latest-inline:hover:not(:disabled) {
-  opacity: 0.9;
-}
-
-
-.btn-del-sm {
-  background: transparent;
-  border: none;
-  color: var(--fg-muted);
-  cursor: pointer;
-  padding: 0.4rem;
-  border-radius: 4px;
-}
-
-.btn-del-sm:hover:not(:disabled) {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.08);
-}
-
-.btn-del-sm:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
+.qe-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.options-group { gap: 8px; }
+.options-header-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.options-list { display: flex; flex-direction: column; gap: 6px; }
+.option-row { display: grid; grid-template-columns: 58px minmax(0, 1fr) 30px; gap: 7px; align-items: center; }
+.opt-key-field { text-align: center; }
+.btn-del-sm { color: var(--bad); }
+.required { color: var(--bad); }
 .modal-footer {
-  margin-top: 0.5rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--border-subtle);
+  position: sticky;
+  bottom: 0;
   display: flex;
-  align-items: center;
   justify-content: flex-end;
-  gap: 0.625rem;
+  gap: 8px;
+  margin: 4px -22px 0;
+  padding: 14px 22px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
 }
-
 @media (max-width: 600px) {
-  .question-edit-dialog {
-    max-height: 95vh;
-  }
-  .form-row-grid {
-    grid-template-columns: 1fr;
-  }
-  .opt-key-field {
-    width: 3.5rem;
-  }
+  .modal-backdrop { padding: 10px; }
+  .qe-grid { grid-template-columns: 1fr 1fr; }
+  .modal-body-form { padding: 14px 16px 0; }
+  .modal-header { padding: 15px 16px 12px; }
+  .modal-footer { margin-left: -16px; margin-right: -16px; padding: 12px 16px; }
+}
+@media (max-width: 400px) {
+  .qe-grid { grid-template-columns: 1fr; }
 }
 </style>

@@ -90,7 +90,7 @@ describe('PracticeViewV1 component integration', () => {
     await new Promise(r => setTimeout(r, 50))
 
     // 1. Initial state: dropdown menu is closed
-    expect(wrapper.find('.mobile-dropdown-menu').exists()).toBe(false)
+    expect(wrapper.find('.focus-menu').exists()).toBe(false)
 
     // 2. Click "⋯" button
     const moreBtn = wrapper.find('.btn-more-menu')
@@ -98,21 +98,17 @@ describe('PracticeViewV1 component integration', () => {
     await moreBtn.trigger('click')
 
     // 3. Dropdown menu appears
-    const dropdown = wrapper.find('.mobile-dropdown-menu')
+    const dropdown = wrapper.find('.focus-menu')
     expect(dropdown.exists()).toBe(true)
 
     // 4. Verify key action items exist
-    const helpBtn = dropdown.find('.btn-help-guide')
-    expect(helpBtn.exists()).toBe(true)
-
-    const editBtn = dropdown.find('.btn-edit-question')
-    expect(editBtn.exists()).toBe(true)
-
-    const killBtn = dropdown.find('.btn-kill')
-    expect(killBtn.exists()).toBe(true)
+    const items = dropdown.findAll('.focus-menu-item')
+    expect(items.length).toBe(2)
+    expect(items[0].classes()).toContain('focus-menu-item')
+    expect(dropdown.find('.is-danger').exists()).toBe(true)
 
     // Header complete button is accessible
-    const completeBtn = wrapper.find('.btn-header-complete')
+    const completeBtn = wrapper.find('.focus-finish')
     expect(completeBtn.exists()).toBe(true)
   })
 })

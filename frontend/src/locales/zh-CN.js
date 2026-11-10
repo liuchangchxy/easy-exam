@@ -1,6 +1,8 @@
 import ui from './ui-zh-CN.js'
+import ep from './ep-zh-CN.js'
 export default {
   ui,
+  ep,
   "app": {
     "name": "飞牛刷题",
     "subtitle": "私有云智能刷题备考系统"
