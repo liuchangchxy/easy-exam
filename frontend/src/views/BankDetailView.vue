@@ -144,7 +144,7 @@
             <span>{{ chapterName(selectedQuestion.chapter_id) }}</span>
             <span>{{ difficultyLabel(selectedQuestion.difficulty) }}</span>
           </div>
-          <div class="q-stem" v-html="renderStem(selectedQuestion.stem)"></div>
+          <div class="q-stem bank-q-stem">{{ selectedQuestion.stem }}</div>
           <div v-if="selectedQuestion.options?.length" class="opt-list">
             <div v-for="opt in selectedQuestion.options" :key="opt.key" class="opt" :class="{ 'is-correct': isCorrectOption(selectedQuestion, opt.key) }">
               <span class="opt-key">{{ opt.key }}</span>
@@ -157,7 +157,7 @@
             <span>{{ t('ep.banks.answer') }}</span>
             <span class="ans">{{ selectedQuestion.answer || t('ep.banks.answer_none') }}</span>
           </div>
-          <div class="explain-body" v-html="renderBody(selectedQuestion.explanation) || `<p>${t('ep.exam.no_analysis')}</p>`"></div>
+          <div class="explain-body bank-q-explain">{{ selectedQuestion.explanation || t('ep.exam.no_analysis') }}</div>
           <div class="kv" style="margin-top: 20px">
             <div><span class="k">{{ t('ep.banks.type') }}</span><span class="v">{{ typeLabel(selectedQuestion.type) }}</span></div>
             <div><span class="k">{{ t('ep.banks.chapter') }}</span><span class="v">{{ chapterName(selectedQuestion.chapter_id) }}</span></div>
@@ -219,14 +219,6 @@ const filteredQuestions = computed(() => {
 
 function stripHtml(html) {
   return String(html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
-}
-
-function renderStem(text) {
-  return String(text || '').replace(/\n/g, '<br>')
-}
-
-function renderBody(text) {
-  return text || ''
 }
 
 function roleLabel(role) {
@@ -311,6 +303,8 @@ onMounted(load)
 .chapter-item .count { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-4); }
 .bank-toolbar { margin-top: 0; border-top: 0; }
 .bank-qrow { width: 100%; }
+.bank-q-stem,
+.bank-q-explain { white-space: pre-wrap; overflow-wrap: anywhere; }
 .qrow-side { font-size: 11.5px; color: var(--ink-3); }
 .qrow-meta { display: flex; flex-wrap: wrap; gap: 10px; }
 .small { font-size: 12px; }
