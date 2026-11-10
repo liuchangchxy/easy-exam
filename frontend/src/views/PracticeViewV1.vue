@@ -1612,20 +1612,13 @@ function handleRestartPractice() {
 .opt:disabled { cursor: default; }
 .opt-key {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--ink-3);
-  padding-top: 5px;
 }
 .opt-text { white-space: pre-wrap; }
 .opt-mark { display: flex; justify-content: flex-end; padding-top: 4px; }
 .opt-mark.ok { color: var(--ok); }
 .opt-mark.bad { color: var(--bad); }
-.opt.is-selected { background: var(--surface-2); }
-.opt.is-selected .opt-key { color: var(--brand); font-weight: 700; }
-.opt.is-correct { background: var(--ok-soft); }
-.opt.is-correct .opt-key { color: var(--ok); }
-.opt.is-wrong { background: var(--bad-soft); }
-.opt.is-wrong .opt-key { color: var(--bad); }
 
 /* ---------- feedback ---------- */
 .feedback-block {

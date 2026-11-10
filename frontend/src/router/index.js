@@ -19,7 +19,7 @@ const routes = [
     children: [
       { path: '', name: 'home', component: HomeView, meta: { title: '今天' } },
       { path: 'banks', name: 'banks', component: BanksView, meta: { title: '题库' } },
-      { path: 'banks/:bankId', name: 'bank-detail', component: BankDetailView, meta: { title: '题库' } },
+      { path: 'banks/:bankId', name: 'bank-detail', component: BankDetailView, props: true, meta: { title: '题库' } },
       { path: 'banks/:bankId/manage', name: 'bank-manage', component: () => import('../views/BankManageView.vue'), meta: { title: '管理' } },
       { path: 'review', name: 'review', component: ReviewView, meta: { title: '复习' } },
       { path: 'learning', redirect: { name: 'review' } },

@@ -391,3 +391,14 @@
   4. 复习到期列表的薄弱标记读取后端真实字段 `is_weak_flagged`（同时兼容 `is_weak`），修复列表展示遗漏。
 - **对应 SPEC 章节**：无（测试与展示层修复，不改变业务语义）。
 - **影响范围**：`frontend/tests/browser_e2e.test.js`、`frontend/tests/bank_manage_e2e.test.js`、`frontend/src/views/ReviewView.vue`。
+
+### [2026-11-10] 真实浏览器验收暴露的展示层缺陷修复
+
+- **触发背景**：按 Editorial Precision 原型逐页做真实浏览器截图验收，发现三处只在真实 UI 中可见的问题：题库详情路由未传 `bankId` 导致页面永久停在“读取中”；练习选项在已选/正确/错误状态下选项字母与填充色同色而不可见；英文计数文案出现 “1 mistakes / 1 questions scheduled”。
+- **核心决策**：
+  1. `banks/:bankId` 路由启用 `props: true`，把路由参数传给 `BankDetailView` 声明的 `bankId` prop；这是路由接线遗漏，不改变业务接口。
+  2. 删除 `PracticeViewV1` 内与全局样式冲突的 `.opt.is-selected/correct/wrong .opt-key` 颜色覆盖，让全局样式统一控制选项底色与前景色，避免同色不可读。
+  3. 英文计数改为中性标签（`Mistakes: {count}`、`Questions: {count}`），不引入复数规则；同步更新运行时字典与 JSON 快照。
+  4. 题库详情题目序号改为当前列表的两位序号，不再直接展示内部题目 ID 造成折行。
+- **对应 SPEC 章节**：无（展示层缺陷修复，不改变业务语义）。
+- **影响范围**：`frontend/src/router/index.js`、`frontend/src/views/BankDetailView.vue`、`frontend/src/views/PracticeViewV1.vue`、`frontend/src/locales/ep-en-US.js`、`frontend/src/locales/en-US.json`。

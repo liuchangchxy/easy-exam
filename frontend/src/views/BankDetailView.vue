@@ -59,8 +59,8 @@
           </div>
 
           <div v-if="filteredQuestions.length" class="qlist">
-            <button v-for="q in filteredQuestions" :key="q.id" type="button" class="qrow bank-qrow" @click="selectedQuestion = q">
-              <span class="qrow-num mono">{{ q.id.replace(/^q/i, '').toUpperCase() }}</span>
+            <button v-for="(q, index) in filteredQuestions" :key="q.id" type="button" class="qrow bank-qrow" @click="selectedQuestion = q">
+              <span class="qrow-num mono">{{ String(index + 1).padStart(2, '0') }}</span>
               <span class="qrow-main">
                 <span class="qrow-stem">{{ stripHtml(q.stem) }}</span>
                 <span class="qrow-meta">
@@ -213,7 +213,7 @@ const filteredQuestions = computed(() => {
   let list = questions.value
   if (chapterFilter.value) list = list.filter(q => q.chapter_id === chapterFilter.value)
   const q = query.value.trim().toLowerCase()
-  if (q) list = list.filter(item => `${stripHtml(item.stem)} ${item.id} ${(item.tags || []).join(' ')}`.toLowerCase().includes(q))
+  if (q) list = list.filter(item => `${stripHtml(item.stem)} ${(item.tags || []).join(' ')}`.toLowerCase().includes(q))
   return list
 })
 
