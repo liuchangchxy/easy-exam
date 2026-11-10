@@ -7,10 +7,10 @@
           <h2 id="blueprint-title">{{ t('ui.k0215') }}</h2>
         </div>
         <div class="seg-control">
-          <button type="button" class="seg" :class="{ 'is-on': blueprintMode === 'simple' }" @click="blueprintMode = 'simple'">
+          <button type="button" class="seg" :class="{ 'is-on': blueprintMode === 'simple' }" @click="switchBlueprintMode('simple')">
             {{ t('blueprint.mode_simple') }}
           </button>
-          <button type="button" class="seg" :class="{ 'is-on': blueprintMode === 'advanced' }" @click="blueprintMode = 'advanced'">
+          <button type="button" class="seg" :class="{ 'is-on': blueprintMode === 'advanced' }" @click="switchBlueprintMode('advanced')">
             {{ t('blueprint.mode_advanced') }}
           </button>
         </div>
@@ -66,6 +66,8 @@
             {{ t('ui.k0228') }} {{ blueprintConfig.sections.length }} {{ t('ui.k0229') }} · {{ computedBlueprintTotal }} {{ t('ui.k0230') }}
           </span>
         </header>
+
+        <p v-if="blueprintError" class="notice bad blueprint-error" role="alert">{{ blueprintError }}</p>
 
         <div v-if="blueprintMode === 'simple'" class="simple-panel">
           <p class="hint">{{ t('blueprint.simple_desc') }}</p>
@@ -145,7 +147,7 @@
         </div>
 
         <div class="editor-actions">
-          <button type="button" class="btn btn-primary" :disabled="savingBlueprint" @click="handleSaveBlueprint">
+          <button type="button" class="btn btn-primary" :disabled="savingBlueprint || !blueprintLoaded" @click="handleSaveBlueprint">
             {{ savingBlueprint ? t('ui.k0668') : t('ui.k0682') }}
           </button>
         </div>
@@ -182,6 +184,11 @@ const creatingProfile = ref(false)
 const savingBlueprint = ref(false)
 const blueprintMode = ref('simple')
 const hideBlueprintGuide = ref(false)
+const blueprintError = ref('')
+const blueprintLoaded = ref(true)
+const lastUniformDifficulty = ref(null)
+
+const SECTION_TYPES = ['SINGLE', 'MULTI', 'JUDGE', 'ESSAY']
 
 const blueprintConfig = ref({
   negative_mark: 0,
@@ -229,22 +236,39 @@ function dismissBlueprintGuide() {
 
 async function loadProfileBlueprint() {
   if (!activeBlueprintProfileId.value) return
+  blueprintError.value = ''
+  blueprintLoaded.value = false
   try {
-    const bp = await getBlueprint(props.token, activeBlueprintProfileId.value)
-    if (bp && (bp.sections || bp.negative_mark !== undefined)) {
-      blueprintConfig.value = {
-        negative_mark: bp.negative_mark || 0,
-        sections: bp.sections || [],
-      }
-    } else {
-      blueprintConfig.value = { negative_mark: 0, sections: [] }
-    }
+    const response = await getBlueprint(props.token, activeBlueprintProfileId.value)
+    // The API wraps the stored configuration as { id, profile_id, version_number, blueprint }.
+    applyBlueprint(response?.blueprint || {})
+    blueprintLoaded.value = true
   } catch (err) {
-    console.error(t('ui.k0288'), err)
-    blueprintConfig.value = { negative_mark: 0, sections: [] }
+    if (err?.status === 404) {
+      applyBlueprint({ negative_mark: 0, sections: [] })
+      blueprintLoaded.value = true
+    } else {
+      blueprintError.value = `${t('ui.k0288')}${err.detail || err.message}`
+      blueprintLoaded.value = false
+    }
   } finally {
     syncToSimpleMode()
   }
+}
+
+function applyBlueprint(blueprint) {
+  const sections = Array.isArray(blueprint?.sections) ? blueprint.sections.map(section => ({ ...section })) : []
+  blueprintConfig.value = {
+    ...blueprint,
+    negative_mark: Number(blueprint?.negative_mark) || 0,
+    sections,
+  }
+}
+
+function switchBlueprintMode(mode) {
+  if (mode === blueprintMode.value) return
+  if (mode === 'simple') syncToSimpleMode()
+  blueprintMode.value = mode
 }
 
 function syncToSimpleMode() {
@@ -264,61 +288,95 @@ function syncToSimpleMode() {
     essay_count: essay,
     difficulty: diff,
   }
+  lastUniformDifficulty.value = diff
+}
+
+function simpleCount(type) {
+  if (type === 'SINGLE') return Number(simpleBlueprint.value.single_count) || 0
+  if (type === 'MULTI') return Number(simpleBlueprint.value.multi_count) || 0
+  if (type === 'JUDGE') return Number(simpleBlueprint.value.judge_count) || 0
+  return Number(simpleBlueprint.value.essay_count) || 0
+}
+
+function defaultSectionName(type) {
+  if (type === 'SINGLE') return t('ui.k0317')
+  if (type === 'MULTI') return t('ui.k0309')
+  if (type === 'JUDGE') return t('ui.k0318')
+  return t('ui.k0316')
 }
 
 function syncFromSimpleMode() {
-  const sections = []
-  if (simpleBlueprint.value.single_count > 0) {
-    sections.push({ name: t('ui.k0317'), type: 'SINGLE', count: Number(simpleBlueprint.value.single_count), difficulty: simpleBlueprint.value.difficulty, chapter_id: '', tags: '' })
+  const sections = blueprintConfig.value?.sections || []
+  const difficultyChanged = simpleBlueprint.value.difficulty !== lastUniformDifficulty.value
+  const next = sections.filter(section => !SECTION_TYPES.includes(section.type))
+
+  for (const type of SECTION_TYPES) {
+    const sameType = sections.filter(section => section.type === type)
+    const target = simpleCount(type)
+    const current = sameType.reduce((sum, section) => sum + (Number(section.count) || 0), 0)
+    if (current === target && !difficultyChanged) {
+      // Unchanged types pass through untouched so custom names, chapter and
+      // tag filters survive an unrelated simple-mode edit.
+      next.push(...sameType)
+      continue
+    }
+    let remaining = target
+    sameType.forEach((section, index) => {
+      const isLast = index === sameType.length - 1
+      const count = isLast ? remaining : Math.min(Number(section.count) || 0, remaining)
+      remaining -= count
+      if (count <= 0) return
+      next.push({
+        ...section,
+        count,
+        difficulty: difficultyChanged ? simpleBlueprint.value.difficulty : section.difficulty,
+      })
+    })
+    if (!sameType.length && target > 0) {
+      next.push({
+        name: defaultSectionName(type),
+        type,
+        count: target,
+        difficulty: simpleBlueprint.value.difficulty,
+        chapter_id: '',
+        tags: '',
+      })
+    }
   }
-  if (simpleBlueprint.value.multi_count > 0) {
-    sections.push({ name: t('ui.k0309'), type: 'MULTI', count: Number(simpleBlueprint.value.multi_count), difficulty: simpleBlueprint.value.difficulty, chapter_id: '', tags: '' })
-  }
-  if (simpleBlueprint.value.judge_count > 0) {
-    sections.push({ name: t('ui.k0318'), type: 'JUDGE', count: Number(simpleBlueprint.value.judge_count), difficulty: simpleBlueprint.value.difficulty, chapter_id: '', tags: '' })
-  }
-  if (simpleBlueprint.value.essay_count > 0) {
-    sections.push({ name: t('ui.k0316'), type: 'ESSAY', count: Number(simpleBlueprint.value.essay_count), difficulty: simpleBlueprint.value.difficulty, chapter_id: '', tags: '' })
-  }
-  blueprintConfig.value.sections = sections
+
+  blueprintConfig.value.sections = next
+  lastUniformDifficulty.value = simpleBlueprint.value.difficulty
+}
+
+function replaceBlueprintSections(sections, negativeMark = 0) {
+  const { sections: _sections, negative_mark: _negative, ...meta } = blueprintConfig.value || {}
+  blueprintConfig.value = { ...meta, negative_mark: negativeMark, sections }
 }
 
 function applyBlueprintTemplate(templateKey) {
   if (templateKey === 'STANDARD_50') {
-    blueprintConfig.value = {
-      negative_mark: 0,
-      sections: [
-        { name: t('ui.k0308'), type: 'SINGLE', count: 35, difficulty: null, chapter_id: '', tags: '' },
-        { name: t('ui.k0309'), type: 'MULTI', count: 10, difficulty: null, chapter_id: '', tags: '' },
-        { name: t('ui.k0310'), type: 'JUDGE', count: 5, difficulty: null, chapter_id: '', tags: '' },
-      ],
-    }
+    replaceBlueprintSections([
+      { name: t('ui.k0308'), type: 'SINGLE', count: 35, difficulty: null, chapter_id: '', tags: '' },
+      { name: t('ui.k0309'), type: 'MULTI', count: 10, difficulty: null, chapter_id: '', tags: '' },
+      { name: t('ui.k0310'), type: 'JUDGE', count: 5, difficulty: null, chapter_id: '', tags: '' },
+    ], 0)
   } else if (templateKey === 'OBJECTIVE_30') {
-    blueprintConfig.value = {
-      negative_mark: 0,
-      sections: [
-        { name: t('ui.k0311'), type: 'SINGLE', count: 20, difficulty: null, chapter_id: '', tags: '' },
-        { name: t('ui.k0312'), type: 'MULTI', count: 10, difficulty: null, chapter_id: '', tags: '' },
-      ],
-    }
+    replaceBlueprintSections([
+      { name: t('ui.k0311'), type: 'SINGLE', count: 20, difficulty: null, chapter_id: '', tags: '' },
+      { name: t('ui.k0312'), type: 'MULTI', count: 10, difficulty: null, chapter_id: '', tags: '' },
+    ], 0)
   } else if (templateKey === 'ADVANCED_SPRINT') {
-    blueprintConfig.value = {
-      negative_mark: 0.5,
-      sections: [
-        { name: t('ui.k0313'), type: 'SINGLE', count: 30, difficulty: 2, chapter_id: '', tags: '' },
-        { name: t('ui.k0314'), type: 'SINGLE', count: 20, difficulty: 4, chapter_id: '', tags: '' },
-        { name: t('ui.k0315'), type: 'MULTI', count: 15, difficulty: 3, chapter_id: '', tags: '' },
-        { name: t('ui.k0316'), type: 'ESSAY', count: 10, difficulty: null, chapter_id: '', tags: '' },
-      ],
-    }
+    replaceBlueprintSections([
+      { name: t('ui.k0313'), type: 'SINGLE', count: 30, difficulty: 2, chapter_id: '', tags: '' },
+      { name: t('ui.k0314'), type: 'SINGLE', count: 20, difficulty: 4, chapter_id: '', tags: '' },
+      { name: t('ui.k0315'), type: 'MULTI', count: 15, difficulty: 3, chapter_id: '', tags: '' },
+      { name: t('ui.k0316'), type: 'ESSAY', count: 10, difficulty: null, chapter_id: '', tags: '' },
+    ], 0.5)
   } else if (templateKey === 'BASIC_25') {
-    blueprintConfig.value = {
-      negative_mark: 0,
-      sections: [
-        { name: t('ui.k0317'), type: 'SINGLE', count: 20, difficulty: 1, chapter_id: '', tags: '' },
-        { name: t('ui.k0318'), type: 'JUDGE', count: 5, difficulty: 1, chapter_id: '', tags: '' },
-      ],
-    }
+    replaceBlueprintSections([
+      { name: t('ui.k0317'), type: 'SINGLE', count: 20, difficulty: 1, chapter_id: '', tags: '' },
+      { name: t('ui.k0318'), type: 'JUDGE', count: 5, difficulty: 1, chapter_id: '', tags: '' },
+    ], 0)
   }
   syncToSimpleMode()
 }
@@ -337,6 +395,9 @@ async function handleCreateExamProfile() {
     newProfileName.value = ''
     newProfileDesc.value = ''
     blueprintConfig.value = { negative_mark: 0, sections: [] }
+    blueprintLoaded.value = true
+    blueprintError.value = ''
+    syncToSimpleMode()
   } catch (err) {
     alert(`${t('ui.k0289')}${err.detail || err.message}`)
   } finally {
@@ -354,18 +415,27 @@ function handleAddBlueprintSection() {
 }
 
 async function handleSaveBlueprint() {
-  if (!activeBlueprintProfileId.value) return
+  if (!activeBlueprintProfileId.value || !blueprintLoaded.value) return
+  if (computedBlueprintTotal.value <= 0) {
+    blueprintError.value = t('ep.exam.blueprint_invalid')
+    return
+  }
   savingBlueprint.value = true
+  blueprintError.value = ''
   try {
     await saveBlueprint(props.token, activeBlueprintProfileId.value, {
-      negative_mark: blueprintConfig.value.negative_mark,
-      sections: blueprintConfig.value.sections,
+      ...blueprintConfig.value,
+      negative_mark: Number(blueprintConfig.value.negative_mark) || 0,
+      sections: (blueprintConfig.value.sections || []).map(section => ({
+        ...section,
+        count: Number(section.count) || 0,
+      })),
     })
     alert(t('ui.k0291'))
     examProfiles.value = await listProfiles(props.token)
     emit('saved')
   } catch (err) {
-    alert(`${t('ui.k0292')}${err.detail || err.message}`)
+    blueprintError.value = `${t('ui.k0292')}${err.detail || err.message}`
   } finally {
     savingBlueprint.value = false
   }
@@ -452,6 +522,7 @@ async function handleSaveBlueprint() {
   margin-bottom: 12px;
 }
 .editor-head h3 { margin: 0; font-family: var(--font-sans); font-size: 13px; font-weight: 650; }
+.blueprint-error { margin: 0 0 10px; }
 .editor-count { font-size: 10.5px; color: var(--ink-3); }
 .simple-panel .hint { margin: 0 0 10px; }
 .simple-grid {

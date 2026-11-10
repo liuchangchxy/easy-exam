@@ -38,6 +38,11 @@
               </select>
             </div>
 
+            <div v-if="bankId && !canImport" class="notice warn" style="margin-bottom: 16px">
+              <LinearIcon name="lock" :size="15" />
+              <span>{{ t('ep.imports.readonly_bank') }}</span>
+            </div>
+
             <div
               class="file-drop"
               :class="{ 'is-dragging': isDragging, 'has-file': Boolean(file) }"
@@ -85,13 +90,13 @@
             </div>
 
             <div v-if="!spreadsheetPreview && !pdfPreview && !duplicatePreview && !result" class="import-actions">
-              <button v-if="isSpreadsheet" type="button" class="btn btn-primary" :disabled="loading || !bankId || !file" @click="inspectSpreadsheet">
+              <button v-if="isSpreadsheet" type="button" class="btn btn-primary" :disabled="loading || !bankId || !file || !canImport" @click="inspectSpreadsheet">
                 {{ loading ? t('ep.imports.uploading') : t('ep.imports.inspect_sheet') }}
               </button>
-              <button v-else-if="isPdf" type="button" class="btn btn-primary" :disabled="loading || !bankId || !file" @click="inspectPdf">
+              <button v-else-if="isPdf" type="button" class="btn btn-primary" :disabled="loading || !bankId || !file || !canImport" @click="inspectPdf">
                 {{ loading ? t('ep.imports.uploading') : t('ep.imports.inspect_pdf') }}
               </button>
-              <button v-else type="submit" class="btn btn-primary" :disabled="loading || !bankId || !file">
+              <button v-else type="submit" class="btn btn-primary" :disabled="loading || !bankId || !file || !canImport">
                 {{ loading ? t('ep.imports.uploading') : t('ep.imports.submit_import') }}
               </button>
             </div>
@@ -200,7 +205,7 @@
             </div>
 
             <div class="import-actions">
-              <button type="submit" class="btn btn-primary" :disabled="loading || !bankId || !file">
+              <button type="submit" class="btn btn-primary" :disabled="loading || !bankId || !file || !canImport">
                 {{ loading ? t('ep.imports.uploading') : t('ep.imports.submit_import') }}
               </button>
               <button type="button" class="btn btn-quiet" @click="spreadsheetPreview = null">{{ t('ep.imports.cancel_preview') }}</button>
@@ -281,11 +286,35 @@
               <div class="empty-desc">{{ t('ep.imports.no_candidates') }}</div>
             </div>
 
+            <div v-if="pdfPreview.duplicates?.length" class="pdf-duplicates">
+              <div class="notice warn">
+                <LinearIcon name="alert" :size="15" />
+                <span>{{ t('ep.imports.dup_hint', { count: pdfPreview.duplicates.length }) }}</span>
+              </div>
+              <div v-if="pdfPreview.duplicates.length" class="list dup-list">
+                <div v-for="(dup, idx) in pdfPreview.duplicates.slice(0, 8)" :key="idx" class="list-row">
+                  <span class="mono small dim">{{ String(idx + 1).padStart(2, '0') }}</span>
+                  <span class="list-main">
+                    <span class="qrow-stem">{{ dup.stem || dup.question_stem || dup.id }}</span>
+                  </span>
+                </div>
+              </div>
+              <div class="field" style="margin-top: 12px; max-width: 320px">
+                <span class="label">{{ t('ep.imports.strategy') }}</span>
+                <select v-model="pdfDuplicateStrategy" class="select">
+                  <option value="" disabled>{{ t('ep.imports.strategy_choose') }}</option>
+                  <option value="skip">{{ t('ep.imports.strategy_skip') }}</option>
+                  <option value="new">{{ t('ep.imports.strategy_new') }}</option>
+                  <option value="merge">{{ t('ep.imports.strategy_merge') }}</option>
+                </select>
+              </div>
+            </div>
+
             <div class="import-actions">
-              <button type="button" class="btn btn-primary" :disabled="loading || !pdfCandidates.length" @click="confirmPdfImportAction">
+              <button type="button" class="btn btn-primary" :disabled="loading || !pdfCandidates.length || !canImport || pdfStrategyMissing" @click="confirmPdfImportAction">
                 {{ loading ? t('ep.imports.uploading') : t('ep.imports.confirm_pdf') }}
               </button>
-              <button type="button" class="btn btn-quiet" @click="pdfPreview = null">{{ t('ep.imports.cancel_preview') }}</button>
+              <button type="button" class="btn btn-quiet" @click="resetPdfPreview">{{ t('ep.imports.cancel_preview') }}</button>
             </div>
           </section>
 
@@ -318,7 +347,7 @@
             </div>
 
             <div class="import-actions">
-              <button type="submit" class="btn btn-primary" :disabled="loading || !bankId || !file">
+              <button type="submit" class="btn btn-primary" :disabled="loading || !bankId || !file || !canImport">
                 {{ loading ? t('ep.imports.uploading') : t('ep.imports.submit_confirm') }}
               </button>
             </div>
@@ -393,6 +422,7 @@ const duplicateStrategy = ref('skip')
 const spreadsheetPreview = ref(null)
 const pdfPreview = ref(null)
 const pdfCandidates = ref([])
+const pdfDuplicateStrategy = ref('')
 const currentMapping = ref({
   stem: null,
   answer: null,
@@ -430,6 +460,17 @@ const isPdf = computed(() => {
   return name.endsWith('.pdf')
 })
 
+const selectedBank = computed(() => banks.value.find(b => b.id === bankId.value) || null)
+
+// Import writes questions, so member-level access must be rejected before the
+// user spends time mapping columns or correcting a PDF draft.
+const canImport = computed(() => {
+  const role = String(selectedBank.value?.role || '').toUpperCase()
+  return role === 'ADMIN' || role === 'EDITOR'
+})
+
+const pdfStrategyMissing = computed(() => Boolean(pdfPreview.value?.duplicates?.length) && !pdfDuplicateStrategy.value)
+
 const optionSlots = ref(Array(8).fill(''))
 
 function syncOptionsFromSlots() {
@@ -460,6 +501,7 @@ function handleSelectedFile(selected) {
   spreadsheetPreview.value = null
   pdfPreview.value = null
   pdfCandidates.value = []
+  pdfDuplicateStrategy.value = ''
   optionSlots.value = Array(8).fill('')
   error.value = ''
 }
@@ -532,11 +574,18 @@ async function inspectPdf() {
     const prev = await previewPdfImport(props.token, bankId.value, file.value)
     pdfPreview.value = prev
     pdfCandidates.value = JSON.parse(JSON.stringify(prev.candidates || []))
+    pdfDuplicateStrategy.value = prev.duplicates?.length ? '' : 'skip'
   } catch (err) {
     error.value = err
   } finally {
     loading.value = false
   }
+}
+
+function resetPdfPreview() {
+  pdfPreview.value = null
+  pdfCandidates.value = []
+  pdfDuplicateStrategy.value = ''
 }
 
 function mergeWithPrev(idx) {
@@ -620,19 +669,28 @@ function addCandidateOption(cand) {
 }
 
 async function confirmPdfImportAction() {
-  if (!pdfPreview.value || !pdfCandidates.value.length) return
+  if (!pdfPreview.value || !pdfCandidates.value.length || !canImport.value) return
+  if (pdfStrategyMissing.value) return
   loading.value = true
   error.value = ''
   try {
     result.value = await confirmPdfImport(props.token, bankId.value, {
       draft_id: pdfPreview.value.draft_id,
       questions: pdfCandidates.value,
-      duplicate_strategy: 'skip',
+      duplicate_strategy: pdfDuplicateStrategy.value || 'skip',
     })
-    pdfPreview.value = null
-    pdfCandidates.value = []
+    resetPdfPreview()
   } catch (err) {
-    error.value = err
+    if (err.status === 409 && err.detail && typeof err.detail === 'object') {
+      // Duplicates appeared after the preview (another editor changed the bank).
+      // Keep the corrected PDF draft and let the user choose a strategy here.
+      if (pdfPreview.value) {
+        pdfPreview.value = { ...pdfPreview.value, duplicates: err.detail.duplicates || [] }
+      }
+      pdfDuplicateStrategy.value = ''
+    } else {
+      error.value = err
+    }
   } finally {
     loading.value = false
   }
@@ -682,6 +740,7 @@ function resetImport() {
   spreadsheetPreview.value = null
   pdfPreview.value = null
   pdfCandidates.value = []
+  pdfDuplicateStrategy.value = ''
   optionSlots.value = Array(8).fill('')
   file.value = null
   error.value = ''
@@ -748,6 +807,7 @@ function resetImport() {
 .opt-key { width: 46px; flex: none; text-align: center; }
 
 .dup-list { margin-top: 14px; }
+.pdf-duplicates { margin-top: 18px; }
 .qrow-stem { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-family: var(--font-serif); font-size: 13.5px; line-height: 1.65; }
 .result-block .kv { margin-top: 2px; }
 
@@ -757,13 +817,19 @@ function resetImport() {
   .mapping-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 640px) {
+  .import-page { overflow-x: hidden; }
   .import-steps { gap: 14px; }
-  .import-step { flex: 1 1 40%; }
+  .import-step { flex: 1 1 40%; min-width: 0; }
   .mapping-grid, .pdf-grid { grid-template-columns: minmax(0, 1fr); }
   .file-drop { flex-wrap: wrap; }
-  .file-drop .btn { margin-left: 46px; }
+  .file-drop .btn { margin-left: 0; flex: 1 1 auto; justify-content: center; }
+  .file-main { flex-basis: calc(100% - 46px); }
   .step-block { padding: 18px 0 22px; }
   .step-title { font-size: 17px; }
-  .pdf-card-actions { justify-content: flex-end; }
+  .step-head { flex-wrap: wrap; }
+  .pdf-card-head { flex-wrap: wrap; align-items: flex-start; }
+  .pdf-card-actions { width: 100%; justify-content: flex-end; }
+  .pdf-option-row { flex-wrap: wrap; }
+  .import-actions .btn { flex: 1 1 auto; justify-content: center; }
 }
 </style>

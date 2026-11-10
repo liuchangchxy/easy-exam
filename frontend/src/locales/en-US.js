@@ -404,7 +404,9 @@ export default {
     "AUTH_ACCOUNT_EXISTS": "Username already exists",
     "EXAM_ACTIVE_PROTECTED": "Mock exam in progress: The question bank is currently locked to protect active exams and cannot be modified or imported.",
     "QUESTION_INVALID_MULTI": "Multiple-choice questions must contain at least 2 options and at least 2 distinct correct answers.",
-    "VALIDATION_FAILED": "Validation failed: {detail}"
+    "VALIDATION_FAILED": "Validation failed: {detail}",
+    "AI_NOT_CONFIGURED": "AI is not configured or is unavailable. Check the AI service in Settings.",
+    "AI_GENERATION_FAILED": "AI could not produce a valid variant question. Try again or adjust the prompt."
   },
   "blueprint": {
     "mode_simple": "Simple Mode",
@@ -513,6 +515,23 @@ export default {
     "invalid_answer": "Answer cannot be empty and must match a valid option",
     "answer_reset_prompt": "Question type changed. Please select the correct answer.",
     "reload_latest": "Reload Latest Version",
-    "conflict_detected": "Concurrent edit conflict detected: Question was modified. Server latest version preserved. Please reload."
+    "conflict_detected": "Concurrent edit conflict detected: Question was modified. Server latest version preserved. Please reload.",
+    "conflict_draft_kept": "Your edits are still in the form. Save them as a new version, or discard the draft and load the server version.",
+    "save_as_branch": "Keep my edits as a new version",
+    "discard_and_reload": "Discard draft and load latest",
+    "branch_saved": "Your edits were kept as a new version",
+    "regrade_title": "Standard answer changed",
+    "regrade_offer": "Also re-grade existing attempts",
+    "regrade_hint": "By default only a new version is saved; existing attempts stay scored on the original version.",
+    "regrade_warning": "Re-grading rewrites existing attempts, mistake and mastery state, and may reschedule FSRS. It affects every user who answered this question.",
+    "regrade_fsrs": "Also reschedule FSRS reviews",
+    "version_history": "Version history",
+    "version_history_empty": "No historical versions yet",
+    "version_current": "Current version",
+    "version_view": "View",
+    "version_back": "Back to editing",
+    "version_preview_hint": "Historical versions are read-only; practice and editing always use the current version.",
+    "version_created": "Created {date}",
+    "version_load_failed": "Failed to load version history"
   }
 }

@@ -22,13 +22,49 @@
           <ThemeToggle compact />
           <LocaleToggle compact />
         </div>
-        <button v-if="!report" type="button" class="btn btn-sm exam-submit" :disabled="loading || isSubmitting || Boolean(report)" @click="showSubmitConfirm = true">
+        <button v-if="!report" type="button" class="btn btn-sm exam-submit" :disabled="loading || isSubmitting || Boolean(report) || syncExpired" @click="showSubmitConfirm = true">
           {{ t('ep.exam.submit') }}
         </button>
       </div>
     </header>
 
     <p v-if="error" class="notice bad exam-error" role="alert">{{ error }}</p>
+    <div v-if="!report && syncExpired" class="notice bad exam-expired" role="alert" data-testid="exam-expired-banner">
+      <div class="exam-expired-body">
+        <strong>{{ expiredCopy.notice }}</strong>
+        <p v-if="unsubmittedQuestionNumbers.length" data-testid="exam-expired-unsubmitted">
+          {{ expiredCopy.unsubmitted }}
+          <span v-for="number in unsubmittedQuestionNumbers" :key="number" class="exam-expired-number">{{ t('ep.practice.question_no', { current: number }) }}</span>
+        </p>
+        <p v-else>{{ expiredCopy.none }}</p>
+        <p class="exam-expired-kept">{{ expiredCopy.kept }}</p>
+      </div>
+      <div class="exam-expired-actions">
+        <button type="button" class="btn btn-sm btn-primary" data-testid="exam-expired-submit-server" :disabled="isSubmitting" @click="showExpiredSubmitConfirm = true">
+          {{ expiredCopy.submit_server }}
+        </button>
+      </div>
+    </div>
+    <div v-if="!report && connectionNotice" class="notice warn exam-offline" role="status" data-testid="exam-offline-banner" :data-pending="String(pendingSubmit)">
+      <span>{{ connectionNotice }}</span>
+      <button type="button" class="btn btn-sm btn-quiet" data-testid="exam-offline-retry" @click="retrySync">{{ t('ep.practice.offline_retry') }}</button>
+    </div>
+    <div v-if="!report && draftConflicts.length" class="notice warn exam-conflict" role="status" data-testid="exam-draft-conflicts">
+      <div class="exam-conflict-body">
+        <strong>{{ t('ep.exam.draft_conflict', { count: draftConflicts.length }) }}</strong>
+        <ul class="exam-conflict-list">
+          <li v-for="conflict in draftConflicts" :key="conflict.question_id">
+            {{ t('ep.practice.question_no', { current: conflict.question_number }) }} ·
+            {{ t('ep.exam.your_answer') }} {{ displayAnswer(conflict.incoming_answer) }} ·
+            {{ t('ep.exam.saved_answer') }} {{ displayAnswer(conflict.existing_answer) }}
+          </li>
+        </ul>
+      </div>
+      <div class="exam-conflict-actions">
+        <button type="button" class="btn btn-sm" @click="restoreMyAnswers">{{ t('ep.exam.draft_conflict_restore') }}</button>
+        <button type="button" class="btn btn-sm btn-quiet" @click="dismissDraftConflicts">{{ t('ep.exam.draft_conflict_dismiss') }}</button>
+      </div>
+    </div>
     <div v-if="loading" class="exam-loading skeleton-rows">
       <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
     </div>
@@ -111,7 +147,10 @@
       <section v-if="reviewQuestions.length" class="report-section exam-review">
         <h2 class="section-title">{{ t('ep.exam.wrong_detail') }}</h2>
         <article v-for="item in reviewQuestions" :key="item.id" class="review-item">
-          <h3 class="review-stem">{{ item.stem }}</h3>
+          <h3 class="review-stem">
+            <span v-if="isBlankReportItem(item.id)" class="tag">{{ t('ep.exam.blank') }}</span>
+            {{ item.stem }}
+          </h3>
           <div class="review-answers">
             <p><span>{{ t('ep.exam.your_answer') }}</span><strong>{{ displayAnswer(report.answers[item.id]?.user_answer) }}</strong></p>
             <p><span>{{ t('ep.exam.right_answer') }}</span><strong>{{ displayAnswer(report.answers[item.id]?.correct_answer) }}</strong></p>
@@ -148,6 +187,7 @@
                 :type="question.type === 'MULTI' ? 'checkbox' : 'radio'"
                 :name="`question-${question.id}`"
                 :checked="isOptionSelected(option.key)"
+                :disabled="answersLocked"
                 @change="selectOption(option.key, $event.target.checked)"
               />
               <span class="option-content-text">{{ option.content }}</span>
@@ -160,6 +200,7 @@
               :value="currentTextAnswer"
               :rows="['ESSAY', 'SUBJECTIVE'].includes(question.type) ? 8 : 2"
               :placeholder="['ESSAY', 'SUBJECTIVE'].includes(question.type) ? t('ep.practice.essay_placeholder') : t('ep.practice.essay_placeholder')"
+              :disabled="answersLocked"
               @input="setTextAnswer($event.target.value)"
             />
           </label>
@@ -197,7 +238,7 @@
             <LinearIcon name="layers" :size="14" />{{ t('ep.exam.sheet') }}
             <span class="mono">{{ answeredCount }} / {{ questions.length }}</span>
           </button>
-          <button type="button" class="btn btn-sm exam-flag" data-testid="exam-flag-toggle" :aria-pressed="isFlagged" :class="{ 'is-on': isFlagged }" @click="toggleCurrentFlag">
+          <button type="button" class="btn btn-sm exam-flag" data-testid="exam-flag-toggle" :aria-pressed="isFlagged" :disabled="answersLocked" :class="{ 'is-on': isFlagged }" @click="toggleCurrentFlag">
             <LinearIcon name="flag" :size="13" />{{ isFlagged ? t('ep.exam.flagged') : t('ep.exam.flag') }}
             <kbd>F</kbd>
           </button>
@@ -240,6 +281,7 @@
             type="button"
             class="answer-cell mono"
             :class="answerButtonClass(item.id, index)"
+            :aria-label="`${t('ep.practice.question_no', { current: index + 1 })} ${answerState(item.id).answered ? t('ep.exam.answered') : t('ep.exam.blank')}${answerState(item.id).flagged ? ' ' + t('ep.exam.flagged') : ''}`"
             @click="goTo(index); showMobileSheet = false"
           >{{ index + 1 }}</button>
         </div>
@@ -248,6 +290,27 @@
           <LocaleToggle compact />
         </div>
       </div>
+    </div>
+
+    <!-- Explicit deadline recovery: only this action may finalise a late paper -->
+    <div v-if="showExpiredSubmitConfirm" class="exam-overlay" @click.self="showExpiredSubmitConfirm = false" data-testid="exam-expired-confirm">
+      <section class="exam-dialog" role="dialog" aria-modal="true" aria-labelledby="exam-expired-title">
+        <div class="dialog-head">
+          <span id="exam-expired-title" class="dialog-title">{{ expiredCopy.submit_server }}</span>
+          <button type="button" class="icon-btn" :aria-label="t('ep.common.close')" @click="showExpiredSubmitConfirm = false"><LinearIcon name="x" :size="16" /></button>
+        </div>
+        <div class="exam-dialog-body">
+          <p>{{ expiredCopy.confirm }}</p>
+          <p v-if="unsubmittedQuestionNumbers.length" class="exam-dialog-warn" data-testid="exam-expired-confirm-unsubmitted">
+            {{ expiredCopy.unsubmitted }}
+            <span v-for="number in unsubmittedQuestionNumbers" :key="number">{{ t('ep.practice.question_no', { current: number }) }}</span>
+          </p>
+        </div>
+        <div class="dialog-actions">
+          <button type="button" class="btn" @click="showExpiredSubmitConfirm = false">{{ expiredCopy.cancel }}</button>
+          <button type="button" class="btn btn-primary" data-testid="exam-expired-confirm-submit" :disabled="isSubmitting" @click="submitWithServerAnswers">{{ expiredCopy.confirm_submit }}</button>
+        </div>
+      </section>
     </div>
 
     <!-- Submit confirmation -->
@@ -298,12 +361,15 @@ import { useRouter } from 'vue-router'
 import LinearIcon from '../../components/LinearIcon.vue'
 import ThemeToggle from '../../components/ThemeToggle.vue'
 import LocaleToggle from '../../components/LocaleToggle.vue'
-import { useLocale } from '../../composables/useLocale.js'
+import { useLocale, getCurrentLocale } from '../../composables/useLocale.js'
+import { useAuthStore } from '../../stores/authStore'
 import { completeSession, getSession, getSessionQuestions, submitAttempt, syncDraft, toggleFlag } from '../../api/practice'
-import { calculateAccuracy, examAnswerState, findFirstUnansweredIndex, formatQuestionTypeName, formatRemainingTime, isSwipeGestureValid, normalizeExamAnswer } from '../../domain/exam'
+import { buildExamDraftBase, buildExamDraftPayload, buildExamLocalDraft, calculateAccuracy, examAnswerState, examAnswersToBase, examLocalDraftDiffers, examLocalDraftKey, examRecoveryBase, findFirstUnansweredIndex, formatQuestionTypeName, formatRemainingTime, isExamNetworkError, isExamTimeExpiredError, isExamReviewItem, isSwipeGestureValid, mergeExamLocalDraft, normalizeDraftConflicts, resolveExamUserKey, unsubmittedExamAnswers } from '../../domain/exam'
 
 const { t } = useLocale()
 const router = useRouter()
+const auth = useAuthStore()
+const examUserKey = computed(() => resolveExamUserKey(auth.user?.value || auth.user))
 
 const props = defineProps({ token: { type: String, required: true }, sessionId: { type: String, required: true } })
 const emit = defineEmits(['back'])
@@ -346,6 +412,50 @@ const report = ref(null)
 const loading = ref(true)
 const error = ref('')
 const showMobileSheet = ref(false)
+const draftConflicts = ref([])
+const draftBase = ref({})
+const pendingSubmit = ref(false)
+const offlineNotice = ref('')
+const offlineRetryAvailable = ref(false)
+// Set only when the server answered EXAM_TIME_EXPIRED. It is terminal: no
+// automatic retry, no silent submission. The user must explicitly choose to
+// finalise with the answers the server already saved.
+const syncExpired = ref(false)
+const showExpiredSubmitConfirm = ref(false)
+
+// Kept local to this runner because the shared locale files are owned by other
+// work in this batch; both shipped languages must still be complete.
+const EXPIRED_COPY = {
+  'zh-CN': {
+    notice: '模考已超过截止时间，服务器不再接受这台设备上的答案同步。',
+    unsubmitted: '以下本地答案未能提交：',
+    none: '本机没有未提交的答案。',
+    kept: '未提交的答案仍保留在这台设备上。',
+    submit_server: '以服务器已保存的答案交卷',
+    confirm: '将以服务器在截止前已保存的答案交卷，本机未提交的答案不会计入成绩。交卷后不可撤销。',
+    confirm_submit: '确认交卷',
+    cancel: '暂不交卷',
+  },
+  'en-US': {
+    notice: 'The exam deadline has passed and the server no longer accepts answer syncs from this device.',
+    unsubmitted: 'These local answers were not submitted:',
+    none: 'This device has no unsubmitted answers.',
+    kept: 'The unsubmitted answers remain saved on this device.',
+    submit_server: 'Submit with the answers saved on the server',
+    confirm: 'The paper will be finalised with the answers the server saved before the deadline. Local unsubmitted answers will not be scored. This cannot be undone.',
+    confirm_submit: 'Submit now',
+    cancel: 'Not yet',
+  },
+}
+
+const expiredCopy = computed(() => EXPIRED_COPY[getCurrentLocale() === 'en-US' ? 'en-US' : 'zh-CN'])
+const unsubmittedAnswers = computed(() => unsubmittedExamAnswers(answers.value, draftBase.value))
+const unsubmittedQuestionNumbers = computed(() => {
+  const order = new Map(questions.value.map((item, index) => [item?.id, index + 1]))
+  return unsubmittedAnswers.value
+    .map(item => order.get(item.question_id))
+    .filter(number => number !== undefined)
+})
 
 let touchStartX = 0
 let touchStartY = 0
@@ -373,6 +483,15 @@ let draftHandle
 let draftPromise = null
 const question = computed(() => questions.value[currentIndex.value])
 const remainingSeconds = computed(() => Math.max(0, Number(session.value?.time_limit || 0) * 60 - elapsedSeconds.value))
+const timeExpired = computed(() => Boolean(session.value?.time_limit) && remainingSeconds.value <= 0)
+// Once the clock runs out the server rejects further draft writes, so the paper
+// becomes read-only even if the auto-submit is still pending on this device.
+const answersLocked = computed(() => Boolean(report.value) || timeExpired.value || pendingSubmit.value || syncExpired.value)
+const connectionNotice = computed(() => {
+  if (syncExpired.value) return ''
+  if (pendingSubmit.value) return t('ep.practice.draft_offline_notice')
+  return offlineRetryAvailable.value ? offlineNotice.value : ''
+})
 const answeredCount = computed(() => questions.value.filter(item => answerState(item.id).answered).length)
 const flaggedCount = computed(() => flags.value.length)
 const isFlagged = computed(() => question.value ? flags.value.includes(question.value.id) : false)
@@ -380,7 +499,7 @@ const currentTextAnswer = computed(() => {
   const value = question.value ? answerValue(question.value.id) : ''
   return Array.isArray(value) ? value.join('') : String(value ?? '')
 })
-const reviewQuestions = computed(() => questions.value.filter(item => report.value?.answers?.[item.id]))
+const reviewQuestions = computed(() => questions.value.filter(item => isExamReviewItem(item.id, report.value?.answers)))
 
 function answerValue(questionId) {
   const saved = answers.value[questionId]
@@ -403,43 +522,250 @@ function displayAnswer(value) {
   return value === undefined || value === null || value === '' ? t('ui.k0112') : String(value)
 }
 
+function isBlankReportItem(questionId) {
+  const entry = report.value?.answers?.[questionId]
+  return !entry || entry.correctness === 'UNANSWERED'
+}
+
+function dismissDraftConflicts() {
+  // The server keeps the value saved elsewhere, so dismissing means accepting
+  // it. A paper that was already waiting on its time-up submission can then
+  // finish; nothing is dropped silently because the user made the choice.
+  draftConflicts.value = []
+  saveLocalExamDraft()
+  if (pendingSubmit.value) void submitExam(true)
+  else scheduleDraftSave()
+}
+
+function restoreMyAnswers() {
+  // With optimistic draft sync the server keeps the answer saved elsewhere and
+  // reports this device's value as rejected. "Keep my answer" re-applies the
+  // rejected value now that the baseline matches the server.
+  for (const conflict of draftConflicts.value) {
+    answers.value[conflict.question_id] = conflict.incoming_answer
+  }
+  draftConflicts.value = []
+  saveLocalExamDraft()
+  if (pendingSubmit.value) void submitExam(true)
+  else scheduleDraftSave()
+}
+
+function draftStorageKeys() {
+  const scoped = examLocalDraftKey(props.sessionId, examUserKey.value)
+  const legacy = examLocalDraftKey(props.sessionId)
+  return { scoped, legacy: legacy && legacy !== scoped ? legacy : '' }
+}
+
+function readStoredDraft(key) {
+  if (!key || typeof localStorage === 'undefined') return null
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || 'null')
+    if (!parsed || typeof parsed !== 'object' || !parsed.answers || typeof parsed.answers !== 'object') return null
+    return parsed
+  } catch (_) {
+    return null
+  }
+}
+
+function readLocalExamDraft() {
+  const { scoped, legacy } = draftStorageKeys()
+  // A draft written before per-account scoping is still this user's (session ids
+  // are issued per account); reading it lets the next write migrate it.
+  return readStoredDraft(scoped) || (legacy ? readStoredDraft(legacy) : null)
+}
+
+function saveLocalExamDraft() {
+  const { scoped, legacy } = draftStorageKeys()
+  if (!scoped || typeof localStorage === 'undefined' || !session.value || report.value) return
+  try {
+    localStorage.setItem(scoped, JSON.stringify(buildExamLocalDraft({
+      answers: answers.value,
+      baseAnswers: draftBase.value,
+      flags: flags.value,
+      currentIndex: currentIndex.value,
+      timeSpent: elapsedSeconds.value,
+      pendingSubmit: pendingSubmit.value,
+    })))
+    if (legacy) localStorage.removeItem(legacy)
+  } catch (_) { /* quota / private mode: the server sync remains the fallback */ }
+}
+
+function clearLocalExamDraft() {
+  const { scoped, legacy } = draftStorageKeys()
+  for (const key of [scoped, legacy]) {
+    if (!key || typeof localStorage === 'undefined') continue
+    try { localStorage.removeItem(key) } catch (_) {}
+  }
+  offlineNotice.value = ''
+  offlineRetryAvailable.value = false
+}
+
+function markPendingSubmit() {
+  if (report.value) return
+  pendingSubmit.value = true
+  saveLocalExamDraft()
+}
+
+/**
+ * The server rejected a late draft/answer with EXAM_TIME_EXPIRED. This is a
+ * terminal state: stop every automatic retry, keep the device copy, and wait
+ * for the user to explicitly choose the server-saved answers.
+ */
+function enterExpiredState() {
+  if (report.value) return
+  syncExpired.value = true
+  pendingSubmit.value = false
+  offlineNotice.value = ''
+  offlineRetryAvailable.value = false
+  clearTimeout(draftHandle)
+  clearInterval(tickHandle)
+  saveLocalExamDraft()
+}
+
+/**
+ * Explicit, user-triggered finalisation after the deadline. Only the answers
+ * the server saved before the deadline are scored; this is never called
+ * automatically, so a late paper is never silently submitted.
+ */
+async function submitWithServerAnswers() {
+  if (isSubmitting.value || report.value || !syncExpired.value) return
+  isSubmitting.value = true
+  error.value = ''
+  showExpiredSubmitConfirm.value = false
+  try {
+    report.value = await completeSession(props.token, props.sessionId)
+    report.value.time_spent = elapsedSeconds.value
+    syncExpired.value = false
+    pendingSubmit.value = false
+    clearLocalExamDraft()
+  } catch (err) {
+    if (isExamTimeExpiredError(err)) {
+      enterExpiredState()
+      error.value = err.detail || err.message
+    } else {
+      error.value = `${t('ui.k0115')}${err.detail || err.message}`
+    }
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+function retrySync() {
+  if (isSubmitting.value || report.value || syncExpired.value) return
+  if (pendingSubmit.value || timeExpired.value) void recoverPendingSubmit()
+  else void persistDraft()
+}
+
+async function recoverPendingSubmit() {
+  if (isSubmitting.value || report.value || syncExpired.value) return
+  if (pendingSubmit.value) {
+    // A previous complete may have succeeded while its response was lost (or
+    // another device finalised the paper). Completing is idempotent; prefer the
+    // server's final report instead of replaying a draft the server will reject.
+    try {
+      const fresh = await getSession(props.token, props.sessionId)
+      if (fresh?.is_completed) {
+        report.value = await completeSession(props.token, props.sessionId)
+        report.value.time_spent = elapsedSeconds.value
+        pendingSubmit.value = false
+        clearLocalExamDraft()
+        return
+      }
+    } catch (_) { /* fall through to the normal draft-then-complete path */ }
+  }
+  await submitExam(true)
+}
+
+function handleOnline() {
+  if (report.value || !session.value) return
+  // After the deadline the server will keep rejecting drafts; retrying on every
+  // reconnect is the endless loop this guard prevents.
+  if (syncExpired.value) return
+  if (pendingSubmit.value) {
+    void recoverPendingSubmit()
+    return
+  }
+  if (!draftConflicts.value.length && offlineRetryAvailable.value) void persistDraft()
+}
+
 function scheduleDraftSave() {
   clearTimeout(draftHandle)
   draftHandle = setTimeout(() => { void persistDraft() }, 400)
 }
 
 async function persistDraft(force = false) {
-  if (!session.value || (isSubmitting.value && !force) || report.value) return
-  if (draftPromise) await draftPromise
-  if (!session.value || (isSubmitting.value && !force) || report.value) return
-  draftPromise = syncDraft(props.token, props.sessionId, {
+  if (!session.value || (isSubmitting.value && !force) || report.value) return false
+  if (draftPromise) {
+    try { await draftPromise } catch (_) { /* reported by the owning call */ }
+  }
+  if (!session.value || (isSubmitting.value && !force) || report.value) return false
+  const changedAnswers = buildExamDraftPayload(answers.value, draftBase.value)
+  const payload = {
     current_index: currentIndex.value,
-    answers: answers.value,
     flags: flags.value,
     time_spent: elapsedSeconds.value,
-  })
+  }
+  if (Object.keys(changedAnswers).length) {
+    payload.answers = changedAnswers
+    payload.base_answers = buildExamDraftBase(changedAnswers, draftBase.value)
+  }
+  // Persist before the request so a reload during a slow/failed sync still
+  // restores what the user typed.
+  saveLocalExamDraft()
+  draftPromise = syncDraft(props.token, props.sessionId, payload)
   try {
-    await draftPromise
+    const saved = await draftPromise
+    offlineNotice.value = ''
+    offlineRetryAvailable.value = false
+    if (saved?.answers) draftBase.value = examAnswersToBase(saved.answers)
+    if (saved?.has_conflict) {
+      const conflicts = normalizeDraftConflicts(saved.conflicts, questions.value)
+      // The service keeps the value saved elsewhere, so the paper must show it;
+      // the notice offers an explicit way to re-apply this device's answer.
+      for (const conflict of conflicts) {
+        answers.value[conflict.question_id] = conflict.existing_answer
+      }
+      draftConflicts.value = conflicts
+      // Keep the device backup aligned with the server's resolved value so a
+      // reload does not resurrect the rejected answer as a fresh "local" edit.
+      saveLocalExamDraft()
+    }
+    saveLocalExamDraft()
+    return true
   } catch (err) {
-    error.value = `${t('ui.k0113')}${err.detail || err.message}`
+    if (isExamTimeExpiredError(err)) {
+      enterExpiredState()
+      return false
+    }
+    if (isExamNetworkError(err)) {
+      offlineNotice.value = t('ep.practice.draft_offline_notice')
+      offlineRetryAvailable.value = true
+    } else {
+      error.value = `${t('ui.k0113')}${err.detail || err.message}`
+    }
+    saveLocalExamDraft()
+    return false
   } finally {
     draftPromise = null
   }
 }
 
 function selectOption(key, checked) {
-  if (!question.value) return
+  if (!question.value || answersLocked.value) return
   if (question.value.type === 'MULTI') {
     const selected = Array.isArray(answerValue(question.value.id)) ? [...answerValue(question.value.id)] : []
     answers.value[question.value.id] = checked ? [...new Set([...selected, key])].sort() : selected.filter(value => value !== key)
   } else {
     answers.value[question.value.id] = key
   }
+  saveLocalExamDraft()
   scheduleDraftSave()
 }
 
 function setTextAnswer(value) {
+  if (!question.value || answersLocked.value) return
   answers.value[question.value.id] = value
+  saveLocalExamDraft()
   scheduleDraftSave()
 }
 
@@ -450,41 +776,93 @@ function goTo(index) {
 }
 
 async function toggleCurrentFlag() {
-  if (!question.value) return
+  if (!question.value || answersLocked.value) return
   error.value = ''
   try {
     const result = await toggleFlag(props.token, props.sessionId, question.value.id)
     flags.value = result.flags
+    saveLocalExamDraft()
     scheduleDraftSave()
   } catch (err) {
     error.value = err.detail || err.message
   }
 }
 
+function restartTicker() {
+  clearInterval(tickHandle)
+  if (!report.value) tickHandle = setInterval(tick, 1000)
+}
+
 async function submitExam(automatic) {
   if (isSubmitting.value || report.value) return
+  // Once the server has declared the deadline passed, only the explicit
+  // server-answer action may finalise the paper.
+  if (syncExpired.value) return
+  if (!automatic && draftConflicts.value.length) {
+    // Do not finalise a paper while a draft conflict is unresolved: the user
+    // must decide whether to keep this device's answer first.
+    showSubmitConfirm.value = false
+    error.value = t('ep.exam.draft_conflict_submit')
+    return
+  }
   isSubmitting.value = true
   error.value = ''
   showSubmitConfirm.value = false
   clearTimeout(draftHandle)
   clearInterval(tickHandle)
   try {
-    await persistDraft(true)
-    report.value = await completeSession(props.token, props.sessionId)
-    report.value.time_spent = elapsedSeconds.value
-    if (automatic) error.value = t('ui.k0114')
-  } catch (err) {
-    error.value = `${t('ui.k0115')}${err.detail || err.message}`
-    tickHandle = setInterval(tick, 1000)
+    const saved = await persistDraft(true)
+    if (!saved) {
+      // A terminal EXAM_TIME_EXPIRED must never fall through to completing with
+      // the server copy; the banner asks the user to decide explicitly.
+      if (syncExpired.value) return
+      // Never complete with the server's older draft. The user's answers stay
+      // in the device backup and a time-up submission stays pending until the
+      // connection returns (or the user retries explicitly).
+      if (automatic || timeExpired.value) markPendingSubmit()
+      else restartTicker()
+      return
+    }
+    if (draftConflicts.value.length) {
+      // A cross-device conflict is the user's call. Surface it and hold the
+      // submission instead of picking a side silently.
+      if (!automatic) error.value = t('ep.exam.draft_conflict_submit')
+      if (automatic || timeExpired.value) markPendingSubmit()
+      else restartTicker()
+      return
+    }
+    pendingSubmit.value = false
+    try {
+      report.value = await completeSession(props.token, props.sessionId)
+      report.value.time_spent = elapsedSeconds.value
+      clearLocalExamDraft()
+      if (automatic) error.value = t('ui.k0114')
+    } catch (err) {
+      if (isExamTimeExpiredError(err)) {
+        enterExpiredState()
+        return
+      }
+      // The draft is already saved on the server, so completing later is safe
+      // and idempotent; keep the local copy until the report actually arrives.
+      error.value = `${t('ui.k0115')}${err.detail || err.message}`
+      if (automatic || timeExpired.value) markPendingSubmit()
+      else restartTicker()
+    }
   } finally {
     isSubmitting.value = false
   }
 }
 
 function tick() {
+  if (syncExpired.value) return
   elapsedSeconds.value += 1
-  if (session.value?.time_limit && remainingSeconds.value <= 0) void submitExam(true)
-  else if (elapsedSeconds.value % 10 === 0) void persistDraft()
+  if (session.value?.time_limit && remainingSeconds.value <= 0) {
+    // A pending submission is retried by the online event / retry button, not
+    // every second, so an offline device does not hammer the network.
+    if (!pendingSubmit.value) void submitExam(true)
+  } else if (elapsedSeconds.value % 10 === 0) {
+    void persistDraft()
+  }
 }
 
 function jumpToFirstUnanswered() {
@@ -503,8 +881,14 @@ function handleKeyDown(e) {
 
   const key = e.key.toUpperCase()
 
+  // While a dialog or the mobile answer sheet is open, only Escape is handled
+  // below; keystrokes must not silently change the answer behind the overlay.
+  if ((showSubmitConfirm.value || showExitConfirmModal.value || showMobileSheet.value) && e.key !== 'Escape') {
+    return
+  }
+
   // 1. Select options via A, B, C, D... or 1, 2, 3, 4...
-  if (question.value?.options?.length && !report.value) {
+  if (question.value?.options?.length && !report.value && !answersLocked.value) {
     const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
     let optKey = null
     if (letters.includes(key)) {
@@ -547,7 +931,7 @@ function handleKeyDown(e) {
   // 4. Toggle flag on F
   if (key === 'F') {
     e.preventDefault()
-    toggleCurrentFlag()
+    if (!answersLocked.value) toggleCurrentFlag()
     return
   }
 
@@ -561,6 +945,7 @@ function handleKeyDown(e) {
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('online', handleOnline)
   try {
     session.value = await getSession(props.token, props.sessionId)
     if (session.value?.mode !== 'EXAM') {
@@ -568,16 +953,47 @@ onMounted(async () => {
       return
     }
     questions.value = await getSessionQuestions(props.token, props.sessionId)
-    answers.value = { ...(session.value.answers || {}) }
-    flags.value = [...(session.value.flags || [])]
-    currentIndex.value = Math.min(Number(session.value.current_index || 0), Math.max(0, questions.value.length - 1))
-    elapsedSeconds.value = Number(session.value.time_spent || 0)
-    if (session.value.is_completed) report.value = await completeSession(props.token, props.sessionId)
+    const serverAnswers = session.value.answers || {}
+    const localDraft = session.value.is_completed ? null : readLocalExamDraft()
+    answers.value = localDraft ? mergeExamLocalDraft(serverAnswers, localDraft) : { ...serverAnswers }
+    // The baseline is always what the server last showed us, so a local edit
+    // that now differs from another device is reported as a conflict by the
+    // next sync instead of silently overwriting it. Unsynced device edits keep
+    // their older baseline so that difference stays detectable.
+    draftBase.value = localDraft ? examRecoveryBase(serverAnswers, localDraft) : examAnswersToBase(serverAnswers)
+    flags.value = [...((Array.isArray(localDraft?.flags) ? localDraft.flags : session.value.flags) || [])]
+    const restoredIndex = Number(localDraft?.currentIndex ?? session.value.current_index ?? 0)
+    currentIndex.value = Math.min(Math.max(0, restoredIndex), Math.max(0, questions.value.length - 1))
+    elapsedSeconds.value = Math.max(Number(session.value.time_spent || 0), Number(localDraft?.timeSpent || 0))
+    pendingSubmit.value = Boolean(localDraft?.pendingSubmit)
+    const localDiverged = Boolean(localDraft) && examLocalDraftDiffers(localDraft, serverAnswers)
+    if (session.value.is_completed) {
+      report.value = await completeSession(props.token, props.sessionId)
+      clearLocalExamDraft()
+    }
     if (!report.value && session.value.time_limit > 0) {
       const createdAt = Date.parse(`${session.value.created_at}Z`)
       if (Number.isFinite(createdAt)) elapsedSeconds.value = Math.max(elapsedSeconds.value, Math.floor((Date.now() - createdAt) / 1000))
     }
-    if (!report.value) tickHandle = setInterval(tick, 1000)
+    if (!report.value) {
+      if (session.value.is_expired) {
+        // The server already considers the deadline passed. Enter the terminal
+        // state instead of replaying the device draft and retrying forever.
+        enterExpiredState()
+      } else {
+        tickHandle = setInterval(tick, 1000)
+        saveLocalExamDraft()
+        if (pendingSubmit.value) {
+          // A time-up submission that could not be delivered before the reload:
+          // recover it safely once this device is back online.
+          if (navigator?.onLine !== false) void submitExam(true)
+        } else if (localDiverged && navigator?.onLine !== false) {
+          // Push the restored device answers to the server; any cross-device
+          // difference comes back as an explicit conflict notice.
+          void persistDraft()
+        }
+      }
+    }
   } catch (err) {
     error.value = err.detail || err.message
   } finally {
@@ -587,9 +1003,13 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('online', handleOnline)
   clearInterval(tickHandle)
   clearTimeout(draftHandle)
-  if (session.value && !report.value) void persistDraft()
+  if (session.value && !report.value) {
+    saveLocalExamDraft()
+    void persistDraft()
+  }
 })
 </script>
 
@@ -1075,6 +1495,44 @@ onBeforeUnmount(() => {
 }
 .exam-loading.skeleton-rows { text-align: left; }
 .exam-error { width: min(100% - 48px, var(--reading-w)); margin: 16px auto 0; }
+.exam-offline {
+  width: min(100% - 48px, 1120px);
+  margin: 16px auto 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.exam-conflict {
+  width: min(100% - 48px, 1120px);
+  margin: 16px auto 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.exam-conflict-body { min-width: 0; flex: 1; }
+.exam-conflict-body strong { font-family: var(--font-sans); font-size: 12.5px; color: var(--ink); }
+.exam-conflict-list { margin: 4px 0 0; padding-left: 16px; font-size: 12px; color: var(--ink-3); }
+.exam-conflict-list li { line-height: 1.7; }
+.exam-conflict-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.exam-expired {
+  width: min(100% - 48px, 1120px);
+  margin: 16px auto 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.exam-expired-body { min-width: 0; flex: 1; }
+.exam-expired-body strong { display: block; font-family: var(--font-sans); font-size: 12.5px; color: var(--ink); }
+.exam-expired-body p { margin: 6px 0 0; font-size: 12px; color: var(--ink-3); }
+.exam-expired-number { margin-left: 6px; font-family: var(--font-mono); font-size: 11.5px; color: var(--ink); }
+.exam-expired-kept { font-size: 11.5px; }
+.exam-expired-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .empty-title { font-family: var(--font-sans); font-size: 15px; font-weight: 650; }
 .empty-desc { font-size: 13px; color: var(--ink-3); margin-bottom: 12px; }
 

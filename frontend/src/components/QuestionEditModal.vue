@@ -17,8 +17,11 @@
           </h2>
         </div>
         <div class="modal-head-right">
+          <button type="button" class="btn btn-sm btn-quiet" @click="toggleVersionHistory">
+            {{ t('bank_manage.version_history') }}
+          </button>
           <span v-if="question" class="version-tag mono">
-            {{ t('bank_manage.version_badge', { ver: question.version_number }) }}
+            {{ t('bank_manage.version_badge', { ver: baseVersion }) }}
           </span>
           <button type="button" class="icon-btn" :aria-label="t('common.close')" @click="handleClose">
             <LinearIcon name="x" size="16" />
@@ -27,17 +30,70 @@
       </header>
 
       <form class="modal-body-form" @submit.prevent="handleSave">
+        <section v-if="showVersionHistory" class="version-history" aria-live="polite">
+          <div class="version-history-head">
+            <span class="rule-label">{{ t('bank_manage.version_history') }}</span>
+            <button type="button" class="icon-btn" :aria-label="t('common.close')" @click="showVersionHistory = false">
+              <LinearIcon name="x" size="14" />
+            </button>
+          </div>
+          <p v-if="versionError" class="hint bad-text">{{ versionError }}</p>
+          <p v-else-if="versionsLoading" class="hint">{{ t('common.loading') }}</p>
+          <p v-else-if="!versions.length" class="hint">{{ t('bank_manage.version_history_empty') }}</p>
+          <div v-else class="version-list">
+            <button
+              v-for="ver in versions"
+              :key="ver.id"
+              type="button"
+              class="version-row"
+              :class="{ 'is-current': ver.version_number === baseVersion }"
+              @click="versionPreview = ver"
+            >
+              <span class="mono">v{{ ver.version_number }}</span>
+              <span class="version-meta">
+                <span v-if="ver.version_number === baseVersion" class="tag ok">{{ t('bank_manage.version_current') }}</span>
+                <span class="dim">{{ t('bank_manage.version_created', { date: formatVersionDate(ver.created_at) }) }}</span>
+              </span>
+              <span class="version-view">{{ t('bank_manage.version_view') }}</span>
+            </button>
+          </div>
+
+          <div v-if="versionPreview" class="version-preview">
+            <div class="version-preview-head">
+              <span class="mono">v{{ versionPreview.version_number }}</span>
+              <button type="button" class="btn btn-sm btn-quiet" @click="versionPreview = null">
+                {{ t('bank_manage.version_back') }}
+              </button>
+            </div>
+            <p class="hint">{{ t('bank_manage.version_preview_hint') }}</p>
+            <div class="version-stem">{{ versionPreview.stem }}</div>
+            <div v-if="versionPreview.options?.length" class="version-options">
+              <div v-for="opt in versionPreview.options" :key="opt.key" class="version-option">
+                <span class="mono">{{ opt.key }}</span>
+                <span>{{ opt.content ?? opt.text }}</span>
+              </div>
+            </div>
+            <div class="version-answer">
+              <span class="label">{{ t('bank_manage.answer_label') }}</span>
+              <span>{{ versionPreview.answer || t('ep.common.none') }}</span>
+            </div>
+            <div v-if="versionPreview.explanation" class="version-explanation">{{ versionPreview.explanation }}</div>
+          </div>
+        </section>
+
         <div v-if="errorMsg" class="notice bad" role="alert">
           <span>{{ errorMsg }}</span>
-          <button
-            v-if="isConflict"
-            type="button"
-            class="btn btn-sm btn-quiet"
-            :disabled="saving"
-            @click="handleReloadLatest"
-          >
-            {{ t('bank_manage.reload_latest') }}
-          </button>
+          <div v-if="isConflict" class="conflict-actions">
+            <p class="hint">{{ t('bank_manage.conflict_draft_kept') }}</p>
+            <div class="conflict-buttons">
+              <button type="button" class="btn btn-sm" :disabled="saving" @click="saveAsBranch">
+                {{ t('bank_manage.save_as_branch') }}
+              </button>
+              <button type="button" class="btn btn-sm btn-quiet" :disabled="saving" @click="handleReloadLatest">
+                {{ t('bank_manage.discard_and_reload') }}
+              </button>
+            </div>
+          </div>
         </div>
 
         <label class="field" for="edit-stem">
@@ -134,6 +190,19 @@
           <input id="edit-answer" v-model.trim="answer" type="text" class="input" :disabled="readOnly || saving" />
         </label>
 
+        <div v-if="regradeAvailable" class="regrade-choice notice">
+          <div class="regrade-head">{{ t('bank_manage.regrade_title') }}</div>
+          <label class="check-row">
+            <input v-model="regradeHistory" type="checkbox" :disabled="readOnly || saving" />
+            <span>{{ t('bank_manage.regrade_offer') }}</span>
+          </label>
+          <p class="hint">{{ regradeHistory ? t('bank_manage.regrade_warning') : t('bank_manage.regrade_hint') }}</p>
+          <label v-if="regradeHistory" class="check-row">
+            <input v-model="regradeFsrs" type="checkbox" :disabled="readOnly || saving" />
+            <span>{{ t('bank_manage.regrade_fsrs') }}</span>
+          </label>
+        </div>
+
         <label class="field" for="edit-explanation">
           <span class="label">{{ t('bank_manage.explanation_label') }}</span>
           <textarea id="edit-explanation" v-model.trim="explanation" rows="3" class="textarea" :disabled="readOnly || saving"></textarea>
@@ -158,9 +227,14 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import LinearIcon from './LinearIcon.vue'
-import { updateQuestion, getQuestion, getQuestionConflict } from '../api/questions'
+import { updateQuestion, getQuestion, getQuestionConflict, listQuestionVersions } from '../api/questions'
 import { useLocale } from '../composables/useLocale'
-import { validateQuestionEdit, sanitizeAnswerOnOptionRemove, adaptAnswerOnTypeChange } from '../domain/bankManage'
+import {
+  validateQuestionEdit,
+  sanitizeAnswerOnOptionRemove,
+  adaptAnswerOnTypeChange,
+  shouldOfferRegrade,
+} from '../domain/bankManage'
 
 const props = defineProps({
   show: {
@@ -185,7 +259,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['close', 'saved', 'conflict'])
+const emit = defineEmits(['close', 'saved', 'conflict', 'reloaded'])
 
 const { t } = useLocale()
 
@@ -200,9 +274,23 @@ const tagsInput = ref('')
 const saving = ref(false)
 const errorMsg = ref('')
 const isConflict = ref(false)
+const baseVersion = ref(1)
+const original = ref({ type: 'SINGLE', answer: '' })
+const regradeHistory = ref(false)
+const regradeFsrs = ref(true)
+const showVersionHistory = ref(false)
+const versions = ref([])
+const versionsLoading = ref(false)
+const versionError = ref('')
+const versionPreview = ref(null)
 
 const isChoiceType = computed(() => {
   return ['SINGLE', 'MULTI', 'JUDGE'].includes(type.value)
+})
+
+const regradeAvailable = computed(() => {
+  if (props.readOnly) return false
+  return shouldOfferRegrade(original.value, { type: type.value, answer: answer.value })
 })
 
 watch(
@@ -236,6 +324,14 @@ watch(
         options.value = []
       }
       tagsInput.value = Array.isArray(q.tags) ? q.tags.join(', ') : ''
+      baseVersion.value = q.version_number || 1
+      original.value = { type: q.type || 'SINGLE', answer: q.answer || '' }
+      regradeHistory.value = false
+      regradeFsrs.value = true
+      showVersionHistory.value = false
+      versions.value = []
+      versionPreview.value = null
+      versionError.value = ''
       errorMsg.value = ''
       isConflict.value = false
     }
@@ -302,7 +398,7 @@ async function handleReloadLatest() {
   try {
     const latestQ = await getQuestion(props.token, props.question.id)
     if (latestQ) {
-      props.question.version_number = latestQ.version_number
+      baseVersion.value = latestQ.version_number || baseVersion.value
       stem.value = latestQ.stem || ''
       type.value = latestQ.type || 'SINGLE'
       difficulty.value = latestQ.difficulty !== undefined && latestQ.difficulty !== null ? Number(latestQ.difficulty) : 3
@@ -318,38 +414,54 @@ async function handleReloadLatest() {
         options.value = []
       }
       tagsInput.value = Array.isArray(latestQ.tags) ? latestQ.tags.join(', ') : ''
+      original.value = { type: latestQ.type || 'SINGLE', answer: latestQ.answer || '' }
+      regradeHistory.value = false
+      versions.value = []
+      versionPreview.value = null
       isConflict.value = false
       errorMsg.value = ''
+      emit('reloaded', latestQ)
     }
   } catch (err) {
-    errorMsg.value = err?.message || 'Failed to reload latest question'
+    errorMsg.value = err?.detail?.message || err?.detail || err?.message || t('bank_manage.version_load_failed')
   } finally {
     saving.value = false
   }
 }
 
-async function handleSave() {
-  if (props.readOnly || !props.question) return
-  if (!stem.value.trim()) return
-
-  // Strict answer validation per question type
-  const validation = validateQuestionEdit(type.value, options.value, answer.value)
-  if (!validation.valid) {
-    errorMsg.value = t('bank_manage.invalid_answer')
+async function toggleVersionHistory() {
+  if (showVersionHistory.value) {
+    showVersionHistory.value = false
     return
   }
-  if (type.value === 'JUDGE') {
-    answer.value = answer.value.trim().toUpperCase()
+  showVersionHistory.value = true
+  versionPreview.value = null
+  if (versions.value.length || !props.question) return
+  versionsLoading.value = true
+  versionError.value = ''
+  try {
+    const res = await listQuestionVersions(props.token, props.question.id)
+    versions.value = Array.isArray(res) ? res.slice().sort((a, b) => (b.version_number || 0) - (a.version_number || 0)) : []
+  } catch (err) {
+    versionError.value = err?.detail?.message || err?.detail || err?.message || t('bank_manage.version_load_failed')
+  } finally {
+    versionsLoading.value = false
   }
+}
 
-  saving.value = true
-  errorMsg.value = ''
+function formatVersionDate(value) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleString()
+}
 
+function buildPayload({ allowStaleBranch = false, rejectStale = true } = {}) {
   const parsedTags = tagsInput.value
-    ? tagsInput.value.split(/[,\s]+/).map(t => t.trim()).filter(Boolean)
+    ? tagsInput.value.split(/[,\s]+/).map(tag => tag.trim()).filter(Boolean)
     : []
-
-  const payload = {
+  const regrade = regradeAvailable.value && regradeHistory.value
+  return {
     stem: stem.value.trim(),
     type: type.value,
     options: isChoiceType.value ? options.value : [],
@@ -358,14 +470,19 @@ async function handleSave() {
     difficulty: Number(difficulty.value),
     tags: parsedTags,
     chapter_id: chapterId.value ? chapterId.value : null,
-    base_version_number: props.question.version_number,
-    regrade_history: false,
-    allow_stale_branch: false,
-    reject_stale: true,
+    base_version_number: baseVersion.value,
+    regrade_history: regrade,
+    apply_fsrs: regrade ? regradeFsrs.value : true,
+    allow_stale_branch: allowStaleBranch,
+    reject_stale: rejectStale,
   }
+}
 
+async function submitPayload(options = {}) {
+  saving.value = true
+  errorMsg.value = ''
   try {
-    const updated = await updateQuestion(props.token, props.question.id, payload)
+    const updated = await updateQuestion(props.token, props.question.id, buildPayload(options))
     let conflictInfo = null
     try {
       const confRes = await getQuestionConflict(props.token, props.question.id)
@@ -388,6 +505,38 @@ async function handleSave() {
   } finally {
     saving.value = false
   }
+}
+
+async function handleSave() {
+  if (props.readOnly || !props.question) return
+  if (!stem.value.trim()) return
+
+  // Strict answer validation per question type
+  const validation = validateQuestionEdit(type.value, options.value, answer.value)
+  if (!validation.valid) {
+    errorMsg.value = t('bank_manage.invalid_answer')
+    return
+  }
+  if (type.value === 'JUDGE') {
+    answer.value = answer.value.trim().toUpperCase()
+  }
+  await submitPayload()
+}
+
+async function saveAsBranch() {
+  if (props.readOnly || !props.question || !stem.value.trim()) return
+  const validation = validateQuestionEdit(type.value, options.value, answer.value)
+  if (!validation.valid) {
+    errorMsg.value = t('bank_manage.invalid_answer')
+    return
+  }
+  if (type.value === 'JUDGE') {
+    answer.value = answer.value.trim().toUpperCase()
+  }
+  // The draft is submitted unchanged as a new branch; the server keeps both
+  // versions and records the unresolved conflict for later review.
+  isConflict.value = false
+  await submitPayload({ allowStaleBranch: true, rejectStale: false })
 }
 </script>
 
@@ -429,8 +578,38 @@ async function handleSave() {
   font-weight: 600;
   letter-spacing: .01em;
 }
-.modal-head-right { display: flex; align-items: center; gap: 10px; }
+.modal-head-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .version-tag { font-size: 10.5px; color: var(--ink-4); letter-spacing: .04em; }
+.version-history {
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  padding: 12px 14px;
+}
+.version-history-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.version-list { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+.version-row {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; min-height: 34px; padding: 4px 6px;
+  border: 0; background: none; color: var(--ink-2);
+  font-size: 12px; text-align: left; cursor: pointer;
+}
+.version-row:hover { background: var(--surface); color: var(--ink); }
+.version-row.is-current { color: var(--ink); }
+.version-meta { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; flex-wrap: wrap; }
+.version-view { color: var(--brand); font-size: 11.5px; }
+.version-preview { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.version-preview-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.version-stem { margin-top: 8px; font-family: var(--font-serif); font-size: 14px; line-height: 1.65; white-space: pre-wrap; }
+.version-options { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+.version-option { display: flex; gap: 8px; }
+.version-answer { display: flex; gap: 8px; margin-top: 8px; font-size: 12.5px; }
+.version-explanation { margin-top: 8px; font-size: 12px; color: var(--ink-3); white-space: pre-wrap; }
+.regrade-choice { display: flex; flex-direction: column; gap: 6px; }
+.regrade-head { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.check-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); }
+.conflict-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.conflict-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.bad-text { color: var(--bad); }
 .modal-body-form {
   display: flex;
   flex-direction: column;
@@ -463,8 +642,13 @@ async function handleSave() {
   .modal-body-form { padding: 14px 16px 0; }
   .modal-header { padding: 15px 16px 12px; }
   .modal-footer { margin-left: -16px; margin-right: -16px; padding: 12px 16px; }
+  .modal-head-right { gap: 6px; }
+  .version-row { flex-wrap: wrap; }
+  .version-view { margin-left: auto; }
 }
 @media (max-width: 400px) {
   .qe-grid { grid-template-columns: 1fr; }
+  .option-row { grid-template-columns: 46px minmax(0, 1fr) 28px; }
+  .conflict-buttons .btn { flex: 1 1 100%; justify-content: center; }
 }
 </style>

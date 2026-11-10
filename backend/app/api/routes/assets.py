@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from backend.app.dependencies import current_user
@@ -13,9 +14,17 @@ class AssetPayload(BaseModel):
     knowledge_tag_id: str | None = None
 
 
+class AssetUpdatePayload(BaseModel):
+    asset_type: str | None = Field(default=None, pattern="^(NOTE|SUMMARY|MNEMONIC)$")
+    content: str | None = Field(default=None, min_length=1)
+
+
 @router.post("", status_code=201)
 def create_asset(payload: AssetPayload, request: Request, user=Depends(current_user)):
-    return request.app.state.services.assets.create(user["id"], payload.model_dump())
+    try:
+        return request.app.state.services.assets.create(user["id"], payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/upload", status_code=201)
@@ -52,6 +61,29 @@ def get_asset(asset_id: str, request: Request, user=Depends(current_user)):
     if not asset:
         raise HTTPException(status_code=404, detail="资料不存在或无权访问")
     return asset
+
+
+@router.get("/{asset_id}/file")
+def get_asset_file(asset_id: str, request: Request, download: bool = False, user=Depends(current_user)):
+    stored = request.app.state.services.assets.get_file(user["id"], asset_id)
+    if not stored:
+        raise HTTPException(status_code=404, detail="资料文件不存在或已被删除")
+    return FileResponse(
+        path=str(stored["path"]),
+        media_type=stored["mime_type"],
+        filename=stored["file_name"],
+        content_disposition_type="attachment" if download else "inline",
+    )
+
+
+@router.put("/{asset_id}")
+def update_asset(asset_id: str, payload: AssetUpdatePayload, request: Request, user=Depends(current_user)):
+    try:
+        return request.app.state.services.assets.update(user["id"], asset_id, payload.model_dump())
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="资料不存在或无权访问") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.delete("/{asset_id}", status_code=204)

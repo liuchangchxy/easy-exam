@@ -38,8 +38,17 @@ export const getBank = (token, bankId) => request(`/banks/${bankId}`, {
   headers: authHeaders(token),
 })
 
-export const listBankQuestionsContent = (token, bankId) => request(`/banks/${bankId}/content/questions`, {
+export const listBankQuestionsContent = (token, bankId, options = {}) => {
+  const query = options.includeArchived ? '?include_archived=true' : ''
+  return request(`/banks/${bankId}/content/questions${query}`, {
+    headers: authHeaders(token),
+  })
+}
+
+export const batchBankQuestions = (token, bankId, payload) => request(`/banks/${bankId}/questions/batch`, {
+  method: 'POST',
   headers: authHeaders(token),
+  body: JSON.stringify(payload),
 })
 
 export const listChapters = (token, bankId) => request(`/banks/${bankId}/chapters`, {

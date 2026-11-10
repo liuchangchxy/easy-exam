@@ -445,16 +445,18 @@ async function load() {
   loading.value = false
 }
 
-async function start(mode, bankId, questionIds) {
+async function start(mode, bankId, questionIds, bankIds = null) {
   if (!bankId || !questionIds?.length || starting.value) return
   starting.value = true
   notice.value = ''
   try {
-    const session = await startSession(props.token, {
+    const payload = {
       bank_id: bankId,
       mode,
       question_ids: questionIds,
-    })
+    }
+    if (Array.isArray(bankIds) && bankIds.length > 1) payload.bank_ids = bankIds
+    const session = await startSession(props.token, payload)
     emit('start-session', session)
   } catch (err) {
     notice.value = err.detail || err.message
@@ -463,9 +465,19 @@ async function start(mode, bankId, questionIds) {
   }
 }
 
+function uniqueBankIds(items) {
+  return [...new Set((items || []).map(item => item.bank_id).filter(Boolean))]
+}
+
+function startAll(mode, items) {
+  const list = Array.isArray(items) ? items : []
+  const bankIds = uniqueBankIds(list)
+  if (!bankIds.length) return
+  start(mode, bankIds[0], list.map(item => item.question_id), bankIds)
+}
+
 function startDueAll() {
-  const group = dueBankGroups.value[0]
-  if (group) start('FSRS', group.bank_id, group.items.map(i => i.question_id))
+  startAll('FSRS', dueReviews.value)
 }
 
 function startDueGroup(group) {
@@ -477,10 +489,7 @@ function startFsrsOne(item) {
 }
 
 function startMistakeAll() {
-  const list = filteredMistakes.value
-  if (!list.length) return
-  const group = groupByBank(list)[0]
-  if (group) start('MISTAKE', group.bank_id, group.items.map(i => i.question_id))
+  startAll('MISTAKE', filteredMistakes.value)
 }
 
 function startMistakeOne(item) {
@@ -488,16 +497,17 @@ function startMistakeOne(item) {
 }
 
 function startKilledAll() {
-  const list = filteredKilled.value
-  if (!list.length) return
-  const group = groupByBank(list)[0]
-  if (group) start('ELIMINATION', group.bank_id, group.items.map(i => i.question_id))
+  startAll('ELIMINATION', filteredKilled.value)
 }
 
 function startPlanDay(day) {
-  const first = day.bank_tasks?.[0]
-  if (first?.bank_id) {
-    start('PRACTICE', first.bank_id, first.question_ids)
+  const tasks = Array.isArray(day.bank_tasks)
+    ? day.bank_tasks.filter(task => task?.bank_id && Array.isArray(task.question_ids) && task.question_ids.length)
+    : []
+  if (tasks.length) {
+    const bankIds = [...new Set(tasks.map(task => task.bank_id))]
+    const questionIds = [...new Set(tasks.flatMap(task => task.question_ids))]
+    start('PRACTICE', bankIds[0], questionIds, bankIds)
     return
   }
   if (day.question_ids?.length) start('PRACTICE', day.bank_id, day.question_ids)

@@ -10,11 +10,51 @@ class AssetRepository:
     def create(self, user_id: str, payload: dict) -> dict:
         asset_id = str(uuid.uuid4())
         with transaction(self.db_path) as conn:
-            conn.execute("INSERT INTO personal_assets(id, user_id, question_id, knowledge_tag_id, asset_type, content) VALUES (?, ?, ?, ?, ?, ?)", (asset_id, user_id, payload.get("question_id"), payload.get("knowledge_tag_id"), payload["asset_type"], payload["content"]))
+            conn.execute(
+                """INSERT INTO personal_assets(
+                    id, user_id, question_id, knowledge_tag_id, asset_type, content,
+                    file_name, mime_type, storage_key
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    asset_id,
+                    user_id,
+                    payload.get("question_id"),
+                    payload.get("knowledge_tag_id"),
+                    payload["asset_type"],
+                    payload["content"],
+                    payload.get("file_name"),
+                    payload.get("mime_type"),
+                    payload.get("storage_key"),
+                ),
+            )
             return dict(conn.execute("SELECT * FROM personal_assets WHERE id = ?", (asset_id,)).fetchone())
 
     def get_for_user(self, user_id: str, asset_id: str) -> dict | None:
         with transaction(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT * FROM personal_assets WHERE id = ? AND user_id = ?",
+                (asset_id, user_id),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def update(self, user_id: str, asset_id: str, payload: dict) -> dict | None:
+        fields = []
+        params = []
+        for key in ("asset_type", "content"):
+            if key in payload and payload[key] is not None:
+                fields.append(f"{key} = ?")
+                params.append(payload[key])
+        if not fields:
+            return self.get_for_user(user_id, asset_id)
+        fields.append("updated_at = CURRENT_TIMESTAMP")
+        params.extend([asset_id, user_id])
+        with transaction(self.db_path) as conn:
+            cursor = conn.execute(
+                f"UPDATE personal_assets SET {', '.join(fields)} WHERE id = ? AND user_id = ?",
+                tuple(params),
+            )
+            if cursor.rowcount == 0:
+                return None
             row = conn.execute(
                 "SELECT * FROM personal_assets WHERE id = ? AND user_id = ?",
                 (asset_id, user_id),

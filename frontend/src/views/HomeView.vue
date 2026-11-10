@@ -549,12 +549,43 @@ async function startToday() {
     await handleResume(activeSessions.value[0])
     return
   }
+  if (await startTodayPlan()) return
   const bank = banks.value.find(b => b.question_count > 0)
   if (bank) emit('start', bank)
   else openCreateBankDialog()
 }
 
+function todayPlanTask() {
+  const day = todayPlan.value?.days?.[0]
+  const tasks = Array.isArray(day?.bank_tasks)
+    ? day.bank_tasks.filter(task => task?.bank_id && Array.isArray(task.question_ids) && task.question_ids.length)
+    : []
+  if (!tasks.length) return null
+  const bankIds = [...new Set(tasks.map(task => task.bank_id))]
+  const questionIds = [...new Set(tasks.flatMap(task => task.question_ids))]
+  return { bankIds, questionIds }
+}
+
+async function startTodayPlan() {
+  const task = todayPlanTask()
+  if (!task) return false
+  try {
+    const session = await startSession(props.token, {
+      bank_id: task.bankIds[0],
+      ...(task.bankIds.length > 1 ? { bank_ids: task.bankIds } : {}),
+      mode: 'PRACTICE',
+      question_ids: task.questionIds,
+    })
+    router.push(`/practice/${session.id}`)
+    return true
+  } catch (err) {
+    error.value = err.detail || err.message
+    return false
+  }
+}
+
 async function startSprint() {
+  if (await startTodayPlan()) return
   const bank = banks.value.find(b => b.question_count > 0)
   if (!bank) {
     openCreateBankDialog()
@@ -1021,12 +1052,15 @@ async function onExamProfileChange() {
   }
   try {
     const bp = await getBlueprint(props.token, selectedProfileId.value)
-    if (bp && bp.sections?.length) {
-      const total = bp.sections.reduce((acc, s) => acc + (Number(s.count) || 0), 0)
+    // The API wraps the stored configuration as { id, profile_id, version_number, blueprint }.
+    const config = bp?.blueprint || {}
+    const sections = Array.isArray(config.sections) ? config.sections : []
+    if (sections.length) {
+      const total = sections.reduce((acc, s) => acc + (Number(s.count) || 0), 0)
       selectedProfileBlueprintSummary.value = {
-        sectionsCount: bp.sections.length,
+        sectionsCount: sections.length,
         totalQuestions: total,
-        negativeMark: bp.negative_mark || 0,
+        negativeMark: Number(config.negative_mark) || 0,
       }
       if (total > 0 && examBank.value) totalQuestions.value = Math.min(total, examBank.value.question_count || total)
     } else {
@@ -1053,6 +1087,7 @@ async function handleSyncedEvents(e) {
   }
   if (hasSession) {
     try { activeSessions.value = await listActiveSessions(props.token) } catch (_) {}
+    refreshLearningStats()
   }
 }
 

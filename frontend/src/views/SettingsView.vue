@@ -48,6 +48,33 @@
 
           <div class="setting-row setting-row-top">
             <div class="setting-label">
+              <div class="setting-name">{{ t('ep.settings.palette') }}</div>
+              <div class="setting-desc">{{ t('ep.settings.palette_note') }}</div>
+            </div>
+            <div class="palette-grid" role="radiogroup" :aria-label="t('ep.settings.palette')">
+              <button
+                v-for="id in palettes"
+                :key="id"
+                type="button"
+                class="palette-option"
+                :class="{ 'is-active': palette === id }"
+                role="radio"
+                :aria-checked="palette === id"
+                :aria-label="t(`ep.settings.palette_${id}`)"
+                :data-palette="id"
+                @click="setPalette(id)"
+              >
+                <span class="palette-swatch" :style="{ background: paletteSwatch(id).paper }">
+                  <span class="palette-swatch-dot" :style="{ background: paletteSwatch(id).accent }"></span>
+                </span>
+                <span class="palette-name">{{ t(`ep.settings.palette_${id}`) }}</span>
+                <LinearIcon v-if="palette === id" name="check" :size="13" />
+              </button>
+            </div>
+          </div>
+
+          <div class="setting-row setting-row-top">
+            <div class="setting-label">
               <div class="setting-name">{{ t('ep.settings.accent') }}</div>
               <div class="setting-desc">{{ t('ep.settings.accent_note') }}</div>
             </div>
@@ -102,6 +129,11 @@
             <p>{{ t('ep.settings.ai_note') }}</p>
           </div>
 
+          <div class="notice" :class="aiConfigured ? 'ok' : 'info'" style="margin-bottom: 16px">
+            <LinearIcon :name="aiConfigured ? 'check' : 'info'" :size="15" />
+            <span>{{ aiConfigured ? t('ep.settings.ai_configured') : t('ep.settings.ai_unconfigured') }}</span>
+          </div>
+
           <div class="settings-fields">
             <label class="field">
               <span class="label">{{ t('ep.settings.ai_provider') }}</span>
@@ -121,7 +153,7 @@
             <label class="field">
               <span class="label">{{ t('ep.settings.ai_key') }}</span>
               <input v-model="config.ai_api_key" class="input" type="password" :placeholder="t('ep.settings.ai_key_placeholder')" />
-              <span class="hint">{{ t('ep.settings.ai_key_set') }}</span>
+              <span v-if="config.ai_api_key" class="hint">{{ t('ep.settings.ai_key_set') }}</span>
             </label>
           </div>
 
@@ -134,7 +166,7 @@
             <button type="button" class="btn btn-primary" :disabled="savingAi" @click="saveAi">
               {{ savingAi ? t('ep.settings.ai_loading') : t('ep.settings.ai_save') }}
             </button>
-            <span v-if="aiNotice" class="settings-saved">{{ aiNotice }}</span>
+            <span v-if="aiNotice" class="settings-saved" :class="{ 'is-error': aiError }">{{ aiNotice }}</span>
           </div>
         </section>
 
@@ -158,7 +190,7 @@
               <input v-model.trim="config.search_api_base" class="input" type="text" placeholder="http://localhost:8000/v1/search" />
             </label>
             <label v-if="config.search_provider !== 'offline'" class="field">
-              <span class="label">{{ t('ep.settings.ai_key') }}</span>
+              <span class="label">{{ t('ep.settings.web_key') }}</span>
               <input v-model="config.search_api_key" class="input" type="password" :placeholder="t('ep.settings.ai_key_placeholder')" />
             </label>
           </div>
@@ -167,7 +199,7 @@
             <button type="button" class="btn btn-primary" :disabled="savingWeb" @click="saveWeb">
               {{ savingWeb ? t('ep.settings.ai_loading') : t('ep.settings.web_save') }}
             </button>
-            <span v-if="webNotice" class="settings-saved">{{ webNotice }}</span>
+            <span v-if="webNotice" class="settings-saved" :class="{ 'is-error': webError }">{{ webNotice }}</span>
           </div>
         </section>
 
@@ -190,11 +222,8 @@
             <button type="button" class="btn" @click="showPasswordModal = true">
               <LinearIcon name="key" :size="14" />{{ t('ep.settings.change_password') }}
             </button>
-            <button type="button" class="btn" @click="$emit('logout')">
-              <LinearIcon name="logout" :size="14" />{{ t('ep.settings.switch_account') }}
-            </button>
             <button type="button" class="btn btn-danger" @click="$emit('logout')">
-              {{ t('ep.settings.logout') }}
+              <LinearIcon name="logout" :size="14" />{{ t('ep.settings.logout') }}
             </button>
           </div>
 
@@ -217,10 +246,6 @@
             <div class="kv-row"><span class="kv-key">{{ t('ep.settings.about_languages') }}</span><span class="kv-val">{{ t('ep.settings.about_languages_value') }}</span></div>
             <div class="kv-row"><span class="kv-key">{{ t('ep.settings.about_sync') }}</span><span class="kv-val">{{ t('ep.settings.about_sync_value') }}</span></div>
             <div class="kv-row"><span class="kv-key">{{ t('ep.settings.version_label') }}</span><span class="kv-val mono">v{{ appVersion }}</span></div>
-          </div>
-
-          <div class="settings-actions">
-            <button type="button" class="btn" @click="$emit('logout')">{{ t('ep.account.logout') }}</button>
           </div>
         </section>
       </div>
@@ -247,7 +272,7 @@ const props = defineProps({
 defineEmits(['logout'])
 
 const { t, locale: currentLocale, setLocale } = useLocale()
-const { mode, setMode, customAccent, setCustomAccent } = useTheme()
+const { mode, setMode, palette, palettes, setPalette, customAccent, setCustomAccent } = useTheme()
 
 const activeSection = ref('appearance')
 const showPasswordModal = ref(false)
@@ -261,6 +286,17 @@ const navItems = [
   { key: 'account', label: 'ep.settings.nav_account', icon: 'user' },
   { key: 'about', label: 'ep.settings.nav_about', icon: 'info' },
 ]
+
+const PALETTE_SWATCHES = {
+  editorial: { paper: '#fbf9f4', accent: '#23554b' },
+  gruvbox: { paper: '#fbf1c7', accent: '#d79921' },
+  everforest: { paper: '#fdf6e3', accent: '#8da101' },
+  catppuccin: { paper: '#eff1f5', accent: '#8839ef' },
+}
+
+function paletteSwatch(id) {
+  return PALETTE_SWATCHES[id] || PALETTE_SWATCHES.editorial
+}
 
 const accentPresets = computed(() => {
   const pine = '#23554b'
@@ -294,6 +330,9 @@ const savingAi = ref(false)
 const savingWeb = ref(false)
 const aiNotice = ref('')
 const webNotice = ref('')
+const aiError = ref(false)
+const webError = ref(false)
+const aiConfigured = ref(false)
 
 function onAccentInput(event) {
   setCustomAccent(event.target.value)
@@ -303,6 +342,7 @@ async function loadConfig() {
   if (!props.token) return
   try {
     const res = await getAiConfig(props.token)
+    aiConfigured.value = Boolean(res.is_configured)
     config.value = {
       ai_provider: res.ai_provider || 'openai',
       ai_api_base: res.ai_api_base || 'https://api.openai.com/v1',
@@ -312,17 +352,23 @@ async function loadConfig() {
       search_api_key: res.search_api_key || '',
       search_api_base: res.search_api_base || 'http://localhost:8000/v1/search',
     }
-  } catch (_) {}
+  } catch (err) {
+    aiError.value = true
+    aiNotice.value = `${t('ep.settings.ai_load_failed')}${err.detail || err.message || ''}`
+  }
 }
 
 async function saveAi() {
   savingAi.value = true
   aiNotice.value = ''
+  aiError.value = false
   try {
     const updated = await updateAiConfig(props.token, config.value)
     config.value.ai_api_key = updated.ai_api_key ?? ''
+    aiConfigured.value = Boolean(updated.is_configured)
     aiNotice.value = t('ep.settings.ai_saved')
   } catch (err) {
+    aiError.value = true
     aiNotice.value = err.detail || err.message
   } finally {
     savingAi.value = false
@@ -332,11 +378,14 @@ async function saveAi() {
 async function saveWeb() {
   savingWeb.value = true
   webNotice.value = ''
+  webError.value = false
   try {
     const updated = await updateAiConfig(props.token, config.value)
     config.value.search_api_key = updated.search_api_key ?? ''
+    aiConfigured.value = Boolean(updated.is_configured)
     webNotice.value = t('ep.settings.web_saved')
   } catch (err) {
+    webError.value = true
     webNotice.value = err.detail || err.message
   } finally {
     savingWeb.value = false
@@ -383,6 +432,19 @@ onMounted(loadConfig)
 .segment.is-active { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
 
 .accent-grid { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.palette-grid { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.palette-option {
+  display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px;
+  border: 1px solid var(--line); background: none; color: var(--ink-2);
+  font-size: 11.5px; cursor: pointer;
+}
+.palette-option:hover { border-color: var(--ink-4); }
+.palette-option.is-active { border-color: var(--brand-line); color: var(--brand); }
+.palette-swatch {
+  width: 16px; height: 16px; flex: none; border: 1px solid var(--line-strong);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.palette-swatch-dot { width: 7px; height: 7px; border-radius: 50%; }
 .accent-option {
   display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px;
   border: 1px solid var(--line); background: none; color: var(--ink-2);
@@ -398,6 +460,7 @@ onMounted(loadConfig)
 .settings-note { margin-top: 20px; }
 .settings-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); }
 .settings-saved { font-size: 11.5px; color: var(--ok); }
+.settings-saved.is-error { color: var(--bad); }
 
 .account-block { display: flex; align-items: center; gap: 14px; padding: 16px 0; border-top: 1px solid var(--line); }
 .account-main { min-width: 0; }

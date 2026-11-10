@@ -29,8 +29,8 @@
       </div>
     </div>
 
-    <div v-if="notice" class="notice bad" style="margin-top: 16px">
-      <LinearIcon name="alert" :size="15" /><span>{{ notice }}</span>
+    <div v-if="notice" class="notice" :class="noticeIsError ? 'bad' : 'ok'" style="margin-top: 16px">
+      <LinearIcon :name="noticeIsError ? 'alert' : 'check'" :size="15" /><span>{{ notice }}</span>
     </div>
 
     <div v-if="loadingAssets" class="skeleton-rows">
@@ -74,13 +74,31 @@
           <div class="page-eyebrow">{{ formatType(selected.asset_type) }} · {{ formatDate(selected.created_at) }}</div>
           <h2 class="reader-title">{{ plainTitle(selected) }}</h2>
         </div>
-        <div class="reader-body">{{ selected.content || selected.file_name }}</div>
+
+        <div v-if="editingNote" class="reader-edit">
+          <textarea v-model="editContent" class="textarea reader-edit-input" rows="10" :placeholder="t('ep.library.note_body_placeholder')"></textarea>
+          <div class="reader-edit-actions">
+            <button type="button" class="btn btn-sm" :disabled="savingNote" @click="cancelEdit">{{ t('ep.common.cancel') }}</button>
+            <button type="button" class="btn btn-sm btn-primary" :disabled="savingNote || !editContent.trim()" @click="saveNote">
+              {{ savingNote ? t('ep.library.saving') : t('ep.common.save') }}
+            </button>
+          </div>
+        </div>
+        <div v-else class="reader-body">{{ selected.content || selected.file_name }}</div>
+
         <div v-if="selected.file_name" class="reader-file">
           <LinearIcon name="file" :size="15" />
-          <span class="mono">{{ selected.file_name }}</span>
+          <span class="mono reader-file-name">{{ selected.file_name }}</span>
+          <span class="reader-file-actions">
+            <button type="button" class="btn btn-sm btn-quiet file-preview" @click="previewFile(selected)">{{ t('ep.library.preview_file') }}</button>
+            <button type="button" class="btn btn-sm btn-quiet file-download" @click="downloadFile(selected)">{{ t('ep.library.download_file') }}</button>
+          </span>
         </div>
         <div class="reader-foot">
-          <button type="button" class="btn btn-sm btn-danger" @click="handleDelete(selected.id)">
+          <button v-if="!editingNote" type="button" class="btn btn-sm note-edit" @click="startEdit(selected)">
+            {{ t('ep.library.note_edit') }}
+          </button>
+          <button type="button" class="btn btn-sm btn-danger note-delete" :disabled="savingNote" @click="handleDelete(selected.id)">
             {{ t('ep.library.delete_asset') }}
           </button>
         </div>
@@ -117,7 +135,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import LinearIcon from '../components/LinearIcon.vue'
 import { useLocale } from '../composables/useLocale.js'
-import { listAssets, createAsset, uploadAssetFile, deleteAsset } from '../api/assets'
+import { listAssets, createAsset, uploadAssetFile, updateAsset, deleteAsset, fetchAssetBlob } from '../api/assets'
 
 const props = defineProps({
   token: { type: String, required: true },
@@ -136,6 +154,10 @@ const filterType = ref('ALL')
 const searchQuery = ref('')
 const selectedId = ref('')
 const notice = ref('')
+const noticeIsError = ref(false)
+const editingNote = ref(false)
+const editContent = ref('')
+const savingNote = ref(false)
 const fileInputRef = ref(null)
 
 const tabs = computed(() => [
@@ -170,6 +192,16 @@ watch(filteredAssets, list => {
   else if (!list.some(item => item.id === selectedId.value)) selectedId.value = list[0].id
 })
 
+watch(selectedId, () => {
+  editingNote.value = false
+  editContent.value = ''
+})
+
+function showNotice(message, isError = true) {
+  notice.value = message || ''
+  noticeIsError.value = isError
+}
+
 function countType(type) {
   return assetsList.value.filter(item => item.asset_type === type).length
 }
@@ -182,7 +214,7 @@ async function fetchAssets() {
     const res = await listAssets(props.token)
     assetsList.value = Array.isArray(res) ? res : (res?.assets || [])
   } catch (err) {
-    notice.value = err.detail || err.message
+    showNotice(err.detail || err.message)
   } finally {
     loadingAssets.value = false
   }
@@ -217,7 +249,7 @@ async function handleCreateAsset() {
     showAddModal.value = false
     await fetchAssets()
   } catch (err) {
-    notice.value = err.detail || err.message
+    showNotice(err.detail || err.message)
   } finally {
     savingAsset.value = false
   }
@@ -233,10 +265,74 @@ async function handleFileUpload(e) {
     showAddModal.value = false
     await fetchAssets()
   } catch (err) {
-    notice.value = err.detail || err.message
+    showNotice(err.detail || err.message)
   } finally {
     uploadingAsset.value = false
     e.target.value = ''
+  }
+}
+
+function startEdit(item) {
+  if (!item) return
+  selectedId.value = item.id
+  editContent.value = item.content || ''
+  editingNote.value = true
+  notice.value = ''
+}
+
+function cancelEdit() {
+  editingNote.value = false
+  editContent.value = ''
+}
+
+async function saveNote() {
+  const item = selected.value
+  if (!item || !editContent.value.trim()) return
+  savingNote.value = true
+  notice.value = ''
+  try {
+    const updated = await updateAsset(props.token, item.id, { content: editContent.value.trim() })
+    assetsList.value = assetsList.value.map(asset => asset.id === updated.id ? { ...asset, ...updated } : asset)
+    editingNote.value = false
+    showNotice(t('ep.library.note_saved'), false)
+  } catch (err) {
+    showNotice(err.detail || err.message)
+  } finally {
+    savingNote.value = false
+  }
+}
+
+async function previewFile(item) {
+  if (!item) return
+  const previewWindow = window.open('', '_blank')
+  notice.value = ''
+  try {
+    const { blob } = await fetchAssetBlob(props.token, item.id)
+    const url = URL.createObjectURL(blob)
+    if (previewWindow) previewWindow.location.href = url
+    else window.open(url, '_blank')
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  } catch (err) {
+    if (previewWindow) previewWindow.close()
+    showNotice(err.detail || err.message)
+  }
+}
+
+async function downloadFile(item) {
+  if (!item) return
+  notice.value = ''
+  try {
+    const { blob } = await fetchAssetBlob(props.token, item.id, { download: true })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = item.file_name || 'material'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  } catch (err) {
+    showNotice(err.detail || err.message)
   }
 }
 
@@ -247,7 +343,7 @@ async function handleDelete(id) {
     await deleteAsset(props.token, id)
     await fetchAssets()
   } catch (err) {
-    notice.value = err.detail || err.message
+    showNotice(err.detail || err.message)
   }
 }
 
@@ -303,7 +399,12 @@ onMounted(fetchAssets)
 .reader-head { border-bottom: 1px solid var(--line); padding-bottom: 16px; }
 .reader-title { margin: 6px 0 0; font-family: var(--font-serif); font-size: 24px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
 .reader-body { padding: 22px 0; font-family: var(--font-serif); font-size: 15.5px; line-height: 1.95; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
-.reader-file { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--ink-2); }
+.reader-edit { padding: 18px 0; display: flex; flex-direction: column; gap: 10px; }
+.reader-edit-input { width: 100%; min-height: 220px; resize: vertical; font-family: var(--font-serif); line-height: 1.8; }
+.reader-edit-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.reader-file { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--ink-2); }
+.reader-file-name { overflow-wrap: anywhere; }
+.reader-file-actions { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; }
 .reader-foot { display: flex; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
 .library-dialog { width: min(100%, 520px); }
 @media (max-width: 860px) {

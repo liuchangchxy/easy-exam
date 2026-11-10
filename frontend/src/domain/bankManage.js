@@ -35,6 +35,103 @@ export function canEditQuestionInBank({ role, hasActiveExam = false, isQuestionI
   return true
 }
 
+/**
+ * A question is locked only when an unfinished exam currently includes it.
+ * Other questions in the same bank stay editable.
+ */
+export function isQuestionLocked(question) {
+  return Boolean(question && (question.locked_by_active_exam || question.locked))
+}
+
+export function canEditQuestion({ role, question, hasActiveExam = false } = {}) {
+  if (!canEditBankContent(role)) return false
+  if (hasActiveExam || isQuestionLocked(question)) return false
+  return true
+}
+
+export function createSelection() {
+  return new Set()
+}
+
+export function toggleSelection(selection, questionId) {
+  const next = new Set(selection || [])
+  const id = String(questionId || '').trim()
+  if (!id) return next
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  return next
+}
+
+export function toggleVisibleSelection(selection, visibleIds, checked) {
+  const next = new Set(selection || [])
+  for (const raw of visibleIds || []) {
+    const id = String(raw || '').trim()
+    if (!id) continue
+    if (checked) next.add(id)
+    else next.delete(id)
+  }
+  return next
+}
+
+export function isAllVisibleSelected(selection, visibleIds) {
+  const ids = (visibleIds || []).map(id => String(id || '').trim()).filter(Boolean)
+  if (!ids.length) return false
+  return ids.every(id => selection?.has?.(id))
+}
+
+export function buildBatchRequest(operation, questionIds, extras = {}) {
+  const ids = [...new Set((questionIds || []).map(id => String(id || '').trim()).filter(Boolean))]
+  if (!ids.length) return { error: 'no_questions' }
+
+  const op = String(operation || '').trim().toLowerCase()
+  const allowed = ['chapter', 'add_tags', 'remove_tags', 'move', 'copy', 'archive', 'restore']
+  if (!allowed.includes(op)) return { error: 'invalid_operation' }
+
+  const payload = { question_ids: ids, operation: op }
+
+  if (op === 'chapter') {
+    if (extras.chapterId === undefined || extras.chapterId === null) return { error: 'chapter_required' }
+    payload.chapter_id = extras.chapterId || null
+  }
+
+  if (op === 'add_tags' || op === 'remove_tags') {
+    const tags = [...new Set((extras.tags || []).map(tag => String(tag || '').trim()).filter(Boolean))]
+    if (!tags.length) return { error: 'tags_required' }
+    payload.tags = tags
+  }
+
+  if (op === 'move' || op === 'copy') {
+    const targetBankId = String(extras.targetBankId || '').trim()
+    if (!targetBankId) return { error: 'target_required' }
+    payload.target_bank_id = targetBankId
+  }
+
+  return { payload }
+}
+
+export function normalizeAnswer(type, answer) {
+  const t = String(type || '').toUpperCase()
+  const raw = String(answer ?? '').trim()
+  if (t === 'MULTI') {
+    return [...new Set(raw.split(/[,;\s]+/).map(key => key.trim().toUpperCase()).filter(Boolean))].sort().join(',')
+  }
+  if (t === 'SINGLE' || t === 'JUDGE') return raw.toUpperCase()
+  return raw
+}
+
+/**
+ * Ask before re-grading existing attempts: only when the scoring-relevant
+ * content changed and the draft still carries a usable answer.
+ */
+export function shouldOfferRegrade(original = {}, draft = {}) {
+  const newAnswer = String(draft?.answer ?? '').trim()
+  if (!newAnswer) return false
+  const originalType = String(original?.type || '').toUpperCase()
+  const draftType = String(draft?.type || '').toUpperCase()
+  if (originalType !== draftType) return true
+  return normalizeAnswer(originalType, original?.answer) !== normalizeAnswer(draftType, newAnswer)
+}
+
 export function filterBankQuestions(questions, filters) {
   if (!Array.isArray(questions)) return []
   if (!filters || !isFilterActive(filters)) return questions.slice()

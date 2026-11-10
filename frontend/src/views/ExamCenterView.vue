@@ -247,7 +247,7 @@
         </div>
       </div>
       <div class="drawer-foot">
-        <button type="button" class="btn btn-primary" :disabled="savingBp" @click="saveBp">
+        <button type="button" class="btn btn-primary" :disabled="savingBp || !bpLoaded" @click="saveBp">
           {{ savingBp ? t('ep.common.loading') : t('ep.exam.blueprint_save') }}
         </button>
         <span class="spacer"></span>
@@ -288,7 +288,9 @@ const setup = ref({ bankId: '', profileId: '', total: 50, minutes: 120, recordMi
 
 const editingProfile = ref(null)
 const bpForm = ref({ negative_mark: 0, sections: [] })
+const bpMeta = ref({})
 const bpError = ref('')
+const bpLoaded = ref(false)
 const savingBp = ref(false)
 
 const examBanks = computed(() => banks.value.filter(b => (b.question_count || 0) > 0))
@@ -303,7 +305,10 @@ const setupMax = computed(() => {
 })
 const setupValid = computed(() => {
   const n = Number(setup.value.total)
-  return !!setup.value.bankId && n >= 1 && n <= setupMax.value && Number(setup.value.minutes) > 0
+  const minutes = Number(setup.value.minutes)
+  return !!setup.value.bankId
+    && Number.isInteger(n) && n >= 1 && n <= setupMax.value
+    && Number.isInteger(minutes) && minutes >= 1 && minutes <= 600
 })
 
 const bpTotal = computed(() => bpForm.value.sections.reduce((sum, s) => sum + (Number(s.count) || 0), 0))
@@ -381,7 +386,10 @@ function openSetup(profile = null, bank = null) {
 
 function onSetupBankChange() {
   const bank = setupBank.value
-  if (bank) setup.value.total = Math.min(Number(setup.value.total) || bank.question_count, bank.question_count)
+  if (bank) {
+    const requested = Number(setup.value.total) || bank.question_count
+    setup.value.total = Math.min(requested, bank.question_count, setupMax.value)
+  }
   setupError.value = ''
 }
 
@@ -394,7 +402,10 @@ function onSetupProfileChange() {
 
 async function beginExam() {
   if (!setupValid.value) {
-    setupError.value = t('ep.exam.invalid_count', { max: setupMax.value })
+    const minutes = Number(setup.value.minutes)
+    setupError.value = Number.isInteger(minutes) && minutes >= 1 && minutes <= 600
+      ? t('ep.exam.invalid_count', { max: setupMax.value })
+      : t('ep.exam.invalid_time')
     return
   }
   starting.value = true
@@ -429,35 +440,41 @@ async function abandon(session) {
 async function openBlueprint(profile) {
   editingProfile.value = profile
   bpError.value = ''
+  bpLoaded.value = false
+  bpMeta.value = {}
   bpForm.value = { negative_mark: 0, sections: [] }
   try {
     const bp = await getBlueprint(props.token, profile.id)
     const data = bp?.blueprint || {}
-    bpForm.value = {
-      negative_mark: Number(data.negative_mark) || 0,
-      sections: (data.sections || []).map(s => ({
-        name: s.name || '',
-        type: s.type || 'SINGLE',
-        count: Number(s.count) || 0,
-        difficulty: s.difficulty ?? null,
-        chapter_id: s.chapter_id || '',
-        tags: s.tags || '',
-      })),
+    bpMeta.value = blueprintMetaOf(data)
+    bpForm.value = { negative_mark: Number(data.negative_mark) || 0, sections: blueprintSections(data) }
+    bpLoaded.value = true
+  } catch (err) {
+    if (err?.status === 404) {
+      // A profile without a saved blueprint legitimately starts from empty.
+      bpForm.value = { negative_mark: 0, sections: [] }
+      bpLoaded.value = true
+      return
     }
-  } catch (_) {
-    const data = blueprintOf(profile) || {}
-    bpForm.value = {
-      negative_mark: Number(data.negative_mark) || 0,
-      sections: (data.sections || []).map(s => ({
-        name: s.name || '',
-        type: s.type || 'SINGLE',
-        count: Number(s.count) || 0,
-        difficulty: s.difficulty ?? null,
-        chapter_id: s.chapter_id || '',
-        tags: s.tags || '',
-      })),
-    }
+    bpError.value = `${t('ui.k0288')}${err.detail || err.message}`
   }
+}
+
+function blueprintMetaOf(blueprint) {
+  const { sections: _sections, negative_mark: _negative, ...meta } = blueprint || {}
+  return meta
+}
+
+function blueprintSections(blueprint) {
+  return (blueprint?.sections || []).map(section => ({
+    ...section,
+    name: section.name || '',
+    type: section.type || 'SINGLE',
+    count: Number(section.count) || 0,
+    difficulty: section.difficulty ?? null,
+    chapter_id: section.chapter_id || '',
+    tags: section.tags || '',
+  }))
 }
 
 function addSection() {
@@ -474,7 +491,7 @@ function typeName(type) {
 }
 
 async function saveBp() {
-  if (!editingProfile.value) return
+  if (!editingProfile.value || !bpLoaded.value) return
   if (bpTotal.value <= 0) {
     bpError.value = t('ep.exam.blueprint_invalid')
     return
@@ -483,9 +500,11 @@ async function saveBp() {
   bpError.value = ''
   try {
     await saveBlueprint(props.token, editingProfile.value.id, {
+      ...bpMeta.value,
       negative_mark: Number(bpForm.value.negative_mark) || 0,
       sections: bpForm.value.sections.map(s => ({
-        name: typeName(s.type),
+        ...s,
+        name: String(s.name || '').trim() || typeName(s.type),
         type: s.type,
         count: Number(s.count) || 0,
         difficulty: s.difficulty ?? null,

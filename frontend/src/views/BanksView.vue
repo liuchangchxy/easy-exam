@@ -34,12 +34,21 @@
     </div>
 
     <div v-else-if="filteredBanks.length" class="bank-list">
-      <button v-for="bank in filteredBanks" :key="bank.id" type="button" class="bank-row banks-row" @click="router.push(`/banks/${bank.id}`)">
+      <div
+        v-for="bank in filteredBanks"
+        :key="bank.id"
+        class="bank-row banks-row"
+        role="button"
+        tabindex="0"
+        @click="router.push(`/banks/${bank.id}`)"
+        @keydown.enter.prevent="router.push(`/banks/${bank.id}`)"
+        @keydown.space.prevent="router.push(`/banks/${bank.id}`)"
+      >
         <span class="od-stack" style="--od-gap:2px;text-align:left;min-width:0">
           <span class="bank-name">
             {{ bank.name }}
             <span class="tag">{{ roleLabel(bank.role) }}</span>
-            <span v-if="bank.has_active_exam" class="tag warn">{{ t('ep.today.active_badge') }}</span>
+            <span v-if="bank.has_active_exam" class="tag warn" :title="t('ep.manage.locked_desc')">{{ t('ep.today.active_badge') }}</span>
           </span>
           <span class="bank-meta">
             <span>{{ bank.category || t('ep.nav.banks') }}</span>
@@ -48,11 +57,16 @@
           </span>
         </span>
         <span class="bank-actions-cell">
-          <span class="btn btn-sm" @click.stop="startPractice(bank)">{{ t('ep.banks.practice') }}</span>
-          <span class="btn btn-sm btn-quiet" @click.stop="router.push(`/banks/${bank.id}/manage`)">{{ t('ep.banks.manage') }}</span>
+          <button type="button" class="btn btn-sm" @click.stop="startPractice(bank)">{{ t('ep.banks.practice') }}</button>
+          <button
+            type="button"
+            class="btn btn-sm btn-quiet"
+            :title="bank.has_active_exam ? t('ep.manage.locked_desc') : ''"
+            @click.stop="router.push(`/banks/${bank.id}/manage`)"
+          >{{ t('ep.banks.manage') }}</button>
           <LinearIcon name="chevron-right" :size="16" />
         </span>
-      </button>
+      </div>
     </div>
 
     <div v-else class="empty">
@@ -177,8 +191,20 @@ onMounted(load)
 
 <style scoped>
 .banks-page { padding-top: 30px; }
-.banks-row { width: 100%; }
-.bank-meta .od-truncate { max-width: 420px; }
-.bank-actions-cell { display: flex; align-items: center; gap: 8px; color: var(--ink-4); }
+.banks-row { width: 100%; flex-wrap: wrap; row-gap: 10px; cursor: pointer; }
+.banks-row:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.bank-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.bank-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; min-width: 0; }
+.bank-meta .od-truncate { max-width: min(420px, 100%); }
+.bank-actions-cell { display: flex; align-items: center; gap: 8px; color: var(--ink-4); flex-wrap: wrap; }
 .small { font-size: 12px; }
+@media (max-width: 640px) {
+  .banks-page { overflow-x: hidden; }
+  .page-head .page-actions { width: 100%; flex-wrap: wrap; }
+  .page-head .page-actions .btn { flex: 1 1 auto; justify-content: center; }
+  .toolbar { flex-wrap: wrap; }
+  .toolbar .search-box { flex: 1 1 100%; min-width: 0; }
+  .bank-actions-cell { width: 100%; justify-content: flex-end; }
+  .bank-meta .od-truncate { max-width: 100%; }
+}
 </style>

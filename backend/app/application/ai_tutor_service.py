@@ -3,6 +3,14 @@ import threading
 from typing import Any, Dict, List, Optional
 
 
+class AiNotConfiguredError(RuntimeError):
+    """Raised when the optional AI provider has no usable configuration."""
+
+
+class AiGenerationError(RuntimeError):
+    """Raised when the configured AI provider returns unusable output."""
+
+
 class AiTutorService:
     def __init__(self, answers, questions, provider=None, web_search=None, conversations=None, assets=None, drafts=None, ai_configs=None):
         self.answers = answers
@@ -213,7 +221,7 @@ class AiTutorService:
         self,
         user_id: str,
         original_question_id: str,
-        target_bank_id: str,
+        target_bank_id: str | None = None,
         prompt_hint: str = "",
     ) -> dict:
         if not self.drafts:
@@ -221,6 +229,15 @@ class AiTutorService:
         original = self.questions.get_for_user(original_question_id, user_id)
         if not original:
             raise LookupError("original question not found")
+
+        resolved_bank_id = (target_bank_id or "").strip() or original.get("bank_id")
+        if not resolved_bank_id:
+            raise ValueError("target_bank_id is required")
+        role = self.drafts.get_bank_role(user_id, resolved_bank_id)
+        if role is None:
+            raise LookupError("target bank not found")
+        if role not in ("ADMIN", "EDITOR"):
+            raise PermissionError("user cannot edit this question bank")
 
         provider = self._get_provider_for_user(user_id)
 
@@ -240,27 +257,41 @@ class AiTutorService:
             },
         ]
 
-        raw_output = provider.chat_complete(variant_prompt)
-        cleaned = raw_output.strip()
+        try:
+            raw_output = provider.chat_complete(variant_prompt)
+        except Exception as exc:
+            raise AiGenerationError("AI 变式题生成失败：模型服务调用失败") from exc
+        if not raw_output or not str(raw_output).strip():
+            raise AiNotConfiguredError("AI 未配置或暂不可用")
+        from backend.legacy.services.ai_service import OFFLINE_FALLBACK_MESSAGE
+        if str(raw_output).strip() == OFFLINE_FALLBACK_MESSAGE:
+            raise AiNotConfiguredError("AI 未配置或暂不可用")
+
+        cleaned = str(raw_output).strip()
         if cleaned.startswith("```"):
             cleaned = cleaned.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
         try:
             draft_payload = json.loads(cleaned)
         except Exception as exc:
-            raise ValueError(f"AI 变式题生成失败，模型输出解析异常: {exc}") from exc
+            raise ValueError("AI 变式题生成失败：模型输出解析异常") from exc
 
-        if not isinstance(draft_payload, dict) or not draft_payload.get("stem"):
-            raise ValueError("模型未返回有效变式题内容")
-        # 题型契约归一化: MULTIPLE -> MULTI
-        if draft_payload.get("type") == "MULTIPLE":
-            draft_payload["type"] = "MULTI"
+        if not isinstance(draft_payload, dict) or not str(draft_payload.get("stem") or "").strip():
+            raise ValueError("AI 变式题生成失败：模型未返回有效变式题内容")
 
-        return self.drafts.create_draft(user_id, original_question_id, target_bank_id, draft_payload)
+        # 题型契约归一化: MULTIPLE -> MULTI，并拒绝模型返回的未知题型。
+        q_type = str(draft_payload.get("type") or "SINGLE").strip().upper()
+        if q_type == "MULTIPLE":
+            q_type = "MULTI"
+        if q_type not in {"SINGLE", "MULTI", "JUDGE", "FILL", "ESSAY", "QA", "SHORT_ANSWER", "SUBJECTIVE"}:
+            raise ValueError("AI 变式题生成失败：模型返回了不支持的题型")
+        draft_payload["type"] = q_type
 
-    def list_variant_drafts(self, user_id: str, status: str = "DRAFT") -> list[dict]:
+        return self.drafts.create_draft(user_id, original_question_id, resolved_bank_id, draft_payload)
+
+    def list_variant_drafts(self, user_id: str, status: str = "DRAFT", bank_id: str | None = None) -> list[dict]:
         if not self.drafts:
             return []
-        return self.drafts.list_drafts(user_id, status)
+        return self.drafts.list_drafts(user_id, status, bank_id)
 
     def get_variant_draft(self, user_id: str, draft_id: str) -> dict:
         if not self.drafts:
@@ -273,13 +304,16 @@ class AiTutorService:
     def accept_variant_draft(self, user_id: str, draft_id: str, modifications: Optional[dict] = None) -> dict:
         if not self.drafts:
             raise LookupError("AiDraftRepository is not configured")
-        
+
         # 在同一个数据库事务内原子完成草稿状态抢占与正式题目创建，杜绝补偿回滚和状态不一致
         from backend.app.infrastructure.db.connection import transaction
         with transaction(self.drafts.db_path) as conn:
-            draft = self.drafts.get_draft(user_id, draft_id)
+            draft = self.drafts.get_draft(user_id, draft_id, conn=conn)
             if not draft or draft.get("status") != "DRAFT":
                 raise LookupError("draft not found or already processed")
+            role = self.drafts.get_bank_role(user_id, draft["target_bank_id"], conn=conn)
+            if role not in ("ADMIN", "EDITOR"):
+                raise PermissionError("user cannot edit this question bank")
 
             updated_draft = self.drafts.update_status(user_id, draft_id, "ACCEPTED", expected_status="DRAFT", conn=conn)
             if not updated_draft:

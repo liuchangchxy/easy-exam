@@ -27,6 +27,15 @@
       </div>
     </div>
 
+    <div v-if="bankLocked" class="notice warn bank-notice">
+      <LinearIcon name="lock" :size="15" />
+      <span>{{ t('ep.banks.locked_banner') }}</span>
+    </div>
+    <div v-else-if="bank && !canEditContent" class="notice info bank-notice">
+      <LinearIcon name="info" :size="15" />
+      <span>{{ t('ep.banks.readonly_banner') }}</span>
+    </div>
+
     <div class="tabs">
       <button v-for="tab in tabs" :key="tab.key" type="button" class="tab" :class="{ 'is-active': activeTab === tab.key }" @click="activeTab = tab.key">
         {{ t(tab.label) }}<span v-if="tab.count != null" class="count">{{ tab.count }}</span>
@@ -59,7 +68,7 @@
           </div>
 
           <div v-if="filteredQuestions.length" class="qlist">
-            <button v-for="(q, index) in filteredQuestions" :key="q.id" type="button" class="qrow bank-qrow" @click="selectedQuestion = q">
+            <button v-for="(q, index) in filteredQuestions" :key="q.id" type="button" class="qrow bank-qrow" @click="openQuestion(q)">
               <span class="qrow-num mono">{{ String(index + 1).padStart(2, '0') }}</span>
               <span class="qrow-main">
                 <span class="qrow-stem">{{ stripHtml(q.stem) }}</span>
@@ -131,7 +140,8 @@
         <div style="flex: 1; min-width: 0">
           <div class="drawer-title">{{ t('ep.banks.detail') }}</div>
           <div class="drawer-sub">
-            {{ selectedQuestion.id.toUpperCase() }} · v{{ selectedQuestion.version_number }} · {{ typeLabel(selectedQuestion.type) }}
+            {{ selectedQuestion.id.toUpperCase() }} · v{{ drawerQuestion.version_number }} · {{ typeLabel(drawerQuestion.type) }}
+            <span v-if="versionPreview" class="tag">{{ t('ep.banks.version_history') }}</span>
           </div>
         </div>
         <button type="button" class="icon-btn" :aria-label="t('ep.common.close')" @click="selectedQuestion = null">
@@ -139,30 +149,57 @@
         </button>
       </div>
       <div class="drawer-body">
+        <section class="version-panel">
+          <div class="version-panel-head">
+            <span class="rule-label">{{ t('ep.banks.version_history') }}</span>
+            <span class="small dim">{{ t('ep.banks.version_current') }} v{{ selectedQuestion.version_number }}</span>
+          </div>
+          <p v-if="versionError" class="hint bad-text">{{ versionError }}</p>
+          <p v-else-if="versionsLoading" class="hint">{{ t('ep.common.loading') }}</p>
+          <p v-else-if="!versions.length" class="hint">{{ t('ep.banks.version_history_empty') }}</p>
+          <div v-else class="version-list">
+            <button
+              v-for="ver in versions"
+              :key="ver.id"
+              type="button"
+              class="version-item"
+              :class="{ 'is-active': versionPreview?.id === ver.id, 'is-current': ver.version_number === selectedQuestion.version_number }"
+              @click="versionPreview = ver"
+            >
+              <span class="mono">v{{ ver.version_number }}</span>
+              <span class="od-truncate">{{ stripHtml(ver.stem) }}</span>
+              <span v-if="ver.version_number === selectedQuestion.version_number" class="tag ok">{{ t('ep.banks.version_current') }}</span>
+            </button>
+          </div>
+          <div v-if="versionPreview" class="version-preview-note">
+            <span>{{ t('ep.banks.version_preview_note') }}</span>
+            <button type="button" class="btn btn-sm btn-quiet" @click="versionPreview = null">{{ t('ep.banks.version_back') }}</button>
+          </div>
+        </section>
         <div class="q-sheet reading-page" style="box-shadow: none; padding: 0">
           <div class="q-meta">
-            <span>{{ chapterName(selectedQuestion.chapter_id) }}</span>
-            <span>{{ difficultyLabel(selectedQuestion.difficulty) }}</span>
+            <span>{{ chapterName(drawerQuestion.chapter_id) }}</span>
+            <span>{{ difficultyLabel(drawerQuestion.difficulty) }}</span>
           </div>
-          <div class="q-stem bank-q-stem">{{ selectedQuestion.stem }}</div>
-          <div v-if="selectedQuestion.options?.length" class="opt-list">
-            <div v-for="opt in selectedQuestion.options" :key="opt.key" class="opt" :class="{ 'is-correct': isCorrectOption(selectedQuestion, opt.key) }">
+          <div class="q-stem bank-q-stem">{{ drawerQuestion.stem }}</div>
+          <div v-if="drawerQuestion.options?.length" class="opt-list">
+            <div v-for="opt in drawerQuestion.options" :key="opt.key" class="opt" :class="{ 'is-correct': isCorrectOption(drawerQuestion, opt.key) }">
               <span class="opt-key">{{ opt.key }}</span>
               <span class="opt-text">{{ opt.text || opt.content }}</span>
-              <span v-if="isCorrectOption(selectedQuestion, opt.key)" class="opt-mark"><LinearIcon name="check" :size="14" /></span>
+              <span v-if="isCorrectOption(drawerQuestion, opt.key)" class="opt-mark"><LinearIcon name="check" :size="14" /></span>
             </div>
           </div>
           <div class="answer-line">
             <LinearIcon name="check" :size="15" />
             <span>{{ t('ep.banks.answer') }}</span>
-            <span class="ans">{{ selectedQuestion.answer || t('ep.banks.answer_none') }}</span>
+            <span class="ans">{{ drawerQuestion.answer || t('ep.banks.answer_none') }}</span>
           </div>
-          <div class="explain-body bank-q-explain">{{ selectedQuestion.explanation || t('ep.exam.no_analysis') }}</div>
+          <div class="explain-body bank-q-explain">{{ drawerQuestion.explanation || t('ep.exam.no_analysis') }}</div>
           <div class="kv" style="margin-top: 20px">
-            <div><span class="k">{{ t('ep.banks.type') }}</span><span class="v">{{ typeLabel(selectedQuestion.type) }}</span></div>
-            <div><span class="k">{{ t('ep.banks.chapter') }}</span><span class="v">{{ chapterName(selectedQuestion.chapter_id) }}</span></div>
-            <div><span class="k">{{ t('ep.banks.difficulty') }}</span><span class="v">{{ difficultyLabel(selectedQuestion.difficulty) }}</span></div>
-            <div><span class="k">{{ t('ep.banks.version') }}</span><span class="v">v{{ selectedQuestion.version_number }}</span></div>
+            <div><span class="k">{{ t('ep.banks.type') }}</span><span class="v">{{ typeLabel(drawerQuestion.type) }}</span></div>
+            <div><span class="k">{{ t('ep.banks.chapter') }}</span><span class="v">{{ chapterName(drawerQuestion.chapter_id) }}</span></div>
+            <div><span class="k">{{ t('ep.banks.difficulty') }}</span><span class="v">{{ difficultyLabel(drawerQuestion.difficulty) }}</span></div>
+            <div><span class="k">{{ t('ep.banks.version') }}</span><span class="v">v{{ drawerQuestion.version_number }}</span></div>
           </div>
           <div class="notice info" style="margin-top: 18px">
             <LinearIcon name="info" :size="15" />
@@ -171,11 +208,22 @@
         </div>
       </div>
       <div class="drawer-foot">
-        <button type="button" class="btn btn-primary" @click="practiceOne(selectedQuestion)">
+        <button v-if="!versionPreview" type="button" class="btn btn-primary" @click="practiceOne(selectedQuestion)">
           <LinearIcon name="play" :size="14" />{{ t('ep.banks.practice_one') }}
         </button>
+        <span v-else class="small dim">{{ t('ep.banks.version_preview_note') }}</span>
         <span class="spacer"></span>
-        <button type="button" class="btn btn-quiet" @click="router.push(`/banks/${bankId}/manage`)">{{ t('ep.banks.manage') }}</button>
+        <div v-if="copyTargets.length && !versionPreview" class="copy-form">
+          <select v-model="copyTargetId" class="select copy-select" :aria-label="t('ep.banks.copy_to')">
+            <option value="" disabled>{{ t('ep.banks.copy_target_placeholder') }}</option>
+            <option v-for="target in copyTargets" :key="target.id" :value="target.id">{{ target.name }}</option>
+          </select>
+          <button type="button" class="btn btn-sm" :disabled="copyBusy || !copyTargetId" @click="copyQuestion">
+            {{ copyBusy ? t('ep.common.loading') : t('ep.banks.copy_action') }}
+          </button>
+        </div>
+        <span v-else-if="!versionPreview && canEditContent" class="small dim">{{ t('ep.banks.no_copy_target') }}</span>
+        <span v-if="copyNotice" class="small copy-notice">{{ copyNotice }}</span>
       </div>
     </aside>
   </div>
@@ -186,8 +234,17 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
 import { useLocale } from '../composables/useLocale.js'
-import { getBank, listBankQuestionsContent, listChapters, listBankMembers } from '../api/banks'
+import {
+  getBank,
+  listBanks,
+  listBankQuestionsContent,
+  listChapters,
+  listBankMembers,
+  copyQuestionToBank,
+} from '../api/banks'
+import { listQuestionVersions } from '../api/questions'
 import { startSession } from '../api/practice'
+import { canEditBankContent, isQuestionLocked } from '../domain/bankManage'
 
 const props = defineProps({ token: { type: String, required: true }, bankId: { type: String, required: true } })
 const router = useRouter()
@@ -197,11 +254,30 @@ const bank = ref(null)
 const questions = ref([])
 const chapters = ref([])
 const members = ref([])
+const banks = ref([])
 const loading = ref(true)
 const activeTab = ref('questions')
 const query = ref('')
 const chapterFilter = ref('')
 const selectedQuestion = ref(null)
+const versionPreview = ref(null)
+const versions = ref([])
+const versionsLoading = ref(false)
+const versionError = ref('')
+const copyTargetId = ref('')
+const copyBusy = ref(false)
+const copyNotice = ref('')
+
+const canEditContent = computed(() => canEditBankContent(bank.value?.role))
+
+const bankLocked = computed(() => Boolean(bank.value?.locked_by_active_exam || bank.value?.has_active_exam) || questions.value.some(q => isQuestionLocked(q)))
+
+const drawerQuestion = computed(() => versionPreview.value || selectedQuestion.value || {})
+
+const copyTargets = computed(() => banks.value.filter(item => {
+  if (item.id === props.bankId) return false
+  return ['ADMIN', 'EDITOR'].includes(String(item.role || '').toUpperCase())
+}))
 
 const tabs = computed(() => [
   { key: 'questions', label: 'ep.banks.question_browse', count: questions.value.length },
@@ -253,17 +329,61 @@ function isCorrectOption(question, key) {
 
 async function load() {
   loading.value = true
-  const [bankRes, qRes, chRes, membersRes] = await Promise.allSettled([
+  const [bankRes, qRes, chRes, membersRes, banksRes] = await Promise.allSettled([
     getBank(props.token, props.bankId),
     listBankQuestionsContent(props.token, props.bankId),
     listChapters(props.token, props.bankId),
     listBankMembers(props.token, props.bankId),
+    listBanks(props.token),
   ])
   bank.value = bankRes.status === 'fulfilled' ? bankRes.value : null
   questions.value = qRes.status === 'fulfilled' && Array.isArray(qRes.value) ? qRes.value : []
   chapters.value = chRes.status === 'fulfilled' && Array.isArray(chRes.value) ? chRes.value : []
   members.value = membersRes.status === 'fulfilled' && Array.isArray(membersRes.value) ? membersRes.value : []
+  banks.value = banksRes.status === 'fulfilled' && Array.isArray(banksRes.value) ? banksRes.value : []
   loading.value = false
+}
+
+let versionRequestSeq = 0
+
+async function openQuestion(question) {
+  selectedQuestion.value = question
+  versionPreview.value = null
+  versions.value = []
+  versionError.value = ''
+  copyNotice.value = ''
+  copyTargetId.value = ''
+  versionsLoading.value = true
+  const requestId = ++versionRequestSeq
+  try {
+    const res = await listQuestionVersions(props.token, question.id)
+    if (requestId !== versionRequestSeq) return
+    versions.value = Array.isArray(res)
+      ? res.slice().sort((a, b) => (b.version_number || 0) - (a.version_number || 0))
+      : []
+  } catch (err) {
+    if (requestId !== versionRequestSeq) return
+    versionError.value = err?.detail || err?.message || t('ep.banks.version_history_empty')
+  } finally {
+    if (requestId === versionRequestSeq) versionsLoading.value = false
+  }
+}
+
+async function copyQuestion() {
+  if (!selectedQuestion.value || !copyTargetId.value || copyBusy.value) return
+  copyBusy.value = true
+  copyNotice.value = ''
+  const target = copyTargets.value.find(item => item.id === copyTargetId.value)
+  try {
+    await copyQuestionToBank(props.token, props.bankId, selectedQuestion.value.id, copyTargetId.value)
+    copyNotice.value = t('ep.banks.copy_done', { name: target?.name || copyTargetId.value })
+    copyTargetId.value = ''
+    banks.value = await listBanks(props.token).catch(() => banks.value)
+  } catch (err) {
+    copyNotice.value = `${t('ep.banks.copy_failed')}: ${err?.detail || err?.message || ''}`.trim()
+  } finally {
+    copyBusy.value = false
+  }
 }
 
 async function startPractice() {
@@ -291,6 +411,25 @@ onMounted(load)
 <style scoped>
 .bank-detail-page { padding-top: 26px; }
 .bank-sub { display: flex; flex-wrap: wrap; gap: 14px; }
+.bank-notice { margin-top: 14px; }
+.bad-text { color: var(--bad); }
+.version-panel { border-bottom: 1px solid var(--line); padding-bottom: 14px; margin-bottom: 16px; }
+.version-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.version-list { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; max-height: 180px; overflow-y: auto; }
+.version-item {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; min-height: 30px; padding: 3px 6px;
+  border: 0; background: none; color: var(--ink-3);
+  font-size: 12px; text-align: left; cursor: pointer;
+}
+.version-item:hover { background: var(--surface-2); color: var(--ink); }
+.version-item.is-active { background: var(--surface-2); color: var(--ink); }
+.version-item.is-current { font-weight: 600; }
+.version-item .od-truncate { flex: 1; min-width: 0; }
+.version-preview-note { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 8px; font-size: 11.5px; color: var(--ink-3); }
+.copy-form { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.copy-select { max-width: 170px; height: 30px; font-size: 12px; }
+.copy-notice { color: var(--ink-3); overflow-wrap: anywhere; max-width: 220px; }
 .bank-questions-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px; margin-top: 18px; align-items: start; }
 .bank-chapter-rail { border-top: 1px solid var(--line); padding-top: 10px; }
 .chapter-item {
@@ -312,5 +451,19 @@ onMounted(load)
   .bank-questions-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .bank-chapter-rail { display: flex; gap: 4px; overflow-x: auto; border-top: 0; padding-top: 0; }
   .chapter-item { width: auto; white-space: nowrap; min-height: 32px; }
+}
+@media (max-width: 640px) {
+  .bank-detail-page { overflow-x: hidden; }
+  .page-head .page-actions { width: 100%; flex-wrap: wrap; }
+  .page-head .page-actions .btn { flex: 1 1 auto; justify-content: center; }
+  .tabs { overflow-x: auto; flex-wrap: nowrap; }
+  .tabs .tab { white-space: nowrap; }
+  .qrow-main { min-width: 0; }
+  .drawer-foot { flex-wrap: wrap; gap: 8px; }
+  .drawer-foot > .btn { flex: 1 1 auto; justify-content: center; }
+  .copy-form { width: 100%; }
+  .copy-select { flex: 1 1 auto; max-width: none; }
+  .copy-notice { max-width: none; flex-basis: 100%; }
+  .version-panel-head { align-items: flex-start; }
 }
 </style>

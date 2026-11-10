@@ -92,6 +92,8 @@
                 :type="showConfirmPassword ? 'text' : 'password'"
                 autocomplete="new-password"
                 :placeholder="t('ep.auth.confirm_password')"
+                required
+                minlength="8"
               />
               <button type="button" class="link-btn auth-eye" tabindex="-1" @click="showConfirmPassword = !showConfirmPassword">
                 {{ showConfirmPassword ? t('ep.auth.hide_password') : t('ep.auth.show_password') }}
@@ -153,11 +155,24 @@ const errorText = computed(() => {
 })
 
 async function submit() {
+  if (busy.value) return
   busy.value = true
   error.value = ''
 
-  if (registering.value && confirmPassword.value && confirmPassword.value !== password.value) {
-    error.value = { translationKey: 'ep.auth.password_mismatch' }
+  if (registering.value) {
+    if (!confirmPassword.value) {
+      error.value = { translationKey: 'ep.auth.confirm_required' }
+      busy.value = false
+      return
+    }
+    if (confirmPassword.value !== password.value) {
+      error.value = { translationKey: 'ep.auth.password_mismatch' }
+      busy.value = false
+      return
+    }
+  }
+  if (password.value.length < 8) {
+    error.value = { translationKey: 'ep.auth.password_too_short' }
     busy.value = false
     return
   }

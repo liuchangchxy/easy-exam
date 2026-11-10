@@ -404,7 +404,9 @@ export default {
     "AUTH_ACCOUNT_EXISTS": "用户名已存在",
     "EXAM_ACTIVE_PROTECTED": "模考进行中：题库当前存在活动模拟考试，已被锁定保护，暂无法编辑或导入",
     "QUESTION_INVALID_MULTI": "多选题必须至少包含2个选项且至少有2个不同的正确答案",
-    "VALIDATION_FAILED": "输入校验失败：{detail}"
+    "VALIDATION_FAILED": "输入校验失败：{detail}",
+    "AI_NOT_CONFIGURED": "AI 尚未配置或暂不可用，请在设置中检查 AI 服务。",
+    "AI_GENERATION_FAILED": "AI 未能生成有效的变式题，请稍后重试或调整提示。"
   },
   "blueprint": {
     "mode_simple": "简易模式",
@@ -513,6 +515,23 @@ export default {
     "invalid_answer": "答案不能为空且必须是有效选项",
     "answer_reset_prompt": "题型已变更，请重新选择正确答案",
     "reload_latest": "重新加载最新版本",
-    "conflict_detected": "检测到并发编辑冲突：题目已被修改。已保留服务器最新版本，请重新加载。"
+    "conflict_detected": "检测到并发编辑冲突：题目已被修改。已保留服务器最新版本，请重新加载。",
+    "conflict_draft_kept": "你的修改仍保留在表单中。可以另存为新版本，或放弃草稿加载服务器版本。",
+    "save_as_branch": "保留我的修改并另存新版本",
+    "discard_and_reload": "放弃草稿并加载最新版本",
+    "branch_saved": "已保留你的修改并另存为新版本",
+    "regrade_title": "标准答案已更改",
+    "regrade_offer": "同时重判历史作答",
+    "regrade_hint": "默认只保存新版本，历史作答继续按原版本计分。",
+    "regrade_warning": "重判会改写已有作答记录、错题与掌握状态，并可能重新安排 FSRS 复习。此操作影响该题的所有作答者。",
+    "regrade_fsrs": "同时重排 FSRS 复习计划",
+    "version_history": "版本历史",
+    "version_history_empty": "还没有历史版本",
+    "version_current": "当前版本",
+    "version_view": "查看",
+    "version_back": "返回编辑",
+    "version_preview_hint": "历史版本仅供查看；练习与编辑始终使用当前版本。",
+    "version_created": "创建于 {date}",
+    "version_load_failed": "版本历史加载失败"
   }
 }

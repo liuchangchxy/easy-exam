@@ -10,6 +10,7 @@ router = APIRouter(prefix="/practice", tags=["practice"])
 
 class StartSessionPayload(BaseModel):
     bank_id: str
+    bank_ids: list[str] | None = None
     mode: str = "PRACTICE"
     total_questions: int = 0
     time_limit: int = 0
@@ -23,6 +24,9 @@ class AttemptPayload(BaseModel):
     user_answer: Any
     mistake_cause: str | None = None
     fsrs_rating: int | None = None
+    # Optional client-generated idempotency key for offline queues: a retry with
+    # the same key (even after a changed payload) must map to the first attempt.
+    client_attempt_id: str | None = None
 
 
 class DraftPayload(BaseModel):
@@ -30,6 +34,7 @@ class DraftPayload(BaseModel):
     answers: dict | None = None
     flags: list[str] | None = None
     time_spent: int | None = None
+    base_answers: dict | None = None
 
 
 class FlagPayload(BaseModel):
@@ -49,6 +54,7 @@ def start_session(payload: StartSessionPayload, request: Request, user=Depends(c
             question_ids=payload.question_ids,
             config=payload.config,
             record_mistakes=payload.record_mistakes,
+            bank_ids=payload.bank_ids,
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -62,6 +68,7 @@ def submit_attempt(session_id: str, payload: AttemptPayload, request: Request, u
         return request.app.state.services.practice.submit_attempt(
             user["id"], session_id, payload.question_id, payload.user_answer,
             fsrs_rating=payload.fsrs_rating, mistake_cause=payload.mistake_cause,
+            client_attempt_id=payload.client_attempt_id,
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

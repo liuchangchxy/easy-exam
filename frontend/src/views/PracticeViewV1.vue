@@ -28,7 +28,7 @@
             <LinearIcon name="more" :size="16" />
           </button>
           <div v-if="showMoreMenu" class="focus-menu" @click="showMoreMenu = false">
-            <button type="button" class="focus-menu-item" @click="toggleEditQuestion">
+            <button type="button" class="focus-menu-item" @click="toggleEditQuestion" v-if="canEditQuestion">
               <LinearIcon name="edit" :size="14" />{{ isEditingQuestion ? t('ep.practice.edit_exit') : t('ep.practice.edit_question') }}
             </button>
             <button type="button" class="focus-menu-item is-danger" @click="handleKill">
@@ -170,7 +170,7 @@
           <div v-if="offlineNotice" class="notice warn focus-offline" data-testid="offline-banner">
             <LinearIcon name="alert" :size="15" />
             <span>{{ offlineNotice }}</span>
-            <button v-if="offlineRetryAvailable" type="button" class="btn btn-sm btn-quiet" @click="syncOfflineEdits">{{ t('ep.practice.offline_retry') }}</button>
+            <button v-if="offlineRetryAvailable" type="button" class="btn btn-sm btn-quiet" @click="retryOfflineSync">{{ t('ep.practice.offline_retry') }}</button>
           </div>
 
           <!-- Inline question editor -->
@@ -228,7 +228,7 @@
               <span class="label">{{ t('ep.practice.edit_tags') }}</span>
               <input v-model="editTags" class="input" :placeholder="t('ep.practice.edit_tags_placeholder')" />
             </label>
-            <label class="edit-check">
+            <label v-if="canEditQuestion" class="edit-check">
               <input v-model="editRegradeHistory" type="checkbox" />
               <span>{{ t('ep.practice.edit_regrade') }}</span>
             </label>
@@ -238,17 +238,41 @@
             </div>
           </section>
 
+          <!-- Draft conflict: another device wrote a different answer. -->
+          <section v-if="draftConflicts.length" class="conflict-banner" data-testid="draft-conflict-banner">
+            <div class="conflict-head">
+              <LinearIcon name="alert" :size="15" />
+              <span>{{ t('ep.practice.draft_conflict_title') }}</span>
+            </div>
+            <p class="conflict-resolved">{{ t('ep.practice.draft_conflict_desc') }}</p>
+            <div class="conflict-list">
+              <article v-for="conflict in draftConflicts" :key="conflict.question_id" class="conflict-version">
+                <div class="conflict-version-head">
+                  <span class="mono">{{ t('ep.practice.question_no', { current: questionNumberFor(conflict.question_id) }) }}</span>
+                </div>
+                <div class="conflict-meta">
+                  <span>{{ t('ep.practice.draft_conflict_server') }} · {{ formatUserAnswer(conflict.existing_answer) }}</span>
+                  <span>{{ t('ep.practice.draft_conflict_local') }} · {{ formatUserAnswer(conflict.incoming_answer) }}</span>
+                </div>
+                <div class="ai-version-actions">
+                  <button type="button" class="btn btn-sm" @click="resolveDraftConflictKeepServer">{{ t('ep.practice.draft_conflict_keep_server') }}</button>
+                  <button type="button" class="btn btn-sm btn-primary" @click="resolveDraftConflictUseLocal">{{ t('ep.practice.draft_conflict_use_local') }}</button>
+                </div>
+              </article>
+            </div>
+          </section>
+
           <!-- Conflict banner -->
           <section v-if="activeConflict || conflictResolvedMessage" class="conflict-banner" data-testid="conflict-banner">
             <div class="conflict-head">
               <LinearIcon name="alert" :size="15" />
               <span>{{ t('ep.practice.conflict_title') }}</span>
-              <button type="button" class="btn btn-sm btn-quiet" @click="showConflictModal = !showConflictModal">
+              <button v-if="canEditQuestion" type="button" class="btn btn-sm btn-quiet" @click="showConflictModal = !showConflictModal">
                 {{ showConflictModal ? t('ep.practice.conflict_hide') : t('ep.practice.conflict_resolve') }}
               </button>
             </div>
             <p v-if="conflictResolvedMessage" class="conflict-resolved">{{ conflictResolvedMessage }}</p>
-            <div v-if="showConflictModal" class="conflict-list" data-testid="conflict-list">
+            <div v-if="showConflictModal && canEditQuestion" class="conflict-list" data-testid="conflict-list">
               <article v-for="v in questionVersions" :key="v.id" class="conflict-version" :class="{ 'is-current': v.version_number === question.version_number }">
                 <div class="conflict-version-head">
                   <span class="mono">{{ t('ep.practice.conflict_version', { version: v.version_number }) }}</span>
@@ -499,13 +523,43 @@ import LocaleToggle from '../components/LocaleToggle.vue'
 import { useLocale } from '../composables/useLocale.js'
 import { useAuthStore } from '../stores/authStore'
 import { getSession, getSessionQuestions, submitAttempt, completeSession, syncDraft } from '../api/practice'
-import { getQuestion, listQuestionVersions, updateQuestion, getQuestionConflict, resolveQuestionConflict, regradeQuestion } from '../api/questions'
+import { getQuestion, listQuestionVersions, updateQuestion, getQuestionConflict, resolveQuestionConflict } from '../api/questions'
 import { generateAnswer, listAnswerVersions, adoptAnswer, saveCandidate, verifyWeb, listQuestionConversations, listConversationMessages, sendChatMessage, generateVariant } from '../api/ai'
 import { markWeak, unmarkWeak } from '../api/learning'
+import { listBankMembers } from '../api/banks'
 import { killQuestion } from '../api/kills'
 import { triggerSyncEvent } from '../api/sync'
 import { formatVerdictTitle, findFirstUnansweredIndex, findNextUnansweredIndex, isSwipeGestureValid } from '../domain/exam.js'
-import { hydrateSessionPractice, normalizeQuestionOptions, shouldResetQuestionForm } from '../domain/practice.js'
+import {
+  answersToBaseMap,
+  buildDraftAnswerPayload,
+  buildDraftBasePayload,
+  clientAttemptIdOf,
+  clientAttemptIdsFromDraft,
+  createClientAttemptId,
+  draftConflictQuestionIds,
+  dropDraftConflicts,
+  hydrateSessionPractice,
+  isEditorRole,
+  isEmptyAnswer,
+  isNetworkError,
+  localPracticeDraftKey,
+  mergeDraftConflicts,
+  mergeEditQueues,
+  mergeLocalDraftEntries,
+  normalizeQuestionOptions,
+  offlineAttemptQueueKey,
+  offlineEditQueueKey,
+  partitionLegacyEditQueue,
+  practiceDraftConflictKey,
+  rawDraftAnswer,
+  removePendingAttempt,
+  shouldResetQuestionForm,
+  snapshotLocalDraft,
+  upsertPendingAttempt,
+  withoutProtectedAnswers,
+  LEGACY_OFFLINE_EDIT_KEY,
+} from '../domain/practice.js'
 
 const props = defineProps({ token: { type: String, required: true }, sessionId: { type: String, required: true } })
 const emit = defineEmits(['back', 'completed'])
@@ -528,14 +582,7 @@ function handleBack() {
 async function handleConfirmExit() {
   showExitConfirmModal.value = false
   saveCurrentQuestionState()
-  if (props.sessionId && props.token) {
-    try {
-      await syncDraft(props.token, props.sessionId, {
-        current_index: index.value,
-        time_spent: null,
-      })
-    } catch (_) {}
-  }
+  await flushDraft()
   doExit()
 }
 
@@ -552,9 +599,112 @@ function doExit() {
   }
 }
 
-function getOfflineQueueKey() {
-  const uid = auth.user?.value?.id || auth.user?.value?.username || 'user'
-  return `easyexam_offline_question_edits_${uid}`
+const currentUserKey = computed(() => {
+  const user = auth.user?.value || auth.user
+  const id = user?.id ?? user?.username
+  return id === undefined || id === null ? '' : String(id)
+})
+
+function readStoredJson(key, fallback) {
+  if (!key || typeof localStorage === 'undefined') return fallback
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || 'null')
+    return parsed === null ? fallback : parsed
+  } catch (_) {
+    return fallback
+  }
+}
+
+function writeStoredJson(key, value) {
+  if (!key || typeof localStorage === 'undefined') return
+  try {
+    if (value === null || value === undefined) localStorage.removeItem(key)
+    else localStorage.setItem(key, JSON.stringify(value))
+  } catch (_) {}
+}
+
+/**
+ * Loads the current account's offline question-edit queue and migrates legacy
+ * unscoped entries without deleting another account's pending edits.
+ */
+function loadEditQueue() {
+  const userKey = currentUserKey.value
+  if (!userKey) return []
+  const scopedKey = offlineEditQueueKey(userKey)
+  let queue = readStoredJson(scopedKey, [])
+  if (!Array.isArray(queue)) queue = []
+  const legacy = readStoredJson(LEGACY_OFFLINE_EDIT_KEY, [])
+  if (Array.isArray(legacy) && legacy.length) {
+    const { mine, others } = partitionLegacyEditQueue(legacy, userKey)
+    if (mine.length) {
+      queue = mergeEditQueues(queue, mine.map(item => ({ ...item, userId: userKey })))
+      writeStoredJson(scopedKey, queue)
+    }
+    if (others.length) writeStoredJson(LEGACY_OFFLINE_EDIT_KEY, others)
+    else if (typeof localStorage !== 'undefined') localStorage.removeItem(LEGACY_OFFLINE_EDIT_KEY)
+  }
+  return queue
+}
+
+function saveEditQueue(queue) {
+  const userKey = currentUserKey.value
+  if (!userKey) return
+  const key = offlineEditQueueKey(userKey)
+  if (Array.isArray(queue) && queue.length) writeStoredJson(key, queue)
+  else if (typeof localStorage !== 'undefined') localStorage.removeItem(key)
+}
+
+function loadPendingAttempts() {
+  const userKey = currentUserKey.value
+  if (!userKey) return []
+  const queue = readStoredJson(offlineAttemptQueueKey(userKey), [])
+  return Array.isArray(queue) ? queue : []
+}
+
+function savePendingAttempts(queue) {
+  const userKey = currentUserKey.value
+  if (!userKey) return
+  const key = offlineAttemptQueueKey(userKey)
+  if (Array.isArray(queue) && queue.length) writeStoredJson(key, queue)
+  else if (typeof localStorage !== 'undefined') localStorage.removeItem(key)
+}
+
+function localDraftStorageKey() {
+  return localPracticeDraftKey(currentUserKey.value, props.sessionId)
+}
+
+function readLocalDraft() {
+  return readStoredJson(localDraftStorageKey(), null)
+}
+
+function writeLocalDraft() {
+  const key = localDraftStorageKey()
+  if (!key) return
+  writeStoredJson(key, snapshotLocalDraft(sessionAnswers.value, Date.now(), clientAttemptIds.value))
+}
+
+function clearLocalDraft() {
+  const key = localDraftStorageKey()
+  if (key && typeof localStorage !== 'undefined') localStorage.removeItem(key)
+}
+
+function draftConflictStorageKey() {
+  return practiceDraftConflictKey(currentUserKey.value, props.sessionId)
+}
+
+/**
+ * Unresolved draft conflicts outlive a reload: the server answer stays
+ * protected until the user explicitly picks a side.
+ */
+function persistDraftConflicts() {
+  const key = draftConflictStorageKey()
+  if (!key) return
+  writeStoredJson(key, draftConflicts.value.length ? draftConflicts.value : null)
+}
+
+function clearDraftConflictsStorage() {
+  const key = draftConflictStorageKey()
+  if (key && typeof localStorage !== 'undefined') localStorage.removeItem(key)
 }
 
 const session = ref(null)
@@ -599,6 +749,21 @@ const editRegradeHistory = ref(false)
 const offlineNotice = ref('')
 const offlineRetryAvailable = ref(false)
 const editSaveError = ref('')
+const draftBase = ref({})
+const draftConflicts = ref([])
+// questionId -> client_attempt_id of the answer submission for that attempt.
+// The rating reuses it so the two-step flow updates one attempt instead of
+// inserting a duplicate and scheduling FSRS twice.
+const clientAttemptIds = ref({})
+const elapsedSeconds = ref(0)
+const canEditQuestion = ref(false)
+const pendingAttempts = ref([])
+const bankRoles = new Map()
+let clockTimer = null
+let draftTimer = null
+let draftFlushPromise = null
+let draftFlushQueued = false
+let drainingAttempts = false
 
 
 const question = computed(() => questions.value[index.value])
@@ -623,6 +788,7 @@ function selectOption(key) {
     answer.value = key
   }
   saveCurrentQuestionState()
+  scheduleDraftFlush()
 }
 
 function isOptionSelected(key) {
@@ -708,6 +874,7 @@ function saveCurrentQuestionState() {
   if (!question.value) return
   const qid = question.value.id
   sessionAnswers.value[qid] = {
+    ...(sessionAnswers.value[qid] || {}),
     answer: Array.isArray(answer.value) ? [...answer.value] : answer.value,
     textAnswer: textAnswer.value,
     result: result.value,
@@ -719,36 +886,144 @@ function saveCurrentQuestionState() {
 function restoreQuestionState(targetIndex) {
   saveCurrentQuestionState()
   index.value = targetIndex
-  if (props.sessionId && props.token) {
-    syncDraft(props.token, props.sessionId, { current_index: targetIndex }).catch(() => {})
+  scheduleDraftFlush(0)
+}
+
+function scheduleDraftFlush(delay = 600) {
+  if (draftTimer) clearTimeout(draftTimer)
+  draftTimer = setTimeout(() => {
+    draftTimer = null
+    flushDraft().catch(() => {})
+  }, delay)
+}
+
+/**
+ * Persists the in-progress draft. The payload carries the server values this
+ * client last observed (`base_answers`), so the service can distinguish a
+ * normal local edit from a cross-device write and never silently overwrite it.
+ */
+async function flushDraft() {
+  saveCurrentQuestionState()
+  writeLocalDraft()
+  if (!props.sessionId || !authToken.value) return false
+  if (draftFlushPromise) {
+    draftFlushQueued = true
+    return draftFlushPromise
+  }
+  draftFlushPromise = (async () => {
+    do {
+      draftFlushQueued = false
+      const lockedIds = draftConflictQuestionIds(draftConflicts.value)
+      const answers = withoutProtectedAnswers(
+        buildDraftAnswerPayload(sessionAnswers.value, draftBase.value),
+        lockedIds,
+      )
+      const payload = { current_index: index.value, time_spent: elapsedSeconds.value }
+      if (Object.keys(answers).length) {
+        payload.answers = answers
+        payload.base_answers = buildDraftBasePayload(answers, draftBase.value)
+      }
+      try {
+        const res = await syncDraft(authToken.value, props.sessionId, payload)
+        const reported = Array.isArray(res?.conflicts) ? res.conflicts : []
+        draftConflicts.value = mergeDraftConflicts(draftConflicts.value, reported)
+        if (res?.answers) {
+          const nextBase = answersToBaseMap(res.answers)
+          // Freeze the observed base of every unresolved conflict. Advancing it to
+          // the server value would turn the next send into a silent overwrite.
+          for (const qid of draftConflictQuestionIds(draftConflicts.value)) {
+            if (qid in draftBase.value) nextBase[qid] = draftBase.value[qid]
+            else delete nextBase[qid]
+          }
+          draftBase.value = nextBase
+        }
+        if (draftConflicts.value.length) {
+          persistDraftConflicts()
+          offlineNotice.value = t('ep.practice.draft_conflict_notice')
+        } else if (offlineNotice.value === t('ep.practice.draft_conflict_notice') || offlineNotice.value === t('ep.practice.draft_offline_notice')) {
+          offlineNotice.value = ''
+        }
+        offlineRetryAvailable.value = false
+      } catch (err) {
+        if (isNetworkError(err)) {
+          offlineNotice.value = t('ep.practice.draft_offline_notice')
+          offlineRetryAvailable.value = true
+        } else {
+          offlineNotice.value = err?.detail || err?.message || t('api_errors.REQUEST_FAILED')
+        }
+        return false
+      }
+    } while (draftFlushQueued)
+    return true
+  })()
+  try {
+    return await draftFlushPromise
+  } finally {
+    draftFlushPromise = null
   }
 }
 
 async function handleSyncedEvents(e) {
   const detail = e.detail || {}
   const events = Array.isArray(detail) ? detail : (detail.events || [])
-  if (detail.userId && props.user?.id && detail.userId !== props.user.id) {
+  const uid = currentUserKey.value
+  if (detail.userId && uid && String(detail.userId) !== uid) {
     return
   }
   if (!question.value) return
   const qEvent = events.find(ev => ev.aggregate_type === 'QUESTION' && ev.aggregate_id === question.value?.id)
   if (qEvent) {
     try {
-      const fresh = await getQuestion(props.token, question.value.id)
+      const fresh = await getQuestion(authToken.value, question.value.id)
       if (fresh && fresh.version_number !== question.value.version_number) {
         questions.value[index.value] = fresh
-        questionVersions.value = await listQuestionVersions(props.token, fresh.id)
-        const conf = await getQuestionConflict(props.token, fresh.id)
+        questionVersions.value = await listQuestionVersions(authToken.value, fresh.id)
+        const conf = await getQuestionConflict(authToken.value, fresh.id)
         activeConflict.value = conf?.has_conflict ? conf.conflict : null
       }
     } catch (_) {}
   }
 }
 
+function startClock() {
+  stopClock()
+  clockTimer = setInterval(() => {
+    if (typeof document !== 'undefined' && document.hidden) return
+    elapsedSeconds.value += 1
+  }, 1000)
+}
+
+function stopClock() {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
+  }
+}
+
+function handleVisibilityChange() {
+  if (typeof document !== 'undefined' && document.hidden) {
+    flushDraft().catch(() => {})
+  }
+}
+
+function handlePageHide() {
+  writeLocalDraft()
+}
+
+function handleOnlineRecovery() {
+  syncOfflineEdits()
+  drainPendingAttempts()
+  flushDraft().catch(() => {})
+}
+
 onMounted(async () => {
-  window.addEventListener('online', syncOfflineEdits)
+  window.addEventListener('online', handleOnlineRecovery)
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('easyexam:events-synced', handleSyncedEvents)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  window.addEventListener('pagehide', handlePageHide)
+  pendingAttempts.value = loadPendingAttempts()
+  startClock()
   try {
     session.value = await getSession(props.token, props.sessionId)
     if (session.value?.mode === 'EXAM') {
@@ -759,7 +1034,27 @@ onMounted(async () => {
     if (session.value) {
       const hydrated = hydrateSessionPractice(session.value, questions.value?.length || 0)
       index.value = hydrated.currentIndex
+      elapsedSeconds.value = Math.max(0, Number(session.value.time_spent) || 0)
+      draftBase.value = answersToBaseMap(hydrated.sessionAnswers)
       sessionAnswers.value = hydrated.sessionAnswers
+      // Conflicts persisted before the reload stay unresolved and stay protected.
+      const storedConflicts = readStoredJson(draftConflictStorageKey(), [])
+      if (Array.isArray(storedConflicts) && storedConflicts.length) {
+        draftConflicts.value = mergeDraftConflicts([], storedConflicts)
+        for (const conflict of draftConflicts.value) {
+          const entry = sessionAnswers.value[conflict.question_id] || {}
+          if (entry.result || entry.correctness) continue
+          sessionAnswers.value[conflict.question_id] = {
+            ...entry,
+            answer: conflict.incoming_answer,
+            textAnswer: typeof conflict.incoming_answer === 'string' ? conflict.incoming_answer : '',
+          }
+        }
+        offlineNotice.value = t('ep.practice.draft_conflict_notice')
+      }
+      const localDraft = readLocalDraft()
+      clientAttemptIds.value = clientAttemptIdsFromDraft(localDraft)
+      sessionAnswers.value = mergeLocalDraftEntries(sessionAnswers.value, localDraft, session.value.updated_at)
       const currentSaved = sessionAnswers.value[question.value?.id]
       if (currentSaved) {
         answer.value = Array.isArray(currentSaved.answer) ? [...currentSaved.answer] : (currentSaved.answer ?? '')
@@ -768,30 +1063,74 @@ onMounted(async () => {
         showAiPanel.value = currentSaved.showAiPanel ?? false
         selectedFsrsRating.value = currentSaved.selectedFsrsRating ?? null
       }
+      if (localDraft) flushDraft().catch(() => {})
     }
-    await syncOfflineEdits()
+    await Promise.allSettled([syncOfflineEdits(), drainPendingAttempts()])
+  } catch (err) {
+    if (isNetworkError(err)) {
+      offlineNotice.value = t('ep.practice.draft_offline_notice')
+      offlineRetryAvailable.value = true
+    } else {
+      offlineNotice.value = err?.detail || err?.message || t('api_errors.REQUEST_FAILED')
+    }
   } finally {
     loading.value = false
   }
 })
 
 onUnmounted(() => {
-  window.removeEventListener('online', syncOfflineEdits)
+  window.removeEventListener('online', handleOnlineRecovery)
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('easyexam:events-synced', handleSyncedEvents)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  window.removeEventListener('pagehide', handlePageHide)
+  if (draftTimer) {
+    clearTimeout(draftTimer)
+    draftTimer = null
+  }
+  writeLocalDraft()
+  flushDraft().catch(() => {})
+  stopClock()
 })
+
+function resetQuestionEditForm() {
+  isEditingQuestion.value = false
+  editStem.value = ''
+  editType.value = 'SINGLE'
+  editOptions.value = []
+  editAnswer.value = ''
+  editExplanation.value = ''
+  editTags.value = ''
+  editDifficulty.value = 3
+  editRegradeHistory.value = false
+  editSaveError.value = ''
+}
+
+async function ensureBankRole(bankId) {
+  if (!bankId) {
+    canEditQuestion.value = false
+    return
+  }
+  if (!bankRoles.has(bankId)) {
+    let role = ''
+    try {
+      const members = await listBankMembers(authToken.value, bankId)
+      const uid = auth.user?.value?.id
+      role = (Array.isArray(members) ? members.find(m => m.user_id === uid)?.role : '') || ''
+    } catch (_) {
+      role = ''
+    }
+    bankRoles.set(bankId, role)
+  }
+  canEditQuestion.value = isEditorRole(bankRoles.get(bankId))
+}
 
 watch(question, async (current, oldQuestion) => {
   if (current) {
     const isDifferentQuestion = shouldResetQuestionForm(current, oldQuestion)
     if (isDifferentQuestion) {
-      isEditingQuestion.value = false
-      editStem.value = ''
-      editType.value = 'SINGLE'
-      editOptions.value = []
-      editAnswer.value = ''
-      editExplanation.value = ''
-      editTags.value = ''
+      resetQuestionEditForm()
+      ensureBankRole(current.bank_id).catch(() => {})
       const saved = sessionAnswers.value[current.id]
       if (saved) {
         answer.value = Array.isArray(saved.answer) ? [...saved.answer] : (saved.answer ?? '')
@@ -813,24 +1152,24 @@ watch(question, async (current, oldQuestion) => {
       editingVersionId.value = null
       fsrsRatingStatus.value = ''
     }
-    answerVersions.value = await listAnswerVersions(props.token, current.id)
+    answerVersions.value = await listAnswerVersions(authToken.value, current.id)
     try {
-      questionVersions.value = await listQuestionVersions(props.token, current.id)
+      questionVersions.value = await listQuestionVersions(authToken.value, current.id)
     } catch {
       questionVersions.value = []
     }
     try {
-      const conf = await getQuestionConflict(props.token, current.id)
+      const conf = await getQuestionConflict(authToken.value, current.id)
       activeConflict.value = conf?.has_conflict ? conf.conflict : null
     } catch {
       activeConflict.value = null
     }
     if (isDifferentQuestion) {
       try {
-        const convs = await listQuestionConversations(props.token, current.id)
+        const convs = await listQuestionConversations(authToken.value, current.id)
         if (convs?.length) {
           activeConversationId.value = convs[0].id
-          chatMessages.value = await listConversationMessages(props.token, convs[0].id)
+          chatMessages.value = await listConversationMessages(authToken.value, convs[0].id)
         } else {
           activeConversationId.value = null
           chatMessages.value = []
@@ -842,45 +1181,199 @@ watch(question, async (current, oldQuestion) => {
   }
 }, { immediate: true })
 
-async function submitRating(rating) {
+watch(textAnswer, () => {
+  scheduleDraftFlush()
+})
 
+/**
+ * The answer that was actually submitted for this question. A rating must rate
+ * that answer, not whatever sits in the editor now (which may be an unsent
+ * edit), otherwise the rating request would overwrite the stored answer.
+ */
+function submittedAnswerFor(qid) {
+  const stored = rawDraftAnswer(sessionAnswers.value[qid])
+  if (!isEmptyAnswer(stored)) return stored
+  if (result.value?.question_id === qid && result.value?.user_answer !== undefined) {
+    return result.value.user_answer
+  }
+  return normalizedAnswer()
+}
+
+function rememberClientAttemptId(qid, clientAttemptId) {
+  clientAttemptIds.value = { ...clientAttemptIds.value, [qid]: clientAttemptId }
+}
+
+async function submitRating(rating) {
   if (!question.value) return
+  const qid = question.value.id
   selectedFsrsRating.value = rating
   fsrsRatingStatus.value = t('ui.k0607')
+  // The rating belongs to the answer attempt that is already on the server.
+  // Reusing its key makes the server update that attempt's FSRS rating instead
+  // of inserting a duplicate attempt (which would schedule the card twice).
+  const clientAttemptId = clientAttemptIds.value[qid] || createClientAttemptId('practice-rating')
+  rememberClientAttemptId(qid, clientAttemptId)
+  const payload = {
+    question_id: qid,
+    user_answer: submittedAnswerFor(qid),
+    fsrs_rating: rating,
+    client_attempt_id: clientAttemptId,
+  }
   try {
-    const res = await submitAttempt(props.token, props.sessionId, {
-      question_id: question.value.id,
-      user_answer: normalizedAnswer(),
-      fsrs_rating: rating,
-    })
+    const res = await submitAttemptWithRetry(payload)
     result.value = res
+    clearPendingAttemptFor(qid)
     saveCurrentQuestionState()
-    triggerSyncEvent('PRACTICE_RATING', 'SESSION', props.sessionId, { question_id: question.value.id, rating })
+    writeLocalDraft()
+    triggerSyncEvent('PRACTICE_RATING', 'SESSION', props.sessionId, { question_id: qid, rating })
     fsrsRatingStatus.value = `${t('ui.k0612')}${['', t('ui.k0608'), t('ui.k0609'), t('ui.k0610'), t('ui.k0611')][rating]}${t('ui.k0613')}`
   } catch (err) {
-    fsrsRatingStatus.value = `${t('ui.k0614')}${err.detail || err.message}`
+    if (isNetworkError(err)) {
+      queuePendingAttempt(payload)
+      fsrsRatingStatus.value = t('ep.practice.pending_rating')
+    } else {
+      fsrsRatingStatus.value = `${t('ui.k0614')}${err.detail || err.message}`
+    }
+  }
+}
+
+const RETRY_DELAYS = [250, 600]
+
+async function submitAttemptWithRetry(payload) {
+  let lastError
+  for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt += 1) {
+    try {
+      return await submitAttempt(authToken.value, props.sessionId, payload)
+    } catch (err) {
+      lastError = err
+      if (!isNetworkError(err) || attempt === RETRY_DELAYS.length) throw err
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]))
+    }
+  }
+  throw lastError
+}
+
+function queuePendingAttempt(payload) {
+  const qid = payload.question_id
+  const clientAttemptId = clientAttemptIdOf(payload)
+  // A new answer operation supersedes older queued work for the same question;
+  // the answer and its rating share a key, so they merge instead of replacing
+  // one another.
+  const pruned = pendingAttempts.value.filter(item => {
+    if (item.sessionId !== props.sessionId || item.questionId !== qid) return true
+    return clientAttemptIdOf(item) === clientAttemptId
+  })
+  pendingAttempts.value = upsertPendingAttempt(pruned, {
+    sessionId: props.sessionId,
+    questionId: qid,
+    user_answer: payload.user_answer,
+    fsrs_rating: payload.fsrs_rating ?? null,
+    clientAttemptId,
+    queuedAt: Date.now(),
+  })
+  savePendingAttempts(pendingAttempts.value)
+  writeLocalDraft()
+  offlineNotice.value = t('ep.practice.pending_submit')
+  offlineRetryAvailable.value = true
+}
+
+/**
+ * A manual submission that reaches the server supersedes the queued offline
+ * attempt for the same question; leaving it queued replays it later as a
+ * duplicate attempt (and can roll the stored answer back to the stale one).
+ */
+function clearPendingAttemptFor(questionId) {
+  const present = pendingAttempts.value.some(
+    item => item.sessionId === props.sessionId && item.questionId === questionId,
+  )
+  if (!present) return
+  pendingAttempts.value = removePendingAttempt(pendingAttempts.value, props.sessionId, questionId)
+  savePendingAttempts(pendingAttempts.value)
+  if (offlineNotice.value === t('ep.practice.pending_submit')) offlineNotice.value = ''
+  if (!pendingAttempts.value.some(item => item.sessionId === props.sessionId)) {
+    offlineRetryAvailable.value = false
+  }
+}
+
+async function drainPendingAttempts() {
+  if (drainingAttempts) return
+  if (!currentUserKey.value) return
+  pendingAttempts.value = loadPendingAttempts()
+  const items = pendingAttempts.value.filter(item => item.sessionId === props.sessionId)
+  if (!items.length) return
+  drainingAttempts = true
+  try {
+    for (const item of items) {
+      const clientAttemptId = clientAttemptIdOf(item)
+      try {
+        const payload = {
+          question_id: item.questionId,
+          user_answer: item.user_answer,
+          ...(item.fsrs_rating ? { fsrs_rating: item.fsrs_rating } : {}),
+          ...(clientAttemptId ? { client_attempt_id: clientAttemptId } : {}),
+        }
+        const res = await submitAttemptWithRetry(payload)
+        pendingAttempts.value = removePendingAttempt(
+          pendingAttempts.value, item.sessionId, item.questionId, clientAttemptId || undefined,
+        )
+        savePendingAttempts(pendingAttempts.value)
+        if (question.value?.id === item.questionId) {
+          result.value = res
+          saveCurrentQuestionState()
+        }
+        triggerSyncEvent('PRACTICE_ATTEMPT', 'SESSION', props.sessionId, { question_id: item.questionId })
+      } catch (err) {
+        if (isNetworkError(err)) break
+        if (err?.status === 404 || err?.status === 409 || err?.status === 422) {
+          pendingAttempts.value = removePendingAttempt(
+            pendingAttempts.value, item.sessionId, item.questionId, clientAttemptId || undefined,
+          )
+          savePendingAttempts(pendingAttempts.value)
+          offlineNotice.value = err?.detail || err?.message || t('api_errors.REQUEST_FAILED')
+        } else {
+          break
+        }
+      }
+    }
+  } finally {
+    drainingAttempts = false
+  }
+  if (!pendingAttempts.value.some(item => item.sessionId === props.sessionId)) {
+    if (offlineNotice.value === t('ep.practice.pending_submit')) offlineNotice.value = ''
+    offlineRetryAvailable.value = false
   }
 }
 
 async function submit() {
   if (!hasAnswer.value || !question.value) return
   submitting.value = true
+  const qid = question.value.id
+  const userAnswer = normalizedAnswer()
+  // One user action, one key. Every retry and the offline queue reuse it.
+  const clientAttemptId = createClientAttemptId('practice-answer')
+  rememberClientAttemptId(qid, clientAttemptId)
+  const payload = { question_id: qid, user_answer: userAnswer, client_attempt_id: clientAttemptId }
   try {
-    result.value = await submitAttempt(props.token, props.sessionId, {
-      question_id: question.value.id,
-      user_answer: normalizedAnswer(),
-    })
+    const res = await submitAttemptWithRetry(payload)
+    result.value = res
+    draftBase.value = { ...draftBase.value, [qid]: userAnswer }
+    clearPendingAttemptFor(qid)
     saveCurrentQuestionState()
-    triggerSyncEvent('PRACTICE_ATTEMPT', 'SESSION', props.sessionId, { question_id: question.value.id })
+    writeLocalDraft()
+    triggerSyncEvent('PRACTICE_ATTEMPT', 'SESSION', props.sessionId, { question_id: qid })
     if (result.value?.correctness === 'INCORRECT' && (session.value?.mode === 'FSRS' || session.value?.mode === 'MISTAKE')) {
       selectedFsrsRating.value = 1
       fsrsRatingStatus.value = t('ui.k0615')
-      if (sessionAnswers.value[question.value.id]) {
-        sessionAnswers.value[question.value.id].selectedFsrsRating = 1
+      if (sessionAnswers.value[qid]) {
+        sessionAnswers.value[qid].selectedFsrsRating = 1
       }
     }
   } catch (err) {
-    alert(`${t('ui.k0617')}${err.detail || err.message || t('ui.k0616')}`)
+    if (isNetworkError(err)) {
+      queuePendingAttempt(payload)
+    } else {
+      alert(`${t('ui.k0617')}${err.detail || err.message || t('ui.k0616')}`)
+    }
   } finally {
     submitting.value = false
   }
@@ -1008,9 +1501,33 @@ async function handleKill() {
   if (!question.value) return
   if (!window.confirm(t('ui.k0628'))) return
   try {
-    await killQuestion(props.token, question.value.id)
+    const killedId = question.value.id
+    await killQuestion(authToken.value, killedId)
+    delete sessionAnswers.value[killedId]
+    delete draftBase.value[killedId]
+    if (clientAttemptIds.value[killedId]) {
+      const nextIds = { ...clientAttemptIds.value }
+      delete nextIds[killedId]
+      clientAttemptIds.value = nextIds
+    }
+    // A killed question leaves the session: never replay its queued attempt or
+    // keep it in the local backup / unresolved conflict set.
+    clearPendingAttemptFor(killedId)
+    if (draftConflicts.value.some(conflict => conflict.question_id === killedId)) {
+      draftConflicts.value = dropDraftConflicts(draftConflicts.value, [killedId])
+      persistDraftConflicts()
+    }
+    writeLocalDraft()
+    const killedIndex = questions.value.findIndex(q => q.id === killedId)
+    if (killedIndex >= 0) questions.value.splice(killedIndex, 1)
+    if (!questions.value.length) {
+      alert(t('ui.k0629'))
+      complete()
+      return
+    }
+    if (index.value >= questions.value.length) index.value = questions.value.length - 1
     alert(t('ui.k0629'))
-    next()
+    scheduleDraftFlush(0)
   } catch (err) {
     alert(`${t('ui.k0506')}${err.detail || err.message}`)
   }
@@ -1163,6 +1680,10 @@ function handleKeyDown(e) {
 
 function toggleEditQuestion() {
   if (!question.value) return
+  if (!canEditQuestion.value) {
+    editSaveError.value = t('ep.practice.edit_permission_denied')
+    return
+  }
   isEditingQuestion.value = !isEditingQuestion.value
   if (isEditingQuestion.value) {
     editSaveError.value = ''
@@ -1173,6 +1694,7 @@ function toggleEditQuestion() {
     editExplanation.value = question.value.explanation || ''
     editDifficulty.value = question.value.difficulty ?? 3
     editTags.value = Array.isArray(question.value.tags) ? question.value.tags.join(', ') : (question.value.tags || '')
+    editRegradeHistory.value = false
   }
 }
 
@@ -1188,6 +1710,10 @@ function removeOption(idx) {
 
 async function saveQuestionEdit() {
   if (!question.value || !editStem.value.trim()) return
+  if (!canEditQuestion.value) {
+    editSaveError.value = t('ep.practice.edit_permission_denied')
+    return
+  }
   const tagsList = editTags.value
     ? editTags.value.split(/[,，\s]+/).map(t => t.trim()).filter(Boolean)
     : []
@@ -1204,15 +1730,14 @@ async function saveQuestionEdit() {
     apply_fsrs: true,
     allow_stale_branch: true,
   }
-  const storageKey = 'easyexam_offline_question_edits'
-  const userScopedKey = getOfflineQueueKey()
-  const uid = auth.user?.value?.id || auth.user?.value?.username || 'user'
+  const uid = currentUserKey.value
   const queueItem = { userId: uid, questionId: question.value.id, payload, queuedAt: Date.now() }
+  if (!uid) {
+    editSaveError.value = t('api_errors.REQUEST_FAILED')
+    return
+  }
   if (!window.navigator.onLine) {
-    const queue = JSON.parse(localStorage.getItem(storageKey) || '[]')
-    queue.push(queueItem)
-    localStorage.setItem(storageKey, JSON.stringify(queue))
-    localStorage.setItem(userScopedKey, JSON.stringify(queue))
+    saveEditQueue([...loadEditQueue(), queueItem])
     offlineNotice.value = t('ui.k0631')
     offlineRetryAvailable.value = true
     editSaveError.value = ''
@@ -1221,14 +1746,10 @@ async function saveQuestionEdit() {
   }
   let updated
   try {
-    const currentToken = authToken.value
-    updated = await updateQuestion(currentToken, question.value.id, payload)
+    updated = await updateQuestion(authToken.value, question.value.id, payload)
   } catch (err) {
-    if (isNetworkFailure(err)) {
-      const queue = JSON.parse(localStorage.getItem(storageKey) || '[]')
-      queue.push(queueItem)
-      localStorage.setItem(storageKey, JSON.stringify(queue))
-      localStorage.setItem(userScopedKey, JSON.stringify(queue))
+    if (isNetworkError(err)) {
+      saveEditQueue([...loadEditQueue(), queueItem])
       offlineNotice.value = t('ui.k0632')
       offlineRetryAvailable.value = true
       editSaveError.value = ''
@@ -1245,11 +1766,10 @@ async function saveQuestionEdit() {
   triggerSyncEvent('QUESTION_UPDATED', 'QUESTION', updated.id, { version_number: updated.version_number })
   isEditingQuestion.value = false
   editSaveError.value = ''
+  editRegradeHistory.value = false
   questions.value[index.value] = updated
-  const queue = JSON.parse(localStorage.getItem(storageKey) || '[]').filter(item =>
-    !(item.blocked && item.questionId === updated.id))
-  localStorage.setItem(storageKey, JSON.stringify(queue))
-  localStorage.setItem(userScopedKey, JSON.stringify(queue))
+  const queue = loadEditQueue().filter(item => !(item.blocked && item.questionId === updated.id))
+  saveEditQueue(queue)
   try {
     questionVersions.value = await listQuestionVersions(currentToken, updated.id)
     const conf = await getQuestionConflict(currentToken, updated.id)
@@ -1260,25 +1780,19 @@ async function saveQuestionEdit() {
 }
 
 function isNetworkFailure(err) {
-  return err?.status === 0 || err?.code === 'NETWORK_ERROR'
+  return isNetworkError(err)
 }
 
 let isSyncing = false
 let syncQueued = false
 
 async function processOfflineQueue() {
-  const storageKey = 'easyexam_offline_question_edits'
-  const userScopedKey = getOfflineQueueKey()
-  const uid = auth.user?.value?.id || auth.user?.value?.username || 'user'
+  if (!currentUserKey.value) return
   const currentToken = authToken.value
-  const raw = localStorage.getItem(storageKey) || localStorage.getItem(userScopedKey)
-  if (!raw) return
-  let queue = JSON.parse(raw)
+  const queue = loadEditQueue()
   if (!queue.length) return
-  const userItems = queue.filter(item => !item.userId || item.userId === uid || item.userId === auth.user?.value?.id || item.userId === auth.user?.value?.username || item.userId === 'user')
-  if (!userItems.length) return
-  const pendingItems = userItems.filter(item => !item.blocked)
-  const blockedItems = userItems.filter(item => item.blocked)
+  const pendingItems = queue.filter(item => !item.blocked)
+  const blockedItems = queue.filter(item => item.blocked)
   if (!pendingItems.length) {
     offlineRetryAvailable.value = false
     offlineNotice.value = blockedItems[0]?.error || ''
@@ -1287,9 +1801,9 @@ async function processOfflineQueue() {
   offlineRetryAvailable.value = true
   offlineNotice.value = t('ui.k0633')
 
-  // Process atomically item-by-item: NEVER wipe queue before confirmed completion!
+  // Process atomically item-by-item: NEVER wipe the queue before confirmed completion.
   while (true) {
-    const itemIndex = queue.findIndex(item => !item.blocked && (!item.userId || item.userId === uid || item.userId === auth.user?.value?.id || item.userId === auth.user?.value?.username || item.userId === 'user'))
+    const itemIndex = queue.findIndex(item => !item.blocked)
     if (itemIndex < 0) break
     const item = queue[itemIndex]
     let updated
@@ -1311,8 +1825,7 @@ async function processOfflineQueue() {
       if (isNetworkFailure(err)) break
       item.blocked = true
       item.error = err?.message || t('api_errors.REQUEST_FAILED')
-      localStorage.setItem(storageKey, JSON.stringify(queue))
-      localStorage.setItem(userScopedKey, JSON.stringify(queue))
+      saveEditQueue(queue)
       if (question.value?.id === item.questionId) {
         editStem.value = item.payload.stem ?? ''
         editType.value = item.payload.type ?? 'SINGLE'
@@ -1321,7 +1834,7 @@ async function processOfflineQueue() {
         editExplanation.value = item.payload.explanation ?? ''
         editDifficulty.value = item.payload.difficulty ?? 3
         editTags.value = (item.payload.tags ?? []).join(', ')
-        editRegradeHistory.value = item.payload.regrade_history ?? false
+        editRegradeHistory.value = canEditQuestion.value && Boolean(item.payload.regrade_history)
         isEditingQuestion.value = true
         editSaveError.value = item.error
       }
@@ -1340,12 +1853,10 @@ async function processOfflineQueue() {
     }
     // Remove item only after the update itself is confirmed.
     queue.splice(itemIndex, 1)
-    localStorage.setItem(storageKey, JSON.stringify(queue))
-    localStorage.setItem(userScopedKey, JSON.stringify(queue))
+    saveEditQueue(queue)
   }
-  const remainingItems = queue.filter(item => !item.userId || item.userId === uid || item.userId === auth.user?.value?.id || item.userId === auth.user?.value?.username || item.userId === 'user')
-  const retryableItems = remainingItems.filter(item => !item.blocked)
-  const remainingBlockedItems = remainingItems.filter(item => item.blocked)
+  const retryableItems = queue.filter(item => !item.blocked)
+  const remainingBlockedItems = queue.filter(item => item.blocked)
   offlineRetryAvailable.value = retryableItems.length > 0
   if (retryableItems.length) {
     offlineNotice.value = `${t('ui.k0634')} ${retryableItems.length} ${t('ui.k0635')}`
@@ -1353,8 +1864,7 @@ async function processOfflineQueue() {
     offlineNotice.value = remainingBlockedItems[0].error || ''
   } else {
     offlineNotice.value = ''
-    localStorage.removeItem(storageKey)
-    localStorage.removeItem(userScopedKey)
+    saveEditQueue([])
   }
 }
 
@@ -1374,7 +1884,16 @@ async function syncOfflineEdits() {
   }
 }
 
+async function retryOfflineSync() {
+  await Promise.allSettled([syncOfflineEdits(), drainPendingAttempts()])
+  await flushDraft()
+}
+
 async function handleAdoptQuestionVersion(targetVer) {
+  if (!canEditQuestion.value) {
+    alert(t('ep.practice.edit_permission_denied'))
+    return
+  }
   try {
     const currentToken = authToken.value
     let updated
@@ -1402,6 +1921,46 @@ async function handleAdoptQuestionVersion(targetVer) {
   }
 }
 
+function questionNumberFor(questionId) {
+  const idx = questions.value.findIndex(q => q.id === questionId)
+  return idx >= 0 ? idx + 1 : '?'
+}
+
+function resolveDraftConflictKeepServer() {
+  for (const conflict of draftConflicts.value) {
+    const qid = conflict.question_id
+    const serverValue = conflict.existing_answer
+    sessionAnswers.value[qid] = {
+      ...(sessionAnswers.value[qid] || {}),
+      answer: serverValue,
+      textAnswer: typeof serverValue === 'string' ? serverValue : '',
+    }
+    draftBase.value = { ...draftBase.value, [qid]: serverValue }
+    if (question.value?.id === qid) {
+      answer.value = Array.isArray(serverValue) ? [...serverValue] : (serverValue ?? '')
+      textAnswer.value = typeof serverValue === 'string' ? serverValue : ''
+    }
+  }
+  draftConflicts.value = []
+  persistDraftConflicts()
+  if (offlineNotice.value === t('ep.practice.draft_conflict_notice')) offlineNotice.value = ''
+  scheduleDraftFlush(0)
+}
+
+function resolveDraftConflictUseLocal() {
+  const base = { ...draftBase.value }
+  for (const conflict of draftConflicts.value) {
+    // Align the base with the current server value so the next flush is an
+    // explicit, user-approved overwrite rather than a silent one.
+    base[conflict.question_id] = conflict.existing_answer
+  }
+  draftBase.value = base
+  draftConflicts.value = []
+  persistDraftConflicts()
+  if (offlineNotice.value === t('ep.practice.draft_conflict_notice')) offlineNotice.value = ''
+  scheduleDraftFlush(0)
+}
+
 const showCompleteConfirmModal = ref(false)
 const practiceReport = ref(null)
 const completing = ref(false)
@@ -1417,15 +1976,49 @@ function complete() {
   }
 }
 
+async function completeSessionWithRetry() {
+  let lastError
+  for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt += 1) {
+    try {
+      return await completeSession(authToken.value, props.sessionId)
+    } catch (err) {
+      lastError = err
+      if (!isNetworkError(err) || attempt === RETRY_DELAYS.length) throw err
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]))
+    }
+  }
+  throw lastError
+}
+
 async function handleConfirmComplete() {
   completing.value = true
   try {
-    const report = await completeSession(props.token, props.sessionId)
+    await flushDraft()
+    await drainPendingAttempts()
+    if (pendingAttempts.value.some(item => item.sessionId === props.sessionId)) {
+      showCompleteConfirmModal.value = false
+      offlineNotice.value = t('ep.practice.pending_before_complete')
+      offlineRetryAvailable.value = true
+      return
+    }
+    const report = await completeSessionWithRetry()
     practiceReport.value = report
+    session.value = { ...(session.value || {}), is_completed: true }
+    clearLocalDraft()
+    clientAttemptIds.value = {}
+    draftConflicts.value = []
+    clearDraftConflictsStorage()
+    pendingAttempts.value = pendingAttempts.value.filter(item => item.sessionId !== props.sessionId)
+    savePendingAttempts(pendingAttempts.value)
     showCompleteConfirmModal.value = false
     emit('completed', report)
   } catch (err) {
-    alert(`${t('ui.k0639')}${err.detail || err.message}`)
+    if (isNetworkError(err)) {
+      offlineNotice.value = t('ep.practice.draft_offline_notice')
+      offlineRetryAvailable.value = true
+    } else {
+      alert(`${t('ui.k0639')}${err.detail || err.message}`)
+    }
   } finally {
     completing.value = false
   }

@@ -22,7 +22,7 @@
         <button type="button" class="btn" @click="router.push(`/import?bankId=${bankId}`)">
           <LinearIcon name="upload" :size="14" />{{ t('ep.common.import') }}
         </button>
-        <button type="button" class="btn btn-primary" :disabled="!canEdit" @click="openCreate">
+        <button type="button" class="btn btn-primary" :disabled="!canEdit" :title="canEdit ? '' : t('ep.manage.readonly_note')" @click="openCreate">
           <LinearIcon name="plus" :size="14" />{{ t('ep.manage.new_question') }}
         </button>
       </div>
@@ -31,6 +31,10 @@
     <div v-if="hasActiveExam" class="notice warn manage-notice">
       <LinearIcon name="lock" :size="15" />
       <span><strong>{{ t('ep.manage.locked_title') }}</strong> {{ t('ep.manage.locked_desc') }}</span>
+    </div>
+    <div v-if="showArchived" class="notice info manage-notice">
+      <LinearIcon name="archive" :size="15" />
+      <span>{{ t('ep.manage.archived_note') }}</span>
     </div>
     <div v-else-if="bank && !canEdit" class="notice info manage-notice">
       <LinearIcon name="info" :size="15" />
@@ -84,13 +88,75 @@
           </select>
           <button v-if="hasActiveFilters" type="button" class="btn btn-sm btn-quiet" @click="resetFilters">{{ t('ep.manage.reset') }}</button>
           <div class="spacer"></div>
+          <label class="archived-toggle">
+            <input v-model="showArchived" type="checkbox" data-testid="show-archived" @change="onArchivedToggle" />
+            <span>{{ t(showArchived ? 'ep.manage.hide_archived' : 'ep.manage.show_archived') }}</span>
+          </label>
           <span class="small dim mono">{{ t('ep.manage.shown', { shown: filteredQuestions.length, total: questions.length }) }}</span>
+        </div>
+
+        <div v-if="canEdit && selectedIds.size" class="batch-bar">
+          <div class="batch-bar-head">
+            <span class="batch-title">{{ t('ep.manage.batch_title') }}</span>
+            <span class="small dim">{{ t('ep.manage.selected_count', { count: selectedIds.size }) }}</span>
+            <button type="button" class="btn btn-sm btn-quiet" @click="clearSelection">{{ t('ep.manage.clear_selection') }}</button>
+          </div>
+          <div class="batch-controls">
+            <div class="batch-group">
+              <select v-model="batchChapterId" class="select" data-testid="batch-chapter" :disabled="batchBusy || batchBlocked">
+                <option value="">{{ t('ep.manage.batch_chapter_clear') }}</option>
+                <option v-for="c in chapters" :key="c.id" :value="c.id">{{ c.name }}</option>
+              </select>
+              <button type="button" class="btn btn-sm" data-testid="batch-apply-chapter" :disabled="batchBusy || batchBlocked" @click="runBatch('chapter')">
+                {{ t('ep.manage.batch_apply_chapter') }}
+              </button>
+            </div>
+            <div class="batch-group">
+              <input v-model.trim="batchTags" class="input" data-testid="batch-tags" :placeholder="t('ep.manage.batch_tags_placeholder')" :disabled="batchBusy || batchBlocked" />
+              <button type="button" class="btn btn-sm" data-testid="batch-add-tags" :disabled="batchBusy || batchBlocked || !batchTags" @click="runBatch('add_tags')">
+                {{ t('ep.manage.batch_add_tags') }}
+              </button>
+              <button type="button" class="btn btn-sm btn-quiet" data-testid="batch-remove-tags" :disabled="batchBusy || batchBlocked || !batchTags" @click="runBatch('remove_tags')">
+                {{ t('ep.manage.batch_remove_tags') }}
+              </button>
+            </div>
+            <div v-if="batchTargets.length" class="batch-group">
+              <select v-model="batchTargetBankId" class="select" data-testid="batch-target" :disabled="batchBusy || batchBlocked">
+                <option value="" disabled>{{ t('ep.manage.batch_target_placeholder') }}</option>
+                <option v-for="b in batchTargets" :key="b.id" :value="b.id">{{ b.name }}</option>
+              </select>
+              <button type="button" class="btn btn-sm" data-testid="batch-move" :disabled="batchBusy || batchBlocked || !batchTargetBankId" @click="runBatch('move')">
+                {{ t('ep.manage.batch_move_label') }}
+              </button>
+              <button type="button" class="btn btn-sm" data-testid="batch-copy" :disabled="batchBusy || batchBlocked || !batchTargetBankId" @click="runBatch('copy')">
+                {{ t('ep.manage.batch_copy_label') }}
+              </button>
+            </div>
+            <span v-else class="small dim">{{ t('ep.manage.batch_no_target') }}</span>
+            <button v-if="!showArchived" type="button" class="btn btn-sm btn-quiet" data-testid="batch-archive" :disabled="batchBusy || batchBlocked" @click="archiveSelected">
+              {{ t('ep.manage.batch_archive') }}
+            </button>
+            <button v-else type="button" class="btn btn-sm" data-testid="batch-restore" :disabled="batchBusy || batchBlocked" @click="restoreSelected">
+              {{ t('ep.manage.batch_restore') }}
+            </button>
+          </div>
+          <p v-if="batchBlocked" class="hint bad-text">{{ t('ep.manage.batch_locked_hint') }}</p>
+          <p v-if="batchError" class="error">{{ batchError }}</p>
         </div>
 
         <div v-if="filteredQuestions.length" class="mtable-wrap">
           <table class="mtable">
             <thead>
               <tr>
+                <th v-if="canEdit" class="select-cell">
+                  <input
+                    type="checkbox"
+                    data-testid="select-all"
+                    :checked="allVisibleSelected"
+                    :aria-label="t('ep.manage.select_all')"
+                    @change="toggleSelectAll($event.target.checked)"
+                  />
+                </th>
                 <th style="width: 88px">{{ t('ep.manage.col_no') }}</th>
                 <th>{{ t('ep.manage.col_stem') }}</th>
                 <th style="width: 92px">{{ t('ep.manage.col_type') }}</th>
@@ -101,13 +167,24 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="q in filteredQuestions" :key="q.id" class="mtable-row" @click="openEdit(q)">
+              <tr v-for="q in filteredQuestions" :key="q.id" class="mtable-row" :class="{ 'is-archived': q.archived }" @click="openEdit(q)">
+                <td v-if="canEdit" class="select-cell" @click.stop>
+                  <input
+                    type="checkbox"
+                    class="row-select"
+                    :data-question-id="q.id"
+                    :checked="selectedIds.has(q.id)"
+                    :aria-label="t('ep.manage.select_question')"
+                    @change="toggleRowSelection(q.id)"
+                  />
+                </td>
                 <td class="mono id-cell">{{ questionCode(q.id) }}</td>
                 <td class="stem-cell">
                   <span class="stem-text">{{ stripHtml(q.stem) }}</span>
                   <span v-if="q.tags?.length" class="row-tags">
                     <span v-for="tag in q.tags" :key="tag" class="tag">{{ tag }}</span>
                   </span>
+                  <span v-if="q.archived" class="tag">{{ t('ep.manage.archived_badge') }}</span>
                   <span v-if="q.locked_by_active_exam" class="tag warn">{{ t('ep.manage.active_exam_badge') }}</span>
                 </td>
                 <td>{{ formatTypeName(q.type) }}</td>
@@ -116,7 +193,7 @@
                 <td class="mono dim-cell">{{ t('ep.manage.version_value', { version: q.version_number || 1 }) }}</td>
                 <td>
                   <button type="button" class="btn btn-sm btn-quiet" @click.stop="openEdit(q)">
-                    {{ canEdit ? t('ep.manage.edit') : t('ep.manage.view') }}
+                    {{ rowEditable(q) ? t('ep.manage.edit') : t('ep.manage.view') }}
                   </button>
                 </td>
               </tr>
@@ -332,10 +409,11 @@
       :show="Boolean(activeModalQuestion)"
       :question="activeModalQuestion"
       :chapters="chapters"
-      :read-only="!canEdit"
+      :read-only="modalReadOnly"
       :token="token"
       @close="activeModalQuestion = null"
       @saved="handleQuestionSaved"
+      @reloaded="handleQuestionReloaded"
       @conflict="handleConflictDetected"
     />
   </div>
@@ -348,6 +426,7 @@ import LinearIcon from '../components/LinearIcon.vue'
 import QuestionEditModal from '../components/QuestionEditModal.vue'
 import {
   getBank,
+  listBanks,
   listBankQuestionsContent,
   listChapters,
   listBankMembers,
@@ -357,12 +436,19 @@ import {
   updateChapter,
   deleteChapter,
   createQuestion,
+  batchBankQuestions,
 } from '../api/banks'
 import { useLocale } from '../composables/useLocale'
 import {
   createEmptyBankFilters,
   isFilterActive,
   canEditQuestionInBank,
+  isQuestionLocked,
+  createSelection,
+  toggleSelection,
+  toggleVisibleSelection,
+  isAllVisibleSelected,
+  buildBatchRequest,
   filterBankQuestions,
   adaptOptionsOnTypeChange,
   adaptAnswerOnTypeChange,
@@ -384,6 +470,7 @@ const bank = ref(null)
 const questions = ref([])
 const chapters = ref([])
 const members = ref([])
+const banks = ref([])
 const hasActiveExam = ref(false)
 const loading = ref(true)
 const error = ref('')
@@ -393,6 +480,14 @@ const activeTab = ref('questions')
 
 const filters = ref(createEmptyBankFilters())
 const activeModalQuestion = ref(null)
+
+const showArchived = ref(false)
+const selectedIds = ref(createSelection())
+const batchChapterId = ref('')
+const batchTags = ref('')
+const batchTargetBankId = ref('')
+const batchBusy = ref(false)
+const batchError = ref('')
 
 const showCreate = ref(false)
 const creating = ref(false)
@@ -441,7 +536,91 @@ const canEdit = computed(() => canEditQuestionInBank({
   hasActiveExam: hasActiveExam.value,
 }))
 
+const modalReadOnly = computed(() => !activeModalQuestion.value || !rowEditable(activeModalQuestion.value))
+
+const batchTargets = computed(() => banks.value.filter(item => {
+  if (item.id === bankId.value) return false
+  return ['ADMIN', 'EDITOR'].includes(String(item.role || '').toUpperCase())
+}))
+
+const visibleQuestionIds = computed(() => filteredQuestions.value.map(q => q.id))
+
+const allVisibleSelected = computed(() => isAllVisibleSelected(selectedIds.value, visibleQuestionIds.value))
+
+const selectedQuestions = computed(() => questions.value.filter(q => selectedIds.value.has(q.id)))
+
+const selectedLockedCount = computed(() => selectedQuestions.value.filter(q => isQuestionLocked(q)).length)
+
+const batchBlocked = computed(() => selectedLockedCount.value > 0)
+
 const isOwner = computed(() => String(bank.value?.role || '').toUpperCase() === 'ADMIN')
+
+function rowEditable(question) {
+  return canEdit.value && !isQuestionLocked(question) && !question?.archived
+}
+
+function toggleRowSelection(questionId) {
+  selectedIds.value = toggleSelection(selectedIds.value, questionId)
+}
+
+function toggleSelectAll(checked) {
+  selectedIds.value = toggleVisibleSelection(selectedIds.value, visibleQuestionIds.value, checked)
+}
+
+function clearSelection() {
+  selectedIds.value = createSelection()
+}
+
+function onArchivedToggle() {
+  clearSelection()
+  loadData()
+}
+
+async function runBatch(operation) {
+  if (!canEdit.value || batchBlocked.value) return
+  let extras = {}
+  if (operation === 'chapter') {
+    extras = { chapterId: batchChapterId.value }
+  } else if (operation === 'add_tags' || operation === 'remove_tags') {
+    extras = { tags: batchTags.value.split(/[,，\s]+/).filter(Boolean) }
+  } else if (operation === 'move' || operation === 'copy') {
+    extras = { targetBankId: batchTargetBankId.value }
+  }
+  const built = buildBatchRequest(operation, selectedQuestions.value.map(q => q.id), extras)
+  if (built.error) {
+    batchError.value = t('ep.manage.batch_failed')
+    return
+  }
+  await sendBatch(built.payload)
+}
+
+async function archiveSelected() {
+  if (!canEdit.value || batchBlocked.value || !selectedQuestions.value.length) return
+  if (!window.confirm(t('ep.manage.batch_archive_confirm', { count: selectedQuestions.value.length }))) return
+  await sendBatch({ question_ids: selectedQuestions.value.map(q => q.id), operation: 'archive' })
+}
+
+async function restoreSelected() {
+  if (!canEdit.value || batchBlocked.value || !selectedQuestions.value.length) return
+  await sendBatch({ question_ids: selectedQuestions.value.map(q => q.id), operation: 'restore' })
+}
+
+async function sendBatch(payload) {
+  batchBusy.value = true
+  batchError.value = ''
+  try {
+    await batchBankQuestions(props.token, bankId.value, payload)
+    clearSelection()
+    batchChapterId.value = ''
+    batchTags.value = ''
+    await loadData()
+    flashSuccess(t('ep.manage.batch_done'))
+  } catch (err) {
+    batchError.value = err.detail || err.message || t('ep.manage.batch_failed')
+  } finally {
+    batchBusy.value = false
+  }
+}
 
 function emptyForm() {
   return {
@@ -525,6 +704,12 @@ function handleQuestionSaved(updatedQ) {
     conflictAlert.value = ''
     flashSuccess(t('bank_manage.save_success'))
   }
+}
+
+function handleQuestionReloaded(latestQ) {
+  if (!latestQ) return
+  const idx = questions.value.findIndex(item => item.id === latestQ.id)
+  if (idx !== -1) questions.value[idx] = latestQ
 }
 
 function handleConflictDetected() {
@@ -700,16 +885,18 @@ async function loadData() {
   loading.value = true
   error.value = ''
   try {
-    const [bankRes, questionsRes, chaptersRes, membersRes] = await Promise.all([
+    const [bankRes, questionsRes, chaptersRes, membersRes, banksRes] = await Promise.all([
       getBank(props.token, bankId.value),
-      listBankQuestionsContent(props.token, bankId.value),
+      listBankQuestionsContent(props.token, bankId.value, { includeArchived: showArchived.value }),
       listChapters(props.token, bankId.value).catch(() => []),
       listBankMembers(props.token, bankId.value).catch(() => []),
+      listBanks(props.token).catch(() => []),
     ])
     bank.value = bankRes
     questions.value = Array.isArray(questionsRes) ? questionsRes : []
     chapters.value = Array.isArray(chaptersRes) ? chaptersRes : []
     members.value = Array.isArray(membersRes) ? membersRes : []
+    banks.value = Array.isArray(banksRes) ? banksRes : (banksRes?.banks || [])
     hasActiveExam.value = Boolean(bankRes?.locked_by_active_exam || bankRes?.has_active_exam || questions.value.some(q => q.locked_by_active_exam))
   } catch (err) {
     error.value = err.detail || err.message
@@ -736,9 +923,29 @@ onMounted(loadData)
 .manage-toolbar .search-box { min-width: 220px; flex: 1 1 260px; }
 .manage-toolbar .select { height: 32px; font-size: 12px; }
 .small { font-size: 12px; }
+.bad-text { color: var(--bad); }
+.archived-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-3); cursor: pointer; }
+
+.batch-bar {
+  display: flex; flex-direction: column; gap: 10px;
+  margin-top: 12px; padding: 12px 14px;
+  border: 1px solid var(--line-strong); background: var(--surface-2);
+  min-width: 0;
+}
+.batch-bar-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.batch-title { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.batch-controls { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; }
+.batch-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.batch-group .select { max-width: 180px; }
+.batch-group .input { width: 190px; max-width: 100%; }
 
 .mtable-wrap { overflow-x: auto; }
 .mtable { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.mtable th.select-cell,
+.mtable td.select-cell { width: 36px; padding: 0 4px; text-align: center; }
+.mtable th.select-cell input,
+.mtable td.select-cell input { width: 14px; height: 14px; cursor: pointer; }
+.mtable-row.is-archived { opacity: .68; }
 .mtable th {
   padding: 9px 10px; text-align: left;
   font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
@@ -777,7 +984,7 @@ onMounted(loadData)
 .opt-key-btn.is-on { background: var(--brand); border-color: var(--brand); color: var(--brand-contrast); }
 
 @media (max-width: 900px) {
-  .mtable { min-width: 760px; }
+  .mtable { min-width: 800px; }
   .create-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 640px) {
@@ -786,6 +993,12 @@ onMounted(loadData)
   .manage-tabs { gap: 16px; overflow-x: auto; flex-wrap: nowrap; }
   .manage-tabs .tab { white-space: nowrap; }
   .manage-toolbar .search-box { flex-basis: 100%; }
+  .archived-toggle { flex-basis: 100%; }
+  .batch-controls { flex-direction: column; align-items: stretch; }
+  .batch-group { width: 100%; }
+  .batch-group .select,
+  .batch-group .input { flex: 1 1 auto; width: auto; max-width: none; }
+  .batch-group .btn { flex: 0 0 auto; }
   .member-form { flex-wrap: wrap; }
   .member-form .input { flex-basis: 100%; }
   .create-grid { grid-template-columns: minmax(0, 1fr); }

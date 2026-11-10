@@ -370,6 +370,32 @@
 - **影响范围**：`scripts/`、`tests/test_guard_checks.py`、`frontend/src/locales/`、`frontend/src/composables/`、`frontend/src/design/`、`frontend/src/components/`、`backend/app/api/routes/ai.py`、`backend/legacy/services/ai_service.py`、`frontend/tests/browser_e2e.test.js`、`DECISIONS.md`、`SPEC.md`。
 
 
+### [2026-11-11] 四套配色族替代旧多主题系统，旧配色标识自动归并
+
+- **触发背景**：用户确认产品只保留四套主题（编辑部 Editorial、Gruvbox、Everforest、Catppuccin），替换此前按单一色名堆叠的多主题实现。旧版本已把配色 id 写入本机存储，直接改枚举会让老用户启动后被静默重置为默认色。
+- **核心决策**：
+  1. **配色族与明暗解耦**：四套配色族各自提供同一套语义 token 契约；`mode`（light/dark/system）只选择该族内的明暗取值，配色与模式分开持久化，切换任一维度不覆盖另一维度。
+  2. **旧 id 归并而非重置**：`blue-grey`/`mist` → `editorial`，`ocean`/`amethyst`/`mocha` → `catppuccin`，`rose`/`amber` → `gruvbox`，`forest` → `everforest`；未识别的值回落 `editorial`。
+  3. **强调色按实际表面推导前景**：自定义强调色先归一化，再针对当前配色族的 page/card/subtle 表面逐步混合，直到正文对比度 ≥ 4.5:1；hover/active 各自重新计算前景，避免沿用基色前景造成同色不可读。
+  4. **门禁按 token 而非截图**：`frontend/tests/theme.test.js` 断言四族 × 明暗的 AA 对比度、`style.css` 每族明暗块存在、`PALETTE_SURFACES` 与 CSS 同步、最小字号与强调色可读性。截图式“四主题全视口审美验收”不在本决策的已验证范围内。
+- **对应 SPEC 章节**：SPEC.md §8「验收基线」。
+- **影响范围**：`frontend/src/design/themePreference.js`、`frontend/src/composables/useTheme.js`、`frontend/src/views/SettingsView.vue`、`frontend/src/style.css`、`frontend/src/locales/*`、`frontend/tests/theme.test.js`、`frontend/tests/components/settings_view.test.js`。
+
+### [2026-11-11] 批量题库维护：整批原子、双端权限与归档软删除
+
+- **触发背景**：用户确认题库需要批量维护能力，避免逐题修改章节、标签或跨库搬运；同时必须满足既有领域红线（复制生成新身份、进行中模考不可改题、普通成员不得编辑）。批量接口天然容易产生“部分成功”，因此把原子性作为核心约束而不是事后补丁。
+- **核心决策**：
+  1. **单一批量端点**：`POST /api/v1/banks/{bank_id}/questions/batch`，`operation` 仅接受 `chapter`、`add_tags`、`remove_tags`、`move`、`copy`、`archive`、`restore`；去重后单次最多 500 道题。
+  2. **先全量校验，再单事务写入**：在第一次写入前校验源题库编辑权、目标题库编辑权、目标存在性、章节归属、题目归属、活动模考锁定与归档状态；任一项失败即整批回滚，不留下部分更新。
+  3. **双端权限**：`move`/`copy` 同时要求源题库与目标题库的 `ADMIN`/`EDITOR` 角色；普通成员 `MEMBER` 一律 403。
+  4. **元数据不推版本**：批量章节与标签直接更新当前最新版本行，不生成新题目版本，避免把“归章/打标”误记成内容变更；标签同时同步到 `question_tag_items`。
+  5. **移动与复制的身份语义**：`move` 保留题目 id，章节在目标题库中按名称匹配，缺失时自动创建同名章节，源题无章节则保持无章节；`copy` 复用既有复制路径生成新题目与初始版本，学习状态从空白开始。
+  6. **归档是软删除**：`archive` 置 `is_deleted=1`，题目从内容列表、普通刷题与专项目标集中隐藏，并禁止编辑及章节/标签/移动/复制等批量操作；重复归档保持幂等，`restore` 恢复。
+  7. **审计留痕**：每次批量写入 `audit_logs`，action 为 `BANK_QUESTIONS_BATCH`，记录操作、题目 id、章节/标签/目标题库参数。
+  8. **前端只暴露可执行项**：批量栏仅对编辑者显示；所选行含模考锁定时整体禁用并说明原因；归档需确认；375px 下批量栏不得横向溢出。
+- **对应 SPEC 章节**：SPEC.md §2.0.1「题库组织」。
+- **影响范围**：`backend/app/api/routes/banks.py`、`backend/app/application/bank_service.py`、`backend/app/infrastructure/db/repositories/question_repository.py`、`frontend/src/api/banks.js`、`frontend/src/domain/bankManage.js`、`frontend/src/views/BankManageView.vue`、`frontend/src/locales/*`、`tests/test_bank_batch_operations.py`、`frontend/tests/bank_manage.test.js`、`frontend/tests/bank_batch_e2e.test.js`。
+
 ### [2026-11-10] Editorial Precision 全产品 UI 替换，同步更新旧 UI 断言
 
 - **触发背景**：按已确认的 Editorial Precision 原型与设计文档重写产品页面与全局外壳。旧组件测试断言的“更多菜单”结构（`mobile-nav-more-popup`、`mobile-dropdown-menu`）已随移动导航与练习顶栏的信息架构调整而消失，属于设计被正确替换，不是业务回归。

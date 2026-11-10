@@ -38,7 +38,10 @@ class ImportService:
         return (str(item.get("stem") or "").strip().casefold(), str(item.get("answer") or "").strip().upper())
 
     def _find_duplicates(self, user_id: str, bank_id: str, items: list[dict]) -> list[dict]:
-        existing = self.questions.list_for_bank(bank_id, user_id)
+        # Duplicate detection is a content-level concern: killed questions still
+        # occupy the bank and archived questions do not. Using the practice list
+        # would silently miss duplicates of questions the user has killed.
+        existing = self.questions.list_content_for_bank(bank_id, user_id)
         by_key = {self._key(item): item for item in existing}
         seen_batch = {}
         duplicates = []

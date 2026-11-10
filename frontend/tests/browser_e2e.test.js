@@ -681,14 +681,17 @@ test('True Chrome Browser E2E: Editorial Precision Full Lifecycle', async (t) =>
       await fillEditStem(pageB, 'B端离线并发修改题干')
       await pageB.locator('.edit-panel-actions .btn-primary').click()
       await pageB.waitForSelector('[data-testid="offline-banner"]', { timeout: 5000 })
-      const queued = await pageB.evaluate(() => JSON.parse(localStorage.getItem('easyexam_offline_question_edits') || '[]'))
+      const queued = await pageB.evaluate(() => {
+        const user = JSON.parse(sessionStorage.getItem('easyexam_user') || localStorage.getItem('easyexam_user') || '{}')
+        const key = `easyexam_offline_question_edits_${user.id || user.username}`
+        return JSON.parse(localStorage.getItem(key) || '[]')
+      })
       assert.equal(queued.length, 1)
       assert.equal(queued[0].payload.base_version_number, 1)
       assert.equal(queued[0].payload.stem, 'B端离线并发修改题干')
 
       await contextB.setOffline(false)
-      await pageB.locator('[data-testid="offline-banner"] .btn').click()
-      await pageB.waitForTimeout(800)
+      await pageB.waitForSelector('[data-testid="conflict-banner"]', { timeout: 8000 })
 
       const conflictRes = await (await fetch(`${BASE_URL}/api/v1/questions/${targetQId}/conflict`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -766,9 +769,12 @@ test('True Chrome Browser E2E: Editorial Precision Full Lifecycle', async (t) =>
       await page.locator('.edit-panel-actions .btn-primary').click()
       await page.waitForSelector('[data-testid="offline-banner"]')
       await context.setOffline(false)
-      await page.locator('[data-testid="offline-banner"] .btn').evaluate(button => button.click())
       await page.waitForSelector('[data-testid="question-edit-error"]')
-      const rejectedQueue = await page.evaluate(() => JSON.parse(localStorage.getItem('easyexam_offline_question_edits') || '[]'))
+      const rejectedQueue = await page.evaluate(() => {
+        const user = JSON.parse(sessionStorage.getItem('easyexam_user') || localStorage.getItem('easyexam_user') || '{}')
+        const key = `easyexam_offline_question_edits_${user.id || user.username}`
+        return JSON.parse(localStorage.getItem(key) || '[]')
+      })
       assert.equal(rejectedQueue.length, 1)
       assert.equal(rejectedQueue[0].blocked, true)
       assert.match(await page.locator('[data-testid="offline-banner"]').innerText(), /存在活动模拟考试/)

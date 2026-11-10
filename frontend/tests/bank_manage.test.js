@@ -9,6 +9,15 @@ import {
   validateQuestionEdit,
   sanitizeAnswerOnOptionRemove,
   adaptAnswerOnTypeChange,
+  isQuestionLocked,
+  canEditQuestion,
+  createSelection,
+  toggleSelection,
+  toggleVisibleSelection,
+  isAllVisibleSelected,
+  buildBatchRequest,
+  normalizeAnswer,
+  shouldOfferRegrade,
 } from '../src/domain/bankManage.js'
 
 const sampleQuestions = [
@@ -91,6 +100,81 @@ test('canEditQuestionInBank checks active exam safety condition', () => {
   assert.equal(canEditQuestionInBank({ role: 'EDITOR', hasActiveExam: true }), false)
   // Member is always blocked
   assert.equal(canEditQuestionInBank({ role: 'MEMBER', hasActiveExam: false }), false)
+})
+
+test('per-question lock only blocks the questions included in an active exam', () => {
+  const lockedQuestion = { id: 'q1', locked_by_active_exam: true }
+  const freeQuestion = { id: 'q2', locked_by_active_exam: false }
+  assert.equal(isQuestionLocked(lockedQuestion), true)
+  assert.equal(isQuestionLocked(freeQuestion), false)
+  assert.equal(canEditQuestion({ role: 'ADMIN', question: lockedQuestion }), false)
+  assert.equal(canEditQuestion({ role: 'ADMIN', question: freeQuestion }), true)
+  assert.equal(canEditQuestion({ role: 'MEMBER', question: freeQuestion }), false)
+})
+
+test('selection helpers toggle single rows and the visible page without duplicates', () => {
+  const selected = createSelection()
+  const one = toggleSelection(selected, 'q1')
+  assert.deepEqual([...one], ['q1'])
+  assert.deepEqual([...toggleSelection(one, 'q1')], [])
+  // Blank ids never enter the selection
+  assert.deepEqual([...toggleSelection(one, '  ')], ['q1'])
+
+  const visible = ['q1', 'q2', 'q3']
+  const all = toggleVisibleSelection(one, visible, true)
+  assert.deepEqual([...all], ['q1', 'q2', 'q3'])
+  assert.equal(isAllVisibleSelected(all, visible), true)
+  assert.equal(isAllVisibleSelected(all, ['q1', 'q4']), false)
+
+  const cleared = toggleVisibleSelection(all, ['q1', 'q2'], false)
+  assert.deepEqual([...cleared], ['q3'])
+  assert.equal(isAllVisibleSelected(cleared, ['q1', 'q2']), false)
+})
+
+test('buildBatchRequest validates each batch operation and deduplicates ids', () => {
+  assert.deepEqual(buildBatchRequest('archive', []), { error: 'no_questions' })
+  assert.deepEqual(buildBatchRequest('explode', ['q1']), { error: 'invalid_operation' })
+
+  const archive = buildBatchRequest('archive', ['q1', 'q1', ' q2 '])
+  assert.deepEqual(archive.payload, { question_ids: ['q1', 'q2'], operation: 'archive' })
+
+  assert.deepEqual(buildBatchRequest('chapter', ['q1']), { error: 'chapter_required' })
+  assert.deepEqual(buildBatchRequest('chapter', ['q1'], { chapterId: '' }).payload, {
+    question_ids: ['q1'],
+    operation: 'chapter',
+    chapter_id: null,
+  })
+
+  assert.deepEqual(buildBatchRequest('add_tags', ['q1']), { error: 'tags_required' })
+  assert.deepEqual(buildBatchRequest('add_tags', ['q1'], { tags: [' math ', ''] }).payload, {
+    question_ids: ['q1'],
+    operation: 'add_tags',
+    tags: ['math'],
+  })
+
+  assert.deepEqual(buildBatchRequest('copy', ['q1']), { error: 'target_required' })
+  assert.deepEqual(buildBatchRequest('copy', ['q1'], { targetBankId: 'b2' }).payload, {
+    question_ids: ['q1'],
+    operation: 'copy',
+    target_bank_id: 'b2',
+  })
+})
+
+test('normalizeAnswer ignores separator and case noise for choice questions', () => {
+  assert.equal(normalizeAnswer('MULTI', 'B, A'), 'A,B')
+  assert.equal(normalizeAnswer('MULTI', 'a b'), 'A,B')
+  assert.equal(normalizeAnswer('SINGLE', ' a '), 'A')
+  assert.equal(normalizeAnswer('ESSAY', ' Depends on context '), 'Depends on context')
+})
+
+test('shouldOfferRegrade only asks when the scoring answer actually changes', () => {
+  const original = { type: 'SINGLE', answer: 'A' }
+  assert.equal(shouldOfferRegrade(original, { type: 'SINGLE', answer: 'A' }), false)
+  assert.equal(shouldOfferRegrade(original, { type: 'SINGLE', answer: ' a ' }), false)
+  assert.equal(shouldOfferRegrade(original, { type: 'SINGLE', answer: 'B' }), true)
+  assert.equal(shouldOfferRegrade(original, { type: 'MULTI', answer: 'A,B' }), true)
+  // Do not offer destructive re-grading when the draft answer is empty.
+  assert.equal(shouldOfferRegrade(original, { type: 'SINGLE', answer: '' }), false)
 })
 
 test('filterBankQuestions filters by keyword matching stem', () => {
