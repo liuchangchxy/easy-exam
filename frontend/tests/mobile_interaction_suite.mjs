@@ -44,7 +44,7 @@ async function waitForServer(url, expectedToken, timeoutMs = 25000) {
 }
 
 // The progress pill renders as "N / M 📑 答题卡" (spaces around the slash, see
-// PracticeViewV1.vue `.btn-sheet-trigger-pill`). Assert on the numbers rather than a
+// PracticeViewV1.vue `.focus-counter`). Assert on the numbers rather than a
 // literal substring so this tracks the DOM instead of a hand-copied format string.
 const PROGRESS_RE = /(?:^|\D)(\d+)\s*\/\s*(\d+)/
 
@@ -60,26 +60,19 @@ function assertProgress(text, expectedN, label) {
 }
 
 // The action bar swaps its primary slot by state (see PracticeViewV1.vue):
-//   answered  -> .btn-next-question  ("下一题 →")
-//   unanswered -> .btn-skip-unanswered ("跳过 →")
-// Both call next(). Tests must click whichever is actually present for the state
-// under test, instead of assuming "下一题" always exists.
+//   answered   -> primary "next" button
+//   unanswered -> quiet "next" button
 async function advance(page) {
-  const nextBtn = page.locator('.btn-next-question')
-  if (await nextBtn.count() && await nextBtn.isVisible()) {
-    await nextBtn.click()
+  const nextBtn = page.locator('.focus-actionbar .btn-primary, .focus-actionbar .btn-quiet')
+  if (await nextBtn.count() && await nextBtn.first().isVisible()) {
+    await nextBtn.first().click()
     return 'next'
   }
-  const skipBtn = page.locator('.btn-skip-unanswered')
-  if (await skipBtn.count() && await skipBtn.isVisible()) {
-    await skipBtn.click()
-    return 'skip'
-  }
-  throw new Error('no forward control (.btn-next-question / .btn-skip-unanswered) is visible')
+  throw new Error('no forward control in .focus-actionbar is visible')
 }
 
 async function goBack(page) {
-  await page.locator('.btn-prev-question').click()
+  await page.locator('.focus-actionbar button:has-text("上一题")').click()
 }
 
 async function run() {
@@ -126,11 +119,13 @@ async function run() {
 
     // --- Register through the real UI (not the API: this is the user path) ---
     await page.goto(BASE_URL)
-    await page.click('button:has-text("首次使用？创建账号")')
-    await page.fill('input[placeholder="用户名"]', `mobile_suite_${Date.now()}`)
-    await page.fill('input[placeholder="密码（至少 8 位）"]', 'password-123456')
-    await page.click('button:has-text("注册并登录")')
-    await page.waitForSelector('.home-page')
+    await page.waitForSelector('.auth-layout')
+    await page.click('.auth-switch .link-btn')
+    await page.fill('#login-username', `mobile_suite_${Date.now()}`)
+    await page.fill('#login-password', 'password-123456')
+    await page.fill('#login-confirm', 'password-123456')
+    await page.click('.auth-submit')
+    await page.waitForSelector('.today')
 
     // Check 1: login persisted for offline/token reuse
     const cached = await page.evaluate(() => localStorage.getItem('easyexam_user'))
@@ -153,19 +148,19 @@ async function run() {
     })
     assert(importRes.ok, `Failed to import fixture questions: ${importRes.status}`)
 
-    await page.reload()
-    await page.waitForSelector('.bank-card')
-    await page.click('button:has-text("开始刷题")')
-    await page.waitForSelector('.question-card')
+    await page.goto(`${BASE_URL}/#/banks`)
+    await page.waitForSelector('.bank-row')
+    await page.locator('.bank-row .btn-sm').first().click()
+    await page.waitForSelector('.focus-mode')
     console.log('[Check 2] Question card loaded')
 
-    await page.click('.option:first-child')
+    await page.click('.opt')
     await page.waitForTimeout(200)
-    await page.click('button:has-text("提交答案")')
+    await page.click('.focus-actionbar .btn-primary')
     await page.waitForTimeout(600)
 
     // Check 3: single-choice verdict wording
-    const verdictBanner = await page.textContent('.verdict-status-title')
+    const verdictBanner = await page.textContent('.verdict-line strong')
     console.log('[Check 3] Single choice verdict text:', verdictBanner.trim())
     assert(!verdictBanner.includes('未完全答对'), 'Single choice must never show 未完全答对')
     assert(
@@ -175,14 +170,14 @@ async function run() {
 
     await advance(page)
     await page.waitForTimeout(400)
-    const q2Progress = await page.textContent('.btn-sheet-trigger-pill')
+    const q2Progress = await page.textContent('.focus-counter')
     console.log('[Check 4] Progress after next:', q2Progress.trim())
     assertProgress(q2Progress, 2, 'Should have navigated to Q2')
 
     // Check 5: skipping an unanswered question must be allowed (non-blocking navigation)
     await advance(page)
     await page.waitForTimeout(400)
-    const q3Progress = await page.textContent('.btn-sheet-trigger-pill')
+    const q3Progress = await page.textContent('.focus-counter')
     console.log('[Check 5] Skip unanswered question to Q3:', q3Progress.trim())
     assertProgress(q3Progress, 3, 'Should have skipped to Q3 without answering Q2')
 
@@ -191,12 +186,12 @@ async function run() {
     await page.waitForTimeout(300)
     await goBack(page)
     await page.waitForTimeout(400)
-    const backToQ1Progress = await page.textContent('.btn-sheet-trigger-pill')
+    const backToQ1Progress = await page.textContent('.focus-counter')
     console.log('[Check 6] Back to Q1:', backToQ1Progress.trim())
     assertProgress(backToQ1Progress, 1, 'Should be back at Q1')
 
     // Check 7: going back must not clear the earlier answer/verdict
-    const q1PreservedVerdict = await page.textContent('.verdict-status-title')
+    const q1PreservedVerdict = await page.textContent('.verdict-line strong')
     console.log('[Check 7] Q1 preserved verdict after navigating back:', q1PreservedVerdict.trim())
     assert(
       q1PreservedVerdict &&
@@ -205,14 +200,14 @@ async function run() {
     )
 
     // Check 8: question palette drawer
-    await page.click('.btn-sheet-trigger-pill')
-    await page.waitForSelector('.sheet-modal-drawer')
-    const isDrawerOpen = await page.isVisible('.sheet-modal-drawer')
+    await page.click('.focus-counter')
+    await page.waitForSelector('.sheet-dialog')
+    const isDrawerOpen = await page.isVisible('.sheet-dialog')
     console.log('[Check 8] Question palette drawer opened:', isDrawerOpen)
     assert(isDrawerOpen, 'Question palette drawer should be open')
 
     const q1PaletteClass = await page.evaluate(() => {
-      const items = Array.from(document.querySelectorAll('.sheet-num-btn'))
+      const items = Array.from(document.querySelectorAll('.sheet-dialog .sheet-num'))
       return items[0]?.className || ''
     })
     console.log('[Check 9] Q1 palette class:', q1PaletteClass)
@@ -223,14 +218,14 @@ async function run() {
 
     // Check 10: jump to Q10 via the palette
     const jumpTarget = await page.evaluate(() => {
-      const items = Array.from(document.querySelectorAll('.sheet-num-btn'))
+      const items = Array.from(document.querySelectorAll('.sheet-dialog .sheet-num'))
       const t = items.find((el) => el.textContent.trim() === '10')
       if (t) t.click()
       return Boolean(t)
     })
     assert(jumpTarget, 'palette should expose a Q10 button')
     await page.waitForTimeout(500)
-    const q10Progress = await page.textContent('.btn-sheet-trigger-pill')
+    const q10Progress = await page.textContent('.focus-counter')
     console.log('[Check 10] Jumped to Q10:', q10Progress.trim())
     assertProgress(q10Progress, 10, 'Should jump to Q10')
 
@@ -238,7 +233,7 @@ async function run() {
     // The handler reads e.touches / e.changedTouches (PracticeViewV1.vue
     // handleTouchStart/handleTouchEnd), so a mouse drag never reaches it — real
     // touch events must be dispatched via CDP Input.dispatchTouchEvent.
-    const box = await page.locator('.practice-page').boundingBox()
+    const box = await page.locator('.focus-mode').boundingBox()
     const cy = box.y + box.height / 2
     const cdp = await context.newCDPSession(page)
     // Start beyond the 25px iOS-back edge guard (isSwipeGestureValid).
@@ -257,7 +252,7 @@ async function run() {
     }
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
     await page.waitForTimeout(800)
-    const q11Progress = await page.textContent('.btn-sheet-trigger-pill')
+    const q11Progress = await page.textContent('.focus-counter')
     console.log('[Check 11] After swipe:', q11Progress.trim())
     assertProgress(q11Progress, 11, 'Should have swiped to Q11')
 
