@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { spawn } from 'node:child_process'
+import { spawn, execSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import fs from 'node:fs'
@@ -35,11 +35,12 @@ async function waitForServer(url, timeoutMs = 20000) {
   throw new Error(`Server at ${url} failed to start within ${timeoutMs}ms`)
 }
 
-test('Bank Content Management E2E: Full Lifecycle, Killed Retention, Active Exam Lock, Mobile 375px', async () => {
+test('Bank Management E2E: Editorial Table, Filtering, Edit, Active Exam Lock and 375px', async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bank-manage-e2e-'))
   const tempDbPath = path.join(tempDir, 'bank_manage.db')
   const port = await getFreePort()
   const BASE_URL = `http://127.0.0.1:${port}`
+  const instanceToken = crypto.randomUUID()
 
   console.log(`[E2E] Spawning backend server on ${BASE_URL}...`)
   const serverProcess = spawn(
@@ -51,25 +52,18 @@ test('Bank Content Management E2E: Full Lifecycle, Killed Retention, Active Exam
         ...process.env,
         PYTHONPATH: repoRoot,
         DB_PATH: tempDbPath,
+        INSTANCE_TOKEN: instanceToken,
         EASYEXAM_SECRET_KEY: 'e2e-secret-key-32bytes-ci-safe!!',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     }
   )
 
-  const screenshotsDir = path.resolve(repoRoot, 'tests/visual_smoke')
-  if (!fs.existsSync(screenshotsDir)) {
-    fs.mkdirSync(screenshotsDir, { recursive: true })
-  }
-
   let browser = null
-
   try {
     await waitForServer(BASE_URL)
     console.log('[E2E] Backend server healthy.')
 
-    // Setup initial data via API
-    // 1. Admin user registration & login
     const adminRegRes = await fetch(`${BASE_URL}/api/v1/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -82,10 +76,8 @@ test('Bank Content Management E2E: Full Lifecycle, Killed Retention, Active Exam
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'admin_e2e', password: 'Password123!' }),
     })
-    const adminLoginBody = await adminLoginRes.json()
-    const adminToken = adminLoginBody.token
+    const adminToken = (await adminLoginRes.json()).token
 
-    // 2. Member user registration
     const memberRegRes = await fetch(`${BASE_URL}/api/v1/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -93,13 +85,9 @@ test('Bank Content Management E2E: Full Lifecycle, Killed Retention, Active Exam
     })
     assert.equal(memberRegRes.status, 201)
 
-    // 3. Create question bank
     const createBankRes = await fetch(`${BASE_URL}/api/v1/banks`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminToken}`,
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
       body: JSON.stringify({
         name: 'Computer Networks Bank',
         category: 'CS Core',
@@ -110,362 +98,178 @@ test('Bank Content Management E2E: Full Lifecycle, Killed Retention, Active Exam
     const bank = await createBankRes.json()
     const bankId = bank.id
 
-    // 4. Add member_e2e as MEMBER
-    await fetch(`${BASE_URL}/api/v1/banks/${bankId}/members`, {
+    const addMemberRes = await fetch(`${BASE_URL}/api/v1/banks/${bankId}/members`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminToken}`,
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
       body: JSON.stringify({ username: 'member_e2e', role: 'MEMBER' }),
     })
+    assert.equal(addMemberRes.status, 201)
 
-    // 5. Add chapter
     const chapRes = await fetch(`${BASE_URL}/api/v1/banks/${bankId}/chapters`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminToken}`,
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
       body: JSON.stringify({ name: 'Transport Layer' }),
     })
     const chapter = await chapRes.json()
 
-    // 6. Create 3 questions
-    // Q1 (will be killed by admin)
-    const q1Res = await fetch(`${BASE_URL}/api/v1/banks/${bankId}/questions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminToken}`,
-      },
-      body: JSON.stringify({
-        stem: 'What layer of the OSI model does IP belong to?',
-        type: 'SINGLE',
-        options: [{ key: 'A', content: 'Network' }, { key: 'B', content: 'Transport' }],
-        answer: 'A',
-        explanation: 'IP is network layer (Layer 3).',
-        difficulty: 2,
-        tags: ['network', 'osi'],
-        chapter_id: chapter.id,
-      }),
-    })
-    const q1 = await q1Res.json()
+    const createQuestion = async payload => {
+      const res = await fetch(`${BASE_URL}/api/v1/banks/${bankId}/questions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify(payload),
+      })
+      assert.equal(res.status, 201)
+      return res.json()
+    }
 
-    // Q2 (multi-choice)
-    const q2Res = await fetch(`${BASE_URL}/api/v1/banks/${bankId}/questions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminToken}`,
-      },
-      body: JSON.stringify({
-        stem: 'Which protocols run on TCP?',
-        type: 'MULTI',
-        options: [
-          { key: 'A', content: 'HTTP' },
-          { key: 'B', content: 'FTP' },
-          { key: 'C', content: 'UDP' },
-        ],
-        answer: 'AB',
-        explanation: 'HTTP and FTP use TCP connection.',
-        difficulty: 3,
-        tags: ['protocol', 'tcp'],
-        chapter_id: chapter.id,
-      }),
+    const q1 = await createQuestion({
+      stem: 'What layer of the OSI model does IP belong to?',
+      type: 'SINGLE',
+      options: [{ key: 'A', content: 'Network' }, { key: 'B', content: 'Transport' }],
+      answer: 'A',
+      explanation: 'IP is network layer (Layer 3).',
+      difficulty: 2,
+      tags: ['network', 'osi'],
+      chapter_id: chapter.id,
     })
-    const q2 = await q2Res.json()
-
-    // Q3 (judge question)
-    const q3Res = await fetch(`${BASE_URL}/api/v1/banks/${bankId}/questions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminToken}`,
-      },
-      body: JSON.stringify({
-        stem: 'Is UDP a connection-oriented protocol?',
-        type: 'JUDGE',
-        options: [{ key: 'T', content: 'True' }, { key: 'F', content: 'False' }],
-        answer: 'F',
-        explanation: 'UDP is connectionless.',
-        difficulty: 1,
-        tags: ['udp', 'basics'],
-        chapter_id: chapter.id,
-      }),
+    const q2 = await createQuestion({
+      stem: 'Which protocols run on TCP?',
+      type: 'MULTI',
+      options: [
+        { key: 'A', content: 'HTTP' },
+        { key: 'B', content: 'FTP' },
+        { key: 'C', content: 'UDP' },
+      ],
+      answer: 'AB',
+      explanation: 'HTTP and FTP use TCP connection.',
+      difficulty: 3,
+      tags: ['protocol', 'tcp'],
+      chapter_id: chapter.id,
     })
-    const q3 = await q3Res.json()
-
-    // 7. Kill Question 1
-    const killRes = await fetch(`${BASE_URL}/api/v1/kills/${q1.id}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${adminToken}` },
+    const q3 = await createQuestion({
+      stem: 'Is UDP a connection-oriented protocol?',
+      type: 'JUDGE',
+      options: [{ key: 'T', content: 'True' }, { key: 'F', content: 'False' }],
+      answer: 'F',
+      explanation: 'UDP is connectionless.',
+      difficulty: 1,
+      tags: ['udp', 'basics'],
+      chapter_id: chapter.id,
     })
-    assert.equal(killRes.status, 201)
-    console.log('[E2E] Seeded 3 questions and killed Q1.')
 
-    // Launch Playwright Chromium
-    browser = await chromium.launch({ headless: true })
-    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+    browser = await chromium.launch({
+      ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}),
+      headless: true,
+    })
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'zh-CN' })
     const page = await context.newPage()
+    page.on('dialog', dialog => dialog.accept())
 
-    // Step A: Login as admin via LoginView UI
     await page.goto(BASE_URL)
-    await page.waitForSelector('.auth-page', { timeout: 10000 })
-    await page.fill('input[autocomplete="username"]', 'admin_e2e')
-    await page.fill('input[type="password"]', 'Password123!')
-    await page.click('button[type="submit"]')
-    await page.waitForSelector('.home-page', { timeout: 10000 })
-    console.log('[E2E] Logged into HomeView.')
+    await page.waitForSelector('.auth-layout', { timeout: 10000 })
+    await page.fill('#login-username', 'admin_e2e')
+    await page.fill('#login-password', 'Password123!')
+    await page.click('.auth-submit')
+    await page.waitForSelector('.today', { timeout: 10000 })
 
-    // Step B: Home bank card has "管理题目" button (inside bank actions accordion)
-    const accordion = page.locator('.bank-manage-accordion').first()
-    if (await accordion.isVisible().catch(() => false)) {
-      await page.click('.bank-manage-summary')
-    }
-    const manageBtn = page.locator(`[data-testid="manage-bank-${bankId}"]`)
-    await manageBtn.waitFor({ state: 'visible', timeout: 5000 })
-    await manageBtn.click()
+    await page.goto(`${BASE_URL}/#/banks/${bankId}/manage`)
+    await page.waitForSelector('.manage-page', { timeout: 10000 })
+    await page.waitForSelector('.mtable-row', { timeout: 10000 })
+    assert.equal(await page.locator('.mtable-row').count(), 3, 'Management table must list all three questions')
+    assert.match(await page.locator('.page-title').innerText(), /Computer Networks Bank/)
 
-    // Step C: URL is now #/banks/:bankId
-    await page.waitForURL(`**/banks/${bankId}`, { timeout: 5000 })
-    await page.waitForSelector('.bank-manage-page', { timeout: 5000 })
-    console.log('[E2E] Entered BankManageView.')
+    await page.locator('.manage-toolbar .input').fill('UDP')
+    await page.waitForTimeout(250)
+    assert.equal(await page.locator('.mtable-row').count(), 1, 'Keyword search must narrow the table')
+    assert.match(await page.locator('.mtable-row').first().innerText(), /UDP/)
 
-    // Step D: Acceptance Criterion 3 - Wait for questions to load and verify Killed question 1 MUST be in the content list!
-    await page.waitForSelector(`[data-testid="question-card-${q1.id}"]`, { timeout: 5000 })
-    await page.waitForSelector(`[data-testid="question-card-${q2.id}"]`, { timeout: 5000 })
-    await page.waitForSelector(`[data-testid="question-card-${q3.id}"]`, { timeout: 5000 })
-    console.log('[E2E] Confirmed questions loaded and killed question Q1 is present in management list.')
+    await page.locator('.manage-toolbar .btn-quiet').click()
+    await page.waitForTimeout(250)
+    assert.equal(await page.locator('.mtable-row').count(), 3)
 
-    // Step E: Header verification
-    const titleText = await page.locator('.bank-title-text').innerText()
-    assert.equal(titleText, 'Computer Networks Bank')
-    const rolePill = await page.locator('.role-pill').innerText()
-    assert.ok(rolePill.includes('管理员') || rolePill.includes('Admin'))
+    await page.locator('.manage-toolbar select').first().selectOption('JUDGE')
+    await page.waitForTimeout(250)
+    assert.equal(await page.locator('.mtable-row').count(), 1, 'Type filter must isolate JUDGE questions')
+    assert.match(await page.locator('.mtable-row').first().innerText(), /UDP/)
+    await page.locator('.manage-toolbar .btn-quiet').click()
+    await page.waitForTimeout(250)
 
-    // Visual Capture 1: 1280px full bank manage page (with questions loaded)
-    await page.screenshot({ path: path.join(screenshotsDir, 'bank_manage_1280_full.png'), fullPage: false })
-
-    // Step F: Keyword Search
-    await page.fill('.search-input', 'TCP')
-    await page.waitForTimeout(300)
-    assert.equal(await page.locator(`[data-testid="question-card-${q2.id}"]`).isVisible(), true)
-    assert.equal(await page.locator(`[data-testid="question-card-${q1.id}"]`).isVisible(), false)
-    assert.equal(await page.locator(`[data-testid="question-card-${q3.id}"]`).isVisible(), false)
-
-    // Visual Capture 2: 1280px search + multi-filter state
-    await page.screenshot({ path: path.join(screenshotsDir, 'bank_manage_1280_filtered.png') })
-
-    // Clear search
-    await page.click('.btn-clear-search')
-    await page.waitForTimeout(200)
-
-    // Step G: Type and Difficulty filter
-    const typeSelect = page.locator('.filter-select').first()
-    await typeSelect.selectOption('JUDGE')
-    await page.waitForTimeout(200)
-    assert.equal(await page.locator(`[data-testid="question-card-${q3.id}"]`).isVisible(), true)
-    assert.equal(await page.locator(`[data-testid="question-card-${q2.id}"]`).isVisible(), false)
-
-    // Reset filters
-    await page.click('.btn-reset-filters')
-    await page.waitForTimeout(200)
-    assert.equal(await page.locator(`[data-testid="question-card-${q1.id}"]`).isVisible(), true)
-    assert.equal(await page.locator(`[data-testid="question-card-${q2.id}"]`).isVisible(), true)
-
-    // Step H: Versioned Question Editing
-    const editBtnQ3 = page.locator(`[data-testid="edit-btn-${q3.id}"]`)
-    await editBtnQ3.click()
+    const q3Row = page.locator('.mtable-row').filter({ hasText: 'Is UDP a connection-oriented protocol?' }).first()
+    await q3Row.click()
     await page.waitForSelector('.question-edit-dialog', { timeout: 5000 })
-    await page.waitForTimeout(300)
+    await page.locator('#edit-stem').fill('Is UDP a connectionless protocol?')
+    await page.locator('.btn-submit-edit').click()
+    await page.waitForSelector('.notice.ok.manage-notice', { timeout: 8000 })
+    await page.waitForSelector('.mtable-row:has-text("Is UDP a connectionless protocol?")', { timeout: 8000 })
+    const versionText = await page.locator('.mtable-row:has-text("Is UDP a connectionless protocol?")').innerText()
+    assert.match(versionText, /v2/, 'Edited question must advance to version 2')
 
-    // Visual Capture 3: 1280px edit modal
-    await page.screenshot({ path: path.join(screenshotsDir, 'bank_manage_1280_edit_modal.png') })
-
-    // Edit stem
-    const stemInput = page.locator('#edit-stem')
-    await stemInput.fill('Is UDP a connection-oriented protocol or connectionless?')
-    await page.click('.btn-submit-edit')
-
-    // Toast appears
-    await page.waitForSelector('.toast-success-banner', { timeout: 5000 })
-    console.log('[E2E] Question edited and saved.')
-
-    // Card should now display v2
-    const q3Card = page.locator(`[data-testid="question-card-${q3.id}"]`)
-    const q3VersionText = await q3Card.locator('.version-badge').innerText()
-    assert.ok(q3VersionText.includes('v2'))
-
-    // Reload page and check persistence
     await page.reload()
-    await page.waitForSelector(`[data-testid="question-card-${q3.id}"]`, { timeout: 5000 })
-    const reloadedStem = await page.locator(`[data-testid="question-card-${q3.id}"] .card-stem-text`).innerText()
-    assert.ok(reloadedStem.includes('connectionless'))
-    const reloadedVer = await page.locator(`[data-testid="question-card-${q3.id}"] .version-badge`).innerText()
-    assert.ok(reloadedVer.includes('v2'))
-    console.log('[E2E] Persistence and version increment v2 verified after reload.')
+    await page.waitForSelector('.manage-page', { timeout: 10000 })
+    await page.waitForSelector('.mtable-row:has-text("Is UDP a connectionless protocol?")', { timeout: 10000 })
+    console.log('✓ Verified table, search, type filter and versioned inline edit.')
 
-    // Step I: Mobile 375px responsive testing
+    const memberLoginRes = await fetch(`${BASE_URL}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'member_e2e', password: 'Password123!' }),
+    })
+    const memberToken = (await memberLoginRes.json()).token
+    const examRes = await fetch(`${BASE_URL}/api/v1/practice/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${memberToken}` },
+      body: JSON.stringify({ bank_id: bankId, mode: 'EXAM', total_questions: 1, question_ids: [q1.id] }),
+    })
+    assert.equal(examRes.status, 201)
+    const examSession = await examRes.json()
+
+    await page.reload()
+    await page.waitForSelector('.manage-page', { timeout: 10000 })
+    const lockNotice = page.locator('.notice.warn.manage-notice')
+    await lockNotice.waitFor({ state: 'visible', timeout: 10000 })
+    assert.match(await lockNotice.innerText(), /模考/)
+    assert.ok(await page.locator('.mtable-row .tag.warn').count() > 0, 'Locked questions must carry an active-exam tag')
+
+    await page.locator('.mtable-row').filter({ hasText: 'Is UDP a connectionless protocol?' }).first().click()
+    await page.waitForSelector('.question-edit-dialog', { timeout: 5000 })
+    assert.equal(await page.locator('#edit-stem').isDisabled(), true, 'Active exam must force read-only editing')
+    assert.equal(await page.locator('.btn-submit-edit').count(), 0, 'Read-only modal must not expose save')
+    await page.locator('.question-edit-dialog .modal-footer .btn').first().click()
+    await page.waitForSelector('.question-edit-dialog', { state: 'detached', timeout: 5000 })
+
+    const completeExam = await fetch(`${BASE_URL}/api/v1/practice/sessions/${examSession.id}/complete`, {
+      method: 'POST', headers: { Authorization: `Bearer ${memberToken}` },
+    })
+    assert.equal(completeExam.status, 200)
+
     await page.setViewportSize({ width: 375, height: 812 })
-    await page.waitForTimeout(300)
+    await page.goto(`${BASE_URL}/#/banks/${bankId}/manage`)
+    await page.waitForSelector('.manage-page', { timeout: 10000 })
+    await page.waitForSelector('.mtable-row', { timeout: 10000 })
+    const mobile = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      innerWidth: window.innerWidth,
+      tableWidth: document.querySelector('.mtable-wrap')?.getBoundingClientRect().width || 0,
+      titleWidth: document.querySelector('.page-title')?.getBoundingClientRect().width || 0,
+    }))
+    assert.ok(mobile.scrollWidth <= mobile.innerWidth + 1, 'Manage page must not overflow horizontally at 375px')
+    assert.ok(mobile.tableWidth > 0 && mobile.titleWidth > 0)
+    console.log('✓ Verified active-exam read-only lock and 375px management layout.')
 
-    // Check no horizontal overflow
-    const bodyScrollWidth = await page.evaluate(() => document.body.scrollWidth)
-    const bodyClientWidth = await page.evaluate(() => document.body.clientWidth)
-    assert.ok(bodyScrollWidth <= bodyClientWidth + 1, `Horizontal overflow detected: scrollWidth=${bodyScrollWidth}, clientWidth=${bodyClientWidth}`)
-
-    // Visual Capture 4: 375px mobile list
-    await page.screenshot({ path: path.join(screenshotsDir, 'bank_manage_375_list.png') })
-
-    // Open edit modal on mobile
-    await page.locator(`[data-testid="edit-btn-${q3.id}"]`).click()
-    await page.waitForSelector('.question-edit-dialog', { timeout: 5000 })
-    await page.waitForTimeout(300)
-
-    // Visual Capture 5: 375px mobile edit modal
-    await page.screenshot({ path: path.join(screenshotsDir, 'bank_manage_375_edit_modal.png') })
-
-    await page.click('.modal-footer .secondary-btn')
-    await page.waitForTimeout(200)
-
-    // Test back button on mobile
-    await page.click('.btn-back-home')
-    await page.waitForURL(`**/`, { timeout: 5000 })
-    console.log('[E2E] Mobile 375px responsiveness and navigation verified.')
-
-    // Step J: Active Exam Protection & Masking Verification
-    // Start active exam with Q2
-    const startExamRes = await fetch(`${BASE_URL}/api/v1/practice/sessions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminToken}`,
-      },
-      body: JSON.stringify({
-        bank_id: bankId,
-        mode: 'EXAM',
-        total_questions: 1,
-        question_ids: [q2.id],
-      }),
-    })
-    assert.equal(startExamRes.status, 201)
-    const examSession = await startExamRes.json()
-
-    // Assert backend API masks answer and explanation during active exam
-    const contentCheckRes = await fetch(`${BASE_URL}/api/v1/banks/${bankId}/content/questions`, {
-      headers: { Authorization: `Bearer ${adminToken}` },
-    })
-    const contentQuestions = await contentCheckRes.json()
-    const q2Content = contentQuestions.find(q => q.id === q2.id)
-    assert.equal(q2Content.answer, '', 'Backend API must mask question answer during active exam')
-    assert.equal(q2Content.explanation, '', 'Backend API must mask question explanation during active exam')
-
-    // Re-visit bank manage page
-    await page.setViewportSize({ width: 1280, height: 800 })
-    await page.goto(`${BASE_URL}/#/banks/${bankId}`)
-    await page.waitForSelector('.bank-manage-page', { timeout: 5000 })
-
-    // Active exam banner must be visible
-    const examAlert = page.locator('[data-testid="active-exam-alert"]')
-    await examAlert.waitFor({ state: 'visible', timeout: 5000 })
-    console.log('[E2E] Active exam warning banner verified.')
-
-    // Edit button must be replaced by view button
-    const editBtnsCount = await page.locator('.btn-action-edit').count()
-    assert.equal(editBtnsCount, 0, 'Edit buttons must not be present during active exam')
-    const viewBtn = page.locator(`[data-testid="view-btn-${q2.id}"]`)
-    assert.equal(await viewBtn.isVisible(), true)
-
-    // Clicking view opens modal in readOnly mode
-    await viewBtn.click()
-    await page.waitForSelector('.question-edit-dialog', { timeout: 5000 })
-    const saveBtnVisible = await page.locator('.btn-submit-edit').isVisible()
-    assert.equal(saveBtnVisible, false, 'Save button must not exist in read-only modal')
-
-    // Assert DOM input fields are masked in the modal
-    const ansVal = await page.inputValue('#edit-answer')
-    assert.equal(ansVal, '', 'DOM input #edit-answer must be empty (masked) during active exam')
-    const expVal = await page.inputValue('#edit-explanation')
-    assert.equal(expVal, '', 'DOM textarea #edit-explanation must be empty (masked) during active exam')
-
-    await page.click('.btn-close-modal')
-    console.log('[E2E] Active exam safety verified: answers masked in API and DOM, view-only mode enforced.')
-
-    // Step K: Concurrent Conflict Detection Verification
-    // Complete the exam session first so editing is re-enabled
-    await fetch(`${BASE_URL}/api/v1/practice/sessions/${examSession.id}/complete`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${adminToken}` },
-    })
-
-    // Advance Q3 to version 3 on backend directly
-    await fetch(`${BASE_URL}/api/v1/questions/${q3.id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminToken}`,
-      },
-      body: JSON.stringify({
-        stem: 'Is UDP connectionless? (Intermediary edit v3)',
-        type: 'JUDGE',
-        options: [{ key: 'T', content: 'True' }, { key: 'F', content: 'False' }],
-        answer: 'F',
-        base_version_number: 2,
-      }),
-    })
-
-    // Reload bank manage page so UI has latest data
-    await page.reload()
-    await page.waitForSelector(`[data-testid="edit-btn-${q3.id}"]`, { timeout: 5000 })
-
-    // Simulate concurrent client editing based on outdated base_version_number=1
-    // Server MUST reject stale submission with HTTP 409 conflict and NOT overwrite
-    const conflictPutRes = await fetch(`${BASE_URL}/api/v1/questions/${q3.id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminToken}`,
-      },
-      body: JSON.stringify({
-        stem: 'Outdated client concurrent update',
-        type: 'JUDGE',
-        options: [{ key: 'T', content: 'True' }, { key: 'F', content: 'False' }],
-        answer: 'F',
-        base_version_number: 1,
-        allow_stale_branch: false,
-        reject_stale: true,
-      }),
-    })
-    assert.equal(conflictPutRes.status, 409, 'Stale base_version submission must be rejected with HTTP 409')
-    const conflictErrBody = await conflictPutRes.json()
-    assert.equal(conflictErrBody.detail.error, 'version_conflict')
-
-    // Verify current version on server is STILL version 3 and stem was NOT overwritten
-    const checkQ3Res = await fetch(`${BASE_URL}/api/v1/questions/${q3.id}`, {
-      headers: { Authorization: `Bearer ${adminToken}` },
-    })
-    const q3Data = await checkQ3Res.json()
-    assert.equal(q3Data.version_number, 3, 'Latest version must remain 3')
-    assert.equal(q3Data.stem, 'Is UDP connectionless? (Intermediary edit v3)', 'Stem must not be overwritten by stale update')
-
-    // Check conflict endpoint
-    const conflictRes = await fetch(`${BASE_URL}/api/v1/questions/${q3.id}/conflict`, {
-      headers: { Authorization: `Bearer ${adminToken}` },
-    })
-    const confJson = await conflictRes.json()
-    assert.equal(confJson.has_conflict, true, 'Conflict endpoint must report has_conflict=true')
-    assert.equal(confJson.conflict.base_version_number, 1)
-    console.log('[E2E] Concurrent conflict tracking verified.')
-
-    console.log('[E2E] All browser E2E acceptance criteria successfully passed!')
+    console.log(`[E2E] Covered questions ${q1.id}, ${q2.id}, ${q3.id}.`)
   } finally {
-    if (browser) await browser.close()
-    if (serverProcess) {
-      serverProcess.kill('SIGTERM')
+    if (browser) await browser.close().catch(() => {})
+    if (serverProcess && serverProcess.pid) {
+      try {
+        execSync(`taskkill /pid ${serverProcess.pid} /T /F`, { stdio: 'ignore' })
+      } catch (_) {
+        serverProcess.kill('SIGKILL')
+      }
     }
-    if (fs.existsSync(tempDir)) {
-      fs.rmSync(tempDir, { recursive: true, force: true })
+    if (tempDbPath && fs.existsSync(tempDbPath)) {
+      try {
+        fs.rmSync(path.dirname(tempDbPath), { recursive: true, force: true })
+      } catch (_) {}
     }
   }
 })

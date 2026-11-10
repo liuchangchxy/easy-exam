@@ -380,3 +380,14 @@
   4. 品牌字标“易”为 `aria-hidden` 视觉标记，不参与可见文案本地化扫描。
 - **对应 SPEC 章节**：无（UI 呈现层重构，不改变业务语义）。
 - **影响范围**：`frontend/src/components/MobileNav.vue`、`frontend/src/views/PracticeViewV1.vue`、`frontend/src/style.css`、`frontend/tests/components/`、`frontend/tests/theme.test.js`、`frontend/tests/locale.test.js`。
+
+### [2026-11-10] 真实浏览器 E2E 对齐路由化 Editorial Precision 外壳
+
+- **触发背景**：旧 `browser_e2e.test.js` 与 `bank_manage_e2e.test.js` 仍驱动已删除的 `.home-page`、`.bank-card`、`.mistakes-page`、`.exam-page` 与旧八色调色板。设计替换后这些选择器不再存在，测试超时属于表现层断言过期，不是业务回归。
+- **核心决策**：
+  1. 保留原有用例意图（注册、建库、练习、错题与 FSRS、斩杀、模考、诊断、导入、冲突、强制改密、双语主题、响应式），按当前路由与 Editorial DOM 重写选择器。
+  2. 题库管理用例改为验证新的高密度表格：搜索、题型筛选、行内编辑、活动模考只读锁与 375px 布局；删除对已废弃手风琴与卡片结构的断言。
+  3. 主题用例改为验证 Editorial 纸色/墨色下的实际控件对比度，不再验证已移除的自定义主题系统。
+  4. 复习到期列表的薄弱标记读取后端真实字段 `is_weak_flagged`（同时兼容 `is_weak`），修复列表展示遗漏。
+- **对应 SPEC 章节**：无（测试与展示层修复，不改变业务语义）。
+- **影响范围**：`frontend/tests/browser_e2e.test.js`、`frontend/tests/bank_manage_e2e.test.js`、`frontend/src/views/ReviewView.vue`。

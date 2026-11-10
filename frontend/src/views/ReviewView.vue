@@ -81,7 +81,7 @@
                   <span class="qrow-stem">{{ item.stem }}</span>
                   <span class="list-meta">
                     <span>{{ bankName(item.bank_id) }}</span>
-                    <span v-if="item.is_weak" class="tag brand">{{ t('ep.review.weak') }}</span>
+                    <span v-if="item.is_weak || item.is_weak_flagged" class="tag brand">{{ t('ep.review.weak') }}</span>
                     <span v-if="item.stability != null">{{ t('ep.review.stability') }} · {{ Number(item.stability).toFixed(1) }}</span>
                   </span>
                 </span>
