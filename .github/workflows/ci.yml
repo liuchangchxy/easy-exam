@@ -114,7 +114,6 @@ jobs:
         shell: bash
         run: |
           python -m unittest discover -s tests -v
-          node --test tests/coordination-label-cleanup.test.js
 
   frontend-unit-and-build:
     name: Frontend Unit & Build Tests

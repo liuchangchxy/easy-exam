@@ -472,3 +472,14 @@
   5. 测试断言变更：`app_sidebar.test.js` 原「侧栏触发器打开共享菜单 / 反映菜单状态」两条行为断言随侧栏去账户化失效，改为断言侧栏不存在 `avatar`、`user-mini`、`user-name`、`user-sub`、`data-account-trigger`，且不再 emit `account-menu`；`app_layout.test.js` 改为断言侧栏 0 个触发器、菜单内的用户名/角色头部、移动顶栏复用同一菜单实例。这是结构变更后的等价断言，不是放宽断言。
 - **对应 SPEC 章节**：无（外壳交互与信息架构修复，不改变业务语义）。
 - **影响范围**：`frontend/src/layouts/AppLayout.vue`、`frontend/src/components/AppSidebar.vue`、`frontend/src/style.css`、`frontend/tests/components/app_layout.test.js`、`frontend/tests/components/app_sidebar.test.js`、`frontend/tests/browser_e2e.test.js`。
+
+### [2026-11-12] 移除 VCCP 编排及全部仓库残留
+
+- **触发背景**：VCCP（`liuchangchxy/vibe-coding-control-plane`）已于 2026-11-12 通过 `vccp remove` 正式卸载（PR #91 删除 `.github/control-plane.yml`、`.github/vccp/installation-lock.json`、`.github/vccp/reviewer-task-prompt.md`，并注销本机 Runner 计划任务），但仓库内仍留有只服务于该流水线的清理工作流、脚本、测试与文档。
+- **核心决策**：
+  1. 删除 `.github/workflows/coordination-label-cleanup.yml`、`.github/scripts/cleanup-coordination-labels.js`、`tests/coordination-label-cleanup.test.js`，并从 `.github/workflows/ci.yml` 的后端测试任务中移除唯一调用点 `node --test tests/coordination-label-cleanup.test.js`。
+  2. 删除整个 `docs/automation/`：`AUTOMATION.md` 与 `vccp-migration-smoke.txt` 描述已下线的编排流程，其余 `closure-v1-*.txt`、`post-cleanup-smoke-test.md`、`production-loop-validation.md`、`repair-loop-validation.md` 均为该流水线的验证占位文档，无产品语义。
+  3. 删除 GitHub 上 `frozen-spec`、`agent-ready`、`agent-working`、`changes-requested`、`infra-blocked`、`needs-human` 六个协调标签；VCCP 的 `remove` 按设计保留标签，此处由维护者显式清除。
+  4. 测试断言变更：`tests/test_coordination_workflows.py` 删除 `test_closed_issue_cleanup_is_scoped_and_preserves_blocked_states` 及 `CLEANUP_PATH` 常量，因为其唯一被测对象（该清理工作流）已删除；保留 `test_ci_keeps_the_five_required_jobs_and_pr_triggers_only` 继续守护 CI 任务集合。这是被测对象下线，不是放宽断言。
+- **对应 SPEC 章节**：无（删除已下线的基础设施，不改变产品语义）。
+- **影响范围**：`.github/workflows/ci.yml`、`tests/test_coordination_workflows.py`，以及上述被删除的文件与 GitHub 标签。
