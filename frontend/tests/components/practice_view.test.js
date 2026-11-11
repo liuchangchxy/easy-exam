@@ -128,6 +128,36 @@ describe('PracticeViewV1 component integration', () => {
     localStorage.clear()
   })
 
+  it('opens the exit confirmation focused on continue and restores the exit trigger on Escape', async () => {
+    const wrapper = mount(PracticeViewV1, {
+      props: { token: 'test-token', sessionId: 's1' },
+      attachTo: document.body,
+    })
+    await flushPromises()
+
+    const trigger = wrapper.find('.focus-exit').element
+    trigger.focus()
+    await wrapper.find('.focus-exit').trigger('click')
+    await flushPromises()
+
+    const panel = document.querySelector('[data-testid="exit-confirm-modal"]')
+    expect(panel).not.toBeNull()
+    expect(document.activeElement).toBe(panel.querySelector('.exit-continue'))
+
+    // Escape from outside the dialog keeps the session and returns focus.
+    document.body.setAttribute('tabindex', '-1')
+    document.body.focus()
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    await flushPromises()
+
+    expect(document.querySelector('[data-testid="exit-confirm-modal"]')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+    expect(wrapper.emitted('back')).toBeFalsy()
+
+    wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+
   it('toggles more menu on "⋯" click and renders key action items', async () => {
     const wrapper = await mountView()
 

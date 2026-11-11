@@ -162,19 +162,23 @@
       </div>
     </div>
 
-    <!-- Exit confirmation -->
-    <div v-if="showExitConfirmModal" class="focus-overlay" @click.self="handleCancelExit" data-testid="exit-confirm-modal">
-      <div class="focus-dialog confirm-dialog" role="dialog" aria-modal="true">
-        <div class="dialog-head"><span class="dialog-title">{{ t('ep.practice.exit_title') }}</span></div>
-        <div class="confirm-body">
-          <p class="confirm-text">{{ t('ep.practice.exit_desc') }}</p>
-        </div>
-        <div class="dialog-actions">
-          <button type="button" class="btn" @click="handleCancelExit">{{ t('ep.practice.continue_practice') }}</button>
+    <!-- Exit confirmation: backdrop and Escape both mean "keep practising". -->
+    <AppDialog
+      :open="showExitConfirmModal"
+      :title="t('ep.practice.exit_title')"
+      initial-focus=".exit-continue"
+      style="--app-dialog-width: 460px"
+      data-testid="exit-confirm-modal"
+      @close="handleCancelExit"
+    >
+      <p class="confirm-text">{{ t('ep.practice.exit_desc') }}</p>
+      <template #foot>
+        <div class="exit-actions">
+          <button type="button" class="btn exit-continue" @click="handleCancelExit">{{ t('ep.practice.continue_practice') }}</button>
           <button type="button" class="btn btn-primary" @click="handleConfirmExit">{{ t('ep.practice.confirm_exit') }}</button>
         </div>
-      </div>
-    </div>
+      </template>
+    </AppDialog>
 
     <div v-if="loading" class="focus-loading skeleton-rows">
       <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
@@ -547,6 +551,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
+import AppDialog from '../components/AppDialog.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
 import LocaleToggle from '../components/LocaleToggle.vue'
 import { useLocale } from '../composables/useLocale.js'
@@ -2671,6 +2676,7 @@ kbd {
 .help-keys { display: flex; flex-direction: column; gap: 8px; margin-top: 9px; }
 .help-keys span { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--ink-2); }
 .help-text { margin: 7px 0 0; font-size: 12.5px; line-height: 1.65; color: var(--ink-3); }
+.exit-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .confirm-body { padding: 18px 20px 6px; }
 .confirm-body p { margin: 0 0 10px; font-size: 13px; line-height: 1.65; color: var(--ink-2); }
 .confirm-warn { color: var(--warn); }

@@ -62,6 +62,37 @@ describe('BanksView row semantics and practice failures', () => {
     expect(lock.find('button').element.disabled).toBe(true)
   })
 
+  it('opens the create-bank dialog with focus inside, traps Tab and restores the trigger on Escape', async () => {
+    const wrapper = mount(BanksView, { props: { token: 't1' }, attachTo: document.body })
+    await flush()
+
+    const trigger = wrapper.find('.page-actions .btn-primary').element
+    trigger.focus()
+    await wrapper.find('.page-actions .btn-primary').trigger('click')
+    await flush()
+
+    const panel = document.querySelector('[data-testid="bank-create-dialog"]')
+    expect(panel).not.toBeNull()
+    expect(document.activeElement).toBe(document.querySelector('#bank-create-name'))
+
+    // Tab from the last focusable control wraps back into the dialog.
+    const submit = panel.querySelector('button[type="submit"]')
+    submit.focus()
+    submit.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }))
+    expect(document.activeElement).toBe(panel.querySelector('.app-dialog-close'))
+
+    document.body.setAttribute('tabindex', '-1')
+    document.body.focus()
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    await flush()
+
+    expect(document.querySelector('[data-testid="bank-create-dialog"]')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+
+    wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+
   it('surfaces a failed practice start on the page', async () => {
     startSession.mockRejectedValue({ detail: 'start failed' })
     const wrapper = mount(BanksView, { props: { token: 't1' } })

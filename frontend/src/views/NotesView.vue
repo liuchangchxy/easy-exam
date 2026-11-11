@@ -142,35 +142,43 @@
       </div>
     </div>
 
-    <div v-if="showAddModal" class="exam-setup-backdrop" @click.self="showAddModal = false">
-      <form class="exam-setup-dialog library-dialog" role="dialog" aria-modal="true" @submit.prevent="handleCreateAsset">
-        <h2>{{ t('ep.library.note_create') }}</h2>
+    <AppDialog
+      :open="showAddModal"
+      :title="t('ep.library.note_create')"
+      class="library-dialog"
+      style="--app-dialog-width: 520px"
+      initial-focus="#note-create-content"
+      data-testid="note-create-dialog"
+      @close="closeCreateDialog"
+    >
+      <form id="note-create-form" class="form-grid" @submit.prevent="handleCreateAsset">
         <p class="hint">{{ t('ep.library.new_note_desc') }}</p>
-        <label>{{ t('ep.library.type_label') }}
-          <select v-model="newAssetType">
+        <label class="field"><span class="label">{{ t('ep.library.type_label') }}</span>
+          <select v-model="newAssetType" class="select">
             <option value="NOTE">{{ t('ep.library.type_note') }}</option>
             <option value="MISTAKE_SUMMARY">{{ t('ep.library.type_summary') }}</option>
             <option value="KNOWLEDGE">{{ t('ep.library.type_knowledge') }}</option>
           </select>
         </label>
-        <label>{{ t('ep.library.note_body') }}
-          <textarea v-model="newAssetContent" rows="7" :placeholder="t('ep.library.note_body_placeholder')"></textarea>
+        <label class="field"><span class="label">{{ t('ep.library.note_body') }}</span>
+          <textarea id="note-create-content" v-model="newAssetContent" class="textarea" rows="7" :placeholder="t('ep.library.note_body_placeholder')"></textarea>
         </label>
         <p class="hint">{{ t('ep.library.upload_hint') }}</p>
-        <div class="bank-actions">
-          <button type="button" @click="showAddModal = false">{{ t('ep.common.cancel') }}</button>
-          <button type="submit" class="primary" :disabled="savingAsset || !newAssetContent.trim()">
-            {{ savingAsset ? t('ep.library.saving') : t('ep.common.save') }}
-          </button>
-        </div>
       </form>
-    </div>
+      <template #foot>
+        <button type="button" class="btn btn-quiet" @click="closeCreateDialog">{{ t('ep.common.cancel') }}</button>
+        <button type="submit" class="btn btn-primary" form="note-create-form" :disabled="savingAsset || !newAssetContent.trim()">
+          {{ savingAsset ? t('ep.library.saving') : t('ep.common.save') }}
+        </button>
+      </template>
+    </AppDialog>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import LinearIcon from '../components/LinearIcon.vue'
+import AppDialog from '../components/AppDialog.vue'
 import { useLocale } from '../composables/useLocale.js'
 import { listAssets, createAsset, uploadAssetFile, updateAsset, deleteAsset, fetchAssetBlob } from '../api/assets'
 
@@ -318,6 +326,11 @@ function cancelUnsavedDecision() {
 
 function onReaderKeydown(event) {
   if (event.key !== 'Escape') return
+  // AppDialog handles Escape for its own dialogs from a document capture
+  // listener and prevents the default before this bubble-phase handler runs.
+  // Without this guard, dismissing the create dialog would also close the
+  // reader (or raise its unsaved prompt) in the same keystroke.
+  if (event.defaultPrevented) return
   if (showUnsavedDialog.value) {
     event.preventDefault()
     cancelUnsavedDecision()
@@ -356,6 +369,10 @@ function openCreate() {
   newAssetContent.value = ''
   newAssetType.value = 'NOTE'
   showAddModal.value = true
+}
+
+function closeCreateDialog() {
+  showAddModal.value = false
 }
 
 function triggerUpload() {
@@ -565,7 +582,6 @@ onUnmounted(() => {
 .reader-file-name { overflow-wrap: anywhere; }
 .reader-file-actions { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; }
 .reader-foot { display: flex; gap: 8px; border-top: 1px solid var(--line); }
-.library-dialog { width: min(100%, 520px); }
 @media (min-width: 1100px) {
   /* The fixed 460px reader overlays the right edge of the work surface.
      Keep the page head (upload / new note) clear of it. */

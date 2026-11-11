@@ -153,25 +153,30 @@
     </div>
 
     <!-- Create bank -->
-    <div v-if="showCreateDialog" class="exam-setup-backdrop" @click.self="showCreateDialog = false" @keydown.esc="showCreateDialog = false">
-      <form class="exam-setup-dialog" role="dialog" aria-modal="true" @submit.prevent="handleCreateBank">
-        <h2>{{ t('home.create_bank') }}</h2>
-        <label>{{ t('home.bank_name') }}
-          <input v-model.trim="newBank.name" type="text" :placeholder="t('home.bank_name_placeholder')" required />
+    <AppDialog
+      :open="showCreateDialog"
+      :title="t('home.create_bank')"
+      initial-focus="#home-create-bank-name"
+      data-testid="home-create-bank-dialog"
+      @close="closeCreateBankDialog"
+    >
+      <form id="home-create-bank-form" class="form-grid" @submit.prevent="handleCreateBank">
+        <label class="field"><span class="label">{{ t('home.bank_name') }}</span>
+          <input id="home-create-bank-name" v-model.trim="newBank.name" class="input" type="text" :placeholder="t('home.bank_name_placeholder')" required />
         </label>
-        <label>{{ t('home.category') }}
-          <input v-model.trim="newBank.category" type="text" :placeholder="t('home.category_placeholder')" />
+        <label class="field"><span class="label">{{ t('home.category') }}</span>
+          <input v-model.trim="newBank.category" class="input" type="text" :placeholder="t('home.category_placeholder')" />
         </label>
-        <label>{{ t('home.description') }}
-          <textarea v-model.trim="newBank.description" :placeholder="t('home.description_placeholder')" rows="3"></textarea>
+        <label class="field"><span class="label">{{ t('home.description') }}</span>
+          <textarea v-model.trim="newBank.description" class="textarea" :placeholder="t('home.description_placeholder')" rows="3"></textarea>
         </label>
         <p v-if="createError" class="error">{{ createError }}</p>
-        <div class="bank-actions">
-          <button type="button" @click="showCreateDialog = false">{{ t('common.cancel') }}</button>
-          <button type="submit" class="primary" :disabled="creatingBank">{{ creatingBank ? t('home.creating') : t('home.confirm_create') }}</button>
-        </div>
       </form>
-    </div>
+      <template #foot>
+        <button type="button" class="btn btn-quiet" @click="closeCreateBankDialog">{{ t('common.cancel') }}</button>
+        <button type="submit" class="btn btn-primary" form="home-create-bank-form" :disabled="creatingBank">{{ creatingBank ? t('home.creating') : t('home.confirm_create') }}</button>
+      </template>
+    </AppDialog>
 
     <!-- Active sessions -->
     <div v-if="showActiveSessionsModal" class="exam-setup-backdrop" @click.self="showActiveSessionsModal = false" @keydown.esc="showActiveSessionsModal = false">
@@ -435,6 +440,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
+import AppDialog from '../components/AppDialog.vue'
 import { listBanks, createBank, createQuestion, addBankMember, listBankMembers, removeBankMember, copyQuestionToBank } from '../api/banks'
 import { startExam, listProfiles, getBlueprint } from '../api/exams'
 import { startSession, listActiveSessions, getSession, abandonSession, abandonAllSessions } from '../api/practice'
@@ -747,6 +753,10 @@ function openCreateBankDialog() {
   newBank.value = { name: '', description: '', category: '' }
   createError.value = ''
   showCreateDialog.value = true
+}
+
+function closeCreateBankDialog() {
+  showCreateDialog.value = false
 }
 
 async function handleResume(sessionSummary) {

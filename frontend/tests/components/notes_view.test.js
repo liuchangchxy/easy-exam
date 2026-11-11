@@ -137,6 +137,63 @@ describe('NotesView', () => {
     expect(wrapper.find('.reader-edit-input').element.value).toBe('未保存的修改')
   })
 
+  it('opens the create-note dialog with focus inside, traps Escape and restores the trigger', async () => {
+    const wrapper = mount(NotesView, { props: { token: 't1' }, attachTo: document.body })
+    await flush()
+
+    const trigger = wrapper.find('.page-actions .btn-primary').element
+    trigger.focus()
+    await wrapper.find('.page-actions .btn-primary').trigger('click')
+    await flush()
+
+    const panel = document.querySelector('[data-testid="note-create-dialog"]')
+    expect(panel).not.toBeNull()
+    expect(panel.contains(document.activeElement)).toBe(true)
+    expect(document.activeElement).toBe(document.querySelector('#note-create-content'))
+
+    // Escape must work even when focus has left the dialog (body).
+    document.body.setAttribute('tabindex', '-1')
+    document.body.focus()
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    await flush()
+
+    expect(document.querySelector('[data-testid="note-create-dialog"]')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+
+    wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+
+  it('does not let the create dialog and the dirty reader close each other', async () => {
+    const wrapper = mount(NotesView, { props: { token: 't1' }, attachTo: document.body })
+    await flush()
+
+    await wrapper.find('.library-row').trigger('click')
+    await wrapper.find('.note-edit').trigger('click')
+    await wrapper.find('.reader-edit-input').setValue('未保存的修改')
+
+    await wrapper.find('.page-actions .btn-primary').trigger('click')
+    await flush()
+
+    // Opening the create dialog must not raise the reader's discard prompt.
+    expect(document.querySelector('[data-testid="note-create-dialog"]')).not.toBeNull()
+    expect(wrapper.find('[data-testid="unsaved-edit-dialog"]').exists()).toBe(false)
+
+    document.body.setAttribute('tabindex', '-1')
+    document.body.focus()
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    await flush()
+
+    // Dismissing the create dialog must not close the dirty reader either.
+    expect(document.querySelector('[data-testid="note-create-dialog"]')).toBeNull()
+    expect(wrapper.find('[data-testid="unsaved-edit-dialog"]').exists()).toBe(false)
+    expect(wrapper.find('.notes-reader.is-open').exists()).toBe(true)
+    expect(wrapper.find('.reader-edit-input').element.value).toBe('未保存的修改')
+
+    wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+
   it('saves before switching to another note', async () => {
     updateAsset.mockResolvedValue({ ...noteAsset, content: '切换前保存的内容' })
 

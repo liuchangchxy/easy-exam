@@ -16,6 +16,16 @@
 
 ---
 
+### [2026-11-12] W2-2：页面级对话框迁移到 AppDialog，并保留 NotesView 双重守卫互不干扰
+- **触发背景**：`新建笔记`、`新建题库`、首页 `创建题库` 与刷题页 `退出练习` 四个对话框各自在 backdrop 上绑定 `keydown.esc`，Escape 只在焦点恰好位于遮罩内时生效；打开时也不移动焦点。W1-2 已为笔记阅读器加入未保存守卫，若直接迁移，create 对话框的 Escape 会继续冒泡到 reader 的 window 监听，误触发关闭/未保存提示。
+- **核心决策**：
+  1. **统一使用 `AppDialog`**：四个对话框改为共享组件，Escape 由 document capture 监听处理，打开后焦点进入首个字段（刷题页为「继续练习」），Tab 循环限制在面板内，关闭时焦点回到触发按钮。
+  2. **保留刷题页退出策略**：遮罩点击与 Escape 仍表示「取消退出」，不静默放弃作答；确认按钮才真正保存并退出。
+  3. **双重守卫显式隔离**：`NotesView` 的 reader keydown 监听在 `event.defaultPrevented` 时直接返回。`AppDialog` 已在 capture 阶段 `preventDefault`，因此关闭 create 对话框不会同时关闭 reader 或弹出未保存提示；打开 create 对话框也不经过 reader 的守卫路径。
+  4. **测试选择器按新标记更新（非弱化断言）**：`browser_e2e.test.js` 的题库创建对话框选择器由 `.exam-setup-dialog` 改为 `[data-testid="bank-create-dialog"]`，退出确认的取消按钮由 `.dialog-actions .btn` 改为 `.exit-actions .btn`。两者都是因为对话框根节点已迁移到 `AppDialog` 的 `.app-dialog-panel`，原类名不再描述真实结构；断言强度与操作语义不变。笔记创建对话框仍保留 `library-dialog` 类，既有 E2E 选择器无需改动。
+- **对应 SPEC 章节**：SPEC.md 前端交互与可访问性规范。
+- **影响范围**：`frontend/src/views/NotesView.vue`, `frontend/src/views/BanksView.vue`, `frontend/src/views/HomeView.vue`, `frontend/src/views/PracticeViewV1.vue`, `frontend/tests/browser_e2e.test.js`, `frontend/tests/components/{notes_view,banks_view,home_view,practice_view}.test.js`, `DECISIONS.md`。
+
 ### [2026-10-23] Issue #11：fnOS 物理验收测试入口按真实 API/UI 契约重写
 - **触发背景**：`tests/test_remote_fnos_e2e.py` 与 `frontend/tests/physical_fnos_browser_e2e.mjs` 基于历史 API（无 `/api/v1` 前缀、无 Bearer 认证）与旧版扁平导航（`button:has-text("导入题目")` 等）编写，在真实 fnOS 上必然失败或整包 skip；同时脚本写死了 NAS 地址、Chrome 安装路径和默认测试密码。Issue #11 要求在不改业务功能、不建 CI 物理门禁的前提下，让这两个入口在真实 fnOS 上可执行并完成一次核心链路验收。
 - **核心决策**：

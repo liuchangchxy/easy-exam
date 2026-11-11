@@ -259,7 +259,7 @@ test('True Chrome Browser E2E: Editorial Precision Full Lifecycle', async (t) =>
     await t.test('2. Bank Creation via the Banks Workspace', async () => {
       await openBanks(page, BASE_URL)
       await page.locator('.page-actions .btn-primary').click()
-      const dialog = page.locator('.exam-setup-dialog')
+      const dialog = page.locator('[data-testid="bank-create-dialog"]')
       await dialog.waitFor({ state: 'visible', timeout: 5000 })
       const inputs = dialog.locator('input[type="text"]')
       await inputs.nth(0).fill('E2E真实浏览器题库')
@@ -467,7 +467,7 @@ test('True Chrome Browser E2E: Editorial Precision Full Lifecycle', async (t) =>
       await page.locator('.focus-exit').click()
       const exitDialog = page.locator('[data-testid="exit-confirm-modal"]')
       await exitDialog.waitFor({ state: 'visible', timeout: 5000 })
-      await exitDialog.locator('.dialog-actions .btn').first().click()
+      await exitDialog.locator('.exit-actions .btn').first().click()
       assert.ok(await page.locator('.focus-mode').isVisible(), 'Cancelling exit must preserve the session')
       await page.locator('.focus-exit').click()
       await exitDialog.locator('.btn-primary').click()

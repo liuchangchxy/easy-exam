@@ -91,25 +91,30 @@
       </div>
     </div>
 
-    <div v-if="showCreate" class="exam-setup-backdrop" @click.self="showCreate = false" @keydown.esc="showCreate = false">
-      <form class="exam-setup-dialog" role="dialog" aria-modal="true" @submit.prevent="createBank">
-        <h2>{{ t('ep.today.create_bank') }}</h2>
-        <label>{{ t('home.bank_name') }}
-          <input v-model.trim="form.name" type="text" :placeholder="t('home.bank_name_placeholder')" required />
+    <AppDialog
+      :open="showCreate"
+      :title="t('ep.today.create_bank')"
+      initial-focus="#bank-create-name"
+      data-testid="bank-create-dialog"
+      @close="closeCreate"
+    >
+      <form id="bank-create-form" class="form-grid" @submit.prevent="createBank">
+        <label class="field"><span class="label">{{ t('home.bank_name') }}</span>
+          <input id="bank-create-name" v-model.trim="form.name" class="input" type="text" :placeholder="t('home.bank_name_placeholder')" required />
         </label>
-        <label>{{ t('home.category') }}
-          <input v-model.trim="form.category" type="text" :placeholder="t('home.category_placeholder')" />
+        <label class="field"><span class="label">{{ t('home.category') }}</span>
+          <input v-model.trim="form.category" class="input" type="text" :placeholder="t('home.category_placeholder')" />
         </label>
-        <label>{{ t('home.description') }}
-          <textarea v-model.trim="form.description" :placeholder="t('home.description_placeholder')" rows="3"></textarea>
+        <label class="field"><span class="label">{{ t('home.description') }}</span>
+          <textarea v-model.trim="form.description" class="textarea" :placeholder="t('home.description_placeholder')" rows="3"></textarea>
         </label>
         <p v-if="createError" class="error">{{ createError }}</p>
-        <div class="bank-actions">
-          <button type="button" @click="showCreate = false">{{ t('common.cancel') }}</button>
-          <button type="submit" class="primary" :disabled="creating">{{ t('ep.today.create_bank') }}</button>
-        </div>
       </form>
-    </div>
+      <template #foot>
+        <button type="button" class="btn btn-quiet" @click="closeCreate">{{ t('common.cancel') }}</button>
+        <button type="submit" class="btn btn-primary" form="bank-create-form" :disabled="creating">{{ t('ep.today.create_bank') }}</button>
+      </template>
+    </AppDialog>
   </div>
 </template>
 
@@ -117,6 +122,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
+import AppDialog from '../components/AppDialog.vue'
 import { useLocale } from '../composables/useLocale.js'
 import { listBanks, createBank as createBankApi } from '../api/banks'
 import { startSession } from '../api/practice'
@@ -168,6 +174,10 @@ function openCreate() {
   form.value = { name: '', description: '', category: '' }
   createError.value = ''
   showCreate.value = true
+}
+
+function closeCreate() {
+  showCreate.value = false
 }
 
 async function createBank() {

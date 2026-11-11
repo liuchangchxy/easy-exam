@@ -180,6 +180,29 @@ describe('HomeView today plan across banks', () => {
     window.removeEventListener('easyexam:open-dialog', openDialog)
   })
 
+  it('opens the create-bank dialog with focus inside and closes it on Escape', async () => {
+    const wrapper = mount(HomeView, { props: { token: 'test-token' }, attachTo: document.body })
+    await flushPromises()
+
+    wrapper.vm.openCreateBankDialog()
+    await flushPromises()
+
+    const panel = document.querySelector('[data-testid="home-create-bank-dialog"]')
+    expect(panel).not.toBeNull()
+    expect(panel.contains(document.activeElement)).toBe(true)
+    expect(document.activeElement).toBe(document.querySelector('#home-create-bank-name'))
+
+    document.body.setAttribute('tabindex', '-1')
+    document.body.focus()
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    await flushPromises()
+
+    expect(document.querySelector('[data-testid="home-create-bank-dialog"]')).toBeNull()
+
+    wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+
   it('reads the exam profile blueprint summary from the wrapped blueprint payload', async () => {
     getBlueprint.mockResolvedValue({
       id: 'bp1',
