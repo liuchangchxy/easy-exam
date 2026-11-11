@@ -127,7 +127,7 @@
 
       <aside class="today-rail">
         <div class="rail-block">
-          <div class="rail-title">{{ t('ep.today.next') }} · 7</div>
+          <div class="rail-title">{{ t('ep.today.plan') }}</div>
           <div v-if="planDays.length" class="d-week-bars" aria-hidden="true">
             <div v-for="day in planDays" :key="day.day_number" class="d-week-bar" :title="`${day.day_number}: ${day.question_count}`">
               <i :style="{ height: planBarHeight(day.question_count) }"></i>
@@ -137,9 +137,6 @@
           <div v-else class="rail-note">{{ t('ep.today.plan_empty') }}</div>
           <div v-if="todayPlan" class="rail-note weekly-plan-note">
             {{ todayPlan.question_count || 0 }} {{ t('ui.k0101') }} · {{ todayPlan.planned_minutes || 0 }} {{ t('ui.k0231') }}
-          </div>
-          <div class="rail-note weekly-plan-note">
-            {{ t('ui.k0392') }} 7 {{ t('ui.k0393') }}: {{ trends?.recent?.attempts || 0 }} · {{ recentMinutes }} {{ t('ui.k0231') }}
           </div>
         </div>
         <div class="rail-block">
@@ -502,7 +499,6 @@ const planDays = computed(() => {
 })
 
 const maxPlanQuestions = computed(() => Math.max(1, ...planDays.value.map(day => day.question_count)))
-const recentMinutes = computed(() => Math.round((Number(trends.value?.recent?.time_spent) || 0) / 60))
 
 function planBarHeight(questionCount) {
   const value = Number(questionCount) || 0

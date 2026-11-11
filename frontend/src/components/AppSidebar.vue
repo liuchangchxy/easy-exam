@@ -28,7 +28,7 @@
 
     <div v-if="learningTrends" class="side-study-state">
       <div class="ss-label">{{ t('ep.today.figure_due') }}</div>
-      <div class="ss-value">{{ reviewCount }}<small>{{ t('ui.k0101') }}</small></div>
+      <div class="ss-value">{{ reviewCount }} <small>{{ t('ui.k0101') }}</small></div>
       <div class="ss-bar" role="progressbar" :aria-valuenow="coveragePercent" aria-valuemin="0" aria-valuemax="100">
         <div class="ss-bar-fill" :style="{ width: coveragePercent + '%' }"></div>
       </div>

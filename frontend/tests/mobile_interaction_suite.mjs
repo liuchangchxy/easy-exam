@@ -149,8 +149,8 @@ async function run() {
     assert(importRes.ok, `Failed to import fixture questions: ${importRes.status}`)
 
     await page.goto(`${BASE_URL}/#/banks`)
-    await page.waitForSelector('.bank-row')
-    await page.locator('.bank-row .btn-sm').first().click()
+    await page.waitForSelector('.banks-row')
+    await page.locator('.banks-row .btn-sm').first().click()
     await page.waitForSelector('.focus-mode')
     console.log('[Check 2] Question card loaded')
 

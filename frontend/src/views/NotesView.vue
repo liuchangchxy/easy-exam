@@ -17,12 +17,12 @@
       </div>
     </div>
 
-    <div class="toolbar library-toolbar notes-toolbar">
+    <div class="toolbar library-toolbar">
       <div class="search-box">
         <LinearIcon name="search" :size="15" />
         <input v-model.trim="searchQuery" class="input" :placeholder="t('ep.library.search')" />
       </div>
-      <div class="tabs library-tabs notes-tabs">
+      <div class="tabs library-tabs">
         <button v-for="tab in tabs" :key="tab.key" type="button" class="tab" :class="{ 'is-active': filterType === tab.key }" @click="filterType = tab.key">
           {{ t(tab.label) }}<span class="count">{{ tab.count }}</span>
         </button>
@@ -37,7 +37,7 @@
       <div class="skeleton"></div><div class="skeleton"></div>
     </div>
 
-    <div v-else-if="!filteredAssets.length" class="empty library-empty notes-empty">
+    <div v-else-if="!filteredAssets.length" class="empty library-empty">
       <div class="empty-mark"><LinearIcon name="note" :size="26" /></div>
       <div class="empty-title">{{ searchQuery ? t('ep.library.no_results') : t('ep.library.empty') }}</div>
       <div class="empty-desc">{{ searchQuery ? t('ep.library.search') : t('ep.library.empty_hint') }}</div>
@@ -47,15 +47,15 @@
       </div>
     </div>
 
-    <div v-else class="library-layout notes-layout">
-      <div class="library-list notes-list">
+    <div v-else class="notes-layout">
+      <div class="notes-list">
         <button
           v-for="item in filteredAssets"
           :key="item.id"
           type="button"
-          class="library-row notes-row"
+          class="library-row"
           :class="{ 'is-active': selectedId === item.id }"
-          @click="openReader(item)"
+          @click="openReader(item, $event)"
         >
           <span class="library-row-main">
             <span class="library-row-title">{{ plainTitle(item) }}</span>
@@ -71,17 +71,18 @@
 
       <article
         v-if="selected"
-        class="library-reader notes-reader"
+        class="notes-reader"
         :class="{ 'is-open': readerOpen }"
         role="dialog"
+        aria-modal="true"
         :aria-label="plainTitle(selected)"
       >
-        <div class="reader-head notes-reader-head">
+        <div class="notes-reader-head">
           <div style="min-width: 0; flex: 1">
             <div class="page-eyebrow">{{ formatType(selected.asset_type) }} · {{ formatDate(selected.created_at) }}</div>
             <h2 class="reader-title notes-reader-title">{{ plainTitle(selected) }}</h2>
           </div>
-          <button type="button" class="icon-btn notes-reader-close" :aria-label="t('ep.common.close')" @click="closeReader">
+          <button ref="readerCloseRef" type="button" class="icon-btn notes-reader-close" :aria-label="t('ep.common.close')" @click="closeReader">
             <LinearIcon name="x" :size="17" />
           </button>
         </div>
@@ -143,7 +144,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import LinearIcon from '../components/LinearIcon.vue'
 import { useLocale } from '../composables/useLocale.js'
 import { listAssets, createAsset, uploadAssetFile, updateAsset, deleteAsset, fetchAssetBlob } from '../api/assets'
@@ -171,6 +172,8 @@ const editingNote = ref(false)
 const editContent = ref('')
 const savingNote = ref(false)
 const fileInputRef = ref(null)
+const readerCloseRef = ref(null)
+const readerTrigger = ref(null)
 
 const tabs = computed(() => [
   { key: 'ALL', label: 'ep.common.all', count: assetsList.value.length },
@@ -209,16 +212,30 @@ watch(selectedId, () => {
   editContent.value = ''
 })
 
-function openReader(item) {
+function openReader(item, event) {
   if (!item) return
+  readerTrigger.value = event?.currentTarget || null
   selectedId.value = item.id
   readerOpen.value = true
+  nextTick(() => readerCloseRef.value?.focus?.())
 }
 
 function closeReader() {
+  const trigger = readerTrigger.value
   readerOpen.value = false
   editingNote.value = false
   editContent.value = ''
+  readerTrigger.value = null
+  nextTick(() => {
+    if (trigger && typeof trigger.focus === 'function') trigger.focus()
+  })
+}
+
+function onReaderKeydown(event) {
+  if (event.key === 'Escape' && readerOpen.value) {
+    event.preventDefault()
+    closeReader()
+  }
 }
 
 function showNotice(message, isError = true) {
@@ -399,7 +416,14 @@ function formatDate(isoStr) {
   }
 }
 
-onMounted(fetchAssets)
+onMounted(() => {
+  fetchAssets()
+  window.addEventListener('keydown', onReaderKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', onReaderKeydown)
+})
 </script>
 
 <style scoped>

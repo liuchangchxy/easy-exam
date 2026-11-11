@@ -181,9 +181,16 @@ async function loadShellData() {
 
 watch(
   () => route.name,
-  name => {
-    if (typeof document === 'undefined') return
-    document.body.dataset.route = typeof name === 'string' ? name : 'today'
+  (name, previous) => {
+    if (typeof document !== 'undefined') {
+      document.body.dataset.route = typeof name === 'string' ? name : 'today'
+    }
+    // Returning from practice/exam after a session ends must refresh the shell
+    // counts (due review, banks, trends). Skip practice/exam routes themselves
+    // to avoid fetching on every question transition.
+    if (previous !== undefined && (name === 'home' || name === 'review' || name === 'banks')) {
+      loadShellData()
+    }
   },
   { immediate: true }
 )

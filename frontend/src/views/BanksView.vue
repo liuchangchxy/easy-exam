@@ -37,7 +37,7 @@
       <div
         v-for="bank in filteredBanks"
         :key="bank.id"
-        class="bank-row banks-row"
+        class="banks-row"
         role="button"
         tabindex="0"
         @click="router.push(`/banks/${bank.id}`)"

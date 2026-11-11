@@ -1,6 +1,6 @@
 <template>
-  <div class="manage-page bank-manage-page">
-    <div class="page-head manage-head bank-manage-head">
+  <div class="manage-page">
+    <div class="page-head manage-head">
       <div class="page-head-main">
         <div class="page-eyebrow">
           <button type="button" class="link-btn" @click="router.push('/banks')">{{ t('ep.banks.title') }}</button>
@@ -28,30 +28,30 @@
       </div>
     </div>
 
-    <div v-if="hasActiveExam" class="notice warn manage-notice bank-manage-notice">
+    <div v-if="hasActiveExam" class="notice warn manage-notice">
       <LinearIcon name="lock" :size="15" />
       <span><strong>{{ t('ep.manage.locked_title') }}</strong> {{ t('ep.manage.locked_desc') }}</span>
     </div>
-    <div v-if="showArchived" class="notice info manage-notice bank-manage-notice">
+    <div v-if="showArchived" class="notice info manage-notice">
       <LinearIcon name="archive" :size="15" />
       <span>{{ t('ep.manage.archived_note') }}</span>
     </div>
-    <div v-else-if="bank && !canEdit" class="notice info manage-notice bank-manage-notice">
+    <div v-else-if="bank && !canEdit" class="notice info manage-notice">
       <LinearIcon name="info" :size="15" />
       <span>{{ t('ep.manage.readonly_note') }}</span>
     </div>
-    <div v-if="successToast" class="notice ok manage-notice bank-manage-notice">
+    <div v-if="successToast" class="notice ok manage-notice">
       <LinearIcon name="check" :size="15" /><span>{{ successToast }}</span>
     </div>
-    <div v-if="conflictAlert" class="notice warn manage-notice bank-manage-notice">
+    <div v-if="conflictAlert" class="notice warn manage-notice">
       <LinearIcon name="alert" :size="15" /><span>{{ conflictAlert }}</span>
       <button type="button" class="btn btn-sm btn-quiet" @click="loadData">{{ t('ep.common.retry') }}</button>
     </div>
-    <div v-if="error" class="notice bad manage-notice bank-manage-notice">
+    <div v-if="error" class="notice bad manage-notice">
       <LinearIcon name="alert" :size="15" /><span>{{ error }}</span>
     </div>
 
-    <div class="tabs manage-tabs bank-manage-tabs">
+    <div class="tabs manage-tabs">
       <button v-for="tab in tabs" :key="tab.key" type="button" class="tab" :class="{ 'is-active': activeTab === tab.key }" @click="activeTab = tab.key">
         {{ t(tab.label) }}<span v-if="tab.count != null" class="count">{{ tab.count }}</span>
       </button>
@@ -61,7 +61,7 @@
 
     <template v-else>
       <!-- Questions workspace -->
-      <section v-if="activeTab === 'questions'" class="manage-workspace bank-manage-workspace">
+      <section v-if="activeTab === 'questions'" class="manage-workspace">
         <div class="manage-toolbar bank-manage-toolbar">
           <div class="search-box">
             <LinearIcon name="search" :size="15" />
@@ -95,7 +95,7 @@
           <span class="small dim mono">{{ t('ep.manage.shown', { shown: filteredQuestions.length, total: questions.length }) }}</span>
         </div>
 
-        <div v-if="canEdit && selectedIds.size" class="batch-bar bank-manage-batch">
+        <div v-if="canEdit && selectedIds.size" class="batch-bar">
           <div class="batch-bar-head">
             <span class="batch-title">{{ t('ep.manage.batch_title') }}</span>
             <span class="small dim">{{ t('ep.manage.selected_count', { count: selectedIds.size }) }}</span>
@@ -144,11 +144,11 @@
           <p v-if="batchError" class="error">{{ batchError }}</p>
         </div>
 
-        <div v-if="filteredQuestions.length" class="mtable-wrap bank-manage-table-wrap">
+        <div v-if="filteredQuestions.length" class="mtable-wrap">
           <table class="mtable bank-manage-table">
             <thead>
               <tr>
-                <th v-if="canEdit" class="select-cell bank-manage-col-select">
+                <th v-if="canEdit" class="select-cell">
                   <input
                     type="checkbox"
                     data-testid="select-all"
@@ -167,8 +167,8 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="q in filteredQuestions" :key="q.id" class="mtable-row bank-manage-row" :class="{ 'is-archived': q.archived }" @click="openEdit(q)">
-                <td v-if="canEdit" class="select-cell bank-manage-col-select" @click.stop>
+              <tr v-for="q in filteredQuestions" :key="q.id" class="mtable-row" :class="{ 'is-archived': q.archived }" @click="openEdit(q)">
+                <td v-if="canEdit" class="select-cell" @click.stop>
                   <input
                     type="checkbox"
                     class="row-select"

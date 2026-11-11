@@ -1,6 +1,6 @@
 <template>
   <div class="bank-detail-page">
-    <div class="page-head bank-detail-head">
+    <div class="page-head">
       <div class="page-head-main">
         <div class="page-eyebrow">
           <button type="button" class="link-btn" @click="router.push('/banks')">{{ t('ep.banks.title') }}</button>
@@ -27,16 +27,16 @@
       </div>
     </div>
 
-    <div v-if="bankLocked" class="notice warn bank-notice bank-detail-notice">
+    <div v-if="bankLocked" class="notice warn bank-notice">
       <LinearIcon name="lock" :size="15" />
       <span>{{ t('ep.banks.locked_banner') }}</span>
     </div>
-    <div v-else-if="bank && !canEditContent" class="notice info bank-notice bank-detail-notice">
+    <div v-else-if="bank && !canEditContent" class="notice info bank-notice">
       <LinearIcon name="info" :size="15" />
       <span>{{ t('ep.banks.readonly_banner') }}</span>
     </div>
 
-    <div class="tabs bank-detail-tabs">
+    <div class="tabs">
       <button v-for="tab in tabs" :key="tab.key" type="button" class="tab" :class="{ 'is-active': activeTab === tab.key }" @click="activeTab = tab.key">
         {{ t(tab.label) }}<span v-if="tab.count != null" class="count">{{ tab.count }}</span>
       </button>
@@ -57,7 +57,7 @@
           <div v-if="!chapters.length" class="tiny dim">{{ t('ep.banks.chapter_empty') }}</div>
         </aside>
 
-        <div class="bank-question-main bank-detail-question-main">
+        <div class="bank-question-main">
           <div class="toolbar bank-toolbar bank-detail-toolbar">
             <div class="search-box">
               <LinearIcon name="search" :size="15" />
@@ -67,7 +67,7 @@
             <span class="small dim">{{ t('ep.common.count', { count: filteredQuestions.length }) }}</span>
           </div>
 
-          <div v-if="filteredQuestions.length" class="qlist bank-detail-qlist">
+          <div v-if="filteredQuestions.length" class="qlist">
             <button v-for="(q, index) in filteredQuestions" :key="q.id" type="button" class="qrow bank-qrow bank-detail-qrow" @click="openQuestion(q)">
               <span class="qrow-num mono">{{ String(index + 1).padStart(2, '0') }}</span>
               <span class="qrow-main">
@@ -136,7 +136,7 @@
 
     <div v-if="selectedQuestion" class="drawer-scrim" @click="selectedQuestion = null"></div>
     <aside v-if="selectedQuestion" class="drawer bank-detail-drawer" role="dialog" aria-modal="true">
-      <div class="drawer-head bank-detail-drawer-head">
+      <div class="drawer-head">
         <div style="flex: 1; min-width: 0">
           <div class="drawer-title">{{ t('ep.banks.detail') }}</div>
           <div class="drawer-sub">
@@ -148,7 +148,7 @@
           <LinearIcon name="x" :size="17" />
         </button>
       </div>
-      <div class="drawer-body bank-detail-drawer-body">
+      <div class="drawer-body">
         <section class="version-panel">
           <div class="version-panel-head">
             <span class="rule-label">{{ t('ep.banks.version_history') }}</span>
@@ -207,7 +207,7 @@
           </div>
         </div>
       </div>
-      <div class="drawer-foot bank-detail-drawer-foot">
+      <div class="drawer-foot">
         <button v-if="!versionPreview" type="button" class="btn btn-primary" @click="practiceOne(selectedQuestion)">
           <LinearIcon name="play" :size="14" />{{ t('ep.banks.practice_one') }}
         </button>

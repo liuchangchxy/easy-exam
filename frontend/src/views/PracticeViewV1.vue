@@ -181,7 +181,7 @@
     </div>
 
     <template v-else-if="question">
-      <div class="focus-layout practice-study-layout">
+      <div class="focus-layout">
         <article class="focus-reading practice-study-main">
           <div v-if="offlineNotice" class="notice warn focus-offline" data-testid="offline-banner">
             <LinearIcon name="alert" :size="15" />

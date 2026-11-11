@@ -79,7 +79,7 @@
             </div>
           </div>
 
-          <div class="setting-row setting-row-top settings-stack-row settings-density-row">
+          <div class="setting-row setting-row-top settings-stack-row">
             <div class="setting-label">
               <div class="setting-name">{{ densityLabel }}</div>
               <div class="setting-desc">{{ densityNote }}</div>
@@ -290,6 +290,7 @@ import LinearIcon from '../components/LinearIcon.vue'
 import ChangePasswordModal from '../components/ChangePasswordModal.vue'
 import { useLocale } from '../composables/useLocale.js'
 import { useTheme } from '../composables/useTheme.js'
+import { DENSITY_STORAGE_KEY, normalizeDensityPreference, restoreDensityPreference } from '../composables/density.js'
 import { getAiConfig, updateAiConfig } from '../api/ai'
 import pkg from '../../package.json'
 
@@ -306,7 +307,6 @@ const { mode, setMode, palette, palettes, setPalette, customAccent, setCustomAcc
 const activeSection = ref('appearance')
 const showPasswordModal = ref(false)
 const appVersion = pkg.version
-const DENSITY_STORAGE_KEY = 'easyexam-density'
 const density = ref('balanced')
 
 const navItems = [
@@ -357,7 +357,7 @@ const densityOptions = computed(() => currentLocale.value === 'en-US'
     ])
 
 function applyDensity(value, persist = true) {
-  const next = value === 'dense' ? 'dense' : 'balanced'
+  const next = normalizeDensityPreference(value)
   density.value = next
   if (typeof document !== 'undefined') document.documentElement.setAttribute('data-density', next)
   if (!persist) return
@@ -373,13 +373,7 @@ function setDensity(value) {
 }
 
 function restoreDensity() {
-  let saved = ''
-  try {
-    saved = globalThis.localStorage?.getItem(DENSITY_STORAGE_KEY) || ''
-  } catch {
-    saved = ''
-  }
-  applyDensity(saved, false)
+  density.value = restoreDensityPreference()
 }
 
 const userInitial = computed(() => {

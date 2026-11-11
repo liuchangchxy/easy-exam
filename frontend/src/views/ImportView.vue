@@ -11,7 +11,7 @@
       </div>
     </div>
 
-    <ol class="import-steps" :aria-label="importCopy.stepsLabel">
+    <ol class="import-steps" :aria-label="t('ep.imports.title')">
       <li
         v-for="(step, idx) in steps"
         :key="step.key"
@@ -28,7 +28,7 @@
     <div
       class="import-progress"
       role="progressbar"
-      :aria-label="importCopy.stepsLabel"
+      :aria-label="t('ep.imports.title')"
       :aria-valuemin="1"
       :aria-valuemax="4"
       :aria-valuenow="stepNo"
@@ -38,26 +38,26 @@
 
     <section v-if="previewing || precheckPanel" class="import-precheck-panel" aria-live="polite">
       <div class="import-precheck-panel-head">
-        <span class="rule-label">{{ importCopy.precheckTitle }}</span>
+        <span class="rule-label">{{ t('ep.imports.submit_preview') }}</span>
         <span class="tag" :class="precheckPanel && precheckPanel.accepted ? 'ok' : 'warn'">
-          {{ previewing && !precheckPanel ? importCopy.prechecking : precheckPanel?.status }}
+          {{ previewing && !precheckPanel ? t('ep.imports.uploading') : precheckPanel?.status }}
         </span>
       </div>
       <div v-if="precheckPanel" class="import-precheck-grid">
         <div class="import-precheck-cell">
           <b>{{ precheckPanel.count }}</b>
-          <span>{{ importCopy.parsed }}</span>
+          <span>{{ t('ep.imports.rows', { count: precheckPanel.count }) }}</span>
         </div>
         <div class="import-precheck-cell">
           <b :class="{ 'is-warn': precheckPanel.duplicates > 0 }">{{ precheckPanel.duplicates }}</b>
-          <span>{{ importCopy.duplicates }}</span>
+          <span>{{ t('ep.imports.step_duplicates') }}</span>
         </div>
         <div class="import-precheck-cell">
           <b :class="{ 'is-warn': precheckPanel.attention > 0 }">{{ precheckPanel.attention }}</b>
-          <span>{{ importCopy.needsAttention }}</span>
+          <span>{{ t('ep.imports.pdf_low') }}</span>
         </div>
       </div>
-      <p v-else class="import-precheck-loading">{{ importCopy.prechecking }}</p>
+      <p v-else class="import-precheck-loading">{{ t('ep.imports.uploading') }}</p>
     </section>
 
     <div class="import-layout">
@@ -361,16 +361,16 @@
           </section>
 
           <!-- Text precheck and correction -->
-          <section v-if="textPreview" class="step-block import-text-section">
+          <section v-if="textPreview" class="step-block">
             <div class="step-head">
               <span class="step-no mono">03</span>
               <div>
-                <div class="step-title">{{ importCopy.correctionTitle }}</div>
-                <div class="step-sub">{{ importCopy.textHint }}</div>
+                <div class="step-title">{{ t('ep.imports.step_duplicates') }}</div>
+                <div class="step-sub">{{ t('ep.imports.preview_hint') }}</div>
               </div>
             </div>
 
-            <div v-if="textPreview.duplicates?.length" class="pdf-duplicates import-text-duplicates">
+            <div v-if="textPreview.duplicates?.length" class="pdf-duplicates">
               <div class="notice warn">
                 <LinearIcon name="alert" :size="15" />
                 <span>{{ t('ep.imports.dup_hint', { count: textPreview.duplicates.length }) }}</span>
@@ -483,7 +483,7 @@ import { listBanks } from '../api/banks'
 import { previewImport, previewFileImport, uploadImport, previewPdfImport, confirmPdfImport } from '../api/imports'
 import { useLocale } from '../composables/useLocale.js'
 
-const { t, locale } = useLocale()
+const { t } = useLocale()
 
 const props = defineProps({ token: { type: String, required: true } })
 defineEmits(['back'])
@@ -523,48 +523,16 @@ const currentMapping = ref({
 
 const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
 
-const importCopy = computed(() => locale.value === 'en-US'
-  ? {
-      stepsLabel: 'Import progress',
-      precheckStep: 'Precheck',
-      correctStep: 'Correct',
-      precheckTitle: 'File precheck',
-      parsed: 'Rows parsed',
-      duplicates: 'Possible duplicates',
-      needsAttention: 'Need correction',
-      prechecking: 'Checking file…',
-      duplicatesFound: 'Duplicates found',
-      needsCorrection: 'Needs confirmation',
-      ready: 'Precheck passed',
-      correctionTitle: 'Review and correct',
-      textHint: 'The text file is parsed. Confirm duplicate handling before writing.',
-      done: 'Done',
-      active: 'In progress',
-      pending: 'Pending',
-    }
-  : {
-      stepsLabel: '导入进度',
-      precheckStep: '预检',
-      correctStep: '纠错',
-      precheckTitle: '文件预检',
-      parsed: '解析出题目',
-      duplicates: '疑似重复',
-      needsAttention: '待纠错',
-      prechecking: '正在预检…',
-      duplicatesFound: '发现重复题目',
-      needsCorrection: '需要人工确认',
-      ready: '预检通过',
-      correctionTitle: '人工纠错',
-      textHint: '文本已解析完成；确认重复处理后再写入题库。',
-      done: '已完成',
-      active: '进行中',
-      pending: '待处理',
-    })
+// Pending steps carry no state label; only completed and active steps do.
+const STEP_STATE_KEYS = {
+  done: 'ep.common.done',
+  active: 'ep.imports.uploading',
+}
 
 const steps = computed(() => [
   { key: 'source', label: t('ep.imports.step_source') },
-  { key: 'precheck', label: importCopy.value.precheckStep },
-  { key: 'correct', label: importCopy.value.correctStep },
+  { key: 'precheck', label: t('ep.imports.step_fields') },
+  { key: 'correct', label: t('ep.imports.step_duplicates') },
   { key: 'result', label: t('ep.imports.step_result') },
 ])
 
@@ -584,34 +552,30 @@ function stepState(index) {
 }
 
 function stepStateLabel(index) {
-  const state = stepState(index)
-  return importCopy.value[state]
+  const key = STEP_STATE_KEYS[stepState(index)]
+  return key ? t(key) : ''
 }
 
 const precheckPanel = computed(() => {
   const source = spreadsheetPreview.value || pdfPreview.value || textPreview.value || duplicatePreview.value
   if (!source) return null
   const duplicates = Array.isArray(source.duplicates) ? source.duplicates.length : 0
-  let count = Number(source.question_count || 0)
-  let attention = Array.isArray(source.missing) ? source.missing.length : 0
-  let accepted = Boolean(source.accepted)
-  let status = source.reason || ''
-
-  if (source === pdfPreview.value) {
-    count = Number(source.question_count || pdfCandidates.value.length || 0)
-    attention = pdfCandidates.value.filter(candidate => candidate.is_uncertain).length
-    accepted = duplicates === 0 && attention === 0
-    status = duplicates ? importCopy.value.duplicatesFound : attention ? importCopy.value.needsCorrection : importCopy.value.ready
-  } else {
-    accepted = duplicates === 0 && attention === 0 && source.accepted !== false
-    status = duplicates
-      ? importCopy.value.duplicatesFound
-      : attention
-        ? importCopy.value.needsCorrection
-        : accepted
-          ? importCopy.value.ready
-          : (status || importCopy.value.needsCorrection)
-  }
+  const isPdf = source === pdfPreview.value
+  const count = isPdf
+    ? Number(source.question_count || pdfCandidates.value.length || 0)
+    : Number(source.question_count || 0)
+  const attention = isPdf
+    ? pdfCandidates.value.filter(candidate => candidate.is_uncertain).length
+    : Array.isArray(source.missing) ? source.missing.length : 0
+  const accepted = duplicates === 0 && attention === 0 && (isPdf || source.accepted !== false)
+  // Labels come from the shared catalog and are derived from local state, so a
+  // server-supplied reason string can never leak into the UI (e.g. Chinese text
+  // under an English locale).
+  const status = duplicates
+    ? t('ep.imports.dup_title')
+    : attention || !accepted
+      ? t('ep.imports.pdf_low')
+      : t('ep.imports.pdf_high')
 
   return { count, duplicates, attention, accepted, status }
 })

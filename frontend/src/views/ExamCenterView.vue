@@ -20,7 +20,7 @@
       <LinearIcon name="alert" :size="15" /><span>{{ notice }}</span>
     </div>
 
-    <section v-if="activeSessions.length" class="active-exam exam-active panel">
+    <section v-if="activeSessions.length" class="active-exam panel">
       <div class="panel-head">
         <span class="panel-title">{{ t('ep.exam.active_title') }}</span>
         <span class="section-note">{{ t('ep.exam.active_desc') }}</span>
@@ -51,14 +51,14 @@
     </div>
 
     <div v-else class="exam-layout exam-center-grid">
-      <div class="exam-main exam-center-main">
+      <div class="exam-main">
         <section class="panel">
           <div class="panel-head">
             <span class="panel-title">{{ t('ep.exam.papers') }}</span>
             <span class="section-note">{{ t('ep.common.count', { count: profiles.length }) }}</span>
           </div>
 
-          <div v-if="profiles.length" class="list exam-paper-list">
+          <div v-if="profiles.length" class="list">
             <div v-for="profile in profiles" :key="profile.id" class="list-row paper-row exam-paper-row">
               <span class="list-main exam-paper-main">
                 <span class="list-title exam-paper-title">{{ profile.name }}</span>
@@ -91,12 +91,12 @@
           </div>
         </section>
 
-        <section class="panel exam-bank-section" style="margin-top: 28px">
+        <section class="panel" style="margin-top: 28px">
           <div class="panel-head">
             <span class="panel-title">{{ t('ep.exam.start_from_bank') }}</span>
             <span class="section-note">{{ t('ep.exam.start_hint') }}</span>
           </div>
-          <div v-if="banks.length" class="list exam-bank-list">
+          <div v-if="banks.length" class="list">
             <div v-for="bank in banks" :key="bank.id" class="list-row exam-bank-row">
               <span class="list-main">
                 <span class="list-title exam-bank-title">{{ bank.name }}</span>
@@ -122,20 +122,20 @@
       </div>
 
       <aside class="exam-rail exam-center-rail">
-        <div class="rail-block exam-rail-block">
-          <div class="rail-title exam-rail-title">{{ t('ep.exam.blueprint') }}</div>
-          <p class="rail-note exam-rail-note">{{ t('ep.exam.profile_note') }}</p>
-          <div v-if="profiles.length" class="rail-list exam-rail-list">
-            <button v-for="profile in profiles" :key="profile.id" type="button" class="rail-link exam-rail-link" @click="openBlueprint(profile)">
+        <div class="rail-block">
+          <div class="rail-title">{{ t('ep.exam.blueprint') }}</div>
+          <p class="rail-note">{{ t('ep.exam.profile_note') }}</p>
+          <div v-if="profiles.length" class="rail-list">
+            <button v-for="profile in profiles" :key="profile.id" type="button" class="rail-link" @click="openBlueprint(profile)">
               <span class="rail-link-title od-truncate">{{ profile.name }}</span>
               <span class="tiny mono">{{ blueprintTotal(profile) }}</span>
             </button>
           </div>
           <div v-else class="tiny dim">{{ t('ep.exam.papers_empty') }}</div>
         </div>
-        <div class="rail-block exam-rail-block">
-          <div class="rail-title exam-rail-title">{{ t('ep.exam.report') }}</div>
-          <p class="rail-note exam-rail-note">{{ t('ep.exam.scores_note') }}</p>
+        <div class="rail-block">
+          <div class="rail-title">{{ t('ep.exam.report') }}</div>
+          <p class="rail-note">{{ t('ep.exam.scores_note') }}</p>
         </div>
       </aside>
     </div>
@@ -604,6 +604,9 @@ onMounted(load)
 .bp-section:first-child { border-top: 0; }
 .bp-count { text-align: right; }
 .setup-check { display: flex; flex-direction: row; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); }
+@media (max-width: 1280px) {
+  .exam-layout { gap: 40px; }
+}
 @media (max-width: 1100px) {
   .exam-layout { grid-template-columns: minmax(0, 1fr) 236px; gap: 28px; }
 }
