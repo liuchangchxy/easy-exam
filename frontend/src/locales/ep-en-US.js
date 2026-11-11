@@ -64,6 +64,9 @@ export default {
     saved: 'Saved',
     retry: 'Retry',
     min: 'min',
+    discard: 'Discard',
+    unsaved_title: 'Unsaved changes',
+    unsaved_desc: 'Save your changes before closing?',
   },
   today: {
     title: 'Today',
@@ -427,6 +430,7 @@ export default {
     sub: 'Papers, answer sheet and score reports',
     new_paper: 'New paper',
     start: 'Start exam',
+    start_requires_bank: 'Create a bank with questions before starting an exam.',
     papers: 'Papers',
     papers_empty: 'No papers yet',
     papers_empty_hint: 'Create a paper, or start an exam directly from a bank.',

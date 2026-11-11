@@ -1,20 +1,17 @@
 <template>
-  <div
-    v-if="show"
-    class="modal-backdrop"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="question-edit-title"
-    @click.self="handleClose"
-    @keydown.esc="handleClose"
+  <AppDialog
+    :open="show"
+    :title="dialogTitle"
+    panel-class="question-edit-dialog"
+    style="--app-dialog-width: 680px"
+    :initial-focus="readOnly ? '.modal-head-right .btn' : '#edit-stem'"
+    @close="handleClose"
   >
-    <div class="modal-dialog question-edit-dialog">
-      <header class="modal-header">
+    <template #head>
+      <div class="modal-header">
         <div class="modal-title-wrap">
           <div class="rule-label">{{ t('ep.manage.tab_questions') }}</div>
-          <h2 id="question-edit-title">
-            {{ readOnly ? t('bank_manage.view_question') : t('bank_manage.edit_question') }}
-          </h2>
+          <h2 id="question-edit-title">{{ dialogTitle }}</h2>
         </div>
         <div class="modal-head-right">
           <button type="button" class="btn btn-sm btn-quiet" @click="toggleVersionHistory">
@@ -23,13 +20,11 @@
           <span v-if="question" class="version-tag mono">
             {{ t('bank_manage.version_badge', { ver: baseVersion }) }}
           </span>
-          <button type="button" class="icon-btn" :aria-label="t('common.close')" @click="handleClose">
-            <LinearIcon name="x" size="16" />
-          </button>
         </div>
-      </header>
+      </div>
+    </template>
 
-      <form class="modal-body-form" @submit.prevent="handleSave">
+    <form id="question-edit-form" class="modal-body-form" @submit.prevent="handleSave">
         <section v-if="showVersionHistory" class="version-history" aria-live="polite">
           <div class="version-history-head">
             <span class="rule-label">{{ t('bank_manage.version_history') }}</span>
@@ -213,22 +208,42 @@
           <input id="edit-tags" v-model="tagsInput" type="text" class="input" :disabled="readOnly || saving" />
         </label>
 
-        <footer class="modal-footer">
-          <button type="button" class="btn" :disabled="saving" @click="handleClose">{{ t('common.cancel') }}</button>
-          <button v-if="!readOnly" type="submit" class="btn btn-primary btn-submit-edit" :disabled="saving">
-            {{ saving ? t('common.loading') : t('common.save') }}
-          </button>
-        </footer>
-      </form>
-    </div>
-  </div>
+    </form>
+
+    <template #foot>
+      <footer class="modal-footer">
+        <button type="button" class="btn" :disabled="saving" @click="handleClose">{{ t('common.cancel') }}</button>
+        <button v-if="!readOnly" type="submit" form="question-edit-form" class="btn btn-primary btn-submit-edit" :disabled="saving">
+          {{ saving ? t('common.loading') : t('common.save') }}
+        </button>
+      </footer>
+    </template>
+  </AppDialog>
+
+  <AppDialog
+    :open="discardPromptOpen"
+    :title="t('ep.common.unsaved_title')"
+    panel-class="discard-prompt-dialog"
+    style="--app-dialog-width: 420px"
+    initial-focus=".discard-save"
+    @close="confirmDiscardCancel"
+  >
+    <p class="hint">{{ t('ep.common.unsaved_desc') }}</p>
+    <template #foot>
+      <button type="button" class="btn btn-quiet" @click="confirmDiscardCancel">{{ t('ep.common.cancel') }}</button>
+      <button type="button" class="btn discard-discard" @click="confirmDiscardAccept">{{ t('ep.common.discard') }}</button>
+      <button type="button" class="btn btn-primary discard-save" @click="saveFromDiscardPrompt">{{ t('common.save') }}</button>
+    </template>
+  </AppDialog>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import AppDialog from './AppDialog.vue'
 import LinearIcon from './LinearIcon.vue'
 import { updateQuestion, getQuestion, getQuestionConflict, listQuestionVersions } from '../api/questions'
 import { useLocale } from '../composables/useLocale'
+import { useDirtyGuard } from '../composables/useDirtyGuard'
 import {
   validateQuestionEdit,
   sanitizeAnswerOnOptionRemove,
@@ -293,10 +308,44 @@ const regradeAvailable = computed(() => {
   return shouldOfferRegrade(original.value, { type: type.value, answer: answer.value })
 })
 
+const dialogTitle = computed(() => (
+  props.readOnly ? t('bank_manage.view_question') : t('bank_manage.edit_question')
+))
+
+const baselineSnapshot = ref('')
+
+function draftSnapshot() {
+  return JSON.stringify({
+    stem: stem.value,
+    type: type.value,
+    difficulty: Number(difficulty.value),
+    chapterId: chapterId.value,
+    options: options.value.map(opt => [opt.key, opt.content]),
+    answer: answer.value,
+    explanation: explanation.value,
+    tagsInput: tagsInput.value,
+  })
+}
+
+const isDirty = computed(() => (
+  !props.readOnly
+  && Boolean(props.question)
+  && Boolean(baselineSnapshot.value)
+  && draftSnapshot() !== baselineSnapshot.value
+))
+
+const {
+  confirmDiscard,
+  discardPromptOpen,
+  confirmDiscardAccept,
+  confirmDiscardCancel,
+} = useDirtyGuard(() => isDirty.value, () => emit('close'))
+
 watch(
   () => props.question,
   (q) => {
     if (q) {
+      const previousType = type.value
       stem.value = q.stem || ''
       type.value = q.type || 'SINGLE'
       difficulty.value = q.difficulty !== undefined && q.difficulty !== null ? Number(q.difficulty) : 3
@@ -334,13 +383,19 @@ watch(
       versionError.value = ''
       errorMsg.value = ''
       isConflict.value = false
+      // Apply the same type normalisation the type watcher would queue, then
+      // capture the baseline in the same tick so a pristine form stays clean.
+      normalizeForTypeChange(type.value, previousType)
+      baselineSnapshot.value = draftSnapshot()
+    } else {
+      baselineSnapshot.value = ''
     }
   },
   { immediate: true }
 )
 
 // Type switching logic
-watch(type, (newType, oldType) => {
+function normalizeForTypeChange(newType, oldType) {
   if (props.readOnly) return
   if (!oldType || newType === oldType) return
 
@@ -369,6 +424,10 @@ watch(type, (newType, oldType) => {
   if (prevAnswer && prevAnswer.trim() && !adapted) {
     errorMsg.value = t('bank_manage.answer_reset_prompt')
   }
+}
+
+watch(type, (newType, oldType) => {
+  normalizeForTypeChange(newType, oldType)
 })
 
 function addOption() {
@@ -386,9 +445,13 @@ function removeOption(idx) {
 }
 
 function handleClose() {
-  if (!saving.value) {
-    emit('close')
-  }
+  if (saving.value) return
+  confirmDiscard()
+}
+
+function saveFromDiscardPrompt() {
+  confirmDiscardCancel()
+  handleSave()
 }
 
 async function handleReloadLatest() {
@@ -398,6 +461,7 @@ async function handleReloadLatest() {
   try {
     const latestQ = await getQuestion(props.token, props.question.id)
     if (latestQ) {
+      const previousType = type.value
       baseVersion.value = latestQ.version_number || baseVersion.value
       stem.value = latestQ.stem || ''
       type.value = latestQ.type || 'SINGLE'
@@ -420,6 +484,8 @@ async function handleReloadLatest() {
       versionPreview.value = null
       isConflict.value = false
       errorMsg.value = ''
+      normalizeForTypeChange(type.value, previousType)
+      baselineSnapshot.value = draftSnapshot()
       emit('reloaded', latestQ)
     }
   } catch (err) {
@@ -541,35 +607,13 @@ async function saveAsBranch() {
 </script>
 
 <style scoped>
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  background: color-mix(in srgb, var(--ink) 38%, transparent);
-  backdrop-filter: blur(2px);
-}
-.question-edit-dialog {
-  width: min(100%, 680px);
-  max-height: 88vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-2);
-  overflow: hidden;
-}
 .modal-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 22px 14px;
-  border-bottom: 1px solid var(--line);
+  flex: 1;
+  min-width: 0;
 }
 .modal-title-wrap h2 {
   margin: 4px 0 0;
@@ -614,8 +658,8 @@ async function saveAsBranch() {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 18px 22px 0;
-  overflow-y: auto;
+  padding: 0;
+  overflow: visible;
 }
 .qe-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .options-group { gap: 8px; }
@@ -626,22 +670,12 @@ async function saveAsBranch() {
 .btn-del-sm { color: var(--bad); }
 .required { color: var(--bad); }
 .modal-footer {
-  position: sticky;
-  bottom: 0;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin: 4px -22px 0;
-  padding: 14px 22px;
-  border-top: 1px solid var(--line);
-  background: var(--surface);
 }
 @media (max-width: 600px) {
-  .modal-backdrop { padding: 10px; }
   .qe-grid { grid-template-columns: 1fr 1fr; }
-  .modal-body-form { padding: 14px 16px 0; }
-  .modal-header { padding: 15px 16px 12px; }
-  .modal-footer { margin-left: -16px; margin-right: -16px; padding: 12px 16px; }
   .modal-head-right { gap: 6px; }
   .version-row { flex-wrap: wrap; }
   .version-view { margin-left: auto; }

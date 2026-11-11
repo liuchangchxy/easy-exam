@@ -822,7 +822,10 @@
       "required": "必填",
       "saved": "已保存",
       "retry": "重试",
-      "min": "分钟"
+      "min": "分钟",
+      "discard": "丢弃",
+      "unsaved_title": "有未保存的修改",
+      "unsaved_desc": "关闭前要保存这次修改吗？"
     },
     "today": {
       "title": "今天",
@@ -1184,6 +1187,7 @@
       "sub": "组卷、答题卡与成绩报告",
       "new_paper": "新建试卷",
       "start": "开始模考",
+      "start_requires_bank": "先创建题库并导入题目，才能开始模考。",
       "papers": "试卷",
       "papers_empty": "还没有试卷",
       "papers_empty_hint": "新建一份试卷，或在题库中直接开始模考。",

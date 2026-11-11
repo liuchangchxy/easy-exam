@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import QuestionEditModal from '../../src/components/QuestionEditModal.vue'
 import { updateQuestion, getQuestion, getQuestionConflict, listQuestionVersions } from '../../src/api/questions'
@@ -32,13 +32,38 @@ function makeQuestion(overrides = {}) {
 function mountModal(question = makeQuestion(), readOnly = false) {
   return mount(QuestionEditModal, {
     props: { show: true, question, chapters: [], readOnly, token: 'token' },
+    attachTo: document.body,
+    // AppDialog teleports to <body>; stubbing Teleport keeps the markup inside
+    // the wrapper so the component contract stays queryable.
+    global: { stubs: { teleport: true } },
   })
 }
 
+function pressEscapeFromBody() {
+  document.body.tabIndex = -1
+  document.body.focus()
+  document.body.dispatchEvent(new KeyboardEvent('keydown', {
+    key: 'Escape',
+    bubbles: true,
+    cancelable: true,
+  }))
+}
+
 describe('QuestionEditModal', () => {
+  let wrapper
+
   beforeEach(() => {
+    document.body.innerHTML = ''
     vi.clearAllMocks()
     getQuestionConflict.mockResolvedValue({ has_conflict: false, conflict: null })
+    listQuestionVersions.mockResolvedValue([])
+  })
+
+  afterEach(() => {
+    if (wrapper) wrapper.unmount()
+    wrapper = null
+    document.body.innerHTML = ''
+    document.body.style.overflow = ''
   })
 
   it('offers history and renders reachable versions', async () => {
@@ -47,7 +72,7 @@ describe('QuestionEditModal', () => {
       { id: 'v2', version_number: 2, stem: 'Newer stem', options: [], answer: 'B', explanation: '' },
     ])
 
-    const wrapper = mountModal()
+    wrapper = mountModal()
     await wrapper.find('.modal-head-right .btn').trigger('click')
     await flushPromises()
 
@@ -63,7 +88,7 @@ describe('QuestionEditModal', () => {
 
   it('asks about re-grading only when the answer changes and sends the choice', async () => {
     updateQuestion.mockResolvedValue(makeQuestion({ version_number: 2, answer: 'B' }))
-    const wrapper = mountModal()
+    wrapper = mountModal()
 
     expect(wrapper.find('.regrade-choice').exists()).toBe(false)
 
@@ -82,7 +107,7 @@ describe('QuestionEditModal', () => {
 
   it('sends regrade_history when the user opts in', async () => {
     updateQuestion.mockResolvedValue(makeQuestion({ version_number: 2, answer: 'B' }))
-    const wrapper = mountModal()
+    wrapper = mountModal()
 
     await wrapper.find('#edit-answer').setValue('B')
     await wrapper.find('.regrade-choice .check-row input').setValue(true)
@@ -99,7 +124,7 @@ describe('QuestionEditModal', () => {
     updateQuestion.mockRejectedValueOnce(conflictError)
     updateQuestion.mockResolvedValueOnce({ ...makeQuestion({ version_number: 3 }), conflict: { id: 'c1' } })
 
-    const wrapper = mountModal()
+    wrapper = mountModal()
     await wrapper.find('#edit-stem').setValue('My local draft')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
@@ -118,5 +143,80 @@ describe('QuestionEditModal', () => {
     expect(branchPayload.reject_stale).toBe(false)
     expect(branchPayload.stem).toBe('My local draft')
     expect(wrapper.emitted('saved')?.[0]?.[0]?.conflict).toBeTruthy()
+  })
+
+  it('closes immediately when nothing changed', async () => {
+    wrapper = mountModal()
+    await flushPromises()
+
+    await wrapper.find('.modal-footer .btn').trigger('click')
+
+    expect(wrapper.find('.discard-prompt-dialog').exists()).toBe(false)
+    expect(wrapper.emitted('close')).toHaveLength(1)
+  })
+
+  it('closes a read-only viewer without a discard prompt', async () => {
+    wrapper = mountModal(makeQuestion(), true)
+
+    await wrapper.find('.modal-footer .btn').trigger('click')
+
+    expect(wrapper.find('.discard-prompt-dialog').exists()).toBe(false)
+    expect(wrapper.emitted('close')).toHaveLength(1)
+  })
+
+  it('prompts before discarding an edited draft from the cancel button', async () => {
+    wrapper = mountModal()
+    await wrapper.find('#edit-stem').setValue('Edited stem')
+
+    await wrapper.find('.modal-footer .btn').trigger('click')
+
+    expect(wrapper.find('.discard-prompt-dialog').exists()).toBe(true)
+    expect(wrapper.emitted('close')).toBeUndefined()
+    expect(wrapper.find('#edit-stem').element.value).toBe('Edited stem')
+
+    await wrapper.find('.discard-discard').trigger('click')
+
+    expect(wrapper.emitted('close')).toHaveLength(1)
+  })
+
+  it('prompts on Escape and on the backdrop while dirty', async () => {
+    wrapper = mountModal()
+    await wrapper.find('#edit-stem').setValue('Edited stem')
+
+    pressEscapeFromBody()
+    await flushPromises()
+    expect(wrapper.find('.discard-prompt-dialog').exists()).toBe(true)
+
+    await wrapper.find('.discard-prompt-dialog .btn-quiet').trigger('click')
+    expect(wrapper.find('.discard-prompt-dialog').exists()).toBe(false)
+    expect(wrapper.emitted('close')).toBeUndefined()
+
+    await wrapper.find('.app-dialog-scrim').trigger('click')
+    expect(wrapper.find('.discard-prompt-dialog').exists()).toBe(true)
+    expect(wrapper.emitted('close')).toBeUndefined()
+  })
+
+  it('prompts from the header close control', async () => {
+    wrapper = mountModal()
+    await wrapper.find('#edit-stem').setValue('Edited stem')
+
+    await wrapper.find('.app-dialog-close').trigger('click')
+
+    expect(wrapper.find('.discard-prompt-dialog').exists()).toBe(true)
+    expect(wrapper.emitted('close')).toBeUndefined()
+  })
+
+  it('saves through the existing save path from the discard prompt', async () => {
+    updateQuestion.mockResolvedValue(makeQuestion({ version_number: 2 }))
+    wrapper = mountModal()
+    await wrapper.find('#edit-stem').setValue('Edited stem')
+
+    await wrapper.find('.app-dialog-close').trigger('click')
+    await wrapper.find('.discard-save').trigger('click')
+    await flushPromises()
+
+    expect(updateQuestion).toHaveBeenCalledTimes(1)
+    expect(updateQuestion.mock.calls[0][2].stem).toBe('Edited stem')
+    expect(wrapper.emitted('close')).toHaveLength(1)
   })
 })

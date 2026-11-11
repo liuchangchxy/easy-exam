@@ -10,9 +10,12 @@
         <button type="button" class="btn" @click="openCreatePaper">
           <LinearIcon name="plus" :size="14" />{{ t('ep.exam.new_paper') }}
         </button>
-        <button type="button" class="btn btn-primary" :disabled="!banks.length" @click="openSetup()">
-          <LinearIcon name="play" :size="14" />{{ t('ep.exam.start') }}
-        </button>
+        <span class="action-with-reason">
+          <span v-if="!banks.length" class="action-reason">{{ t('ep.exam.start_requires_bank') }}</span>
+          <button type="button" class="btn btn-primary" :disabled="!banks.length" @click="openSetup()">
+            <LinearIcon name="play" :size="14" />{{ t('ep.exam.start') }}
+          </button>
+        </span>
       </div>
     </div>
 
@@ -86,7 +89,10 @@
             <div class="empty-desc">{{ t('ep.exam.papers_empty_hint') }}</div>
             <div class="empty-actions">
               <button type="button" class="btn" @click="openCreatePaper">{{ t('ep.exam.new_paper') }}</button>
-              <button type="button" class="btn btn-primary" :disabled="!banks.length" @click="openSetup()">{{ t('ep.exam.start') }}</button>
+              <span class="action-with-reason">
+                <span v-if="!banks.length" class="action-reason">{{ t('ep.exam.start_requires_bank') }}</span>
+                <button type="button" class="btn btn-primary" :disabled="!banks.length" @click="openSetup()">{{ t('ep.exam.start') }}</button>
+              </span>
             </div>
           </div>
         </section>
@@ -141,11 +147,17 @@
     </div>
 
     <!-- Create paper -->
-    <div v-if="showCreate" class="exam-setup-backdrop" @click.self="showCreate = false">
-      <form class="exam-setup-dialog" role="dialog" aria-modal="true" @submit.prevent="createPaper">
-        <h2>{{ t('ep.exam.new_paper') }}</h2>
+    <AppDialog
+      :open="showCreate"
+      :title="t('ep.exam.new_paper')"
+      panel-class="exam-setup-dialog"
+      style="--app-dialog-width: 520px"
+      initial-focus="#paper-name"
+      @close="showCreate = false"
+    >
+      <form class="exam-dialog-form" @submit.prevent="createPaper">
         <label>{{ t('ep.exam.paper_name') }}
-          <input v-model.trim="paperForm.name" type="text" :placeholder="t('ep.exam.paper_name_placeholder')" required />
+          <input id="paper-name" v-model.trim="paperForm.name" type="text" :placeholder="t('ep.exam.paper_name_placeholder')" required />
         </label>
         <label>{{ t('ep.exam.paper_desc') }}
           <input v-model.trim="paperForm.description" type="text" :placeholder="t('ep.exam.paper_desc_placeholder')" />
@@ -155,29 +167,35 @@
           <button type="submit" class="primary" :disabled="creating || !paperForm.name">{{ t('ep.exam.create_paper') }}</button>
         </div>
       </form>
-    </div>
+    </AppDialog>
 
     <!-- Start exam -->
-    <div v-if="showSetup" class="exam-setup-backdrop" @click.self="showSetup = false">
-      <form class="exam-setup-dialog" role="dialog" aria-modal="true" @submit.prevent="beginExam">
-        <h2>{{ t('ep.exam.setup') }}</h2>
+    <AppDialog
+      :open="showSetup"
+      :title="t('ep.exam.setup')"
+      panel-class="exam-setup-dialog"
+      style="--app-dialog-width: 520px"
+      initial-focus="#setup-bank"
+      @close="showSetup = false"
+    >
+      <form class="exam-dialog-form" @submit.prevent="beginExam">
         <label>{{ t('ep.exam.bank_pick') }}
-          <select v-model="setup.bankId" @change="onSetupBankChange">
+          <select id="setup-bank" v-model="setup.bankId" @change="onSetupBankChange">
             <option v-for="bank in examBanks" :key="bank.id" :value="bank.id">{{ bank.name }} · {{ t('ep.banks.questions', { count: bank.question_count || 0 }) }}</option>
           </select>
         </label>
         <label>{{ t('ep.exam.profile_pick') }}
-          <select v-model="setup.profileId" @change="onSetupProfileChange">
+          <select id="setup-profile" v-model="setup.profileId" @change="onSetupProfileChange">
             <option value="">{{ t('ep.exam.direct') }}</option>
             <option v-for="profile in blueprintProfiles" :key="profile.id" :value="profile.id">{{ profile.name }}</option>
           </select>
         </label>
         <p class="hint">{{ t('ep.exam.profile_note') }}</p>
         <label>{{ t('ep.exam.questions') }}
-          <input v-model.number="setup.total" type="number" min="1" :max="setupMax" />
+          <input id="setup-total" v-model.number="setup.total" type="number" min="1" :max="setupMax" />
         </label>
         <label>{{ t('ep.exam.time') }}
-          <input v-model.number="setup.minutes" type="number" min="1" max="600" />
+          <input id="setup-minutes" v-model.number="setup.minutes" type="number" min="1" max="600" />
         </label>
         <label class="setup-check">
           <input v-model="setup.recordMistakes" type="checkbox" />
@@ -190,20 +208,23 @@
           <button type="submit" class="primary" :disabled="starting || !setupValid">{{ t('ep.exam.start') }}</button>
         </div>
       </form>
-    </div>
+    </AppDialog>
 
-    <!-- Blueprint drawer -->
-    <div v-if="editingProfile" class="drawer-scrim" @click="closeBlueprint"></div>
-    <aside v-if="editingProfile" class="drawer" role="dialog" aria-modal="true">
-      <div class="drawer-head">
-        <div style="flex: 1; min-width: 0">
+    <!-- Blueprint editor -->
+    <AppDialog
+      :open="Boolean(editingProfile)"
+      :title="t('ep.exam.blueprint')"
+      panel-class="drawer exam-blueprint-dialog"
+      style="--app-dialog-width: 720px"
+      initial-focus="#bp-negative"
+      @close="requestBlueprintClose"
+    >
+      <template #head>
+        <div class="drawer-heading">
           <div class="drawer-title">{{ t('ep.exam.blueprint') }}</div>
-          <div class="drawer-sub">{{ editingProfile.name }} · v{{ editingProfile.latest_blueprint?.version_number || 0 }}</div>
+          <div class="drawer-sub">{{ editingProfile?.name }} · v{{ editingProfile?.latest_blueprint?.version_number || 0 }}</div>
         </div>
-        <button type="button" class="icon-btn" :aria-label="t('ep.common.close')" @click="closeBlueprint">
-          <LinearIcon name="x" :size="17" />
-        </button>
-      </div>
+      </template>
       <div class="drawer-body">
         <div class="bp-total">
           <div class="stat">
@@ -212,7 +233,7 @@
           </div>
           <label class="field bp-negative">
             <span class="label">{{ t('ep.exam.blueprint_negative') }}</span>
-            <input v-model.number="bpForm.negative_mark" class="input" type="number" min="0" max="5" step="0.5" />
+            <input id="bp-negative" v-model.number="bpForm.negative_mark" class="input" type="number" min="0" max="5" step="0.5" />
           </label>
         </div>
 
@@ -246,22 +267,44 @@
           <span>{{ t('ep.exam.profile_note') }}</span>
         </div>
       </div>
-      <div class="drawer-foot">
-        <button type="button" class="btn btn-primary" :disabled="savingBp || !bpLoaded" @click="saveBp">
-          {{ savingBp ? t('ep.common.loading') : t('ep.exam.blueprint_save') }}
+      <template #foot>
+        <div class="drawer-foot">
+          <button type="button" class="btn btn-primary" :disabled="savingBp || !bpLoaded" @click="saveBp">
+            {{ savingBp ? t('ep.common.loading') : t('ep.exam.blueprint_save') }}
+          </button>
+          <span class="spacer"></span>
+          <button type="button" class="btn btn-quiet" @click="requestBlueprintClose">{{ t('ep.common.cancel') }}</button>
+        </div>
+      </template>
+    </AppDialog>
+
+    <AppDialog
+      :open="blueprintDiscardOpen"
+      :title="t('ep.common.unsaved_title')"
+      panel-class="discard-prompt-dialog"
+      style="--app-dialog-width: 420px"
+      initial-focus=".discard-save"
+      @close="cancelBlueprintDiscard"
+    >
+      <p class="hint">{{ t('ep.common.unsaved_desc') }}</p>
+      <template #foot>
+        <button type="button" class="btn btn-quiet" @click="cancelBlueprintDiscard">{{ t('ep.common.cancel') }}</button>
+        <button type="button" class="btn discard-discard" @click="discardBlueprint">{{ t('ep.common.discard') }}</button>
+        <button type="button" class="btn btn-primary discard-save" :disabled="savingBp || !bpLoaded" @click="saveFromBlueprintPrompt">
+          {{ t('common.save') }}
         </button>
-        <span class="spacer"></span>
-        <button type="button" class="btn btn-quiet" @click="closeBlueprint">{{ t('ep.common.cancel') }}</button>
-      </div>
-    </aside>
+      </template>
+    </AppDialog>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import AppDialog from '../components/AppDialog.vue'
 import LinearIcon from '../components/LinearIcon.vue'
 import { useLocale } from '../composables/useLocale.js'
+import { useDirtyGuard } from '../composables/useDirtyGuard.js'
 import { listBanks } from '../api/banks'
 import { listProfiles, createProfile, getBlueprint, saveBlueprint, startExam } from '../api/exams'
 import { listActiveSessions, abandonSession } from '../api/practice'
@@ -292,6 +335,7 @@ const bpMeta = ref({})
 const bpError = ref('')
 const bpLoaded = ref(false)
 const savingBp = ref(false)
+const bpBaseline = ref('')
 
 const examBanks = computed(() => banks.value.filter(b => (b.question_count || 0) > 0))
 const difficultyOptions = computed(() => [1, 2, 3, 4, 5].map(value => ({ value, label: t('ep.difficulty.' + value) })))
@@ -312,6 +356,29 @@ const setupValid = computed(() => {
 })
 
 const bpTotal = computed(() => bpForm.value.sections.reduce((sum, s) => sum + (Number(s.count) || 0), 0))
+
+function blueprintSnapshot() {
+  return JSON.stringify({
+    negative_mark: Number(bpForm.value.negative_mark) || 0,
+    sections: bpForm.value.sections.map(section => ({
+      name: section.name || '',
+      type: section.type || 'SINGLE',
+      count: Number(section.count) || 0,
+      difficulty: section.difficulty ?? null,
+      chapter_id: section.chapter_id || '',
+      tags: section.tags || '',
+    })),
+  })
+}
+
+const blueprintDirty = computed(() => Boolean(bpBaseline.value) && blueprintSnapshot() !== bpBaseline.value)
+
+const {
+  confirmDiscard: confirmBlueprintDiscard,
+  discardPromptOpen: blueprintDiscardOpen,
+  confirmDiscardAccept: discardBlueprint,
+  confirmDiscardCancel: cancelBlueprintDiscard,
+} = useDirtyGuard(() => blueprintDirty.value, closeBlueprintNow)
 
 function blueprintOf(profile) {
   const bp = profile?.latest_blueprint?.blueprint
@@ -438,9 +505,9 @@ async function abandon(session) {
 }
 
 async function openBlueprint(profile) {
-  editingProfile.value = profile
   bpError.value = ''
   bpLoaded.value = false
+  bpBaseline.value = ''
   bpMeta.value = {}
   bpForm.value = { negative_mark: 0, sections: [] }
   try {
@@ -449,15 +516,20 @@ async function openBlueprint(profile) {
     bpMeta.value = blueprintMetaOf(data)
     bpForm.value = { negative_mark: Number(data.negative_mark) || 0, sections: blueprintSections(data) }
     bpLoaded.value = true
+    bpBaseline.value = blueprintSnapshot()
   } catch (err) {
     if (err?.status === 404) {
       // A profile without a saved blueprint legitimately starts from empty.
       bpForm.value = { negative_mark: 0, sections: [] }
       bpLoaded.value = true
-      return
+      bpBaseline.value = blueprintSnapshot()
+    } else {
+      bpError.value = `${t('ui.k0288')}${err.detail || err.message}`
     }
-    bpError.value = `${t('ui.k0288')}${err.detail || err.message}`
   }
+  // Open only once the draft is populated so the dialog mounts with its data
+  // and the initial focus target is not re-rendered straight after focusing.
+  editingProfile.value = profile
 }
 
 function blueprintMetaOf(blueprint) {
@@ -512,6 +584,7 @@ async function saveBp() {
         tags: s.tags || '',
       })),
     })
+    bpBaseline.value = blueprintSnapshot()
     profiles.value = await listProfiles(props.token)
     const fresh = profiles.value.find(p => p.id === editingProfile.value.id)
     if (fresh) editingProfile.value = fresh
@@ -522,9 +595,20 @@ async function saveBp() {
   }
 }
 
-function closeBlueprint() {
+function closeBlueprintNow() {
   editingProfile.value = null
   bpError.value = ''
+  bpBaseline.value = ''
+}
+
+function requestBlueprintClose() {
+  if (savingBp.value) return
+  confirmBlueprintDiscard()
+}
+
+function saveFromBlueprintPrompt() {
+  cancelBlueprintDiscard()
+  saveBp()
 }
 
 onMounted(load)
@@ -604,6 +688,27 @@ onMounted(load)
 .bp-section:first-child { border-top: 0; }
 .bp-count { text-align: right; }
 .setup-check { display: flex; flex-direction: row; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); }
+.action-with-reason { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.action-reason { font-size: 12px; line-height: 1.5; color: var(--ink-3); }
+.exam-dialog-form { display: flex; flex-direction: column; gap: 14px; }
+.drawer-heading { flex: 1; min-width: 0; }
+.drawer-body { flex: none; overflow: visible; padding: 0; }
+.drawer-foot { width: 100%; padding: 0; border-top: 0; background: transparent; }
+/* AppDialog owns the modal chrome; the legacy setup/drawer classes remain on
+   the panel only so existing browser selectors keep resolving. */
+:global(.app-dialog-panel.exam-setup-dialog) {
+  padding: 0;
+  gap: 0;
+  overflow: visible;
+}
+:global(.app-dialog-panel.drawer) {
+  position: relative;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  width: min(100%, 720px);
+  max-height: min(88dvh, 960px);
+}
 @media (max-width: 1280px) {
   .exam-layout { gap: 40px; }
 }
