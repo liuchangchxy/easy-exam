@@ -538,8 +538,10 @@ img { max-width: 100%; }
 }
 .side-nav { display: flex; flex-direction: column; gap: 2px; padding-top: 16px; position: relative; }
 .side-nav::before {
+  /* Thread the rule through the nav-ico centers (10px item padding + 9px half
+     icon = 19px center). A 1px rule needs left: 18.5px to be centered on it. */
   content: ""; position: absolute;
-  left: 25px; top: 22px; bottom: 6px;
+  left: 18.5px; top: 55px; bottom: 10px;
   width: 1px; background: var(--d-spine-line); pointer-events: none;
 }
 .nav-label {
