@@ -29,45 +29,55 @@
       <span class="small dim">{{ t('ep.common.count', { count: filteredBanks.length }) }}</span>
     </div>
 
+    <div v-if="practiceError" class="notice bad practice-notice" role="alert">
+      <LinearIcon name="alert" :size="15" /><span>{{ practiceError }}</span>
+    </div>
+
     <div v-if="loading" class="skeleton-rows">
       <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
     </div>
 
     <div v-else-if="filteredBanks.length" class="bank-list">
-      <div
-        v-for="bank in filteredBanks"
-        :key="bank.id"
-        class="banks-row"
-        role="button"
-        tabindex="0"
-        @click="router.push(`/banks/${bank.id}`)"
-        @keydown.enter.prevent="router.push(`/banks/${bank.id}`)"
-        @keydown.space.prevent="router.push(`/banks/${bank.id}`)"
-      >
-        <span class="od-stack" style="--od-gap:2px;text-align:left;min-width:0">
-          <span class="bank-name">
-            {{ bank.name }}
-            <span class="tag">{{ roleLabel(bank.role) }}</span>
-            <span v-if="bank.has_active_exam" class="tag warn" :title="t('ep.manage.locked_desc')">{{ t('ep.today.active_badge') }}</span>
+      <div v-for="bank in filteredBanks" :key="bank.id" class="banks-row">
+        <button
+          type="button"
+          class="bank-open"
+          :aria-label="`${t('ep.banks.open')} ${bank.name}`"
+          @click="router.push(`/banks/${bank.id}`)"
+        >
+          <span class="od-stack" style="--od-gap:2px;text-align:left;min-width:0">
+            <span class="bank-name">
+              {{ bank.name }}
+              <span class="tag">{{ roleLabel(bank.role) }}</span>
+              <span v-if="bank.has_active_exam" class="tag warn" :title="t('ep.manage.locked_desc')">{{ t('ep.today.active_badge') }}</span>
+            </span>
+            <span class="bank-meta">
+              <span>{{ bank.category || t('ep.nav.banks') }}</span>
+              <span v-if="bank.description" class="od-truncate">{{ bank.description }}</span>
+            </span>
           </span>
-          <span class="bank-meta">
-            <span>{{ bank.category || t('ep.nav.banks') }}</span>
-            <span v-if="bank.description" class="od-truncate">{{ bank.description }}</span>
-          </span>
-        </span>
+        </button>
         <span class="bank-count">
           <strong>{{ bank.question_count || 0 }}</strong>
           <span>{{ t('ui.k0101') }}</span>
         </span>
         <span class="bank-actions-cell">
           <button type="button" class="btn btn-sm" @click.stop="startPractice(bank)">{{ t('ep.banks.practice') }}</button>
+          <span v-if="bank.has_active_exam" class="bank-manage-locked" :title="t('ep.manage.locked_desc')">
+            <button
+              type="button"
+              class="btn btn-sm btn-quiet"
+              disabled
+              :aria-label="`${t('ep.banks.manage')} — ${t('ep.manage.locked_desc')}`"
+            >{{ t('ep.banks.manage') }}</button>
+          </span>
           <button
+            v-else
             type="button"
             class="btn btn-sm btn-quiet"
-            :title="bank.has_active_exam ? t('ep.manage.locked_desc') : ''"
             @click.stop="router.push(`/banks/${bank.id}/manage`)"
           >{{ t('ep.banks.manage') }}</button>
-          <span class="bank-go"><LinearIcon name="chevron-right" :size="16" /></span>
+          <span class="bank-go" aria-hidden="true"><LinearIcon name="chevron-right" :size="16" /></span>
         </span>
       </div>
     </div>
@@ -123,6 +133,7 @@ const category = ref('')
 const showCreate = ref(false)
 const creating = ref(false)
 const createError = ref('')
+const practiceError = ref('')
 const form = ref({ name: '', description: '', category: '' })
 
 const categories = computed(() => [...new Set(banks.value.map(b => b.category).filter(Boolean))])
@@ -181,11 +192,12 @@ async function createBank() {
 }
 
 async function startPractice(bank) {
+  practiceError.value = ''
   try {
     const session = await startSession(props.token, { bank_id: bank.id, mode: 'PRACTICE' })
     router.push(`/practice/${session.id}`)
   } catch (err) {
-    createError.value = err.detail || err.message
+    practiceError.value = t('ep.banks.practice_start_failed', { message: err.detail || err.message })
   }
 }
 
@@ -201,7 +213,14 @@ onMounted(load)
   align-items: center;
   cursor: pointer;
 }
-.banks-row:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.bank-open {
+  display: flex; align-items: center; min-width: 0;
+  padding: 0; border: 0; background: none; color: inherit;
+  text-align: left; cursor: pointer;
+}
+.bank-open:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.practice-notice { margin-top: 16px; }
+.bank-manage-locked { display: inline-flex; }
 .bank-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
 .bank-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; min-width: 0; }
 .bank-meta .od-truncate { max-width: min(420px, 100%); }

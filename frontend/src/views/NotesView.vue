@@ -29,7 +29,7 @@
       </div>
     </div>
 
-    <div v-if="notice" class="notice" :class="noticeIsError ? 'bad' : 'ok'" style="margin-top: 16px">
+    <div v-if="notice && !readerOpen" class="notice" :class="noticeIsError ? 'bad' : 'ok'" style="margin-top: 16px">
       <LinearIcon :name="noticeIsError ? 'alert' : 'check'" :size="15" /><span>{{ notice }}</span>
     </div>
 
@@ -87,6 +87,10 @@
           </button>
         </div>
 
+        <div v-if="notice" class="notice notes-reader-notice" :class="noticeIsError ? 'bad' : 'ok'" role="status">
+          <LinearIcon :name="noticeIsError ? 'alert' : 'check'" :size="15" /><span>{{ notice }}</span>
+        </div>
+
         <div v-if="editingNote" class="reader-edit notes-reader-edit">
           <textarea v-model="editContent" class="textarea reader-edit-input" rows="10" :placeholder="t('ep.library.note_body_placeholder')"></textarea>
           <div class="reader-edit-actions">
@@ -115,6 +119,27 @@
           </button>
         </div>
       </article>
+    </div>
+
+    <div
+      v-if="showUnsavedDialog"
+      class="exam-setup-backdrop"
+      data-testid="unsaved-edit-dialog"
+      @click.self="cancelUnsavedDecision"
+      @keydown.esc="cancelUnsavedDecision"
+    >
+      <div class="exam-setup-dialog" role="dialog" aria-modal="true" :aria-label="t('ep.library.note_unsaved_title')">
+        <h2>{{ t('ep.library.note_unsaved_title') }}</h2>
+        <p>{{ t('ep.library.note_unsaved_desc') }}</p>
+        <p v-if="unsavedError" class="error">{{ unsavedError }}</p>
+        <div class="bank-actions">
+          <button type="button" @click="cancelUnsavedDecision">{{ t('ep.common.cancel') }}</button>
+          <button type="button" class="btn btn-danger" :disabled="savingNote" @click="discardAndContinue">{{ t('ui.k0214') }}</button>
+          <button type="button" class="btn btn-primary" :disabled="savingNote || !editContent.trim()" @click="saveAndContinue">
+            {{ savingNote ? t('ep.library.saving') : t('ep.common.save') }}
+          </button>
+        </div>
+      </div>
     </div>
 
     <div v-if="showAddModal" class="exam-setup-backdrop" @click.self="showAddModal = false">
@@ -171,6 +196,9 @@ const noticeIsError = ref(false)
 const editingNote = ref(false)
 const editContent = ref('')
 const savingNote = ref(false)
+const showUnsavedDialog = ref(false)
+const unsavedError = ref('')
+let pendingAfterDiscard = null
 const fileInputRef = ref(null)
 const readerCloseRef = ref(null)
 const readerTrigger = ref(null)
@@ -212,15 +240,31 @@ watch(selectedId, () => {
   editContent.value = ''
 })
 
-function openReader(item, event) {
-  if (!item) return
-  readerTrigger.value = event?.currentTarget || null
+function hasUnsavedEdit() {
+  if (!editingNote.value || !selected.value) return false
+  return editContent.value !== (selected.value.content || '')
+}
+
+function openReaderNow(item, trigger) {
+  readerTrigger.value = trigger || null
   selectedId.value = item.id
   readerOpen.value = true
   nextTick(() => readerCloseRef.value?.focus?.())
 }
 
-function closeReader() {
+function openReader(item, event) {
+  if (!item) return
+  const trigger = event?.currentTarget || null
+  if (item.id !== selectedId.value && hasUnsavedEdit()) {
+    pendingAfterDiscard = () => openReaderNow(item, trigger)
+    unsavedError.value = ''
+    showUnsavedDialog.value = true
+    return
+  }
+  openReaderNow(item, trigger)
+}
+
+function closeReaderNow() {
   const trigger = readerTrigger.value
   readerOpen.value = false
   editingNote.value = false
@@ -231,8 +275,55 @@ function closeReader() {
   })
 }
 
+function closeReader() {
+  if (hasUnsavedEdit()) {
+    pendingAfterDiscard = () => closeReaderNow()
+    unsavedError.value = ''
+    showUnsavedDialog.value = true
+    return
+  }
+  closeReaderNow()
+}
+
+function finishPendingDiscard() {
+  const pending = pendingAfterDiscard
+  pendingAfterDiscard = null
+  showUnsavedDialog.value = false
+  unsavedError.value = ''
+  if (typeof pending === 'function') pending()
+}
+
+function discardAndContinue() {
+  editingNote.value = false
+  editContent.value = ''
+  notice.value = ''
+  finishPendingDiscard()
+}
+
+async function saveAndContinue() {
+  unsavedError.value = ''
+  const saved = await saveNote()
+  if (!saved) {
+    unsavedError.value = notice.value || t('ep.library.saving')
+    return
+  }
+  finishPendingDiscard()
+}
+
+function cancelUnsavedDecision() {
+  pendingAfterDiscard = null
+  showUnsavedDialog.value = false
+  unsavedError.value = ''
+}
+
 function onReaderKeydown(event) {
-  if (event.key === 'Escape' && readerOpen.value) {
+  if (event.key !== 'Escape') return
+  if (showUnsavedDialog.value) {
+    event.preventDefault()
+    cancelUnsavedDecision()
+    return
+  }
+  if (readerOpen.value) {
     event.preventDefault()
     closeReader()
   }
@@ -328,7 +419,7 @@ function cancelEdit() {
 
 async function saveNote() {
   const item = selected.value
-  if (!item || !editContent.value.trim()) return
+  if (!item || !editContent.value.trim()) return false
   savingNote.value = true
   notice.value = ''
   try {
@@ -336,8 +427,10 @@ async function saveNote() {
     assetsList.value = assetsList.value.map(asset => asset.id === updated.id ? { ...asset, ...updated } : asset)
     editingNote.value = false
     showNotice(t('ep.library.note_saved'), false)
+    return true
   } catch (err) {
     showNotice(err.detail || err.message)
+    return false
   } finally {
     savingNote.value = false
   }
@@ -382,7 +475,7 @@ async function handleDelete(id) {
   notice.value = ''
   try {
     await deleteAsset(props.token, id)
-    closeReader()
+    closeReaderNow()
     await fetchAssets()
   } catch (err) {
     showNotice(err.detail || err.message)
@@ -456,6 +549,7 @@ onUnmounted(() => {
 }
 .notes-reader.is-open { transform: none; visibility: visible; }
 .notes-reader-head { flex: none; display: flex; align-items: flex-start; gap: 12px; padding: 20px 24px 14px; border-bottom: 1px solid var(--line); }
+.notes-reader-notice { flex: none; margin: 12px 24px 0; }
 .notes-reader-title { margin-top: 4px; }
 .notes-reader-close { flex: none; }
 .notes-reader-body { flex: 1; overflow-y: auto; padding: 22px 24px 30px; }
@@ -473,6 +567,9 @@ onUnmounted(() => {
 .reader-foot { display: flex; gap: 8px; border-top: 1px solid var(--line); }
 .library-dialog { width: min(100%, 520px); }
 @media (min-width: 1100px) {
+  /* The fixed 460px reader overlays the right edge of the work surface.
+     Keep the page head (upload / new note) clear of it. */
+  .notes-page.is-reader-open .page-head { padding-right: 484px; }
   .notes-page.is-reader-open .notes-layout { padding-right: 460px; }
 }
 @media (max-width: 640px) {
@@ -488,6 +585,7 @@ onUnmounted(() => {
     border-left: 0; box-shadow: none;
   }
   .notes-reader-head { padding: 16px 16px 12px; }
+  .notes-reader-notice { margin: 12px 16px 0; }
   .notes-reader-body { padding: 16px 16px 24px; }
   .notes-reader-edit { padding: 16px 16px 20px; }
   .notes-reader-file { padding: 10px 16px; }

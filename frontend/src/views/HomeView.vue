@@ -11,7 +11,7 @@
           <h1 class="masthead-title">{{ t('ep.today.title') }}</h1>
           <div class="od-row masthead-actions">
             <button type="button" class="btn btn-primary" @click="startToday">
-              <LinearIcon name="play" :size="15" />{{ t('ep.today.continue') }}
+              <LinearIcon name="play" :size="15" />{{ todayActionLabel }}
             </button>
             <button v-if="dueMistakesCount" type="button" class="btn" @click="router.push('/review')">
               {{ t('ep.today.figure_due') }} {{ dueMistakesCount }}
@@ -101,19 +101,21 @@
             <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
           </div>
           <div v-else-if="banks.length" class="today-bank-list">
-            <button v-for="bank in banks" :key="bank.id" type="button" class="today-bank-row" @click="router.push(`/banks/${bank.id}`)">
-              <span class="bank-name-cell">
-                <span class="bank-name">{{ bank.name }}</span>
-                <span class="bank-meta">
-                  <span>{{ bank.category || t('ep.banks.detail') }}</span>
-                  <span>{{ t('ep.banks.questions', { count: bank.question_count || 0 }) }}</span>
+            <div v-for="bank in banks" :key="bank.id" class="today-bank-row">
+              <button type="button" class="today-bank-open" :aria-label="`${t('ep.banks.open')} ${bank.name}`" @click="router.push(`/banks/${bank.id}`)">
+                <span class="bank-name-cell">
+                  <span class="bank-name">{{ bank.name }}</span>
+                  <span class="bank-meta">
+                    <span>{{ bank.category || t('ep.banks.detail') }}</span>
+                    <span>{{ t('ep.banks.questions', { count: bank.question_count || 0 }) }}</span>
+                  </span>
                 </span>
-              </span>
+              </button>
               <span class="bank-row-actions">
-                <span class="btn btn-sm" @click.stop="emit('start', bank)">{{ t('ep.today.start_practice') }}</span>
+                <button type="button" class="btn btn-sm" @click="emit('start', bank)">{{ t('ep.today.start_practice') }}</button>
                 <LinearIcon name="chevron-right" :size="16" />
               </span>
-            </button>
+            </div>
           </div>
           <div v-else class="empty">
             <div class="empty-title">{{ t('ep.today.banks_empty') }}</div>
@@ -146,14 +148,6 @@
             <span class="rail-link-n">→</span>
           </button>
           <div v-if="!banks.length" class="rail-note">{{ t('ep.today.no_next') }}</div>
-        </div>
-        <div class="rail-block rail-keys">
-          <div class="rail-title">{{ t('ep.today.keys') }}</div>
-          <div class="rail-note rail-key-list">
-            <span><span class="kbd">P</span> {{ t('ep.today.key_practice') }}</span>
-            <span><span class="kbd">K</span> {{ t('ep.today.key_search') }}</span>
-            <span><span class="kbd">?</span> {{ t('ep.today.key_help') }}</span>
-          </div>
         </div>
       </aside>
     </div>
@@ -237,7 +231,7 @@
                     {{ p.name }} {{ p.latest_blueprint ? t('ui.k0665') : t('ui.k0666') }}
                   </option>
                 </select>
-                <button type="button" class="action-link-btn" style="white-space: nowrap; font-size: 0.8rem; padding: 0.35rem 0.6rem;" @click="openBlueprintDialogFromExam">
+                <button type="button" class="action-link-btn" style="white-space: nowrap; font-size: 0.8rem; padding: 0.35rem 0.6rem;" @click="openBlueprintEditor">
                   {{ t('ui.k0038') }}
                 </button>
               </div>
@@ -489,6 +483,10 @@ const accuracyText = computed(() => {
   const rate = trends.value?.recent?.correct_rate
   return Number.isFinite(rate) ? `${Math.round(rate)}%` : '—'
 })
+
+const todayActionLabel = computed(() => (
+  activeSessions.value.length ? t('ep.today.continue') : t('ep.today.start_practice')
+))
 
 const planDays = computed(() => {
   const days = Array.isArray(todayPlan.value?.days) ? todayPlan.value.days.slice(0, 7) : []
@@ -1077,9 +1075,15 @@ async function onExamProfileChange() {
   }
 }
 
-function openBlueprintDialogFromExam() {
+function openBlueprintEditor() {
+  // The exam centre owns the single blueprint editor (its setup drawer);
+  // Today must not spawn a second modal for the same configuration.
   examBank.value = null
-  window.dispatchEvent(new CustomEvent('easyexam:open-dialog', { detail: 'blueprint' }))
+  router.push('/exams')
+}
+
+function openAiSettings() {
+  router.push({ path: '/settings', query: { section: 'ai' } })
 }
 
 async function handleSyncedEvents(e) {
@@ -1131,8 +1135,10 @@ watch(() => route.query.action, (act) => {
 function handleEasyExamAction(e) {
   const action = e?.detail
   if (action === 'create_bank') openCreateBankDialog()
-  else if (action === 'blueprint' || action === 'drafts' || action === 'ai') {
-    window.dispatchEvent(new CustomEvent('easyexam:open-dialog', { detail: action }))
+  else if (action === 'blueprint') router.push('/exams')
+  else if (action === 'ai') openAiSettings()
+  else if (action === 'drafts') {
+    window.dispatchEvent(new CustomEvent('easyexam:open-dialog', { detail: 'drafts' }))
   }
 }
 
@@ -1175,15 +1181,23 @@ defineExpose({ openCreateBankDialog, showCreateDialog, closeAllModals })
   gap: 16px;
   width: 100%;
   min-height: 58px;
+  border-bottom: 1px solid var(--line);
+}
+.today-bank-row:hover { background: var(--surface-2); }
+.today-bank-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
   padding: 10px 0;
   border: 0;
-  border-bottom: 1px solid var(--line);
   background: none;
   color: inherit;
   text-align: left;
   cursor: pointer;
 }
-.today-bank-row:hover { background: var(--surface-2); }
+.today-bank-open:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .bank-name-cell { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .bank-name { font-size: 14px; font-weight: 500; color: var(--ink); }
 .bank-meta { display: flex; gap: 12px; font-size: 12.5px; color: var(--ink-3); }

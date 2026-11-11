@@ -21,10 +21,15 @@
         <button type="button" class="btn" @click="router.push(`/import?bankId=${bankId}`)">
           <LinearIcon name="upload" :size="14" />{{ t('ep.common.import') }}
         </button>
+        <span v-if="!loading && !questions.length" class="practice-empty-note">{{ t('ep.banks.practice_empty') }}</span>
         <button type="button" class="btn btn-primary" :disabled="!questions.length" @click="startPractice">
           <LinearIcon name="play" :size="14" />{{ t('ep.banks.practice') }}
         </button>
       </div>
+    </div>
+
+    <div v-if="practiceError" class="notice bad bank-notice" role="alert">
+      <LinearIcon name="alert" :size="15" /><span>{{ practiceError }}</span>
     </div>
 
     <div v-if="bankLocked" class="notice warn bank-notice">
@@ -224,6 +229,7 @@
         </div>
         <span v-else-if="!versionPreview && canEditContent" class="small dim">{{ t('ep.banks.no_copy_target') }}</span>
         <span v-if="copyNotice" class="small copy-notice">{{ copyNotice }}</span>
+        <span v-if="practiceError" class="small bad-text practice-error-inline" role="alert">{{ practiceError }}</span>
       </div>
     </aside>
   </div>
@@ -267,6 +273,7 @@ const versionError = ref('')
 const copyTargetId = ref('')
 const copyBusy = ref(false)
 const copyNotice = ref('')
+const practiceError = ref('')
 
 const canEditContent = computed(() => canEditBankContent(bank.value?.role))
 
@@ -387,13 +394,17 @@ async function copyQuestion() {
 }
 
 async function startPractice() {
+  practiceError.value = ''
   try {
     const session = await startSession(props.token, { bank_id: props.bankId, mode: 'PRACTICE' })
     router.push(`/practice/${session.id}`)
-  } catch (_) {}
+  } catch (err) {
+    practiceError.value = t('ep.banks.practice_start_failed', { message: err?.detail || err?.message || '' })
+  }
 }
 
 async function practiceOne(question) {
+  practiceError.value = ''
   try {
     const session = await startSession(props.token, {
       bank_id: props.bankId,
@@ -402,7 +413,9 @@ async function practiceOne(question) {
       total_questions: 1,
     })
     router.push(`/practice/${session.id}`)
-  } catch (_) {}
+  } catch (err) {
+    practiceError.value = t('ep.banks.practice_start_failed', { message: err?.detail || err?.message || '' })
+  }
 }
 
 onMounted(load)
@@ -412,6 +425,8 @@ onMounted(load)
 .bank-detail-page { padding-top: 26px; }
 .bank-sub { display: flex; flex-wrap: wrap; gap: 14px; }
 .bank-notice { margin-top: 14px; }
+.practice-empty-note { font-size: 12px; color: var(--ink-3); max-width: 22ch; line-height: 1.5; }
+.practice-error-inline { flex-basis: 100%; overflow-wrap: anywhere; }
 .bad-text { color: var(--bad); }
 .version-panel { border-bottom: 1px solid var(--line); padding-bottom: 14px; margin-bottom: 16px; }
 .version-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }

@@ -97,6 +97,65 @@ describe('NotesView', () => {
 
     expect(fakeWindow.close).toHaveBeenCalled()
     expect(wrapper.find('.notice.bad').exists()).toBe(true)
+    expect(wrapper.find('.notes-reader .notice.bad').exists()).toBe(true)
     expect(wrapper.text()).toContain('资料文件不存在')
+  })
+
+  it('asks before discarding an unsaved note when the reader closes', async () => {
+    const wrapper = mount(NotesView, { props: { token: 't1' } })
+    await flush()
+
+    await wrapper.find('.library-row').trigger('click')
+    await wrapper.find('.note-edit').trigger('click')
+    await wrapper.find('.reader-edit-input').setValue('未保存的修改')
+
+    await wrapper.find('.notes-reader-close').trigger('click')
+    expect(wrapper.find('[data-testid="unsaved-edit-dialog"]').exists()).toBe(true)
+    expect(wrapper.find('.notes-reader.is-open').exists()).toBe(true)
+    expect(updateAsset).not.toHaveBeenCalled()
+
+    const actions = wrapper.findAll('[data-testid="unsaved-edit-dialog"] .bank-actions button')
+    await actions[1].trigger('click')
+    expect(wrapper.find('[data-testid="unsaved-edit-dialog"]').exists()).toBe(false)
+    expect(wrapper.find('.notes-reader.is-open').exists()).toBe(false)
+    expect(updateAsset).not.toHaveBeenCalled()
+  })
+
+  it('keeps editing when the unsaved-change prompt is cancelled', async () => {
+    const wrapper = mount(NotesView, { props: { token: 't1' } })
+    await flush()
+
+    await wrapper.find('.library-row').trigger('click')
+    await wrapper.find('.note-edit').trigger('click')
+    await wrapper.find('.reader-edit-input').setValue('未保存的修改')
+    await wrapper.find('.notes-reader-close').trigger('click')
+
+    const actions = wrapper.findAll('[data-testid="unsaved-edit-dialog"] .bank-actions button')
+    await actions[0].trigger('click')
+    expect(wrapper.find('[data-testid="unsaved-edit-dialog"]').exists()).toBe(false)
+    expect(wrapper.find('.notes-reader.is-open').exists()).toBe(true)
+    expect(wrapper.find('.reader-edit-input').element.value).toBe('未保存的修改')
+  })
+
+  it('saves before switching to another note', async () => {
+    updateAsset.mockResolvedValue({ ...noteAsset, content: '切换前保存的内容' })
+
+    const wrapper = mount(NotesView, { props: { token: 't1' } })
+    await flush()
+
+    await wrapper.findAll('.library-row')[0].trigger('click')
+    await wrapper.find('.note-edit').trigger('click')
+    await wrapper.find('.reader-edit-input').setValue('切换前保存的内容')
+    await wrapper.findAll('.library-row')[1].trigger('click')
+
+    expect(wrapper.find('[data-testid="unsaved-edit-dialog"]').exists()).toBe(true)
+    const actions = wrapper.findAll('[data-testid="unsaved-edit-dialog"] .bank-actions button')
+    await actions[2].trigger('click')
+    await flush()
+
+    expect(updateAsset).toHaveBeenCalledWith('t1', 'a1', { content: '切换前保存的内容' })
+    expect(wrapper.find('[data-testid="unsaved-edit-dialog"]').exists()).toBe(false)
+    expect(wrapper.find('.notes-reader-title').text()).toContain('PDF 提取出的文本')
+    expect(wrapper.find('.reader-edit-input').exists()).toBe(false)
   })
 })

@@ -1,12 +1,15 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import HomeView from '../../src/views/HomeView.vue'
+import { t } from '../../src/composables/useLocale.js'
 import { startSession, listActiveSessions } from '../../src/api/practice'
 import { getBlueprint } from '../../src/api/exams'
 
+const routerPush = vi.hoisted(() => vi.fn())
+
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: {} }),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+  useRouter: () => ({ push: routerPush, replace: vi.fn(), back: vi.fn() }),
 }))
 
 const mockState = vi.hoisted(() => ({
@@ -114,6 +117,67 @@ describe('HomeView today plan across banks', () => {
     expect(payload.bank_ids).toBeUndefined()
 
     wrapper.unmount()
+  })
+
+  it('labels the primary action by the real session state', async () => {
+    const wrapper = mount(HomeView, { props: { token: 'test-token' } })
+    await flushPromises()
+    expect(wrapper.find('.masthead-actions .btn-primary').text()).toContain(t('ep.today.start_practice'))
+
+    listActiveSessions.mockResolvedValue([{
+      id: 's1',
+      bank_name: 'Bank One',
+      mode: 'PRACTICE',
+      answered_count: 1,
+      total_questions: 5,
+      created_at: '2026-11-11T08:00:00Z',
+    }])
+    const resumed = mount(HomeView, { props: { token: 'test-token' } })
+    await flushPromises()
+    expect(resumed.find('.masthead-actions .btn-primary').text()).toContain(t('ep.today.continue'))
+
+    wrapper.unmount()
+    resumed.unmount()
+  })
+
+  it('offers separately focusable controls for opening a bank and starting practice', async () => {
+    const wrapper = mount(HomeView, { props: { token: 'test-token' } })
+    await flushPromises()
+
+    const row = wrapper.find('.today-bank-row')
+    expect(row.element.tagName).toBe('DIV')
+    expect(row.element.querySelector('button button')).toBeNull()
+    expect(row.findAll('button').length).toBe(2)
+    expect(row.find('.today-bank-open').element.tagName).toBe('BUTTON')
+    expect(row.find('.bank-row-actions .btn').element.tagName).toBe('BUTTON')
+
+    wrapper.unmount()
+  })
+
+  it('does not advertise shortcuts that are not implemented', async () => {
+    const wrapper = mount(HomeView, { props: { token: 'test-token' } })
+    await flushPromises()
+
+    expect(wrapper.find('.rail-keys').exists()).toBe(false)
+    expect(wrapper.find('.kbd').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('routes blueprint and AI entries to their single editors instead of modal events', async () => {
+    const openDialog = vi.fn()
+    window.addEventListener('easyexam:open-dialog', openDialog)
+    const wrapper = mount(HomeView, { props: { token: 'test-token' } })
+    await flushPromises()
+
+    window.dispatchEvent(new CustomEvent('easyexam:action', { detail: 'blueprint' }))
+    expect(routerPush).toHaveBeenCalledWith('/exams')
+    window.dispatchEvent(new CustomEvent('easyexam:action', { detail: 'ai' }))
+    expect(routerPush).toHaveBeenCalledWith({ path: '/settings', query: { section: 'ai' } })
+    expect(openDialog).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+    window.removeEventListener('easyexam:open-dialog', openDialog)
   })
 
   it('reads the exam profile blueprint summary from the wrapped blueprint payload', async () => {
