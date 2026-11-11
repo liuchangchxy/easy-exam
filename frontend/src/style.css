@@ -1791,10 +1791,10 @@ dialog.dlg:focus { outline: none; }
   .stat:nth-child(n+3) { border-top: 1px solid var(--line); }
   .stat-num { font-size: 20px; }
 
-  /* Step 10: 64px bottomnav — 5 items */
+  /* Step 10: 64px bottomnav — 5 destinations + the 更多 chrome menu */
   .bottomnav {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
-    display: grid; grid-template-columns: repeat(5, 1fr);
+    display: grid; grid-template-columns: repeat(6, 1fr);
     height: calc(64px + env(safe-area-inset-bottom));
     background: color-mix(in srgb, var(--surface) 96%, transparent);
     backdrop-filter: blur(13px);

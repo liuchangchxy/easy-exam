@@ -144,8 +144,16 @@ test('Fast UI Interaction: mobile nav, review page, practice tools and finish', 
 
     await mobilePage.waitForSelector('.bottomnav')
     const navItems = mobilePage.locator('.bottomnav .bn-item')
-    assert.equal(await navItems.count(), 5, 'Bottom navigation must expose five destinations')
-    await navItems.nth(4).click()
+    assert.equal(await navItems.count(), 6, 'Bottom navigation must expose five destinations plus 更多')
+
+    // Mobile chrome must surface Settings, theme and language without leaving the shell.
+    await navItems.nth(5).click()
+    const moreMenu = mobilePage.locator('.chrome-more-menu')
+    await moreMenu.waitFor({ state: 'visible' })
+    assert.equal(await moreMenu.locator('.popover-action').count(), 3, '更多 must own Settings, theme and language')
+    await moreMenu.locator('.popover-action').nth(0).click()
+    await mobilePage.waitForSelector('.settings-page', { timeout: 8000 })
+    await mobilePage.locator('.bottomnav .bn-item').nth(4).click()
     await mobilePage.waitForSelector('.library-page', { timeout: 8000 })
     assert.ok(await mobilePage.locator('.library-page').isVisible(), 'Library page should open from mobile nav')
     await mobileContext.close()

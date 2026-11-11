@@ -773,12 +773,14 @@
       "review": "复习",
       "exams": "模考",
       "library": "资料",
-      "settings": "设置"
+      "settings": "设置",
+      "more": "更多"
     },
     "account": {
       "menu": "账户菜单",
       "guest": "未登录",
       "logout": "退出登录",
+      "logout_confirm": "确定要退出登录吗？",
       "change_password": "修改密码"
     },
     "role": {
@@ -908,6 +910,8 @@
       "analysis": "解析",
       "answer_none": "主观题不自动判分",
       "practice_one": "练习这道题",
+      "practice_empty": "题库还没有题目，添加题目后才能开始练习。",
+      "practice_start_failed": "无法开始练习：{message}",
       "mark_weak": "标记薄弱",
       "unmark_weak": "取消薄弱",
       "copy": "复制题目",
@@ -1386,6 +1390,8 @@
       "note_delete": "删除笔记",
       "note_delete_confirm": "删除这条笔记？不会影响题目与学习记录。",
       "note_saved": "笔记已保存",
+      "note_unsaved_title": "未保存的修改",
+      "note_unsaved_desc": "这条笔记还有未保存的修改。离开前要保存吗？",
       "file_upload": "上传文件",
       "file_drop": "拖入文件，或选择本地文件",
       "file_meta": "{size} · {date}",
@@ -1562,6 +1568,8 @@
       "ai_saved": "AI 配置已保存",
       "ai_load_failed": "读取 AI 配置失败：",
       "ai_loading": "读取配置中",
+      "saving": "保存中…",
+      "auto_save_hint": "更改后自动保存。",
       "web_provider": "检索方式",
       "web_on": "联网检索",
       "web_off": "关闭联网",
@@ -1593,6 +1601,7 @@
       "change_password": "修改密码",
       "switch_account": "切换账号",
       "logout": "退出登录",
+      "logout_confirm": "确定要退出登录吗？",
       "about_deployment": "部署方式",
       "about_deployment_value": "私有云 · 数据保存在你的实例",
       "about_storage": "存储",
@@ -2029,6 +2038,7 @@
     "desc_logout": "清理当前凭证退出",
     "bank_questions": "{count} 道试题",
     "bank_action_practice": "开始刷题",
+    "bank_action_open": "打开题库",
     "no_results": "未找到匹配的命令或题库",
     "search_placeholder": "键入题库名称或操作指令... (ESC 关闭, ↑↓ 移动, ↵ 确认)",
     "footer_hint_navigate": "导航",

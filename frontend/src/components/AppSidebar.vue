@@ -53,43 +53,27 @@
         <span class="label">{{ t('ep.nav.settings') }}</span>
       </button>
 
-      <button type="button" class="user-mini" :aria-label="t('ep.account.menu')" @click="showUserMenu = !showUserMenu">
+      <button
+        type="button"
+        class="user-mini"
+        data-account-trigger
+        aria-haspopup="menu"
+        :aria-expanded="accountMenuOpen ? 'true' : 'false'"
+        :aria-label="t('ep.account.menu')"
+        @click="$emit('account-menu', $event.currentTarget)"
+      >
         <span class="avatar">{{ userInitial }}</span>
         <span class="user-meta">
           <span class="user-name">{{ user?.username || t('ep.account.guest') }}</span>
           <span class="user-sub">{{ user?.is_admin ? t('ep.role.admin') : t('ep.role.user') }}</span>
         </span>
       </button>
-
-      <div v-if="showUserMenu" class="user-popover" @click.stop>
-        <div class="popover-user">
-          <span class="avatar">{{ userInitial }}</span>
-          <span class="user-meta">
-            <span class="user-name">{{ user?.username || t('ep.account.guest') }}</span>
-            <span class="user-sub">{{ user?.is_admin ? t('ep.role.admin') : t('ep.role.user') }}</span>
-          </span>
-        </div>
-        <div class="popover-actions">
-          <button type="button" class="popover-action" @click="handleAction('settings')">
-            <LinearIcon name="settings" :size="15" />
-            <span>{{ t('ep.nav.settings') }}</span>
-          </button>
-          <button type="button" class="popover-action" @click="handleAction('change-password')">
-            <LinearIcon name="key" :size="15" />
-            <span>{{ t('ep.account.change_password') }}</span>
-          </button>
-          <button type="button" class="popover-action is-danger" @click="handleAction('logout')">
-            <LinearIcon name="logout" :size="15" />
-            <span>{{ t('ep.account.logout') }}</span>
-          </button>
-        </div>
-      </div>
     </div>
   </aside>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed } from 'vue'
 import LinearIcon from './LinearIcon.vue'
 import { useLocale } from '../composables/useLocale.js'
 
@@ -101,11 +85,10 @@ const props = defineProps({
   bankCount: { type: Number, default: 0 },
   reviewCount: { type: Number, default: 0 },
   learningTrends: { type: Object, default: null },
+  accountMenuOpen: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['navigate', 'action', 'logout', 'change-password'])
-
-const showUserMenu = ref(false)
+defineEmits(['navigate', 'account-menu'])
 
 const navItems = [
   { key: 'today', label: 'ep.nav.today', icon: 'home' },
@@ -128,26 +111,6 @@ const accuracyText = computed(() => {
   const value = Number(props.learningTrends?.recent?.correct_rate)
   return Number.isFinite(value) ? `${Math.round(value)}%` : '—'
 })
-
-function handleAction(action) {
-  showUserMenu.value = false
-  if (action === 'settings') emit('navigate', 'settings')
-  else if (action === 'change-password') emit('change-password')
-  else if (action === 'logout') emit('logout')
-}
-
-function handleGlobalClick(e) {
-  if (showUserMenu.value && !e.target.closest('.user-mini') && !e.target.closest('.user-popover')) {
-    showUserMenu.value = false
-  }
-}
-
-onMounted(() => {
-  if (typeof window !== 'undefined') window.addEventListener('click', handleGlobalClick)
-})
-onUnmounted(() => {
-  if (typeof window !== 'undefined') window.removeEventListener('click', handleGlobalClick)
-})
 </script>
 
 <style scoped>
@@ -163,48 +126,6 @@ onUnmounted(() => {
   cursor: pointer;
   color: inherit;
 }
-
-.user-popover {
-  position: absolute;
-  left: 12px;
-  bottom: calc(100% + 6px);
-  width: 208px;
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  box-shadow: var(--shadow-2);
-  z-index: 120;
-  padding: 6px;
-}
-
-.popover-user {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 8px 8px 10px;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 4px;
-}
-
-.popover-actions { display: flex; flex-direction: column; }
-
-.popover-action {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  min-height: 36px;
-  padding: 0 9px;
-  border: 0;
-  background: none;
-  color: var(--ink-2);
-  font-size: 12.5px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.popover-action:hover { background: var(--surface-2); color: var(--ink); }
-.popover-action.is-danger { color: var(--bad); }
-.popover-action.is-danger:hover { background: var(--bad-soft); }
 
 .side-foot { position: relative; }
 </style>

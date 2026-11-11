@@ -773,12 +773,14 @@
       "review": "Review",
       "exams": "Exams",
       "library": "Library",
-      "settings": "Settings"
+      "settings": "Settings",
+      "more": "More"
     },
     "account": {
       "menu": "Account menu",
       "guest": "Not signed in",
       "logout": "Sign out",
+      "logout_confirm": "Sign out of this account?",
       "change_password": "Change password"
     },
     "role": {
@@ -908,6 +910,8 @@
       "analysis": "Explanation",
       "answer_none": "Subjective answers are not auto-graded",
       "practice_one": "Practise this question",
+      "practice_empty": "Add questions before practice can start.",
+      "practice_start_failed": "Could not start practice: {message}",
       "mark_weak": "Mark weak",
       "unmark_weak": "Clear weak",
       "copy": "Copy question",
@@ -1386,6 +1390,8 @@
       "note_delete": "Delete note",
       "note_delete_confirm": "Delete this note? Questions and study records are unaffected.",
       "note_saved": "Note saved",
+      "note_unsaved_title": "Unsaved changes",
+      "note_unsaved_desc": "This note has unsaved changes. Save before leaving?",
       "file_upload": "Upload file",
       "file_drop": "Drop a file, or choose one",
       "file_meta": "{size} · {date}",
@@ -1562,6 +1568,8 @@
       "ai_saved": "AI configuration saved",
       "ai_load_failed": "Could not read AI configuration: ",
       "ai_loading": "Reading configuration",
+      "saving": "Saving…",
+      "auto_save_hint": "Changes save automatically.",
       "web_provider": "Search method",
       "web_on": "Web search",
       "web_off": "Off",
@@ -1593,6 +1601,7 @@
       "change_password": "Change password",
       "switch_account": "Switch account",
       "logout": "Sign out",
+      "logout_confirm": "Sign out of this account?",
       "about_deployment": "Deployment",
       "about_deployment_value": "Private cloud · data stays on your instance",
       "about_storage": "Storage",
@@ -2029,6 +2038,7 @@
     "desc_logout": "Clear credentials & sign out",
     "bank_questions": "{count} Questions",
     "bank_action_practice": "Start Practice",
+    "bank_action_open": "Open bank",
     "no_results": "No matching commands or question banks found",
     "search_placeholder": "Type bank name or command... (ESC to close, ↑↓ to move, ↵ to select)",
     "footer_hint_navigate": "Navigate",

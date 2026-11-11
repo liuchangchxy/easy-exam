@@ -1,6 +1,6 @@
 <template>
-  <div v-if="isOpen" class="cmd-palette-backdrop" @click.self="close" @keydown.esc="close">
-    <div class="cmd-palette-modal" role="dialog" aria-modal="true">
+  <div v-if="isOpen" class="cmd-palette-backdrop" @click.self="close">
+    <div ref="modalRef" class="cmd-palette-modal" role="dialog" aria-modal="true">
       <!-- 搜索输入栏 -->
       <div class="cmd-palette-search-row">
         <LinearIcon name="search" size="18" class="cmd-search-icon" />
@@ -44,7 +44,12 @@
             </div>
             <div class="cmd-item-right">
               <span class="cmd-bank-count">{{ bank.question_count }} {{ t('home.questions_count', { count: bank.question_count }) }}</span>
-              <span class="cmd-action-hint">{{ t('commands.bank_action_practice') }} ↵</span>
+              <button
+                type="button"
+                class="cmd-bank-practice"
+                @click.stop="practiceBank(bank)"
+              >{{ t('commands.bank_action_practice') }}</button>
+              <span class="cmd-action-hint">{{ t('commands.bank_action_open') }} ↵</span>
             </div>
           </div>
         </template>
@@ -113,12 +118,14 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['execute', 'select-bank'])
+const emit = defineEmits(['execute', 'select-bank', 'practice-bank'])
 
 const isOpen = ref(false)
 const query = ref('')
 const currentFlatIndex = ref(0)
 const inputRef = ref(null)
+const modalRef = ref(null)
+let lastFocusedElement = null
 
 // 匹配题库
 const matchedBanks = computed(() => {
@@ -151,6 +158,10 @@ watch([matchedBanks, matchedCommands], () => {
 })
 
 function open() {
+  if (isOpen.value) return
+  // Remember the trigger so Escape, outside click and row selection all return
+  // focus to where the palette was opened from.
+  lastFocusedElement = typeof document !== 'undefined' ? document.activeElement : null
   isOpen.value = true
   query.value = ''
   currentFlatIndex.value = 0
@@ -160,7 +171,13 @@ function open() {
 }
 
 function close() {
+  if (!isOpen.value) return
   isOpen.value = false
+  const target = lastFocusedElement
+  lastFocusedElement = null
+  nextTick(() => {
+    if (target && typeof target.focus === 'function' && document.contains(target)) target.focus()
+  })
 }
 
 function moveSelection(step) {
@@ -172,6 +189,11 @@ function moveSelection(step) {
 function selectBank(bank) {
   close()
   emit('select-bank', bank)
+}
+
+function practiceBank(bank) {
+  close()
+  emit('practice-bank', bank)
 }
 
 function execute(cmd) {
@@ -199,12 +221,59 @@ function handleKeydown(e) {
   }
 }
 
+function getFocusableElements() {
+  const root = modalRef.value
+  if (!root) return []
+  return Array.from(root.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  ))
+}
+
+/**
+ * Document-level keys while open:
+ *  - Escape closes even after focus would otherwise have left the modal.
+ *  - Tab is trapped inside the modal instead of walking into the page behind it.
+ */
+function handleDocumentKeydown(e) {
+  if (!isOpen.value) return
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    close()
+    return
+  }
+  if (e.key !== 'Tab') return
+
+  const focusable = getFocusableElements()
+  const root = modalRef.value
+  if (!focusable.length || !root) {
+    e.preventDefault()
+    inputRef.value?.focus()
+    return
+  }
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  const active = document.activeElement
+  const inside = active && root.contains(active)
+
+  if (e.shiftKey) {
+    if (!inside || active === first) {
+      e.preventDefault()
+      last.focus()
+    }
+  } else if (!inside || active === last) {
+    e.preventDefault()
+    first.focus()
+  }
+}
+
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
+  document.addEventListener('keydown', handleDocumentKeydown)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
+  document.removeEventListener('keydown', handleDocumentKeydown)
 })
 
 defineExpose({ open, close })
@@ -333,6 +402,20 @@ defineExpose({ open, close })
 }
 .cmd-item-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .cmd-bank-count { font-family: var(--font-mono); font-size: 10px; color: var(--ink-4); }
+.cmd-bank-practice {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 10.5px;
+  white-space: nowrap;
+  transition: border-color .12s var(--ease), color .12s var(--ease);
+}
+.cmd-bank-practice:hover { border-color: var(--brand); color: var(--brand); }
 .cmd-action-hint {
   font-family: var(--font-mono);
   font-size: 10px;
@@ -367,5 +450,6 @@ defineExpose({ open, close })
 @media (max-width: 480px) {
   .cmd-palette-backdrop { padding-top: 6vh; }
   .cmd-footer-tag { display: none; }
+  .cmd-bank-count { display: none; }
 }
 </style>

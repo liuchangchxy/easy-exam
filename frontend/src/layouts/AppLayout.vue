@@ -6,10 +6,9 @@
       :bank-count="banks.length"
       :review-count="reviewCount"
       :learning-trends="learningTrends"
+      :account-menu-open="accountMenuOpen && accountMenuAnchor === 'sidebar'"
       @navigate="handleNavigate"
-      @action="handleSidebarAction"
-      @change-password="showChangePasswordModal = true"
-      @logout="auth.logout"
+      @account-menu="toggleAccountMenu"
     />
     <div class="main">
       <header class="topbar">
@@ -28,7 +27,16 @@
           <button type="button" class="icon-btn" :title="t('ep.action.language')" :aria-label="t('ep.action.language')" @click="toggleLocale">
             <LinearIcon name="globe" :size="16" />
           </button>
-          <button type="button" class="user-mini" style="width: 34px; padding: 2px" :aria-label="t('ep.account.menu')" @click="router.push('/settings')">
+          <button
+            type="button"
+            class="user-mini"
+            style="width: 34px; padding: 2px"
+            data-account-trigger
+            aria-haspopup="menu"
+            :aria-expanded="accountMenuOpen && accountMenuAnchor === 'topbar' ? 'true' : 'false'"
+            :aria-label="t('ep.account.menu')"
+            @click="toggleAccountMenu($event.currentTarget)"
+          >
             <span class="avatar">{{ userInitial }}</span>
           </button>
         </div>
@@ -41,7 +49,15 @@
           <button type="button" class="icon-btn" :aria-label="t('ep.action.search')" @click="openCommandPalette">
             <LinearIcon name="search" :size="17" />
           </button>
-          <button type="button" class="icon-btn" :aria-label="t('ep.account.menu')" @click="router.push('/settings')">
+          <button
+            type="button"
+            class="icon-btn"
+            data-account-trigger
+            aria-haspopup="menu"
+            :aria-expanded="accountMenuOpen && accountMenuAnchor === 'mobile' ? 'true' : 'false'"
+            :aria-label="t('ep.account.menu')"
+            @click="toggleAccountMenu($event.currentTarget)"
+          >
             <span class="avatar" style="width: 26px; height: 26px; font-size: 12px">{{ userInitial }}</span>
           </button>
         </span>
@@ -64,13 +80,63 @@
       </main>
     </div>
 
-    <MobileNav :current-page="currentPage" @navigate="handleNavigate" />
+    <MobileNav
+      :current-page="currentPage"
+      :more-open="moreMenuOpen"
+      @navigate="handleNavigate"
+      @more="toggleMoreMenu"
+    />
+
+    <!-- One account menu for every avatar; it is anchored to whichever trigger opened it. -->
+    <div
+      v-if="accountMenuOpen"
+      ref="accountMenuRef"
+      class="account-menu"
+      role="menu"
+      :aria-label="t('ep.account.menu')"
+      :style="accountMenuStyle"
+      @focusout="handleAccountMenuFocusOut"
+    >
+      <button type="button" role="menuitem" class="popover-action" @click="openChangePassword">
+        <LinearIcon name="key" :size="15" />
+        <span>{{ t('ep.account.change_password') }}</span>
+      </button>
+      <button type="button" role="menuitem" class="popover-action is-danger" @click="requestLogout">
+        <LinearIcon name="logout" :size="15" />
+        <span>{{ t('ep.account.logout') }}</span>
+      </button>
+    </div>
+
+    <!-- Mobile chrome overflow: the single mobile owner of Settings, theme and language. -->
+    <div
+      v-if="moreMenuOpen"
+      ref="moreMenuRef"
+      class="chrome-more-menu"
+      role="menu"
+      :aria-label="t('ep.nav.more')"
+      @focusout="handleMoreMenuFocusOut"
+    >
+      <button type="button" role="menuitem" class="popover-action" @click="handleMoreNavigate('settings')">
+        <LinearIcon name="settings" :size="15" />
+        <span>{{ t('ep.nav.settings') }}</span>
+      </button>
+      <button type="button" role="menuitem" class="popover-action" @click="handleMoreTheme">
+        <LinearIcon :name="theme === 'dark' ? 'sun' : 'moon'" :size="15" />
+        <span>{{ t('ep.action.theme') }}</span>
+      </button>
+      <button type="button" role="menuitem" class="popover-action" @click="handleMoreLocale">
+        <LinearIcon name="globe" :size="15" />
+        <span>{{ t('ep.action.language') }}</span>
+      </button>
+    </div>
+
     <CommandPalette
       ref="commandPaletteRef"
       :commands="commands"
       :banks="banks"
       @execute="handleCommandExecute"
       @select-bank="handleSelectBank"
+      @practice-bank="handlePracticeBank"
     />
 
     <BlueprintModal v-if="activeDialog === 'blueprint'" :token="auth.token.value" @close="activeDialog = null" />
@@ -81,7 +147,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppSidebar from '../components/AppSidebar.vue'
 import MobileNav from '../components/MobileNav.vue'
@@ -111,6 +177,17 @@ const reviewCount = ref(0)
 const learningTrends = ref(null)
 const activeDialog = ref(null)
 const showChangePasswordModal = ref(false)
+
+// Shell menus: one account menu shared by every avatar, plus the mobile
+// chrome menu that owns Settings / theme / language.
+const accountMenuOpen = ref(false)
+const accountMenuAnchor = ref('')
+const accountMenuStyle = ref({})
+const accountMenuRef = ref(null)
+const accountMenuTrigger = ref(null)
+const moreMenuOpen = ref(false)
+const moreMenuRef = ref(null)
+const moreMenuTrigger = ref(null)
 
 const userInitial = computed(() => {
   const name = auth.user.value?.username
@@ -147,11 +224,15 @@ function handleOpenDialogEvent(e) {
 
 onMounted(() => {
   window.addEventListener('easyexam:open-dialog', handleOpenDialogEvent)
+  document.addEventListener('click', handleDocumentClick)
+  document.addEventListener('keydown', handleDocumentKeydown)
   if (auth.token.value) loadShellData()
 })
 
 onUnmounted(() => {
   window.removeEventListener('easyexam:open-dialog', handleOpenDialogEvent)
+  document.removeEventListener('click', handleDocumentClick)
+  document.removeEventListener('keydown', handleDocumentKeydown)
   delete document.body.dataset.route
 })
 
@@ -182,6 +263,8 @@ watch(
     if (typeof document !== 'undefined') {
       document.body.dataset.route = typeof name === 'string' ? name : 'today'
     }
+    closeAccountMenu(false)
+    closeMoreMenu(false)
     // Returning from practice/exam after a session ends must refresh the shell
     // counts (due review, banks, trends). Skip practice/exam routes themselves
     // to avoid fetching on every question transition.
@@ -191,6 +274,142 @@ watch(
   },
   { immediate: true }
 )
+
+/* ---------- Account menu (one implementation, three anchors) ---------- */
+
+function toggleAccountMenu(trigger) {
+  if (accountMenuOpen.value && accountMenuTrigger.value === trigger) {
+    closeAccountMenu(true)
+    return
+  }
+  closeMoreMenu(false)
+  accountMenuTrigger.value = trigger || null
+  if (trigger?.closest?.('.sidebar')) accountMenuAnchor.value = 'sidebar'
+  else if (trigger?.closest?.('.mobile-top')) accountMenuAnchor.value = 'mobile'
+  else accountMenuAnchor.value = 'topbar'
+  accountMenuOpen.value = true
+  nextTick(() => {
+    positionAccountMenu()
+    accountMenuRef.value?.querySelector('button')?.focus()
+  })
+}
+
+function positionAccountMenu() {
+  if (!accountMenuTrigger.value || typeof window === 'undefined') return
+  const rect = accountMenuTrigger.value.getBoundingClientRect()
+  const width = 208
+  if (accountMenuAnchor.value === 'sidebar') {
+    accountMenuStyle.value = {
+      left: `${Math.min(rect.right + 8, window.innerWidth - width - 8)}px`,
+      bottom: `${Math.max(8, window.innerHeight - rect.bottom)}px`,
+    }
+  } else {
+    const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))
+    accountMenuStyle.value = { left: `${left}px`, top: `${rect.bottom + 6}px` }
+  }
+}
+
+function closeAccountMenu(restoreFocus) {
+  if (!accountMenuOpen.value) return
+  const trigger = accountMenuTrigger.value
+  accountMenuOpen.value = false
+  accountMenuAnchor.value = ''
+  accountMenuTrigger.value = null
+  if (restoreFocus && trigger) nextTick(() => trigger.focus?.())
+}
+
+function handleAccountMenuFocusOut(event) {
+  const next = event.relatedTarget
+  if (next?.closest?.('[data-account-trigger]')) return
+  if (next && accountMenuRef.value?.contains(next)) return
+  closeAccountMenu(false)
+}
+
+function openChangePassword() {
+  closeAccountMenu(false)
+  showChangePasswordModal.value = true
+}
+
+function requestLogout() {
+  const message = t('ep.account.logout_confirm')
+  if (typeof window !== 'undefined' && typeof window.confirm === 'function' && !window.confirm(message)) return
+  closeAccountMenu(false)
+  auth.logout()
+}
+
+/* ---------- Mobile chrome menu (Settings / theme / language) ---------- */
+
+function toggleMoreMenu(trigger) {
+  if (moreMenuOpen.value && moreMenuTrigger.value === trigger) {
+    closeMoreMenu(true)
+    return
+  }
+  closeAccountMenu(false)
+  moreMenuTrigger.value = trigger || null
+  moreMenuOpen.value = true
+  nextTick(() => {
+    moreMenuRef.value?.querySelector('button')?.focus()
+  })
+}
+
+function closeMoreMenu(restoreFocus) {
+  if (!moreMenuOpen.value) return
+  const trigger = moreMenuTrigger.value
+  moreMenuOpen.value = false
+  moreMenuTrigger.value = null
+  if (restoreFocus && trigger) nextTick(() => trigger.focus?.())
+}
+
+function handleMoreMenuFocusOut(event) {
+  const next = event.relatedTarget
+  if (next?.closest?.('[data-more-trigger]')) return
+  if (next && moreMenuRef.value?.contains(next)) return
+  closeMoreMenu(false)
+}
+
+function handleMoreNavigate(target) {
+  closeMoreMenu(false)
+  handleNavigate(target)
+}
+
+function handleMoreTheme() {
+  toggleTheme()
+  closeMoreMenu(true)
+}
+
+function handleMoreLocale() {
+  toggleLocale()
+  closeMoreMenu(true)
+}
+
+/* ---------- Dismissal shared by both shell menus ---------- */
+
+function handleDocumentClick(event) {
+  const target = event.target
+  if (!(target instanceof Element)) return
+  if (accountMenuOpen.value
+      && !target.closest('.account-menu')
+      && !target.closest('[data-account-trigger]')) {
+    closeAccountMenu(false)
+  }
+  if (moreMenuOpen.value
+      && !target.closest('.chrome-more-menu')
+      && !target.closest('[data-more-trigger]')) {
+    closeMoreMenu(false)
+  }
+}
+
+function handleDocumentKeydown(event) {
+  if (event.key !== 'Escape') return
+  if (accountMenuOpen.value) {
+    event.preventDefault()
+    closeAccountMenu(true)
+  }
+  if (moreMenuOpen.value) {
+    event.preventDefault()
+    closeMoreMenu(true)
+  }
+}
 
 function handleNavigate(targetPage) {
   if (targetPage === 'today') router.push('/')
@@ -224,12 +443,11 @@ const commands = computed(() => [
   { id: 'exam', title: t('ep.nav.exams'), icon: 'exam', action: () => router.push('/exams') },
   { id: 'notes', title: t('ep.nav.library'), icon: 'note', action: () => router.push('/notes') },
   { id: 'settings', title: t('ep.nav.settings'), icon: 'settings', action: () => router.push('/settings') },
-  { id: 'blueprint', title: t('sidebar.blueprint'), icon: 'blueprint', action: () => handleSidebarAction('blueprint') },
   { id: 'drafts', title: t('sidebar.drafts'), icon: 'draft', action: () => handleSidebarAction('drafts') },
-  { id: 'ai', title: t('sidebar.ai_search'), icon: 'cpu', action: () => handleSidebarAction('ai') },
+  { id: 'ai', title: t('sidebar.ai_search'), icon: 'cpu', action: () => router.push({ path: '/settings', query: { section: 'ai' } }) },
   { id: 'theme', title: t('ep.action.theme'), icon: 'moon', action: () => toggleTheme() },
   { id: 'locale', title: t('ep.action.language'), icon: 'globe', action: () => toggleLocale() },
-  { id: 'logout', title: t('ep.account.logout'), icon: 'logout', action: () => auth.logout() },
+  { id: 'logout', title: t('ep.account.logout'), icon: 'logout', action: () => requestLogout() },
 ])
 
 function handleCommandExecute(cmd) {
@@ -264,6 +482,57 @@ function handleBack() {
 }
 
 function handleSelectBank(bank) {
+  // A palette row opens the bank, matching every other bank row in the app.
+  router.push(`/banks/${bank.id}`)
+}
+
+function handlePracticeBank(bank) {
+  // Starting practice stays an explicit secondary action inside the row.
   handleStart(bank)
 }
 </script>
+
+<style scoped>
+.account-menu,
+.chrome-more-menu {
+  position: fixed;
+  width: 208px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-xs);
+  box-shadow: var(--shadow-2);
+  z-index: 130;
+}
+
+.chrome-more-menu {
+  left: 12px;
+  right: 12px;
+  bottom: calc(64px + env(safe-area-inset-bottom) + 8px);
+  width: auto;
+  z-index: 110;
+}
+
+.popover-action {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 9px;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.popover-action:hover { background: var(--surface-2); color: var(--ink); }
+.popover-action.is-danger { color: var(--bad); }
+.popover-action.is-danger:hover { background: var(--bad-soft); }
+
+@media (min-width: 769px) {
+  .chrome-more-menu { display: none; }
+}
+</style>

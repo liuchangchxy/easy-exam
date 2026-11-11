@@ -428,3 +428,14 @@
   4. 题库详情题目序号改为当前列表的两位序号，不再直接展示内部题目 ID 造成折行。
 - **对应 SPEC 章节**：无（展示层缺陷修复，不改变业务语义）。
 - **影响范围**：`frontend/src/router/index.js`、`frontend/src/views/BankDetailView.vue`、`frontend/src/views/PracticeViewV1.vue`、`frontend/src/locales/ep-en-US.js`、`frontend/src/locales/en-US.json`。
+
+### [2026-11-12] W1-4 外壳账户入口统一：单一账户菜单 + 移动端「更多」
+
+- **触发背景**：外壳审计发现顶栏头像直接跳转设置、侧栏头像弹出气泡，两个入口同名却行为不同；气泡重复展示头像/姓名/角色并重复一条设置入口；移动端隐藏顶栏后没有可见的设置、主题、语言入口；命令面板缺焦点陷阱，题库行会静默开始刷题。
+- **核心决策**：
+  1. 账户菜单上移到 `AppLayout`，只保留一份实现，并按点击的触发器锚定（侧栏头像右侧、顶栏/移动顶栏下方）；三个头像打开同一菜单。菜单只保留「修改密码」「退出登录」，删除重复身份头部与设置行；桌面端设置入口仅保留侧栏常驻导航项。
+  2. 退出登录在侧栏账户菜单与命令面板两个入口统一使用 `window.confirm(ep.account.logout_confirm)`，与仓库既有破坏性操作确认方式一致。
+  3. 移动底栏由 5 项扩为 6 项，新增「更多」；「更多」是移动端设置、主题、语言的唯一可见入口。`mobile_nav.test.js` 的 `toBe(5)` 因此改为 `toBe(6)` 并新增「更多」菜单断言——这是产品信息架构的合法变更，不是放宽断言。
+  4. 命令面板新增焦点陷阱、文档级 Escape 与触发器焦点恢复；题库行改为打开题库，开始刷题降级为行内显式次要按钮；移除「智能组卷」入口，AI 入口改为跳转 `/settings?section=ai`。
+- **对应 SPEC 章节**：无（外壳交互与信息架构修复，不改变业务语义）。
+- **影响范围**：`frontend/src/layouts/AppLayout.vue`、`frontend/src/components/AppSidebar.vue`、`frontend/src/components/CommandPalette.vue`、`frontend/src/components/MobileNav.vue`、`frontend/src/style.css`、`frontend/src/locales/*`、`frontend/tests/components/`、`frontend/tests/fast_ui_interaction.test.js`、`frontend/tests/browser_e2e.test.js`。

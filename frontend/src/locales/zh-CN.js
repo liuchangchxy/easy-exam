@@ -391,6 +391,7 @@ export default {
     "desc_logout": "清理当前凭证退出",
     "bank_questions": "{count} 道试题",
     "bank_action_practice": "开始刷题",
+    "bank_action_open": "打开题库",
     "no_results": "未找到匹配的命令或题库",
     "search_placeholder": "键入题库名称或操作指令... (ESC 关闭, ↑↓ 移动, ↵ 确认)",
     "footer_hint_navigate": "导航",

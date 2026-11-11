@@ -391,6 +391,7 @@ export default {
     "desc_logout": "Clear credentials & sign out",
     "bank_questions": "{count} Questions",
     "bank_action_practice": "Start Practice",
+    "bank_action_open": "Open bank",
     "no_results": "No matching commands or question banks found",
     "search_placeholder": "Type bank name or command... (ESC to close, ↑↓ to move, ↵ to select)",
     "footer_hint_navigate": "Navigate",
