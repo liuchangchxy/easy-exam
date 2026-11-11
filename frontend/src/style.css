@@ -559,6 +559,9 @@ img { max-width: 100%; }
   content: ""; position: absolute; left: -10px; top: 8px; bottom: 8px;
   width: 2px; background: var(--brand); border-radius: 1px;
 }
+/* Sidebar nav labels must follow the spine's own typography and inherit its
+   hover/active colors; without this the global `.label` form rule below wins. */
+.nav-item .label { color: inherit; font-size: inherit; font-weight: inherit; letter-spacing: inherit; }
 .nav-ico { display: grid; place-items: center; color: var(--d-spine-ink-3); width: 18px; background: var(--d-spine); border-radius: 50%; transition: color .12s var(--ease); }
 .nav-item:hover .nav-ico { color: var(--d-spine-ink-2); }
 .nav-item.is-active .nav-ico { color: var(--d-spine-accent); }
