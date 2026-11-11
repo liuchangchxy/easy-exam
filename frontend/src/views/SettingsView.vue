@@ -16,7 +16,7 @@
           type="button"
           class="settings-nav-item"
           :class="{ 'is-active': activeSection === item.key }"
-          @click="activeSection = item.key"
+          @click="selectSection(item.key)"
         >
           <LinearIcon :name="item.icon" :size="14" />
           <span>{{ t(item.label) }}</span>
@@ -166,22 +166,22 @@
           <div class="settings-fields">
             <label class="field">
               <span class="label">{{ t('ep.settings.ai_provider') }}</span>
-              <select v-model="config.ai_provider" class="select">
+              <select v-model="config.ai_provider" class="select" @change="saveAi">
                 <option value="openai">{{ t('ep.settings.ai_provider_openai') }}</option>
                 <option value="ollama">{{ t('ep.settings.ai_provider_ollama') }}</option>
               </select>
             </label>
             <label class="field">
               <span class="label">{{ t('ep.settings.ai_base_url') }}</span>
-              <input v-model.trim="config.ai_api_base" class="input" type="text" placeholder="https://api.openai.com/v1" />
+              <input v-model.trim="config.ai_api_base" class="input" type="text" placeholder="https://api.openai.com/v1" @change="saveAi" />
             </label>
             <label class="field">
               <span class="label">{{ t('ep.settings.ai_model') }}</span>
-              <input v-model.trim="config.ai_model" class="input" type="text" placeholder="gpt-4o-mini" />
+              <input v-model.trim="config.ai_model" class="input" type="text" placeholder="gpt-4o-mini" @change="saveAi" />
             </label>
             <label class="field">
               <span class="label">{{ t('ep.settings.ai_key') }}</span>
-              <input v-model="config.ai_api_key" class="input" type="password" :placeholder="t('ep.settings.ai_key_placeholder')" />
+              <input v-model="config.ai_api_key" class="input" type="password" :placeholder="t('ep.settings.ai_key_placeholder')" @change="saveAi" />
               <span v-if="config.ai_api_key" class="hint">{{ t('ep.settings.ai_key_set') }}</span>
             </label>
           </div>
@@ -192,10 +192,9 @@
           </div>
 
           <div class="settings-actions">
-            <button type="button" class="btn btn-primary" :disabled="savingAi" @click="saveAi">
-              {{ savingAi ? t('ep.settings.ai_loading') : t('ep.settings.ai_save') }}
-            </button>
-            <span v-if="aiNotice" class="settings-saved" :class="{ 'is-error': aiError }">{{ aiNotice }}</span>
+            <span class="settings-hint">{{ t('ep.settings.auto_save_hint') }}</span>
+            <span v-if="savingAi" class="settings-saved">{{ t('ep.settings.saving') }}</span>
+            <span v-else-if="aiNotice" class="settings-saved" :class="{ 'is-error': aiError }">{{ aiNotice }}</span>
           </div>
         </section>
 
@@ -209,26 +208,25 @@
           <div class="settings-fields">
             <label class="field">
               <span class="label">{{ t('ep.settings.web_provider') }}</span>
-              <select v-model="config.search_provider" class="select">
+              <select v-model="config.search_provider" class="select" @change="saveWeb">
                 <option value="open-webSearch">{{ t('ep.settings.web_on') }}</option>
                 <option value="offline">{{ t('ep.settings.web_off') }}</option>
               </select>
             </label>
             <label v-if="config.search_provider !== 'offline'" class="field">
               <span class="label">{{ t('ep.settings.web_base_url') }}</span>
-              <input v-model.trim="config.search_api_base" class="input" type="text" placeholder="http://localhost:8000/v1/search" />
+              <input v-model.trim="config.search_api_base" class="input" type="text" placeholder="http://localhost:8000/v1/search" @change="saveWeb" />
             </label>
             <label v-if="config.search_provider !== 'offline'" class="field">
               <span class="label">{{ t('ep.settings.web_key') }}</span>
-              <input v-model="config.search_api_key" class="input" type="password" :placeholder="t('ep.settings.ai_key_placeholder')" />
+              <input v-model="config.search_api_key" class="input" type="password" :placeholder="t('ep.settings.ai_key_placeholder')" @change="saveWeb" />
             </label>
           </div>
 
           <div class="settings-actions">
-            <button type="button" class="btn btn-primary" :disabled="savingWeb" @click="saveWeb">
-              {{ savingWeb ? t('ep.settings.ai_loading') : t('ep.settings.web_save') }}
-            </button>
-            <span v-if="webNotice" class="settings-saved" :class="{ 'is-error': webError }">{{ webNotice }}</span>
+            <span class="settings-hint">{{ t('ep.settings.auto_save_hint') }}</span>
+            <span v-if="savingWeb" class="settings-saved">{{ t('ep.settings.saving') }}</span>
+            <span v-else-if="webNotice" class="settings-saved" :class="{ 'is-error': webError }">{{ webNotice }}</span>
           </div>
         </section>
 
@@ -251,7 +249,7 @@
             <button type="button" class="btn" @click="showPasswordModal = true">
               <LinearIcon name="key" :size="14" />{{ t('ep.settings.change_password') }}
             </button>
-            <button type="button" class="btn btn-danger" @click="$emit('logout')">
+            <button type="button" class="btn btn-danger" @click="requestLogout">
               <LinearIcon name="logout" :size="14" />{{ t('ep.settings.logout') }}
             </button>
           </div>
@@ -285,7 +283,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
 import ChangePasswordModal from '../components/ChangePasswordModal.vue'
 import { useLocale } from '../composables/useLocale.js'
@@ -299,12 +298,53 @@ const props = defineProps({
   user: { type: Object, default: null },
 })
 
-defineEmits(['logout'])
+const emit = defineEmits(['logout'])
+const route = useRoute()
+const router = useRouter()
 
 const { t, locale: currentLocale, setLocale } = useLocale()
 const { mode, setMode, palette, palettes, setPalette, customAccent, setCustomAccent } = useTheme()
 
-const activeSection = ref('appearance')
+const DEFAULT_SECTION = 'appearance'
+const SECTION_QUERY = {
+  appearance: 'appearance',
+  language: 'language',
+  ai: 'ai',
+  web: 'network',
+  account: 'account',
+  about: 'about',
+}
+const QUERY_SECTION = Object.fromEntries(
+  Object.entries(SECTION_QUERY).map(([key, query]) => [query, key])
+)
+
+function normalizeSection(value) {
+  const raw = Array.isArray(value) ? value[0] : value
+  return typeof raw === 'string' && QUERY_SECTION[raw] ? QUERY_SECTION[raw] : DEFAULT_SECTION
+}
+
+const activeSection = ref(normalizeSection(route?.query?.section))
+
+function selectSection(key) {
+  const sectionKey = SECTION_QUERY[key] ? key : DEFAULT_SECTION
+  const query = SECTION_QUERY[sectionKey]
+  activeSection.value = sectionKey
+  if (!router || !route) return
+  if (route.query?.section === query) return
+  router.push({ path: route.path, query: { ...(route.query || {}), section: query } })
+}
+
+watch(
+  () => route?.query?.section,
+  value => {
+    activeSection.value = normalizeSection(value)
+  }
+)
+
+function requestLogout() {
+  if (!window.confirm(t('ep.settings.logout_confirm'))) return
+  emit('logout')
+}
 const showPasswordModal = ref(false)
 const appVersion = pkg.version
 const density = ref('balanced')
@@ -560,6 +600,7 @@ onMounted(() => {
 .settings-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); }
 .settings-saved { font-size: 12px; color: var(--ok); }
 .settings-saved.is-error { color: var(--bad); }
+.settings-hint { margin-right: auto; font-size: 12px; color: var(--ink-3); }
 
 .account-block { display: flex; align-items: center; gap: 14px; padding: 16px 0; border-top: 1px solid var(--line); }
 .account-main { min-width: 0; }

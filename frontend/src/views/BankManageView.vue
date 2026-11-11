@@ -310,7 +310,7 @@
           <p class="section-note">{{ t('ep.manage.drafts_note') }}</p>
           <div class="empty-actions" style="justify-content: flex-start; margin-top: 18px">
             <button type="button" class="btn" @click="openDialog('drafts')">{{ t('ep.manage.open_drafts') }}</button>
-            <button type="button" class="btn btn-quiet" @click="openDialog('ai')">{{ t('ep.manage.ai_configure') }}</button>
+            <button type="button" class="btn btn-quiet" @click="openAiSettings">{{ t('ep.manage.ai_configure') }}</button>
           </div>
         </div>
       </section>
@@ -818,6 +818,10 @@ async function removeMember(member) {
 
 function openDialog(dialog) {
   window.dispatchEvent(new CustomEvent('easyexam:open-dialog', { detail: dialog }))
+}
+
+function openAiSettings() {
+  router.push({ path: '/settings', query: { section: 'ai' } })
 }
 
 async function addChapter() {
