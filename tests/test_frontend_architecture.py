@@ -17,34 +17,42 @@ class TestFrontendArchitecture(unittest.TestCase):
             self.assertTrue((self.root / relative).is_file(), relative)
 
         app_source = (self.root / "App.vue").read_text(encoding="utf-8")
+        router_source = (self.root / "router/index.js").read_text(encoding="utf-8")
         self.assertIn("LoginView", app_source)
-        self.assertIn("HomeView", app_source)
-        self.assertIn("PracticeViewV1", app_source)
+        self.assertIn("router-view", app_source)
+        self.assertIn("HomeView", router_source)
+        self.assertIn("PracticeViewV1", router_source)
         self.assertNotIn("fetch('/api/", app_source)
 
     def test_learning_mistakes_and_import_flows_have_separate_boundaries(self):
         for relative in (
-            "views/LearningView.vue",
-            "views/MistakesView.vue",
+            "views/ReviewView.vue",
             "views/ImportView.vue",
             "api/learning.js",
             "api/imports.js",
             "stores/learningStore.js",
         ):
             self.assertTrue((self.root / relative).is_file(), relative)
-        app_source = (self.root / "App.vue").read_text(encoding="utf-8")
-        self.assertIn("LearningView", app_source)
-        self.assertIn("MistakesView", app_source)
-        self.assertIn("ImportView", app_source)
+        review_source = (self.root / "views/ReviewView.vue").read_text(encoding="utf-8")
+        router_source = (self.root / "router/index.js").read_text(encoding="utf-8")
+        import_source = (self.root / "views/ImportView.vue").read_text(encoding="utf-8")
+        self.assertIn("listDueMistakes", review_source)
+        self.assertIn("listMistakes", review_source)
+        self.assertIn("ImportView", router_source)
+        self.assertIn("ReviewView", router_source)
+        self.assertIn("previewFileImport", import_source)
 
     def test_mock_exam_has_a_dedicated_entrypoint_and_exam_view(self):
         home_source = (self.root / "views/HomeView.vue").read_text(encoding="utf-8")
-        app_source = (self.root / "App.vue").read_text(encoding="utf-8")
+        router_source = (self.root / "router/index.js").read_text(encoding="utf-8")
         self.assertTrue((self.root / "features/exam/ExamView.vue").is_file())
         self.assertTrue((self.root / "api/exams.js").is_file())
-        self.assertIn("emit('mock-exam'", home_source)
-        self.assertIn("ExamView", app_source)
-        self.assertIn('@mock-exam="startExam"', app_source)
+        self.assertIn("emit('start'", home_source)
+        self.assertIn("ExamCenterView", router_source)
+        self.assertIn("ExamView", router_source)
+        self.assertIn("exams", router_source)
+        self.assertIn("practice/:sessionId", router_source)
+        self.assertIn("exam/:sessionId", router_source)
 
         exam_source = (self.root / "features/exam/ExamView.vue").read_text(encoding="utf-8")
         for contract in ('data-testid="exam-timer"', 'data-testid="exam-answer-sheet"',
@@ -58,20 +66,22 @@ class TestFrontendArchitecture(unittest.TestCase):
         self.assertIn("killQuestion", kills_source)
         self.assertIn("unkillQuestion", kills_source)
 
-        mistakes_source = (self.root / "views/MistakesView.vue").read_text(encoding="utf-8")
-        self.assertIn("斩杀", mistakes_source)
-        self.assertIn("FSRS", mistakes_source)
+        review_source = (self.root / "views/ReviewView.vue").read_text(encoding="utf-8")
+        self.assertIn("listKills", review_source)
+        self.assertIn("unkillQuestion", review_source)
+        self.assertIn("FSRS", review_source)
 
         practice_source = (self.root / "views/PracticeViewV1.vue").read_text(encoding="utf-8")
-        self.assertIn("薄弱", practice_source)
-        self.assertIn("斩杀", practice_source)
+        self.assertIn("ep.banks.mark_weak", practice_source)
+        self.assertIn("ep.practice.kill", practice_source)
 
     def test_home_view_supports_bank_creation_and_kills_entry(self):
         home_source = (self.root / "views/HomeView.vue").read_text(encoding="utf-8")
-        self.assertIn("创建题库", home_source)
+        review_source = (self.root / "views/ReviewView.vue").read_text(encoding="utf-8")
+        self.assertIn("ep.today.create_bank", home_source)
         self.assertIn("createBank", home_source)
-        self.assertIn("斩杀", home_source)
-
+        self.assertIn("listKills", review_source)
+        self.assertIn("killQuestion", review_source)
 
 
 if __name__ == "__main__":

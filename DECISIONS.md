@@ -16,6 +16,27 @@
 
 ---
 
+### [2026-11-12] W2-3：退役不可达的旧版组卷 / AI 配置弹窗
+- **触发背景**：W1 波次已把智能组卷改为跳转 `/exams`（由考试中心的单一蓝图抽屉编辑），AI 配置改为跳转 `/settings?section=ai`；命令面板也不再有这两项入口。但 `AppLayout.vue` 仍导入并渲染 `BlueprintModal` 与 `AiConfigModal`，`handleSidebarAction` 仍映射 `blueprint` / `ai`。全仓 census 后确认：`easyexam:open-dialog` 只投递 `drafts`（首页 `easyexam:action` 与题库管理页），命令面板只保留 `drafts` 行，键盘监听只有 Escape；没有任何可达 UI 路径能产生 `activeDialog === 'blueprint' | 'ai'`。
+- **核心决策**：
+  1. **删除两个不可达组件**：`BlueprintModal.vue` 与 `AiConfigModal.vue` 连同 `AppLayout` 的导入、渲染分支和 `blueprint` / `ai` 侧栏动作映射一并移除；`handleSidebarAction` 只保留仍可达的 `drafts`。
+  2. **保留 `AiDraftsModal`**：命令面板「AI 智能出题」行、首页 `easyexam:action === 'drafts'`（含 `/?action=drafts`）以及题库管理页「打开草稿」三条路径均可触发，未退役。
+  3. **同步清理只被退役组件消费的词典键**：`blueprint.*` 命名空间、`sidebar.blueprint`，以及仅由这两个组件引用的 70 个 `ui.kNNNN` 键；`ep.*` 中同名字符串仍被 `ExamCenterView` / `SettingsView` / `AiDraftsModal` 使用，全部保留。JS 词典与生成 JSON 同步删除并通过 `tests/locale.test.js` 的 deepEqual 平价。
+  4. **测试随组件退役（`guard_test_tampering.py` 登记）**：`frontend/tests/components/blueprint_modal.test.js` 测的是已不存在的组件与已被考试中心抽屉取代的 simple/advanced 组卷交互，无法迁移到新编辑器（drawer 的 DOM 与数据模型不同）。因此随组件删除，而非放宽或改写断言；`guard_test_tampering.py` 会把文件删除记为“断言被删除”并告警，按该门禁要求在提交说明与本条登记：这是合法退役，不是为制造成全绿而删测试。
+  5. **脚本中的陈旧引用一并清理**：`scan_localized_templates.js` 移除 `AiConfigModal` 白名单项（同名 URL/密钥占位串在 `SettingsView` 仍被使用）；`verify_and_capture_ui.mjs` 删除已失效的 `.sidebar-nav-item.sub:has-text("智能组卷")` 截图步骤及复制映射。
+- **对应 SPEC 章节**：SPEC.md 前端信息架构（考试中心为唯一组卷编辑器；AI 配置归属设置页）。
+- **影响范围**：`frontend/src/layouts/AppLayout.vue`, `frontend/src/components/{BlueprintModal,AiConfigModal}.vue`（删除）, `frontend/tests/components/blueprint_modal.test.js`（删除）, `frontend/src/locales/{en-US,zh-CN}.{js,json}`, `frontend/src/locales/{ui-en-US,ui-zh-CN}.js`, `frontend/scripts/{scan_localized_templates.js,verify_and_capture_ui.mjs}`, `DECISIONS.md`。
+
+### [2026-11-12] W2-2：页面级对话框迁移到 AppDialog，并保留 NotesView 双重守卫互不干扰
+- **触发背景**：`新建笔记`、`新建题库`、首页 `创建题库` 与刷题页 `退出练习` 四个对话框各自在 backdrop 上绑定 `keydown.esc`，Escape 只在焦点恰好位于遮罩内时生效；打开时也不移动焦点。W1-2 已为笔记阅读器加入未保存守卫，若直接迁移，create 对话框的 Escape 会继续冒泡到 reader 的 window 监听，误触发关闭/未保存提示。
+- **核心决策**：
+  1. **统一使用 `AppDialog`**：四个对话框改为共享组件，Escape 由 document capture 监听处理，打开后焦点进入首个字段（刷题页为「继续练习」），Tab 循环限制在面板内，关闭时焦点回到触发按钮。
+  2. **保留刷题页退出策略**：遮罩点击与 Escape 仍表示「取消退出」，不静默放弃作答；确认按钮才真正保存并退出。
+  3. **双重守卫显式隔离**：`NotesView` 的 reader keydown 监听在 `event.defaultPrevented` 时直接返回。`AppDialog` 已在 capture 阶段 `preventDefault`，因此关闭 create 对话框不会同时关闭 reader 或弹出未保存提示；打开 create 对话框也不经过 reader 的守卫路径。
+  4. **测试选择器按新标记更新（非弱化断言）**：`browser_e2e.test.js` 的题库创建对话框选择器由 `.exam-setup-dialog` 改为 `[data-testid="bank-create-dialog"]`，退出确认的取消按钮由 `.dialog-actions .btn` 改为 `.exit-actions .btn`。两者都是因为对话框根节点已迁移到 `AppDialog` 的 `.app-dialog-panel`，原类名不再描述真实结构；断言强度与操作语义不变。笔记创建对话框仍保留 `library-dialog` 类，既有 E2E 选择器无需改动。
+- **对应 SPEC 章节**：SPEC.md 前端交互与可访问性规范。
+- **影响范围**：`frontend/src/views/NotesView.vue`, `frontend/src/views/BanksView.vue`, `frontend/src/views/HomeView.vue`, `frontend/src/views/PracticeViewV1.vue`, `frontend/tests/browser_e2e.test.js`, `frontend/tests/components/{notes_view,banks_view,home_view,practice_view}.test.js`, `DECISIONS.md`。
+
 ### [2026-10-23] Issue #11：fnOS 物理验收测试入口按真实 API/UI 契约重写
 - **触发背景**：`tests/test_remote_fnos_e2e.py` 与 `frontend/tests/physical_fnos_browser_e2e.mjs` 基于历史 API（无 `/api/v1` 前缀、无 Bearer 认证）与旧版扁平导航（`button:has-text("导入题目")` 等）编写，在真实 fnOS 上必然失败或整包 skip；同时脚本写死了 NAS 地址、Chrome 安装路径和默认测试密码。Issue #11 要求在不改业务功能、不建 CI 物理门禁的前提下，让这两个入口在真实 fnOS 上可执行并完成一次核心链路验收。
 - **核心决策**：
@@ -369,3 +390,85 @@
 - **对应 SPEC 章节**：SPEC.md §6, §8。
 - **影响范围**：`scripts/`、`tests/test_guard_checks.py`、`frontend/src/locales/`、`frontend/src/composables/`、`frontend/src/design/`、`frontend/src/components/`、`backend/app/api/routes/ai.py`、`backend/legacy/services/ai_service.py`、`frontend/tests/browser_e2e.test.js`、`DECISIONS.md`、`SPEC.md`。
 
+
+### [2026-11-11] 四套配色族替代旧多主题系统，旧配色标识自动归并
+
+- **触发背景**：用户确认产品只保留四套主题（编辑部 Editorial、Gruvbox、Everforest、Catppuccin），替换此前按单一色名堆叠的多主题实现。旧版本已把配色 id 写入本机存储，直接改枚举会让老用户启动后被静默重置为默认色。
+- **核心决策**：
+  1. **配色族与明暗解耦**：四套配色族各自提供同一套语义 token 契约；`mode`（light/dark/system）只选择该族内的明暗取值，配色与模式分开持久化，切换任一维度不覆盖另一维度。
+  2. **旧 id 归并而非重置**：`blue-grey`/`mist` → `editorial`，`ocean`/`amethyst`/`mocha` → `catppuccin`，`rose`/`amber` → `gruvbox`，`forest` → `everforest`；未识别的值回落 `editorial`。
+  3. **强调色按实际表面推导前景**：自定义强调色先归一化，再针对当前配色族的 page/card/subtle 表面逐步混合，直到正文对比度 ≥ 4.5:1；hover/active 各自重新计算前景，避免沿用基色前景造成同色不可读。
+  4. **门禁按 token 而非截图**：`frontend/tests/theme.test.js` 断言四族 × 明暗的 AA 对比度、`style.css` 每族明暗块存在、`PALETTE_SURFACES` 与 CSS 同步、最小字号与强调色可读性。截图式“四主题全视口审美验收”不在本决策的已验证范围内。
+- **对应 SPEC 章节**：SPEC.md §8「验收基线」。
+- **影响范围**：`frontend/src/design/themePreference.js`、`frontend/src/composables/useTheme.js`、`frontend/src/views/SettingsView.vue`、`frontend/src/style.css`、`frontend/src/locales/*`、`frontend/tests/theme.test.js`、`frontend/tests/components/settings_view.test.js`。
+
+### [2026-11-11] 批量题库维护：整批原子、双端权限与归档软删除
+
+- **触发背景**：用户确认题库需要批量维护能力，避免逐题修改章节、标签或跨库搬运；同时必须满足既有领域红线（复制生成新身份、进行中模考不可改题、普通成员不得编辑）。批量接口天然容易产生“部分成功”，因此把原子性作为核心约束而不是事后补丁。
+- **核心决策**：
+  1. **单一批量端点**：`POST /api/v1/banks/{bank_id}/questions/batch`，`operation` 仅接受 `chapter`、`add_tags`、`remove_tags`、`move`、`copy`、`archive`、`restore`；去重后单次最多 500 道题。
+  2. **先全量校验，再单事务写入**：在第一次写入前校验源题库编辑权、目标题库编辑权、目标存在性、章节归属、题目归属、活动模考锁定与归档状态；任一项失败即整批回滚，不留下部分更新。
+  3. **双端权限**：`move`/`copy` 同时要求源题库与目标题库的 `ADMIN`/`EDITOR` 角色；普通成员 `MEMBER` 一律 403。
+  4. **元数据不推版本**：批量章节与标签直接更新当前最新版本行，不生成新题目版本，避免把“归章/打标”误记成内容变更；标签同时同步到 `question_tag_items`。
+  5. **移动与复制的身份语义**：`move` 保留题目 id，章节在目标题库中按名称匹配，缺失时自动创建同名章节，源题无章节则保持无章节；`copy` 复用既有复制路径生成新题目与初始版本，学习状态从空白开始。
+  6. **归档是软删除**：`archive` 置 `is_deleted=1`，题目从内容列表、普通刷题与专项目标集中隐藏，并禁止编辑及章节/标签/移动/复制等批量操作；重复归档保持幂等，`restore` 恢复。
+  7. **审计留痕**：每次批量写入 `audit_logs`，action 为 `BANK_QUESTIONS_BATCH`，记录操作、题目 id、章节/标签/目标题库参数。
+  8. **前端只暴露可执行项**：批量栏仅对编辑者显示；所选行含模考锁定时整体禁用并说明原因；归档需确认；375px 下批量栏不得横向溢出。
+- **对应 SPEC 章节**：SPEC.md §2.0.1「题库组织」。
+- **影响范围**：`backend/app/api/routes/banks.py`、`backend/app/application/bank_service.py`、`backend/app/infrastructure/db/repositories/question_repository.py`、`frontend/src/api/banks.js`、`frontend/src/domain/bankManage.js`、`frontend/src/views/BankManageView.vue`、`frontend/src/locales/*`、`tests/test_bank_batch_operations.py`、`frontend/tests/bank_manage.test.js`、`frontend/tests/bank_batch_e2e.test.js`。
+
+### [2026-11-10] Editorial Precision 全产品 UI 替换，同步更新旧 UI 断言
+
+- **触发背景**：按已确认的 Editorial Precision 原型与设计文档重写产品页面与全局外壳。旧组件测试断言的“更多菜单”结构（`mobile-nav-more-popup`、`mobile-dropdown-menu`）已随移动导航与练习顶栏的信息架构调整而消失，属于设计被正确替换，不是业务回归。
+- **核心决策**：
+  1. 移动导航以 Today / 题库 / 复习 / 模考 / 资料 五个主入口替代“更多”弹层；测试改为验证五个入口与 `navigate` 事件。
+  2. 练习页的更多菜单收敛为编辑题目与斩杀题目两项，帮助与答题卡提升为独立工具；测试改为验证新菜单结构与完成入口。
+  3. 主题测试从旧八色调色板改为 Editorial Precision 的纸色/墨色/状态色对比度断言，并修正浅色与深色三级文字的实际 AA 对比度。
+  4. 品牌字标“易”为 `aria-hidden` 视觉标记，不参与可见文案本地化扫描。
+- **对应 SPEC 章节**：无（UI 呈现层重构，不改变业务语义）。
+- **影响范围**：`frontend/src/components/MobileNav.vue`、`frontend/src/views/PracticeViewV1.vue`、`frontend/src/style.css`、`frontend/tests/components/`、`frontend/tests/theme.test.js`、`frontend/tests/locale.test.js`。
+
+### [2026-11-10] 真实浏览器 E2E 对齐路由化 Editorial Precision 外壳
+
+- **触发背景**：旧 `browser_e2e.test.js` 与 `bank_manage_e2e.test.js` 仍驱动已删除的 `.home-page`、`.bank-card`、`.mistakes-page`、`.exam-page` 与旧八色调色板。设计替换后这些选择器不再存在，测试超时属于表现层断言过期，不是业务回归。
+- **核心决策**：
+  1. 保留原有用例意图（注册、建库、练习、错题与 FSRS、斩杀、模考、诊断、导入、冲突、强制改密、双语主题、响应式），按当前路由与 Editorial DOM 重写选择器。
+  2. 题库管理用例改为验证新的高密度表格：搜索、题型筛选、行内编辑、活动模考只读锁与 375px 布局；删除对已废弃手风琴与卡片结构的断言。
+  3. 主题用例改为验证 Editorial 纸色/墨色下的实际控件对比度，不再验证已移除的自定义主题系统。
+  4. 复习到期列表的薄弱标记读取后端真实字段 `is_weak_flagged`（同时兼容 `is_weak`），修复列表展示遗漏。
+- **对应 SPEC 章节**：无（测试与展示层修复，不改变业务语义）。
+- **影响范围**：`frontend/tests/browser_e2e.test.js`、`frontend/tests/bank_manage_e2e.test.js`、`frontend/src/views/ReviewView.vue`。
+
+### [2026-11-10] 真实浏览器验收暴露的展示层缺陷修复
+
+- **触发背景**：按 Editorial Precision 原型逐页做真实浏览器截图验收，发现三处只在真实 UI 中可见的问题：题库详情路由未传 `bankId` 导致页面永久停在“读取中”；练习选项在已选/正确/错误状态下选项字母与填充色同色而不可见；英文计数文案出现 “1 mistakes / 1 questions scheduled”。
+- **核心决策**：
+  1. `banks/:bankId` 路由启用 `props: true`，把路由参数传给 `BankDetailView` 声明的 `bankId` prop；这是路由接线遗漏，不改变业务接口。
+  2. 删除 `PracticeViewV1` 内与全局样式冲突的 `.opt.is-selected/correct/wrong .opt-key` 颜色覆盖，让全局样式统一控制选项底色与前景色，避免同色不可读。
+  3. 英文计数改为中性标签（`Mistakes: {count}`、`Questions: {count}`），不引入复数规则；同步更新运行时字典与 JSON 快照。
+  4. 题库详情题目序号改为当前列表的两位序号，不再直接展示内部题目 ID 造成折行。
+- **对应 SPEC 章节**：无（展示层缺陷修复，不改变业务语义）。
+- **影响范围**：`frontend/src/router/index.js`、`frontend/src/views/BankDetailView.vue`、`frontend/src/views/PracticeViewV1.vue`、`frontend/src/locales/ep-en-US.js`、`frontend/src/locales/en-US.json`。
+
+### [2026-11-12] W1-4 外壳账户入口统一：单一账户菜单 + 移动端「更多」
+
+- **触发背景**：外壳审计发现顶栏头像直接跳转设置、侧栏头像弹出气泡，两个入口同名却行为不同；气泡重复展示头像/姓名/角色并重复一条设置入口；移动端隐藏顶栏后没有可见的设置、主题、语言入口；命令面板缺焦点陷阱，题库行会静默开始刷题。
+- **核心决策**：
+  1. 账户菜单上移到 `AppLayout`，只保留一份实现，并按点击的触发器锚定（侧栏头像右侧、顶栏/移动顶栏下方）；三个头像打开同一菜单。菜单只保留「修改密码」「退出登录」，删除重复身份头部与设置行；桌面端设置入口仅保留侧栏常驻导航项。
+  2. 退出登录在侧栏账户菜单与命令面板两个入口统一使用 `window.confirm(ep.account.logout_confirm)`，与仓库既有破坏性操作确认方式一致。
+  3. 移动底栏由 5 项扩为 6 项，新增「更多」；「更多」是移动端设置、主题、语言的唯一可见入口。`mobile_nav.test.js` 的 `toBe(5)` 因此改为 `toBe(6)` 并新增「更多」菜单断言——这是产品信息架构的合法变更，不是放宽断言。
+  4. 命令面板新增焦点陷阱、文档级 Escape 与触发器焦点恢复；题库行改为打开题库，开始刷题降级为行内显式次要按钮；移除「智能组卷」入口，AI 入口改为跳转 `/settings?section=ai`。
+- **对应 SPEC 章节**：无（外壳交互与信息架构修复，不改变业务语义）。
+- **影响范围**：`frontend/src/layouts/AppLayout.vue`、`frontend/src/components/AppSidebar.vue`、`frontend/src/components/CommandPalette.vue`、`frontend/src/components/MobileNav.vue`、`frontend/src/style.css`、`frontend/src/locales/*`、`frontend/tests/components/`、`frontend/tests/fast_ui_interaction.test.js`、`frontend/tests/browser_e2e.test.js`。
+
+### [2026-11-12] 单一身份锚点：侧栏去账户化，账户菜单补回身份头部
+
+- **触发背景**：W1-4 之后侧栏页脚仍保留头像、姓名与角色，与顶栏头像构成两个账户入口；设计确认侧栏只承担导航。页脚只保留常驻「设置」，顶栏头像（≤768 为移动顶栏头像）成为唯一身份锚点，姓名/角色改由打开后的账户菜单承载。
+- **核心决策**：
+  1. 侧栏页脚只保留「设置」导航项，删除 `user-mini` 账户按钮及其头像/姓名/角色；`AppSidebar` 不再接收 `user`、`accountMenuOpen`，也不再抛出 `account-menu` 事件，侧栏不再是账户菜单锚点。
+  2. 账户菜单只保留两个锚点：顶栏（≥769）与移动顶栏（≤768），两者互斥渲染；移除侧栏右侧弹出定位分支，两处 `aria-expanded` 各自只反映自己的锚点。
+  3. 菜单内部补回身份头部：头像 + 用户名 + `ep.role.admin`/`ep.role.user`（Admin / 成员），分隔线之下仍是「修改密码」「退出登录」；头部不重复设置入口。
+  4. 主题/语言仍只在顶栏（≥769）与移动「更多」（≤768）；769–1024 侧栏图标轨保持纯导航 + 设置图标，学习状态块、调色板、宽度与断点不变。
+  5. 测试断言变更：`app_sidebar.test.js` 原「侧栏触发器打开共享菜单 / 反映菜单状态」两条行为断言随侧栏去账户化失效，改为断言侧栏不存在 `avatar`、`user-mini`、`user-name`、`user-sub`、`data-account-trigger`，且不再 emit `account-menu`；`app_layout.test.js` 改为断言侧栏 0 个触发器、菜单内的用户名/角色头部、移动顶栏复用同一菜单实例。这是结构变更后的等价断言，不是放宽断言。
+- **对应 SPEC 章节**：无（外壳交互与信息架构修复，不改变业务语义）。
+- **影响范围**：`frontend/src/layouts/AppLayout.vue`、`frontend/src/components/AppSidebar.vue`、`frontend/src/style.css`、`frontend/tests/components/app_layout.test.js`、`frontend/tests/components/app_sidebar.test.js`、`frontend/tests/browser_e2e.test.js`。

@@ -3,20 +3,45 @@ export const THEME_PALETTE_STORAGE_KEY = 'easyexam-theme-palette'
 export const THEME_MODE_STORAGE_KEY = 'easyexam-theme-mode'
 export const THEME_ACCENT_STORAGE_KEY = 'easyexam-theme-accent'
 
+/**
+ * Canonical palette families. A family supplies one semantic token contract;
+ * `mode` (light/dark/system) selects the light or dark value set inside it.
+ * Keeping the palette and the mode in separate preferences is what lets a user
+ * change "Gruvbox + dark" to "Catppuccin + dark" without touching the mode.
+ */
 export const THEME_PALETTES = Object.freeze([
-  'blue-grey',
-  'mist',
-  'ocean',
-  'amethyst',
-  'rose',
-  'amber',
-  'forest',
-  'mocha',
+  'editorial',
+  'gruvbox',
+  'everforest',
+  'catppuccin',
 ])
+
+export const PALETTE_LABELS = Object.freeze({
+  editorial: 'Editorial',
+  gruvbox: 'Gruvbox',
+  everforest: 'Everforest',
+  catppuccin: 'Catppuccin',
+})
+
+/**
+ * Palette ids persisted by the pre-PR-90 multi-theme system. They are still
+ * accepted and resolved to the nearest current family so an existing user
+ * configuration keeps working after the upgrade instead of silently resetting.
+ */
+export const LEGACY_PALETTE_ALIASES = Object.freeze({
+  'blue-grey': 'editorial',
+  'mist': 'editorial',
+  'ocean': 'catppuccin',
+  'amethyst': 'catppuccin',
+  'rose': 'gruvbox',
+  'amber': 'gruvbox',
+  'forest': 'everforest',
+  'mocha': 'catppuccin',
+})
 
 export const THEME_MODES = Object.freeze(['light', 'dark', 'system'])
 
-export const DEFAULT_PALETTE = 'blue-grey'
+export const DEFAULT_PALETTE = 'editorial'
 export const DEFAULT_MODE = 'light'
 
 export function normalizeThemePreference(value) {
@@ -29,9 +54,11 @@ export function normalizeModePreference(value) {
 }
 
 export function normalizePalettePreference(value) {
-  if (typeof value === 'string' && THEME_PALETTES.includes(value.trim().toLowerCase())) {
-    return value.trim().toLowerCase()
-  }
+  if (typeof value !== 'string') return DEFAULT_PALETTE
+  const key = value.trim().toLowerCase()
+  if (THEME_PALETTES.includes(key)) return key
+  const legacy = LEGACY_PALETTE_ALIASES[key]
+  if (legacy) return legacy
   return DEFAULT_PALETTE
 }
 
@@ -107,22 +134,26 @@ export function mixHex(hex1, hex2, weight = 0.5) {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`.toLowerCase()
 }
 
+// Page/card/subtle surfaces for each palette family. These mirror the
+// `--paper`, `--surface` and `--surface-2` values in style.css and are used to
+// derive an accessible foreground for user-supplied accent colors.
 export const PALETTE_SURFACES = Object.freeze({
-  'blue-grey': { lightPage: '#f8fafc', light: '#ffffff', lightSubtle: '#f1f5f9', darkPage: '#090d16', dark: '#131b2e', darkSubtle: '#1e293b' },
-  'mist': { lightPage: '#f4f6f8', light: '#ffffff', lightSubtle: '#eaeff4', darkPage: '#10171d', dark: '#18222a', darkSubtle: '#22303c' },
-  'ocean': { lightPage: '#f0f9fa', light: '#ffffff', lightSubtle: '#e1f3f5', darkPage: '#09181c', dark: '#10242b', darkSubtle: '#18353f' },
-  'amethyst': { lightPage: '#faf5ff', light: '#ffffff', lightSubtle: '#f3e8ff', darkPage: '#130c22', dark: '#1d1433', darkSubtle: '#2b1d4a' },
-  'rose': { lightPage: '#fff1f2', light: '#ffffff', lightSubtle: '#ffe4e6', darkPage: '#1f0b11', dark: '#2c121a', darkSubtle: '#3f1b26' },
-  'amber': { lightPage: '#fffbeb', light: '#ffffff', lightSubtle: '#fef3c7', darkPage: '#1c1408', dark: '#2a1d0b', darkSubtle: '#3c2a12' },
-  'forest': { lightPage: '#f5f3eb', light: '#fffefa', lightSubtle: '#ecefe7', darkPage: '#151d19', dark: '#1d2822', darkSubtle: '#28352e' },
-  'mocha': { lightPage: '#f5f0eb', light: '#ffffff', lightSubtle: '#ebe3db', darkPage: '#181210', dark: '#241c19', darkSubtle: '#332824' },
+  editorial: { lightPage: '#f5f2ea', light: '#fbf9f4', lightSubtle: '#f1ede4', darkPage: '#121512', dark: '#191d19', darkSubtle: '#1f241f' },
+  gruvbox: { lightPage: '#fbf1c7', light: '#fff9e4', lightSubtle: '#f2e5bc', darkPage: '#282828', dark: '#3c3836', darkSubtle: '#504945' },
+  everforest: { lightPage: '#fdf6e3', light: '#fffcf0', lightSubtle: '#efebd4', darkPage: '#2d353b', dark: '#343f44', darkSubtle: '#3d484d' },
+  catppuccin: { lightPage: '#eff1f5', light: '#f7f8fb', lightSubtle: '#e6e9ef', darkPage: '#1e1e2e', dark: '#252537', darkSubtle: '#313244' },
 })
+
+export function getPaletteSurface(palette, isDark = false) {
+  const norm = normalizePalettePreference(palette)
+  return PALETTE_SURFACES[norm] || PALETTE_SURFACES[DEFAULT_PALETTE]
+}
 
 export function getAccessibleForeground(hexColor, isDarkTheme = false, palette = DEFAULT_PALETTE) {
   const norm = normalizeHexColor(hexColor)
   if (!norm) return isDarkTheme ? '#f8fafc' : '#0f172a'
   const normPalette = normalizePalettePreference(palette)
-  const surfaces = PALETTE_SURFACES[normPalette] || PALETTE_SURFACES['blue-grey']
+  const surfaces = getPaletteSurface(normPalette, isDarkTheme)
   const page = isDarkTheme ? surfaces.darkPage : surfaces.lightPage
   const card = isDarkTheme ? surfaces.dark : surfaces.light
   const subtle = isDarkTheme ? surfaces.darkSubtle : surfaces.lightSubtle
@@ -251,42 +282,95 @@ export function applyPalettePreference(root, palette) {
   return norm
 }
 
+/**
+ * Shift an accent shade while keeping its foreground readable. Dark bases move
+ * away from white on hover/active; light bases move away from the dark ink.
+ * Pure black/white hits the clamp, so the shift reverses direction there to
+ * keep the interaction state visible without dropping below AA.
+ */
+function shiftBrandState(base, weight) {
+  const text = getContrastTextColor(base)
+  const toward = text === '#ffffff' ? '#000000' : '#ffffff'
+  const shifted = mixHex(base, toward, weight)
+  if (shifted === base) {
+    return mixHex(base, toward === '#000000' ? '#ffffff' : '#000000', weight)
+  }
+  return shifted
+}
+
 export function applyAccentPreference(root, hexColor, effectiveTheme = 'light', palette = '') {
   const hex = normalizeHexColor(hexColor)
   if (!root?.style) return ''
 
   if (hex) {
     const isDark = effectiveTheme === 'dark' || root?.getAttribute?.('data-theme') === 'dark'
-    const curPalette = palette || root?.getAttribute?.('data-theme-palette') || DEFAULT_PALETTE
+    const curPalette = normalizePalettePreference(
+      palette || root?.getAttribute?.('data-theme-palette') || DEFAULT_PALETTE
+    )
+
+    // Raw accent: legacy filled surfaces (--primary / --on-primary).
     const onPrimary = getContrastTextColor(hex)
-    const hoverTarget = hex === '#000000' ? '#ffffff' : '#000000'
-    const primaryHover = mixHex(hex, hoverTarget, 0.12)
-    const primaryActive = mixHex(hex, hoverTarget, 0.24)
-    const onPrimaryHover = getContrastTextColor(primaryHover)
-    const onPrimaryActive = getContrastTextColor(primaryActive)
-    const primaryFg = getAccessibleForeground(hex, isDark, curPalette)
+    const rawHoverTarget = hex === '#000000' ? '#ffffff' : '#000000'
+    const rawHover = mixHex(hex, rawHoverTarget, 0.12)
+    const rawActive = mixHex(hex, rawHoverTarget, 0.24)
+    const onPrimaryHover = getContrastTextColor(rawHover)
+    const onPrimaryActive = getContrastTextColor(rawActive)
+
+    // Accessible accent: text and filled brand surfaces. The base is adjusted
+    // until legible on every palette surface, then every state carries the
+    // foreground computed for that exact shade. Reusing the base foreground for
+    // hover/active was the cause of dark-on-dark or light-on-light controls.
+    const brandBase = getAccessibleForeground(hex, isDark, curPalette)
+    const brandHover = shiftBrandState(brandBase, 0.12)
+    const brandActive = shiftBrandState(brandBase, 0.24)
+    const brandContrast = getContrastTextColor(brandBase)
+    const onBrandHover = getContrastTextColor(brandHover)
+    const onBrandActive = getContrastTextColor(brandActive)
 
     root.style.setProperty('--primary', hex)
-    root.style.setProperty('--primary-fg', primaryFg)
+    root.style.setProperty('--primary-fg', brandBase)
     root.style.setProperty('--on-primary', onPrimary)
     root.style.setProperty('--on-primary-hover', onPrimaryHover)
     root.style.setProperty('--on-primary-active', onPrimaryActive)
-    root.style.setProperty('--primary-hover', primaryHover)
-    root.style.setProperty('--primary-active', primaryActive)
+    root.style.setProperty('--primary-hover', rawHover)
+    root.style.setProperty('--primary-active', rawActive)
     root.style.setProperty('--primary-light', `color-mix(in srgb, ${hex} 14%, transparent)`)
-    root.style.setProperty('--primary-border', `color-mix(in srgb, ${primaryFg} 36%, transparent)`)
+    root.style.setProperty('--primary-border', `color-mix(in srgb, ${brandBase} 36%, transparent)`)
+
+    root.style.setProperty('--brand', brandBase)
+    root.style.setProperty('--brand-hover', brandHover)
+    root.style.setProperty('--brand-active', brandActive)
+    root.style.setProperty('--brand-ink', brandBase)
+    root.style.setProperty('--brand-soft', `color-mix(in srgb, ${hex} 10%, var(--surface))`)
+    root.style.setProperty('--brand-line', `color-mix(in srgb, ${brandBase} 36%, transparent)`)
+    root.style.setProperty('--brand-contrast', brandContrast)
+    root.style.setProperty('--on-brand-hover', onBrandHover)
+    root.style.setProperty('--on-brand-active', onBrandActive)
     return hex
   }
 
-  root.style.removeProperty('--primary')
-  root.style.removeProperty('--primary-fg')
-  root.style.removeProperty('--on-primary')
-  root.style.removeProperty('--on-primary-hover')
-  root.style.removeProperty('--on-primary-active')
-  root.style.removeProperty('--primary-hover')
-  root.style.removeProperty('--primary-active')
-  root.style.removeProperty('--primary-light')
-  root.style.removeProperty('--primary-border')
+  for (const prop of [
+    '--primary',
+    '--primary-fg',
+    '--on-primary',
+    '--on-primary-hover',
+    '--on-primary-active',
+    '--primary-hover',
+    '--primary-active',
+    '--primary-light',
+    '--primary-border',
+    '--brand',
+    '--brand-hover',
+    '--brand-active',
+    '--brand-ink',
+    '--brand-soft',
+    '--brand-line',
+    '--brand-contrast',
+    '--on-brand-hover',
+    '--on-brand-active',
+  ]) {
+    root.style.removeProperty(prop)
+  }
   return ''
 }
 

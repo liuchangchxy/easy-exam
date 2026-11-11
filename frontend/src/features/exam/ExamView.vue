@@ -1,91 +1,183 @@
 <template>
-  <main class="exam-page" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
-    <header class="exam-header" :class="{ 'report-header': Boolean(report) }">
-      <button type="button" class="btn-back" @click="handleBack">{{ t('ui.k0060') }}</button>
-      <div class="exam-header-center" @click="!report && (showMobileSheet = true)">
-        <h1>{{ report ? t('ui.k0649') : t('ui.k0650') }}</h1>
-        <p v-if="!report">{{ session ? `${t('ui.k0651')} ${answeredCount} / ${questions.length}` : t('ui.k0652') }}</p>
+  <main class="exam-mode exam-shell" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
+    <header class="exam-topbar exam-bar" :class="{ 'is-report': Boolean(report) }">
+      <div class="exam-top-left">
+        <button type="button" class="exam-back" @click="handleBack">
+          <LinearIcon name="arrow-left" :size="15" />
+          <span>{{ t('ep.exam.runner_exit') }}</span>
+        </button>
+        <span class="exam-sep" aria-hidden="true"></span>
+        <div class="exam-identity">
+          <span class="exam-kicker">{{ report ? t('ep.exam.report') : t('ep.exam.runner_title') }}</span>
+          <span v-if="!report && question" class="exam-sub">{{ formatQuestionTypeName(question.type) }} · {{ currentIndex + 1 }} / {{ questions.length }}</span>
+        </div>
       </div>
-      <div v-if="!report" class="exam-clock" data-testid="exam-timer" role="timer" aria-live="off">
-        {{ session?.time_limit ? formatRemainingTime(remainingSeconds) : t('ui.k0653') }}
+
+      <div class="exam-bar-center">
+        <div v-if="!report" class="exam-timer" :class="{ low: session?.time_limit && remainingSeconds <= 300 }" data-testid="exam-timer" role="timer" aria-live="off">
+          <span class="timer-cap">{{ session?.time_limit ? t('ep.exam.remaining') : t('ep.exam.elapsed') }}</span>
+          <strong class="mono">{{ formatRemainingTime(session?.time_limit ? remainingSeconds : elapsedSeconds) }}</strong>
+        </div>
       </div>
-      <ThemeToggle compact />
-      <LocaleToggle compact />
-      <button v-if="!report" type="button" class="primary btn-exam-submit-subtle" :disabled="loading || isSubmitting || Boolean(report)" @click="showSubmitConfirm = true">{{ t('exam.submit_exam') }}</button>
+
+      <div class="exam-top-right">
+        <div v-if="!report" class="exam-utils">
+          <ThemeToggle compact />
+          <LocaleToggle compact />
+        </div>
+        <button v-if="!report" type="button" class="btn btn-sm btn-primary exam-submit" :disabled="loading || isSubmitting || Boolean(report) || syncExpired" @click="showSubmitConfirm = true">
+          {{ t('ep.exam.submit') }}
+        </button>
+      </div>
     </header>
 
-
-    <p v-if="error" class="exam-error" role="alert">{{ error }}</p>
-    <p v-if="loading" class="exam-loading">{{ t('ui.k0061') }}</p>
+    <p v-if="error" class="notice bad exam-error" role="alert">{{ error }}</p>
+    <div v-if="!report && syncExpired" class="notice bad exam-expired" role="alert" data-testid="exam-expired-banner">
+      <div class="exam-expired-body">
+        <strong>{{ expiredCopy.notice }}</strong>
+        <p v-if="unsubmittedQuestionNumbers.length" data-testid="exam-expired-unsubmitted">
+          {{ expiredCopy.unsubmitted }}
+          <span v-for="number in unsubmittedQuestionNumbers" :key="number" class="exam-expired-number">{{ t('ep.practice.question_no', { current: number }) }}</span>
+        </p>
+        <p v-else>{{ expiredCopy.none }}</p>
+        <p class="exam-expired-kept">{{ expiredCopy.kept }}</p>
+      </div>
+      <div class="exam-expired-actions">
+        <button type="button" class="btn btn-sm btn-primary" data-testid="exam-expired-submit-server" :disabled="isSubmitting" @click="showExpiredSubmitConfirm = true">
+          {{ expiredCopy.submit_server }}
+        </button>
+      </div>
+    </div>
+    <div v-if="!report && connectionNotice" class="notice warn exam-offline" role="status" data-testid="exam-offline-banner" :data-pending="String(pendingSubmit)">
+      <span>{{ connectionNotice }}</span>
+      <button type="button" class="btn btn-sm btn-quiet" data-testid="exam-offline-retry" @click="retrySync">{{ t('ep.practice.offline_retry') }}</button>
+    </div>
+    <div v-if="!report && draftConflicts.length" class="notice warn exam-conflict" role="status" data-testid="exam-draft-conflicts">
+      <div class="exam-conflict-body">
+        <strong>{{ t('ep.exam.draft_conflict', { count: draftConflicts.length }) }}</strong>
+        <ul class="exam-conflict-list">
+          <li v-for="conflict in draftConflicts" :key="conflict.question_id">
+            {{ t('ep.practice.question_no', { current: conflict.question_number }) }} ·
+            {{ t('ep.exam.your_answer') }} {{ displayAnswer(conflict.incoming_answer) }} ·
+            {{ t('ep.exam.saved_answer') }} {{ displayAnswer(conflict.existing_answer) }}
+          </li>
+        </ul>
+      </div>
+      <div class="exam-conflict-actions">
+        <button type="button" class="btn btn-sm" @click="restoreMyAnswers">{{ t('ep.exam.draft_conflict_restore') }}</button>
+        <button type="button" class="btn btn-sm btn-quiet" @click="dismissDraftConflicts">{{ t('ep.exam.draft_conflict_dismiss') }}</button>
+      </div>
+    </div>
+    <div v-if="loading" class="exam-loading skeleton-rows">
+      <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+    </div>
 
     <section v-else-if="report" class="exam-report" aria-labelledby="exam-report-title">
-      <h2 id="exam-report-title">{{ t('ui.k0062') }}</h2>
-      <div class="report-summary">
-        <article><small>{{ t('ui.k0063') }}</small><strong>{{ report.score }}</strong></article>
-        <article><small>{{ t('ui.k0064') }}</small><strong>{{ report.accuracy }}%</strong></article>
-        <article><small>{{ t('ui.k0065') }}</small><strong>{{ report.answered_count }} / {{ report.total_questions }}</strong></article>
-        <article><small>{{ t('ui.k0066') }}</small><strong>{{ formatRemainingTime(report.time_spent ?? elapsedSeconds) }}</strong></article>
-      </div>
-      <p>{{ t('ui.k0067') }} {{ report.correct_count }} {{ t('ui.k0068') }} {{ report.partial_count }} {{ t('ui.k0069') }} {{ report.incorrect_count }} {{ t('ui.k0070') }} {{ report.unanswered_count }}</p>
+      <header class="report-head">
+        <div>
+          <div class="rule-label">{{ t('ep.exam.report') }}</div>
+          <h1 id="exam-report-title" class="report-score">{{ report.score }}</h1>
+          <p class="report-score-cap">{{ t('ep.exam.score') }}</p>
+        </div>
+        <dl class="report-facts">
+          <div><dt>{{ t('ep.exam.accuracy') }}</dt><dd class="mono">{{ report.accuracy }}%</dd></div>
+          <div><dt>{{ t('ep.exam.answered') }}</dt><dd class="mono">{{ report.answered_count }} / {{ report.total_questions }}</dd></div>
+          <div><dt>{{ t('ep.exam.time_used') }}</dt><dd class="mono">{{ formatRemainingTime(report.time_spent ?? elapsedSeconds) }}</dd></div>
+        </dl>
+      </header>
 
-      <section v-if="report.type_stats && Object.keys(report.type_stats).length" class="exam-stats-group">
-        <h3>{{ t('ui.k0071') }}</h3>
-        <div class="stats-table-wrapper">
-          <table class="stats-table">
+      <div class="report-counts">
+        <span class="tag ok">{{ t('ep.exam.correct') }} {{ report.correct_count }}</span>
+        <span v-if="report.partial_count" class="tag warn">{{ t('ep.exam.partial') }} {{ report.partial_count }}</span>
+        <span class="tag bad">{{ t('ep.exam.wrong') }} {{ report.incorrect_count }}</span>
+        <span class="tag">{{ t('ep.exam.blank') }} {{ report.unanswered_count }}</span>
+      </div>
+
+      <section v-if="report.type_stats && Object.keys(report.type_stats).length" class="report-section">
+        <h2 class="section-title">{{ t('ep.exam.by_type') }}</h2>
+        <div class="etable-wrap">
+          <table class="etable">
             <thead>
-              <tr><th>{{ t('ui.k0072') }}</th><th>{{ t('ui.k0073') }}</th><th>{{ t('ui.k0067') }}</th><th>{{ t('ui.k0074') }}</th><th>{{ t('ui.k0075') }}</th><th>{{ t('ui.k0064') }}</th></tr>
+              <tr>
+                <th>{{ t('ep.exam.section_type') }}</th>
+                <th>{{ t('ep.exam.answered') }}</th>
+                <th>{{ t('ep.exam.correct') }}</th>
+                <th>{{ t('ep.exam.partial') }}</th>
+                <th>{{ t('ep.exam.wrong') }}</th>
+                <th>{{ t('ep.exam.accuracy') }}</th>
+              </tr>
             </thead>
             <tbody>
               <tr v-for="(val, type) in report.type_stats" :key="type">
                 <td>{{ formatQuestionTypeName(type) }}</td>
-                <td>{{ val.attempted }}</td>
-                <td>{{ val.correct }}</td>
-                <td>{{ val.partial }}</td>
-                <td>{{ val.incorrect }}</td>
-                <td>{{ calculateAccuracy(val.correct, val.attempted) }}</td>
+                <td class="mono">{{ val.attempted }}</td>
+                <td class="mono">{{ val.correct }}</td>
+                <td class="mono">{{ val.partial }}</td>
+                <td class="mono">{{ val.incorrect }}</td>
+                <td class="mono">{{ calculateAccuracy(val.correct, val.attempted) }}</td>
               </tr>
             </tbody>
           </table>
         </div>
       </section>
 
-      <section v-if="report.tag_stats && Object.keys(report.tag_stats).length" class="exam-stats-group">
-        <h3>{{ t('ui.k0076') }}</h3>
-        <div class="stats-table-wrapper">
-          <table class="stats-table">
+      <section v-if="report.tag_stats && Object.keys(report.tag_stats).length" class="report-section">
+        <h2 class="section-title">{{ t('ep.exam.by_tag') }}</h2>
+        <div class="etable-wrap">
+          <table class="etable">
             <thead>
-              <tr><th>{{ t('ui.k0077') }}</th><th>{{ t('ui.k0073') }}</th><th>{{ t('ui.k0067') }}</th><th>{{ t('ui.k0075') }}</th><th>{{ t('ui.k0064') }}</th></tr>
+              <tr>
+                <th>{{ t('ep.exam.by_tag') }}</th>
+                <th>{{ t('ep.exam.answered') }}</th>
+                <th>{{ t('ep.exam.correct') }}</th>
+                <th>{{ t('ep.exam.wrong') }}</th>
+                <th>{{ t('ep.exam.accuracy') }}</th>
+              </tr>
             </thead>
             <tbody>
               <tr v-for="(val, tag) in report.tag_stats" :key="tag">
                 <td>{{ tag }}</td>
-                <td>{{ val.attempted }}</td>
-                <td>{{ val.correct }}</td>
-                <td>{{ val.incorrect }}</td>
-                <td>{{ calculateAccuracy(val.correct, val.attempted) }}</td>
+                <td class="mono">{{ val.attempted }}</td>
+                <td class="mono">{{ val.correct }}</td>
+                <td class="mono">{{ val.incorrect }}</td>
+                <td class="mono">{{ calculateAccuracy(val.correct, val.attempted) }}</td>
               </tr>
             </tbody>
           </table>
         </div>
       </section>
 
-      <section v-if="reviewQuestions.length" class="exam-review">
-        <h3>{{ t('ui.k0078') }}</h3>
+      <section v-if="reviewQuestions.length" class="report-section exam-review">
+        <h2 class="section-title">{{ t('ep.exam.wrong_detail') }}</h2>
         <article v-for="item in reviewQuestions" :key="item.id" class="review-item">
-          <h4>{{ item.stem }}</h4>
-          <p>{{ t('ui.k0079') }}{{ displayAnswer(report.answers[item.id]?.user_answer) }}</p>
-          <p>{{ t('ui.k0080') }}{{ displayAnswer(report.answers[item.id]?.correct_answer) }}</p>
-          <p v-if="report.answers[item.id]?.explanation">{{ report.answers[item.id].explanation }}</p>
+          <h3 class="review-stem">
+            <span v-if="isBlankReportItem(item.id)" class="tag">{{ t('ep.exam.blank') }}</span>
+            {{ item.stem }}
+          </h3>
+          <div class="review-answers">
+            <p><span>{{ t('ep.exam.your_answer') }}</span><strong>{{ displayAnswer(report.answers[item.id]?.user_answer) }}</strong></p>
+            <p><span>{{ t('ep.exam.right_answer') }}</span><strong>{{ displayAnswer(report.answers[item.id]?.correct_answer) }}</strong></p>
+          </div>
+          <p v-if="report.answers[item.id]?.explanation" class="review-explain">{{ report.answers[item.id].explanation }}</p>
+          <p v-else class="review-explain is-empty">{{ t('ep.exam.no_analysis') }}</p>
         </article>
       </section>
-      <button type="button" class="primary" @click="handleBack">{{ t('ui.k0081') }}</button>
+
+      <div class="report-actions">
+        <button type="button" class="btn btn-primary" @click="handleBack">{{ t('ep.exam.back_center') }}</button>
+      </div>
     </section>
 
     <template v-else-if="question">
       <div class="exam-layout">
-        <section class="exam-question-card">
-          <div class="question-meta"><span>{{ t('ui.k0082') }} {{ currentIndex + 1 }} {{ t('ui.k0083') }} {{ questions.length }}</span><span class="badge-type">{{ formatQuestionTypeName(question.type) }}</span></div>
-          <h2>{{ question.stem }}</h2>
+        <section class="exam-paper">
+          <div class="exam-q-meta">
+            <span>{{ t('ep.practice.question_no', { current: currentIndex + 1 }) }}</span>
+            <span>{{ formatQuestionTypeName(question.type) }}</span>
+            <span v-if="isFlagged" class="tag warn">{{ t('ep.exam.flagged') }}</span>
+          </div>
+          <h2 class="exam-stem">{{ question.stem }}</h2>
+
           <div v-if="question.options?.length" class="exam-options">
             <label
               v-for="option in question.options"
@@ -93,128 +185,173 @@
               class="exam-option"
               :class="{ selected: isOptionSelected(option.key) }"
             >
-              <kbd class="key-cap" :title="`${t('ui.k0084')} ${option.key} ${t('ui.k0085')}`">{{ option.key }}</kbd>
+              <kbd class="key-cap" :title="`${t('ep.practice.edit_option_key')} ${option.key}`">{{ option.key }}</kbd>
               <input
                 :type="question.type === 'MULTI' ? 'checkbox' : 'radio'"
                 :name="`question-${question.id}`"
                 :checked="isOptionSelected(option.key)"
+                :disabled="answersLocked"
                 @change="selectOption(option.key, $event.target.checked)"
               />
               <span class="option-content-text">{{ option.content }}</span>
+              <span class="option-indicator" aria-hidden="true"></span>
             </label>
           </div>
-          <label v-else class="exam-text-answer">
-            <span>{{ ['ESSAY', 'SUBJECTIVE'].includes(question.type) ? t('ui.k0654') : t('ui.k0655') }}</span>
+          <label v-else class="field exam-text-answer">
+            <span class="label">{{ ['ESSAY', 'SUBJECTIVE'].includes(question.type) ? t('ep.exam.your_answer') : t('ep.practice.your_answer') }}</span>
             <textarea
               :value="currentTextAnswer"
               :rows="['ESSAY', 'SUBJECTIVE'].includes(question.type) ? 8 : 2"
-              :placeholder="['ESSAY', 'SUBJECTIVE'].includes(question.type) ? t('ui.k0086') : t('ui.k0087')"
+              :placeholder="['ESSAY', 'SUBJECTIVE'].includes(question.type) ? t('ep.practice.essay_placeholder') : t('ep.practice.essay_placeholder')"
+              :disabled="answersLocked"
               @input="setTextAnswer($event.target.value)"
             />
           </label>
-
-          <div class="exam-question-actions exam-fixed-action-bar">
-            <div class="exam-actions-inner">
-              <button type="button" class="btn-flag-toggle" data-testid="exam-flag-toggle" :aria-pressed="isFlagged" @click="toggleCurrentFlag" :title="t('ui.k0088')">
-                <span class="flag-icon">
-                  <LinearIcon name="target" size="13" />
-                </span>
-                <span>{{ isFlagged ? t('ui.k0656') : t('ui.k0657') }}</span>
-                <kbd class="hotkey-badge">F</kbd>
-              </button>
-              <div class="exam-nav-btns">
-                <button type="button" class="btn-exam-nav" :disabled="currentIndex === 0" @click="goTo(currentIndex - 1)" :title="t('ui.k0089')">
-                  {{ t('ui.k0090') }}
-                  <kbd class="hotkey-badge">←</kbd>
-                </button>
-                <button type="button" class="btn-exam-nav primary" :disabled="currentIndex >= questions.length - 1" @click="goTo(currentIndex + 1)" :title="t('ui.k0091')">
-                  {{ t('ui.k0092') }}
-                  <kbd class="hotkey-badge">→</kbd>
-                </button>
-              </div>
-            </div>
-          </div>
         </section>
 
-        <aside class="exam-answer-sheet" data-testid="exam-answer-sheet" :aria-label="t('ui.k0093')">
-          <h2>{{ t('ui.k0093') }}</h2>
-          <p>{{ answeredCount }} {{ t('ui.k0094') }} {{ flaggedCount }} {{ t('ui.k0095') }}</p>
-          <div class="sheet-legend">
-            <span class="legend-item"><span class="legend-badge answered">✔</span> {{ t('ui.k0096') }}</span>
-            <span class="legend-item"><span class="legend-badge flagged"><LinearIcon name="target" size="10" /></span> {{ t('ui.k0097') }}</span>
-            <span class="legend-item"><span class="legend-badge current">●</span> {{ t('ui.k0098') }}</span>
-            <span class="legend-item"><span class="legend-badge">○</span> {{ t('ui.k0099') }}</span>
+        <aside class="exam-sheet" data-testid="exam-answer-sheet" :aria-label="t('ep.exam.sheet')">
+          <div class="sheet-head">
+            <span class="sheet-title">{{ t('ep.exam.sheet') }}</span>
+            <span class="sheet-count mono">{{ answeredCount }} / {{ questions.length }}</span>
           </div>
+          <div class="sheet-progress"><i :style="{ width: Math.min(100, (answeredCount / Math.max(1, questions.length)) * 100) + '%' }"></i></div>
+          <dl class="sheet-facts">
+            <div><dt>{{ t('ep.exam.answered') }}</dt><dd class="mono">{{ answeredCount }}</dd></div>
+            <div><dt>{{ t('ep.exam.blank') }}</dt><dd class="mono">{{ Math.max(0, questions.length - answeredCount) }}</dd></div>
+            <div><dt>{{ t('ep.exam.flagged') }}</dt><dd class="mono">{{ flaggedCount }}</dd></div>
+          </dl>
           <div class="answer-grid">
             <button
               v-for="(item, index) in questions"
               :key="item.id"
               type="button"
+              class="answer-cell mono"
               :class="answerButtonClass(item.id, index)"
-              :aria-label="`${t('ui.k0082')} ${index + 1} ${t('ui.k0101')}${answerState(item.id).answered ? t('ui.k0096') : t('ui.k0099')}${answerState(item.id).flagged ? t('ui.k0100') : ''}`"
+              :aria-label="`${t('ep.practice.question_no', { current: index + 1 })} ${answerState(item.id).answered ? t('ep.exam.answered') : t('ep.exam.blank')}${answerState(item.id).flagged ? ' ' + t('ep.exam.flagged') : ''}`"
               @click="goTo(index)"
             >{{ index + 1 }}</button>
           </div>
+          <p class="sheet-note">{{ t('ep.exam.sheet_note') }}</p>
         </aside>
       </div>
-    </template>
-    <p v-else-if="!loading" class="exam-loading">{{ t('ui.k0102') }}</p>
 
-    <!-- 移动端答题卡抽屉 -->
-    <div v-if="showMobileSheet" class="exam-sheet-modal-backdrop" @click.self="showMobileSheet = false">
-      <div class="exam-sheet-modal-drawer">
-        <div class="exam-sheet-drawer-header">
-          <h3>{{ t('ui.k0103') }} {{ answeredCount }} / {{ questions.length }})</h3>
-          <button type="button" class="btn-close-sheet" @click="showMobileSheet = false">✕</button>
+      <footer class="exam-actionbar">
+        <div class="exam-action-inner">
+          <button type="button" class="btn btn-sm exam-sheet-trigger" @click="showMobileSheet = true">
+            <LinearIcon name="layers" :size="14" />{{ t('ep.exam.sheet') }}
+            <span class="mono">{{ answeredCount }} / {{ questions.length }}</span>
+          </button>
+          <button type="button" class="btn btn-sm exam-flag" data-testid="exam-flag-toggle" :aria-pressed="isFlagged" :disabled="answersLocked" :class="{ 'is-on': isFlagged }" @click="toggleCurrentFlag">
+            <LinearIcon name="flag" :size="13" />{{ isFlagged ? t('ep.exam.flagged') : t('ep.exam.flag') }}
+            <kbd>F</kbd>
+          </button>
+          <span class="exam-action-spacer"></span>
+          <button type="button" class="btn btn-sm" :disabled="currentIndex === 0" :title="t('ep.practice.prev')" @click="goTo(currentIndex - 1)">
+            <LinearIcon name="arrow-left" :size="14" /><span class="nav-label">{{ t('ep.practice.prev') }}</span>
+          </button>
+          <button type="button" class="btn btn-sm btn-primary" :disabled="currentIndex >= questions.length - 1" :title="t('ep.practice.next')" @click="goTo(currentIndex + 1)">
+            <span class="nav-label">{{ t('ep.practice.next') }}</span><LinearIcon name="arrow-right" :size="14" />
+          </button>
+        </div>
+      </footer>
+    </template>
+
+    <div v-else-if="!loading" class="exam-loading">
+      <div class="empty-title">{{ t('ep.practice.no_questions') }}</div>
+      <div class="empty-desc">{{ t('ep.exam.papers_empty_hint') }}</div>
+      <button type="button" class="btn" @click="handleBack">{{ t('ep.exam.back_center') }}</button>
+    </div>
+
+    <!-- Mobile answer sheet -->
+    <div v-if="showMobileSheet" class="exam-sheet-backdrop" @click.self="showMobileSheet = false">
+      <div class="exam-sheet-drawer" role="dialog" aria-modal="true" :aria-label="t('ep.exam.sheet')">
+        <div class="sheet-head">
+          <div>
+            <span class="sheet-title">{{ t('ep.exam.sheet') }}</span>
+            <span class="sheet-count mono">{{ answeredCount }} / {{ questions.length }}</span>
+          </div>
+          <button type="button" class="icon-btn" :aria-label="t('ep.common.close')" @click="showMobileSheet = false"><LinearIcon name="x" :size="16" /></button>
         </div>
         <div class="sheet-legend">
-          <span class="legend-item"><span class="legend-badge answered">✔</span> {{ t('ui.k0096') }}</span>
-          <span class="legend-item"><span class="legend-badge flagged"><LinearIcon name="target" size="10" /></span> {{ t('ui.k0104') }}</span>
-          <span class="legend-item"><span class="legend-badge current">●</span> {{ t('ui.k0098') }}</span>
-          <span class="legend-item"><span class="legend-badge">○</span> {{ t('ui.k0099') }}</span>
+          <span><i class="dot answered"></i>{{ t('ep.exam.answered') }}</span>
+          <span><i class="dot flagged"></i>{{ t('ep.exam.flagged') }}</span>
+          <span><i class="dot current"></i>{{ t('ep.exam.sheet') }}</span>
         </div>
         <div class="answer-grid">
           <button
             v-for="(item, index) in questions"
             :key="item.id"
             type="button"
+            class="answer-cell mono"
             :class="answerButtonClass(item.id, index)"
+            :aria-label="`${t('ep.practice.question_no', { current: index + 1 })} ${answerState(item.id).answered ? t('ep.exam.answered') : t('ep.exam.blank')}${answerState(item.id).flagged ? ' ' + t('ep.exam.flagged') : ''}`"
             @click="goTo(index); showMobileSheet = false"
           >{{ index + 1 }}</button>
+        </div>
+        <div class="sheet-drawer-foot">
+          <ThemeToggle compact />
+          <LocaleToggle compact />
         </div>
       </div>
     </div>
 
-    <div v-if="showSubmitConfirm" class="exam-confirm-backdrop" @click.self="showSubmitConfirm = false">
-      <section class="exam-confirm-dialog" data-testid="exam-submit-confirm" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
-        <h2 id="confirm-title">{{ t('ui.k0105') }}</h2>
-        <p>
-          {{ t('ui.k0106') }}
-          <button
-            v-if="questions.length - answeredCount > 0"
-            type="button"
-            class="btn-link-jump"
-            :title="t('ui.k0107')"
-            @click="jumpToFirstUnanswered"
-          >
-            <strong>{{ questions.length - answeredCount }} {{ t('ui.k0108') }}</strong>
-          </button>
-          <span v-else>{{ t('ui.k0109') }}</span>，{{ flaggedCount }} {{ t('ui.k0110') }}
-        </p>
-        <div class="exam-question-actions">
-          <button type="button" :disabled="isSubmitting" @click="showSubmitConfirm = false">{{ t('ui.k0111') }}</button>
-          <button type="button" class="primary" :disabled="isSubmitting" @click="submitExam(false)">{{ isSubmitting ? t('ui.k0658') : t('ui.k0659') }}</button>
+    <!-- Explicit deadline recovery: only this action may finalise a late paper -->
+    <div v-if="showExpiredSubmitConfirm" class="exam-overlay" @click.self="showExpiredSubmitConfirm = false" data-testid="exam-expired-confirm">
+      <section class="exam-dialog" role="dialog" aria-modal="true" aria-labelledby="exam-expired-title">
+        <div class="dialog-head">
+          <span id="exam-expired-title" class="dialog-title">{{ expiredCopy.submit_server }}</span>
+          <button type="button" class="icon-btn" :aria-label="t('ep.common.close')" @click="showExpiredSubmitConfirm = false"><LinearIcon name="x" :size="16" /></button>
+        </div>
+        <div class="exam-dialog-body">
+          <p>{{ expiredCopy.confirm }}</p>
+          <p v-if="unsubmittedQuestionNumbers.length" class="exam-dialog-warn" data-testid="exam-expired-confirm-unsubmitted">
+            {{ expiredCopy.unsubmitted }}
+            <span v-for="number in unsubmittedQuestionNumbers" :key="number">{{ t('ep.practice.question_no', { current: number }) }}</span>
+          </p>
+        </div>
+        <div class="dialog-actions">
+          <button type="button" class="btn" @click="showExpiredSubmitConfirm = false">{{ expiredCopy.cancel }}</button>
+          <button type="button" class="btn btn-primary" data-testid="exam-expired-confirm-submit" :disabled="isSubmitting" @click="submitWithServerAnswers">{{ expiredCopy.confirm_submit }}</button>
         </div>
       </section>
     </div>
 
-    <div v-if="showExitConfirmModal" class="exam-confirm-backdrop" @click.self="handleCancelExit" data-testid="exam-exit-confirm-modal">
-      <section class="exam-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="exit-confirm-title">
-        <h2 id="exit-confirm-title">{{ t('exam.exit_confirm_title') }}</h2>
-        <p>{{ t('exam.exit_confirm_desc') }}</p>
-        <div class="exam-question-actions">
-          <button type="button" class="btn-cancel-exit" @click="handleCancelExit">{{ t('exam.continue_exam') }}</button>
-          <button type="button" class="primary btn-confirm-exit" @click="handleConfirmExit">{{ t('exam.confirm_exit') }}</button>
+    <!-- Submit confirmation -->
+    <div v-if="showSubmitConfirm" class="exam-overlay" @click.self="showSubmitConfirm = false" data-testid="exam-submit-confirm">
+      <section class="exam-dialog" role="dialog" aria-modal="true" aria-labelledby="exam-submit-title">
+        <div class="dialog-head">
+          <span id="exam-submit-title" class="dialog-title">{{ t('ep.exam.submit') }}</span>
+          <button type="button" class="icon-btn" :aria-label="t('ep.common.close')" @click="showSubmitConfirm = false"><LinearIcon name="x" :size="16" /></button>
+        </div>
+        <div class="exam-dialog-body">
+          <p>{{ t('ep.exam.submit_confirm') }}</p>
+          <p class="exam-dialog-stats">
+            {{ t('ep.exam.submit_stats', { answered: answeredCount, blank: questions.length - answeredCount, flagged: flaggedCount }) }}
+          </p>
+          <p v-if="questions.length - answeredCount > 0" class="exam-dialog-warn">
+            {{ t('ep.exam.submit_blank_warn', { count: questions.length - answeredCount }) }}
+            <button type="button" class="link-btn" @click="jumpToFirstUnanswered">{{ t('ep.exam.sheet') }}</button>
+          </p>
+        </div>
+        <div class="dialog-actions">
+          <button type="button" class="btn" :disabled="isSubmitting" @click="showSubmitConfirm = false">{{ t('ep.common.cancel') }}</button>
+          <button type="button" class="btn btn-primary" :disabled="isSubmitting" @click="submitExam(false)">{{ isSubmitting ? t('ep.common.loading') : t('ep.exam.submit') }}</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- Exit confirmation -->
+    <div v-if="showExitConfirmModal" class="exam-overlay" @click.self="handleCancelExit" data-testid="exam-exit-confirm-modal">
+      <section class="exam-dialog" role="dialog" aria-modal="true" aria-labelledby="exam-exit-title">
+        <div class="dialog-head">
+          <span id="exam-exit-title" class="dialog-title">{{ t('ep.exam.abandon') }}</span>
+        </div>
+        <div class="exam-dialog-body">
+          <p>{{ t('ep.exam.abandon_confirm') }}</p>
+        </div>
+        <div class="dialog-actions">
+          <button type="button" class="btn" @click="handleCancelExit">{{ t('ep.exam.resume') }}</button>
+          <button type="button" class="btn btn-primary" @click="handleConfirmExit">{{ t('ep.exam.runner_exit') }}</button>
         </div>
       </section>
     </div>
@@ -227,12 +364,15 @@ import { useRouter } from 'vue-router'
 import LinearIcon from '../../components/LinearIcon.vue'
 import ThemeToggle from '../../components/ThemeToggle.vue'
 import LocaleToggle from '../../components/LocaleToggle.vue'
-import { useLocale } from '../../composables/useLocale.js'
+import { useLocale, getCurrentLocale } from '../../composables/useLocale.js'
+import { useAuthStore } from '../../stores/authStore'
 import { completeSession, getSession, getSessionQuestions, submitAttempt, syncDraft, toggleFlag } from '../../api/practice'
-import { calculateAccuracy, examAnswerState, findFirstUnansweredIndex, formatQuestionTypeName, formatRemainingTime, isSwipeGestureValid, normalizeExamAnswer } from '../../domain/exam'
+import { buildExamDraftBase, buildExamDraftPayload, buildExamLocalDraft, calculateAccuracy, examAnswerState, examAnswersToBase, examLocalDraftDiffers, examLocalDraftKey, examRecoveryBase, findFirstUnansweredIndex, formatQuestionTypeName, formatRemainingTime, isExamNetworkError, isExamTimeExpiredError, isExamReviewItem, isSwipeGestureValid, mergeExamLocalDraft, normalizeDraftConflicts, resolveExamUserKey, unsubmittedExamAnswers } from '../../domain/exam'
 
 const { t } = useLocale()
 const router = useRouter()
+const auth = useAuthStore()
+const examUserKey = computed(() => resolveExamUserKey(auth.user?.value || auth.user))
 
 const props = defineProps({ token: { type: String, required: true }, sessionId: { type: String, required: true } })
 const emit = defineEmits(['back'])
@@ -275,6 +415,50 @@ const report = ref(null)
 const loading = ref(true)
 const error = ref('')
 const showMobileSheet = ref(false)
+const draftConflicts = ref([])
+const draftBase = ref({})
+const pendingSubmit = ref(false)
+const offlineNotice = ref('')
+const offlineRetryAvailable = ref(false)
+// Set only when the server answered EXAM_TIME_EXPIRED. It is terminal: no
+// automatic retry, no silent submission. The user must explicitly choose to
+// finalise with the answers the server already saved.
+const syncExpired = ref(false)
+const showExpiredSubmitConfirm = ref(false)
+
+// Kept local to this runner because the shared locale files are owned by other
+// work in this batch; both shipped languages must still be complete.
+const EXPIRED_COPY = {
+  'zh-CN': {
+    notice: '模考已超过截止时间，服务器不再接受这台设备上的答案同步。',
+    unsubmitted: '以下本地答案未能提交：',
+    none: '本机没有未提交的答案。',
+    kept: '未提交的答案仍保留在这台设备上。',
+    submit_server: '以服务器已保存的答案交卷',
+    confirm: '将以服务器在截止前已保存的答案交卷，本机未提交的答案不会计入成绩。交卷后不可撤销。',
+    confirm_submit: '确认交卷',
+    cancel: '暂不交卷',
+  },
+  'en-US': {
+    notice: 'The exam deadline has passed and the server no longer accepts answer syncs from this device.',
+    unsubmitted: 'These local answers were not submitted:',
+    none: 'This device has no unsubmitted answers.',
+    kept: 'The unsubmitted answers remain saved on this device.',
+    submit_server: 'Submit with the answers saved on the server',
+    confirm: 'The paper will be finalised with the answers the server saved before the deadline. Local unsubmitted answers will not be scored. This cannot be undone.',
+    confirm_submit: 'Submit now',
+    cancel: 'Not yet',
+  },
+}
+
+const expiredCopy = computed(() => EXPIRED_COPY[getCurrentLocale() === 'en-US' ? 'en-US' : 'zh-CN'])
+const unsubmittedAnswers = computed(() => unsubmittedExamAnswers(answers.value, draftBase.value))
+const unsubmittedQuestionNumbers = computed(() => {
+  const order = new Map(questions.value.map((item, index) => [item?.id, index + 1]))
+  return unsubmittedAnswers.value
+    .map(item => order.get(item.question_id))
+    .filter(number => number !== undefined)
+})
 
 let touchStartX = 0
 let touchStartY = 0
@@ -302,6 +486,15 @@ let draftHandle
 let draftPromise = null
 const question = computed(() => questions.value[currentIndex.value])
 const remainingSeconds = computed(() => Math.max(0, Number(session.value?.time_limit || 0) * 60 - elapsedSeconds.value))
+const timeExpired = computed(() => Boolean(session.value?.time_limit) && remainingSeconds.value <= 0)
+// Once the clock runs out the server rejects further draft writes, so the paper
+// becomes read-only even if the auto-submit is still pending on this device.
+const answersLocked = computed(() => Boolean(report.value) || timeExpired.value || pendingSubmit.value || syncExpired.value)
+const connectionNotice = computed(() => {
+  if (syncExpired.value) return ''
+  if (pendingSubmit.value) return t('ep.practice.draft_offline_notice')
+  return offlineRetryAvailable.value ? offlineNotice.value : ''
+})
 const answeredCount = computed(() => questions.value.filter(item => answerState(item.id).answered).length)
 const flaggedCount = computed(() => flags.value.length)
 const isFlagged = computed(() => question.value ? flags.value.includes(question.value.id) : false)
@@ -309,7 +502,7 @@ const currentTextAnswer = computed(() => {
   const value = question.value ? answerValue(question.value.id) : ''
   return Array.isArray(value) ? value.join('') : String(value ?? '')
 })
-const reviewQuestions = computed(() => questions.value.filter(item => report.value?.answers?.[item.id]))
+const reviewQuestions = computed(() => questions.value.filter(item => isExamReviewItem(item.id, report.value?.answers)))
 
 function answerValue(questionId) {
   const saved = answers.value[questionId]
@@ -332,43 +525,250 @@ function displayAnswer(value) {
   return value === undefined || value === null || value === '' ? t('ui.k0112') : String(value)
 }
 
+function isBlankReportItem(questionId) {
+  const entry = report.value?.answers?.[questionId]
+  return !entry || entry.correctness === 'UNANSWERED'
+}
+
+function dismissDraftConflicts() {
+  // The server keeps the value saved elsewhere, so dismissing means accepting
+  // it. A paper that was already waiting on its time-up submission can then
+  // finish; nothing is dropped silently because the user made the choice.
+  draftConflicts.value = []
+  saveLocalExamDraft()
+  if (pendingSubmit.value) void submitExam(true)
+  else scheduleDraftSave()
+}
+
+function restoreMyAnswers() {
+  // With optimistic draft sync the server keeps the answer saved elsewhere and
+  // reports this device's value as rejected. "Keep my answer" re-applies the
+  // rejected value now that the baseline matches the server.
+  for (const conflict of draftConflicts.value) {
+    answers.value[conflict.question_id] = conflict.incoming_answer
+  }
+  draftConflicts.value = []
+  saveLocalExamDraft()
+  if (pendingSubmit.value) void submitExam(true)
+  else scheduleDraftSave()
+}
+
+function draftStorageKeys() {
+  const scoped = examLocalDraftKey(props.sessionId, examUserKey.value)
+  const legacy = examLocalDraftKey(props.sessionId)
+  return { scoped, legacy: legacy && legacy !== scoped ? legacy : '' }
+}
+
+function readStoredDraft(key) {
+  if (!key || typeof localStorage === 'undefined') return null
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || 'null')
+    if (!parsed || typeof parsed !== 'object' || !parsed.answers || typeof parsed.answers !== 'object') return null
+    return parsed
+  } catch (_) {
+    return null
+  }
+}
+
+function readLocalExamDraft() {
+  const { scoped, legacy } = draftStorageKeys()
+  // A draft written before per-account scoping is still this user's (session ids
+  // are issued per account); reading it lets the next write migrate it.
+  return readStoredDraft(scoped) || (legacy ? readStoredDraft(legacy) : null)
+}
+
+function saveLocalExamDraft() {
+  const { scoped, legacy } = draftStorageKeys()
+  if (!scoped || typeof localStorage === 'undefined' || !session.value || report.value) return
+  try {
+    localStorage.setItem(scoped, JSON.stringify(buildExamLocalDraft({
+      answers: answers.value,
+      baseAnswers: draftBase.value,
+      flags: flags.value,
+      currentIndex: currentIndex.value,
+      timeSpent: elapsedSeconds.value,
+      pendingSubmit: pendingSubmit.value,
+    })))
+    if (legacy) localStorage.removeItem(legacy)
+  } catch (_) { /* quota / private mode: the server sync remains the fallback */ }
+}
+
+function clearLocalExamDraft() {
+  const { scoped, legacy } = draftStorageKeys()
+  for (const key of [scoped, legacy]) {
+    if (!key || typeof localStorage === 'undefined') continue
+    try { localStorage.removeItem(key) } catch (_) {}
+  }
+  offlineNotice.value = ''
+  offlineRetryAvailable.value = false
+}
+
+function markPendingSubmit() {
+  if (report.value) return
+  pendingSubmit.value = true
+  saveLocalExamDraft()
+}
+
+/**
+ * The server rejected a late draft/answer with EXAM_TIME_EXPIRED. This is a
+ * terminal state: stop every automatic retry, keep the device copy, and wait
+ * for the user to explicitly choose the server-saved answers.
+ */
+function enterExpiredState() {
+  if (report.value) return
+  syncExpired.value = true
+  pendingSubmit.value = false
+  offlineNotice.value = ''
+  offlineRetryAvailable.value = false
+  clearTimeout(draftHandle)
+  clearInterval(tickHandle)
+  saveLocalExamDraft()
+}
+
+/**
+ * Explicit, user-triggered finalisation after the deadline. Only the answers
+ * the server saved before the deadline are scored; this is never called
+ * automatically, so a late paper is never silently submitted.
+ */
+async function submitWithServerAnswers() {
+  if (isSubmitting.value || report.value || !syncExpired.value) return
+  isSubmitting.value = true
+  error.value = ''
+  showExpiredSubmitConfirm.value = false
+  try {
+    report.value = await completeSession(props.token, props.sessionId)
+    report.value.time_spent = elapsedSeconds.value
+    syncExpired.value = false
+    pendingSubmit.value = false
+    clearLocalExamDraft()
+  } catch (err) {
+    if (isExamTimeExpiredError(err)) {
+      enterExpiredState()
+      error.value = err.detail || err.message
+    } else {
+      error.value = `${t('ui.k0115')}${err.detail || err.message}`
+    }
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+function retrySync() {
+  if (isSubmitting.value || report.value || syncExpired.value) return
+  if (pendingSubmit.value || timeExpired.value) void recoverPendingSubmit()
+  else void persistDraft()
+}
+
+async function recoverPendingSubmit() {
+  if (isSubmitting.value || report.value || syncExpired.value) return
+  if (pendingSubmit.value) {
+    // A previous complete may have succeeded while its response was lost (or
+    // another device finalised the paper). Completing is idempotent; prefer the
+    // server's final report instead of replaying a draft the server will reject.
+    try {
+      const fresh = await getSession(props.token, props.sessionId)
+      if (fresh?.is_completed) {
+        report.value = await completeSession(props.token, props.sessionId)
+        report.value.time_spent = elapsedSeconds.value
+        pendingSubmit.value = false
+        clearLocalExamDraft()
+        return
+      }
+    } catch (_) { /* fall through to the normal draft-then-complete path */ }
+  }
+  await submitExam(true)
+}
+
+function handleOnline() {
+  if (report.value || !session.value) return
+  // After the deadline the server will keep rejecting drafts; retrying on every
+  // reconnect is the endless loop this guard prevents.
+  if (syncExpired.value) return
+  if (pendingSubmit.value) {
+    void recoverPendingSubmit()
+    return
+  }
+  if (!draftConflicts.value.length && offlineRetryAvailable.value) void persistDraft()
+}
+
 function scheduleDraftSave() {
   clearTimeout(draftHandle)
   draftHandle = setTimeout(() => { void persistDraft() }, 400)
 }
 
 async function persistDraft(force = false) {
-  if (!session.value || (isSubmitting.value && !force) || report.value) return
-  if (draftPromise) await draftPromise
-  if (!session.value || (isSubmitting.value && !force) || report.value) return
-  draftPromise = syncDraft(props.token, props.sessionId, {
+  if (!session.value || (isSubmitting.value && !force) || report.value) return false
+  if (draftPromise) {
+    try { await draftPromise } catch (_) { /* reported by the owning call */ }
+  }
+  if (!session.value || (isSubmitting.value && !force) || report.value) return false
+  const changedAnswers = buildExamDraftPayload(answers.value, draftBase.value)
+  const payload = {
     current_index: currentIndex.value,
-    answers: answers.value,
     flags: flags.value,
     time_spent: elapsedSeconds.value,
-  })
+  }
+  if (Object.keys(changedAnswers).length) {
+    payload.answers = changedAnswers
+    payload.base_answers = buildExamDraftBase(changedAnswers, draftBase.value)
+  }
+  // Persist before the request so a reload during a slow/failed sync still
+  // restores what the user typed.
+  saveLocalExamDraft()
+  draftPromise = syncDraft(props.token, props.sessionId, payload)
   try {
-    await draftPromise
+    const saved = await draftPromise
+    offlineNotice.value = ''
+    offlineRetryAvailable.value = false
+    if (saved?.answers) draftBase.value = examAnswersToBase(saved.answers)
+    if (saved?.has_conflict) {
+      const conflicts = normalizeDraftConflicts(saved.conflicts, questions.value)
+      // The service keeps the value saved elsewhere, so the paper must show it;
+      // the notice offers an explicit way to re-apply this device's answer.
+      for (const conflict of conflicts) {
+        answers.value[conflict.question_id] = conflict.existing_answer
+      }
+      draftConflicts.value = conflicts
+      // Keep the device backup aligned with the server's resolved value so a
+      // reload does not resurrect the rejected answer as a fresh "local" edit.
+      saveLocalExamDraft()
+    }
+    saveLocalExamDraft()
+    return true
   } catch (err) {
-    error.value = `${t('ui.k0113')}${err.detail || err.message}`
+    if (isExamTimeExpiredError(err)) {
+      enterExpiredState()
+      return false
+    }
+    if (isExamNetworkError(err)) {
+      offlineNotice.value = t('ep.practice.draft_offline_notice')
+      offlineRetryAvailable.value = true
+    } else {
+      error.value = `${t('ui.k0113')}${err.detail || err.message}`
+    }
+    saveLocalExamDraft()
+    return false
   } finally {
     draftPromise = null
   }
 }
 
 function selectOption(key, checked) {
-  if (!question.value) return
+  if (!question.value || answersLocked.value) return
   if (question.value.type === 'MULTI') {
     const selected = Array.isArray(answerValue(question.value.id)) ? [...answerValue(question.value.id)] : []
     answers.value[question.value.id] = checked ? [...new Set([...selected, key])].sort() : selected.filter(value => value !== key)
   } else {
     answers.value[question.value.id] = key
   }
+  saveLocalExamDraft()
   scheduleDraftSave()
 }
 
 function setTextAnswer(value) {
+  if (!question.value || answersLocked.value) return
   answers.value[question.value.id] = value
+  saveLocalExamDraft()
   scheduleDraftSave()
 }
 
@@ -379,41 +779,93 @@ function goTo(index) {
 }
 
 async function toggleCurrentFlag() {
-  if (!question.value) return
+  if (!question.value || answersLocked.value) return
   error.value = ''
   try {
     const result = await toggleFlag(props.token, props.sessionId, question.value.id)
     flags.value = result.flags
+    saveLocalExamDraft()
     scheduleDraftSave()
   } catch (err) {
     error.value = err.detail || err.message
   }
 }
 
+function restartTicker() {
+  clearInterval(tickHandle)
+  if (!report.value) tickHandle = setInterval(tick, 1000)
+}
+
 async function submitExam(automatic) {
   if (isSubmitting.value || report.value) return
+  // Once the server has declared the deadline passed, only the explicit
+  // server-answer action may finalise the paper.
+  if (syncExpired.value) return
+  if (!automatic && draftConflicts.value.length) {
+    // Do not finalise a paper while a draft conflict is unresolved: the user
+    // must decide whether to keep this device's answer first.
+    showSubmitConfirm.value = false
+    error.value = t('ep.exam.draft_conflict_submit')
+    return
+  }
   isSubmitting.value = true
   error.value = ''
   showSubmitConfirm.value = false
   clearTimeout(draftHandle)
   clearInterval(tickHandle)
   try {
-    await persistDraft(true)
-    report.value = await completeSession(props.token, props.sessionId)
-    report.value.time_spent = elapsedSeconds.value
-    if (automatic) error.value = t('ui.k0114')
-  } catch (err) {
-    error.value = `${t('ui.k0115')}${err.detail || err.message}`
-    tickHandle = setInterval(tick, 1000)
+    const saved = await persistDraft(true)
+    if (!saved) {
+      // A terminal EXAM_TIME_EXPIRED must never fall through to completing with
+      // the server copy; the banner asks the user to decide explicitly.
+      if (syncExpired.value) return
+      // Never complete with the server's older draft. The user's answers stay
+      // in the device backup and a time-up submission stays pending until the
+      // connection returns (or the user retries explicitly).
+      if (automatic || timeExpired.value) markPendingSubmit()
+      else restartTicker()
+      return
+    }
+    if (draftConflicts.value.length) {
+      // A cross-device conflict is the user's call. Surface it and hold the
+      // submission instead of picking a side silently.
+      if (!automatic) error.value = t('ep.exam.draft_conflict_submit')
+      if (automatic || timeExpired.value) markPendingSubmit()
+      else restartTicker()
+      return
+    }
+    pendingSubmit.value = false
+    try {
+      report.value = await completeSession(props.token, props.sessionId)
+      report.value.time_spent = elapsedSeconds.value
+      clearLocalExamDraft()
+      if (automatic) error.value = t('ui.k0114')
+    } catch (err) {
+      if (isExamTimeExpiredError(err)) {
+        enterExpiredState()
+        return
+      }
+      // The draft is already saved on the server, so completing later is safe
+      // and idempotent; keep the local copy until the report actually arrives.
+      error.value = `${t('ui.k0115')}${err.detail || err.message}`
+      if (automatic || timeExpired.value) markPendingSubmit()
+      else restartTicker()
+    }
   } finally {
     isSubmitting.value = false
   }
 }
 
 function tick() {
+  if (syncExpired.value) return
   elapsedSeconds.value += 1
-  if (session.value?.time_limit && remainingSeconds.value <= 0) void submitExam(true)
-  else if (elapsedSeconds.value % 10 === 0) void persistDraft()
+  if (session.value?.time_limit && remainingSeconds.value <= 0) {
+    // A pending submission is retried by the online event / retry button, not
+    // every second, so an offline device does not hammer the network.
+    if (!pendingSubmit.value) void submitExam(true)
+  } else if (elapsedSeconds.value % 10 === 0) {
+    void persistDraft()
+  }
 }
 
 function jumpToFirstUnanswered() {
@@ -432,8 +884,14 @@ function handleKeyDown(e) {
 
   const key = e.key.toUpperCase()
 
+  // While a dialog or the mobile answer sheet is open, only Escape is handled
+  // below; keystrokes must not silently change the answer behind the overlay.
+  if ((showSubmitConfirm.value || showExitConfirmModal.value || showMobileSheet.value) && e.key !== 'Escape') {
+    return
+  }
+
   // 1. Select options via A, B, C, D... or 1, 2, 3, 4...
-  if (question.value?.options?.length && !report.value) {
+  if (question.value?.options?.length && !report.value && !answersLocked.value) {
     const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
     let optKey = null
     if (letters.includes(key)) {
@@ -476,7 +934,7 @@ function handleKeyDown(e) {
   // 4. Toggle flag on F
   if (key === 'F') {
     e.preventDefault()
-    toggleCurrentFlag()
+    if (!answersLocked.value) toggleCurrentFlag()
     return
   }
 
@@ -490,6 +948,7 @@ function handleKeyDown(e) {
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('online', handleOnline)
   try {
     session.value = await getSession(props.token, props.sessionId)
     if (session.value?.mode !== 'EXAM') {
@@ -497,16 +956,47 @@ onMounted(async () => {
       return
     }
     questions.value = await getSessionQuestions(props.token, props.sessionId)
-    answers.value = { ...(session.value.answers || {}) }
-    flags.value = [...(session.value.flags || [])]
-    currentIndex.value = Math.min(Number(session.value.current_index || 0), Math.max(0, questions.value.length - 1))
-    elapsedSeconds.value = Number(session.value.time_spent || 0)
-    if (session.value.is_completed) report.value = await completeSession(props.token, props.sessionId)
+    const serverAnswers = session.value.answers || {}
+    const localDraft = session.value.is_completed ? null : readLocalExamDraft()
+    answers.value = localDraft ? mergeExamLocalDraft(serverAnswers, localDraft) : { ...serverAnswers }
+    // The baseline is always what the server last showed us, so a local edit
+    // that now differs from another device is reported as a conflict by the
+    // next sync instead of silently overwriting it. Unsynced device edits keep
+    // their older baseline so that difference stays detectable.
+    draftBase.value = localDraft ? examRecoveryBase(serverAnswers, localDraft) : examAnswersToBase(serverAnswers)
+    flags.value = [...((Array.isArray(localDraft?.flags) ? localDraft.flags : session.value.flags) || [])]
+    const restoredIndex = Number(localDraft?.currentIndex ?? session.value.current_index ?? 0)
+    currentIndex.value = Math.min(Math.max(0, restoredIndex), Math.max(0, questions.value.length - 1))
+    elapsedSeconds.value = Math.max(Number(session.value.time_spent || 0), Number(localDraft?.timeSpent || 0))
+    pendingSubmit.value = Boolean(localDraft?.pendingSubmit)
+    const localDiverged = Boolean(localDraft) && examLocalDraftDiffers(localDraft, serverAnswers)
+    if (session.value.is_completed) {
+      report.value = await completeSession(props.token, props.sessionId)
+      clearLocalExamDraft()
+    }
     if (!report.value && session.value.time_limit > 0) {
       const createdAt = Date.parse(`${session.value.created_at}Z`)
       if (Number.isFinite(createdAt)) elapsedSeconds.value = Math.max(elapsedSeconds.value, Math.floor((Date.now() - createdAt) / 1000))
     }
-    if (!report.value) tickHandle = setInterval(tick, 1000)
+    if (!report.value) {
+      if (session.value.is_expired) {
+        // The server already considers the deadline passed. Enter the terminal
+        // state instead of replaying the device draft and retrying forever.
+        enterExpiredState()
+      } else {
+        tickHandle = setInterval(tick, 1000)
+        saveLocalExamDraft()
+        if (pendingSubmit.value) {
+          // A time-up submission that could not be delivered before the reload:
+          // recover it safely once this device is back online.
+          if (navigator?.onLine !== false) void submitExam(true)
+        } else if (localDiverged && navigator?.onLine !== false) {
+          // Push the restored device answers to the server; any cross-device
+          // difference comes back as an explicit conflict notice.
+          void persistDraft()
+        }
+      }
+    }
   } catch (err) {
     error.value = err.detail || err.message
   } finally {
@@ -516,75 +1006,208 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('online', handleOnline)
   clearInterval(tickHandle)
   clearTimeout(draftHandle)
-  if (session.value && !report.value) void persistDraft()
+  if (session.value && !report.value) {
+    saveLocalExamDraft()
+    void persistDraft()
+  }
 })
 </script>
 
 <style scoped>
-.exam-page {
-  width: min(100% - 2rem, 76rem);
-  margin: 1.25rem auto;
-  padding-bottom: 5.5rem;
+.exam-mode {
+  --exam-bar-h: 60px;
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+  padding-top: var(--exam-bar-h);
+  padding-bottom: 76px;
 }
-.exam-header { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 1rem; margin-bottom: 1rem; }
-.exam-header.report-header { display: flex; justify-content: flex-start; gap: 1.25rem; }
-.exam-header h1 { font-size: 1.25rem; }
-.exam-header p, .exam-answer-sheet p, .question-meta { color: var(--text-muted); }
-.exam-clock { min-width: 5.5rem; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 0.65rem; background: var(--bg-card); text-align: center; font-variant-numeric: tabular-nums; font-weight: 700; }
-.exam-clock.warning { color: var(--danger-fg, var(--danger)); }
-.exam-layout { display: grid; grid-template-columns: minmax(0, 1fr) 17rem; gap: 1.25rem; align-items: start; }
-.exam-question-card { padding: 1.5rem; border: 1px solid var(--border); border-radius: 1rem; background: var(--bg-card); box-shadow: var(--shadow-sm); }
-.exam-report {
-  padding: 2rem 1.75rem;
-  border: 1px solid var(--border);
-  border-radius: 1rem;
-  background: var(--bg-card);
-  box-shadow: var(--shadow-sm);
-  max-width: 52rem;
-  margin: 0 auto;
-}
-.exam-answer-sheet {
-  padding: 1.25rem;
-  border: 1px solid var(--border);
-  border-radius: 1rem;
-  background: var(--bg-card);
-  box-shadow: var(--shadow-sm);
-  position: sticky;
-  top: 1rem;
-  max-height: calc(100vh - 7.5rem);
-  overflow-y: auto;
-}
-.question-meta { display: flex; justify-content: space-between; margin-bottom: 1rem; }
-.exam-question-card h2 { margin-bottom: 1.25rem; font-size: 1.2rem; white-space: pre-wrap; }
-.exam-options { display: grid; gap: 0.65rem; }
-.exam-option {
-  display: flex;
-  gap: 0.7rem;
+
+/* ---------- instrument top bar ---------- */
+.exam-topbar {
+  --exam-chrome-bg: var(--d-spine, var(--ink));
+  --exam-chrome-ink: var(--d-spine-ink, var(--brand-contrast));
+  --exam-chrome-quiet: var(--d-spine-ink-2, color-mix(in srgb, var(--brand-contrast) 68%, transparent));
+  --exam-chrome-line: var(--d-spine-line, color-mix(in srgb, var(--brand-contrast) 22%, transparent));
+  --exam-accent-bg: var(--d-spine-accent, var(--brand-contrast));
+  --exam-accent-ink: var(--d-spine, var(--ink));
+  --exam-warn-ink: color-mix(in srgb, var(--bad) 58%, var(--d-spine-ink, var(--brand-contrast)));
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 40;
+  height: var(--exam-bar-h);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--linear-bg-surface);
+  gap: 12px;
+  padding: 0 18px;
+  background: var(--exam-chrome-bg);
+  color: var(--exam-chrome-ink);
+  border-bottom: 1px solid var(--exam-chrome-line);
+}
+.exam-top-left,
+.exam-top-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.exam-top-left { gap: 12px; justify-content: flex-start; }
+.exam-top-right { justify-content: flex-end; }
+.exam-bar-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+.exam-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--exam-chrome-quiet);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  padding: 4px 2px;
   cursor: pointer;
-  transition: all 0.1s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.exam-option:hover {
-  border-color: var(--border-strong);
-  background: var(--linear-bg-hover);
+.exam-back:hover { color: var(--exam-chrome-ink); }
+.exam-sep { width: 1px; height: 18px; background: var(--exam-chrome-line); }
+.exam-identity { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.exam-kicker {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--exam-chrome-ink);
 }
-.exam-option.selected {
-  border-color: var(--primary);
-  background: var(--primary-light);
-  color: var(--text-main);
-  box-shadow: 0 0 0 1px var(--primary);
+.exam-sub {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--exam-chrome-quiet);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.exam-option.selected .key-cap {
-  background: var(--primary);
-  color: var(--on-primary);
-  border-color: var(--primary);
+.exam-topbar .exam-timer {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 16px;
+  border: 0;
+  border-left: 1px solid var(--exam-chrome-line);
+  border-right: 1px solid var(--exam-chrome-line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--exam-chrome-ink);
 }
+.exam-topbar .exam-timer .timer-cap {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--exam-chrome-quiet);
+}
+.exam-topbar .exam-timer strong { font-size: 22px; font-weight: 600; letter-spacing: .04em; }
+.exam-topbar .exam-timer.low {
+  border-color: color-mix(in srgb, var(--bad) 58%, transparent);
+  background: color-mix(in srgb, var(--bad) 16%, transparent);
+}
+.exam-topbar .exam-timer.low strong { color: var(--exam-warn-ink); }
+.exam-utils { display: flex; align-items: center; gap: 6px; color: var(--exam-chrome-ink); }
+.exam-topbar .theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--exam-chrome-quiet);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.exam-topbar .theme-toggle:hover {
+  color: var(--exam-chrome-ink);
+  border-color: var(--exam-chrome-line);
+  background: color-mix(in srgb, var(--exam-chrome-ink) 12%, transparent);
+}
+.exam-topbar .btn {
+  background: transparent;
+  border-color: var(--exam-chrome-line);
+  color: var(--exam-chrome-ink);
+}
+.exam-topbar .btn:hover {
+  background: color-mix(in srgb, var(--exam-chrome-ink) 12%, transparent);
+  border-color: var(--exam-chrome-quiet);
+  color: var(--exam-chrome-ink);
+}
+.exam-topbar .btn-primary {
+  background: var(--exam-accent-bg);
+  border-color: var(--exam-accent-bg);
+  color: var(--exam-accent-ink);
+}
+.exam-topbar .btn-primary:hover {
+  background: color-mix(in srgb, var(--exam-accent-bg) 86%, var(--exam-chrome-bg));
+  border-color: color-mix(in srgb, var(--exam-accent-bg) 86%, var(--exam-chrome-bg));
+  color: var(--exam-accent-ink);
+}
+.exam-submit { white-space: nowrap; }
+
+/* ---------- runner layout ---------- */
+.exam-mode .exam-layout {
+  display: grid;
+  grid-template-columns: minmax(0, var(--reading-w)) 232px;
+  gap: clamp(32px, 5vw, 72px);
+  justify-content: center;
+  align-items: start;
+  width: min(100% - 48px, 1120px);
+  max-width: none;
+  margin: 0 auto;
+  padding: 40px 0 48px;
+}
+.exam-paper { min-width: 0; }
+.exam-q-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.exam-stem {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  line-height: 1.72;
+  letter-spacing: .01em;
+  margin: 0 0 30px;
+  white-space: pre-wrap;
+}
+.exam-options { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.exam-option {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 18px;
+  align-items: start;
+  gap: 10px;
+  padding: 14px 10px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  transition: background .14s var(--ease);
+}
+.exam-option:hover { background: var(--surface-2); }
 .exam-option input {
   position: absolute;
   opacity: 0;
@@ -592,241 +1215,445 @@ onBeforeUnmount(() => {
   height: 0;
   pointer-events: none;
 }
-.exam-text-answer { display: grid; gap: 0.5rem; }
-.exam-text-answer textarea { width: 100%; min-height: 4rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-md); resize: vertical; }
-
-.exam-fixed-action-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: color-mix(in srgb, var(--bg-card) 94%, transparent);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid var(--border);
-  box-shadow: 0 -4px 16px color-mix(in srgb, var(--text-main) 16%, transparent);
-  padding: 0.65rem 1.25rem;
-  z-index: 50;
+.exam-option .key-cap {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  min-width: 0;
+  height: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-3);
+  padding-top: 5px;
 }
+.option-content-text {
+  font-family: var(--font-serif);
+  font-size: 16.5px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+.option-indicator {
+  width: 11px;
+  height: 11px;
+  margin-top: 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: transparent;
+}
+.exam-option.selected { background: var(--brand-soft); }
+.exam-option.selected .key-cap { color: var(--brand); font-weight: 700; }
+.exam-option.selected .option-indicator {
+  border-color: var(--brand);
+  background: var(--brand);
+  box-shadow: inset 0 0 0 2px var(--brand-soft);
+}
+.exam-text-answer { margin-top: 4px; }
+.exam-text-answer textarea { width: 100%; resize: vertical; }
 
-.exam-actions-inner {
-  width: min(100%, 76rem);
-  margin: 0 auto;
+/* ---------- answer sheet rail ---------- */
+.exam-sheet {
+  position: sticky;
+  top: calc(var(--exam-bar-h) + 24px);
+  padding-top: 4px;
+}
+.sheet-head {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
+  gap: 10px;
+  margin-bottom: 8px;
 }
-
-.btn-flag-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.5rem 0.9rem;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--text-main);
+.sheet-title {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.sheet-count { font-size: 12px; color: var(--ink-2); }
+.sheet-progress {
+  height: 3px;
+  background: var(--surface-3);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.sheet-progress i { display: block; height: 100%; background: var(--brand); transition: width .3s var(--ease); }
+.sheet-facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0 0 16px;
+}
+.sheet-facts div { display: flex; flex-direction: column; gap: 2px; }
+.sheet-facts dt {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--ink-4);
+  letter-spacing: .04em;
+}
+.sheet-facts dd { margin: 0; font-size: 13px; color: var(--ink); }
+.answer-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+.answer-cell {
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s ease;
+}
+.answer-cell:hover { border-color: var(--line-strong); color: var(--ink); }
+.answer-cell.answered { background: var(--surface-2); color: var(--ink-2); border-color: var(--line-strong); }
+.answer-cell.flagged { box-shadow: inset 0 -2px var(--flag); }
+.answer-cell.current { border-color: var(--ink); color: var(--ink); font-weight: 700; }
+.sheet-note {
+  margin: 16px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-4);
 }
 
-.btn-flag-toggle[aria-pressed="true"] {
-  background: var(--warning-light);
-  border-color: var(--warning);
-  color: var(--warning-fg, #92400e);
+/* ---------- bottom instrument bar ---------- */
+.exam-actionbar {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 40;
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--line);
+  padding: 9px 18px calc(9px + env(safe-area-inset-bottom, 0px));
 }
-
-.exam-nav-btns {
+.exam-action-inner {
   display: flex;
-  gap: 0.6rem;
   align-items: center;
+  gap: 8px;
+  width: min(100%, 1120px);
+  margin: 0 auto;
 }
+.exam-action-spacer { flex: 1; }
+.exam-flag.is-on { border-color: var(--warn-line); background: var(--warn-soft); color: var(--warn); }
+.exam-flag kbd { margin-left: 2px; }
+.exam-sheet-trigger { display: none; }
+.exam-sheet-trigger .mono { margin-left: 2px; color: var(--ink-3); font-size: 12px; }
 
-.btn-exam-nav {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.5rem 1.1rem;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  font-size: 0.85rem;
+/* ---------- report ---------- */
+.exam-report {
+  width: min(100% - 48px, 820px);
+  margin: 0 auto;
+  padding: 48px 0 72px;
+}
+.report-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 40px;
+  padding-bottom: 26px;
+  border-bottom: 1px solid var(--line-strong);
+}
+.report-score {
+  margin: 8px 0 0;
+  font-family: var(--font-serif);
+  font-size: 64px;
+  line-height: 1;
+  letter-spacing: -.02em;
   font-weight: 500;
-  color: var(--text-main);
-  cursor: pointer;
-  transition: all 0.15s ease;
 }
+.report-score-cap {
+  margin: 6px 0 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.report-facts {
+  display: flex;
+  gap: 28px;
+  margin: 0;
+}
+.report-facts div { display: flex; flex-direction: column; gap: 4px; }
+.report-facts dt {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.report-facts dd { margin: 0; font-size: 15px; color: var(--ink); }
+.report-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 18px 0 4px;
+}
+.report-section { margin-top: 34px; }
+.section-title {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 12px;
+}
+.etable-wrap { overflow-x: auto; }
+.etable { width: 100%; border-collapse: collapse; }
+.etable th {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line-strong);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  text-align: right;
+  white-space: nowrap;
+}
+.etable th:first-child { text-align: left; }
+.etable td {
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--ink-2);
+  text-align: right;
+}
+.etable td:first-child { text-align: left; color: var(--ink); }
+.review-item { padding: 20px 0; border-bottom: 1px solid var(--line); }
+.review-stem {
+  margin: 0 0 10px;
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.65;
+  font-weight: 500;
+  white-space: pre-wrap;
+}
+.review-answers { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+.review-answers p {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.review-answers strong { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink); font-weight: 500; }
+.review-explain {
+  margin: 10px 0 0;
+  font-family: var(--font-serif);
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+}
+.review-explain.is-empty { color: var(--ink-4); }
+.report-actions { display: flex; justify-content: flex-end; margin-top: 32px; }
 
-.btn-exam-nav:hover:not(:disabled) {
-  border-color: var(--primary-border, var(--border-strong));
-  color: var(--primary-fg, var(--primary));
-}
-
-.btn-exam-nav.primary {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: var(--on-primary);
-}
-
-.btn-exam-nav.primary:hover:not(:disabled) {
-  background: var(--primary-hover);
-  color: var(--on-primary-hover, var(--on-primary));
-}
-
-.btn-exam-nav.primary:active:not(:disabled) {
-  background: var(--primary-active);
-  color: var(--on-primary-active, var(--on-primary));
-}
-
-.btn-exam-nav:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.exam-answer-sheet h2, .exam-answer-sheet p { margin-bottom: 0.5rem; }
-.answer-grid { display: grid; grid-template-columns: repeat(5, minmax(2.2rem, 1fr)); gap: 0.45rem; margin-top: 1rem; }
-.answer-grid button { min-height: 2.3rem; border: 1px solid var(--border); border-radius: 0.55rem; background: var(--bg-page); }
-.answer-grid button.answered { border-color: var(--success); background: var(--success-light); }
-.answer-grid button.flagged { box-shadow: inset 0 -3px var(--warning); }
-.answer-grid button.current { outline: 2px solid var(--primary-fg, var(--primary)); outline-offset: 1px; }
-.primary { padding: 0.65rem 0.9rem; border-radius: 0.6rem; background: var(--primary); color: var(--on-primary); }
-.btn-exam-submit-subtle {
-  background: var(--bg-card) !important;
-  color: var(--primary-fg, var(--primary)) !important;
-  border: 1px solid var(--border-strong) !important;
-  font-size: 0.85rem !important;
-  font-weight: 500 !important;
-  padding: 0.4rem 0.85rem !important;
-  transition: all 0.15s ease !important;
-}
-.btn-exam-submit-subtle:hover:not(:disabled) {
-  background: var(--primary-light) !important;
-  border-color: var(--primary-border) !important;
-  color: var(--primary-fg, var(--primary)) !important;
-}
-.primary:hover:not(:disabled) {
-  background: var(--primary-hover);
-  color: var(--on-primary-hover, var(--on-primary));
-}
-.primary:active:not(:disabled) {
-  background: var(--primary-active);
-  color: var(--on-primary-active, var(--on-primary));
-}
-.primary:disabled { opacity: 0.55; cursor: wait; }
-.exam-error { margin: 0.75rem 0; color: var(--danger-fg, var(--danger)); }
-.exam-loading { padding: 2rem; text-align: center; color: var(--text-muted); }
-.exam-report h2, .exam-report h3 { margin-bottom: 1rem; }
-.report-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin: 1rem 0; }
-.report-summary article { display: grid; gap: 0.25rem; padding: 0.85rem; border-radius: 0.75rem; background: var(--bg-page); }
-.report-summary small { color: var(--text-muted); }
-.report-summary strong { font-size: 1.25rem; }
-.exam-stats-group { margin: 1.25rem 0; }
-.stats-table-wrapper { overflow-x: auto; }
-.stats-table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.95rem; }
-.stats-table th, .stats-table td { padding: 0.6rem 0.75rem; border: 1px solid var(--border); text-align: center; }
-.stats-table th { background: var(--bg-page); font-weight: 600; }
-.exam-review { margin: 1.5rem 0; }
-.review-item { padding: 1rem 0; border-top: 1px solid var(--border); }
-.exam-confirm-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 1rem; background: color-mix(in srgb, var(--text-main) 44%, transparent); }
-.exam-confirm-dialog { width: min(100%, 28rem); padding: 1.5rem; border-radius: 1rem; background: var(--bg-card); box-shadow: var(--shadow-lg); }
-.exam-confirm-dialog p { margin-top: 0.5rem; color: var(--text-muted); }
-.btn-back { padding: 0.4rem 0.65rem; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--bg-card); cursor: pointer; }
-.btn-exam-sheet-trigger { cursor: pointer; font-size: 0.85rem; padding: 0.4rem 0.65rem; }
-.mobile-only-btn { display: none !important; }
-.exam-header-center { cursor: pointer; }
-
-/* Exam Mobile Sheet Modal Drawer */
-.exam-sheet-modal-backdrop {
+/* ---------- dialogs ---------- */
+.exam-overlay {
   position: fixed;
   inset: 0;
-  background: color-mix(in srgb, var(--text-main) 44%, transparent);
-  backdrop-filter: blur(2px);
-  z-index: 100;
+  z-index: 60;
   display: flex;
-  justify-content: center;
-  align-items: flex-end;
-}
-.exam-sheet-modal-drawer {
-  background: var(--bg-card);
-  width: 100%;
-  max-width: 42rem;
-  max-height: 80vh;
-  border-radius: 1rem 1rem 0 0;
-  box-shadow: var(--shadow-xl);
-  display: flex;
-  flex-direction: column;
-  padding: 1.15rem 1.25rem;
-  overflow-y: auto;
-  animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.exam-sheet-drawer-header {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.85rem;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(20, 23, 19, .42);
+  backdrop-filter: blur(2px);
 }
-.btn-close-sheet {
-  border: none;
-  background: var(--bg-muted);
-  width: 1.85rem;
-  height: 1.85rem;
-  border-radius: 50%;
+.exam-dialog {
+  width: min(100%, 420px);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
+}
+.dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 17px 20px 13px;
+  border-bottom: 1px solid var(--line);
+}
+.dialog-title {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: .01em;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--line);
+}
+.exam-dialog-body { padding: 18px 20px 6px; }
+.exam-dialog-body p { margin: 0 0 10px; font-size: 13px; line-height: 1.65; color: var(--ink-2); }
+.exam-dialog-stats { color: var(--ink-3); }
+.exam-dialog-warn { color: var(--warn); }
+.link-btn {
+  border: 0;
+  background: transparent;
+  padding: 0 0 0 4px;
+  color: var(--brand);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
   cursor: pointer;
-  font-weight: 700;
-  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
-@media (max-width: 760px) {
-  .exam-page { width: 100%; margin: 0; padding: 0.35rem 0.5rem 5.5rem; }
-  .exam-layout { grid-template-columns: 1fr; }
-  .exam-answer-sheet { display: none !important; } /* Hide stuck-at-bottom sheet on mobile, use modal drawer */
-  .exam-header {
-    display: flex !important;
-    justify-content: space-between !important;
-    align-items: center !important;
-    flex-wrap: nowrap !important;
-    gap: 0.35rem !important;
-    padding: 0.4rem 0.65rem !important;
+/* ---------- mobile sheet ---------- */
+.exam-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(20, 23, 19, .42);
+  backdrop-filter: blur(2px);
+}
+.exam-sheet-drawer {
+  width: 100%;
+  max-height: 82vh;
+  overflow-y: auto;
+  padding: 18px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface);
+  border-top: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-2);
+}
+.sheet-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 6px 0 14px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.sheet-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.dot.answered { background: var(--surface-3); border: 1px solid var(--line-strong); }
+.dot.flagged { background: var(--flag); }
+.dot.current { background: transparent; border: 1px solid var(--ink); }
+.sheet-drawer-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+/* ---------- states ---------- */
+.exam-loading {
+  width: min(100% - 48px, var(--reading-w));
+  margin: 48px auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: center;
+}
+.exam-loading.skeleton-rows { text-align: left; }
+.exam-error { width: min(100% - 48px, var(--reading-w)); margin: 16px auto 0; }
+.exam-offline {
+  width: min(100% - 48px, 1120px);
+  margin: 16px auto 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.exam-conflict {
+  width: min(100% - 48px, 1120px);
+  margin: 16px auto 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.exam-conflict-body { min-width: 0; flex: 1; }
+.exam-conflict-body strong { font-family: var(--font-sans); font-size: 12.5px; color: var(--ink); }
+.exam-conflict-list { margin: 4px 0 0; padding-left: 16px; font-size: 12px; color: var(--ink-3); }
+.exam-conflict-list li { line-height: 1.7; }
+.exam-conflict-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.exam-expired {
+  width: min(100% - 48px, 1120px);
+  margin: 16px auto 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.exam-expired-body { min-width: 0; flex: 1; }
+.exam-expired-body strong { display: block; font-family: var(--font-sans); font-size: 12.5px; color: var(--ink); }
+.exam-expired-body p { margin: 6px 0 0; font-size: 12px; color: var(--ink-3); }
+.exam-expired-number { margin-left: 6px; font-family: var(--font-mono); font-size: 12px; color: var(--ink); }
+.exam-expired-kept { font-size: 12px; }
+.exam-expired-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.empty-title { font-family: var(--font-sans); font-size: 15px; font-weight: 650; }
+.empty-desc { font-size: 13px; color: var(--ink-3); margin-bottom: 12px; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 1280px) {
+  .exam-mode .exam-layout { gap: 40px; }
+}
+@media (max-width: 1100px) {
+  .exam-mode .exam-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    width: 100%;
+    max-width: none;
+    padding: 26px 24px 48px;
   }
-  .exam-header-center {
-    flex: 1;
-    min-width: 0;
-  }
-  .exam-header h1 {
-    font-size: 0.95rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .exam-header p { font-size: 0.725rem; white-space: nowrap; }
-  .exam-clock { min-width: auto; padding: 0.25rem 0.45rem; font-size: 0.775rem; white-space: nowrap; }
-  .mobile-only-btn { display: inline-flex !important; }
-  .exam-question-card { padding: 0.85rem; border-radius: var(--radius-md); }
-  .exam-question-card h2 { font-size: 1.05rem; margin-bottom: 0.85rem; line-height: 1.45; }
-  .exam-options { gap: 0.5rem; }
-  .exam-option { padding: 0.6rem 0.75rem; border-radius: var(--radius-md); }
-  .exam-option input { display: none !important; }
-  .key-cap { min-width: 1.5rem; height: 1.5rem; font-size: 0.8rem; }
-  .hotkey-badge { display: none !important; }
-  .answer-grid { grid-template-columns: repeat(8, minmax(2rem, 1fr)); }
-  .report-summary { grid-template-columns: repeat(2, 1fr); }
-  .exam-header .primary {
-    font-size: 0.8rem;
-    padding: 0.35rem 0.6rem;
-    white-space: nowrap;
-  }
-  .exam-fixed-action-bar {
-    padding: 0.45rem 0.75rem calc(0.45rem + env(safe-area-inset-bottom, 0px));
-  }
-  .btn-flag-toggle {
-    padding: 0.45rem 0.7rem;
-    font-size: 0.8rem;
-  }
-  .btn-exam-nav {
-    padding: 0.45rem 0.85rem;
-    font-size: 0.8rem;
-  }
+  .exam-sheet { display: none; }
+  .exam-sheet-trigger { display: inline-flex; }
+}
+@media (max-width: 768px) {
+  .exam-mode { --exam-bar-h: 54px; padding-bottom: 70px; }
+  .exam-topbar { padding: 0 12px; gap: 8px; }
+  .exam-utils,
+  .exam-sep,
+  .exam-sub { display: none; }
+  .exam-topbar .exam-timer { padding: 2px 8px; border: 0; gap: 5px; }
+  .exam-topbar .exam-timer strong { font-size: 17px; }
+  .exam-mode .exam-layout { width: 100%; padding: 20px 16px 40px; }
+  .exam-stem { font-size: 18.5px; }
+  .option-content-text { font-size: 16px; }
+  .exam-option { padding: 13px 6px; }
+  .exam-actionbar { padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)); }
+  .exam-action-inner > .btn { flex: 1; justify-content: center; }
+  .exam-action-inner .exam-action-spacer { display: none; }
+  .exam-action-inner .exam-flag kbd { display: none; }
+  .report-head { flex-direction: column; align-items: flex-start; gap: 20px; }
+  .report-score { font-size: 52px; }
+  .report-facts { gap: 20px; }
+  .exam-report { width: 100%; padding: 24px 16px 48px; }
+}
+@media (max-width: 420px) {
+  .exam-back span { display: none; }
+  .exam-topbar .exam-timer { padding: 4px 6px; gap: 4px; }
+  .exam-topbar .exam-timer .timer-cap { display: none; }
+  .exam-stem { font-size: 17.5px; line-height: 1.7; }
+  .exam-option { grid-template-columns: 24px minmax(0, 1fr) 16px; }
+  .option-content-text { font-size: 15.5px; }
+  .exam-submit { padding-left: 10px; padding-right: 10px; }
+  .exam-action-inner .nav-label { display: none; }
+  .exam-action-inner .btn { flex: 0 0 auto; }
+  .exam-sheet-trigger { flex: 1 1 auto !important; }
+  .answer-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .exam-overlay { padding: 10px; }
+  .report-facts { flex-wrap: wrap; }
 }
 </style>

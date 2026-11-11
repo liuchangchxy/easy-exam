@@ -41,7 +41,16 @@ async function waitForServer(url, expectedToken, timeoutMs = 25000) {
   throw new Error(`Server at ${url} failed to start within ${timeoutMs}ms`)
 }
 
-test('Fast UI Interaction: MobileNav More menu, Learning accordion, Practice more menu', async () => {
+async function login(page, baseUrl, username, password) {
+  await page.goto(baseUrl)
+  await page.waitForSelector('.auth-layout')
+  await page.fill('#login-username', username)
+  await page.fill('#login-password', password)
+  await page.click('.auth-submit')
+  await page.waitForSelector('.today', { timeout: 15000 })
+}
+
+test('Fast UI Interaction: mobile nav, review page, practice tools and finish', async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fast-ui-interaction-'))
   const tempDbPath = path.join(tempDir, 'fast_ui.db')
   const port = await getFreePort()
@@ -73,7 +82,6 @@ test('Fast UI Interaction: MobileNav More menu, Learning accordion, Practice mor
       headless: true,
     })
 
-    // Setup 1: Register and login user
     const username = `test_fast_${Date.now()}`
     const password = 'Password123!'
     const regRes = await fetch(`${BASE_URL}/api/v1/auth/register`, {
@@ -92,7 +100,6 @@ test('Fast UI Interaction: MobileNav More menu, Learning accordion, Practice mor
     const loginData = await loginRes.json()
     const token = loginData.token
 
-    // Create a bank and a question to enable Practice view & Learning recommendations
     const bankRes = await fetch(`${BASE_URL}/api/v1/banks`, {
       method: 'POST',
       headers: {
@@ -125,7 +132,7 @@ test('Fast UI Interaction: MobileNav More menu, Learning accordion, Practice mor
     assert.equal(qRes.status, 201, 'Question creation must succeed')
 
     // -------------------------------------------------------------
-    // Test Case 1: MobileNav More Menu Popup and Navigation
+    // Mobile: bottom navigation reaches the library
     // -------------------------------------------------------------
     const mobileContext = await browser.newContext({
       viewport: { width: 375, height: 812 },
@@ -133,110 +140,69 @@ test('Fast UI Interaction: MobileNav More menu, Learning accordion, Practice mor
       hasTouch: true,
     })
     const mobilePage = await mobileContext.newPage()
+    await login(mobilePage, BASE_URL, username, password)
 
-    await mobilePage.goto(BASE_URL)
-    await mobilePage.waitForSelector('.auth-page')
-    await mobilePage.fill('input[placeholder*="用户名"], input[type="text"]', username)
-    await mobilePage.fill('input[type="password"]', password)
-    await mobilePage.click('button[type="submit"]')
-    await mobilePage.waitForSelector('.home-page')
+    await mobilePage.waitForSelector('.bottomnav')
+    const navItems = mobilePage.locator('.bottomnav .bn-item')
+    assert.equal(await navItems.count(), 6, 'Bottom navigation must expose five destinations plus 更多')
 
-    // Verify Mobile Bottom Nav is visible
-    await mobilePage.waitForSelector('.mobile-nav-bar')
-    const moreBtn = mobilePage.locator('.mobile-nav-item-more')
-    assert.ok(await moreBtn.isVisible(), 'Mobile nav more button should be visible')
-
-    // Initial state: popup should not exist
-    assert.equal(await mobilePage.locator('.mobile-nav-more-popup').count(), 0, 'More popup should initially be closed')
-
-    // Natural user click on "更多"
-    await moreBtn.click()
-    await mobilePage.waitForSelector('.mobile-nav-more-popup')
-    assert.equal(await mobilePage.locator('.mobile-nav-more-popup').count(), 1, 'More popup should appear on click')
-
-    // Verify "导入" and "设置" options exist inside the popup
-    const importItem = mobilePage.locator('.more-popup-item:has-text("导入"), .more-popup-item:has-text("Imports")')
-    const settingsItem = mobilePage.locator('.more-popup-item:has-text("设置"), .more-popup-item:has-text("Settings")')
-    assert.ok(await importItem.isVisible(), 'Import item should be visible in popup')
-    assert.ok(await settingsItem.isVisible(), 'Settings item should be visible in popup')
-
-    // Click "导入" and verify navigation happens to import view
-    await importItem.click()
-    await mobilePage.waitForSelector('.import-page', { timeout: 5000 })
-    assert.ok(await mobilePage.locator('.import-page').isVisible(), 'Should navigate to Import view')
-
+    // Mobile chrome must surface Settings, theme and language without leaving the shell.
+    await navItems.nth(5).click()
+    const moreMenu = mobilePage.locator('.chrome-more-menu')
+    await moreMenu.waitFor({ state: 'visible' })
+    assert.equal(await moreMenu.locator('.popover-action').count(), 3, '更多 must own Settings, theme and language')
+    await moreMenu.locator('.popover-action').nth(0).click()
+    await mobilePage.waitForSelector('.settings-page', { timeout: 8000 })
+    await mobilePage.locator('.bottomnav .bn-item').nth(4).click()
+    await mobilePage.waitForSelector('.library-page', { timeout: 8000 })
+    assert.ok(await mobilePage.locator('.library-page').isVisible(), 'Library page should open from mobile nav')
     await mobileContext.close()
 
     // -------------------------------------------------------------
-    // Test Case 2: LearningView Analytics Accordion Natural Click
+    // Desktop: sidebar navigation and review tabs
     // -------------------------------------------------------------
-    const desktopContext = await browser.newContext({
-      viewport: { width: 1280, height: 800 },
-    })
+    const desktopContext = await browser.newContext({ viewport: { width: 1440, height: 900 } })
     const desktopPage = await desktopContext.newPage()
+    await login(desktopPage, BASE_URL, username, password)
 
-    await desktopPage.goto(BASE_URL)
-    await desktopPage.waitForSelector('.auth-page')
-    await desktopPage.fill('input[placeholder*="用户名"], input[type="text"]', username)
-    await desktopPage.fill('input[type="password"]', password)
-    await desktopPage.click('button[type="submit"]')
-    await desktopPage.waitForSelector('.home-page')
-
-    // Navigate to LearningView
-    await desktopPage.waitForSelector('.app-sidebar')
-    await desktopPage.click('.app-sidebar .sidebar-nav-item:has-text("复习规划"), .sidebar-nav-item:has-text("Learning")')
-    await desktopPage.waitForSelector('.learning-page')
-
-    // Verify accordion exists and is initially closed
-    const accordion = desktopPage.locator('.learning-analytics-accordion')
-    await accordion.waitFor({ state: 'attached' })
-    const isInitiallyOpen = await accordion.evaluate(el => el.hasAttribute('open'))
-    assert.equal(isInitiallyOpen, false, 'Learning analytics accordion should be closed by default')
-
-    // Natural user click on summary to expand
-    const summaryBtn = desktopPage.locator('.learning-analytics-accordion summary.analytics-accordion-summary')
-    await summaryBtn.click()
-    await desktopPage.waitForSelector('.learning-analytics-accordion[open]', { timeout: 3000 })
-
-    // Verify analytics body & metrics become visible
-    await desktopPage.waitForSelector('.metrics-grid', { timeout: 3000 })
-    assert.ok(await desktopPage.locator('.metrics-grid').isVisible(), 'Metrics grid should be visible after expansion')
+    await desktopPage.waitForSelector('.sidebar')
+    const sideItems = desktopPage.locator('.sidebar .nav-item')
+    await sideItems.nth(2).click()
+    await desktopPage.waitForSelector('.review-page', { timeout: 8000 })
+    const tabs = desktopPage.locator('.review-page .tabs .tab')
+    assert.ok(await tabs.count() >= 4, 'Review page must expose due, mistakes, killed and diagnosis tabs')
+    await tabs.nth(1).click()
+    await desktopPage.waitForSelector('.review-page .tabs .tab.is-active')
 
     // -------------------------------------------------------------
-    // Test Case 3: PracticeViewV1 More Menu and Weak Toggle / Complete
+    // Practice: start from Today, open tools, finish to report
     // -------------------------------------------------------------
-    // Start a practice session
-    await desktopPage.click('header button:has-text("返回"), .btn-back')
-    await desktopPage.waitForSelector('.home-page')
+    await desktopPage.locator('.sidebar .nav-item').nth(0).click()
+    await desktopPage.waitForSelector('.today')
+    await desktopPage.locator('.masthead .btn-primary').click()
+    await desktopPage.waitForSelector('.focus-mode', { timeout: 12000 })
 
-    // Start practice on the created bank
-    const practiceBtn = desktopPage.locator('button:has-text("顺序刷题"), button:has-text("开始刷题")').first()
-    await practiceBtn.click()
-    await desktopPage.waitForSelector('.practice-page', { timeout: 8000 })
-
-    // Verify ⋯ more menu button exists
+    await desktopPage.waitForSelector('.btn-more-menu', { timeout: 12000 })
     const practiceMoreBtn = desktopPage.locator('.btn-more-menu')
     assert.ok(await practiceMoreBtn.isVisible(), 'Practice more menu button should be visible')
-
-    // Click ⋯ more menu button to toggle dropdown
-    assert.equal(await desktopPage.locator('.mobile-dropdown-menu').count(), 0, 'Dropdown menu should initially be closed')
+    assert.equal(await desktopPage.locator('.focus-menu').count(), 0, 'Menu should initially be closed')
     await practiceMoreBtn.click()
-    await desktopPage.waitForSelector('.mobile-dropdown-menu')
-    assert.equal(await desktopPage.locator('.mobile-dropdown-menu').count(), 1, 'Dropdown menu should open on click')
+    await desktopPage.waitForSelector('.focus-menu')
+    assert.equal(await desktopPage.locator('.focus-menu .focus-menu-item').count(), 2, 'Menu should expose edit and kill actions')
+    await practiceMoreBtn.click()
 
-    // Verify items in more menu
-    assert.ok(await desktopPage.locator('.dropdown-item.btn-help-guide').isVisible(), 'Help guide item should be in dropdown')
-    assert.ok(await desktopPage.locator('.dropdown-item.btn-edit-question').isVisible(), 'Edit question item should be in dropdown')
-
-    // Verify complete button is accessible and works without blocking
-    const completeBtn = desktopPage.locator('.btn-header-complete')
-    assert.ok(await completeBtn.isVisible(), 'Complete button should be accessible')
+    await desktopPage.locator('.focus-finish').click()
+    const confirmDialog = desktopPage.locator('.confirm-dialog')
+    if (await confirmDialog.count()) {
+      await confirmDialog.locator('.btn-primary').click()
+    }
+    await desktopPage.waitForSelector('[data-testid="practice-report-modal"]', { timeout: 12000 })
+    assert.ok(await desktopPage.locator('[data-testid="practice-report-modal"]').isVisible(), 'Completing practice should show the report')
 
     await desktopContext.close()
   } finally {
-    if (browser) {
-      await browser.close().catch(() => {})
-    }
-    serverProcess.kill('SIGTERM')
+    if (browser) await browser.close()
+    serverProcess.kill()
+    fs.rmSync(tempDir, { recursive: true, force: true })
   }
 })

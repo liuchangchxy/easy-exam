@@ -1,96 +1,127 @@
 <template>
-  <main class="auth-page">
-    <div class="auth-theme-switch" style="display: flex; gap: 0.5rem;"><ThemeToggle compact /><LocaleToggle compact /></div>
-    <div class="auth-background-decoration"></div>
-    <section class="auth-card">
-      <div class="auth-brand">
-        <div class="brand-logo">
-          <LinearIcon name="zap" size="24" />
+  <main class="auth-layout">
+    <section class="auth-brand-pane">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">易</span>
+        <span class="brand-text">
+          <span class="brand-name">{{ t('ep.brand.name') }}</span>
+          <span class="brand-sub">{{ t('ep.brand.sub') }}</span>
+        </span>
+      </div>
+      <div class="auth-brand-copy">
+        <h1 class="auth-headline">{{ t('ep.auth.headline') }}</h1>
+        <p class="auth-lede">{{ t('ep.auth.lede') }}</p>
+        <div class="auth-points">
+          <div class="auth-point">
+            <span class="auth-point-n">01</span>
+            <div><div class="auth-point-title">{{ t('ep.auth.point_private') }}</div><div class="auth-point-desc">{{ t('ep.auth.point_private_desc') }}</div></div>
+          </div>
+          <div class="auth-point">
+            <span class="auth-point-n">02</span>
+            <div><div class="auth-point-title">{{ t('ep.auth.point_shared') }}</div><div class="auth-point-desc">{{ t('ep.auth.point_shared_desc') }}</div></div>
+          </div>
+          <div class="auth-point">
+            <span class="auth-point-n">03</span>
+            <div><div class="auth-point-title">{{ t('ep.auth.point_local') }}</div><div class="auth-point-desc">{{ t('ep.auth.point_local_desc') }}</div></div>
+          </div>
         </div>
-        <h1>{{ t('app.name') }}</h1>
-        <p class="brand-sub">{{ t('app.subtitle') }}</p>
+      </div>
+      <div class="auth-colophon"><span>{{ t('ep.brand.name') }}</span> 1.0 · {{ t('ep.brand.sub') }}</div>
+    </section>
+
+    <section class="auth-form-pane">
+      <div class="auth-mobile-brand">
+        <span class="brand-mark" aria-hidden="true">易</span>
+        <span class="brand-name">{{ t('ep.brand.name') }}</span>
       </div>
 
-      <form class="auth-form" @submit.prevent="submit">
-        <div class="form-group">
-          <label class="field-label">{{ t('ui.k0463') }}</label>
-          <div class="input-wrapper">
+      <div class="auth-toggles">
+        <button type="button" class="icon-btn" :title="t('ep.action.language')" :aria-label="t('ep.action.language')" @click="toggleLocale">
+          <LinearIcon name="globe" :size="16" />
+        </button>
+        <button type="button" class="icon-btn" :title="t('ep.action.theme')" :aria-label="t('ep.action.theme')" @click="toggleTheme">
+          <LinearIcon :name="theme === 'dark' ? 'sun' : 'moon'" :size="16" />
+        </button>
+      </div>
+
+      <div class="auth-form-wrap">
+        <div class="page-eyebrow">{{ registering ? t('ep.auth.register_title') : t('ep.auth.signin_title') }}</div>
+        <h2 class="auth-form-title">{{ registering ? t('ep.auth.register_title') : t('ep.auth.signin_title') }}</h2>
+
+        <form class="auth-form" @submit.prevent="submit">
+          <div class="field">
+            <label class="label" for="login-username">{{ t('ep.auth.username') }}</label>
             <input
+              id="login-username"
               v-model.trim="username"
+              class="input"
               autocomplete="username"
               autocapitalize="off"
               autocorrect="off"
-              :placeholder="t('ui.k0463')"
+              :placeholder="t('ep.auth.username')"
               required
             />
           </div>
-        </div>
 
-        <div class="form-group">
-          <label class="field-label">{{ t('ui.k0464') }}</label>
-          <div class="input-wrapper has-trailing-action">
-            <input
-              v-model="password"
-              :type="showPassword ? 'text' : 'password'"
-              :autocomplete="registering ? 'new-password' : 'current-password'"
-              :placeholder="t('ui.k0465')"
-              required
-              minlength="8"
-            />
-            <button
-              type="button"
-              class="btn-toggle-eye"
-              tabindex="-1"
-              :title="showPassword ? t('ui.k0466') : t('ui.k0467')"
-              @click="showPassword = !showPassword"
-            >
-              {{ showPassword ? t('ui.k0710') : t('ui.k0711') }}
-            </button>
+          <div class="field">
+            <label class="label" for="login-password">{{ t('ep.auth.password') }}</label>
+            <div class="auth-input-row">
+              <input
+                id="login-password"
+                v-model="password"
+                class="input"
+                :type="showPassword ? 'text' : 'password'"
+                :autocomplete="registering ? 'new-password' : 'current-password'"
+                :placeholder="t('ep.auth.password')"
+                required
+                minlength="8"
+              />
+              <button type="button" class="link-btn auth-eye" tabindex="-1" @click="showPassword = !showPassword">
+                {{ showPassword ? t('ep.auth.hide_password') : t('ep.auth.show_password') }}
+              </button>
+            </div>
           </div>
-        </div>
 
-        <div v-if="registering" class="form-group">
-          <label class="field-label">{{ t('ui.k0468') }}</label>
-          <div class="input-wrapper has-trailing-action">
-            <input
-              v-model="confirmPassword"
-              :type="showConfirmPassword ? 'text' : 'password'"
-              autocomplete="new-password"
-              :placeholder="t('ui.k0469')"
-            />
-            <button
-              type="button"
-              class="btn-toggle-eye"
-              tabindex="-1"
-              :title="showConfirmPassword ? t('ui.k0466') : t('ui.k0467')"
-              @click="showConfirmPassword = !showConfirmPassword"
-            >
-              {{ showConfirmPassword ? t('ui.k0710') : t('ui.k0711') }}
-            </button>
+          <div v-if="registering" class="field">
+            <label class="label" for="login-confirm">{{ t('ep.auth.confirm_password') }}</label>
+            <div class="auth-input-row">
+              <input
+                id="login-confirm"
+                v-model="confirmPassword"
+                class="input"
+                :type="showConfirmPassword ? 'text' : 'password'"
+                autocomplete="new-password"
+                :placeholder="t('ep.auth.confirm_password')"
+                required
+                minlength="8"
+              />
+              <button type="button" class="link-btn auth-eye" tabindex="-1" @click="showConfirmPassword = !showConfirmPassword">
+                {{ showConfirmPassword ? t('ep.auth.hide_password') : t('ep.auth.show_password') }}
+              </button>
+            </div>
           </div>
-        </div>
 
-        <div class="auth-options-row">
-          <label class="remember-label">
-            <input type="checkbox" v-model="rememberMe" />
-            <span>{{ t('ui.k0470') }}</span>
+          <label class="check">
+            <input v-model="rememberMe" type="checkbox" />
+            <span>{{ t('ep.auth.remember') }}</span>
           </label>
+
+          <div v-if="error" class="notice bad" role="alert">
+            <LinearIcon name="alert" :size="15" />
+            <span>{{ errorText }}</span>
+          </div>
+
+          <button type="submit" class="btn btn-primary auth-submit" :disabled="busy">
+            {{ busy ? t('ep.auth.logging_in') : (registering ? t('ep.auth.register_action') : t('ep.auth.login')) }}
+          </button>
+        </form>
+
+        <div class="auth-switch">
+          <span class="small dim">{{ registering ? t('ep.auth.have_account') : t('ep.auth.no_account') }}</span>
+          <button type="button" class="link-btn" @click="registering = !registering">
+            {{ registering ? t('ep.auth.login') : t('ep.auth.register_action') }}
+          </button>
         </div>
-
-        <div v-if="error" class="error-banner">
-          <span class="error-icon">⚠️</span>
-          <span class="error-text">{{ errorText }}</span>
-        </div>
-
-        <button type="submit" class="primary-btn submit-btn" :disabled="busy">
-          {{ busy ? t('ui.k0712') : (registering ? t('ui.k0713') : t('ui.k0714')) }}
-        </button>
-      </form>
-
-      <div class="auth-footer-toggle">
-        <button class="link-button" type="button" @click="registering = !registering">
-          {{ registering ? t('ui.k0715') : t('ui.k0716') }}
-        </button>
       </div>
     </section>
   </main>
@@ -99,12 +130,12 @@
 <script setup>
 import { computed, ref } from 'vue'
 import LinearIcon from '../components/LinearIcon.vue'
-import ThemeToggle from '../components/ThemeToggle.vue'
-import LocaleToggle from '../components/LocaleToggle.vue'
 import { useLocale } from '../composables/useLocale.js'
+import { useTheme } from '../composables/useTheme.js'
 import * as authApi from '../api/auth'
 
-const { t } = useLocale()
+const { t, toggleLocale } = useLocale()
+const { theme, toggleTheme } = useTheme()
 
 const emit = defineEmits(['authenticated'])
 const username = ref('')
@@ -113,31 +144,35 @@ const confirmPassword = ref('')
 const registering = ref(false)
 const busy = ref(false)
 const error = ref(null)
+const showPassword = ref(false)
+const showConfirmPassword = ref(false)
+const rememberMe = ref(true)
+
 const errorText = computed(() => {
   if (error.value?.translationKey) return t(error.value.translationKey)
   if (error.value instanceof Error) return error.value.message
   return error.value || ''
 })
-const showPassword = ref(false)
-const showConfirmPassword = ref(false)
-const rememberMe = ref(true)
-
-function switchToLogin() {
-  registering.value = false
-  error.value = ''
-}
-
-function switchToRegister() {
-  registering.value = true
-  error.value = ''
-}
 
 async function submit() {
+  if (busy.value) return
   busy.value = true
   error.value = ''
 
-  if (registering.value && confirmPassword.value && confirmPassword.value !== password.value) {
-    error.value = { translationKey: 'ui.k0471' }
+  if (registering.value) {
+    if (!confirmPassword.value) {
+      error.value = { translationKey: 'ep.auth.confirm_required' }
+      busy.value = false
+      return
+    }
+    if (confirmPassword.value !== password.value) {
+      error.value = { translationKey: 'ep.auth.password_mismatch' }
+      busy.value = false
+      return
+    }
+  }
+  if (password.value.length < 8) {
+    error.value = { translationKey: 'ep.auth.password_too_short' }
     busy.value = false
     return
   }
@@ -160,7 +195,7 @@ async function submit() {
 
     emit('authenticated', result)
   } catch (err) {
-    error.value = err instanceof Error ? err : new Error(t('ui.k0472'))
+    error.value = err instanceof Error ? err : new Error(t('ep.auth.error_required'))
   } finally {
     busy.value = false
   }
@@ -168,237 +203,79 @@ async function submit() {
 </script>
 
 <style scoped>
-.auth-page {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-page);
-  padding: 1.5rem;
-  position: relative;
-  overflow: hidden;
+.auth-form-wrap {
+  width: min(100%, 360px);
 }
 
-.auth-theme-switch {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  z-index: 2;
-}
-
-.auth-card {
-  width: 100%;
-  max-width: 25rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 1rem;
-  box-shadow: var(--shadow-lg);
-  padding: 2.25rem 2rem;
-  position: relative;
-  z-index: 1;
-}
-
-.auth-brand {
-  text-align: center;
-  margin-bottom: 1.5rem;
-}
-
-.brand-logo {
-  font-size: 2.5rem;
-  line-height: 1;
-  margin-bottom: 0.5rem;
-}
-
-.auth-brand h1 {
-  font-size: 1.6rem;
-  font-weight: 700;
-  color: var(--text-main);
-  margin: 0 0 0.25rem 0;
-  letter-spacing: -0.02em;
-}
-
-.brand-sub {
-  font-size: 0.875rem;
-  color: var(--text-muted);
-  margin: 0;
-}
-
-.auth-tab-switch {
-  display: flex;
-  background: var(--bg-subtle);
-  border-radius: 0.5rem;
-  padding: 0.25rem;
-  margin-bottom: 1.5rem;
-  gap: 0.25rem;
-}
-
-.tab-btn {
-  flex: 1;
-  border: none;
-  background: transparent;
-  padding: 0.5rem 0;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--text-muted);
-  border-radius: 0.375rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.tab-btn.active {
-  background: var(--bg-card);
-  color: var(--primary-fg, var(--primary));
+.auth-form-title {
+  font-family: var(--font-serif);
+  font-size: 30px;
   font-weight: 600;
-  box-shadow: var(--shadow-sm);
+  letter-spacing: .01em;
+  margin: 8px 0 26px;
 }
 
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
+  gap: 16px;
 }
 
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.field-label {
-  font-size: 0.825rem;
-  font-weight: 600;
-  color: var(--text-main);
-}
-
-.input-wrapper {
-  position: relative;
+.auth-input-row {
   display: flex;
   align-items: center;
+  gap: 10px;
 }
 
-.input-wrapper input {
+.auth-eye {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.auth-submit {
   width: 100%;
-  padding: 0.65rem 0.85rem;
-  border: 1px solid var(--border-strong);
-  border-radius: 0.5rem;
-  font-size: 0.95rem;
-  color: var(--text-main);
-  background: var(--bg-page);
-  transition: all 0.15s ease;
-  box-sizing: border-box;
+  min-height: 40px;
+  margin-top: 6px;
 }
 
-.input-wrapper input:focus {
-  outline: none;
-  border-color: var(--primary-fg, var(--primary));
-  background: var(--bg-card);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-fg, var(--primary)) 20%, transparent);
+.auth-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
 }
 
-.input-wrapper.has-trailing-action input {
-  padding-right: 2.5rem;
-}
-
-.btn-toggle-eye {
+.auth-toggles {
   position: absolute;
-  right: 0.5rem;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  padding: 0.35rem;
-  font-size: 1.1rem;
-  line-height: 1;
-  border-radius: 0.25rem;
-  opacity: 0.7;
-  transition: opacity 0.15s;
-}
-
-.btn-toggle-eye:hover {
-  opacity: 1;
-}
-
-.auth-options-row {
+  top: 18px;
+  right: 22px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: -0.25rem;
+  gap: 2px;
 }
 
-.remember-label {
+.auth-brand-copy { max-width: 520px; }
+.auth-points { margin-top: 40px; display: flex; flex-direction: column; }
+.auth-point {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.825rem;
-  color: var(--text-muted);
-  cursor: pointer;
-  user-select: none;
+  gap: 16px;
+  padding: 16px 0;
+  border-top: 1px solid color-mix(in srgb, var(--brand-contrast) 18%, transparent);
 }
-
-.remember-label input[type="checkbox"] {
-  cursor: pointer;
-  accent-color: var(--primary);
-  width: 1rem;
-  height: 1rem;
+.auth-point-n {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: color-mix(in srgb, var(--brand-contrast) 62%, transparent);
+  padding-top: 2px;
 }
-
-.error-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.65rem 0.85rem;
-  background: var(--danger-light);
-  border: 1px solid var(--danger-border);
-  border-radius: 0.5rem;
-  color: var(--danger-fg, var(--danger));
-  font-size: 0.825rem;
-}
-
-.submit-btn {
-  width: 100%;
-  padding: 0.75rem;
-  background: var(--primary);
-  color: var(--on-primary);
-  border: none;
-  border-radius: 0.5rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease, transform 0.1s ease;
-  margin-top: 0.25rem;
-}
-
-.submit-btn:hover:not(:disabled) {
-  background: var(--primary-hover);
-}
-
-.submit-btn:active:not(:disabled) {
-  transform: scale(0.99);
-}
-
-.submit-btn:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
-}
-
-.auth-footer-toggle {
-  text-align: center;
-  margin-top: 1.25rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border-subtle);
-}
-
-.link-button {
-  border: none;
-  background: transparent;
-  color: var(--primary-fg, var(--primary));
-  font-size: 0.85rem;
-  cursor: pointer;
-  font-weight: 500;
-  padding: 0.25rem 0.5rem;
-}
-
-.link-button:hover {
-  color: var(--primary-fg, var(--primary));
-  text-decoration: underline;
+.auth-point-title { font-size: 13.5px; font-weight: 600; }
+.auth-point-desc { font-size: 12.5px; line-height: 1.6; opacity: .72; margin-top: 2px; }
+.auth-colophon {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .06em;
+  opacity: .55;
 }
 </style>

@@ -39,6 +39,14 @@ class TagPayload(BaseModel):
     name: str = Field(min_length=1)
 
 
+class BatchQuestionsPayload(BaseModel):
+    question_ids: List[str] = Field(min_length=1, max_length=500)
+    operation: str
+    chapter_id: str | None = None
+    tags: List[str] = Field(default_factory=list)
+    target_bank_id: str | None = None
+
+
 @router.get("")
 def list_banks(request: Request, user=Depends(current_user)):
     return request.app.state.services.banks.list_for_user(user["id"])
@@ -83,11 +91,23 @@ def list_questions(bank_id: str, request: Request, user=Depends(current_user)):
 
 
 @router.get("/{bank_id}/content/questions")
-def list_content_questions(bank_id: str, request: Request, user=Depends(current_user)):
+def list_content_questions(bank_id: str, request: Request, include_archived: bool = False, user=Depends(current_user)):
     bank = request.app.state.services.banks.get_for_user(bank_id, user["id"])
     if not bank:
         raise HTTPException(status_code=404, detail="bank not found")
-    return request.app.state.services.questions.list_content_for_bank(bank_id, user["id"])
+    return request.app.state.services.questions.list_content_for_bank(bank_id, user["id"], include_archived=include_archived)
+
+
+@router.post("/{bank_id}/questions/batch")
+def batch_questions(bank_id: str, payload: BatchQuestionsPayload, request: Request, user=Depends(current_user)):
+    try:
+        return request.app.state.services.bank_service.batch_questions(user["id"], bank_id, payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/{bank_id}/questions/{question_id}/copy", status_code=201)

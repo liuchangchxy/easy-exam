@@ -1,649 +1,549 @@
 <template>
-  <main class="practice-page" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
-    <header class="page-header compact-header">
-      <div class="header-left-bar">
-        <button type="button" class="btn-back" @click="handleBack">{{ t('ui.k0510') }}</button>
-        <div class="header-titles">
-          <h1 class="practice-title">{{ session?.mode === 'ELIMINATION' ? t('ui.k0734') : session?.mode === 'FSRS' ? t('ui.k0735') : session?.mode === 'PRACTICE' ? t('home.sequential_practice') : t('ui.k0736') }}</h1>
-          <span v-if="question" class="badge-type-pill">{{ formatType(question.type) }}</span>
+  <main class="focus-mode" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
+    <header class="focus-topbar">
+      <div class="focus-top-left">
+        <button type="button" class="focus-exit" @click="handleBack">
+          <LinearIcon name="arrow-left" :size="15" />
+          <span>{{ t('ep.practice.exit') }}</span>
+        </button>
+        <span class="focus-sep" aria-hidden="true"></span>
+        <div class="focus-context">
+          <span class="focus-mode-label">{{ session?.mode === 'ELIMINATION' ? t('ep.practice.mode_elimination') : session?.mode === 'FSRS' ? t('ep.practice.mode_fsrs') : session?.mode === 'MISTAKE' ? t('ep.practice.mode_mistake') : t('ep.practice.mode_practice') }}</span>
+          <span v-if="question" class="focus-type">{{ formatType(question.type) }}</span>
         </div>
-        <button v-if="question" type="button" class="badge-index-pill btn-sheet-trigger-pill" @click="showSheetModal = true" :title="t('ui.k0511')">
-          <small>{{ index + 1 }} / {{ questions.length }}</small> <LinearIcon name="layers" size="13" /> {{ t('ui.k0093') }}
-        </button>
       </div>
-      <div class="header-actions">
-        <button type="button" class="btn-flag desktop-only-btn" :class="{ active: isWeak }" @click="toggleWeak">
-          {{ isWeak ? t('ui.k0737') : t('ui.k0738') }}
+      <div class="focus-top-right">
+        <button
+          v-if="question"
+          type="button"
+          class="btn btn-sm practice-sheet-btn"
+          :aria-label="t('ep.exam.sheet_open', { answered: answeredCount, total: questions.length })"
+          @click="showSheetModal = true"
+        >
+          <LinearIcon name="layers" :size="14" /><span class="practice-sheet-label">{{ t('ep.exam.sheet') }}</span>
+          <span class="practice-sheet-progress mono">{{ index + 1 }} / {{ questions.length }}</span>
         </button>
-        <button type="button" class="primary btn-header-complete" @click="complete">{{ t('ui.k0514') }}</button>
-
-        <!-- 更多操作下拉菜单 (桌面端与移动端统一收纳管理及辅助操作) -->
-        <div class="mobile-more-wrapper practice-more-dropdown-wrapper">
-          <button type="button" class="btn-more-menu" @click="showMoreMenu = !showMoreMenu" :aria-label="t('ui.k0515')">
-            ⋯
+        <button v-if="question" type="button" class="focus-counter mono" @click="showSheetModal = true">
+          {{ index + 1 }} / {{ questions.length }}
+          <LinearIcon name="layers" :size="13" />
+        </button>
+        <button v-if="question" type="button" class="icon-btn" :class="{ 'is-on': isWeak }" :title="isWeak ? t('ep.banks.unmark_weak') : t('ep.banks.mark_weak')" :aria-label="isWeak ? t('ep.banks.unmark_weak') : t('ep.banks.mark_weak')" @click="toggleWeak">
+          <LinearIcon name="flag" :size="16" />
+        </button>
+        <button type="button" class="icon-btn focus-help-btn" :title="t('ep.practice.shortcuts_title')" :aria-label="t('ep.practice.shortcuts_title')" @click="showHelpTip = !showHelpTip">
+          <LinearIcon name="command" :size="16" />
+        </button>
+        <div class="focus-more">
+          <button type="button" class="icon-btn btn-more-menu" :aria-label="t('ep.practice.more')" @click="showMoreMenu = !showMoreMenu">
+            <LinearIcon name="more" :size="16" />
           </button>
-          <div v-if="showMoreMenu" class="mobile-dropdown-menu" @click="showMoreMenu = false">
-            <button type="button" class="dropdown-item btn-flag-mobile mobile-only-item" :class="{ active: isWeak }" @click="toggleWeak">
-              <LinearIcon name="flag" size="13" /> {{ isWeak ? t('ui.k0737') : t('ui.k0738') }}
+          <div v-if="showMoreMenu" class="focus-menu" @click="showMoreMenu = false">
+            <button type="button" class="focus-menu-item" @click="toggleEditQuestion" v-if="canEditQuestion">
+              <LinearIcon name="edit" :size="14" />{{ isEditingQuestion ? t('ep.practice.edit_exit') : t('ep.practice.edit_question') }}
             </button>
-            <button type="button" class="dropdown-item btn-help-guide" @click="showHelpTip = !showHelpTip">
-              <LinearIcon name="zap" size="13" /> {{ t('ui.k0513') }}
-            </button>
-            <div class="dropdown-item dropdown-toggle-item">
-              <ThemeToggle compact class="header-control-btn" />
-              <LocaleToggle compact class="header-control-btn" />
-            </div>
-            <button type="button" class="dropdown-item btn-edit-question" @click="toggleEditQuestion">
-              {{ isEditingQuestion ? t('ui.k0739') : t('ui.k0740') }}
-            </button>
-            <button type="button" class="dropdown-item btn-kill text-danger" @click="handleKill">
-              {{ t('ui.k0486') }}
+            <button type="button" class="focus-menu-item is-danger" @click="handleKill">
+              <LinearIcon name="x" :size="14" />{{ t('ep.practice.kill') }}
             </button>
           </div>
         </div>
+        <button type="button" class="btn btn-sm focus-finish" @click="complete">{{ t('ep.practice.finish') }}</button>
       </div>
     </header>
 
-    <!-- 快捷键与操作指南弹窗 (轻量弹出，零侵占刷题黄金视野) -->
-    <div v-if="showHelpTip" class="help-tip-backdrop" @click.self="showHelpTip = false">
-      <div class="help-tip-dialog" role="dialog" aria-modal="true">
-        <div class="help-tip-header">
-          <h3><LinearIcon name="zap" size="15" /> {{ t('ui.k0517') }}</h3>
-          <button type="button" class="btn-close-tip" @click="showHelpTip = false">✕</button>
+    <!-- Shortcut guide -->
+    <div v-if="showHelpTip" class="focus-overlay" @click.self="showHelpTip = false">
+      <div class="focus-dialog help-dialog" role="dialog" aria-modal="true">
+        <div class="dialog-head">
+          <span class="dialog-title">{{ t('ep.practice.shortcuts_title') }}</span>
+          <button type="button" class="icon-btn" :aria-label="t('ep.common.close')" @click="showHelpTip = false"><LinearIcon name="x" :size="16" /></button>
         </div>
-        <div class="help-tip-body">
-          <div class="tip-section">
-            <strong><LinearIcon name="compass" size="14" /> {{ t('ui.k0518') }}</strong>
-            <ul>
-              <li><kbd>A</kbd> / <kbd>B</kbd> / <kbd>C</kbd> / <kbd>D</kbd>{{ t('ui.k0519') }}</li>
-              <li><kbd>Enter ↵</kbd>{{ t('ui.k0520') }}</li>
-              <li><kbd>Space ␣</kbd> {{ t('ui.k0521') }} <kbd>→</kbd>{{ t('ui.k0522') }}</li>
-              <li><kbd>←</kbd> {{ t('ui.k0521') }} <kbd>K</kbd>{{ t('ui.k0523') }}</li>
-              <li><kbd>F</kbd>{{ t('ui.k0524') }}</li>
-              <li><kbd>1</kbd> ~ <kbd>4</kbd>{{ t('ui.k0525') }}</li>
-            </ul>
-          </div>
-          <div class="tip-section">
-            <strong><LinearIcon name="maximize" size="14" /> {{ t('ui.k0526') }}</strong>
-            <p>{{ t('ui.k0527') }}</p>
-          </div>
-          <div class="tip-section">
-            <strong><LinearIcon name="layers" size="14" /> {{ t('ui.k0528') }}</strong>
-            <p>{{ t('ui.k0529') }} <strong>“{{ index + 1 }}/{{ questions.length }} {{ t('ui.k0530') }}</strong> {{ t('ui.k0531') }}</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 答题卡抽屉 / 快速跳转面板 (移动端底部抽屉，桌面端居中弹窗) -->
-    <div v-if="showSheetModal" class="sheet-modal-backdrop" @click.self="showSheetModal = false" data-testid="practice-sheet-drawer">
-      <div class="sheet-modal-drawer">
-        <div class="sheet-drawer-header">
-          <div class="sheet-drawer-title">
-            <h3>{{ t('ui.k0093') }}</h3>
-            <span class="sheet-stats-pill">{{ t('ui.k0096') }} {{ answeredCount }} / {{ questions.length }} {{ t('ui.k0101') }}</span>
-          </div>
-          <button type="button" class="btn-close-sheet" @click="showSheetModal = false">✕</button>
-        </div>
-
-        <div class="sheet-quick-actions">
-          <button type="button" class="btn-jump-next-unanswered" @click="jumpNextUnanswered">
-            {{ t('ui.k0532') }}
-          </button>
-        </div>
-
-        <div class="sheet-legend-bar">
-          <span class="legend-item"><span class="legend-dot unanswered"></span> {{ t('ui.k0099') }}</span>
-          <span class="legend-item"><span class="legend-dot correct"></span> {{ t('ui.k0067') }}</span>
-          <span class="legend-item"><span class="legend-dot incorrect"></span> {{ t('ui.k0075') }}</span>
-          <span class="legend-item"><span class="legend-dot partial"></span> {{ t('ui.k0533') }}</span>
-        </div>
-
-        <div class="sheet-numbers-grid">
-          <button
-            v-for="(qItem, qIdx) in questions"
-            :key="qItem.id"
-            type="button"
-            class="sheet-num-btn"
-            :class="getSheetButtonClass(qItem.id, qIdx)"
-            @click="goTo(qIdx)"
-          >
-            {{ qIdx + 1 }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 练习完成交卷结果报告卡片 (优雅模态框) -->
-    <div v-if="practiceReport" class="sheet-modal-backdrop" data-testid="practice-report-modal">
-      <div class="practice-result-card-modal">
-        <div class="result-card-badge"><LinearIcon name="check" size="14" /> {{ t('ui.k0534') }}</div>
-        <h2>{{ t('ui.k0535') }}</h2>
-        <div class="result-stats-grid">
-          <div class="result-stat-box">
-            <small>{{ t('ui.k0063') }}</small>
-            <strong class="text-primary">{{ practiceReport.score }}</strong>
-          </div>
-          <div class="result-stat-box">
-            <small>{{ t('ui.k0064') }}</small>
-            <strong :class="practiceReport.accuracy >= 80 ? 'text-success' : practiceReport.accuracy >= 60 ? 'text-warning' : 'text-danger'">
-              {{ practiceReport.accuracy }}%
-            </strong>
-          </div>
-          <div class="result-stat-box">
-            <small>{{ t('ui.k0536') }}</small>
-            <strong>{{ practiceReport.answered_count }} / {{ practiceReport.total_questions }}</strong>
-          </div>
-          <div class="result-stat-box">
-            <small>{{ t('ui.k0537') }}</small>
-            <strong>{{ formatRemainingTime ? formatRemainingTime(practiceReport.time_spent || 0) : `${practiceReport.time_spent || 0}${t('ui.k0742')}` }}</strong>
-          </div>
-        </div>
-        <div class="result-counts-bar">
-          <span class="count-tag text-success">{{ t('ui.k0538') }} {{ practiceReport.correct_count }}</span>
-          <span v-if="practiceReport.partial_count" class="count-tag text-warning">{{ t('ui.k0539') }} {{ practiceReport.partial_count }}</span>
-          <span class="count-tag text-danger">{{ t('ui.k0540') }} {{ practiceReport.incorrect_count }}</span>
-          <span class="count-tag text-muted">{{ t('ui.k0541') }} {{ practiceReport.unanswered_count }}</span>
-        </div>
-        <div class="result-card-actions">
-          <button type="button" class="primary" @click="handleBack">{{ t('ui.k0081') }}</button>
-          <button type="button" class="secondary-btn" @click="handleRestartPractice">{{ t('ui.k0542') }}</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 交卷前未答题目确认提示弹窗 -->
-    <div v-if="showCompleteConfirmModal" class="sheet-modal-backdrop" @click.self="showCompleteConfirmModal = false">
-      <div class="confirm-submit-dialog">
-        <h3>{{ t('ui.k0543') }}</h3>
-        <p v-if="questions.length - answeredCount > 0" class="confirm-warning-desc">
-          {{ t('ui.k0544') }} <strong class="text-danger">{{ questions.length - answeredCount }}</strong> {{ t('ui.k0545') }}
-        </p>
-        <p v-else class="confirm-info-desc">
-          {{ t('ui.k0546') }} {{ questions.length }} {{ t('ui.k0547') }}
-        </p>
-        <div class="confirm-dialog-actions">
-          <button type="button" class="secondary-btn" @click="showCompleteConfirmModal = false">{{ t('ui.k0548') }}</button>
-          <button type="button" class="primary" :disabled="completing" @click="handleConfirmComplete">
-            {{ completing ? t('ui.k0658') : t('ui.k0659') }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 退出练习确认提示弹窗 (Defect 4) -->
-    <div v-if="showExitConfirmModal" class="sheet-modal-backdrop" @click.self="handleCancelExit" data-testid="exit-confirm-modal">
-      <div class="confirm-submit-dialog">
-        <h3>{{ t('practice.exit_confirm_title') }}</h3>
-        <p class="confirm-info-desc">
-          {{ t('practice.exit_confirm_desc') }}
-        </p>
-        <div class="confirm-dialog-actions">
-          <button type="button" class="secondary-btn btn-cancel-exit" @click="handleCancelExit">
-            {{ t('practice.continue_practice') }}
-          </button>
-          <button type="button" class="primary btn-confirm-exit" @click="handleConfirmExit">
-            {{ t('practice.confirm_exit') }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-
-    <p v-if="loading">{{ t('ui.k0549') }}</p>
-    <section v-else-if="question" class="question-card">
-      <!-- 离线暂存提示 -->
-      <div v-if="offlineNotice" class="offline-banner" data-testid="offline-banner">
-        <span>{{ offlineNotice }}</span>
-        <button v-if="offlineRetryAvailable" type="button" class="btn-sync-offline" @click="syncOfflineEdits">{{ t('ui.k0550') }}</button>
-      </div>
-
-      <!-- 题目编辑面板 (EE-011: 支持完整题干、选项、题型、答案、难度、解析与标签编辑) -->
-      <div v-if="isEditingQuestion" class="question-edit-panel" data-testid="question-edit-panel">
-        <h3>{{ t('ui.k0551') }}{{ question.version_number }})</h3>
-        <p v-if="editSaveError" class="question-edit-error" role="alert" data-testid="question-edit-error">{{ editSaveError }}</p>
-        <div class="edit-form-grid">
-          <label class="form-row">
-            <span>{{ t('ui.k0211') }}</span>
-            <textarea v-model="editStem" class="input-edit-stem" rows="3"></textarea>
-          </label>
-          <div class="form-row-group">
-            <label>
-              <span>{{ t('ui.k0366') }}</span>
-              <select v-model="editType" class="select-edit-type">
-                <option value="SINGLE">{{ t('ui.k0050') }}</option>
-                <option value="MULTI">{{ t('ui.k0051') }}</option>
-                <option value="JUDGE">{{ t('ui.k0052') }}</option>
-                <option value="ESSAY">{{ t('ui.k0166') }}</option>
-              </select>
-            </label>
-            <label>
-              <span>{{ t('ui.k0552') }}</span>
-              <select v-model.number="editDifficulty" class="select-edit-diff">
-                <option :value="1">{{ t('ui.k0168') }}</option>
-                <option :value="2">{{ t('ui.k0169') }}</option>
-                <option :value="3">{{ t('ui.k0170') }}</option>
-                <option :value="4">{{ t('ui.k0171') }}</option>
-                <option :value="5">{{ t('ui.k0172') }}</option>
-              </select>
-            </label>
-            <label>
-              <span>{{ t('ui.k0080') }}</span>
-              <input v-model="editAnswer" class="input-edit-answer" :placeholder="t('ui.k0553')" />
-            </label>
-          </div>
-          <div v-if="editType === 'SINGLE' || editType === 'MULTI' || editType === 'JUDGE'" class="options-edit-block">
-            <div class="options-header">
-              <span>{{ t('ui.k0370') }}</span>
-              <button type="button" class="btn-add-option" @click="addOption">{{ t('ui.k0554') }}</button>
-            </div>
-            <div v-for="(opt, oIdx) in editOptions" :key="oIdx" class="option-edit-row">
-              <input v-model="opt.key" class="opt-key-input" :placeholder="t('ui.k0176')" style="width: 3.5rem;" />
-              <input v-model="opt.content" class="opt-text-input" :placeholder="t('ui.k0555')" style="flex: 1;" />
-              <button type="button" class="btn-del-option" @click="removeOption(oIdx)">{{ t('ui.k0256') }}</button>
+        <div class="help-body">
+          <div class="help-group">
+            <div class="rule-label">{{ t('ep.practice.help_nav') }}</div>
+            <div class="help-keys">
+              <span><kbd>A</kbd><kbd>B</kbd><kbd>C</kbd><kbd>D</kbd> {{ t('ui.k0519') }}</span>
+              <span><kbd>Enter</kbd> {{ t('ui.k0520') }}</span>
+              <span><kbd>Space</kbd> {{ t('ui.k0521') }} <kbd>→</kbd> {{ t('ui.k0522') }}</span>
+              <span><kbd>←</kbd> {{ t('ui.k0523') }}</span>
+              <span><kbd>F</kbd> {{ t('ui.k0524') }}</span>
             </div>
           </div>
-          <label class="form-row">
-            <span>{{ t('ui.k0213') }}</span>
-            <textarea v-model="editExplanation" class="input-edit-exp" rows="2"></textarea>
-          </label>
-          <label class="form-row">
-            <span>{{ t('ui.k0556') }}</span>
-            <input v-model="editTags" class="input-edit-tags" :placeholder="t('ui.k0557')" />
-          </label>
-          <div class="edit-regrade-option" style="margin: 0.5rem 0; padding: 0.5rem; background: var(--bg-page); border-radius: 6px;">
-            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; cursor: pointer;">
-              <input type="checkbox" v-model="editRegradeHistory" class="checkbox-regrade-history" />
-              <span>{{ t('ui.k0558') }}</span>
-            </label>
+          <div class="help-group">
+            <div class="rule-label">{{ t('ep.practice.help_sheet') }}</div>
+            <p class="help-text">{{ t('ep.practice.help_sheet_desc') }}</p>
           </div>
         </div>
-        <div class="edit-actions">
-          <button type="button" @click="isEditingQuestion = false">{{ t('ui.k0149') }}</button>
-          <button type="button" class="primary btn-save-question-edit" @click="saveQuestionEdit">{{ t('ui.k0559') }}</button>
+      </div>
+    </div>
+
+    <!-- Answer sheet -->
+    <div v-if="showSheetModal" class="focus-overlay practice-sheet-overlay" @click.self="showSheetModal = false" data-testid="practice-sheet-drawer">
+      <div class="focus-dialog sheet-dialog practice-sheet-dialog" role="dialog" aria-modal="true">
+        <div class="dialog-head">
+          <div>
+            <span class="dialog-title">{{ t('ep.exam.sheet') }}</span>
+            <span class="dialog-sub">{{ t('ep.practice.answered_ratio', { answered: answeredCount, total: questions.length }) }}</span>
+          </div>
+          <button type="button" class="icon-btn" :aria-label="t('ep.common.close')" @click="showSheetModal = false"><LinearIcon name="x" :size="16" /></button>
+        </div>
+        <div class="sheet-body practice-sheet-body">
+          <div class="sheet-legend practice-sheet-legend">
+            <span><i class="practice-sheet-dot is-answered"></i>{{ t('ep.exam.answered') }}</span>
+            <span><i class="practice-sheet-dot"></i>{{ t('ep.practice.unanswered') }}</span>
+            <span><i class="practice-sheet-dot is-current"></i>{{ t('ui.k0098') }}</span>
+            <span><i class="practice-sheet-dot is-flagged"></i>{{ t('ep.exam.flagged') }}</span>
+          </div>
+          <div class="sheet-grid practice-sheet-grid">
+            <button
+              v-for="(qItem, qIdx) in questions"
+              :key="qItem.id"
+              type="button"
+              class="sheet-num practice-sheet-cell mono"
+              :class="getSheetButtonClass(qItem.id, qIdx)"
+              :aria-current="qIdx === index ? 'true' : undefined"
+              @click="goTo(qIdx)"
+            >{{ qIdx + 1 }}</button>
+          </div>
+          <div class="practice-sheet-actions">
+            <button type="button" class="btn btn-sm" :class="{ 'is-on': isFlagged }" @click="toggleCurrentFlag">
+              <LinearIcon name="flag" :size="13" />{{ isFlagged ? t('ep.exam.flagged') : t('ep.exam.flag') }}
+            </button>
+            <button type="button" class="btn btn-sm" @click="jumpNextUnanswered">{{ t('ep.practice.jump_unanswered') }}</button>
+          </div>
         </div>
       </div>
+    </div>
 
-      <!-- 多端并发修改冲突保留与选择横幅 (基于服务端真实冲突检测) -->
-      <div v-if="activeConflict || conflictResolvedMessage" class="conflict-banner" data-testid="conflict-banner">
-        <div v-if="activeConflict" class="conflict-header">
-          <span class="conflict-badge">{{ t('ui.k0560') }}{{ activeConflict.base_version_number }} {{ t('ui.k0561') }}{{ activeConflict.server_version_number }} {{ t('ui.k0562') }}</span>
-          <button type="button" class="btn-conflict-toggle" @click="showConflictModal = !showConflictModal">
-            {{ showConflictModal ? t('ui.k0743') : t('ui.k0744') }}
+    <!-- Practice report -->
+    <div v-if="practiceReport" class="focus-overlay" data-testid="practice-report-modal">
+      <div class="focus-dialog report-dialog" role="dialog" aria-modal="true">
+        <div class="dialog-head">
+          <div>
+            <span class="dialog-title">{{ t('ep.practice.report_title') }}</span>
+            <span class="dialog-sub">{{ t('ep.practice.report_desc') }}</span>
+          </div>
+        </div>
+        <div class="report-body">
+          <div class="stat-row report-stats">
+            <div class="stat"><div class="stat-num">{{ practiceReport.score }}</div><div class="stat-cap">{{ t('ep.practice.report_score') }}</div></div>
+            <div class="stat"><div class="stat-num">{{ practiceReport.accuracy }}<span class="unit">%</span></div><div class="stat-cap">{{ t('ep.practice.report_accuracy') }}</div></div>
+            <div class="stat"><div class="stat-num">{{ practiceReport.answered_count }}<span class="unit">/ {{ practiceReport.total_questions }}</span></div><div class="stat-cap">{{ t('ep.practice.report_answered') }}</div></div>
+            <div class="stat"><div class="stat-num">{{ practiceReport.time_spent || 0 }}<span class="unit">{{ t('ep.practice.time_unit') }}</span></div><div class="stat-cap">{{ t('ep.practice.report_time') }}</div></div>
+          </div>
+          <div class="report-counts">
+            <span class="tag ok">{{ t('ep.practice.report_correct') }} {{ practiceReport.correct_count }}</span>
+            <span v-if="practiceReport.partial_count" class="tag warn">{{ t('ep.practice.report_partial') }} {{ practiceReport.partial_count }}</span>
+            <span class="tag bad">{{ t('ep.practice.report_wrong') }} {{ practiceReport.incorrect_count }}</span>
+            <span class="tag">{{ t('ep.practice.report_blank') }} {{ practiceReport.unanswered_count }}</span>
+          </div>
+        </div>
+        <div class="dialog-actions">
+          <button type="button" class="btn" @click="handleBack">{{ t('ep.practice.done') }}</button>
+          <button type="button" class="btn btn-primary" @click="handleRestartPractice">{{ t('ep.practice.restart') }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Submit confirmation -->
+    <div v-if="showCompleteConfirmModal" class="focus-overlay" @click.self="showCompleteConfirmModal = false">
+      <div class="focus-dialog confirm-dialog" role="dialog" aria-modal="true">
+        <div class="dialog-head"><span class="dialog-title">{{ t('ep.practice.complete_title') }}</span></div>
+        <div class="confirm-body">
+          <p v-if="questions.length - answeredCount > 0" class="confirm-warn">{{ t('ep.practice.complete_blank', { count: questions.length - answeredCount }) }}</p>
+          <p v-else class="confirm-text">{{ t('ep.practice.complete_all') }}</p>
+          <p class="confirm-text">{{ t('ep.practice.complete_hint') }}</p>
+        </div>
+        <div class="dialog-actions">
+          <button type="button" class="btn" @click="showCompleteConfirmModal = false">{{ t('ep.practice.cancel') }}</button>
+          <button type="button" class="btn btn-primary" :disabled="completing" @click="handleConfirmComplete">
+            {{ completing ? t('ep.practice.completing') : t('ep.practice.confirm_complete') }}
           </button>
         </div>
-        <p v-if="conflictResolvedMessage" class="conflict-resolved-msg">{{ conflictResolvedMessage }}</p>
+      </div>
+    </div>
 
-        <div v-if="showConflictModal" class="conflict-list" data-testid="conflict-list">
-          <div
-            v-for="v in questionVersions"
-            :key="v.id"
-            class="conflict-version-item"
-            :class="{ active: v.version_number === question.version_number }"
-            :data-testid="`conflict-version-${v.version_number}`"
-          >
-            <div class="conflict-version-meta">
-              <strong>{{ t('ui.k0563') }}{{ v.version_number }}</strong>
-              <small>{{ v.created_at ? v.created_at.slice(0, 19).replace('T', ' ') : '' }}</small>
-              <span v-if="v.version_number === question.version_number" class="badge-current">{{ t('ui.k0564') }}</span>
+    <!-- Exit confirmation: backdrop and Escape both mean "keep practising". -->
+    <AppDialog
+      :open="showExitConfirmModal"
+      :title="t('ep.practice.exit_title')"
+      initial-focus=".exit-continue"
+      style="--app-dialog-width: 460px"
+      data-testid="exit-confirm-modal"
+      @close="handleCancelExit"
+    >
+      <p class="confirm-text">{{ t('ep.practice.exit_desc') }}</p>
+      <template #foot>
+        <div class="exit-actions">
+          <button type="button" class="btn exit-continue" @click="handleCancelExit">{{ t('ep.practice.continue_practice') }}</button>
+          <button type="button" class="btn btn-primary" @click="handleConfirmExit">{{ t('ep.practice.confirm_exit') }}</button>
+        </div>
+      </template>
+    </AppDialog>
+
+    <div v-if="loading" class="focus-loading skeleton-rows">
+      <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+    </div>
+
+    <template v-else-if="question">
+      <div class="focus-layout">
+        <article class="focus-reading practice-study-main">
+          <div v-if="offlineNotice" class="notice warn focus-offline" data-testid="offline-banner">
+            <LinearIcon name="alert" :size="15" />
+            <span>{{ offlineNotice }}</span>
+            <button v-if="offlineRetryAvailable" type="button" class="btn btn-sm btn-quiet" @click="retryOfflineSync">{{ t('ep.practice.offline_retry') }}</button>
+          </div>
+
+          <!-- Inline question editor -->
+          <section v-if="isEditingQuestion" class="edit-panel" data-testid="question-edit-panel">
+            <div class="edit-panel-head">
+              <span class="edit-panel-title">{{ t('ep.practice.edit_title', { version: question.version_number }) }}</span>
+              <button type="button" class="btn btn-sm btn-quiet" @click="isEditingQuestion = false">{{ t('ep.practice.edit_exit') }}</button>
             </div>
-            <div class="conflict-version-body">
-              <p><strong>{{ t('ui.k0211') }}</strong>{{ v.stem }}</p>
-              <p><strong>{{ t('ui.k0565') }}</strong>{{ v.answer }}</p>
-              <p v-if="v.explanation"><strong>{{ t('ui.k0372') }}</strong>{{ v.explanation }}</p>
+            <p v-if="editSaveError" class="notice bad" role="alert" data-testid="question-edit-error">{{ editSaveError }}</p>
+            <label class="field">
+              <span class="label">{{ t('ep.practice.edit_stem') }}</span>
+              <textarea v-model="editStem" class="textarea" rows="3"></textarea>
+            </label>
+            <div class="edit-grid">
+              <label class="field">
+                <span class="label">{{ t('ep.banks.type') }}</span>
+                <select v-model="editType" class="select">
+                  <option value="SINGLE">{{ t('ep.question_types.single') }}</option>
+                  <option value="MULTI">{{ t('ep.question_types.multi') }}</option>
+                  <option value="JUDGE">{{ t('ep.question_types.judge') }}</option>
+                  <option value="ESSAY">{{ t('ep.question_types.essay') }}</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="label">{{ t('ep.banks.difficulty') }}</span>
+                <select v-model.number="editDifficulty" class="select">
+                  <option :value="1">{{ t('bank_manage.diff_1') }}</option>
+                  <option :value="2">{{ t('bank_manage.diff_2') }}</option>
+                  <option :value="3">{{ t('bank_manage.diff_3') }}</option>
+                  <option :value="4">{{ t('bank_manage.diff_4') }}</option>
+                  <option :value="5">{{ t('bank_manage.diff_5') }}</option>
+                </select>
+              </label>
+              <label class="field">
+                <span class="label">{{ t('ep.practice.edit_answer') }}</span>
+                <input v-model="editAnswer" class="input" :placeholder="t('ep.practice.edit_answer_placeholder')" />
+              </label>
             </div>
-            <div class="conflict-version-actions">
-              <button
-                type="button"
-                class="btn-adopt-version primary"
-                :disabled="!activeConflict && v.version_number === question.version_number"
-                @click="handleAdoptQuestionVersion(v)"
-              >
-                {{ !activeConflict && v.version_number === question.version_number ? t('ui.k0745') : `${t('ui.k0746')}${v.version_number})` }}
+            <div v-if="editType === 'SINGLE' || editType === 'MULTI' || editType === 'JUDGE'" class="edit-options">
+              <div class="edit-options-head">
+                <span class="label">{{ t('ep.practice.edit_options') }}</span>
+                <button type="button" class="btn btn-sm btn-quiet" @click="addOption">{{ t('ep.practice.edit_add_option') }}</button>
+              </div>
+              <div v-for="(opt, oIdx) in editOptions" :key="oIdx" class="edit-option-row">
+                <input v-model="opt.key" class="input opt-key-input mono" :aria-label="t('ep.practice.edit_option_key')" />
+                <input v-model="opt.content" class="input" :placeholder="t('ep.practice.edit_option_text')" />
+                <button type="button" class="icon-btn" :aria-label="t('ep.common.delete')" @click="removeOption(oIdx)"><LinearIcon name="x" :size="13" /></button>
+              </div>
+            </div>
+            <label class="field">
+              <span class="label">{{ t('ep.practice.edit_explanation') }}</span>
+              <textarea v-model="editExplanation" class="textarea" rows="2"></textarea>
+            </label>
+            <label class="field">
+              <span class="label">{{ t('ep.practice.edit_tags') }}</span>
+              <input v-model="editTags" class="input" :placeholder="t('ep.practice.edit_tags_placeholder')" />
+            </label>
+            <label v-if="canEditQuestion" class="edit-check">
+              <input v-model="editRegradeHistory" type="checkbox" />
+              <span>{{ t('ep.practice.edit_regrade') }}</span>
+            </label>
+            <div class="edit-panel-actions">
+              <button type="button" class="btn" @click="isEditingQuestion = false">{{ t('ep.common.cancel') }}</button>
+              <button type="button" class="btn btn-primary" @click="saveQuestionEdit">{{ t('ep.practice.edit_save') }}</button>
+            </div>
+          </section>
+
+          <!-- Draft conflict: another device wrote a different answer. -->
+          <section v-if="draftConflicts.length" class="conflict-banner" data-testid="draft-conflict-banner">
+            <div class="conflict-head">
+              <LinearIcon name="alert" :size="15" />
+              <span>{{ t('ep.practice.draft_conflict_title') }}</span>
+            </div>
+            <p class="conflict-resolved">{{ t('ep.practice.draft_conflict_desc') }}</p>
+            <div class="conflict-list">
+              <article v-for="conflict in draftConflicts" :key="conflict.question_id" class="conflict-version">
+                <div class="conflict-version-head">
+                  <span class="mono">{{ t('ep.practice.question_no', { current: questionNumberFor(conflict.question_id) }) }}</span>
+                </div>
+                <div class="conflict-meta">
+                  <span>{{ t('ep.practice.draft_conflict_server') }} · {{ formatUserAnswer(conflict.existing_answer) }}</span>
+                  <span>{{ t('ep.practice.draft_conflict_local') }} · {{ formatUserAnswer(conflict.incoming_answer) }}</span>
+                </div>
+                <div class="ai-version-actions">
+                  <button type="button" class="btn btn-sm" @click="resolveDraftConflictKeepServer">{{ t('ep.practice.draft_conflict_keep_server') }}</button>
+                  <button type="button" class="btn btn-sm btn-primary" @click="resolveDraftConflictUseLocal">{{ t('ep.practice.draft_conflict_use_local') }}</button>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <!-- Conflict banner -->
+          <section v-if="activeConflict || conflictResolvedMessage" class="conflict-banner" data-testid="conflict-banner">
+            <div class="conflict-head">
+              <LinearIcon name="alert" :size="15" />
+              <span>{{ t('ep.practice.conflict_title') }}</span>
+              <button v-if="canEditQuestion" type="button" class="btn btn-sm btn-quiet" @click="showConflictModal = !showConflictModal">
+                {{ showConflictModal ? t('ep.practice.conflict_hide') : t('ep.practice.conflict_resolve') }}
               </button>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <div :key="question.id" class="question-slide-wrapper" :class="slideTransition">
-          <div class="practice-split-grid" :class="{ 'has-result': Boolean(result) }">
-            <div class="practice-split-left">
-              <div class="stem-box">
-                <h2>{{ question.stem }}</h2>
-              </div>
-
-              <!-- 客观选择题 -->
-              <div v-if="question.options?.length" class="options-group">
-                <label
-                  v-for="option in question.options"
-                  :key="option.key"
-                  class="option"
-                  :class="{
-                    selected: isOptionSelected(option.key),
-                    'option-correct': result && isCorrectOption(option.key),
-                    'option-wrong': result && isWrongOption(option.key)
-                  }"
-                  @click.prevent="selectOption(option.key)"
-                >
-                  <kbd class="key-cap" :title="`${t('ui.k0084')} ${option.key} ${t('ui.k0085')}`">{{ option.key }}</kbd>
-                  <input
-                    :type="question.type === 'MULTI' ? 'checkbox' : 'radio'"
-                    :name="`practice-${question.id}`"
-                    :value="option.key"
-                    :checked="isOptionSelected(option.key)"
-                    :disabled="Boolean(result)"
-                  />
-                  <span class="option-text-content">{{ option.content }}</span>
-                  <span v-if="result && isCorrectOption(option.key)" class="inline-verdict-badge correct">{{ t('ui.k0566') }}</span>
-                  <span v-if="result && isWrongOption(option.key)" class="inline-verdict-badge wrong">{{ t('ui.k0567') }}</span>
-                </label>
-              </div>
-
-              <!-- 主观题 / 填空题文本输入 -->
-              <div v-else class="text-answer-box">
-                <label>
-                  <span>{{ t('ui.k0568') }}</span>
-                  <textarea
-                    v-model="textAnswer"
-                    :disabled="Boolean(result)"
-                    rows="4"
-                    :placeholder="t('ui.k0569')"
-                  />
-                </label>
-              </div>
-
-              <!-- 紧凑即时判分结果摘要条 (无需向下滚动即可直观看到对错与标准答案) -->
-              <div v-if="result" class="quick-verdict-bar" :class="result.correctness.toLowerCase()">
-                <div class="verdict-status-title">
-                  <span class="verdict-icon">
-                    <LinearIcon :name="result.correctness === 'CORRECT' ? 'check' : 'x'" size="15" />
-                  </span>
-                  <strong>{{ formatVerdictTitle(question.type, result.correctness, result.is_objective) }}</strong>
+            <p v-if="conflictResolvedMessage" class="conflict-resolved">{{ conflictResolvedMessage }}</p>
+            <div v-if="showConflictModal && canEditQuestion" class="conflict-list" data-testid="conflict-list">
+              <article v-for="v in questionVersions" :key="v.id" class="conflict-version" :class="{ 'is-current': v.version_number === question.version_number }">
+                <div class="conflict-version-head">
+                  <span class="mono">{{ t('ep.practice.conflict_version', { version: v.version_number }) }}</span>
+                  <span v-if="v.version_number === question.version_number" class="tag brand">{{ t('ep.practice.conflict_current') }}</span>
+                  <span class="small dim">{{ v.created_at ? v.created_at.slice(0, 19).replace('T', ' ') : '' }}</span>
                 </div>
-                <div class="verdict-text-inline">
-                  <span v-if="question.answer">{{ t('ui.k0080') }}<strong class="text-correct">{{ question.answer }}</strong></span>
-                  <span v-if="hasAnswer">{{ t('ui.k0570') }}<strong :class="result.correctness === 'CORRECT' ? 'text-correct' : 'text-danger'">{{ formatUserAnswer(question.options?.length ? answer : textAnswer) }}</strong></span>
-                  <span v-if="result.is_objective && result.score_ratio !== undefined">{{ t('ui.k0571') }}{{ Math.round((result.score_ratio || 0) * 100) }}%</span>
+                <p class="conflict-stem">{{ v.stem }}</p>
+                <div class="conflict-meta">
+                  <span>{{ t('ep.practice.edit_answer') }} · {{ v.answer }}</span>
+                  <button type="button" class="btn btn-sm" @click="handleAdoptQuestionVersion(v)">{{ t('ep.practice.conflict_adopt', { version: v.version_number }) }}</button>
                 </div>
-              </div>
+              </article>
+            </div>
+          </section>
+
+          <div :key="question.id" class="q-sheet reading-page focus-sheet practice-paper" :class="slideTransition">
+            <div class="q-meta">
+              <span>{{ t('ep.practice.question_no', { current: index + 1 }) }}</span>
+              <span>{{ formatType(question.type) }}</span>
+              <span v-if="isWeak" class="tag brand">{{ t('ep.review.weak') }}</span>
+            </div>
+            <div class="q-stem">{{ question.stem }}</div>
+
+            <div v-if="question.options?.length" class="opt-list">
+              <button
+                v-for="option in question.options"
+                :key="option.key"
+                type="button"
+                class="opt"
+                :class="{
+                  'is-selected': isOptionSelected(option.key),
+                  'is-correct': result && isCorrectOption(option.key),
+                  'is-wrong': result && isWrongOption(option.key),
+                }"
+                :aria-pressed="isOptionSelected(option.key)"
+                :disabled="Boolean(result)"
+                @click.prevent="selectOption(option.key)"
+              >
+                <span class="opt-key">{{ option.key }}</span>
+                <span class="opt-text">{{ option.content }}</span>
+                <span v-if="result && isCorrectOption(option.key)" class="opt-mark ok"><LinearIcon name="check" :size="14" /></span>
+                <span v-else-if="result && isWrongOption(option.key)" class="opt-mark bad"><LinearIcon name="x" :size="14" /></span>
+              </button>
             </div>
 
-            <div class="practice-split-right">
-              <!-- 判分结果卡片 -->
-              <section v-if="result" class="result-card">
-                <div class="result-header">
-                  <strong :class="result.correctness.toLowerCase()">
-                    {{ formatVerdictTitle(question.type, result.correctness, result.is_objective) }}
-                    <span v-if="result.correctness === 'CORRECT'" class="sub-correct-badge">{{ t('ui.k0572') }}</span>
-                  </strong>
-                  <span v-if="result.is_objective">{{ t('ui.k0573') }}{{ result.score_ratio }}</span>
-                </div>
+            <div v-else class="field">
+              <label class="label" for="practice-text">{{ t('ep.practice.your_answer') }}</label>
+              <textarea
+                id="practice-text"
+                v-model="textAnswer"
+                class="textarea"
+                :disabled="Boolean(result)"
+                rows="4"
+                :placeholder="t('ep.practice.essay_placeholder')"
+              ></textarea>
+            </div>
 
-                <!-- FSRS 记忆评级交互区 (驱动下次复习时间) -->
-                <div v-if="session?.mode === 'FSRS' || session?.mode === 'MISTAKE'" class="fsrs-rating-box">
-                  <h4>{{ t('practice.fsrs_rating_title') }} (1-4)：</h4>
-                  <div class="fsrs-buttons">
-                    <button
-                      type="button"
-                      class="rating-btn again"
-                      :class="{ selected: selectedFsrsRating === 1 }"
-                      @click="submitRating(1)"
-                    >
-                      1 - {{ t('practice.fsrs_again') }} (+10m)
-                    </button>
-                    <button
-                      type="button"
-                      class="rating-btn hard"
-                      :disabled="result.correctness === 'INCORRECT'"
-                      :class="{ selected: selectedFsrsRating === 2 }"
-                      @click="submitRating(2)"
-                    >
-                      2 - {{ t('practice.fsrs_hard') }} (+1d)
-                    </button>
-                    <button
-                      type="button"
-                      class="rating-btn good"
-                      :disabled="result.correctness !== 'CORRECT'"
-                      :class="{ selected: selectedFsrsRating === 3 }"
-                      @click="submitRating(3)"
-                    >
-                      3 - {{ t('practice.fsrs_good') }} (+3d)
-                    </button>
-                    <button
-                      type="button"
-                      class="rating-btn easy"
-                      :disabled="result.correctness !== 'CORRECT'"
-                      :class="{ selected: selectedFsrsRating === 4 }"
-                      @click="submitRating(4)"
-                    >
-                      4 - {{ t('practice.fsrs_easy') }} (+7d)
-                    </button>
-                  </div>
-                  <p v-if="fsrsRatingStatus" class="fsrs-status">{{ fsrsRatingStatus }}</p>
-                </div>
+            <!-- Feedback: stays inside the paper so grading has one work surface. -->
+            <section v-if="result" class="feedback-block practice-feedback">
+            <div class="verdict-line" :class="result.correctness.toLowerCase()">
+              <span class="verdict-mark">
+                <LinearIcon :name="result.correctness === 'CORRECT' ? 'check' : 'x'" :size="16" />
+              </span>
+              <strong>{{ formatVerdictTitle(question.type, result.correctness, result.is_objective) }}</strong>
+              <span v-if="result.is_objective && result.score_ratio !== undefined" class="verdict-ratio mono">
+                {{ t('ep.practice.answer_ratio', { percent: Math.round((result.score_ratio || 0) * 100) }) }}
+              </span>
+            </div>
+            <div class="answer-line">
+              <span>{{ t('ep.practice.answer') }}</span>
+              <span class="ans">{{ question.answer || t('ep.practice.ungraded') }}</span>
+              <span v-if="hasAnswer" class="answer-yours">{{ t('ep.practice.your_answer') }} · {{ formatUserAnswer(question.options?.length ? answer : textAnswer) }}</span>
+            </div>
 
-                <div v-if="question.explanation" class="official-explanation">
-                  <h4>{{ t('ui.k0574') }}</h4>
-                  <p>{{ question.explanation }}</p>
-                </div>
+            <div v-if="question.explanation" class="explain-block">
+              <div class="rule-label">{{ t('ep.practice.official_explanation') }}</div>
+              <div class="explain-body">{{ question.explanation }}</div>
+            </div>
 
-                <!-- AI 助教入口卡片 (位于官方解析下方，阅读解析后可直接展开提问) -->
-                <div class="ai-assistant-entry-block">
-                  <div class="ai-entry-meta">
-                    <span class="ai-badge">
-                      <LinearIcon name="cpu" size="13" /> {{ t('ui.k0575') }}
-                    </span>
-                    <span class="ai-desc">{{ t('ui.k0576') }}</span>
-                  </div>
-                  <button
-                    type="button"
-                    class="secondary-btn btn-toggle-ai-card"
-                    :class="{ active: showAiPanel }"
-                    @click="toggleAiPanel"
-                  >
-                    <LinearIcon name="cpu" size="13" /> {{ showAiPanel ? t('ui.k0747') : t('ui.k0748') }}
-                  </button>
-                </div>
-              </section>
+            <div v-if="session?.mode === 'FSRS' || session?.mode === 'MISTAKE'" class="fsrs-block">
+              <div class="rule-label">{{ t('ep.practice.rate') }}</div>
+              <div class="fsrs-buttons">
+                <button type="button" class="btn btn-sm" :class="{ 'is-on': selectedFsrsRating === 1 }" @click="submitRating(1)">{{ t('ep.practice.again') }} <span class="mono">(+10m)</span></button>
+                <button type="button" class="btn btn-sm" :disabled="result.correctness === 'INCORRECT'" :class="{ 'is-on': selectedFsrsRating === 2 }" @click="submitRating(2)">{{ t('ep.practice.hard') }} <span class="mono">(+1d)</span></button>
+                <button type="button" class="btn btn-sm" :disabled="result.correctness !== 'CORRECT'" :class="{ 'is-on': selectedFsrsRating === 3 }" @click="submitRating(3)">{{ t('ep.practice.good') }} <span class="mono">(+3d)</span></button>
+                <button type="button" class="btn btn-sm" :disabled="result.correctness !== 'CORRECT'" :class="{ 'is-on': selectedFsrsRating === 4 }" @click="submitRating(4)">{{ t('ep.practice.easy') }} <span class="mono">(+7d)</span></button>
+              </div>
+              <p v-if="fsrsRatingStatus" class="hint">{{ fsrsRatingStatus }}</p>
+            </div>
 
-              <!-- 桌面端未判分时的专注作答状态卡 -->
-              <div v-else class="practice-answering-placeholder desktop-only-block">
-                <div class="placeholder-icon">
-                  <LinearIcon name="command" size="22" />
-                </div>
-                <div class="placeholder-content">
-                  <h4>{{ t('ui.k0577') }}</h4>
-                  <p>{{ t('ui.k0578') }}</p>
-                  <p>{{ t('ui.k0579') }}<strong>{{ t('ui.k0580') }}</strong>{{ t('ui.k0581') }} <strong>Enter</strong> {{ t('ui.k0582') }}</p>
+            <div class="ai-entry">
+              <div class="ai-entry-text">
+                <span class="ai-entry-title"><LinearIcon name="cpu" :size="14" />{{ t('ep.practice.ai_title') }}</span>
+                <span class="hint">{{ t('ep.practice.ai_secondary') }}</span>
+              </div>
+              <button type="button" class="btn btn-sm" @click="toggleAiPanel">{{ showAiPanel ? t('ep.practice.ai_close') : t('ep.practice.ai_open') }}</button>
+            </div>
+
+            <section v-if="showAiPanel" class="ai-panel">
+              <div class="ai-toolbar">
+                <div class="ai-actions">
+                  <button type="button" class="btn btn-sm" :disabled="aiLoading || generatingVariant" @click="generateExplanation">{{ aiLoading ? t('ep.common.loading') : t('ep.practice.ai_generate') }}</button>
+                  <button type="button" class="btn btn-sm" :disabled="aiLoading || generatingVariant" @click="handleVerifyWeb">{{ t('ep.practice.ai_verify') }}</button>
+                  <button type="button" class="btn btn-sm" :disabled="aiLoading || generatingVariant" @click="handleGenerateVariant">{{ generatingVariant ? t('ep.common.loading') : t('ep.practice.ai_variant') }}</button>
                 </div>
               </div>
 
-      <!-- AI 助教与多版本解释面板 -->
-      <section v-if="showAiPanel" class="ai-panel">
-        <div class="ai-toolbar">
-          <h3>{{ t('ui.k0583') }}</h3>
-          <div class="ai-btn-group">
-            <button type="button" :disabled="aiLoading || generatingVariant" @click="generateExplanation">
-              {{ aiLoading ? t('ui.k0689') : t('ui.k0749') }}
-            </button>
-            <button type="button" :disabled="aiLoading || generatingVariant" @click="handleVerifyWeb">
-              {{ aiLoading ? t('ui.k0750') : t('ui.k0751') }}
-            </button>
-            <button type="button" :disabled="aiLoading || generatingVariant" @click="handleGenerateVariant">
-              {{ generatingVariant ? t('ui.k0752') : t('ui.k0753') }}
-            </button>
-          </div>
-        </div>
+              <div class="ai-ask">
+                <input v-model="customQuery" class="input" type="text" :placeholder="t('ep.practice.ai_ask_placeholder')" @keyup.enter="askCustomQuery" />
+                <button type="button" class="btn btn-sm" :disabled="!customQuery.trim() || aiLoading" @click="askCustomQuery">{{ t('ep.practice.ai_send') }}</button>
+              </div>
+              <p v-if="aiStatusMessage" class="hint">{{ aiStatusMessage }}</p>
 
-        <!-- 自定义追问输入框 -->
-        <div class="ai-ask-box">
-          <input
-            v-model="customQuery"
-            type="text"
-            :placeholder="t('ui.k0584')"
-            @keyup.enter="askCustomQuery"
-          />
-          <button type="button" :disabled="!customQuery.trim() || aiLoading" @click="askCustomQuery">
-            {{ t('ui.k0585') }}
+              <div v-if="chatMessages.length" class="ai-chat">
+                <div class="rule-label">{{ t('ep.practice.ai_chat') }}</div>
+                <div v-for="msg in chatMessages" :key="msg.id" class="chat-row" :class="msg.role">
+                  <div class="chat-meta">
+                    <span class="chat-sender">{{ msg.role === 'user' ? t('ep.practice.ai_me') : t('ep.practice.ai_assistant') }}</span>
+                    <span class="mono">{{ msg.sequence }}</span>
+                  </div>
+                  <p class="chat-text">{{ msg.content }}</p>
+                </div>
+              </div>
+
+              <div v-if="answerVersions.length" class="ai-versions">
+                <div class="rule-label">{{ t('ep.practice.ai_versions') }}</div>
+                <article v-for="version in answerVersions" :key="version.id" class="ai-version" :class="{ 'is-adopted': version.is_adopted }">
+                  <div class="ai-version-head">
+                    <span class="tag">{{ formatSource(version.source) }}</span>
+                    <span v-if="version.is_adopted" class="tag brand">{{ t('ep.practice.ai_adopted') }}</span>
+                    <span class="small dim mono">{{ version.created_at ? version.created_at.slice(0, 19).replace('T', ' ') : '' }}</span>
+                  </div>
+                  <div v-if="editingVersionId !== version.id">
+                    <p class="ai-version-text">{{ version.content }}</p>
+                    <div v-if="version.evidence?.length" class="ai-evidence">
+                      <div class="rule-label">{{ t('ep.practice.ai_evidence') }}</div>
+                      <ul>
+                        <li v-for="(ev, idx) in version.evidence" :key="idx">
+                          <strong>{{ ev.title }}</strong>
+                          <span v-if="ev.snippet"> — {{ ev.snippet }}</span>
+                          <a v-if="ev.url" :href="ev.url" target="_blank" rel="noopener">{{ t('ep.practice.ai_open_link') }}</a>
+                        </li>
+                      </ul>
+                    </div>
+                    <div class="ai-version-actions">
+                      <button v-if="!version.is_adopted" type="button" class="btn btn-sm" @click="adopt(version.id)">{{ t('ep.practice.ai_adopt') }}</button>
+                      <button type="button" class="btn btn-sm btn-quiet" @click="startEdit(version)">{{ t('ep.practice.ai_edit') }}</button>
+                    </div>
+                  </div>
+                  <div v-else class="ai-version-edit">
+                    <textarea v-model="editDraft" class="textarea" rows="4"></textarea>
+                    <div class="ai-version-actions">
+                      <button type="button" class="btn btn-sm" @click="editingVersionId = null">{{ t('ep.common.cancel') }}</button>
+                      <button type="button" class="btn btn-sm btn-primary" :disabled="!editDraft.trim()" @click="savePersonalExplanation">{{ t('ep.practice.ai_save') }}</button>
+                    </div>
+                  </div>
+                </article>
+              </div>
+              <p v-else class="hint">{{ t('ep.practice.ai_empty') }}</p>
+            </section>
+            </section>
+          </div>
+
+          <div v-if="!result" class="reading-hint">
+            <LinearIcon name="command" :size="15" />
+            <span>{{ t('ui.k0577') }} · {{ t('ui.k0580') }} <kbd>Enter</kbd></span>
+          </div>
+        </article>
+
+        <aside class="focus-rail practice-study-rail">
+          <div class="rail-block">
+            <div class="rail-title">{{ t('ep.practice.progress_label') }}</div>
+            <div class="focus-progress">
+              <span class="mono">{{ answeredCount }} / {{ questions.length }}</span>
+              <div class="progress-track"><i :style="{ width: Math.min(100, (answeredCount / Math.max(1, questions.length)) * 100) + '%' }"></i></div>
+            </div>
+            <div class="rail-note">{{ t('ep.practice.session_title') }}</div>
+          </div>
+
+          <div class="rail-block practice-answer-card">
+            <div class="practice-rail-head">
+              <div class="rail-title">{{ t('ep.exam.sheet') }}</div>
+              <button type="button" class="practice-flag-toggle" :class="{ 'is-on': isFlagged }" @click="toggleCurrentFlag">
+                <LinearIcon name="flag" :size="12" />{{ isFlagged ? t('ep.exam.flagged') : t('ep.exam.flag') }}
+              </button>
+            </div>
+            <div class="practice-answer-count mono">{{ t('ep.practice.answered_ratio', { answered: answeredCount, total: questions.length }) }}</div>
+            <div class="sheet-mini practice-answer-grid">
+              <button
+                v-for="(qItem, qIdx) in questions"
+                :key="qItem.id"
+                type="button"
+                class="sheet-num practice-answer-cell mono"
+                :class="getSheetButtonClass(qItem.id, qIdx)"
+                :aria-current="qIdx === index ? 'true' : undefined"
+                @click="goTo(qIdx)"
+              >{{ qIdx + 1 }}</button>
+            </div>
+            <div class="practice-answer-legend">
+              <span><i class="practice-sheet-dot is-answered"></i>{{ t('ep.exam.answered') }}</span>
+              <span><i class="practice-sheet-dot"></i>{{ t('ep.practice.unanswered') }}</span>
+              <span><i class="practice-sheet-dot is-current"></i>{{ t('ui.k0098') }}</span>
+              <span><i class="practice-sheet-dot is-flagged"></i>{{ t('ep.exam.flagged') }}</span>
+            </div>
+          </div>
+
+          <div class="rail-block">
+            <button type="button" class="btn btn-sm btn-block" :class="{ 'is-on': isWeak }" @click="toggleWeak">
+              <LinearIcon name="flag" :size="13" />{{ isWeak ? t('ep.banks.unmark_weak') : t('ep.banks.mark_weak') }}
+            </button>
+            <button type="button" class="btn btn-sm btn-block" style="margin-top: 6px" @click="complete">{{ t('ep.practice.finish') }}</button>
+          </div>
+
+          <div class="rail-block">
+            <div class="rail-title">{{ t('ep.practice.shortcuts_title') }}</div>
+            <div class="rail-keys">
+              <span><kbd>A-D</kbd> {{ t('ui.k0597') }}</span>
+              <span><kbd>Enter</kbd> {{ t('ui.k0598') }}</span>
+              <span><kbd>Space</kbd> {{ t('ui.k0092') }}</span>
+              <span><kbd>F</kbd> {{ t('ui.k0599') }}</span>
+            </div>
+            <div class="rail-tools">
+              <ThemeToggle compact />
+              <LocaleToggle compact />
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <footer class="focus-actionbar" data-testid="practice-action-bar">
+        <div class="focus-action-inner">
+          <button type="button" class="btn btn-sm" :disabled="index === 0" @click="prev">
+            <LinearIcon name="arrow-left" :size="14" />{{ t('ep.practice.prev') }}
           </button>
+          <span class="spacer"></span>
+          <span class="focus-counter mono">{{ index + 1 }} / {{ questions.length }}</span>
+          <span class="spacer"></span>
+          <button v-if="!result && index < questions.length - 1" type="button" class="btn btn-sm btn-quiet" @click="next">{{ t('ep.practice.next') }}</button>
+          <button v-if="!result" type="button" class="btn btn-primary" :disabled="!hasAnswer && question.options?.length" @click="submit">{{ t('ep.practice.submit') }}</button>
+          <template v-else>
+            <button v-if="index < questions.length - 1" type="button" class="btn btn-primary" @click="next">{{ t('ep.practice.next') }}</button>
+            <button v-else type="button" class="btn btn-primary" @click="complete">{{ t('ep.practice.complete') }}</button>
+          </template>
         </div>
-
-        <p v-if="aiStatusMessage" class="ai-status">{{ aiStatusMessage }}</p>
-
-        <!-- 连续追问对话历史 (MiaowTest 对话模型) -->
-        <div v-if="chatMessages.length" class="ai-chat-thread">
-          <h4>{{ t('ui.k0586') }}{{ chatMessages.length }})</h4>
-          <div v-for="msg in chatMessages" :key="msg.id" class="chat-bubble" :class="msg.role">
-            <div class="chat-sender">
-              <strong>{{ msg.role === 'user' ? t('ui.k0754') : t('ui.k0755') }}</strong>
-              <small class="muted">#{{ msg.sequence }}</small>
-            </div>
-            <p class="chat-text">{{ msg.content }}</p>
-          </div>
-        </div>
-
-        <!-- 历史解释版本列表 -->
-        <div v-if="answerVersions.length" class="ai-history">
-          <h4>{{ t('ui.k0587') }}{{ answerVersions.length }})</h4>
-          <article
-            v-for="version in answerVersions"
-            :key="version.id"
-            class="version-card"
-            :class="{ adopted: version.is_adopted }"
-          >
-            <div class="version-meta">
-              <span class="source-tag">{{ formatSource(version.source) }}</span>
-              <span v-if="version.is_adopted" class="badge-adopted">{{ t('ui.k0588') }}</span>
-              <small class="muted">{{ version.created_at ? version.created_at.slice(0, 19).replace('T', ' ') : '' }}</small>
-            </div>
-
-            <!-- 查看模式 -->
-            <div v-if="editingVersionId !== version.id" class="version-content">
-              <p class="content-text">{{ version.content }}</p>
-
-              <!-- 联网证据展示 -->
-              <div v-if="version.evidence?.length" class="evidence-box">
-                <h5>{{ t('ui.k0589') }}{{ version.evidence.length }})</h5>
-                <ul>
-                  <li v-for="(ev, idx) in version.evidence" :key="idx">
-                    <strong>{{ ev.title }}</strong>
-                    <span v-if="ev.snippet"> - {{ ev.snippet }}</span>
-                    <a v-if="ev.url" :href="ev.url" target="_blank" rel="noopener">{{ t('ui.k0590') }}</a>
-                  </li>
-                </ul>
-              </div>
-
-              <div class="version-actions">
-                <button
-                  v-if="!version.is_adopted"
-                  type="button"
-                  class="btn-adopt"
-                  @click="adopt(version.id)"
-                >{{ t('ui.k0591') }}</button>
-                <button
-                  type="button"
-                  @click="startEdit(version)"
-                >{{ t('ui.k0592') }}</button>
-              </div>
-            </div>
-
-            <!-- 编辑模式 -->
-            <div v-else class="version-edit-box">
-              <textarea v-model="editDraft" rows="4" />
-              <div class="version-edit-actions">
-                <button type="button" @click="editingVersionId = null">{{ t('ui.k0149') }}</button>
-                <button type="button" class="primary" :disabled="!editDraft.trim()" @click="savePersonalExplanation">
-                  {{ t('ui.k0593') }}
-                </button>
-              </div>
-            </div>
-          </article>
-        </div>
-        <p v-else class="muted">{{ t('ui.k0594') }}</p>
-      </section>
-        </div>
-      </div>
+      </footer>
+    </template>
+    <div v-else class="focus-empty">
+      <div class="empty-title">{{ t('ep.practice.no_questions') }}</div>
+      <div class="empty-desc">{{ t('ep.practice.no_questions_hint') }}</div>
+      <button type="button" class="btn" @click="handleBack">{{ t('ep.common.back') }}</button>
     </div>
-</section>
-<p v-else>{{ t('ui.k0595') }}</p>
-
-<!-- 屏幕底部固定操作底栏 (屏幕Y坐标永久固定，零位移，绝不被答案挤压) -->
-<footer v-if="question" class="ergonomic-action-bar" data-testid="practice-action-bar">
-  <div class="action-bar-inner">
-    <div class="action-left">
-      <button
-        type="button"
-        class="secondary-btn btn-prev-question"
-        :disabled="index === 0"
-        @click="prev"
-        :title="t('ui.k0089')"
-      >
-        {{ t('ui.k0596') }}
-        <kbd class="hotkey-badge">←</kbd>
-      </button>
-    </div>
-
-    <!-- 键盘盲操指南条 (直观呈现，无需猜测，移动端自动隐藏) -->
-    <div class="hotkey-helper-bar">
-      <span class="hotkey-item"><kbd>A-D</kbd> {{ t('ui.k0597') }}</span>
-      <span class="hotkey-item"><kbd>Enter</kbd> {{ t('ui.k0598') }}</span>
-      <span class="hotkey-item"><kbd>Space</kbd> {{ t('ui.k0092') }}</span>
-      <span class="hotkey-item"><kbd>←</kbd> {{ t('ui.k0090') }}</span>
-      <span class="hotkey-item"><kbd>F</kbd> {{ t('ui.k0599') }}</span>
-    </div>
-
-    <div class="action-right">
-      <!-- 次要操作：未作答时提供跳过按钮 -->
-      <button
-        v-if="!result && index < questions.length - 1"
-        type="button"
-        class="secondary-btn btn-skip-unanswered"
-        @click="next"
-        :title="t('ui.k0091')"
-      >
-        <span>{{ t('ui.k0600') }}</span>
-      </button>
-
-      <!-- 核心主按钮：提交与下一题锁定在相同物理基准位置，消除跳动与误触 -->
-      <button
-        v-if="!result"
-        type="button"
-        class="primary btn-submit-answer btn-action-fixed-primary"
-        :disabled="!hasAnswer && question.options?.length"
-        @click="submit"
-        :title="t('ui.k0601')"
-      >
-        <span>{{ t('ui.k0580') }}</span>
-        <kbd class="hotkey-badge">Enter ↵</kbd>
-      </button>
-
-      <!-- 已作答状态：原位推进到下一题或交卷 -->
-      <template v-else>
-        <button
-          v-if="index < questions.length - 1"
-          type="button"
-          class="primary btn-next-question btn-action-fixed-primary"
-          @click="next"
-          :title="t('ui.k0091')"
-        >
-          <span>{{ t('ui.k0602') }}</span>
-          <kbd class="hotkey-badge">Space ␣</kbd>
-        </button>
-        <button
-          v-else
-          type="button"
-          class="primary btn-finish-session btn-action-fixed-primary"
-          @click="complete"
-          :title="t('ui.k0601')"
-        >
-          <span>{{ t('ui.k0603') }}</span>
-        </button>
-      </template>
-    </div>
-  </div>
-</footer>
-
   </main>
 </template>
 
@@ -651,18 +551,49 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
+import AppDialog from '../components/AppDialog.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
 import LocaleToggle from '../components/LocaleToggle.vue'
 import { useLocale } from '../composables/useLocale.js'
 import { useAuthStore } from '../stores/authStore'
-import { getSession, getSessionQuestions, submitAttempt, completeSession, syncDraft } from '../api/practice'
-import { getQuestion, listQuestionVersions, updateQuestion, getQuestionConflict, resolveQuestionConflict, regradeQuestion } from '../api/questions'
+import { getSession, getSessionQuestions, submitAttempt, completeSession, syncDraft, toggleFlag } from '../api/practice'
+import { getQuestion, listQuestionVersions, updateQuestion, getQuestionConflict, resolveQuestionConflict } from '../api/questions'
 import { generateAnswer, listAnswerVersions, adoptAnswer, saveCandidate, verifyWeb, listQuestionConversations, listConversationMessages, sendChatMessage, generateVariant } from '../api/ai'
 import { markWeak, unmarkWeak } from '../api/learning'
+import { listBankMembers } from '../api/banks'
 import { killQuestion } from '../api/kills'
 import { triggerSyncEvent } from '../api/sync'
 import { formatVerdictTitle, findFirstUnansweredIndex, findNextUnansweredIndex, isSwipeGestureValid } from '../domain/exam.js'
-import { hydrateSessionPractice, normalizeQuestionOptions, shouldResetQuestionForm } from '../domain/practice.js'
+import {
+  answersToBaseMap,
+  buildDraftAnswerPayload,
+  buildDraftBasePayload,
+  clientAttemptIdOf,
+  clientAttemptIdsFromDraft,
+  createClientAttemptId,
+  draftConflictQuestionIds,
+  dropDraftConflicts,
+  hydrateSessionPractice,
+  isEditorRole,
+  isEmptyAnswer,
+  isNetworkError,
+  localPracticeDraftKey,
+  mergeDraftConflicts,
+  mergeEditQueues,
+  mergeLocalDraftEntries,
+  normalizeQuestionOptions,
+  offlineAttemptQueueKey,
+  offlineEditQueueKey,
+  partitionLegacyEditQueue,
+  practiceDraftConflictKey,
+  rawDraftAnswer,
+  removePendingAttempt,
+  shouldResetQuestionForm,
+  snapshotLocalDraft,
+  upsertPendingAttempt,
+  withoutProtectedAnswers,
+  LEGACY_OFFLINE_EDIT_KEY,
+} from '../domain/practice.js'
 
 const props = defineProps({ token: { type: String, required: true }, sessionId: { type: String, required: true } })
 const emit = defineEmits(['back', 'completed'])
@@ -685,14 +616,7 @@ function handleBack() {
 async function handleConfirmExit() {
   showExitConfirmModal.value = false
   saveCurrentQuestionState()
-  if (props.sessionId && props.token) {
-    try {
-      await syncDraft(props.token, props.sessionId, {
-        current_index: index.value,
-        time_spent: null,
-      })
-    } catch (_) {}
-  }
+  await flushDraft()
   doExit()
 }
 
@@ -709,9 +633,112 @@ function doExit() {
   }
 }
 
-function getOfflineQueueKey() {
-  const uid = auth.user?.value?.id || auth.user?.value?.username || 'user'
-  return `easyexam_offline_question_edits_${uid}`
+const currentUserKey = computed(() => {
+  const user = auth.user?.value || auth.user
+  const id = user?.id ?? user?.username
+  return id === undefined || id === null ? '' : String(id)
+})
+
+function readStoredJson(key, fallback) {
+  if (!key || typeof localStorage === 'undefined') return fallback
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || 'null')
+    return parsed === null ? fallback : parsed
+  } catch (_) {
+    return fallback
+  }
+}
+
+function writeStoredJson(key, value) {
+  if (!key || typeof localStorage === 'undefined') return
+  try {
+    if (value === null || value === undefined) localStorage.removeItem(key)
+    else localStorage.setItem(key, JSON.stringify(value))
+  } catch (_) {}
+}
+
+/**
+ * Loads the current account's offline question-edit queue and migrates legacy
+ * unscoped entries without deleting another account's pending edits.
+ */
+function loadEditQueue() {
+  const userKey = currentUserKey.value
+  if (!userKey) return []
+  const scopedKey = offlineEditQueueKey(userKey)
+  let queue = readStoredJson(scopedKey, [])
+  if (!Array.isArray(queue)) queue = []
+  const legacy = readStoredJson(LEGACY_OFFLINE_EDIT_KEY, [])
+  if (Array.isArray(legacy) && legacy.length) {
+    const { mine, others } = partitionLegacyEditQueue(legacy, userKey)
+    if (mine.length) {
+      queue = mergeEditQueues(queue, mine.map(item => ({ ...item, userId: userKey })))
+      writeStoredJson(scopedKey, queue)
+    }
+    if (others.length) writeStoredJson(LEGACY_OFFLINE_EDIT_KEY, others)
+    else if (typeof localStorage !== 'undefined') localStorage.removeItem(LEGACY_OFFLINE_EDIT_KEY)
+  }
+  return queue
+}
+
+function saveEditQueue(queue) {
+  const userKey = currentUserKey.value
+  if (!userKey) return
+  const key = offlineEditQueueKey(userKey)
+  if (Array.isArray(queue) && queue.length) writeStoredJson(key, queue)
+  else if (typeof localStorage !== 'undefined') localStorage.removeItem(key)
+}
+
+function loadPendingAttempts() {
+  const userKey = currentUserKey.value
+  if (!userKey) return []
+  const queue = readStoredJson(offlineAttemptQueueKey(userKey), [])
+  return Array.isArray(queue) ? queue : []
+}
+
+function savePendingAttempts(queue) {
+  const userKey = currentUserKey.value
+  if (!userKey) return
+  const key = offlineAttemptQueueKey(userKey)
+  if (Array.isArray(queue) && queue.length) writeStoredJson(key, queue)
+  else if (typeof localStorage !== 'undefined') localStorage.removeItem(key)
+}
+
+function localDraftStorageKey() {
+  return localPracticeDraftKey(currentUserKey.value, props.sessionId)
+}
+
+function readLocalDraft() {
+  return readStoredJson(localDraftStorageKey(), null)
+}
+
+function writeLocalDraft() {
+  const key = localDraftStorageKey()
+  if (!key) return
+  writeStoredJson(key, snapshotLocalDraft(sessionAnswers.value, Date.now(), clientAttemptIds.value))
+}
+
+function clearLocalDraft() {
+  const key = localDraftStorageKey()
+  if (key && typeof localStorage !== 'undefined') localStorage.removeItem(key)
+}
+
+function draftConflictStorageKey() {
+  return practiceDraftConflictKey(currentUserKey.value, props.sessionId)
+}
+
+/**
+ * Unresolved draft conflicts outlive a reload: the server answer stays
+ * protected until the user explicitly picks a side.
+ */
+function persistDraftConflicts() {
+  const key = draftConflictStorageKey()
+  if (!key) return
+  writeStoredJson(key, draftConflicts.value.length ? draftConflicts.value : null)
+}
+
+function clearDraftConflictsStorage() {
+  const key = draftConflictStorageKey()
+  if (key && typeof localStorage !== 'undefined') localStorage.removeItem(key)
 }
 
 const session = ref(null)
@@ -740,6 +767,7 @@ const customQuery = ref('')
 const editingVersionId = ref(null)
 const editDraft = ref('')
 const isWeak = ref(false)
+const flaggedIds = ref([])
 const questionVersions = ref([])
 const activeConflict = ref(null)
 const showConflictModal = ref(false)
@@ -756,9 +784,25 @@ const editRegradeHistory = ref(false)
 const offlineNotice = ref('')
 const offlineRetryAvailable = ref(false)
 const editSaveError = ref('')
+const draftBase = ref({})
+const draftConflicts = ref([])
+// questionId -> client_attempt_id of the answer submission for that attempt.
+// The rating reuses it so the two-step flow updates one attempt instead of
+// inserting a duplicate and scheduling FSRS twice.
+const clientAttemptIds = ref({})
+const elapsedSeconds = ref(0)
+const canEditQuestion = ref(false)
+const pendingAttempts = ref([])
+const bankRoles = new Map()
+let clockTimer = null
+let draftTimer = null
+let draftFlushPromise = null
+let draftFlushQueued = false
+let drainingAttempts = false
 
 
 const question = computed(() => questions.value[index.value])
+const isFlagged = computed(() => Boolean(question.value && flaggedIds.value.includes(question.value.id)))
 
 const hasAnswer = computed(() => {
   if (!question.value) return false
@@ -780,6 +824,7 @@ function selectOption(key) {
     answer.value = key
   }
   saveCurrentQuestionState()
+  scheduleDraftFlush()
 }
 
 function isOptionSelected(key) {
@@ -865,6 +910,7 @@ function saveCurrentQuestionState() {
   if (!question.value) return
   const qid = question.value.id
   sessionAnswers.value[qid] = {
+    ...(sessionAnswers.value[qid] || {}),
     answer: Array.isArray(answer.value) ? [...answer.value] : answer.value,
     textAnswer: textAnswer.value,
     result: result.value,
@@ -876,47 +922,176 @@ function saveCurrentQuestionState() {
 function restoreQuestionState(targetIndex) {
   saveCurrentQuestionState()
   index.value = targetIndex
-  if (props.sessionId && props.token) {
-    syncDraft(props.token, props.sessionId, { current_index: targetIndex }).catch(() => {})
+  scheduleDraftFlush(0)
+}
+
+function scheduleDraftFlush(delay = 600) {
+  if (draftTimer) clearTimeout(draftTimer)
+  draftTimer = setTimeout(() => {
+    draftTimer = null
+    flushDraft().catch(() => {})
+  }, delay)
+}
+
+/**
+ * Persists the in-progress draft. The payload carries the server values this
+ * client last observed (`base_answers`), so the service can distinguish a
+ * normal local edit from a cross-device write and never silently overwrite it.
+ */
+async function flushDraft() {
+  saveCurrentQuestionState()
+  writeLocalDraft()
+  if (!props.sessionId || !authToken.value) return false
+  if (draftFlushPromise) {
+    draftFlushQueued = true
+    return draftFlushPromise
+  }
+  draftFlushPromise = (async () => {
+    do {
+      draftFlushQueued = false
+      const lockedIds = draftConflictQuestionIds(draftConflicts.value)
+      const answers = withoutProtectedAnswers(
+        buildDraftAnswerPayload(sessionAnswers.value, draftBase.value),
+        lockedIds,
+      )
+      const payload = { current_index: index.value, time_spent: elapsedSeconds.value }
+      if (Object.keys(answers).length) {
+        payload.answers = answers
+        payload.base_answers = buildDraftBasePayload(answers, draftBase.value)
+      }
+      try {
+        const res = await syncDraft(authToken.value, props.sessionId, payload)
+        const reported = Array.isArray(res?.conflicts) ? res.conflicts : []
+        draftConflicts.value = mergeDraftConflicts(draftConflicts.value, reported)
+        if (res?.answers) {
+          const nextBase = answersToBaseMap(res.answers)
+          // Freeze the observed base of every unresolved conflict. Advancing it to
+          // the server value would turn the next send into a silent overwrite.
+          for (const qid of draftConflictQuestionIds(draftConflicts.value)) {
+            if (qid in draftBase.value) nextBase[qid] = draftBase.value[qid]
+            else delete nextBase[qid]
+          }
+          draftBase.value = nextBase
+        }
+        if (draftConflicts.value.length) {
+          persistDraftConflicts()
+          offlineNotice.value = t('ep.practice.draft_conflict_notice')
+        } else if (offlineNotice.value === t('ep.practice.draft_conflict_notice') || offlineNotice.value === t('ep.practice.draft_offline_notice')) {
+          offlineNotice.value = ''
+        }
+        offlineRetryAvailable.value = false
+      } catch (err) {
+        if (isNetworkError(err)) {
+          offlineNotice.value = t('ep.practice.draft_offline_notice')
+          offlineRetryAvailable.value = true
+        } else {
+          offlineNotice.value = err?.detail || err?.message || t('api_errors.REQUEST_FAILED')
+        }
+        return false
+      }
+    } while (draftFlushQueued)
+    return true
+  })()
+  try {
+    return await draftFlushPromise
+  } finally {
+    draftFlushPromise = null
   }
 }
 
 async function handleSyncedEvents(e) {
   const detail = e.detail || {}
   const events = Array.isArray(detail) ? detail : (detail.events || [])
-  if (detail.userId && props.user?.id && detail.userId !== props.user.id) {
+  const uid = currentUserKey.value
+  if (detail.userId && uid && String(detail.userId) !== uid) {
     return
   }
   if (!question.value) return
   const qEvent = events.find(ev => ev.aggregate_type === 'QUESTION' && ev.aggregate_id === question.value?.id)
   if (qEvent) {
     try {
-      const fresh = await getQuestion(props.token, question.value.id)
+      const fresh = await getQuestion(authToken.value, question.value.id)
       if (fresh && fresh.version_number !== question.value.version_number) {
         questions.value[index.value] = fresh
-        questionVersions.value = await listQuestionVersions(props.token, fresh.id)
-        const conf = await getQuestionConflict(props.token, fresh.id)
+        questionVersions.value = await listQuestionVersions(authToken.value, fresh.id)
+        const conf = await getQuestionConflict(authToken.value, fresh.id)
         activeConflict.value = conf?.has_conflict ? conf.conflict : null
       }
     } catch (_) {}
   }
 }
 
+function startClock() {
+  stopClock()
+  clockTimer = setInterval(() => {
+    if (typeof document !== 'undefined' && document.hidden) return
+    elapsedSeconds.value += 1
+  }, 1000)
+}
+
+function stopClock() {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
+  }
+}
+
+function handleVisibilityChange() {
+  if (typeof document !== 'undefined' && document.hidden) {
+    flushDraft().catch(() => {})
+  }
+}
+
+function handlePageHide() {
+  writeLocalDraft()
+}
+
+function handleOnlineRecovery() {
+  syncOfflineEdits()
+  drainPendingAttempts()
+  flushDraft().catch(() => {})
+}
+
 onMounted(async () => {
-  window.addEventListener('online', syncOfflineEdits)
+  window.addEventListener('online', handleOnlineRecovery)
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('easyexam:events-synced', handleSyncedEvents)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  window.addEventListener('pagehide', handlePageHide)
+  pendingAttempts.value = loadPendingAttempts()
+  startClock()
   try {
     session.value = await getSession(props.token, props.sessionId)
     if (session.value?.mode === 'EXAM') {
       router.replace(`/exam/${props.sessionId}`)
       return
     }
+    flaggedIds.value = Array.isArray(session.value?.flags) ? [...session.value.flags] : []
     questions.value = await getSessionQuestions(props.token, props.sessionId)
     if (session.value) {
       const hydrated = hydrateSessionPractice(session.value, questions.value?.length || 0)
       index.value = hydrated.currentIndex
+      elapsedSeconds.value = Math.max(0, Number(session.value.time_spent) || 0)
+      draftBase.value = answersToBaseMap(hydrated.sessionAnswers)
       sessionAnswers.value = hydrated.sessionAnswers
+      // Conflicts persisted before the reload stay unresolved and stay protected.
+      const storedConflicts = readStoredJson(draftConflictStorageKey(), [])
+      if (Array.isArray(storedConflicts) && storedConflicts.length) {
+        draftConflicts.value = mergeDraftConflicts([], storedConflicts)
+        for (const conflict of draftConflicts.value) {
+          const entry = sessionAnswers.value[conflict.question_id] || {}
+          if (entry.result || entry.correctness) continue
+          sessionAnswers.value[conflict.question_id] = {
+            ...entry,
+            answer: conflict.incoming_answer,
+            textAnswer: typeof conflict.incoming_answer === 'string' ? conflict.incoming_answer : '',
+          }
+        }
+        offlineNotice.value = t('ep.practice.draft_conflict_notice')
+      }
+      const localDraft = readLocalDraft()
+      clientAttemptIds.value = clientAttemptIdsFromDraft(localDraft)
+      sessionAnswers.value = mergeLocalDraftEntries(sessionAnswers.value, localDraft, session.value.updated_at)
       const currentSaved = sessionAnswers.value[question.value?.id]
       if (currentSaved) {
         answer.value = Array.isArray(currentSaved.answer) ? [...currentSaved.answer] : (currentSaved.answer ?? '')
@@ -925,30 +1100,74 @@ onMounted(async () => {
         showAiPanel.value = currentSaved.showAiPanel ?? false
         selectedFsrsRating.value = currentSaved.selectedFsrsRating ?? null
       }
+      if (localDraft) flushDraft().catch(() => {})
     }
-    await syncOfflineEdits()
+    await Promise.allSettled([syncOfflineEdits(), drainPendingAttempts()])
+  } catch (err) {
+    if (isNetworkError(err)) {
+      offlineNotice.value = t('ep.practice.draft_offline_notice')
+      offlineRetryAvailable.value = true
+    } else {
+      offlineNotice.value = err?.detail || err?.message || t('api_errors.REQUEST_FAILED')
+    }
   } finally {
     loading.value = false
   }
 })
 
 onUnmounted(() => {
-  window.removeEventListener('online', syncOfflineEdits)
+  window.removeEventListener('online', handleOnlineRecovery)
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('easyexam:events-synced', handleSyncedEvents)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  window.removeEventListener('pagehide', handlePageHide)
+  if (draftTimer) {
+    clearTimeout(draftTimer)
+    draftTimer = null
+  }
+  writeLocalDraft()
+  flushDraft().catch(() => {})
+  stopClock()
 })
+
+function resetQuestionEditForm() {
+  isEditingQuestion.value = false
+  editStem.value = ''
+  editType.value = 'SINGLE'
+  editOptions.value = []
+  editAnswer.value = ''
+  editExplanation.value = ''
+  editTags.value = ''
+  editDifficulty.value = 3
+  editRegradeHistory.value = false
+  editSaveError.value = ''
+}
+
+async function ensureBankRole(bankId) {
+  if (!bankId) {
+    canEditQuestion.value = false
+    return
+  }
+  if (!bankRoles.has(bankId)) {
+    let role = ''
+    try {
+      const members = await listBankMembers(authToken.value, bankId)
+      const uid = auth.user?.value?.id
+      role = (Array.isArray(members) ? members.find(m => m.user_id === uid)?.role : '') || ''
+    } catch (_) {
+      role = ''
+    }
+    bankRoles.set(bankId, role)
+  }
+  canEditQuestion.value = isEditorRole(bankRoles.get(bankId))
+}
 
 watch(question, async (current, oldQuestion) => {
   if (current) {
     const isDifferentQuestion = shouldResetQuestionForm(current, oldQuestion)
     if (isDifferentQuestion) {
-      isEditingQuestion.value = false
-      editStem.value = ''
-      editType.value = 'SINGLE'
-      editOptions.value = []
-      editAnswer.value = ''
-      editExplanation.value = ''
-      editTags.value = ''
+      resetQuestionEditForm()
+      ensureBankRole(current.bank_id).catch(() => {})
       const saved = sessionAnswers.value[current.id]
       if (saved) {
         answer.value = Array.isArray(saved.answer) ? [...saved.answer] : (saved.answer ?? '')
@@ -970,24 +1189,24 @@ watch(question, async (current, oldQuestion) => {
       editingVersionId.value = null
       fsrsRatingStatus.value = ''
     }
-    answerVersions.value = await listAnswerVersions(props.token, current.id)
+    answerVersions.value = await listAnswerVersions(authToken.value, current.id)
     try {
-      questionVersions.value = await listQuestionVersions(props.token, current.id)
+      questionVersions.value = await listQuestionVersions(authToken.value, current.id)
     } catch {
       questionVersions.value = []
     }
     try {
-      const conf = await getQuestionConflict(props.token, current.id)
+      const conf = await getQuestionConflict(authToken.value, current.id)
       activeConflict.value = conf?.has_conflict ? conf.conflict : null
     } catch {
       activeConflict.value = null
     }
     if (isDifferentQuestion) {
       try {
-        const convs = await listQuestionConversations(props.token, current.id)
+        const convs = await listQuestionConversations(authToken.value, current.id)
         if (convs?.length) {
           activeConversationId.value = convs[0].id
-          chatMessages.value = await listConversationMessages(props.token, convs[0].id)
+          chatMessages.value = await listConversationMessages(authToken.value, convs[0].id)
         } else {
           activeConversationId.value = null
           chatMessages.value = []
@@ -999,45 +1218,199 @@ watch(question, async (current, oldQuestion) => {
   }
 }, { immediate: true })
 
-async function submitRating(rating) {
+watch(textAnswer, () => {
+  scheduleDraftFlush()
+})
 
+/**
+ * The answer that was actually submitted for this question. A rating must rate
+ * that answer, not whatever sits in the editor now (which may be an unsent
+ * edit), otherwise the rating request would overwrite the stored answer.
+ */
+function submittedAnswerFor(qid) {
+  const stored = rawDraftAnswer(sessionAnswers.value[qid])
+  if (!isEmptyAnswer(stored)) return stored
+  if (result.value?.question_id === qid && result.value?.user_answer !== undefined) {
+    return result.value.user_answer
+  }
+  return normalizedAnswer()
+}
+
+function rememberClientAttemptId(qid, clientAttemptId) {
+  clientAttemptIds.value = { ...clientAttemptIds.value, [qid]: clientAttemptId }
+}
+
+async function submitRating(rating) {
   if (!question.value) return
+  const qid = question.value.id
   selectedFsrsRating.value = rating
   fsrsRatingStatus.value = t('ui.k0607')
+  // The rating belongs to the answer attempt that is already on the server.
+  // Reusing its key makes the server update that attempt's FSRS rating instead
+  // of inserting a duplicate attempt (which would schedule the card twice).
+  const clientAttemptId = clientAttemptIds.value[qid] || createClientAttemptId('practice-rating')
+  rememberClientAttemptId(qid, clientAttemptId)
+  const payload = {
+    question_id: qid,
+    user_answer: submittedAnswerFor(qid),
+    fsrs_rating: rating,
+    client_attempt_id: clientAttemptId,
+  }
   try {
-    const res = await submitAttempt(props.token, props.sessionId, {
-      question_id: question.value.id,
-      user_answer: normalizedAnswer(),
-      fsrs_rating: rating,
-    })
+    const res = await submitAttemptWithRetry(payload)
     result.value = res
+    clearPendingAttemptFor(qid)
     saveCurrentQuestionState()
-    triggerSyncEvent('PRACTICE_RATING', 'SESSION', props.sessionId, { question_id: question.value.id, rating })
+    writeLocalDraft()
+    triggerSyncEvent('PRACTICE_RATING', 'SESSION', props.sessionId, { question_id: qid, rating })
     fsrsRatingStatus.value = `${t('ui.k0612')}${['', t('ui.k0608'), t('ui.k0609'), t('ui.k0610'), t('ui.k0611')][rating]}${t('ui.k0613')}`
   } catch (err) {
-    fsrsRatingStatus.value = `${t('ui.k0614')}${err.detail || err.message}`
+    if (isNetworkError(err)) {
+      queuePendingAttempt(payload)
+      fsrsRatingStatus.value = t('ep.practice.pending_rating')
+    } else {
+      fsrsRatingStatus.value = `${t('ui.k0614')}${err.detail || err.message}`
+    }
+  }
+}
+
+const RETRY_DELAYS = [250, 600]
+
+async function submitAttemptWithRetry(payload) {
+  let lastError
+  for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt += 1) {
+    try {
+      return await submitAttempt(authToken.value, props.sessionId, payload)
+    } catch (err) {
+      lastError = err
+      if (!isNetworkError(err) || attempt === RETRY_DELAYS.length) throw err
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]))
+    }
+  }
+  throw lastError
+}
+
+function queuePendingAttempt(payload) {
+  const qid = payload.question_id
+  const clientAttemptId = clientAttemptIdOf(payload)
+  // A new answer operation supersedes older queued work for the same question;
+  // the answer and its rating share a key, so they merge instead of replacing
+  // one another.
+  const pruned = pendingAttempts.value.filter(item => {
+    if (item.sessionId !== props.sessionId || item.questionId !== qid) return true
+    return clientAttemptIdOf(item) === clientAttemptId
+  })
+  pendingAttempts.value = upsertPendingAttempt(pruned, {
+    sessionId: props.sessionId,
+    questionId: qid,
+    user_answer: payload.user_answer,
+    fsrs_rating: payload.fsrs_rating ?? null,
+    clientAttemptId,
+    queuedAt: Date.now(),
+  })
+  savePendingAttempts(pendingAttempts.value)
+  writeLocalDraft()
+  offlineNotice.value = t('ep.practice.pending_submit')
+  offlineRetryAvailable.value = true
+}
+
+/**
+ * A manual submission that reaches the server supersedes the queued offline
+ * attempt for the same question; leaving it queued replays it later as a
+ * duplicate attempt (and can roll the stored answer back to the stale one).
+ */
+function clearPendingAttemptFor(questionId) {
+  const present = pendingAttempts.value.some(
+    item => item.sessionId === props.sessionId && item.questionId === questionId,
+  )
+  if (!present) return
+  pendingAttempts.value = removePendingAttempt(pendingAttempts.value, props.sessionId, questionId)
+  savePendingAttempts(pendingAttempts.value)
+  if (offlineNotice.value === t('ep.practice.pending_submit')) offlineNotice.value = ''
+  if (!pendingAttempts.value.some(item => item.sessionId === props.sessionId)) {
+    offlineRetryAvailable.value = false
+  }
+}
+
+async function drainPendingAttempts() {
+  if (drainingAttempts) return
+  if (!currentUserKey.value) return
+  pendingAttempts.value = loadPendingAttempts()
+  const items = pendingAttempts.value.filter(item => item.sessionId === props.sessionId)
+  if (!items.length) return
+  drainingAttempts = true
+  try {
+    for (const item of items) {
+      const clientAttemptId = clientAttemptIdOf(item)
+      try {
+        const payload = {
+          question_id: item.questionId,
+          user_answer: item.user_answer,
+          ...(item.fsrs_rating ? { fsrs_rating: item.fsrs_rating } : {}),
+          ...(clientAttemptId ? { client_attempt_id: clientAttemptId } : {}),
+        }
+        const res = await submitAttemptWithRetry(payload)
+        pendingAttempts.value = removePendingAttempt(
+          pendingAttempts.value, item.sessionId, item.questionId, clientAttemptId || undefined,
+        )
+        savePendingAttempts(pendingAttempts.value)
+        if (question.value?.id === item.questionId) {
+          result.value = res
+          saveCurrentQuestionState()
+        }
+        triggerSyncEvent('PRACTICE_ATTEMPT', 'SESSION', props.sessionId, { question_id: item.questionId })
+      } catch (err) {
+        if (isNetworkError(err)) break
+        if (err?.status === 404 || err?.status === 409 || err?.status === 422) {
+          pendingAttempts.value = removePendingAttempt(
+            pendingAttempts.value, item.sessionId, item.questionId, clientAttemptId || undefined,
+          )
+          savePendingAttempts(pendingAttempts.value)
+          offlineNotice.value = err?.detail || err?.message || t('api_errors.REQUEST_FAILED')
+        } else {
+          break
+        }
+      }
+    }
+  } finally {
+    drainingAttempts = false
+  }
+  if (!pendingAttempts.value.some(item => item.sessionId === props.sessionId)) {
+    if (offlineNotice.value === t('ep.practice.pending_submit')) offlineNotice.value = ''
+    offlineRetryAvailable.value = false
   }
 }
 
 async function submit() {
   if (!hasAnswer.value || !question.value) return
   submitting.value = true
+  const qid = question.value.id
+  const userAnswer = normalizedAnswer()
+  // One user action, one key. Every retry and the offline queue reuse it.
+  const clientAttemptId = createClientAttemptId('practice-answer')
+  rememberClientAttemptId(qid, clientAttemptId)
+  const payload = { question_id: qid, user_answer: userAnswer, client_attempt_id: clientAttemptId }
   try {
-    result.value = await submitAttempt(props.token, props.sessionId, {
-      question_id: question.value.id,
-      user_answer: normalizedAnswer(),
-    })
+    const res = await submitAttemptWithRetry(payload)
+    result.value = res
+    draftBase.value = { ...draftBase.value, [qid]: userAnswer }
+    clearPendingAttemptFor(qid)
     saveCurrentQuestionState()
-    triggerSyncEvent('PRACTICE_ATTEMPT', 'SESSION', props.sessionId, { question_id: question.value.id })
+    writeLocalDraft()
+    triggerSyncEvent('PRACTICE_ATTEMPT', 'SESSION', props.sessionId, { question_id: qid })
     if (result.value?.correctness === 'INCORRECT' && (session.value?.mode === 'FSRS' || session.value?.mode === 'MISTAKE')) {
       selectedFsrsRating.value = 1
       fsrsRatingStatus.value = t('ui.k0615')
-      if (sessionAnswers.value[question.value.id]) {
-        sessionAnswers.value[question.value.id].selectedFsrsRating = 1
+      if (sessionAnswers.value[qid]) {
+        sessionAnswers.value[qid].selectedFsrsRating = 1
       }
     }
   } catch (err) {
-    alert(`${t('ui.k0617')}${err.detail || err.message || t('ui.k0616')}`)
+    if (isNetworkError(err)) {
+      queuePendingAttempt(payload)
+    } else {
+      alert(`${t('ui.k0617')}${err.detail || err.message || t('ui.k0616')}`)
+    }
   } finally {
     submitting.value = false
   }
@@ -1160,14 +1533,60 @@ async function toggleWeak() {
   }
 }
 
+/**
+ * Session review flag, persisted by the existing practice toggle-flag
+ * endpoint. Optimistic so the answer card responds immediately; a failed write
+ * rolls back and reports through the offline notice instead of losing state.
+ */
+async function toggleCurrentFlag() {
+  if (!question.value) return
+  const qid = question.value.id
+  const previous = [...flaggedIds.value]
+  flaggedIds.value = previous.includes(qid)
+    ? previous.filter(id => id !== qid)
+    : [...previous, qid]
+  try {
+    const response = await toggleFlag(authToken.value, props.sessionId, qid)
+    if (Array.isArray(response?.flags)) flaggedIds.value = response.flags
+  } catch (err) {
+    flaggedIds.value = previous
+    offlineNotice.value = err?.detail || err?.message || t('api_errors.REQUEST_FAILED')
+  }
+}
+
 // 斩杀此题：直接将完全掌握的题目移入斩杀题库 (EE-013)
 async function handleKill() {
   if (!question.value) return
   if (!window.confirm(t('ui.k0628'))) return
   try {
-    await killQuestion(props.token, question.value.id)
+    const killedId = question.value.id
+    await killQuestion(authToken.value, killedId)
+    delete sessionAnswers.value[killedId]
+    delete draftBase.value[killedId]
+    flaggedIds.value = flaggedIds.value.filter(id => id !== killedId)
+    if (clientAttemptIds.value[killedId]) {
+      const nextIds = { ...clientAttemptIds.value }
+      delete nextIds[killedId]
+      clientAttemptIds.value = nextIds
+    }
+    // A killed question leaves the session: never replay its queued attempt or
+    // keep it in the local backup / unresolved conflict set.
+    clearPendingAttemptFor(killedId)
+    if (draftConflicts.value.some(conflict => conflict.question_id === killedId)) {
+      draftConflicts.value = dropDraftConflicts(draftConflicts.value, [killedId])
+      persistDraftConflicts()
+    }
+    writeLocalDraft()
+    const killedIndex = questions.value.findIndex(q => q.id === killedId)
+    if (killedIndex >= 0) questions.value.splice(killedIndex, 1)
+    if (!questions.value.length) {
+      alert(t('ui.k0629'))
+      complete()
+      return
+    }
+    if (index.value >= questions.value.length) index.value = questions.value.length - 1
     alert(t('ui.k0629'))
-    next()
+    scheduleDraftFlush(0)
   } catch (err) {
     alert(`${t('ui.k0506')}${err.detail || err.message}`)
   }
@@ -1221,11 +1640,10 @@ function getSheetButtonClass(qid, qIdx) {
   const isAnswered = Boolean(res || (Array.isArray(saved?.answer) ? saved.answer.length : saved?.answer || saved?.textAnswer))
 
   return {
-    current: isCurrent,
-    answered: isAnswered && !res,
-    correct: res?.correctness === 'CORRECT',
-    incorrect: res?.correctness === 'INCORRECT',
-    partial: res?.correctness === 'PARTIAL',
+    'is-current': isCurrent,
+    'is-answered': isAnswered,
+    'is-unanswered': !isAnswered,
+    'is-flagged': flaggedIds.value.includes(qid),
   }
 }
 
@@ -1320,6 +1738,10 @@ function handleKeyDown(e) {
 
 function toggleEditQuestion() {
   if (!question.value) return
+  if (!canEditQuestion.value) {
+    editSaveError.value = t('ep.practice.edit_permission_denied')
+    return
+  }
   isEditingQuestion.value = !isEditingQuestion.value
   if (isEditingQuestion.value) {
     editSaveError.value = ''
@@ -1330,6 +1752,7 @@ function toggleEditQuestion() {
     editExplanation.value = question.value.explanation || ''
     editDifficulty.value = question.value.difficulty ?? 3
     editTags.value = Array.isArray(question.value.tags) ? question.value.tags.join(', ') : (question.value.tags || '')
+    editRegradeHistory.value = false
   }
 }
 
@@ -1345,6 +1768,10 @@ function removeOption(idx) {
 
 async function saveQuestionEdit() {
   if (!question.value || !editStem.value.trim()) return
+  if (!canEditQuestion.value) {
+    editSaveError.value = t('ep.practice.edit_permission_denied')
+    return
+  }
   const tagsList = editTags.value
     ? editTags.value.split(/[,，\s]+/).map(t => t.trim()).filter(Boolean)
     : []
@@ -1361,15 +1788,14 @@ async function saveQuestionEdit() {
     apply_fsrs: true,
     allow_stale_branch: true,
   }
-  const storageKey = 'easyexam_offline_question_edits'
-  const userScopedKey = getOfflineQueueKey()
-  const uid = auth.user?.value?.id || auth.user?.value?.username || 'user'
+  const uid = currentUserKey.value
   const queueItem = { userId: uid, questionId: question.value.id, payload, queuedAt: Date.now() }
+  if (!uid) {
+    editSaveError.value = t('api_errors.REQUEST_FAILED')
+    return
+  }
   if (!window.navigator.onLine) {
-    const queue = JSON.parse(localStorage.getItem(storageKey) || '[]')
-    queue.push(queueItem)
-    localStorage.setItem(storageKey, JSON.stringify(queue))
-    localStorage.setItem(userScopedKey, JSON.stringify(queue))
+    saveEditQueue([...loadEditQueue(), queueItem])
     offlineNotice.value = t('ui.k0631')
     offlineRetryAvailable.value = true
     editSaveError.value = ''
@@ -1378,14 +1804,10 @@ async function saveQuestionEdit() {
   }
   let updated
   try {
-    const currentToken = authToken.value
-    updated = await updateQuestion(currentToken, question.value.id, payload)
+    updated = await updateQuestion(authToken.value, question.value.id, payload)
   } catch (err) {
-    if (isNetworkFailure(err)) {
-      const queue = JSON.parse(localStorage.getItem(storageKey) || '[]')
-      queue.push(queueItem)
-      localStorage.setItem(storageKey, JSON.stringify(queue))
-      localStorage.setItem(userScopedKey, JSON.stringify(queue))
+    if (isNetworkError(err)) {
+      saveEditQueue([...loadEditQueue(), queueItem])
       offlineNotice.value = t('ui.k0632')
       offlineRetryAvailable.value = true
       editSaveError.value = ''
@@ -1402,11 +1824,10 @@ async function saveQuestionEdit() {
   triggerSyncEvent('QUESTION_UPDATED', 'QUESTION', updated.id, { version_number: updated.version_number })
   isEditingQuestion.value = false
   editSaveError.value = ''
+  editRegradeHistory.value = false
   questions.value[index.value] = updated
-  const queue = JSON.parse(localStorage.getItem(storageKey) || '[]').filter(item =>
-    !(item.blocked && item.questionId === updated.id))
-  localStorage.setItem(storageKey, JSON.stringify(queue))
-  localStorage.setItem(userScopedKey, JSON.stringify(queue))
+  const queue = loadEditQueue().filter(item => !(item.blocked && item.questionId === updated.id))
+  saveEditQueue(queue)
   try {
     questionVersions.value = await listQuestionVersions(currentToken, updated.id)
     const conf = await getQuestionConflict(currentToken, updated.id)
@@ -1417,25 +1838,19 @@ async function saveQuestionEdit() {
 }
 
 function isNetworkFailure(err) {
-  return err?.status === 0 || err?.code === 'NETWORK_ERROR'
+  return isNetworkError(err)
 }
 
 let isSyncing = false
 let syncQueued = false
 
 async function processOfflineQueue() {
-  const storageKey = 'easyexam_offline_question_edits'
-  const userScopedKey = getOfflineQueueKey()
-  const uid = auth.user?.value?.id || auth.user?.value?.username || 'user'
+  if (!currentUserKey.value) return
   const currentToken = authToken.value
-  const raw = localStorage.getItem(storageKey) || localStorage.getItem(userScopedKey)
-  if (!raw) return
-  let queue = JSON.parse(raw)
+  const queue = loadEditQueue()
   if (!queue.length) return
-  const userItems = queue.filter(item => !item.userId || item.userId === uid || item.userId === auth.user?.value?.id || item.userId === auth.user?.value?.username || item.userId === 'user')
-  if (!userItems.length) return
-  const pendingItems = userItems.filter(item => !item.blocked)
-  const blockedItems = userItems.filter(item => item.blocked)
+  const pendingItems = queue.filter(item => !item.blocked)
+  const blockedItems = queue.filter(item => item.blocked)
   if (!pendingItems.length) {
     offlineRetryAvailable.value = false
     offlineNotice.value = blockedItems[0]?.error || ''
@@ -1444,9 +1859,9 @@ async function processOfflineQueue() {
   offlineRetryAvailable.value = true
   offlineNotice.value = t('ui.k0633')
 
-  // Process atomically item-by-item: NEVER wipe queue before confirmed completion!
+  // Process atomically item-by-item: NEVER wipe the queue before confirmed completion.
   while (true) {
-    const itemIndex = queue.findIndex(item => !item.blocked && (!item.userId || item.userId === uid || item.userId === auth.user?.value?.id || item.userId === auth.user?.value?.username || item.userId === 'user'))
+    const itemIndex = queue.findIndex(item => !item.blocked)
     if (itemIndex < 0) break
     const item = queue[itemIndex]
     let updated
@@ -1468,8 +1883,7 @@ async function processOfflineQueue() {
       if (isNetworkFailure(err)) break
       item.blocked = true
       item.error = err?.message || t('api_errors.REQUEST_FAILED')
-      localStorage.setItem(storageKey, JSON.stringify(queue))
-      localStorage.setItem(userScopedKey, JSON.stringify(queue))
+      saveEditQueue(queue)
       if (question.value?.id === item.questionId) {
         editStem.value = item.payload.stem ?? ''
         editType.value = item.payload.type ?? 'SINGLE'
@@ -1478,7 +1892,7 @@ async function processOfflineQueue() {
         editExplanation.value = item.payload.explanation ?? ''
         editDifficulty.value = item.payload.difficulty ?? 3
         editTags.value = (item.payload.tags ?? []).join(', ')
-        editRegradeHistory.value = item.payload.regrade_history ?? false
+        editRegradeHistory.value = canEditQuestion.value && Boolean(item.payload.regrade_history)
         isEditingQuestion.value = true
         editSaveError.value = item.error
       }
@@ -1497,12 +1911,10 @@ async function processOfflineQueue() {
     }
     // Remove item only after the update itself is confirmed.
     queue.splice(itemIndex, 1)
-    localStorage.setItem(storageKey, JSON.stringify(queue))
-    localStorage.setItem(userScopedKey, JSON.stringify(queue))
+    saveEditQueue(queue)
   }
-  const remainingItems = queue.filter(item => !item.userId || item.userId === uid || item.userId === auth.user?.value?.id || item.userId === auth.user?.value?.username || item.userId === 'user')
-  const retryableItems = remainingItems.filter(item => !item.blocked)
-  const remainingBlockedItems = remainingItems.filter(item => item.blocked)
+  const retryableItems = queue.filter(item => !item.blocked)
+  const remainingBlockedItems = queue.filter(item => item.blocked)
   offlineRetryAvailable.value = retryableItems.length > 0
   if (retryableItems.length) {
     offlineNotice.value = `${t('ui.k0634')} ${retryableItems.length} ${t('ui.k0635')}`
@@ -1510,8 +1922,7 @@ async function processOfflineQueue() {
     offlineNotice.value = remainingBlockedItems[0].error || ''
   } else {
     offlineNotice.value = ''
-    localStorage.removeItem(storageKey)
-    localStorage.removeItem(userScopedKey)
+    saveEditQueue([])
   }
 }
 
@@ -1531,7 +1942,16 @@ async function syncOfflineEdits() {
   }
 }
 
+async function retryOfflineSync() {
+  await Promise.allSettled([syncOfflineEdits(), drainPendingAttempts()])
+  await flushDraft()
+}
+
 async function handleAdoptQuestionVersion(targetVer) {
+  if (!canEditQuestion.value) {
+    alert(t('ep.practice.edit_permission_denied'))
+    return
+  }
   try {
     const currentToken = authToken.value
     let updated
@@ -1559,6 +1979,46 @@ async function handleAdoptQuestionVersion(targetVer) {
   }
 }
 
+function questionNumberFor(questionId) {
+  const idx = questions.value.findIndex(q => q.id === questionId)
+  return idx >= 0 ? idx + 1 : '?'
+}
+
+function resolveDraftConflictKeepServer() {
+  for (const conflict of draftConflicts.value) {
+    const qid = conflict.question_id
+    const serverValue = conflict.existing_answer
+    sessionAnswers.value[qid] = {
+      ...(sessionAnswers.value[qid] || {}),
+      answer: serverValue,
+      textAnswer: typeof serverValue === 'string' ? serverValue : '',
+    }
+    draftBase.value = { ...draftBase.value, [qid]: serverValue }
+    if (question.value?.id === qid) {
+      answer.value = Array.isArray(serverValue) ? [...serverValue] : (serverValue ?? '')
+      textAnswer.value = typeof serverValue === 'string' ? serverValue : ''
+    }
+  }
+  draftConflicts.value = []
+  persistDraftConflicts()
+  if (offlineNotice.value === t('ep.practice.draft_conflict_notice')) offlineNotice.value = ''
+  scheduleDraftFlush(0)
+}
+
+function resolveDraftConflictUseLocal() {
+  const base = { ...draftBase.value }
+  for (const conflict of draftConflicts.value) {
+    // Align the base with the current server value so the next flush is an
+    // explicit, user-approved overwrite rather than a silent one.
+    base[conflict.question_id] = conflict.existing_answer
+  }
+  draftBase.value = base
+  draftConflicts.value = []
+  persistDraftConflicts()
+  if (offlineNotice.value === t('ep.practice.draft_conflict_notice')) offlineNotice.value = ''
+  scheduleDraftFlush(0)
+}
+
 const showCompleteConfirmModal = ref(false)
 const practiceReport = ref(null)
 const completing = ref(false)
@@ -1574,15 +2034,49 @@ function complete() {
   }
 }
 
+async function completeSessionWithRetry() {
+  let lastError
+  for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt += 1) {
+    try {
+      return await completeSession(authToken.value, props.sessionId)
+    } catch (err) {
+      lastError = err
+      if (!isNetworkError(err) || attempt === RETRY_DELAYS.length) throw err
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]))
+    }
+  }
+  throw lastError
+}
+
 async function handleConfirmComplete() {
   completing.value = true
   try {
-    const report = await completeSession(props.token, props.sessionId)
+    await flushDraft()
+    await drainPendingAttempts()
+    if (pendingAttempts.value.some(item => item.sessionId === props.sessionId)) {
+      showCompleteConfirmModal.value = false
+      offlineNotice.value = t('ep.practice.pending_before_complete')
+      offlineRetryAvailable.value = true
+      return
+    }
+    const report = await completeSessionWithRetry()
     practiceReport.value = report
+    session.value = { ...(session.value || {}), is_completed: true }
+    clearLocalDraft()
+    clientAttemptIds.value = {}
+    draftConflicts.value = []
+    clearDraftConflictsStorage()
+    pendingAttempts.value = pendingAttempts.value.filter(item => item.sessionId !== props.sessionId)
+    savePendingAttempts(pendingAttempts.value)
     showCompleteConfirmModal.value = false
     emit('completed', report)
   } catch (err) {
-    alert(`${t('ui.k0639')}${err.detail || err.message}`)
+    if (isNetworkError(err)) {
+      offlineNotice.value = t('ep.practice.draft_offline_notice')
+      offlineRetryAvailable.value = true
+    } else {
+      alert(`${t('ui.k0639')}${err.detail || err.message}`)
+    }
   } finally {
     completing.value = false
   }
@@ -1595,1833 +2089,796 @@ function handleRestartPractice() {
 </script>
 
 <style scoped>
-.practice-page {
-  width: min(100% - 2rem, 74rem);
-  margin: 1.5rem auto;
-  padding-bottom: 5.5rem;
+.focus-mode {
+  min-height: 100vh;
+  background: var(--d-gasket, var(--paper));
+  color: var(--ink);
+  padding-top: var(--topbar-h);
+  padding-bottom: 76px;
 }
+.focus-mode .tag,
+.focus-mode .rule-label,
+.focus-mode .hint,
+.focus-mode .stat-cap,
+.focus-mode .list-meta { font-size: 12px; }
+.focus-mode .rule-label { letter-spacing: .08em; }
 
-/* 题目横向切换平滑过渡动效 */
-.question-slide-wrapper.slide-next {
-  animation: slideFromRight 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.question-slide-wrapper.slide-prev {
-  animation: slideFromLeft 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes slideFromRight {
-  from {
-    opacity: 0.6;
-    transform: translateX(18px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes slideFromLeft {
-  from {
-    opacity: 0.6;
-    transform: translateX(-18px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.question-slide-wrapper {
-  width: 100%;
-}
-
-/* 核心主操作锁定最右侧固定尺寸与坐标 */
-.btn-action-fixed-primary {
-  min-width: 8.5rem;
-  height: 2.65rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  flex-shrink: 0;
-}
-
-/* 帮助提示弹窗 */
-.help-tip-backdrop {
+/* ---------- top bar ---------- */
+.focus-topbar {
   position: fixed;
-  inset: 0;
-  background: color-mix(in srgb, var(--text-main) 44%, transparent);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  padding: 1rem;
-}
-
-.help-tip-dialog {
-  background: var(--bg-card);
-  color: var(--text-main);
-  border-radius: 12px;
-  padding: 1.5rem;
-  width: min(100%, 30rem);
-  box-shadow: var(--shadow-xl);
-  animation: tipPopIn 0.18s ease-out;
-}
-
-@keyframes tipPopIn {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-.help-tip-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 0.65rem;
-  margin-bottom: 1rem;
-}
-
-.help-tip-header h3 {
-  margin: 0;
-  font-size: 1.05rem;
-  color: var(--text-main);
-}
-
-.btn-close-tip {
-  border: none;
-  background: none;
-  font-size: 1.25rem;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 0.2rem 0.4rem;
-  border-radius: 4px;
-}
-
-.tip-section {
-  margin-bottom: 0.85rem;
-}
-
-.tip-section strong {
-  display: block;
-  font-size: 0.875rem;
-  color: var(--text-main);
-  margin-bottom: 0.35rem;
-}
-
-.tip-section ul {
-  margin: 0;
-  padding-left: 1.25rem;
-  font-size: 0.825rem;
-  color: var(--text-muted);
-  line-height: 1.6;
-}
-
-.tip-section p {
-  margin: 0;
-  font-size: 0.825rem;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-
-.btn-help-guide {
-  font-size: 0.85rem;
-  padding: 0.35rem 0.65rem;
-}
-
-.btn-help-mobile {
-  border: 1px solid var(--border-strong);
-  background: var(--bg-card);
-  border-radius: 6px;
-  padding: 0.3rem 0.5rem;
-  font-size: 0.95rem;
-  cursor: pointer;
-  margin-right: 0.4rem;
-}
-
-/* 官方解析下方的 AI 助教入口 */
-.ai-assistant-entry-block {
-  margin-top: 1rem;
-  padding: 0.75rem 1rem;
-  background: var(--success-light);
-  border: 1px solid var(--success-border);
-  border-radius: 8px;
+  inset: 0 0 auto;
+  z-index: 40;
+  height: var(--topbar-h);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  gap: 16px;
+  padding: 0 18px;
+  background: color-mix(in srgb, var(--d-gasket, var(--paper)) 95%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
 }
-
-.ai-entry-meta {
+.focus-top-left,
+.focus-top-right {
   display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
-.ai-badge {
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: var(--success-fg, var(--success));
-}
-
-.ai-desc {
-  font-size: 0.785rem;
-  color: var(--success-fg, var(--success-hover));
-}
-
-.btn-toggle-ai-card {
-  padding: 0.4rem 0.85rem;
-  font-size: 0.825rem;
-  font-weight: 500;
-  background: var(--bg-card);
-  border: 1px solid var(--success-border);
-  color: var(--success-fg, var(--success));
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-toggle-ai-card:hover {
-  background: var(--success-light);
-}
-
-.btn-toggle-ai-card.active {
-  background: var(--success);
-  color: var(--on-success, #ffffff);
-}
-
-/* 专注作答状态占位卡 */
-.practice-answering-placeholder {
-  padding: 2.25rem 1.25rem;
-  background: var(--bg-page);
-  border: 1px dashed var(--border-strong);
-  border-radius: 8px;
-  display: flex;
-  align-items: flex-start;
-  gap: 0.85rem;
-  color: var(--text-muted);
-}
-
-.placeholder-icon {
-  font-size: 1.8rem;
-  line-height: 1;
-}
-
-.placeholder-content h4 {
-  margin: 0 0 0.35rem 0;
-  font-size: 0.95rem;
-  color: var(--text-main);
-}
-
-.placeholder-content p {
-  margin: 0.2rem 0;
-  font-size: 0.825rem;
-  line-height: 1.45;
-}
-
-.compact-header {
-  display: flex !important;
-  justify-content: space-between !important;
-  align-items: center !important;
-  flex-direction: row !important;
-  flex-wrap: nowrap !important;
-  gap: 0.75rem;
-  margin-bottom: 0.85rem;
-  padding: 0.45rem 1rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
-  min-height: 48px;
-}
-
-.compact-header > .header-left-bar,
-.compact-header .header-left-bar {
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center !important;
-  gap: 0.65rem !important;
-  flex: 0 1 auto !important;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
-
-.header-titles {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  white-space: nowrap;
-}
-
-.practice-title {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: var(--text-main);
-  white-space: nowrap;
-}
-
-.header-meta-group {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.badge-type-pill {
+.focus-top-left { gap: 12px; }
+.focus-exit {
   display: inline-flex;
   align-items: center;
-  padding: 0.15rem 0.5rem;
-  border-radius: var(--radius-sm);
-  background: var(--linear-bg-subtle);
-  border: 1px solid var(--border-strong);
-  color: var(--linear-cyan);
-  font-family: var(--linear-mono);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  cursor: pointer;
+  padding: 4px 2px;
 }
-
-.badge-index-pill {
+.focus-exit:hover { color: var(--ink); }
+.focus-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--line);
+}
+.focus-context {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.focus-mode-label {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+.focus-type {
+  font-size: 12px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.focus-counter {
   display: inline-flex;
   align-items: center;
-  padding: 0.15rem 0.5rem;
-  border-radius: var(--radius-sm);
-  background: var(--linear-bg-subtle);
-  border: 1px solid var(--border-strong);
-  color: var(--text-muted);
-  font-family: var(--linear-mono);
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.badge-conflict-warning {
-  padding: 0.2rem 0.5rem;
-  background: var(--danger-light);
-  border: 1px solid var(--danger-border);
-  color: var(--danger-fg, var(--danger));
-  border-radius: var(--radius-sm);
-  font-size: 0.75rem;
+  gap: 7px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 5px 9px;
+  border-radius: var(--r-xs);
   cursor: pointer;
-  font-weight: 600;
 }
-
-.compact-header > .header-actions,
-.compact-header .header-actions,
-.header-actions {
-  display: flex !important;
-  flex-direction: row !important;
-  gap: 0.45rem !important;
-  align-items: center !important;
-  flex-wrap: nowrap !important;
-  flex: 0 0 auto !important;
+.focus-counter:hover { border-color: var(--line-strong); color: var(--ink); }
+.practice-sheet-btn { display: none; gap: 6px; white-space: nowrap; }
+.practice-sheet-progress {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-2);
 }
-
-.header-actions .btn-header-complete {
-  background: var(--bg-card);
-  color: var(--primary-fg, var(--primary));
-  border: 1px solid var(--border-strong);
-  font-weight: 500;
-  padding: 0 0.85rem;
-  transition: all 0.15s ease;
-}
-.header-actions .btn-header-complete:hover:not(:disabled) {
-  background: var(--primary-light);
-  border-color: var(--primary-border);
-  color: var(--primary-fg, var(--primary));
-}
-.header-actions .btn-header-complete:hover:not(:disabled) {
-  background: var(--primary-hover);
-  color: var(--on-primary-hover, var(--on-primary));
-}
-.header-actions .btn-header-complete:active:not(:disabled) {
-  background: var(--primary-active);
-  color: var(--on-primary-active, var(--on-primary));
-}
-
-.btn-flag.active {
-  background: var(--warning-light);
-  border-color: var(--warning);
-  color: var(--warning-fg, #92400e);
-  font-weight: 600;
-}
-
-.btn-kill {
-  color: var(--text-muted);
-  border-color: var(--border);
-  opacity: 0.85;
-}
-.btn-kill:hover:not(:disabled) {
-  background: var(--danger-light);
-  border-color: var(--danger);
-  color: var(--danger-fg, var(--danger));
-  opacity: 1;
-}
-
-.question-card {
-  padding: 1.5rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--bg-card);
-  box-shadow: var(--shadow-sm);
-  max-width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-}
-
-.stem-box {
-  max-width: 100%;
-  min-width: 0;
-  word-break: break-all;
-  overflow-wrap: anywhere;
-}
-
-.stem-box h2 {
-  font-size: 1.0625rem;
-  line-height: 1.65;
-  margin-bottom: 1.25rem;
-  white-space: pre-wrap;
-  word-break: break-all;
-  overflow-wrap: anywhere;
-  color: var(--text-main);
-  font-weight: 500;
-  max-width: 100%;
-}
-
-.options-group {
-  display: grid;
-  gap: 0.65rem;
-  margin-bottom: 1.25rem;
-  max-width: 100%;
-  min-width: 0;
-}
-
-.option {
-  display: flex;
-  gap: 0.85rem;
-  align-items: flex-start;
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-card);
-  cursor: pointer;
-  transition: all 0.1s cubic-bezier(0.16, 1, 0.3, 1);
-  font-size: 0.9375rem;
-  line-height: 1.5;
-  max-width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-}
-
-.option .option-text-content {
-  color: var(--text-main);
-  flex: 1;
-  min-width: 0;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-}
-
-/* 统一底部操作栏 (Desktop Base) */
-.ergonomic-action-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
+.focus-menu {
+  position: absolute;
+  top: calc(var(--topbar-h) - 4px);
   right: 0;
-  z-index: 80;
-  background: color-mix(in srgb, var(--bg-card) 95%, transparent);
-  backdrop-filter: blur(12px);
-  border-top: 1px solid var(--border);
-  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.04);
-  padding: 0.75rem 1.5rem;
+  min-width: 168px;
+  padding: 5px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-2);
+  z-index: 5;
 }
+.focus-more { position: relative; }
+.focus-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.focus-menu-item:hover { background: var(--surface-2); color: var(--ink); }
+.focus-menu-item.is-danger { color: var(--bad); }
+.focus-finish { white-space: nowrap; }
 
-.action-bar-inner {
-  max-width: 74rem;
+.icon-btn.is-on { color: var(--flag); border-color: var(--warn-line); background: var(--warn-soft); }
+
+/* ---------- layout ---------- */
+.focus-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 744px) 280px;
+  gap: 56px;
+  justify-content: center;
+  align-items: start;
+  width: min(100%, 1140px);
   margin: 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  padding: 30px 26px 120px;
 }
-
-.action-left {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+.practice-study-main { min-width: 0; max-width: 744px; }
+.focus-sheet {
+  padding-bottom: 8px;
 }
-
-.action-right {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.hotkey-helper-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  font-size: 0.8rem;
-  color: var(--text-tertiary);
-}
-
-.hotkey-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.option:hover {
-  border-color: var(--border-strong);
-  background: var(--bg-muted);
-}
-
-.option.selected {
-  border-color: var(--primary-fg, var(--primary));
-  background: var(--primary-light);
-  color: var(--text-main);
-  box-shadow: 0 0 0 1px var(--primary-border, var(--primary));
-}
-
-.option.selected .key-cap {
-  background: var(--primary);
-  color: var(--on-primary);
-  border-color: var(--primary);
-}
-
-.option input {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-  pointer-events: none;
-}
-
-.text-answer-box textarea {
+.practice-paper {
   width: 100%;
-  padding: 0.85rem;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
-  resize: vertical;
-  margin-top: 0.5rem;
-  font-size: 0.95rem;
-  line-height: 1.5;
-}
-
-.practice-split-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-@media (min-width: 1024px) {
-  .practice-split-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    max-width: 52rem;
-    margin: 0 auto;
-    width: 100%;
-    gap: 1.5rem;
-    align-items: start;
-    transition: max-width 0.2s ease;
-  }
-
-  .practice-split-grid.has-result {
-    grid-template-columns: 1.15fr 0.85fr;
-    max-width: none;
-    margin: 0;
-  }
-
-  .practice-split-grid:not(.has-result) .practice-split-right {
-    display: none;
-  }
-
-  .practice-split-right {
-    position: sticky;
-    top: 1rem;
-    max-height: calc(100vh - 7.5rem);
-    overflow-y: auto;
-    padding-right: 0.25rem;
-  }
-}
-
-.practice-split-left {
-  display: flex;
-  flex-direction: column;
+  max-width: 744px;
   min-width: 0;
+  padding: 34px 38px 36px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow: var(--shadow-1);
 }
-
-.practice-split-right {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  min-width: 0;
-}
-
-.practice-side-guide {
-  padding: 1.25rem;
-  background: var(--bg-page);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-lg);
-  color: var(--text-muted);
-}
-
-.practice-side-guide h4 {
-  margin: 0 0 0.5rem 0;
-  font-size: 0.95rem;
-  color: var(--text-main);
-}
-
-.practice-side-guide p {
-  margin: 0.35rem 0;
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-
-.quick-verdict-bar {
-  margin-top: 1rem;
-  padding: 0.75rem 1rem;
-  border-radius: var(--radius-lg);
-  border: 1.5px solid;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  animation: fadeIn 0.2s ease-in-out;
-}
-
-.quick-verdict-bar.correct {
-  background: var(--success-light);
-  border-color: var(--success-border);
-  color: var(--success-fg, var(--success));
-}
-
-.quick-verdict-bar.incorrect {
-  background: var(--danger-light);
-  border-color: var(--danger-border);
-  color: var(--danger-fg, var(--danger));
-}
-
-.quick-verdict-bar.partial {
-  background: var(--warning-light);
-  border-color: var(--warning-border);
-  color: var(--warning-fg, #92400e);
-}
-
-.verdict-status-title {
+.focus-sheet .q-meta {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.95rem;
+  gap: 12px;
+  margin-bottom: 18px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  letter-spacing: .06em;
+  color: var(--ink-3);
+  text-transform: uppercase;
 }
-
-.verdict-text-inline {
+.focus-sheet .q-stem {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  line-height: 1.9;
+  letter-spacing: .01em;
+  margin-bottom: 30px;
+  white-space: pre-wrap;
+}
+.opt-list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  font-size: 0.875rem;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
 }
-
-.text-correct {
-  color: var(--success-fg, var(--success));
+.opt {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 20px;
+  align-items: start;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  font-family: var(--font-serif);
+  font-size: 14.5px;
+  line-height: 1.68;
+  cursor: pointer;
+  transition: background .14s var(--ease);
 }
-
-.text-danger {
-  color: var(--danger-fg, var(--danger));
+.opt:hover:not(:disabled) { background: var(--surface-2); }
+.opt:disabled { cursor: default; }
+.opt-key {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-3);
 }
+.opt-text { white-space: pre-wrap; }
+.opt-mark { display: flex; justify-content: flex-end; padding-top: 4px; }
+.opt-mark.ok { color: var(--ok); }
+.opt-mark.bad { color: var(--bad); }
 
-.option.option-correct {
-  border-color: var(--success);
-  background: var(--success-light);
-  color: var(--text-main);
+/* ---------- feedback ---------- */
+.feedback-block {
+  margin-top: 34px;
+  padding-top: 26px;
+  border-top: 1px solid var(--line-strong);
+  animation: focus-rise .22s var(--ease);
 }
-
-.option.option-wrong {
-  border-color: var(--danger);
-  background: var(--danger-light);
-  color: var(--text-main);
+@keyframes focus-rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
 }
-
-:global(:root[data-theme="dark"]) .option.option-correct {
-  background: color-mix(in srgb, var(--success) 18%, var(--bg-card));
+.verdict-line {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  margin-bottom: 12px;
 }
-
-:global(:root[data-theme="dark"]) .option.option-wrong {
-  background: color-mix(in srgb, var(--danger) 18%, var(--bg-card));
-}
-
-.inline-verdict-badge {
+.verdict-line strong { font-weight: 650; letter-spacing: .01em; }
+.verdict-mark { display: inline-flex; align-self: center; }
+.verdict-line.correct { color: var(--ok); }
+.verdict-line.partial { color: var(--warn); }
+.verdict-line.incorrect { color: var(--bad); }
+.verdict-line.ungraded { color: var(--ink-2); }
+.verdict-ratio {
   margin-left: auto;
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.15rem 0.45rem;
-  border-radius: var(--radius-sm);
-  font-family: var(--linear-mono);
+  font-size: 12px;
+  color: var(--ink-3);
 }
-
-.inline-verdict-badge.correct {
-  background: var(--success-light);
-  color: var(--success-fg, var(--success));
-  border: 1px solid var(--success-border);
-}
-
-.inline-verdict-badge.wrong {
-  background: var(--danger-light);
-  color: var(--danger-fg, var(--danger));
-  border: 1px solid var(--danger-border);
-}
-
-
-.submit-bar {
-  margin: 1.5rem 0 0.5rem;
-}
-
-.result-card {
-  margin-top: 1.5rem;
-  padding: 1.35rem;
-  border-radius: var(--radius-lg);
-  background: var(--bg-page);
-  border: 1px solid var(--border);
-}
-
-.result-header {
+.answer-line {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 1.1rem;
-  margin-bottom: 1rem;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  align-items: baseline;
+  gap: 8px 14px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  color: var(--ink-3);
 }
-
-.result-header strong.correct {
-  color: var(--success-fg, var(--success));
+.answer-line .ans {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink);
+  letter-spacing: .04em;
 }
-.result-header strong.partial {
-  color: var(--warning-fg, #92400e);
-}
-.result-header strong.incorrect {
-  color: var(--danger-fg, var(--danger));
-}
-
-.official-explanation {
-  margin: 1rem 0;
-  padding: 1rem;
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-  border-left: 4px solid var(--primary);
-  line-height: 1.6;
-}
-
-.official-explanation h4 {
-  font-size: 0.95rem;
-  margin-bottom: 0.35rem;
-  color: var(--text-main);
-}
-
-.btn-ai-toggle.active {
-  background: var(--primary-light);
-  color: var(--primary-fg, var(--primary));
-  border-color: var(--primary-border);
-}
-
-.option:active {
-  transform: scale(0.99);
-}
-
-.fsrs-rating-box {
-  margin: 1rem 0;
-  padding: 1rem;
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-}
-
-.fsrs-rating-box h4 {
-  margin: 0 0 0.65rem;
-  font-size: 0.9rem;
-  color: var(--text-muted);
-}
-
-.fsrs-buttons {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.rating-btn {
-  padding: 0.45rem 0.85rem;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-strong);
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 500;
-  background: var(--bg-card);
-  transition: all 0.15s ease;
-}
-
-.rating-btn.again {
-  color: var(--danger-fg, var(--danger));
-  border-color: var(--danger-border);
-}
-.rating-btn.again:hover:not(:disabled) {
-  background: var(--danger-light);
-  color: var(--danger-fg, var(--danger));
-}
-
-.rating-btn.hard {
-  color: var(--warning-fg, #92400e);
-  border-color: var(--warning-border);
-}
-.rating-btn.hard:hover:not(:disabled) {
-  background: var(--warning-light);
-  color: var(--warning-fg, #92400e);
-}
-
-.rating-btn.good {
-  color: var(--primary-fg, var(--primary));
-  border-color: var(--primary-border);
-}
-.rating-btn.good:hover:not(:disabled) {
-  background: var(--primary-light);
-}
-
-.rating-btn.easy {
-  color: var(--success-fg, var(--success));
-  border-color: var(--success-border);
-}
-.rating-btn.easy:hover:not(:disabled) {
-  background: var(--success-light);
-  color: var(--success-fg, var(--success));
-}
-
-.rating-btn.selected {
-  font-weight: 700;
-  box-shadow: 0 0 0 2px currentColor;
-}
-
-.rating-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.fsrs-status {
-  margin-top: 0.5rem;
-  font-size: 0.85rem;
-  color: var(--primary-fg, var(--primary));
-}
-
-.ai-panel {
-  margin-top: 1.5rem;
-  padding: 1.35rem;
-  border: 1px solid var(--primary-border);
-  border-radius: var(--radius-lg);
-  background: var(--bg-card);
-}
-
-.ai-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.ai-btn-group {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.ai-ask-box {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.ai-ask-box input {
-  flex: 1;
-}
-
-.ai-status {
-  color: var(--warning-fg, #92400e);
-  font-size: 0.875rem;
-  margin-bottom: 0.75rem;
-}
-
-.ai-history {
-  display: grid;
-  gap: 0.85rem;
-  margin-top: 1rem;
-}
-
-.version-card {
-  padding: 1rem 1.15rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-card);
-}
-
-.version-card.adopted {
-  border-color: var(--success);
-  box-shadow: 0 0 0 1px var(--success);
-}
-
-.version-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.source-tag {
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.15rem 0.45rem;
-  background: var(--bg-muted);
-  border-radius: var(--radius-sm);
-  color: var(--text-main);
-}
-
-.badge-adopted {
-  font-size: 0.75rem;
-  color: var(--success-fg, var(--success));
-  font-weight: 700;
-  background: var(--success-light);
-  border: 1px solid var(--success-border);
-  padding: 0.1rem 0.4rem;
-  border-radius: var(--radius-sm);
-}
-
-.content-text {
+.answer-yours { margin-left: auto; }
+.explain-block { padding-top: 22px; }
+.explain-body {
+  margin-top: 10px;
+  font-family: var(--font-serif);
+  font-size: 15.5px;
+  line-height: 1.92;
+  color: var(--ink-2);
   white-space: pre-wrap;
-  line-height: 1.6;
-  margin-bottom: 0.5rem;
-  font-size: 0.925rem;
 }
-
-.evidence-box {
-  margin: 0.5rem 0;
-  padding: 0.65rem 0.85rem;
-  background: var(--bg-page);
-  border-radius: var(--radius-sm);
-  font-size: 0.85rem;
-  border: 1px solid var(--border);
+.fsrs-block {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
 }
+.fsrs-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.fsrs-buttons .btn.is-on { border-color: var(--brand); color: var(--brand); background: var(--brand-soft); }
+.fsrs-buttons .mono { color: var(--ink-3); font-size: 12px; }
 
-.evidence-box ul {
-  margin-left: 1.25rem;
-  margin-top: 0.35rem;
-}
-
-.version-actions {
+/* ---------- AI (secondary) ---------- */
+.ai-entry {
   display: flex;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-
-.btn-adopt {
-  color: var(--success-fg, var(--success));
-  border-color: var(--success-border);
-}
-.btn-adopt:hover:not(:disabled) {
-  background: var(--success-light);
-  border-color: var(--success);
-  color: var(--success-fg, var(--success));
-}
-
-.version-edit-box textarea {
-  width: 100%;
-  padding: 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-}
-
-.version-edit-actions {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: flex-end;
-  margin-top: 0.5rem;
-}
-
-.ai-chat-thread {
-  margin: 1rem 0;
-  display: grid;
-  gap: 0.75rem;
-}
-
-.ai-chat-thread h4 {
-  margin: 0;
-  font-size: 0.95rem;
-}
-
-.chat-bubble {
-  padding: 0.75rem 1rem;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-}
-
-.chat-bubble.user {
-  background: var(--primary-light);
-  border-color: var(--primary-border);
-  margin-left: 1.5rem;
-}
-
-.chat-bubble.assistant {
-  background: var(--bg-card);
-  border-color: var(--border);
-  margin-right: 1.5rem;
-}
-
-.chat-sender {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.8125rem;
-  margin-bottom: 0.35rem;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.chat-text {
-  margin: 0;
-  white-space: pre-wrap;
-  line-height: 1.55;
-  font-size: 0.925rem;
-}
-
-.conflict-banner {
-  margin-bottom: 1.25rem;
-  padding: 1.15rem;
-  border: 1px solid var(--warning);
-  background: var(--warning-light);
-  border-radius: var(--radius-lg);
-}
-
-.conflict-header {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.conflict-badge {
-  font-weight: 600;
-  color: var(--warning-fg, #92400e);
-  font-size: 0.925rem;
-}
-
-.btn-conflict-toggle {
-  padding: 0.35rem 0.75rem;
-  border: 1px solid var(--warning);
-  background: var(--warning-light);
-  color: var(--warning-fg, #92400e);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.conflict-resolved-msg {
-  margin-top: 0.5rem;
-  color: var(--success-fg, var(--success));
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
-.conflict-list {
-  display: grid;
-  gap: 0.75rem;
-  margin-top: 1rem;
-}
-
-.conflict-version-item {
-  padding: 0.85rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-card);
-}
-
-.conflict-version-item.active {
-  border-color: var(--primary-fg, var(--primary));
-  box-shadow: 0 0 0 1px var(--primary-border, var(--primary));
-}
-
-.conflict-version-meta {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-  margin-bottom: 0.5rem;
-}
-
-.badge-current {
-  font-size: 0.75rem;
-  background: var(--primary-light);
-  color: var(--primary-fg, var(--primary));
-  border: 1px solid var(--primary-border);
-  padding: 0.1rem 0.4rem;
-  border-radius: var(--radius-sm);
-  font-weight: 600;
-}
-
-.conflict-version-body p {
-  margin: 0.25rem 0;
-  font-size: 0.875rem;
-}
-
-.conflict-version-actions {
-  margin-top: 0.5rem;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.btn-adopt-version {
-  padding: 0.35rem 0.75rem;
-  font-size: 0.85rem;
-}
-
-.offline-banner {
-  margin-bottom: 1rem;
-  padding: 0.75rem 1rem;
-  background: var(--danger-light);
-  border: 1px solid var(--danger-border);
-  border-radius: var(--radius-md);
-  color: var(--danger-fg, var(--danger));
-  display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  font-size: 0.875rem;
+  gap: 16px;
+  margin-top: 30px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
 }
-
-.btn-sync-offline {
-  padding: 0.3rem 0.65rem;
-  border: 1px solid var(--danger);
-  background: var(--bg-card);
-  color: var(--danger-fg, var(--danger));
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.question-edit-panel {
-  margin-bottom: 1.25rem;
-  padding: 1.25rem;
-  background: var(--bg-page);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
-  display: grid;
-  gap: 0.75rem;
-}
-
-.question-edit-panel h3 {
-  margin: 0;
-  font-size: 1.05rem;
-}
-
-.question-edit-error {
-  margin: 0;
-  color: var(--danger-fg, var(--danger));
-}
-
-.question-edit-panel label {
-  display: grid;
-  gap: 0.35rem;
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
-.input-edit-stem, .input-edit-exp {
-  padding: 0.5rem;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  font-size: 0.95rem;
-}
-
-.edit-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-
-.btn-edit-question {
-  border: 1px solid var(--border-strong);
-  background: var(--bg-card);
-  cursor: pointer;
-}
-
-/* Visibility utilities */
-.mobile-only-inline, .mobile-only-btn, .compact-more-menu {
-  display: none !important;
-}
-.practice-more-dropdown-wrapper {
-  display: inline-flex !important;
-}
-.desktop-only-btn, .desktop-full-btn, .header-control-btn {
-  display: inline-flex !important;
-}
-
-.btn-sheet-trigger-pill {
-  border: 1px solid var(--primary-border);
-  background: var(--primary-light);
-  color: var(--primary-fg, var(--primary));
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.btn-sheet-trigger-pill:hover {
-  background: var(--primary-light);
-}
-
-.mobile-more-wrapper {
-  position: relative;
-}
-
-.btn-more-menu {
+.ai-entry-text { display: flex; flex-direction: column; gap: 3px; }
+.ai-entry-title {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text-main);
-  font-size: 1.15rem;
-  font-weight: 800;
-  cursor: pointer;
+  gap: 7px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
 }
+.ai-panel {
+  margin-top: 8px;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.ai-toolbar { display: flex; justify-content: space-between; gap: 12px; }
+.ai-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.ai-ask { display: flex; gap: 8px; margin-top: 12px; }
+.ai-ask .input { flex: 1; }
+.ai-chat { margin-top: 16px; }
+.chat-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.chat-row:last-child { border-bottom: 0; }
+.chat-meta {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-bottom: 4px;
+}
+.chat-sender { font-weight: 600; }
+.chat-text {
+  font-family: var(--font-serif);
+  font-size: 15.5px;
+  line-height: 1.92;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+  margin: 0;
+}
+.ai-versions { margin-top: 18px; }
+.ai-version {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.ai-version-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.ai-version-head .dim { margin-left: auto; }
+.ai-version-text {
+  font-family: var(--font-serif);
+  font-size: 15.5px;
+  line-height: 1.92;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+  margin: 0 0 8px;
+}
+.ai-evidence ul { margin: 6px 0 0; padding-left: 18px; }
+.ai-evidence li { font-size: 12px; color: var(--ink-3); line-height: 1.6; margin-bottom: 4px; }
+.ai-evidence a { color: var(--brand); margin-left: 6px; }
+.ai-version-actions { display: flex; gap: 7px; margin-top: 9px; }
+.ai-version-edit .textarea { margin-top: 4px; }
+.ai-version.is-adopted { background: color-mix(in srgb, var(--brand-soft) 46%, transparent); }
 
-.mobile-dropdown-menu {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 0.35rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
+/* ---------- rail ---------- */
+.practice-study-rail {
+  position: sticky;
+  top: calc(var(--topbar-h) + 20px);
   display: flex;
   flex-direction: column;
-  min-width: 8.5rem;
-  z-index: 100;
+  gap: 22px;
+  padding: 4px 0 0 22px;
+  border-left: 1px solid var(--line);
+}
+.rail-block { padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.rail-block:last-child { border-bottom: 0; padding-bottom: 0; }
+.rail-title {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 10px;
+}
+.focus-progress { display: flex; flex-direction: column; gap: 7px; }
+.focus-progress .mono { font-size: 12px; color: var(--ink-2); }
+.progress-track {
+  height: 3px;
+  background: var(--surface-3);
   overflow: hidden;
 }
-
-.dropdown-item {
-  padding: 0.6rem 0.85rem;
-  text-align: left;
-  background: none;
-  border: none;
-  border-bottom: 1px solid var(--border-subtle);
-  font-size: 0.85rem;
-  color: var(--text-main);
+.progress-track i {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+  transition: width .3s var(--ease);
+}
+.rail-note { margin-top: 8px; font-size: 12px; line-height: 1.6; color: var(--ink-4); }
+.sheet-mini {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 5px;
+}
+.sheet-num {
+  min-width: 28px;
+  height: 30px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  border-radius: var(--r-xs);
   cursor: pointer;
 }
-.dropdown-item:last-child {
-  border-bottom: none;
-}
-.dropdown-item:active {
-  background: var(--bg-muted);
-}
-.dropdown-toggle-item {
+.sheet-num:hover { border-color: var(--line-strong); color: var(--ink); }
+.sheet-num.is-answered { background: var(--brand-soft); border-color: var(--brand-line); color: var(--brand-ink); }
+.sheet-num.is-unanswered { background: transparent; color: var(--ink-3); }
+.sheet-num.is-current { border-color: var(--ink); color: var(--ink); font-weight: 700; }
+.sheet-num.is-flagged { box-shadow: inset 0 -3px 0 var(--flag); }
+
+.practice-rail-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.5rem 0.85rem;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.practice-rail-head .rail-title { margin-bottom: 0; }
+.practice-flag-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--ink-3);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+}
+.practice-flag-toggle:hover { border-color: var(--line-strong); color: var(--ink); }
+.practice-flag-toggle.is-on { color: var(--flag); border-color: var(--warn-line); background: var(--warn-soft); }
+.practice-answer-count { margin-bottom: 8px; font-size: 12px; color: var(--ink-3); }
+.practice-answer-grid { gap: 5px; }
+.practice-answer-cell { height: 30px; min-width: 30px; }
+.practice-answer-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.practice-answer-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.practice-sheet-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  background: transparent;
+}
+.practice-sheet-dot.is-answered { background: var(--brand-soft); border-color: var(--brand); }
+.practice-sheet-dot.is-current { border-color: var(--ink); }
+.practice-sheet-dot.is-flagged { background: var(--flag); border-color: var(--flag); }
+.rail-keys { display: flex; flex-direction: column; gap: 7px; }
+.rail-keys span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 4px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--r-xs);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.rail-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
 }
 
-/* Question Sheet Drawer (答题卡) & Modals */
-.sheet-modal-backdrop {
+/* ---------- action bar ---------- */
+.focus-actionbar {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 40;
+  background: color-mix(in srgb, var(--d-gasket, var(--paper)) 96%, transparent);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--line);
+  padding: 10px 18px calc(10px + env(safe-area-inset-bottom, 0px));
+}
+.focus-action-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(100%, 1120px);
+  margin: 0 auto;
+}
+.focus-action-inner .spacer { flex: 1; }
+.focus-actionbar .focus-counter { border-color: transparent; background: transparent; }
+
+/* ---------- dialogs ---------- */
+.focus-overlay {
   position: fixed;
   inset: 0;
-  background: color-mix(in srgb, var(--text-main) 44%, transparent);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(20, 23, 19, .42);
   backdrop-filter: blur(2px);
-  z-index: 100;
+}
+.focus-dialog {
+  width: min(100%, 460px);
+  max-height: 86vh;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
+}
+.sheet-dialog { width: min(100%, 540px); }
+.report-dialog { width: min(100%, 560px); }
+.dialog-head {
   display: flex;
-  justify-content: center;
-  align-items: flex-end;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--line);
 }
-
-.sheet-modal-drawer {
-  background: var(--bg-card);
-  width: 100%;
-  max-width: 42rem;
-  max-height: 80vh;
-  border-radius: 1rem 1rem 0 0;
-  box-shadow: var(--shadow-xl);
-  display: flex;
-  flex-direction: column;
-  padding: 1.15rem 1.25rem;
-  overflow-y: auto;
-  animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+.dialog-title {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: .01em;
 }
-
-@media (min-width: 768px) {
-  .sheet-modal-backdrop {
-    align-items: center;
-    padding: 1.5rem;
-  }
-
-  .sheet-modal-drawer {
-    margin: auto;
-    border-radius: var(--radius-xl);
-    max-height: 75vh;
-    animation: modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  }
+.dialog-sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--ink-3);
 }
-
-/* 练习结算结果卡片模态框 */
-.practice-result-card-modal {
-  background: var(--bg-card);
-  width: 100%;
-  max-width: 28rem;
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-xl);
-  padding: 2rem 1.75rem 1.5rem;
-  text-align: center;
-  margin: auto;
-  border: 1px solid var(--border);
-  animation: modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.result-card-badge {
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  background: var(--success-light);
-  color: var(--success-fg, var(--success));
-  border: 1px solid var(--success-border);
-  border-radius: 9999px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  margin-bottom: 0.75rem;
-}
-
-.practice-result-card-modal h2 {
-  font-size: 1.35rem;
-  font-weight: 700;
-  margin: 0 0 1.25rem 0;
-  color: var(--text-main);
-}
-
-.result-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.75rem;
-  margin-bottom: 1.25rem;
-}
-
-.result-stat-box {
-  background: var(--bg-subtle);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 0.75rem 0.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.result-stat-box small {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-.result-stat-box strong {
-  font-size: 1.35rem;
-  font-weight: 700;
-}
-
-.result-counts-bar {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.6rem;
-  margin-bottom: 1.5rem;
-  padding: 0.5rem;
-  background: var(--bg-muted);
-  border-radius: var(--radius-md);
-}
-
-.count-tag {
-  font-size: 0.82rem;
-  font-weight: 600;
-}
-
-.result-card-actions {
-  display: flex;
-  gap: 0.75rem;
-}
-
-.result-card-actions button {
-  flex: 1;
-  padding: 0.7rem 1rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-}
-
-/* 确认提前交卷对话框 */
-.confirm-submit-dialog {
-  background: var(--bg-card);
-  width: 100%;
-  max-width: 26rem;
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-xl);
-  padding: 1.75rem;
-  margin: auto;
-  border: 1px solid var(--border);
-  animation: modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.confirm-submit-dialog h3 {
-  margin: 0 0 0.75rem 0;
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: var(--text-main);
-}
-
-.confirm-warning-desc,
-.confirm-info-desc {
-  font-size: 0.92rem;
-  line-height: 1.5;
-  color: var(--text-muted);
-  margin-bottom: 1.5rem;
-}
-
-.confirm-dialog-actions {
+.dialog-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
+  gap: 8px;
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--line);
 }
-
-.confirm-dialog-actions button {
-  padding: 0.6rem 1.15rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-}
-
-@keyframes slideUp {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
-}
-
-@keyframes modalScaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.sheet-drawer-header {
+.sheet-body { padding: 18px 20px 20px; }
+.sheet-legend {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.85rem;
-}
-
-.sheet-drawer-title {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-}
-.sheet-drawer-title h3 {
-  margin: 0;
-  font-size: 1.15rem;
-}
-.sheet-stats-pill {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  background: var(--bg-muted);
-  padding: 0.15rem 0.5rem;
-  border-radius: 9999px;
-}
-
-.btn-close-sheet {
-  border: none;
-  background: var(--bg-muted);
-  width: 42px;
-  height: 42px;
-  min-width: 42px;
-  min-height: 42px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  cursor: pointer;
-  font-weight: 700;
-  color: var(--text-muted);
-  transition: background-color 0.15s ease;
-}
-
-.btn-close-sheet:hover {
-  background: var(--border);
-}
-
-.sheet-quick-actions {
-  margin-bottom: 0.75rem;
-}
-.btn-jump-next-unanswered {
-  width: 100%;
-  min-height: 42px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.55rem;
-  background: var(--primary-light);
-  border: 1px dashed var(--primary-fg, var(--primary));
-  color: var(--primary-fg, var(--primary));
-  border-radius: var(--radius-md);
-  font-weight: 600;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.sheet-legend-bar {
-  display: flex;
-  gap: 0.85rem;
-  margin-bottom: 0.85rem;
-  font-size: 0.8rem;
-  color: var(--text-muted);
   flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  color: var(--ink-3);
 }
-.sheet-legend-bar .legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-.legend-dot {
-  width: 0.65rem;
-  height: 0.65rem;
-  border-radius: 50%;
-  display: inline-block;
-}
-.legend-dot.unanswered { background: var(--border-strong); }
-.legend-dot.correct { background: var(--success); }
-.legend-dot.incorrect { background: var(--danger); }
-.legend-dot.partial { background: var(--warning); }
-
-.sheet-numbers-grid {
+.sheet-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.dot.blank { background: var(--surface-3); border: 1px solid var(--line-strong); }
+.dot.ok { background: var(--ok); }
+.dot.bad { background: var(--bad); }
+.dot.part { background: var(--warn); }
+.sheet-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(2.6rem, 1fr));
-  gap: 0.5rem;
-  margin-top: 0.35rem;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+  margin-bottom: 16px;
 }
+.sheet-grid .sheet-num { height: 32px; }
+.practice-sheet-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.practice-sheet-actions .btn { min-height: 32px; }
+.report-body { padding: 22px 20px; }
+.report-stats { margin-bottom: 18px; }
+.report-counts { display: flex; flex-wrap: wrap; gap: 8px; }
+.help-body { padding: 18px 20px 22px; display: flex; flex-direction: column; gap: 20px; }
+.help-keys { display: flex; flex-direction: column; gap: 8px; margin-top: 9px; }
+.help-keys span { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--ink-2); }
+.help-text { margin: 7px 0 0; font-size: 12.5px; line-height: 1.65; color: var(--ink-3); }
+.exit-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.confirm-body { padding: 18px 20px 6px; }
+.confirm-body p { margin: 0 0 10px; font-size: 13px; line-height: 1.65; color: var(--ink-2); }
+.confirm-warn { color: var(--warn); }
+.confirm-text { color: var(--ink-2); }
 
-.sheet-num-btn {
-  height: 2.6rem;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-strong);
-  background: var(--bg-subtle);
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: var(--text-main);
-  cursor: pointer;
+/* ---------- inline editor / conflict ---------- */
+.edit-panel {
+  margin-bottom: 28px;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+}
+.edit-panel-head {
   display: flex;
   align-items: center;
-  justify-content: center;
-  transition: all 0.15s ease;
+  justify-content: space-between;
+  margin-bottom: 14px;
 }
-.sheet-num-btn.current {
-  border: 2px solid var(--primary-fg, var(--primary)) !important;
-  box-shadow: 0 0 0 2px var(--primary-border);
+.edit-panel-title {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: .02em;
 }
-.sheet-num-btn.answered {
-  background: var(--bg-muted);
-  border-color: var(--text-tertiary);
+.edit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
 }
-.sheet-num-btn.correct {
-  background: var(--success);
-  border-color: var(--success-hover);
-  color: var(--on-success, #ffffff);
+.edit-options { margin: 4px 0 12px; }
+.edit-options-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
 }
-.sheet-num-btn.incorrect {
-  background: var(--danger);
-  border-color: var(--danger-hover);
-  color: var(--on-danger, #ffffff);
+.edit-option-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 28px;
+  gap: 7px;
+  align-items: center;
+  margin-bottom: 6px;
 }
-.sheet-num-btn.partial {
-  background: var(--warning);
-  border-color: var(--warning-hover);
-  color: var(--on-warning, #1c1408);
+.edit-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  margin: 4px 0 14px;
+}
+.edit-panel-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.conflict-banner {
+  margin-bottom: 26px;
+  padding: 14px 16px;
+  background: var(--warn-soft);
+  border: 1px solid var(--warn-line);
+}
+.conflict-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--warn);
+}
+.conflict-head .btn { margin-left: auto; }
+.conflict-resolved { margin: 8px 0 0; font-size: 12px; color: var(--ok); }
+.conflict-list { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.conflict-version {
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.conflict-version.is-current { border-color: var(--brand-line); }
+.conflict-version-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+.conflict-stem {
+  margin: 0 0 8px;
+  font-family: var(--font-serif);
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.conflict-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.focus-offline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.focus-offline .btn { margin-left: auto; }
+.reading-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink-4);
 }
 
-/* ==========================================================================
-   Responsive Overhaul: Tablet & Compact Viewports (<= 1024px)
-   ========================================================================== */
-@media (max-width: 1024px) {
-  .desktop-full-btn {
-    display: none !important;
+/* ---------- states ---------- */
+.focus-loading {
+  width: min(100% - 48px, var(--reading-w));
+  margin: 48px auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.focus-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 96px 24px;
+  text-align: center;
+}
+.focus-empty .empty-desc { margin-bottom: 12px; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 1280px) {
+  .focus-layout { gap: 40px; }
+}
+@media (max-width: 1100px) {
+  .focus-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    width: 100%;
+    max-width: 820px;
+    padding: 22px 26px 120px;
   }
-  .compact-more-menu {
-    display: inline-flex !important;
-  }
-  .header-control-btn {
-    display: inline-flex !important;
-  }
-  .hotkey-helper-bar,
-  .hotkey-badge {
-    display: none !important;
-  }
-  .practice-title {
-    max-width: 140px;
+  .practice-study-main { max-width: 100%; }
+  .practice-paper { max-width: 100%; }
+  .practice-study-rail {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+    margin-top: 32px;
+    padding: 24px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--line-strong);
   }
 }
-
-/* ==========================================================================
-   Tablet & Mobile Viewports (<= 768px)
-   ========================================================================== */
 @media (max-width: 768px) {
-  .practice-page {
+  .focus-mode { padding-bottom: 72px; }
+  .focus-topbar { padding: 0 12px; gap: 8px; }
+  .focus-type,
+  .focus-sep,
+  .focus-counter,
+  .focus-help-btn { display: none; }
+  .practice-sheet-btn { display: inline-flex; }
+  .focus-layout { width: 100%; max-width: none; padding: 14px 14px 120px; }
+  .practice-study-rail { display: none; }
+  .practice-paper { padding: 20px 16px 22px; }
+  .focus-sheet .q-stem { font-size: 18px; line-height: 1.85; }
+  .opt { font-size: 15px; padding: 13px 6px; }
+  .focus-actionbar { padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)); }
+  .focus-action-inner .focus-counter { display: none; }
+  .focus-action-inner .spacer { display: none; }
+  .focus-action-inner > .btn { flex: 1; justify-content: center; }
+  .focus-action-inner > .btn-primary { flex: 1.6; }
+  .edit-grid { grid-template-columns: 1fr 1fr; }
+  .sheet-grid { grid-template-columns: repeat(5, 1fr); }
+  .practice-sheet-overlay { align-items: flex-end; padding: 0; }
+  .practice-sheet-dialog {
     width: 100%;
-    margin: 0;
-    padding: 0.25rem 0.5rem 4.5rem;
+    max-width: none;
+    max-height: 82vh;
+    border-radius: 8px 8px 0 0;
+    border-bottom: 0;
   }
-
-  .compact-header {
-    display: flex !important;
-    flex-direction: row !important;
-    justify-content: space-between !important;
-    align-items: center !important;
-    padding: 0.35rem 0.5rem !important;
-    margin-bottom: 0.75rem !important;
-    gap: 0.35rem !important;
-    height: auto !important;
-    min-height: 44px !important;
-    border-radius: var(--radius-md) !important;
-    box-sizing: border-box !important;
-    flex-wrap: nowrap !important;
-  }
-
-  .header-left-bar {
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    gap: 0.35rem !important;
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
-    overflow: hidden !important;
-  }
-
-  .header-titles {
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    gap: 0.3rem !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    min-width: 0 !important;
-    flex: 1 1 auto !important;
-  }
-
-  .btn-back {
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    min-height: 42px !important;
-    height: 42px !important;
-    padding: 0 0.65rem !important;
-    font-size: 0.85rem !important;
-    white-space: nowrap !important;
-    border-radius: var(--radius-md) !important;
-    flex-shrink: 0 !important;
-  }
-
-  .practice-title {
-    font-size: 0.88rem !important;
-    font-weight: 600 !important;
-    margin: 0 !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    max-width: 90px !important;
-  }
-
-  .badge-type-pill {
-    font-size: 0.72rem !important;
-    padding: 0.15rem 0.35rem !important;
-    flex-shrink: 0 !important;
-    white-space: nowrap !important;
-  }
-
-  .btn-sheet-trigger-pill {
-    font-size: 0.75rem !important;
-    padding: 0.2rem 0.45rem !important;
-    min-height: 42px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    border-radius: var(--radius-md) !important;
-    flex-shrink: 0 !important;
-    white-space: nowrap !important;
-  }
-
-  .header-actions {
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    gap: 0.35rem !important;
-    flex: 0 0 auto !important;
-    width: auto !important;
-    flex-wrap: nowrap !important;
-    margin-left: auto !important;
-  }
-
-  .mobile-only-item {
-    display: flex !important;
-  }
-
-  .btn-header-complete {
-    padding: 0.25rem 0.65rem !important;
-    font-size: 0.825rem !important;
-    height: 42px !important;
-    min-height: 42px !important;
-    border-radius: var(--radius-md) !important;
-    flex-shrink: 0 !important;
-  }
-
-  .desktop-only-btn,
-  .desktop-only-block,
-  .desktop-full-btn,
-  .practice-answering-placeholder {
-    display: none !important;
-  }
-
-  /* 消除移动/平板端重复的判分结果头部（已有 quick-verdict-bar 呈现完整判分） */
-  .result-card .result-header {
-    display: none !important;
-  }
-
-  /* 移动端无障碍隐藏原生 radio/checkbox，保持屏幕阅读器与辅助技术可达 */
-  .option input {
-    position: absolute !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-    width: 1px !important;
-    height: 1px !important;
-    margin: -1px !important;
-    clip: rect(0, 0, 0, 0) !important;
-    overflow: hidden !important;
-  }
-
-  .btn-help-mobile,
-  .btn-more-menu {
-    min-width: 42px !important;
-    min-height: 42px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-  }
-
-  .compact-more-menu {
-    display: inline-flex !important;
-  }
-
-  /* 消除桌面端键盘提示框在移动/平板端的空间占用 */
-  .practice-side-guide,
-  .practice-tips {
-    display: none !important;
-  }
-
-  .question-card {
-    padding: 0.75rem 0.75rem 0.85rem;
-    border-radius: var(--radius-md);
-  }
-
-  .stem-box h2 {
-    font-size: 1rem;
-    line-height: 1.45;
-    margin-bottom: 0.75rem;
-  }
-
-  .options-group {
-    gap: 0.5rem;
-  }
-
-  .option {
-    padding: 0.6rem 0.75rem;
-    border-radius: var(--radius-md);
-    margin-bottom: 0;
-  }
-
-  .key-cap {
-    min-width: 1.5rem;
-    height: 1.5rem;
-    font-size: 0.8rem;
-  }
-
-  .quick-verdict-bar {
-    padding: 0.5rem 0.75rem;
-    margin-top: 0.65rem;
-    border-radius: var(--radius-md);
-  }
-
-  .result-actions {
-    flex-direction: column;
-  }
-  .ai-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .ai-btn-group {
-    flex-direction: column;
-  }
-
-  /* 底部固定底栏极简化与安全区适配 */
-  .ergonomic-action-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 80;
-    padding: 0.5rem 0.75rem max(0.5rem, env(safe-area-inset-bottom, 12px)) !important;
-    background: color-mix(in srgb, var(--bg-card) 96%, transparent) !important;
-    backdrop-filter: blur(12px) !important;
-    border-top: 1px solid var(--border) !important;
-    min-height: 52px;
-  }
-
-  .action-bar-inner {
-    width: 100%;
-    gap: 0.5rem;
-  }
-
-  .btn-prev-question,
-  .btn-next-question,
-  .btn-submit-answer,
-  .btn-skip-unanswered,
-  .btn-finish-session,
-  .btn-ai-toggle {
-    min-height: 42px !important;
-    padding: 0.45rem 0.85rem !important;
-    font-size: 0.875rem !important;
-  }
-
-  .hotkey-badge,
-  .hotkey-helper-bar {
-    display: none !important;
-  }
+  .practice-sheet-body { padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+  .practice-sheet-grid .practice-sheet-cell { height: 42px; }
 }
-
-/* ==========================================================================
-   Narrow Mobile (< 640px, e.g. 375px)
-   ========================================================================== */
-@media (max-width: 640px) {
-  .header-control-btn,
-  .btn-help-mobile {
-    display: none !important;
-  }
-
-  .practice-title {
-    max-width: 80px !important;
-  }
+@media (max-width: 420px) {
+  .focus-mode-label { max-width: 96px; overflow: hidden; text-overflow: ellipsis; }
+  .focus-exit span { display: none; }
+  .practice-sheet-btn .practice-sheet-label { display: none; }
+  .focus-sheet .q-stem { font-size: 17.5px; line-height: 1.8; }
+  .focus-sheet .q-meta { gap: 8px; font-size: 12px; }
+  .opt { grid-template-columns: 24px minmax(0, 1fr) 16px; font-size: 15px; }
+  .edit-grid { grid-template-columns: 1fr; }
+  .ai-toolbar { flex-direction: column; }
+  .answer-yours { margin-left: 0; }
+  .verdict-ratio { margin-left: 0; }
+  .focus-finish { padding-left: 9px; padding-right: 9px; }
+  .focus-overlay:not(.practice-sheet-overlay) { padding: 10px; }
 }
 </style>

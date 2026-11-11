@@ -1,10 +1,11 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
-
 import AppLayout from '../layouts/AppLayout.vue'
 import HomeView from '../views/HomeView.vue'
-import LearningView from '../views/LearningView.vue'
-import MistakesView from '../views/MistakesView.vue'
+import BanksView from '../views/BanksView.vue'
+import BankDetailView from '../views/BankDetailView.vue'
+import ReviewView from '../views/ReviewView.vue'
+import ExamCenterView from '../views/ExamCenterView.vue'
 import ImportView from '../views/ImportView.vue'
 import NotesView from '../views/NotesView.vue'
 import SettingsView from '../views/SettingsView.vue'
@@ -16,71 +17,37 @@ const routes = [
     path: '/',
     component: AppLayout,
     children: [
-      {
-        path: '',
-        name: 'home',
-        component: HomeView,
-        meta: { title: '题库大厅' }
-      },
-      {
-        path: 'learning',
-        name: 'learning',
-        component: LearningView,
-        meta: { title: '复习中心' }
-      },
-      {
-        path: 'mistakes',
-        name: 'mistakes',
-        component: MistakesView,
-        meta: { title: '错题攻克' }
-      },
-      {
-        path: 'import',
-        name: 'import',
-        component: ImportView,
-        meta: { title: '导入题库' }
-      },
-      {
-        path: 'notes',
-        name: 'notes',
-        component: NotesView,
-        meta: { title: '知识笔记' }
-      },
-      {
-        path: 'settings',
-        name: 'settings',
-        component: SettingsView,
-        meta: { title: '系统设置' }
-      },
-      {
-        path: 'banks/:bankId',
-        name: 'bank-manage',
-        component: () => import('../views/BankManageView.vue'),
-        meta: { title: '题库管理' }
-      }
-    ]
+      { path: '', name: 'home', component: HomeView, meta: { title: '今天' } },
+      { path: 'banks', name: 'banks', component: BanksView, meta: { title: '题库' } },
+      { path: 'banks/:bankId', name: 'bank-detail', component: BankDetailView, props: true, meta: { title: '题库' } },
+      { path: 'banks/:bankId/manage', name: 'bank-manage', component: () => import('../views/BankManageView.vue'), meta: { title: '管理' } },
+      { path: 'review', name: 'review', component: ReviewView, meta: { title: '复习' } },
+      { path: 'learning', redirect: { name: 'review' } },
+      { path: 'mistakes', redirect: { name: 'review', query: { tab: 'mistakes' } } },
+      { path: 'exams', name: 'exams', component: ExamCenterView, meta: { title: '模考' } },
+      { path: 'import', name: 'import', component: ImportView, meta: { title: '导入' } },
+      { path: 'notes', name: 'notes', component: NotesView, meta: { title: '资料' } },
+      { path: 'settings', name: 'settings', component: SettingsView, meta: { title: '设置' } },
+    ],
   },
   {
     path: '/practice/:sessionId',
     name: 'practice',
     component: PracticeViewV1,
-    props: route => ({ token: useAuthStore().token.value, sessionId: route.params.sessionId })
+    props: route => ({ token: useAuthStore().token.value, sessionId: route.params.sessionId }),
   },
   {
     path: '/exam/:sessionId',
     name: 'exam',
     component: ExamView,
-    props: route => ({ token: useAuthStore().token.value, sessionId: route.params.sessionId })
+    props: route => ({ token: useAuthStore().token.value, sessionId: route.params.sessionId }),
   },
-  {
-    path: '/:pathMatch(.*)*',
-    redirect: '/'
-  }
+  { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
 export const router = createRouter({
   history: createWebHashHistory(),
-  routes
+  routes,
 })
 
 export default router

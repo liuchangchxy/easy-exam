@@ -32,10 +32,13 @@ def select_questions_by_blueprint(
     if not sections:
         return candidate_questions[:total_questions] if total_questions > 0 else candidate_questions
 
+    requested_total = int(total_questions or 0)
     selected: list[dict] = []
     selected_ids = set()
 
     for sec in sections:
+        if requested_total > 0 and len(selected) >= requested_total:
+            break
         sec_type = sec.get("type")
         sec_tags = sec.get("tags")
         if isinstance(sec_tags, str):
@@ -45,6 +48,8 @@ def select_questions_by_blueprint(
         sec_count = int(sec.get("count") or 0)
         if sec_count <= 0:
             continue
+        if requested_total > 0:
+            sec_count = min(sec_count, requested_total - len(selected))
 
         matches = []
         for q in candidate_questions:
@@ -69,7 +74,7 @@ def select_questions_by_blueprint(
 
     # If target total questions hasn't been reached (either from total_questions or sum of section counts),
     # gracefully degrade by drawing remaining questions from candidates if allowed or in fallback mode.
-    target_total = total_questions if total_questions > 0 else sum(int(s.get("count") or 0) for s in sections)
+    target_total = requested_total if requested_total > 0 else sum(int(s.get("count") or 0) for s in sections)
     if target_total > len(selected):
         # Check if fallback is explicitly allowed or default to graceful fallback when not specified
         allow_fallback = bool(blueprint.get("allow_fallback", True))

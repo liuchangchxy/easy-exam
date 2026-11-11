@@ -46,32 +46,60 @@ class AiDraftRepository:
             res["tags"] = json.loads(res.pop("tags_json") or "[]")
             return res
 
-    def list_drafts(self, user_id: str, status: str = "DRAFT") -> List[dict]:
-        with transaction(self.db_path) as conn:
-            rows = conn.execute(
-                "SELECT * FROM ai_question_drafts WHERE user_id = ? AND status = ? ORDER BY created_at DESC",
-                (user_id, status),
-            ).fetchall()
-            results = []
-            for r in rows:
-                item = dict(r)
-                item["options"] = json.loads(item.pop("options_json") or "[]")
-                item["tags"] = json.loads(item.pop("tags_json") or "[]")
-                results.append(item)
-            return results
+    _SELECT_WITH_BANK = """
+        SELECT d.*, b.name AS target_bank_name, m.role AS target_bank_role
+        FROM ai_question_drafts d
+        LEFT JOIN question_banks b ON b.id = d.target_bank_id
+        LEFT JOIN question_bank_members m ON m.bank_id = d.target_bank_id AND m.user_id = d.user_id
+    """
 
-    def get_draft(self, user_id: str, draft_id: str) -> Optional[dict]:
+    @staticmethod
+    def _serialize_draft(row) -> dict:
+        item = dict(row)
+        item["options"] = json.loads(item.pop("options_json") or "[]")
+        item["tags"] = json.loads(item.pop("tags_json") or "[]")
+        item["can_manage"] = item.get("target_bank_role") in ("ADMIN", "EDITOR")
+        return item
+
+    def list_drafts(self, user_id: str, status: str = "DRAFT", bank_id: Optional[str] = None) -> List[dict]:
+        query = self._SELECT_WITH_BANK + " WHERE d.user_id = ? AND d.status = ?"
+        params: list[Any] = [user_id, status]
+        if bank_id:
+            query += " AND d.target_bank_id = ?"
+            params.append(bank_id)
+        query += " ORDER BY d.created_at DESC"
         with transaction(self.db_path) as conn:
-            row = conn.execute(
-                "SELECT * FROM ai_question_drafts WHERE id = ? AND user_id = ?",
+            rows = conn.execute(query, tuple(params)).fetchall()
+            return [self._serialize_draft(row) for row in rows]
+
+    def get_draft(self, user_id: str, draft_id: str, conn=None) -> Optional[dict]:
+        def _query(c):
+            row = c.execute(
+                self._SELECT_WITH_BANK + " WHERE d.id = ? AND d.user_id = ?",
                 (draft_id, user_id),
             ).fetchone()
-            if not row:
-                return None
-            res = dict(row)
-            res["options"] = json.loads(res.pop("options_json") or "[]")
-            res["tags"] = json.loads(res.pop("tags_json") or "[]")
-            return res
+            return self._serialize_draft(row) if row else None
+
+        if conn is not None:
+            return _query(conn)
+        with transaction(self.db_path) as conn:
+            return _query(conn)
+
+    def get_bank_role(self, user_id: str, bank_id: str, conn=None) -> Optional[str]:
+        def _query(c):
+            row = c.execute(
+                """SELECT m.role
+                   FROM question_bank_members m
+                   JOIN question_banks b ON b.id = m.bank_id AND b.is_deleted = 0
+                   WHERE m.bank_id = ? AND m.user_id = ?""",
+                (bank_id, user_id),
+            ).fetchone()
+            return row[0] if row else None
+
+        if conn is not None:
+            return _query(conn)
+        with transaction(self.db_path) as conn:
+            return _query(conn)
 
     def update_status(self, user_id: str, draft_id: str, status: str, expected_status: str | None = None, conn=None) -> Optional[dict]:
         def _exec(c):

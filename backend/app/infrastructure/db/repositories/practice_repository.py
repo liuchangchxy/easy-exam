@@ -1,10 +1,79 @@
 import json
+import sqlite3
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict
 
 from backend.app.infrastructure.db.connection import transaction
 from backend.app.infrastructure.learning.fsrs_adapter import FSRS5
+
+
+# Fixed namespace so an idempotent retry of the same logical answer can be given
+# a deterministic row id. With a client key the id depends only on the key, so
+# any retry of that key collapses even if the payload changed. Without a key the
+# id also carries the attempt ordinal: two retries that are consecutive in time
+# collapse, but a user legitimately changing A→B→A must still get a fresh row
+# instead of colliding with the historical A attempt.
+_ATTEMPT_NAMESPACE = uuid.UUID("5b0f3c2a-9d1e-4c7b-8a21-6f4e2d9c1b77")
+_SUBJECTIVE_TYPES = {"ESSAY", "SHORT_ANSWER", "SUBJECTIVE"}
+
+
+def _canonical_answer(question_type: str, value: Any) -> tuple:
+    """Return a scoring-equivalent representation used for replay detection.
+
+    Two payloads that score identically must be treated as the same answer, so a
+    retry is not turned into a second attempt just because the client serialized
+    the value differently (e.g. a MULTI list in another order).
+    """
+    type_name = str(question_type or "SINGLE").upper()
+    if type_name == "MULTI":
+        if value is None:
+            return (type_name, ())
+        tokens = set()
+        items = value if isinstance(value, (list, tuple, set)) else [value]
+        for item in items:
+            if item is None:
+                continue
+            tokens.update(char for char in str(item).strip().upper() if char.isalnum())
+        return (type_name, tuple(sorted(tokens)))
+    if type_name == "JUDGE":
+        text = str(value or "").strip().upper()
+        if text in {"TRUE", "1", "正确", "对", "YES", "Y", "T"}:
+            return (type_name, "T")
+        if text in {"FALSE", "0", "错误", "错", "NO", "N", "F"}:
+            return (type_name, "F")
+        return (type_name, text)
+    if isinstance(value, (list, tuple, set)):
+        return (type_name, tuple(sorted(str(item).strip() for item in value)))
+    if isinstance(value, dict):
+        return (type_name, json.dumps(value, sort_keys=True, ensure_ascii=False))
+    text = "" if value is None else str(value)
+    if type_name in _SUBJECTIVE_TYPES:
+        return (type_name, text.strip())
+    return (type_name, text.strip().upper())
+
+
+def _attempt_id_for(
+    user_id: str,
+    session_id: str,
+    question_id: str,
+    canonical_answer: tuple,
+    client_attempt_id: str | None,
+    attempt_seq: int = 0,
+) -> str:
+    if client_attempt_id:
+        seed = f"client|{user_id}|{session_id}|{question_id}|{client_attempt_id}"
+    else:
+        seed = f"answer|{user_id}|{session_id}|{question_id}|{canonical_answer!r}|{attempt_seq}"
+    return str(uuid.uuid5(_ATTEMPT_NAMESPACE, seed))
+
+
+def _loads_json(value, fallback=None):
+    try:
+        return json.loads(value)
+    except (TypeError, ValueError):
+        return fallback if fallback is not None else value
+
 
 
 class PracticeRepository:
@@ -69,6 +138,165 @@ class PracticeRepository:
             )
             return cur.rowcount
 
+    _ATTEMPT_COLUMNS = """id, user_answer_json, correctness, mastery_status, score_ratio,
+                          fsrs_rating, mistake_cause, card_snapshot_json, created_at"""
+
+    def _attempt_rows(self, conn, session_id: str, question_id: str) -> list:
+        return conn.execute(
+            f"""SELECT {self._ATTEMPT_COLUMNS}
+                FROM answer_attempts
+                WHERE session_id = ? AND question_id = ?
+                ORDER BY created_at DESC, rowid DESC""",
+            (session_id, question_id),
+        ).fetchall()
+
+    def _find_replay_attempt(
+        self,
+        conn,
+        question_type: str,
+        canonical_answer: tuple,
+        client_attempt_id: str | None,
+        attempt_id: str,
+        latest,
+    ):
+        """Return the attempt this submission replays, if any.
+
+        A keyed submission replays exactly the row carrying the same key (it may
+        be older than the latest answer, which is a genuinely stale offline
+        replay). An unkeyed legacy submission only replays the *latest* attempt
+        when its answer is scoring-equivalent: that is the "response lost, client
+        retried" case. Matching any older answer would turn a legitimate A→B→A
+        answer change into a phantom replay and permanently deduplicate by
+        answer, so the historical rows are deliberately not scanned.
+        """
+        if client_attempt_id:
+            return conn.execute(
+                f"SELECT {self._ATTEMPT_COLUMNS} FROM answer_attempts WHERE id = ?",
+                (attempt_id,),
+            ).fetchone()
+        if latest is None:
+            return None
+        stored = _loads_json(latest["user_answer_json"], latest["user_answer_json"])
+        if _canonical_answer(question_type, stored) == canonical_answer:
+            return latest
+        return None
+
+    def _settle_duplicate_attempt(
+        self,
+        conn,
+        user_id: str,
+        session: dict,
+        question: dict,
+        existing,
+        latest,
+        fsrs_rating: int | None,
+        mistake_cause: str | None,
+        result: dict,
+    ) -> dict:
+        """Return the existing attempt for a replay instead of inserting again.
+
+        A replay that matches the *latest* attempt may still carry a new FSRS
+        rating/mistake cause (the two-step practice flow), so those attributes
+        are updated on that attempt. A replay that matches an older attempt is
+        stale (e.g. an offline queue drained after a newer manual answer); it
+        must not mutate history or roll the card back.
+        """
+        is_latest = latest is not None and latest["id"] == existing["id"]
+        current_rating = existing["fsrs_rating"]
+        current_cause = existing["mistake_cause"]
+        if is_latest:
+            if fsrs_rating is not None and fsrs_rating != existing["fsrs_rating"]:
+                conn.execute("UPDATE answer_attempts SET fsrs_rating = ? WHERE id = ?", (fsrs_rating, existing["id"]))
+                current_rating = fsrs_rating
+                if result.get("is_objective", True):
+                    existing_dict = dict(existing)
+                    snapshot = json.loads(existing_dict["card_snapshot_json"]) if existing_dict.get("card_snapshot_json") else None
+                    if snapshot is None:
+                        card_row = conn.execute(
+                            "SELECT state, stability, difficulty, due_at, last_review_at FROM fsrs_cards WHERE user_id = ? AND question_id = ?",
+                            (user_id, question["id"]),
+                        ).fetchone()
+                        # 存量/无快照记录安全策略：
+                        # 检查该存量作答是否已在历史上完成过 FSRS 调度
+                        already_scheduled = (
+                            existing_dict.get("fsrs_rating") is not None
+                            or (
+                                card_row is not None
+                                and card_row["last_review_at"] is not None
+                                and existing_dict.get("created_at") is not None
+                                and str(card_row["last_review_at"]).strip() == str(existing_dict["created_at"]).strip()
+                            )
+                        )
+                        if not already_scheduled:
+                            # 未调度过的存量作答（如迁移的未评级作答）：当前卡片（或初始新卡）确为该次作答的初始基准
+                            if card_row:
+                                snapshot = dict(card_row)
+                            else:
+                                snapshot = {"state": 0, "stability": 0.0, "difficulty": 5.0, "due_at": None, "last_review_at": None}
+                            conn.execute(
+                                "UPDATE answer_attempts SET card_snapshot_json = ? WHERE id = ?",
+                                (json.dumps(snapshot, ensure_ascii=False), existing["id"]),
+                            )
+                        # 若 already_scheduled 为 True：
+                        # 该作答此前已在卡片上触发过调度，且无作答前快照。
+                        # 严禁在已被该作答更新过的卡片上二次叠加调度，亦严禁用默认值重置卡片。
+                        # 保持 snapshot 为 None，冻结保护卡片现有状态，仅记录用户评级反馈。
+
+                    if snapshot is not None:
+                        stability = float(snapshot["stability"]) if snapshot.get("stability") is not None else 0.0
+                        difficulty = float(snapshot["difficulty"]) if snapshot.get("difficulty") is not None else 5.0
+                        if existing_dict.get("created_at"):
+                            attempt_time = datetime.fromisoformat(existing_dict["created_at"])
+                            if attempt_time.tzinfo is None:
+                                attempt_time = attempt_time.replace(tzinfo=timezone.utc)
+                        else:
+                            attempt_time = datetime.now(timezone.utc)
+                        elapsed_days = 0.0
+                        if snapshot.get("last_review_at"):
+                            last_review = datetime.fromisoformat(snapshot["last_review_at"])
+                            if last_review.tzinfo is None:
+                                last_review = last_review.replace(tzinfo=timezone.utc)
+                            elapsed_days = max(0.0, (attempt_time - last_review).total_seconds() / 86400)
+                        fsrs_result = self.fsrs.schedule(
+                            rating=fsrs_rating,
+                            stability=stability,
+                            difficulty=difficulty,
+                            elapsed_days=elapsed_days,
+                            now=attempt_time,
+                        )
+                        conn.execute(
+                            """INSERT INTO fsrs_cards(user_id, question_id, state, stability, difficulty, due_at, last_review_at)
+                               VALUES (?, ?, ?, ?, ?, ?, ?)
+                               ON CONFLICT(user_id, question_id) DO UPDATE SET
+                                 state=excluded.state, stability=excluded.stability,
+                                 difficulty=excluded.difficulty, due_at=excluded.due_at,
+                                 last_review_at=excluded.last_review_at""",
+                            (user_id, question["id"], fsrs_result.state, fsrs_result.stability,
+                             fsrs_result.difficulty, fsrs_result.due.isoformat(), attempt_time.isoformat()),
+                        )
+            if mistake_cause is not None:
+                conn.execute("UPDATE answer_attempts SET mistake_cause = ? WHERE id = ?", (mistake_cause, existing["id"]))
+                conn.execute("UPDATE mistake_records SET mistake_cause = ? WHERE user_id = ? AND question_id = ?", (mistake_cause, user_id, question["id"]))
+                current_cause = mistake_cause
+
+        latest_row = latest or existing
+        return {
+            "id": latest_row["id"],
+            "session_id": session["id"],
+            "question_id": question["id"],
+            "user_answer": _loads_json(latest_row["user_answer_json"], latest_row["user_answer_json"]),
+            "correctness": latest_row["correctness"],
+            "mastery_status": latest_row["mastery_status"],
+            "score_ratio": latest_row["score_ratio"],
+            "is_objective": result.get("is_objective", True),
+            "is_correct": latest_row["correctness"] == "CORRECT",
+            "fsrs_rating": current_rating if is_latest else latest_row["fsrs_rating"],
+            "mistake_cause": current_cause if is_latest else latest_row["mistake_cause"],
+            "duplicate": True,
+            "idempotent_replay": True,
+            "replayed_attempt_id": existing["id"],
+        }
+
     def save_attempt(
         self,
         user_id: str,
@@ -78,9 +306,14 @@ class PracticeRepository:
         result: dict,
         fsrs_rating: int | None = None,
         mistake_cause: str | None = None,
+        client_attempt_id: str | None = None,
     ) -> dict:
-        attempt_id = str(uuid.uuid4())
+        canonical_answer = _canonical_answer(question.get("type"), user_answer)
+        client_key = str(client_attempt_id).strip() if client_attempt_id else None
         with transaction(self.db_path) as conn:
+            # Serialize writers before the duplicate check so two simultaneous
+            # retries cannot both observe "no attempt yet" and double-insert.
+            conn.execute("BEGIN IMMEDIATE")
             current_session = conn.execute(
                 "SELECT user_id, is_completed FROM practice_sessions WHERE id = ?",
                 (session["id"],),
@@ -89,97 +322,20 @@ class PracticeRepository:
                 raise LookupError("practice session not found")
             if current_session["is_completed"]:
                 raise ValueError("session already completed")
-            existing = conn.execute(
-                """SELECT id, user_answer_json, correctness, mastery_status, score_ratio, fsrs_rating, card_snapshot_json, created_at
-                   FROM answer_attempts
-                   WHERE session_id = ? AND question_id = ?
-                   ORDER BY created_at DESC LIMIT 1""",
-                (session["id"], question["id"]),
-            ).fetchone()
-            if existing and existing["user_answer_json"] == json.dumps(user_answer, ensure_ascii=False):
-                current_rating = existing["fsrs_rating"]
-                if fsrs_rating is not None and fsrs_rating != existing["fsrs_rating"]:
-                    conn.execute("UPDATE answer_attempts SET fsrs_rating = ? WHERE id = ?", (fsrs_rating, existing["id"]))
-                    current_rating = fsrs_rating
-                    if result.get("is_objective", True):
-                        existing_dict = dict(existing)
-                        snapshot = json.loads(existing_dict["card_snapshot_json"]) if existing_dict.get("card_snapshot_json") else None
-                        if snapshot is None:
-                            card_row = conn.execute(
-                                "SELECT state, stability, difficulty, due_at, last_review_at FROM fsrs_cards WHERE user_id = ? AND question_id = ?",
-                                (user_id, question["id"]),
-                            ).fetchone()
-                            # 存量/无快照记录安全策略：
-                            # 检查该存量作答是否已在历史上完成过 FSRS 调度
-                            already_scheduled = (
-                                existing_dict.get("fsrs_rating") is not None
-                                or (
-                                    card_row is not None
-                                    and card_row["last_review_at"] is not None
-                                    and existing_dict.get("created_at") is not None
-                                    and str(card_row["last_review_at"]).strip() == str(existing_dict["created_at"]).strip()
-                                )
-                            )
-                            if not already_scheduled:
-                                # 未调度过的存量作答（如迁移的未评级作答）：当前卡片（或初始新卡）确为该次作答的初始基准
-                                if card_row:
-                                    snapshot = dict(card_row)
-                                else:
-                                    snapshot = {"state": 0, "stability": 0.0, "difficulty": 5.0, "due_at": None, "last_review_at": None}
-                                conn.execute(
-                                    "UPDATE answer_attempts SET card_snapshot_json = ? WHERE id = ?",
-                                    (json.dumps(snapshot, ensure_ascii=False), existing["id"]),
-                                )
-                            # 若 already_scheduled 为 True：
-                            # 该作答此前已在卡片上触发过调度，且无作答前快照。
-                            # 严禁在已被该作答更新过的卡片上二次叠加调度，亦严禁用默认值重置卡片。
-                            # 保持 snapshot 为 None，冻结保护卡片现有状态，仅记录用户评级反馈。
 
-                        if snapshot is not None:
-                            stability = float(snapshot["stability"]) if snapshot.get("stability") is not None else 0.0
-                            difficulty = float(snapshot["difficulty"]) if snapshot.get("difficulty") is not None else 5.0
-                            if existing_dict.get("created_at"):
-                                attempt_time = datetime.fromisoformat(existing_dict["created_at"])
-                                if attempt_time.tzinfo is None:
-                                    attempt_time = attempt_time.replace(tzinfo=timezone.utc)
-                            else:
-                                attempt_time = datetime.now(timezone.utc)
-                            elapsed_days = 0.0
-                            if snapshot.get("last_review_at"):
-                                last_review = datetime.fromisoformat(snapshot["last_review_at"])
-                                if last_review.tzinfo is None:
-                                    last_review = last_review.replace(tzinfo=timezone.utc)
-                                elapsed_days = max(0.0, (attempt_time - last_review).total_seconds() / 86400)
-                            fsrs_result = self.fsrs.schedule(
-                                rating=fsrs_rating,
-                                stability=stability,
-                                difficulty=difficulty,
-                                elapsed_days=elapsed_days,
-                                now=attempt_time,
-                            )
-                            conn.execute(
-                                """INSERT INTO fsrs_cards(user_id, question_id, state, stability, difficulty, due_at, last_review_at)
-                                   VALUES (?, ?, ?, ?, ?, ?, ?)
-                                   ON CONFLICT(user_id, question_id) DO UPDATE SET
-                                     state=excluded.state, stability=excluded.stability,
-                                     difficulty=excluded.difficulty, due_at=excluded.due_at,
-                                     last_review_at=excluded.last_review_at""",
-                                (user_id, question["id"], fsrs_result.state, fsrs_result.stability,
-                                 fsrs_result.difficulty, fsrs_result.due.isoformat(), attempt_time.isoformat()),
-                            )
-                if mistake_cause is not None:
-                    conn.execute("UPDATE answer_attempts SET mistake_cause = ? WHERE id = ?", (mistake_cause, existing["id"]))
-                    conn.execute("UPDATE mistake_records SET mistake_cause = ? WHERE user_id = ? AND question_id = ?", (mistake_cause, user_id, question["id"]))
-                return {
-                    "id": existing["id"],
-                    "session_id": session["id"],
-                    "question_id": question["id"],
-                    "correctness": existing["correctness"],
-                    "mastery_status": existing["mastery_status"],
-                    "score_ratio": existing["score_ratio"],
-                    "is_objective": result.get("is_objective", True),
-                    "fsrs_rating": current_rating,
-                }
+            rows = self._attempt_rows(conn, session["id"], question["id"])
+            latest = rows[0] if rows else None
+            attempt_id = _attempt_id_for(
+                user_id, session["id"], question["id"], canonical_answer, client_key,
+                attempt_seq=len(rows),
+            )
+            existing = self._find_replay_attempt(
+                conn, question.get("type"), canonical_answer, client_key, attempt_id, latest,
+            )
+            if existing is not None:
+                return self._settle_duplicate_attempt(
+                    conn, user_id, session, question, existing, latest, fsrs_rating, mistake_cause, result,
+                )
 
             now = datetime.now(timezone.utc)
             before_card = conn.execute(
@@ -189,16 +345,32 @@ class PracticeRepository:
             card_snapshot = dict(before_card) if before_card else {"state": 0, "stability": 0.0, "difficulty": 5.0, "due_at": None, "last_review_at": None}
             card_snapshot_json = json.dumps(card_snapshot, ensure_ascii=False)
 
-            conn.execute(
-                """INSERT INTO answer_attempts(
-                    id, user_id, session_id, bank_id, question_id, question_version_id,
-                    user_answer_json, score_ratio, correctness, mastery_status, fsrs_rating, mistake_cause, card_snapshot_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    attempt_id, user_id, session["id"], session["bank_id"], question["id"], question["version_id"],
-                    json.dumps(user_answer, ensure_ascii=False), result["score_ratio"], result["correctness"], result["mastery_status"], fsrs_rating, mistake_cause, card_snapshot_json, now.isoformat(),
-                ),
-            )
+            try:
+                conn.execute(
+                    """INSERT INTO answer_attempts(
+                        id, user_id, session_id, bank_id, question_id, question_version_id,
+                        user_answer_json, score_ratio, correctness, mastery_status, fsrs_rating, mistake_cause, card_snapshot_json, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        attempt_id, user_id, session["id"], question["bank_id"], question["id"], question["version_id"],
+                        json.dumps(user_answer, ensure_ascii=False), result["score_ratio"], result["correctness"], result["mastery_status"], fsrs_rating, mistake_cause, card_snapshot_json, now.isoformat(),
+                    ),
+                )
+            except sqlite3.IntegrityError:
+                # Another writer inserted the same deterministic attempt id
+                # between our check and insert. Treat it as the same replay;
+                # if the row is not ours, the original error is real.
+                rows = self._attempt_rows(conn, session["id"], question["id"])
+                latest = rows[0] if rows else None
+                existing = conn.execute(
+                    f"SELECT {self._ATTEMPT_COLUMNS} FROM answer_attempts WHERE id = ?",
+                    (attempt_id,),
+                ).fetchone()
+                if existing is None:
+                    raise
+                return self._settle_duplicate_attempt(
+                    conn, user_id, session, question, existing, latest, fsrs_rating, mistake_cause, result,
+                )
             current_sess_row = conn.execute("SELECT answers_json FROM practice_sessions WHERE id = ?", (session["id"],)).fetchone()
             answers = json.loads((current_sess_row[0] if current_sess_row else session.get("answers_json")) or "{}")
             answers[question["id"]] = {
@@ -220,28 +392,33 @@ class PracticeRepository:
                 mistakes = 0
                 consecutive = 0
             is_exam = session.get("mode") == "EXAM"
-            # EE-002: Respect record_mistakes configuration for EXAM mode (default True)
+            is_elimination = session.get("mode") == "ELIMINATION"
+            # EE-002: Respect record_mistakes configuration for every session mode
+            # (the field is stored in config_json; exam blueprints may also carry it).
             record_mistakes = True
-            if is_exam:
-                cfg = json.loads(session.get("config_json") or "{}")
-                if "record_mistakes" in cfg:
-                    record_mistakes = bool(cfg["record_mistakes"])
-                elif session.get("blueprint_id"):
-                    bp_row = conn.execute("SELECT blueprint_json FROM exam_blueprints WHERE id = ?", (session["blueprint_id"],)).fetchone()
-                    if bp_row:
-                        bp_dict = json.loads(bp_row[0] or "{}")
-                        if "record_mistakes" in bp_dict:
-                            record_mistakes = bool(bp_dict["record_mistakes"])
+            cfg = json.loads(session.get("config_json") or "{}")
+            if "record_mistakes" in cfg:
+                record_mistakes = bool(cfg["record_mistakes"])
+            elif is_exam and session.get("blueprint_id"):
+                bp_row = conn.execute("SELECT blueprint_json FROM exam_blueprints WHERE id = ?", (session["blueprint_id"],)).fetchone()
+                if bp_row:
+                    bp_dict = json.loads(bp_row[0] or "{}")
+                    if "record_mistakes" in bp_dict:
+                        record_mistakes = bool(bp_dict["record_mistakes"])
 
             if result["correctness"] == "CORRECT":
                 consecutive += 1
                 cleared = int(consecutive >= 2)
             elif result["correctness"] in {"INCORRECT", "PARTIAL"}:
                 consecutive = 0
-                if not is_exam or record_mistakes:
+                if record_mistakes:
                     mistakes += 1
                 cleared = 0
-                if not is_exam or record_mistakes:
+                # SPEC §4.3: only a wrong answer inside the elimination queue may
+                # revive a killed question. Answers submitted from another session
+                # (including stale/offline ones started before the kill) must never
+                # silently take a question out of the kill queue.
+                if record_mistakes and is_elimination:
                     conn.execute("DELETE FROM kill_records WHERE user_id = ? AND question_id = ?", (user_id, question["id"]))
             else:
                 cleared = int(previous["is_cleared"]) if previous else 0
@@ -274,7 +451,7 @@ class PracticeRepository:
                     last_review_at=excluded.last_review_at,
                     mistake_cause=COALESCE(excluded.mistake_cause, mistake_records.mistake_cause),
                     updated_at=CURRENT_TIMESTAMP""",
-                    (user_id, question["id"], session["bank_id"], mistakes, consecutive, mistake_cleared, mistake_cause),
+                    (user_id, question["id"], question["bank_id"], mistakes, consecutive, mistake_cleared, mistake_cause),
                 )
             if not is_exam:
                 if fsrs_rating is None:
@@ -322,9 +499,11 @@ class PracticeRepository:
             "is_correct": result["correctness"] == "CORRECT",
             "fsrs_rating": fsrs_rating,
             "mistake_cause": mistake_cause,
+            "duplicate": False,
+            "idempotent_replay": False,
         }
 
-    def update_draft(self, user_id: str, session_id: str, current_index=None, answers=None, flags=None, time_spent=None) -> dict | None:
+    def update_draft(self, user_id: str, session_id: str, current_index=None, answers=None, flags=None, time_spent=None, base_answers=None) -> dict | None:
         def _is_empty(val):
             if val is None:
                 return True
@@ -341,6 +520,7 @@ class PracticeRepository:
 
         conflicts = []
         with transaction(self.db_path) as conn:
+            conn.execute("BEGIN IMMEDIATE")
             row = conn.execute("SELECT * FROM practice_sessions WHERE id = ? AND user_id = ?", (session_id, user_id)).fetchone()
             if not row:
                 return None
@@ -349,6 +529,7 @@ class PracticeRepository:
             current = dict(row)
             session_questions = json.loads(current.get("questions_json") or "[]")
             allowed_qids = {item["question_id"] for item in session_questions} if session_questions else set()
+            version_ids = {item["question_id"]: item.get("version_id") for item in session_questions}
 
             merged_answers = json.loads(current.get("answers_json") or "{}")
             if answers is not None:
@@ -359,19 +540,58 @@ class PracticeRepository:
                     existing_val = merged_answers.get(q_id)
                     existing_raw = _raw(existing_val)
                     incoming_raw = _raw(incoming_val)
+                    version = conn.execute("SELECT type FROM question_versions WHERE id = ?", (version_ids.get(q_id),)).fetchone()
+                    question_type = version["type"] if version else "SINGLE"
+                    def equivalent(left, right):
+                        return _canonical_answer(question_type, left) == _canonical_answer(question_type, right)
+                    # Replaying an unchanged draft must not strip scored-attempt metadata.
+                    if isinstance(existing_val, dict) and not isinstance(incoming_val, dict) and equivalent(existing_raw, incoming_raw):
+                        continue
                     if _is_empty(incoming_raw):
-                        # P2-3: If all incoming answers in this sync request are empty (e.g. {q: ""}),
-                        # it represents an explicit user clearing action; if some answers are non-empty
-                        # (e.g. device syncing {q1: "", q2: "B"}), do not overwrite existing valid answers.
-                        if not has_non_empty_incoming or _is_empty(existing_raw):
+                        if _is_empty(existing_raw):
+                            merged_answers[q_id] = ""
+                            continue
+                        if base_answers is not None:
+                            # With an observed base, an empty value is an explicit clear by
+                            # this client and must apply even when the same payload also
+                            # edits another question. Only a diverged base is a conflict.
+                            if not equivalent(existing_raw, _raw(base_answers.get(q_id))):
+                                conflicts.append({
+                                    "question_id": q_id,
+                                    "existing_answer": existing_raw,
+                                    "incoming_answer": incoming_raw,
+                                })
+                                continue
+                            merged_answers[q_id] = ""
+                            continue
+                        # P2-3 legacy client (no base snapshot): if all incoming answers in
+                        # this sync request are empty (e.g. {q: ""}), treat it as an explicit
+                        # clear; a mixed payload ({q1: "", q2: "B"}) is ambiguous, so keep
+                        # the existing valid answer rather than dropping it.
+                        if not has_non_empty_incoming:
                             merged_answers[q_id] = ""
                         continue
-                    if not _is_empty(existing_raw) and existing_raw != incoming_raw:
-                        conflicts.append({
-                            "question_id": q_id,
-                            "existing_answer": existing_raw,
-                            "incoming_answer": incoming_raw,
-                        })
+                    if not _is_empty(existing_raw) and not equivalent(existing_raw, incoming_raw):
+                        # Optimistic concurrency for cross-device drafts: the client sends the
+                        # server values it last observed. A difference means another device has
+                        # written since then, so keep the server value and report the conflict
+                        # instead of silently overwriting the other device's answer.
+                        if base_answers is not None:
+                            if not equivalent(existing_raw, _raw(base_answers.get(q_id))):
+                                conflicts.append({
+                                    "question_id": q_id,
+                                    "existing_answer": existing_raw,
+                                    "incoming_answer": incoming_raw,
+                                })
+                                continue
+                        else:
+                            # Legacy client with no base snapshot: keep the historical
+                            # behaviour of accepting the write, but still report it.
+                            conflicts.append({
+                                "question_id": q_id,
+                                "existing_answer": existing_raw,
+                                "incoming_answer": incoming_raw,
+                            })
                     merged_answers[q_id] = incoming_val
 
             if flags is not None:
@@ -471,11 +691,13 @@ class PracticeRepository:
                                   THEN 1 ELSE 0 END AS is_due
                       FROM mistake_records m
                       JOIN learning_records l ON l.user_id = m.user_id AND l.question_id = m.question_id
+                      JOIN questions q ON q.id = m.question_id AND q.is_deleted = 0
                       JOIN bank_question_items i ON i.question_id = m.question_id
                       JOIN question_bank_members qbm ON qbm.bank_id = i.bank_id AND qbm.user_id = m.user_id
                       JOIN question_versions qv ON qv.question_id = l.question_id
                       LEFT JOIN fsrs_cards f ON f.user_id = m.user_id AND f.question_id = m.question_id
-                      WHERE m.user_id = ? AND m.is_cleared = 0
+                      LEFT JOIN kill_records k ON k.user_id = m.user_id AND k.question_id = m.question_id
+                      WHERE m.user_id = ? AND m.is_cleared = 0 AND k.question_id IS NULL
                         AND qv.version_number = (SELECT MAX(version_number) FROM question_versions WHERE question_id = l.question_id)"""
             params = [user_id]
             if bank_id:
@@ -543,6 +765,7 @@ class PracticeRepository:
                          m.mistake_cause, f.due_at,
                          CASE WHEN w.question_id IS NULL THEN 0 ELSE 1 END AS is_weak_flagged
                   FROM fsrs_cards f
+                  JOIN questions q ON q.id = f.question_id AND q.is_deleted = 0
                   JOIN bank_question_items i ON i.question_id = f.question_id
                   JOIN question_bank_members bm ON bm.bank_id = i.bank_id AND bm.user_id = f.user_id
                   JOIN question_versions qv ON qv.question_id = f.question_id
@@ -568,13 +791,28 @@ class PracticeRepository:
                           COALESCE(SUM(a.score_ratio), 0) AS score,
                           SUM(CASE WHEN a.correctness = 'CORRECT' THEN 1 ELSE 0 END) AS correct
                    FROM answer_attempts a
+                   JOIN questions q ON q.id = a.question_id AND q.is_deleted = 0
                    JOIN question_bank_members m ON m.bank_id = a.bank_id AND m.user_id = a.user_id
                    JOIN question_versions qv ON qv.id = a.question_version_id
                    WHERE a.user_id = ? AND UPPER(qv.type) NOT IN ('ESSAY', 'SHORT_ANSWER', 'SUBJECTIVE')""",
                 (user_id,),
             ).fetchone()
-            questions = conn.execute("SELECT COUNT(*) FROM learning_records WHERE user_id = ?", (user_id,)).fetchone()[0]
-            weak = conn.execute("SELECT COUNT(*) FROM learning_records WHERE user_id = ? AND mastery_status IN ('WEAK', 'PARTIAL') AND is_cleared = 0", (user_id,)).fetchone()[0]
+            questions = conn.execute(
+                """SELECT COUNT(*) FROM learning_records lr
+                   JOIN questions q ON q.id = lr.question_id AND q.is_deleted = 0
+                   WHERE lr.user_id = ?""",
+                (user_id,),
+            ).fetchone()[0]
+            weak = conn.execute(
+                """SELECT COUNT(*) FROM learning_records lr
+                   JOIN questions q ON q.id = lr.question_id AND q.is_deleted = 0
+                   WHERE lr.user_id = ? AND lr.mastery_status IN ('WEAK', 'PARTIAL') AND lr.is_cleared = 0
+                     AND NOT EXISTS (
+                       SELECT 1 FROM kill_records k
+                       WHERE k.user_id = lr.user_id AND k.question_id = lr.question_id
+                     )""",
+                (user_id,),
+            ).fetchone()[0]
             return {
                 "attempts": int(totals["attempts"] or 0),
                 "score": round(float(totals["score"] or 0), 2),
@@ -591,6 +829,7 @@ class PracticeRepository:
             bank_params = [bank_id] if bank_id else []
             total = conn.execute(
                 """SELECT COUNT(*) FROM bank_question_items i
+                   JOIN questions q ON q.id = i.question_id AND q.is_deleted = 0
                    JOIN question_bank_members m ON m.bank_id = i.bank_id AND m.user_id = ?
                    WHERE 1=1""" + bank_filter,
                 [user_id, *bank_params],
@@ -603,6 +842,7 @@ class PracticeRepository:
                           COALESCE(SUM(a.time_spent), 0) AS time_spent,
                           COALESCE(SUM(CASE WHEN a.correctness = 'CORRECT' THEN 1 ELSE 0 END), 0) AS correct
                    FROM answer_attempts a
+                   JOIN questions q ON q.id = a.question_id AND q.is_deleted = 0
                    JOIN question_bank_members m ON m.bank_id = a.bank_id AND m.user_id = a.user_id
                    JOIN question_versions qv ON qv.id = a.question_version_id
                    WHERE a.user_id = ? AND UPPER(qv.type) NOT IN ('ESSAY', 'SHORT_ANSWER', 'SUBJECTIVE')""" + attempt_bank_filter + " AND a.created_at >= datetime('now', ?)" ,
@@ -615,6 +855,7 @@ class PracticeRepository:
                           COALESCE(SUM(a.time_spent), 0) AS time_spent,
                           COALESCE(SUM(CASE WHEN a.correctness = 'CORRECT' THEN 1 ELSE 0 END), 0) AS correct
                    FROM answer_attempts a
+                   JOIN questions q ON q.id = a.question_id AND q.is_deleted = 0
                    JOIN question_bank_members m ON m.bank_id = a.bank_id AND m.user_id = a.user_id
                    JOIN question_versions qv ON qv.id = a.question_version_id
                    WHERE a.user_id = ? AND UPPER(qv.type) NOT IN ('ESSAY', 'SHORT_ANSWER', 'SUBJECTIVE')""" + attempt_bank_filter + " AND a.created_at < datetime('now', ?)" ,
@@ -623,6 +864,7 @@ class PracticeRepository:
             due_filter = " AND i.bank_id = ?" if bank_id else ""
             due = conn.execute(
                 """SELECT COUNT(*) FROM fsrs_cards f
+                   JOIN questions q ON q.id = f.question_id AND q.is_deleted = 0
                    JOIN bank_question_items i ON i.question_id = f.question_id
                    JOIN question_bank_members m ON m.bank_id = i.bank_id AND m.user_id = f.user_id
                    LEFT JOIN kill_records k ON k.user_id = f.user_id AND k.question_id = f.question_id
@@ -653,6 +895,7 @@ class PracticeRepository:
         with transaction(self.db_path) as conn:
             lifetime = conn.execute(
                 """SELECT COUNT(DISTINCT a.question_id) FROM answer_attempts a
+                   JOIN questions q ON q.id = a.question_id AND q.is_deleted = 0
                    JOIN question_bank_members m ON m.bank_id = a.bank_id AND m.user_id = a.user_id
                    WHERE a.user_id = ?""" + attempt_bank_filter,
                 [user_id, *bank_params],
@@ -662,9 +905,11 @@ class PracticeRepository:
             weak_rows = conn.execute(
                 """SELECT qv.tags_json, qv.type, m.mistake_count
                    FROM mistake_records m
+                   JOIN questions q ON q.id = m.question_id AND q.is_deleted = 0
                    JOIN question_bank_members mb ON mb.bank_id = m.bank_id AND mb.user_id = m.user_id
                    JOIN question_versions qv ON qv.question_id = m.question_id
-                   WHERE m.user_id = ? AND m.is_cleared = 0
+                   LEFT JOIN kill_records k ON k.user_id = m.user_id AND k.question_id = m.question_id
+                   WHERE m.user_id = ? AND m.is_cleared = 0 AND k.question_id IS NULL
                      AND qv.version_number = (SELECT MAX(version_number) FROM question_versions WHERE question_id = m.question_id)""" + weak_bank_filter,
                 [user_id, *bank_params],
             ).fetchall()
@@ -682,6 +927,7 @@ class PracticeRepository:
 
             reviews_done = conn.execute(
                 """SELECT COUNT(*) FROM answer_attempts a
+                   JOIN questions q ON q.id = a.question_id AND q.is_deleted = 0
                    JOIN practice_sessions s ON s.id = a.session_id
                    WHERE a.user_id = ? AND a.created_at >= datetime('now', ?)
                    AND a.fsrs_rating IS NOT NULL AND s.mode = 'FSRS'""" + attempt_bank_filter,
@@ -782,6 +1028,7 @@ class PracticeRepository:
                 """SELECT k.user_id, k.question_id, k.killed_at, qv.stem, qv.type,
                           i.bank_id
                    FROM kill_records k
+                   JOIN questions q ON q.id = k.question_id AND q.is_deleted = 0
                    JOIN bank_question_items i ON i.question_id = k.question_id
                    JOIN question_bank_members m ON m.bank_id = i.bank_id AND m.user_id = ?
                    JOIN question_versions qv ON qv.question_id = k.question_id

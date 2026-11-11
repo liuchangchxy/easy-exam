@@ -87,6 +87,10 @@ def create_app(db_path: str | None = None, dist_dir: str | Path | None = None) -
         elif exc.status_code == 403 and "cannot edit question while exam is active" in detail_text.lower():
             code = "EXAM_ACTIVE_PROTECTED"
             params = {"detail": detail_text}
+        elif exc.status_code == 503 and detail_text == "AI 未配置或暂不可用":
+            code = "AI_NOT_CONFIGURED"
+        elif exc.status_code in (422, 502) and "AI 变式题生成失败" in detail_text:
+            code = "AI_GENERATION_FAILED"
         elif exc.status_code in (400, 422) and detail_text:
             code = f"HTTP_{exc.status_code}"
             params = {"detail": detail_text}

@@ -1,47 +1,47 @@
 <template>
   <LoginView v-if="!auth.isAuthenticated.value" @authenticated="handleAuthenticated" />
   <div v-else-if="auth.user.value?.must_change_password" class="force-pwd-wrapper">
-    <div class="force-pwd-theme"><ThemeToggle compact /></div>
+    <div class="force-pwd-theme">
+      <ThemeToggle compact />
+    </div>
     <div class="force-pwd-card">
-      <div class="force-pwd-badge">{{ t('ui.k0001') }}</div>
-      <h2>{{ t('ui.k0002') }}</h2>
-      <p class="force-pwd-desc">{{ t('ui.k0003') }}</p>
-
-      <div v-if="changePwdError" class="force-pwd-alert error">{{ changePwdError }}</div>
-      <div v-if="changePwdSuccess" class="force-pwd-alert success">{{ changePwdSuccess }}</div>
-
-      <div class="force-pwd-field">
-        <label>{{ t('ui.k0004') }}</label>
-        <input v-model="oldPassword" type="password" :placeholder="t('ui.k0005')" />
+      <div class="brand" style="margin-bottom: 28px">
+        <span class="brand-mark" aria-hidden="true">易</span>
+        <span class="brand-text">
+          <span class="brand-name">{{ t('ep.brand.name') }}</span>
+          <span class="brand-sub">{{ t('ep.brand.sub') }}</span>
+        </span>
       </div>
-      <div class="force-pwd-field">
-        <label>{{ t('ui.k0006') }}</label>
-        <input v-model="newPassword" type="password" :placeholder="t('ui.k0007')" />
+      <div class="page-eyebrow">{{ t('ep.auth.force_title') }}</div>
+      <h2 class="force-pwd-title">{{ t('ep.auth.force_title') }}</h2>
+      <p class="force-pwd-desc">{{ t('ep.auth.force_lede') }}</p>
+
+      <div v-if="changePwdError" class="notice bad">{{ changePwdError }}</div>
+      <div v-if="changePwdSuccess" class="notice ok">{{ changePwdSuccess }}</div>
+
+      <div class="field">
+        <label class="label" for="force-old">{{ t('ep.auth.old_password') }}</label>
+        <input id="force-old" v-model="oldPassword" class="input" type="password" :placeholder="t('ep.auth.old_password')" />
       </div>
-      <div class="force-pwd-field">
-        <label>{{ t('ui.k0008') }}</label>
-        <input v-model="confirmPassword" type="password" :placeholder="t('ui.k0009')" />
+      <div class="field">
+        <label class="label" for="force-new">{{ t('ep.auth.new_password') }}</label>
+        <input id="force-new" v-model="newPassword" class="input" type="password" :placeholder="t('ep.auth.new_password')" />
+        <div class="hint">{{ t('ep.auth.password_rule') }}</div>
+      </div>
+      <div class="field">
+        <label class="label" for="force-confirm">{{ t('ep.auth.confirm_password') }}</label>
+        <input id="force-confirm" v-model="confirmPassword" class="input" type="password" :placeholder="t('ep.auth.confirm_password')" />
       </div>
 
       <div class="force-pwd-actions">
-        <button class="primary-btn" :disabled="submittingPwd" @click="handleForceChangePassword">
-          {{ submittingPwd ? t('ui.k0640') : t('ui.k0641') }}
+        <button type="button" class="btn btn-primary" :disabled="submittingPwd" @click="handleForceChangePassword">
+          {{ submittingPwd ? t('ep.auth.changing_password') : t('ep.auth.change_password') }}
         </button>
-        <button class="secondary-btn" @click="auth.logout">{{ t('ui.k0010') }}</button>
+        <button type="button" class="btn btn-quiet" @click="auth.logout">{{ t('ep.account.logout') }}</button>
       </div>
     </div>
   </div>
   <router-view v-else />
-  <!--
-    Architectural View Manifest & Integration Contracts:
-    Delegated and managed via Vue Router (src/router/index.js) and Layouts (src/layouts/AppLayout.vue):
-    <HomeView @mock-exam="startExam" />
-    <PracticeViewV1 />
-    <LearningView />
-    <MistakesView />
-    <ImportView />
-    <ExamView />
-  -->
 </template>
 
 <script setup>
@@ -76,27 +76,25 @@ async function handleForceChangePassword() {
   changePwdError.value = ''
   changePwdSuccess.value = ''
   if (!oldPassword.value) {
-    changePwdError.value = t('ui.k0030')
+    changePwdError.value = t('ep.auth.error_required')
     return
   }
   if (!newPassword.value || newPassword.value.length < 8) {
-    changePwdError.value = t('ui.k0031')
+    changePwdError.value = t('ep.auth.password_rule')
     return
   }
   if (newPassword.value !== confirmPassword.value) {
-    changePwdError.value = t('ui.k0032')
+    changePwdError.value = t('ep.auth.password_mismatch')
     return
   }
 
   submittingPwd.value = true
   try {
     await changePassword(auth.token.value, oldPassword.value, newPassword.value)
-    changePwdSuccess.value = t('ui.k0033')
-    if (auth.user.value) {
-      auth.user.value.must_change_password = false
-    }
+    changePwdSuccess.value = t('common.success')
+    if (auth.user.value) auth.user.value.must_change_password = false
   } catch (err) {
-    changePwdError.value = err.message || t('ui.k0034')
+    changePwdError.value = err.message || t('common.error')
   } finally {
     submittingPwd.value = false
   }
@@ -106,118 +104,49 @@ async function handleForceChangePassword() {
 <style scoped>
 .force-pwd-wrapper {
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-page);
-  padding: 1rem;
+  display: grid;
+  place-items: center;
+  background: var(--paper);
+  padding: 24px;
 }
+
 .force-pwd-theme {
   position: fixed;
-  top: 1rem;
-  right: 1rem;
+  top: 18px;
+  right: 22px;
   z-index: 2;
 }
+
 .force-pwd-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  box-shadow: var(--shadow-lg);
-  padding: 2.5rem;
-  max-width: 440px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
+  padding: 32px;
+  max-width: 420px;
   width: 100%;
 }
-.force-pwd-badge {
-  display: inline-block;
-  padding: 0.25rem 0.6rem;
-  background: var(--danger-light);
-  color: var(--danger-fg, var(--danger));
-  font-size: 0.75rem;
+
+.force-pwd-title {
+  font-family: var(--font-serif);
+  font-size: 28px;
   font-weight: 600;
-  border-radius: 9999px;
-  margin-bottom: 0.75rem;
+  margin: 4px 0 8px;
 }
+
 .force-pwd-desc {
-  color: var(--text-muted);
-  font-size: 0.875rem;
-  line-height: 1.5;
-  margin-top: 0.5rem;
-  margin-bottom: 1.5rem;
+  color: var(--ink-3);
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0 0 20px;
 }
-.force-pwd-alert {
-  padding: 0.75rem 1rem;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  margin-bottom: 1rem;
-}
-.force-pwd-alert.error {
-  background: var(--danger-light);
-  color: var(--danger-fg, var(--danger));
-  border: 1px solid var(--danger-border);
-}
-.force-pwd-alert.success {
-  background: var(--success-light);
-  color: var(--success-fg, var(--success));
-  border: 1px solid var(--success-border);
-}
-.force-pwd-field {
-  margin-bottom: 1rem;
-}
-.force-pwd-field label {
-  display: block;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--text-main);
-  margin-bottom: 0.35rem;
-}
-.force-pwd-field input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 0.65rem 0.85rem;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  color: var(--text-main);
-  background: var(--bg-page);
-  font-size: 0.875rem;
-  outline: none;
-  transition: border-color 0.2s;
-}
-.force-pwd-field input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
-}
+
 .force-pwd-actions {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 1.5rem;
+  gap: 8px;
+  margin-top: 22px;
 }
-.primary-btn {
-  width: 100%;
-  padding: 0.75rem;
-  background: var(--primary);
-  color: var(--on-primary);
-  border: none;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-}
-.primary-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.secondary-btn {
-  width: 100%;
-  padding: 0.65rem;
-  background: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-.secondary-btn:hover {
-  background: var(--bg-subtle);
-}
+
+.force-pwd-actions .btn { height: 38px; }
 </style>

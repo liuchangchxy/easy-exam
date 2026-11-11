@@ -6,8 +6,8 @@
 
 ## 1. 审计与执行快照
 
-- **最新执行日期**：2026-09-27
-- **执行范围**：EE-001 至 EE-021 台账闭环复核 + FPK 离线安装时序修复（commit `48bfa85`）的源码、实机与本地全套复跑。
+- **最新执行日期**：2026-11-11（四主题与批量题库维护批次，见第 9 节；第 1～8 节保留 2026-09-27 至 2026-10-26 的历史快照，不随后续批次改写）
+- **执行范围**：2026-09-27 的历史范围是 EE-001 至 EE-021 台账闭环复核 + FPK 离线安装时序修复（commit `48bfa85`）的源码、实机与本地全套复跑；2026-11-11 的范围见第 9 节。
 - **代码状态**：工作树在 HEAD `48bfa85` 上无未提交改动（仅一个未跟踪的 `NUL` 文件）。FPK `1.0.2` 已实机安装验证。
 - **验证结论汇总（2026-09-27 本轮实跑）**：
   - Python 后端全量测试：`python -m unittest discover -s tests` → **205 通过、0 失败、0 错误、1 跳过** (104.8s)。唯一跳过项为 `test_remote_fnos_e2e.setUpClass`，原因"远程 fnOS 不可达 (HTTP 404)"。
@@ -331,3 +331,75 @@ EE-001 至 EE-021 **全部 21 项**已完成源码级修复、单元测试、前
 - **旧镜像问题已不适用**：`1.0.19` / `1797a03` 的 `/auth/me` 泄露 `password_hash` 与 JUDGE 未归一化，在 exact-head 代码中均已修复（`backend/app/api/routes/auth.py:40-44`、`backend/app/domain/content/validators.py:118-130`、`backend/app/domain/learning/scoring.py`）。上一轮把旧镜像结果当作本 PR 验收证据属归属错误，已由本轮替换。
 - **跳过口径**：上述 skip 全部为阶段门控，不是断言性跳过；本链路无未执行的目标用例。
 - **本轮门禁（含未通过项）**：`python scripts/guard_test_tampering.py` exit 0；`python -m pytest tests/ -q` → **2 failed, 264 passed, 3 skipped**，两个失败均为硬编码路径门禁，唯一原因是本机 untracked 且被 `.gitignore:50` 忽略的 `scratch/vccp-status-baseline.json`（含 VCCP 运行时绝对路径，从未提交），与本轮改动无关。该两项在本轮**未通过**，不并入"全绿"结论。
+
+## 9. 2026-11-11 PR 90 四主题与批量题库维护（本轮实跑）
+
+> 本节只登记本轮实际执行。第 1～8 节的历史数字不因本节改写；本节**不宣布 UI 审美验收通过**，也不宣布任何内容已部署。
+
+### 9.1 审计对象与版本归属
+
+| 项 | 值 |
+|---|---|
+| 分支 / PR | `feat/editorial-precision-ui` / PR #90 |
+| 工作树 | 含未提交改动（四主题、批量题库维护、迁移 18 等） |
+| 本地 HEAD | `55e19aabc11681f49eec31f03ec790682656e614`（`fix(ui): render bank detail stems as plain text`） |
+| fnOS 实机运行 revision | `55e19aabc11681f49eec31f03ec790682656e614`（`GET /api/v1/health` 的 `commit_sha`） |
+| 归属结论 | 实机运行的是 HEAD 提交，**不包含**工作树中的四主题与批量维护改动。本节任何结果都不得写成“已在 fnOS 验证通过” |
+
+### 9.2 本轮实际运行证据
+
+| 层级 / 环节 | 命令 | 实际结果 | 状态 |
+|---|---|---|---|
+| 后端批量维护专项 | `python -m unittest tests.test_bank_batch_operations -v` | **6 passed, 0 failed, 0 skipped** | 通过 |
+| 后端全量 | `python -m unittest discover -s tests -v` | 运行 **420** 个用例：**419 passed, 0 failed, 0 errors, 1 skipped**（`test_remote_fnos_e2e.setUpClass`，`FNOS_BASE_URL` 未设置） | 通过（含 1 环境性 skip） |
+| 前端主题契约 | `node --test frontend/tests/theme.test.js` | **25 passed, 0 failed, 0 skipped** | 通过 |
+| 前端题库管理领域 | `node --test frontend/tests/bank_manage.test.js` | **22 passed, 0 failed, 0 skipped** | 通过 |
+| 前端 Node/契约合集 | `node --test tests/exam.test.js tests/sync.test.js tests/practice.test.js tests/theme.test.js tests/locale.test.js tests/bank_manage.test.js tests/issue_57_consistency.test.js`（在 `frontend/` 下） | **109 passed, 0 failed, 0 skipped** | 通过 |
+| 前端单元 + 组件集成 | `npm --prefix frontend run test:unit`（含本地化守卫 + 上述 Node 套件 + Vitest） | Node **109 passed**；Vitest **54 passed / 13 files**；0 failed, 0 skipped | 通过 |
+| 快速门禁 | `python scripts/verify.py fast` | 4/4 步骤通过（空白、测试篡改守卫、硬编码路径、前端单元与组件），约 18s（逐次浮动） | 通过 |
+| 批量维护真实浏览器 E2E | `node frontend/tests/bank_batch_e2e.test.js` | **1 passed, 0 failed, 0 skipped**；真实后端 + Chromium，覆盖全选、批量章节、复制、归档/恢复、抽屉版本历史、免 UUID 复制、375px 批量栏与页面横向溢出 | 通过 |
+
+### 9.3 需求到源码与测试的映射
+
+| 确认需求 | 源码 | 测试 / 证据 | 状态与边界 |
+|---|---|---|---|
+| 四套配色（Editorial / Gruvbox / Everforest / Catppuccin） | `frontend/src/design/themePreference.js`；`frontend/src/composables/useTheme.js`；`frontend/src/style.css`；`frontend/src/views/SettingsView.vue` | `theme.test.js` 四族 × 明暗 token 断言；`settings_view.test.js`（Vitest） | 契约级通过；未做四配色逐视口真实浏览器审美审计 |
+| 配色与明暗独立、light/dark/system、持久化、零闪烁 | `themePreference.js`（`THEME_PALETTES`、`THEME_MODES`、读写函数）；`useTheme.js`；`main.js` | `theme.test.js`（palette/mode 独立性、system、读写、`applyFullTheme`）；零闪烁为 `main.js` 在 `app.mount()` 前调用 `initializeTheme()` 的源码顺序证据 | 通过（零闪烁无专门断言，未做首帧录制） |
+| 自定义强调色在四族与明暗下保持 AA | `themePreference.js`（`getAccessibleForeground`、`applyAccentPreference`） | `theme.test.js`（AA ≥ 4.5:1、合成表面、base/hover/active 前景） | 通过（数学与 token 层） |
+| 旧配色 id 自动归并，不静默重置 | `themePreference.js`（`LEGACY_PALETTE_ALIASES`） | `theme.test.js`（`applyFullTheme ... including legacy palette ids`） | 通过（单元层）；未做真实升级浏览器复现 |
+| 批量章节/加标签/移除标签 | `backend/app/api/routes/banks.py`；`backend/app/application/bank_service.py`；`question_repository.batch_mutate_questions`；`frontend/src/domain/bankManage.js`；`BankManageView.vue` | `tests/test_bank_batch_operations.py`（6 通过）；`bank_manage.test.js`（22 通过）；`bank_batch_e2e.test.js`（通过） | 通过；元数据操作不推版本由后端测试断言 |
+| 批量移动/复制到其他题库 | 同上（`move`/`copy`） | 后端专项覆盖复制新身份/版本 1、移动后源库不再包含该题、目标库权限 403；浏览器 E2E 覆盖复制 | 通过；`move` 的浏览器路径未在本轮 E2E 中单独驱动 |
+| 整批原子，失败无部分写入 | `batch_mutate_questions` 单事务；前端 `buildBatchRequest` | 后端专项：非法章节、成员越权、模考锁定均断言未部分更新 | 通过 |
+| 仅 ADMIN/EDITOR；MEMBER 403 | `_require_bank_editor`（源库与目标库） | 后端专项覆盖成员归档与复制越权 | 通过（API 层） |
+| 进行中模考锁定不可批量修改 | `_get_active_exam_question_ids` + 批量事务内检查 | 后端专项 `test_batch_rejects_members_and_locked_batches_atomically` | 通过 |
+| 归档从内容/刷题/专项隐藏，可恢复，归档期不可编辑 | `is_deleted` 软删除；`list_content_for_bank`；`BankManageView` 归档视图 | 后端专项覆盖内容列表与练习列表隐藏、归档后编辑 400、批量操作 400；错题/FSRS/斩杀查询在 `practice_repository` 统一过滤 `is_deleted` 属源码核对，本轮未新增归档题专项断言；浏览器 E2E 覆盖归档徽标与恢复 | 通过（专项队列过滤为源码核对） |
+| 批量上限 500、非法操作与空集合拒绝 | `BatchQuestionsPayload`（1..500）；`BATCH_OPERATIONS` | 后端专项（422 / 400） | 通过 |
+| 每次批量写审计日志 | `audit_logs` action `BANK_QUESTIONS_BATCH` | 代码实现；**没有测试直接断言审计行内容** | 实现存在，测试缺口未关闭 |
+| 移动端批量栏不横向溢出 | `BankManageView.vue` `.batch-bar` | 浏览器 E2E 在 375px 断言 `scrollWidth <= innerWidth + 1` | 通过（单页、单场景） |
+
+### 9.4 未运行、未验证与环境性跳过（不得据此称为全绿或 UI accepted）
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| `python scripts/verify.py ui` | **未运行**（本轮文档/预检批次） | 需要另跑真实交互门禁；PR 正文所述历史 PASS 不能代表当前工作树 |
+| `python scripts/verify.py full` | **未运行**（本轮文档/预检批次） | 同上 |
+| 四配色逐视口真实浏览器审美验收 | **未运行** | 本轮只有 token 级对比度与组件测试，不构成视觉验收 |
+| 批量移动的浏览器端 E2E | **未运行** | 后端已覆盖 `move`，浏览器脚本只驱动复制 |
+| 审计日志内容断言 | **缺口** | 见 9.3「每次批量写审计日志」行 |
+| 远程 fnOS API / 浏览器 E2E | **未运行（环境门控）** | `test_remote_fnos_e2e` 在 `FNOS_BASE_URL` 未设置时 `skipped`；这是环境性跳过，不是断言性跳过。浏览器入口 `physical_fnos_browser_e2e.mjs` 需 `FNOS_BASE_URL` + `FNOS_E2E_EXPECTED_SHA`，本轮未设置 |
+| fnOS 部署 | **未执行** | 仅做只读预检，见 9.5；未部署、未重启容器、未写入数据、未输出任何凭据 |
+
+### 9.5 fnOS 部署预检（只读，2026-11-11）
+
+> 本节只记录非破坏性识别结果，**没有执行部署**，也没有读取或输出任何密钥值。
+
+| 预检项 | 发现 |
+|---|---|
+| 访问方式 | SSH 别名 `nas`（`192.168.100.11:22`，用户 `chang`）；密钥免交互登录可用（`BatchMode=yes` 返回可达，主机名 `FnNas`）。HTTP `http://192.168.100.11:3000/api/v1/health` 返回 **200** |
+| 目标环境 | fnOS（Debian 12 bookworm 基础，x86_64；平台版本号本轮未独立读取）；容器 `easy-exam-fpk`，状态 `Up (healthy)`；镜像 `easyexam-exacthead:55e19aabc11681f49eec31f03ec790682656e614`；`target` compose 使用该 exact-head 镜像且 `pull_policy: never` |
+| 实机版本 | `/var/apps/easy-exam/manifest` 的 `version = 1.0.19`；仓库 `fpk/easy-exam/manifest` 为 `1.0.17`。**存在版本漂移**：不能把仓库当前 1.0.17 包直接覆盖到 1.0.19 实机 |
+| 数据保护 | 数据库 `/vol4/@appdata/easy-exam/easyexam-v1.db`（约 1.6 MB，`PRAGMA quick_check = ok`，32 张表）。已有备份含 `easyexam-v1.db.backup-pr90-55e19aa-20261110-214008`、`docker-compose.yaml.backup-pr90-55e19aa-20261110-214008` 及多份历史 DB/`.env` 备份。磁盘 `/vol4` 余量约 321 GB |
+| 迁移状态 | 实机 `schema_migrations` 已应用 **17** 个版本（最后 2026-09-27）；本地工作树新增**迁移 18**（`personal_assets` 增加 `file_name` / `mime_type` / `storage_key`，仅 `ALTER TABLE ADD COLUMN`）。部署当前工作树会触发该迁移，必须先备份 |
+| 凭据是否具备 | SSH 密钥与 `sudo -n` 均可用；Docker 28.5.2 与 Compose v2.40.3 可用；`/vol4/@appdata/easy-exam/.env` 存在且权限 `600`，其中 `EASYEXAM_SECRET_KEY` 存在（只做存在性计数，未读取值）。`appcenter-cli` 需经 `sudo` 执行 |
+| 版本部署步骤（预检结论） | 1) 以被验收 revision 构建镜像并注入 `EASYEXAM_BUILD_SHA`；2) 备份 DB 与 `.env`；3) 同步 `manifest` / compose 镜像 tag / 随包镜像 tag 三处版本；4) 停止应用、载入镜像、启动；5) 核对 `/api/v1/health` 的 `commit_sha`、`schema_migrations` 与关键实体计数；6) 用 `FNOS_E2E_EXPECTED_SHA` 强约束的入口复跑。**以上均未执行**。注意：实机 `sudo appcenter-cli status easy-exam` 实际输出 `start`（exit 0），`docs/FNOS_FPK_GUIDE.md` 写的 `running` 与实机输出不一致，验收脚本不应按 `running` 字符串断言 |
+| 未满足项 | 仓库 manifest 与实机 `1.0.19` 不一致；当前工作树未提交、未构建、未注入 SHA；迁移 18 尚未在实机应用 |

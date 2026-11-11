@@ -1,6 +1,6 @@
 <template>
-  <div v-if="isOpen" class="cmd-palette-backdrop" @click.self="close" @keydown.esc="close">
-    <div class="cmd-palette-modal" role="dialog" aria-modal="true">
+  <div v-if="isOpen" class="cmd-palette-backdrop" @click.self="close">
+    <div ref="modalRef" class="cmd-palette-modal" role="dialog" aria-modal="true">
       <!-- 搜索输入栏 -->
       <div class="cmd-palette-search-row">
         <LinearIcon name="search" size="18" class="cmd-search-icon" />
@@ -44,7 +44,12 @@
             </div>
             <div class="cmd-item-right">
               <span class="cmd-bank-count">{{ bank.question_count }} {{ t('home.questions_count', { count: bank.question_count }) }}</span>
-              <span class="cmd-action-hint">{{ t('commands.bank_action_practice') }} ↵</span>
+              <button
+                type="button"
+                class="cmd-bank-practice"
+                @click.stop="practiceBank(bank)"
+              >{{ t('commands.bank_action_practice') }}</button>
+              <span class="cmd-action-hint">{{ t('commands.bank_action_open') }} ↵</span>
             </div>
           </div>
         </template>
@@ -113,12 +118,14 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['execute', 'select-bank'])
+const emit = defineEmits(['execute', 'select-bank', 'practice-bank'])
 
 const isOpen = ref(false)
 const query = ref('')
 const currentFlatIndex = ref(0)
 const inputRef = ref(null)
+const modalRef = ref(null)
+let lastFocusedElement = null
 
 // 匹配题库
 const matchedBanks = computed(() => {
@@ -151,6 +158,10 @@ watch([matchedBanks, matchedCommands], () => {
 })
 
 function open() {
+  if (isOpen.value) return
+  // Remember the trigger so Escape, outside click and row selection all return
+  // focus to where the palette was opened from.
+  lastFocusedElement = typeof document !== 'undefined' ? document.activeElement : null
   isOpen.value = true
   query.value = ''
   currentFlatIndex.value = 0
@@ -160,7 +171,13 @@ function open() {
 }
 
 function close() {
+  if (!isOpen.value) return
   isOpen.value = false
+  const target = lastFocusedElement
+  lastFocusedElement = null
+  nextTick(() => {
+    if (target && typeof target.focus === 'function' && document.contains(target)) target.focus()
+  })
 }
 
 function moveSelection(step) {
@@ -172,6 +189,11 @@ function moveSelection(step) {
 function selectBank(bank) {
   close()
   emit('select-bank', bank)
+}
+
+function practiceBank(bank) {
+  close()
+  emit('practice-bank', bank)
 }
 
 function execute(cmd) {
@@ -199,12 +221,59 @@ function handleKeydown(e) {
   }
 }
 
+function getFocusableElements() {
+  const root = modalRef.value
+  if (!root) return []
+  return Array.from(root.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  ))
+}
+
+/**
+ * Document-level keys while open:
+ *  - Escape closes even after focus would otherwise have left the modal.
+ *  - Tab is trapped inside the modal instead of walking into the page behind it.
+ */
+function handleDocumentKeydown(e) {
+  if (!isOpen.value) return
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    close()
+    return
+  }
+  if (e.key !== 'Tab') return
+
+  const focusable = getFocusableElements()
+  const root = modalRef.value
+  if (!focusable.length || !root) {
+    e.preventDefault()
+    inputRef.value?.focus()
+    return
+  }
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  const active = document.activeElement
+  const inside = active && root.contains(active)
+
+  if (e.shiftKey) {
+    if (!inside || active === first) {
+      e.preventDefault()
+      last.focus()
+    }
+  } else if (!inside || active === last) {
+    e.preventDefault()
+    first.focus()
+  }
+}
+
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
+  document.addEventListener('keydown', handleDocumentKeydown)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
+  document.removeEventListener('keydown', handleDocumentKeydown)
 })
 
 defineExpose({ open, close })
@@ -214,264 +283,173 @@ defineExpose({ open, close })
 .cmd-palette-backdrop {
   position: fixed;
   inset: 0;
-  background: color-mix(in srgb, var(--text-main) 45%, transparent);
-  backdrop-filter: blur(10px);
   z-index: 9999;
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: 10vh;
-  animation: cmdFadeIn 140ms cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 9vh 16px 16px;
+  background: color-mix(in srgb, var(--ink) 38%, transparent);
+  backdrop-filter: blur(2px);
 }
-
-@keyframes cmdFadeIn {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
 .cmd-palette-modal {
-  width: min(100% - 2rem, 640px);
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.22);
-  overflow: hidden;
+  width: min(100%, 600px);
+  max-height: 74vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
 }
-
 .cmd-palette-search-row {
   display: flex;
   align-items: center;
-  padding: 0.95rem 1.15rem;
-  border-bottom: 1px solid var(--border-subtle);
-  gap: 0.75rem;
-  background: var(--bg-page);
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
 }
-
-.cmd-search-icon {
-  color: var(--primary-fg, var(--primary));
-  flex-shrink: 0;
-}
-
+.cmd-search-icon { color: var(--ink-3); flex-shrink: 0; }
 .cmd-palette-input {
   flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
   background: transparent;
-  border: none;
-  outline: none;
-  color: var(--text-main);
-  font-size: 0.95rem;
-  font-family: inherit;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
 }
-
-.cmd-palette-input::placeholder {
-  color: var(--text-tertiary);
-  font-size: 0.88rem;
+.cmd-palette-input::placeholder { color: var(--ink-4); }
+.cmd-palette-esc-badge,
+.cmd-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--ink-3);
 }
-
-.cmd-palette-esc-badge {
-  padding: 2px 7px;
-  background: var(--bg-subtle);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font-size: 0.68rem;
-  font-family: var(--linear-mono, monospace);
-  color: var(--text-muted);
-}
-
 .cmd-palette-list {
-  max-height: 380px;
   overflow-y: auto;
-  padding: 0.5rem;
+  padding: 6px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
-
 .cmd-group-label {
-  font-size: 0.68rem;
-  font-weight: 600;
+  padding: 10px 10px 4px;
+  font-family: var(--font-sans);
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: .09em;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-tertiary);
-  padding: 0.45rem 0.65rem 0.25rem;
+  color: var(--ink-4);
 }
-
 .cmd-palette-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.55rem 0.75rem;
-  border-radius: 8px;
+  gap: 12px;
+  padding: 9px 10px;
+  border-left: 2px solid transparent;
   cursor: pointer;
-  transition: all 90ms ease;
   user-select: none;
-  gap: 0.75rem;
 }
-
 .cmd-palette-item:hover,
-.cmd-palette-item.active {
-  background: var(--primary-light);
-}
-
-.cmd-palette-item.active .cmd-item-title {
-  color: var(--primary-fg, var(--primary));
-}
-
-.cmd-item-left {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  min-width: 0;
-  flex: 1;
-}
-
+.cmd-palette-item.active { background: var(--surface-2); border-left-color: var(--brand); }
+.cmd-item-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
 .cmd-icon-gem {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 24px;
+  height: 24px;
   flex-shrink: 0;
+  color: var(--ink-3);
 }
-
-.bank-gem {
-  background: var(--primary-light);
-  color: var(--primary-fg, var(--primary));
-  border: 1px solid var(--primary-border);
-}
-
-.action-gem {
-  background: var(--bg-subtle);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-}
-
-.cmd-palette-item.active .action-gem {
-  background: var(--primary);
-  color: var(--on-primary);
-  border-color: var(--primary);
-}
-
-.cmd-item-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-
-.cmd-item-title-row {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  min-width: 0;
-}
-
+.bank-gem { color: var(--brand); }
+.action-gem { color: var(--ink-3); }
+.cmd-palette-item.active .action-gem { color: var(--brand); }
+.cmd-item-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.cmd-item-title-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .cmd-item-title {
-  font-size: 0.88rem;
-  font-weight: 500;
-  color: var(--text-main);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .cmd-bank-category-pill {
-  font-size: 0.68rem;
-  padding: 1px 6px;
-  border-radius: 10px;
-  background: var(--bg-subtle);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--ink-4);
   flex-shrink: 0;
 }
-
 .cmd-item-desc {
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
+  font-size: 11.5px;
+  color: var(--ink-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-.cmd-item-right {
-  display: flex;
+.cmd-item-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.cmd-bank-count { font-family: var(--font-mono); font-size: 10px; color: var(--ink-4); }
+.cmd-bank-practice {
+  display: inline-flex;
   align-items: center;
-  gap: 0.65rem;
-  flex-shrink: 0;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 10.5px;
+  white-space: nowrap;
+  transition: border-color .12s var(--ease), color .12s var(--ease);
 }
-
-.cmd-bank-count {
-  font-size: 0.75rem;
-  font-family: var(--linear-mono, monospace);
-  color: var(--text-muted);
-}
-
+.cmd-bank-practice:hover { border-color: var(--brand); color: var(--brand); }
 .cmd-action-hint {
-  font-size: 0.72rem;
-  color: var(--primary-fg, var(--primary));
-  font-weight: 500;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--brand);
   opacity: 0;
-  transition: opacity 100ms ease;
 }
-
-.cmd-palette-item.active .cmd-action-hint {
-  opacity: 1;
-}
-
-.cmd-item-shortcut {
-  font-size: 0.68rem;
-  font-family: var(--linear-mono, monospace);
-  color: var(--text-tertiary);
-  opacity: 0.8;
-}
-
+.cmd-palette-item.active .cmd-action-hint { opacity: 1; }
+.cmd-item-shortcut { font-family: var(--font-mono); font-size: 10px; color: var(--ink-4); }
 .cmd-palette-empty {
-  padding: 2.5rem 1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.65rem;
-  color: var(--text-tertiary);
-  font-size: 0.85rem;
+  gap: 8px;
+  padding: 36px 16px;
+  color: var(--ink-4);
+  font-size: 12.5px;
 }
-
-.empty-icon {
-  opacity: 0.4;
-}
-
+.cmd-palette-empty p { margin: 0; }
 .cmd-palette-footer {
-  padding: 0.65rem 1rem;
-  background: var(--bg-page);
-  border-top: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
+  gap: 12px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+  font-size: 10.5px;
+  color: var(--ink-3);
 }
-
-.cmd-footer-hint {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-}
-
-.cmd-key {
-  padding: 1px 4px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  font-family: var(--linear-mono, monospace);
-  font-size: 0.68rem;
-  color: var(--text-muted);
-}
-
-.cmd-footer-tag {
-  font-family: var(--linear-mono, monospace);
-  font-size: 0.68rem;
-  opacity: 0.7;
+.cmd-footer-hint { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.cmd-footer-tag { font-family: var(--font-mono); font-size: 9.5px; color: var(--ink-4); }
+@media (max-width: 480px) {
+  .cmd-palette-backdrop { padding-top: 6vh; }
+  .cmd-footer-tag { display: none; }
+  .cmd-bank-count { display: none; }
 }
 </style>

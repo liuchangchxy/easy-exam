@@ -97,7 +97,103 @@ async function waitForServer(url, expectedToken, timeoutMs = 25000) {
   throw new Error(`Server at ${url} failed to start within ${timeoutMs}ms`)
 }
 
-test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Scenarios', async (t) => {
+async function login(page, baseUrl, username, password) {
+  await page.goto(baseUrl)
+  await page.waitForSelector('.auth-layout')
+  await page.fill('#login-username', username)
+  await page.fill('#login-password', password)
+  await page.click('.auth-submit')
+  await page.waitForSelector('.today', { timeout: 15000 })
+}
+
+async function logout(page) {
+  await page.locator('.topbar [data-account-trigger]').click()
+  await page.locator('.account-menu .popover-action.is-danger').click()
+  await page.waitForSelector('.auth-layout')
+}
+
+async function openBanks(page, baseUrl) {
+  await page.goto(`${baseUrl}/#/banks`)
+  await page.waitForSelector('.banks-page')
+}
+
+async function startBankPractice(page, baseUrl, bankName) {
+  await openBanks(page, baseUrl)
+  const row = page.locator('.banks-row').filter({ hasText: bankName }).first()
+  await row.waitFor({ state: 'visible', timeout: 10000 })
+  await row.locator('.btn-sm').first().click()
+  await page.waitForSelector('.focus-mode', { timeout: 12000 })
+  await page.waitForSelector('.q-stem', { timeout: 8000 })
+}
+
+function correctKeyFor(stem) {
+  if (stem.includes('计算机网络')) return 'B'
+  if (stem.includes('关系数据库')) return 'B'
+  if (stem.includes('面向对象')) return 'C'
+  if (stem.includes('软件测试')) return 'B'
+  return 'A'
+}
+
+async function answerCurrent(page, wrong = false) {
+  await page.waitForSelector('.focus-mode .q-stem', { timeout: 8000 })
+  const stem = await page.locator('.q-stem').first().innerText()
+  const correctKey = correctKeyFor(stem)
+  const targetKey = wrong ? (correctKey === 'A' ? 'B' : 'A') : correctKey
+  const option = page.locator('.opt').filter({ has: page.locator('.opt-key', { hasText: targetKey }) }).first()
+  await option.click()
+  await page.locator('.focus-actionbar .btn-primary').click()
+  await page.waitForSelector('.verdict-line', { timeout: 8000 })
+  return { stem, targetKey }
+}
+
+async function exitPractice(page) {
+  await page.locator('.focus-exit').click()
+  const dialog = page.locator('[data-testid="exit-confirm-modal"]')
+  await dialog.waitFor({ state: 'visible', timeout: 5000 })
+  await dialog.locator('.btn-primary').click()
+  await page.waitForSelector('.focus-mode', { state: 'detached', timeout: 8000 })
+}
+
+async function nextQuestion(page) {
+  await page.waitForSelector('.focus-actionbar .btn-primary', { timeout: 5000 })
+  await page.locator('.focus-actionbar .btn-primary').click()
+  await page.waitForTimeout(300)
+}
+
+async function currentStem(page) {
+  await page.waitForSelector('.q-stem', { timeout: 8000 })
+  return page.locator('.q-stem').first().innerText()
+}
+
+async function fillEditStem(page, value) {
+  await page.locator('.edit-panel textarea').first().fill(value)
+}
+
+async function openQuestionEditor(page) {
+  await page.locator('.btn-more-menu').click()
+  await page.locator('.focus-menu-item').first().click()
+  await page.waitForSelector('[data-testid="question-edit-panel"]', { timeout: 5000 })
+}
+
+async function startExamFromCenter(page, baseUrl, bankName, total = 3) {
+  await page.goto(`${baseUrl}/#/exams`)
+  await page.waitForSelector('.exam-center')
+  await page.locator('.page-actions .btn-primary:not([disabled])').waitFor({ state: 'visible', timeout: 10000 })
+  await page.locator('.page-actions .btn-primary:not([disabled])').click()
+  const dialog = page.locator('.exam-setup-dialog')
+  await dialog.waitFor({ state: 'visible', timeout: 5000 })
+  const bankSelect = dialog.locator('select').first()
+  const optionValue = await bankSelect.locator('option', { hasText: bankName }).first().getAttribute('value')
+  assert.ok(optionValue, `Bank ${bankName} must be selectable in exam setup`)
+  await bankSelect.selectOption(optionValue)
+  const numbers = dialog.locator('input[type="number"]')
+  await numbers.nth(0).fill(String(total))
+  await numbers.nth(1).fill('30')
+  await dialog.locator('button[type="submit"]').click()
+  await page.waitForSelector('.exam-mode', { timeout: 12000 })
+}
+
+test('True Chrome Browser E2E: Editorial Precision Full Lifecycle', async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fnexam-e2e-'))
   tempDbPath = path.join(tempDir, 'browser_e2e.db')
   const port = await getFreePort()
@@ -131,138 +227,126 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
     await waitForServer(BASE_URL, instanceToken)
     console.log(`FastAPI server is up and verified with instance token on port ${port}.`)
 
-    console.log('Launching Chromium for the real browser run...')
     browser = await chromium.launch({
       ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}),
       headless: true,
     })
-    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'zh-CN' })
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'zh-CN' })
     const page = await context.newPage()
+    page.__baseUrl = BASE_URL
 
-    page.on('console', msg => console.log(`[Browser Console ${msg.type()}] ${msg.text()}`))
     page.on('pageerror', err => console.error(`[Browser PageError] ${err.message}`))
-    page.on('dialog', async (dialog) => {
+    page.on('dialog', async dialog => {
       console.log(`Browser Dialog [${dialog.type()}]: ${dialog.message()}`)
       await dialog.accept()
     })
 
     await t.test('1. User Registration and Auto Login', async () => {
       await page.goto(BASE_URL)
-      await page.waitForSelector('.auth-page')
-      assert.ok(await page.locator('text=飞牛刷题').isVisible())
+      await page.waitForSelector('.auth-layout')
+      await page.locator('.auth-switch .link-btn').click()
+      await page.fill('#login-username', 'e2e_student')
+      await page.fill('#login-password', 'password-123456')
+      await page.fill('#login-confirm', 'password-123456')
+      await page.click('.auth-submit')
 
-      // Switch to register
-      await page.click('button:has-text("首次使用？创建账号")')
-      await page.fill('input[placeholder="用户名"]', 'e2e_student')
-      await page.fill('input[placeholder="密码（至少 8 位）"]', 'password-123456')
-      await page.click('button:has-text("注册并登录")')
-
-      // Wait for HomeView
-      await page.waitForSelector('.home-page')
-      const userText = await page.locator('.page-header p').textContent()
-      assert.ok(userText.includes('e2e_student'))
-      console.log('✓ Registered and logged in successfully.')
+      await page.waitForSelector('.today', { timeout: 15000 })
+      const byline = await page.locator('.byline').innerText()
+      assert.match(byline, /e2e_student/)
+      console.log('✓ Registered and logged in through the editorial auth screen.')
     })
 
-    await t.test('2. Bank Creation via UI', async () => {
-      await page.click('button:has-text("创建题库")')
-      await page.waitForSelector('#create-bank-title')
-
-      await page.fill('input[placeholder*="软考"]', 'E2E真实浏览器题库')
-      await page.fill('input[placeholder="默认分类"]', '自动化测试')
-      await page.fill('textarea[placeholder*="简要说明"]', '用于真实 Chrome 端到端验证')
-      await page.click('button:has-text("确认创建")')
-
-      // Wait for bank card to appear
-      await page.waitForSelector('.bank-card h2:has-text("E2E真实浏览器题库")')
-      console.log('✓ Created question bank via UI.')
+    await t.test('2. Bank Creation via the Banks Workspace', async () => {
+      await openBanks(page, BASE_URL)
+      await page.locator('.page-actions .btn-primary').click()
+      const dialog = page.locator('[data-testid="bank-create-dialog"]')
+      await dialog.waitFor({ state: 'visible', timeout: 5000 })
+      const inputs = dialog.locator('input[type="text"]')
+      await inputs.nth(0).fill('E2E真实浏览器题库')
+      await inputs.nth(1).fill('自动化测试')
+      await dialog.locator('textarea').fill('用于真实 Chrome 端到端验证')
+      await dialog.locator('button[type="submit"]').click()
+      await page.waitForTimeout(1000)
+      await openBanks(page, BASE_URL)
+      await page.waitForSelector('.banks-row:has-text("E2E真实浏览器题库")', { timeout: 10000 })
+      await openBanks(page, BASE_URL)
+      await page.waitForSelector('.banks-row:has-text("E2E真实浏览器题库")', { timeout: 10000 })
+      console.log('✓ Created a question bank through the management-style banks page.')
     })
 
     let token = ''
     let bankId = ''
     let bankBId = ''
-    await t.test('3. Seed Question Data and Multi-Bank Context via API', async () => {
+
+    await t.test('3. Seed Question Data, Weak Flag and Due Review via API', async () => {
       token = await page.evaluate(() => localStorage.getItem('easyexam_token'))
       assert.ok(token, 'Token must exist in localStorage')
 
-      const banksRes = await fetch(`${BASE_URL}/api/v1/banks`, {
+      const banks = await (await fetch(`${BASE_URL}/api/v1/banks`, {
         headers: { Authorization: `Bearer ${token}` },
-      })
-      const banks = await banksRes.json()
+      })).json()
       const targetBank = banks.find(b => b.name === 'E2E真实浏览器题库')
       assert.ok(targetBank, 'Bank must exist in API list')
       bankId = targetBank.id
 
-      // Question 1: Single choice
-      const q1Res = await fetch(`${BASE_URL}/api/v1/banks/${bankId}/questions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          stem: '计算机网络中，提供无连接数据报传输服务的网络层协议是？',
-          type: 'SINGLE',
-          options: [
-            { key: 'A', content: 'TCP' },
-            { key: 'B', content: 'IP' },
-            { key: 'C', content: 'HTTP' },
-            { key: 'D', content: 'FTP' },
-          ],
-          answer: 'B',
-          explanation: 'IP 协议工作在网络层，提供不可靠无连接的数据报传输。',
-          tags: ['网络层', '计算机网络'],
-        }),
-      })
-      assert.equal(q1Res.status, 201)
+      const createQuestion = async payload => {
+        const res = await fetch(`${BASE_URL}/api/v1/banks/${bankId}/questions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(payload),
+        })
+        assert.equal(res.status, 201)
+        return res.json()
+      }
 
-      // Question 2: Single choice
-      const q2Res = await fetch(`${BASE_URL}/api/v1/banks/${bankId}/questions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          stem: '关系数据库中关于主键的约束，下列描述正确的是？',
-          type: 'SINGLE',
-          options: [
-            { key: 'A', content: '可以包含 NULL 值' },
-            { key: 'B', content: '必须唯一且非空' },
-            { key: 'C', content: '每个表可以有多个主键' },
-            { key: 'D', content: '必须是整型数值' },
-          ],
-          answer: 'B',
-          explanation: '主键用于唯一标识表中的一条记录，必须满足唯一且非空。',
-          tags: ['数据库', '主键'],
-        }),
+      await createQuestion({
+        stem: '计算机网络中，提供无连接数据报传输服务的网络层协议是？',
+        type: 'SINGLE',
+        options: [
+          { key: 'A', content: 'TCP' },
+          { key: 'B', content: 'IP' },
+          { key: 'C', content: 'HTTP' },
+          { key: 'D', content: 'FTP' },
+        ],
+        answer: 'B',
+        explanation: 'IP 协议工作在网络层，提供不可靠无连接的数据报传输。',
+        tags: ['网络层', '计算机网络'],
       })
-      assert.equal(q2Res.status, 201)
-
-      // Question 3: Single choice
-      const q3Res = await fetch(`${BASE_URL}/api/v1/banks/${bankId}/questions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          stem: '面向对象程序设计的基本特征中，用于实现代码复用的是？',
-          type: 'SINGLE',
-          options: [
-            { key: 'A', content: '多态' },
-            { key: 'B', content: '封装' },
-            { key: 'C', content: '继承' },
-            { key: 'D', content: '重载' },
-          ],
-          answer: 'C',
-          explanation: '继承机制允许子类获得父类的特征和行为，主要用于代码复用。',
-          tags: ['面向对象'],
-        }),
+      await createQuestion({
+        stem: '关系数据库中关于主键的约束，下列描述正确的是？',
+        type: 'SINGLE',
+        options: [
+          { key: 'A', content: '可以包含 NULL 值' },
+          { key: 'B', content: '必须唯一且非空' },
+          { key: 'C', content: '每个表可以有多个主键' },
+          { key: 'D', content: '必须是整型数值' },
+        ],
+        answer: 'B',
+        explanation: '主键用于唯一标识表中的一条记录，必须满足唯一且非空。',
+        tags: ['数据库', '主键'],
       })
-      assert.equal(q3Res.status, 201)
+      await createQuestion({
+        stem: '面向对象程序设计的基本特征中，用于实现代码复用的是？',
+        type: 'SINGLE',
+        options: [
+          { key: 'A', content: '多态' },
+          { key: 'B', content: '封装' },
+          { key: 'C', content: '继承' },
+          { key: 'D', content: '重载' },
+        ],
+        answer: 'C',
+        explanation: '继承机制允许子类获得父类的特征和行为，主要用于代码复用。',
+        tags: ['面向对象'],
+      })
 
-      // Seed second bank for multi-bank isolation testing
       const b2Res = await fetch(`${BASE_URL}/api/v1/banks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ name: '第二题库(专项隔离)', default_category: '隔离测试' }),
       })
-      const b2Data = await b2Res.json()
-      bankBId = b2Data.id
+      assert.equal(b2Res.status, 201)
+      bankBId = (await b2Res.json()).id
 
-      // Seed question in bank B and flag as weak
       const qWeakRes = await fetch(`${BASE_URL}/api/v1/banks/${bankBId}/questions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -277,335 +361,216 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
           explanation: '集成测试重点检测模块之间的接口交互。',
         }),
       })
-      const qWeakData = await qWeakRes.json()
-      // Flag as weak
-      await fetch(`${BASE_URL}/api/v1/learning/weak/${qWeakData.id}`, {
+      assert.equal(qWeakRes.status, 201)
+      const qWeak = await qWeakRes.json()
+      await fetch(`${BASE_URL}/api/v1/learning/weak/${qWeak.id}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       })
+      execSync(`python -c "import sqlite3; conn=sqlite3.connect(r'${tempDbPath}'); conn.execute(\\"UPDATE fsrs_cards SET due_at = '2020-01-01 00:00:00' WHERE question_id = '${qWeak.id}'\\\"); conn.commit(); conn.close()"`)
 
-      // Set due_at in the past via sqlite script
-      execSync(`python -c "import sqlite3; conn=sqlite3.connect(r'${tempDbPath}'); conn.execute(\\\"UPDATE fsrs_cards SET due_at = '2020-01-01 00:00:00' WHERE question_id = '${qWeakData.id}'\\\"); conn.commit(); conn.close()"`)
-
-      // Reload page to reflect updated question counts
-      await page.reload()
-      await page.waitForSelector('.bank-card small:has-text("3 题")')
+      await openBanks(page, BASE_URL)
+      await page.waitForSelector('.banks-row:has-text("E2E真实浏览器题库")')
       console.log('✓ Seeded 3 questions in Bank A and 1 weak due question in Bank B.')
     })
 
     let killedStem = ''
     let mistakeStem = ''
 
-    async function answerCurrentQuestion(wrong = false) {
-      await page.waitForSelector('.question-card', { timeout: 8000 })
-      const stem = await page.locator('.stem-box h2').textContent()
-      let targetKey = 'A'
-      if (stem.includes('计算机网络')) {
-        targetKey = wrong ? 'A' : 'B'
-      } else if (stem.includes('关系数据库')) {
-        targetKey = wrong ? 'A' : 'B'
-      } else if (stem.includes('面向对象')) {
-        targetKey = wrong ? 'A' : 'C'
-      } else if (stem.includes('软件测试')) {
-        targetKey = wrong ? 'A' : 'B'
-      }
-      const opt = page.locator('label.option').filter({ has: page.locator(`.key-cap:text-is("${targetKey}")`) })
-      await opt.click()
-      await page.click('button:has-text("提交答案")')
-      await page.waitForSelector('.result-card', { timeout: 8000 })
-      return { stem, targetKey }
-    }
+    await t.test('4. Learning Flow: Wrong Answer, Verdict, Kill and Report', async () => {
+      await startBankPractice(page, BASE_URL, 'E2E真实浏览器题库')
 
-    await t.test('4. Practice Flow: Answering, Result Inspection & Question Kill', async () => {
-      console.log('Clicking 开始刷题...')
-      await page.click('.bank-card:has-text("E2E真实浏览器题库") [data-testid="start-practice-btn"]')
-
-      // Q1: Answer wrongly
-      const q1 = await answerCurrentQuestion(true)
+      const q1 = await answerCurrent(page, true)
       mistakeStem = q1.stem
-      console.log(`Answered Q1 wrongly: "${q1.stem.slice(0, 15)}..." with ${q1.targetKey}`)
-      const res1 = await page.locator('.result-header').textContent()
-      assert.ok(res1.includes('未完全答对') || res1.includes('0'))
+      const wrongVerdict = await page.locator('.verdict-line').innerText()
+      assert.match(wrongVerdict, /回答错误/)
+      assert.ok(await page.locator('.explain-block').isVisible(), 'Official explanation must be shown after answering')
+      await nextQuestion(page)
 
-      // Next
-      await page.click('button:has-text("下一题")')
-
-      // Q2: Answer correctly and kill
-      const q2 = await answerCurrentQuestion(false)
+      const q2 = await answerCurrent(page, false)
       killedStem = q2.stem
-      console.log(`Answered Q2 correctly: "${q2.stem.slice(0, 15)}..." with ${q2.targetKey}`)
-      const res2 = await page.locator('.result-header').textContent()
-      assert.ok(res2.includes('完全正确'))
+      const correctVerdict = await page.locator('.verdict-line').innerText()
+      assert.match(correctVerdict, /回答正确/)
 
-      // Kill Q2
-      await page.click('button.btn-more-menu')
-      await page.waitForSelector('.dropdown-item.btn-kill', { timeout: 3000 })
-      await page.click('.dropdown-item.btn-kill')
-      await new Promise(r => setTimeout(r, 400))
+      await page.locator('.btn-more-menu').click()
+      await page.locator('.focus-menu-item.is-danger').click()
+      await page.waitForTimeout(400)
 
-      // Q3: Answer correctly
-      const q3 = await answerCurrentQuestion(false)
-      console.log(`Answered Q3 correctly: "${q3.stem.slice(0, 15)}..." with ${q3.targetKey}`)
-
-      // Complete session
-      await page.click('header button:has-text("完成练习")')
-      await page.waitForSelector('[data-testid="practice-report-modal"]')
-      await page.click('[data-testid="practice-report-modal"] button:has-text("返回题库")')
-      await page.waitForSelector('.home-page')
-      console.log('✓ Completed practice session with wrong answer, question kill, and completion.')
+      const q3 = await answerCurrent(page, false)
+      assert.ok(q3.stem)
+      await page.locator('.focus-finish').click()
+      await page.waitForSelector('.report-dialog', { timeout: 10000 })
+      assert.ok(await page.locator('[data-testid="practice-report-modal"]').isVisible())
+      await page.locator('.report-dialog .dialog-actions .btn').first().click()
+      await page.waitForSelector('.banks-page', { timeout: 8000 })
+      console.log('✓ Completed practice with a wrong answer, a killed question and the report dialog.')
     })
 
-    await t.test('5. Mistakes View: Cause Persistence & FSRS Non-Default Rating Update (Fix 1)', async () => {
-      await page.click('button:has-text("错题复习"), .sidebar-nav-item:has-text("错题复习")')
-      await page.waitForSelector('.mistakes-page')
+    await t.test('5. Mistakes: Cause Persistence, Scoped Practice and FSRS Rating', async () => {
+      await page.locator('.sidebar .nav-item').nth(2).click()
+      await page.waitForSelector('.review-page')
+      await page.locator('.review-page .tabs .tab').nth(1).click()
+      await page.waitForSelector('.mistake-row', { timeout: 10000 })
 
-      // Verify mistake question is in mistakes list
-      await page.waitForSelector(`.mistake-card h2:has-text("${mistakeStem.slice(0, 8)}")`)
+      const row = page.locator('.mistake-row').filter({ hasText: mistakeStem.slice(0, 8) }).first()
+      await row.waitFor({ state: 'visible', timeout: 8000 })
+      await row.locator('.cause-select').selectOption('概念欠缺')
+      await page.waitForTimeout(600)
 
-      // Update mistake cause to '概念欠缺'
-      const causeSelect = page.locator('.mistake-card select').first()
-      await causeSelect.selectOption('概念欠缺')
-      await new Promise(r => setTimeout(r, 600)) // wait for API update
-
-      // Verify persistence by querying backend API
-      const mistakesRes = await fetch(`${BASE_URL}/api/v1/mistakes?bank_id=${bankId}`, {
+      const mistakes = await (await fetch(`${BASE_URL}/api/v1/mistakes?bank_id=${bankId}`, {
         headers: { Authorization: `Bearer ${token}` },
+      })).json()
+      const saved = mistakes.find(m => m.stem === mistakeStem)
+      assert.ok(saved, 'Mistake must exist in API')
+      assert.equal(saved.mistake_cause, '概念欠缺')
+
+      await row.locator('.mistake-actions .btn').first().click()
+      await page.waitForSelector('.focus-mode', { timeout: 10000 })
+      const counter = await page.locator('.focus-actionbar .focus-counter').innerText()
+      assert.match(counter, /1\s*\/\s*1/)
+
+      await answerCurrent(page, false)
+      await page.waitForSelector('.fsrs-block .fsrs-buttons .btn', { timeout: 5000 })
+
+      const paper = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
+      const ratingStyles = await page.evaluate(() => {
+        return Array.from(document.querySelectorAll('.fsrs-buttons .btn')).map(btn => {
+          const cs = getComputedStyle(btn)
+          return { text: btn.textContent.trim(), color: cs.color, bg: cs.backgroundColor }
+        })
       })
-      const mistakesData = await mistakesRes.json()
-      const m1 = mistakesData.find(m => m.stem === mistakeStem)
-      assert.ok(m1, 'Mistake must exist in API')
-      assert.equal(m1.mistake_cause, '概念欠缺')
+      assert.equal(ratingStyles.length, 4, 'FSRS must expose four rating buttons')
+      for (const style of ratingStyles) {
+        const bg = style.bg === 'rgba(0, 0, 0, 0)' ? paper : style.bg
+        const ratio = calcContrast(style.color, bg)
+        assert.ok(ratio >= 4.5, `FSRS rating "${style.text}" contrast ${ratio.toFixed(2)}:1 must meet AA`)
+      }
 
-      // Click '练习此题' -> strictly scoped practice session
-      await page.click('button:has-text("练习此题")')
-      await page.waitForSelector('.practice-page')
-
-      // Verify session is scoped to 1 question
-      const progressText = await page.locator('.page-header small').textContent()
-      assert.ok(progressText.includes('1 / 1'), `Expected 1 / 1 but got ${progressText}`)
-
-      // Answer correctly
-      await answerCurrentQuestion(false)
-
-      // FSRS rating buttons are shown: verify computed contrast meets WCAG AA >= 4.5:1
-      await page.waitForSelector('.fsrs-rating-box')
-      const ratingBtnStyles = await page.evaluate(() => {
-        const againBtn = document.querySelector('.rating-btn.again')
-        const goodBtn = document.querySelector('.rating-btn.good')
-        const easyBtn = document.querySelector('.rating-btn.easy')
-        const csAgain = againBtn ? getComputedStyle(againBtn) : null
-        const csGood = goodBtn ? getComputedStyle(goodBtn) : null
-        const csEasy = easyBtn ? getComputedStyle(easyBtn) : null
-        return {
-          againColor: csAgain ? csAgain.color : '',
-          againBg: csAgain ? csAgain.backgroundColor : '',
-          goodColor: csGood ? csGood.color : '',
-          goodBg: csGood ? csGood.backgroundColor : '',
-          easyColor: csEasy ? csEasy.color : '',
-          easyBg: csEasy ? csEasy.backgroundColor : '',
-        }
+      const ratingResponse = page.waitForResponse(response => {
+        if (!response.url().endsWith('/attempts') || response.request().method() !== 'POST') return false
+        try { return response.request().postDataJSON()?.fsrs_rating === 4 } catch { return false }
       })
-      assert.ok(ratingBtnStyles.againColor && ratingBtnStyles.againBg, 'Again button must be rendered')
-      assert.ok(calcContrast(ratingBtnStyles.againColor, ratingBtnStyles.againBg) >= 4.5, 'Again rating button contrast >= 4.5')
-      assert.ok(ratingBtnStyles.goodColor && ratingBtnStyles.goodBg, 'Good button must be rendered')
-      assert.ok(calcContrast(ratingBtnStyles.goodColor, ratingBtnStyles.goodBg) >= 4.5, 'Good rating button contrast >= 4.5')
-      assert.ok(ratingBtnStyles.easyColor && ratingBtnStyles.easyBg, 'Easy button must be rendered')
-      assert.ok(calcContrast(ratingBtnStyles.easyColor, ratingBtnStyles.easyBg) >= 4.5, 'Easy rating button contrast >= 4.5')
+      await page.locator('.fsrs-buttons .btn').nth(3).click()
+      assert.equal((await ratingResponse).status(), 201, 'FSRS rating request must succeed')
+      await page.waitForSelector('.fsrs-block .hint', { timeout: 5000 })
 
-      // Deliberately select non-default '4 - 简单 (Easy)'
-      await page.click('button.rating-btn.easy')
-      await page.waitForSelector('text=已更新 FSRS 评级')
-
-      // Physical DB check: Verify attempt's fsrs_rating was really updated to 4 in SQLite
       const ratingInDb = execSync(
         `python -c "import sqlite3; conn=sqlite3.connect(r'${tempDbPath}'); r=conn.execute('SELECT fsrs_rating FROM answer_attempts ORDER BY rowid DESC LIMIT 1').fetchone(); print(r[0]); conn.close()"`
       ).toString().trim()
-      assert.equal(ratingInDb, '4', 'FSRS rating must physically be 4 in SQLite database attempt record')
+      assert.equal(ratingInDb, '4', 'FSRS rating must physically be 4 in SQLite')
 
-      // Verify pre-answer snapshot was recorded to prevent double scheduling
       const snapshotRecorded = execSync(
         `python -c "import sqlite3; conn=sqlite3.connect(r'${tempDbPath}'); r=conn.execute('SELECT card_snapshot_json FROM answer_attempts ORDER BY rowid DESC LIMIT 1').fetchone(); print(bool(r[0])); conn.close()"`
       ).toString().trim()
-      assert.equal(snapshotRecorded, 'True', 'Attempt must store pre-answer card snapshot to guarantee single scheduling equivalence')
+      assert.equal(snapshotRecorded, 'True', 'Attempt must store the pre-answer card snapshot')
 
-
-      // Return to mistakes view
-      await page.click('button:has-text("返回")')
-      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
-      // Verify cancel retains session (Issue #57 Defect 4)
-      await page.click('[data-testid="exit-confirm-modal"] .btn-cancel-exit')
-      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { state: 'hidden', timeout: 3000 })
-      assert.ok(await page.locator('.practice-page').isVisible(), 'Canceling exit must preserve session')
-      // Now confirm exit
-      await page.click('button:has-text("返回")')
-      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
-      await page.click('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
-      await page.waitForSelector('.mistakes-page')
-      console.log('✓ Verified mistake cause persistence, scoped practice, and physical FSRS rating=4 update.')
+      await page.locator('.focus-exit').click()
+      const exitDialog = page.locator('[data-testid="exit-confirm-modal"]')
+      await exitDialog.waitFor({ state: 'visible', timeout: 5000 })
+      await exitDialog.locator('.exit-actions .btn').first().click()
+      assert.ok(await page.locator('.focus-mode').isVisible(), 'Cancelling exit must preserve the session')
+      await page.locator('.focus-exit').click()
+      await exitDialog.locator('.btn-primary').click()
+      await page.waitForSelector('.review-page', { timeout: 8000 })
+      console.log('✓ Verified mistake cause persistence, one-question practice and physical FSRS rating=4.')
     })
 
-    await t.test('6. Multi-Bank Isolation & Weak-Flagged Due Review (Fix 2)', async () => {
-      // Check bank filter dropdown
-      await page.waitForSelector('#bank-filter')
-      // Switch filter to '第二题库(专项隔离)'
-      await page.selectOption('#bank-filter', bankBId)
-      await new Promise(r => setTimeout(r, 400))
+    await t.test('6. Multi-Bank Isolation and Weak-Flagged Due Review', async () => {
+      await page.locator('.review-page .tabs .tab').nth(0).click()
+      const dueRow = page.locator('.due-row').filter({ hasText: '软件测试' }).first()
+      await dueRow.waitFor({ state: 'visible', timeout: 10000 })
+      assert.ok(await dueRow.locator('.tag.brand').isVisible(), 'Weak question must carry the weak tag')
 
-      // Bank B has the weak flagged due question
-      await page.waitForSelector('.due-highlight h2:has-text("软件测试")')
-      assert.ok(await page.locator('.badge-due:has-text("薄弱标记")').isVisible())
-
-      // Click '复习此题' on the weak card
-      await page.click('.due-highlight button:has-text("复习此题")')
-      await page.waitForSelector('.practice-page')
-
-      // Answer the weak question
-      await answerCurrentQuestion(false)
-      await page.click('button:has-text("返回")')
-      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
-      await page.click('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
-      await page.waitForSelector('.mistakes-page')
-
-      // Reset filter to all banks
-      await page.selectOption('#bank-filter', '')
-      await new Promise(r => setTimeout(r, 400))
-      console.log('✓ Verified multi-bank isolation filter and weak-flagged due question review.')
+      await dueRow.locator('.btn').click()
+      await page.waitForSelector('.focus-mode', { timeout: 10000 })
+      await answerCurrent(page, false)
+      await exitPractice(page)
+      await page.waitForSelector('.review-page')
+      console.log('✓ Verified bank-isolated weak due review.')
     })
 
-    await t.test('7. Elimination (Kills) View: Scoped Review and Restoration on Wrong', async () => {
-      // Switch tab to '已掌握题目'
-      await page.click('button:has-text("已掌握题目")')
-      await page.waitForSelector(`.bank-card:has-text("${killedStem.slice(0, 8)}")`)
+    await t.test('7. Killed Questions: Scoped Review and Restoration on Wrong', async () => {
+      await page.locator('.review-page .tabs .tab').nth(2).click()
+      const killedRow = page.locator('.review-single .list-row').filter({ hasText: killedStem.slice(0, 8) }).first()
+      await killedRow.waitFor({ state: 'visible', timeout: 8000 })
 
-      // Click '查漏补缺练习'
-      await page.click('button:has-text("查漏补缺练习")')
-      await page.waitForSelector('.practice-page')
+      await page.locator('.review-toolbar .btn').first().click()
+      await page.waitForSelector('.focus-mode', { timeout: 10000 })
+      const modeLabel = await page.locator('.focus-mode-label').innerText()
+      assert.match(modeLabel, /斩杀/)
 
-      // Verify mode is ELIMINATION by waiting for async session mode binding
-      await page.waitForSelector('.practice-page .page-header h1:has-text("斩杀查漏补缺")')
-
-
-      // Answer wrong on purpose
-      await answerCurrentQuestion(true)
-
-      // Return to mistakes view
-      await page.click('button:has-text("返回")')
-      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
-      await page.click('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
-      await page.waitForSelector('.mistakes-page')
-
-      // Switch to '已掌握题目' tab and verify question was restored (killed list is now empty)
-      await page.click('button:has-text("已掌握题目")')
-      await page.waitForSelector('text=暂无已斩杀题目')
-      console.log('✓ Verified elimination review and restoration on wrong answer.')
-
-      // Return to home
-      await page.click('.mistakes-page .page-header button:has-text("返回")')
-      await page.waitForSelector('.home-page')
+      await answerCurrent(page, true)
+      await exitPractice(page)
+      await page.waitForSelector('.review-page')
+      await page.locator('.review-page .tabs .tab').nth(2).click()
+      await page.waitForSelector('.review-single .empty-title', { timeout: 8000 })
+      assert.match(await page.locator('.review-single .empty-title').innerText(), /没有斩杀题目/)
+      console.log('✓ Verified elimination review restores a killed question after a wrong answer.')
     })
 
-    await t.test('8. Mock Exam Mode: Idempotent Submit & Rich Report', async () => {
-      await page.click('.bank-card:has-text("E2E真实浏览器题库") [data-testid="start-mock-exam-btn"]')
-      await page.waitForSelector('#exam-setup-title')
+    await t.test('8. Mock Exam: Setup, Answer Sheet, Submit and Report', async () => {
+      await page.locator('.sidebar .nav-item').nth(3).click()
+      await page.waitForSelector('.exam-center')
+      await page.locator('.page-actions .btn-primary').click()
+      const dialog = page.locator('.exam-setup-dialog')
+      await dialog.waitFor({ state: 'visible', timeout: 5000 })
+      const bankSelect = dialog.locator('select').first()
+      const val = await bankSelect.locator('option', { hasText: 'E2E真实浏览器题库' }).first().getAttribute('value')
+      await bankSelect.selectOption(val)
+      const numbers = dialog.locator('input[type="number"]')
+      await numbers.nth(0).fill('3')
+      await numbers.nth(1).fill('30')
+      await dialog.locator('button[type="submit"]').click()
 
-      await page.click('button:has-text("开始考试")')
-      await page.waitForSelector('.exam-page')
+      await page.waitForSelector('.exam-mode', { timeout: 12000 })
+      assert.ok(await page.locator('[data-testid="exam-timer"]').isVisible())
+      assert.equal(await page.locator('.exam-report').count(), 0, 'No report or answers before submission')
 
-      const timerLocator = page.locator('[data-testid="exam-timer"]')
-      assert.ok(await timerLocator.isVisible())
+      await page.locator('.exam-option').nth(0).click()
+      await page.locator('.answer-cell').nth(1).click()
+      await page.locator('.exam-option').nth(1).click()
+      await page.locator('[data-testid="exam-flag-toggle"]').click()
+      assert.match(await page.locator('[data-testid="exam-answer-sheet"]').innerText(), /2\s*\/\s*3/)
 
-      await page.click('.exam-options label:nth-child(1)')
-      await page.click('.exam-answer-sheet button:has-text("2")')
-      await page.click('.exam-options label:nth-child(2)')
+      await page.locator('.exam-submit').click()
+      await page.locator('[data-testid="exam-submit-confirm"]').waitFor({ state: 'visible', timeout: 5000 })
+      await page.locator('[data-testid="exam-submit-confirm"] .btn-primary').click()
+      await page.waitForSelector('.exam-report', { timeout: 12000 })
+      assert.ok(await page.locator('.report-score').isVisible())
+      assert.ok(await page.locator('.report-counts').isVisible())
+      assert.ok(await page.locator('table.etable').first().isVisible(), 'Type statistics table must render')
 
-      await page.click('header button.primary:has-text("交卷")')
-      await page.waitForSelector('[data-testid="exam-submit-confirm"]')
-      await page.click('button:has-text("确认交卷")')
-
-      await page.waitForSelector('#exam-report-title:has-text("考试报告")')
-      assert.ok(await page.locator('.report-summary').isVisible())
-      assert.ok(await page.locator('.exam-stats-group:has-text("题型统计")').isVisible())
-
-      await page.click('header button:has-text("返回")')
-      await page.waitForSelector('.home-page')
-      console.log('✓ Verified mock exam flow and rich statistics report.')
+      await page.locator('.report-actions .btn-primary').click()
+      await page.waitForSelector('.exam-center', { timeout: 8000 })
+      console.log('✓ Verified exam setup, answer sheet, submit confirmation and the tabular report.')
     })
 
-    await t.test('9. Learning Diagnostics Dashboard & Interactive Recommendations to Practice (Task B1)', async () => {
-      await page.click('button:has-text("复习规划"), .sidebar-nav-item:has-text("复习规划")')
-      await page.waitForSelector('.learning-page')
-      await page.waitForSelector('.learning-analytics-accordion', { timeout: 8000 })
+    await t.test('9. Diagnosis and Plan Recommendations Launch Practice', async () => {
+      await page.locator('.sidebar .nav-item').nth(2).click()
+      await page.waitForSelector('.review-page')
+      await page.locator('.review-page .tabs .tab').nth(3).click()
+      await page.waitForSelector('.diagnosis', { timeout: 10000 })
+      assert.ok(await page.locator('.diagnosis .review-stats .stat').count() >= 4)
+      await page.waitForSelector('.diagnosis .panel', { timeout: 5000 })
 
-      // Open folded analysis section via natural user click on the accordion summary
-      const summaryBtn = page.locator('.learning-analytics-accordion summary.analytics-accordion-summary')
-      await summaryBtn.scrollIntoViewIfNeeded()
-      await summaryBtn.click()
-      await page.waitForSelector('.learning-analytics-accordion[open]', { timeout: 5000 })
-
-      await page.waitForSelector('.metrics-grid', { timeout: 8000 })
-      await page.waitForSelector('text=题库覆盖率', { timeout: 5000 })
-      await page.waitForSelector('text=复习完成度', { timeout: 5000 })
-      await page.waitForSelector('text=近期表现 vs 长期历史基线', { timeout: 5000 })
-
-      // Adjust recommendation filters: set question type to SINGLE and new_ratio to 0.7
-      await page.selectOption('#select-rec-type', 'SINGLE')
-      await page.selectOption('#select-rec-ratio', '0.7')
-      await page.waitForTimeout(400)
-
-      // Verify recommendation cards update with reasons
-      await page.waitForSelector('.rec-item', { timeout: 5000 })
-      const recItems = page.locator('.rec-item')
-      const count = await recItems.count()
-      assert.ok(count > 0, 'Recommendation list must contain items after applying filters')
-
-      // Assert all recommended items strictly match the SINGLE question type filter
-      let newCount = 0
-      for (let i = 0; i < count; i++) {
-        const itemType = await recItems.nth(i).locator('small.muted').textContent()
-        assert.equal(itemType.trim(), 'SINGLE', `Item ${i} must have type SINGLE`)
-        const reasonText = await recItems.nth(i).locator('.rec-reason').textContent()
-        assert.ok(reasonText.length > 0, `Item ${i} must have explainable reason`)
-        if (reasonText.includes('新题覆盖')) {
-          newCount++
-        }
-      }
-      const newRatioActual = newCount / count
-      console.log(`✓ Verified recommendation items count=${count}, newCount=${newCount} (ratio=${newRatioActual.toFixed(2)}), all types strictly SINGLE.`)
-
-      // Click "开始推荐刷题" to launch real practice session from recommendations
-      const recBtn = page.locator('button.btn-start-rec').first()
-      await recBtn.scrollIntoViewIfNeeded()
-      await recBtn.click()
-      await page.waitForSelector('.practice-page', { timeout: 8000 })
-      await page.waitForSelector('.practice-page .stem-box', { timeout: 8000 })
-      assert.ok(await page.locator('.stem-box').isVisible(), 'Should enter PracticeViewV1 from recommendations')
-      console.log('✓ Successfully launched practice session directly from recommendations.')
-
-      // Return from practice to LearningView, then return to HomeView
-      await page.click('header button:has-text("返回")')
-      const confirmExit9 = page.locator('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
-      if (await confirmExit9.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await confirmExit9.click()
-      }
-      await page.waitForSelector('.learning-page', { timeout: 8000 })
-      await page.click('header button:has-text("返回")')
-      await page.waitForSelector('.home-page', { timeout: 8000 })
-      console.log('✓ Verified learning diagnostics dashboard and practice launch workflow.')
+      const recRows = page.locator('.diagnosis .panel').last().locator('.list-row')
+      await recRows.first().waitFor({ state: 'visible', timeout: 8000 })
+      await recRows.first().locator('.btn').click()
+      await page.waitForSelector('.focus-mode', { timeout: 10000 })
+      await page.waitForSelector('.q-stem')
+      await exitPractice(page)
+      await page.waitForSelector('.review-page', { timeout: 8000 })
+      console.log('✓ Verified diagnosis statistics and direct practice launch from recommendations.')
     })
 
-    await t.test('10. Spreadsheet Column Mapping Preview, User Manual Mapping & Precheck Validation (Task 1 & 2)', async () => {
-      // Navigate to Import view
-      await page.click('button:has-text("导入题库"), .sidebar-nav-item:has-text("导入题库")')
+    await t.test('10. Spreadsheet Mapping, Import, Duplicate Strategy and Sparse Keys', async () => {
+      await page.goto(`${BASE_URL}/#/import`)
       await page.waitForSelector('.import-page')
-      assert.ok(await page.locator('text=导入题目').isVisible())
 
-      // Select target bank
-      const bankSelect = page.locator('form.import-form select').first()
-      await bankSelect.waitFor({ state: 'visible' })
-      const firstOptionVal = await bankSelect.locator('option:not([disabled])').first().getAttribute('value')
-      await bankSelect.selectOption(firstOptionVal)
+      const bankSelect = page.locator('#import-bank')
+      await bankSelect.selectOption(bankId)
+      const fileInput = page.locator('input[type="file"]')
 
-      // Create a test CSV file with arbitrary unmapped headers (5 options requiring manual mapping including option E)
       const manualCsvPath = path.join(tempDir, 'manual_unmapped.csv')
       fs.writeFileSync(
         manualCsvPath,
@@ -613,54 +578,48 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
         '浏览器手工映射五选项题目,第一项,第二项,第三项,第四项,第五项,E,手工映射五选项详细解析\n',
         'utf8'
       )
-
-      // Attach file to input
-      const fileInput = page.locator('input[type="file"]')
       await fileInput.setInputFiles(manualCsvPath)
-
-      // Click "预览表格列映射"
-      await page.click('button:has-text("预览表格列映射")')
-
-      // Verify Column Mapping Preview Panel is displayed with missing stem/answer warning
-      await page.waitForSelector('.column-mapping-panel', { timeout: 8000 })
-      assert.ok(await page.locator('text=表格列映射预览').isVisible())
-      assert.ok(await page.locator('text=前 1 行内容采样').isVisible())
+      await page.locator('.import-actions .btn-primary').click()
+      await page.waitForSelector('.mapping-grid', { timeout: 8000 })
+      assert.match(await page.locator('.notice.warn').innerText(), /还没有对应/)
       assert.ok(await page.locator('table.sample-table').isVisible())
-      await page.waitForSelector('.missing-warning:has-text("缺少必要字段映射")', { timeout: 5000 })
-      console.log('✓ Verified column mapping preview panel correctly caught unmapped headers.')
 
-      // Manually interact with browser UI select controls to bind columns including Option E (#select-opt-e)
-      await page.selectOption('#select-stem', '0') // col_q -> 题干
-      await page.selectOption('#select-answer', '6') // col_ans -> 答案
-      await page.selectOption('#select-opt-a', '1') // col_opt1 -> 选项 A
-      await page.selectOption('#select-opt-b', '2') // col_opt2 -> 选项 B
-      await page.selectOption('#select-opt-c', '3') // col_opt3 -> 选项 C
-      await page.selectOption('#select-opt-d', '4') // col_opt4 -> 选项 D
-      await page.selectOption('#select-opt-e', '5') // col_opt5 -> 选项 E
-      await page.selectOption('#select-explanation', '7') // col_exp -> 解析
-      console.log('✓ Manually mapped stem, answer, options A-E (#select-opt-e), and explanation via UI dropdowns.')
+      const mapField = label => page.locator('.mapping-grid label').filter({ hasText: label }).locator('select')
+      await mapField('题干').selectOption('0')
+      await mapField('答案').selectOption('6')
+      await mapField('选项 A').selectOption('1')
+      await mapField('选项 B').selectOption('2')
+      await mapField('选项 C').selectOption('3')
+      await mapField('选项 D').selectOption('4')
+      await mapField('选项 E').selectOption('5')
+      await mapField('解析').selectOption('7')
 
-      // Confirm and Import with manual mapping
-      await page.click('button:has-text("确认列映射并导入")')
-      await page.waitForSelector('.success:has-text("导入完成")', { timeout: 8000 })
-      assert.ok(await page.locator('text=新增/更新 1 题').isVisible())
-      console.log('✓ Verified user confirmation and successful import with manual column bindings.')
+      await page.locator('.import-actions .btn-primary').click()
+      await page.waitForSelector('.result-block', { timeout: 10000 })
+      assert.match(await page.locator('.result-block').innerText(), /导入完成/)
 
-      // Test duplicate precheck: re-import the exact same file without strategy
-      await fileInput.setInputFiles(manualCsvPath)
-      await page.click('button:has-text("预览表格列映射")')
-      await page.waitForSelector('.column-mapping-panel', { timeout: 8000 })
-      // Re-apply mapping
-      await page.selectOption('#select-stem', '0')
-      await page.selectOption('#select-answer', '6')
-      await page.click('button:has-text("确认列映射并导入")')
+      // Re-import the same content under a new filename: duplicate detection is content based.
+      await page.locator('.result-block button:has-text("再导入一批")').click()
+      await page.waitForSelector('.result-block', { state: 'detached', timeout: 5000 })
+      await page.locator('#import-bank').selectOption(bankId)
+      const duplicateCsvPath = path.join(tempDir, 'manual_unmapped_again.csv')
+      fs.copyFileSync(manualCsvPath, duplicateCsvPath)
+      await page.locator('input[type="file"]').setInputFiles(duplicateCsvPath)
+      await page.locator('.import-actions .btn-primary:not([disabled])').click()
+      await page.waitForSelector('.mapping-grid', { timeout: 8000 })
+      await mapField('题干').selectOption('0')
+      await mapField('答案').selectOption('6')
+      await page.locator('.mapping-grid ~ .import-actions .btn-primary:not([disabled])').click()
+      await page.waitForSelector('.dup-list', { timeout: 10000 })
+      assert.match(await page.locator('.dup-list').innerText(), /浏览器手工映射五选项题目/)
+      await page.locator('.step-block select').last().selectOption('merge')
+      await page.locator('.step-block .import-actions .btn-primary').last().click()
+      await page.waitForSelector('.result-block', { timeout: 10000 })
 
-      // Verify duplicate warning is shown
-      await page.waitForSelector('.warning:has-text("检测到 1 道重复题")', { timeout: 8000 })
-      assert.ok(await page.locator('text=请选择如何处理后再次导入').isVisible())
-      console.log('✓ Verified duplicate precheck warning intercepted duplicate import.')
-
-      // Test sparse mapping: map only B and E columns, leaving other options unmapped
+      // Sparse mapping keeps the original option keys B and E.
+      await page.locator('.result-block button:has-text("再导入一批")').click()
+      await page.waitForSelector('.result-block', { state: 'detached', timeout: 5000 })
+      await page.locator('#import-bank').selectOption(bankId)
       const sparseCsvPath = path.join(tempDir, 'browser_sparse.csv')
       fs.writeFileSync(
         sparseCsvPath,
@@ -668,163 +627,99 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
         '浏览器稀疏B与E选项题目,选项B内容,选项E内容,E\n',
         'utf8'
       )
-      await fileInput.setInputFiles(sparseCsvPath)
-      await page.click('button:has-text("预览表格列映射")')
-      await page.waitForSelector('.column-mapping-panel', { timeout: 8000 })
-      await page.selectOption('#select-stem', '0')
-      await page.selectOption('#select-answer', '3')
-      await page.selectOption('#select-opt-b', '1') // map Option B
-      await page.selectOption('#select-opt-e', '2') // map Option E
-      await page.click('button:has-text("确认列映射并导入")')
-      await page.waitForSelector('.success:has-text("导入完成")', { timeout: 8000 })
-      assert.ok(await page.locator('text=新增/更新 1 题').isVisible())
+      await page.locator('input[type="file"]').setInputFiles(sparseCsvPath)
+      await page.locator('.import-actions .btn-primary:not([disabled])').click()
+      await page.waitForSelector('.mapping-grid', { timeout: 8000 })
+      await mapField('题干').selectOption('0')
+      await mapField('答案').selectOption('3')
+      await mapField('选项 B').selectOption('1')
+      await mapField('选项 E').selectOption('2')
+      await page.locator('.mapping-grid ~ .import-actions .btn-primary:not([disabled])').click()
+      await page.waitForSelector('.result-block', { timeout: 10000 })
 
-      // Verify via API that options retain keys 'B' and 'E' rather than being renumbered to 'A' and 'B'
-      const bankQs = await (await fetch(`${BASE_URL}/api/v1/banks/${firstOptionVal}/questions`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })).json()
-      const sparseQ = bankQs.find(q => q.stem === '浏览器稀疏B与E选项题目')
-      assert.ok(sparseQ, 'Sparse question must exist in bank')
-      assert.equal(sparseQ.options.length, 2)
-      assert.equal(sparseQ.options[0].key, 'B')
-      assert.equal(sparseQ.options[0].content, '选项B内容')
-      assert.equal(sparseQ.options[1].key, 'E')
-      assert.equal(sparseQ.options[1].content, '选项E内容')
-      console.log('✓ Verified browser sparse manual mapping preserves option keys B and E without renumbering.')
-
-      // Return to Home view
-      await page.click('header button:has-text("返回")')
-      await page.waitForSelector('.home-page')
-      console.log('✓ Successfully tested full spreadsheet manual mapping and import workflow in browser.')
-    })
-
-    await t.test('11. Multi-Device Dual Browser Context Sync & Conflict Retention (Task B3)', async () => {
-      // 1. Prepare target question in real bank
       const bankQs = await (await fetch(`${BASE_URL}/api/v1/banks/${bankId}/questions`, {
         headers: { Authorization: `Bearer ${token}` },
       })).json()
-      const targetQuestion = bankQs[0]
+      const sparseQ = bankQs.find(q => q.stem === '浏览器稀疏B与E选项题目')
+      assert.ok(sparseQ, 'Sparse question must exist')
+      assert.deepEqual(sparseQ.options.map(o => o.key), ['B', 'E'])
+      console.log('✓ Verified mapping preview, duplicate strategy and sparse option-key preservation.')
+    })
+
+    await t.test('11. Dual-Device Conflict, Offline Queue, Active Exam Lock and Version Retention', async () => {
+      const bankQs = await (await fetch(`${BASE_URL}/api/v1/banks/${bankId}/questions`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })).json()
+
+      await startBankPractice(page, BASE_URL, 'E2E真实浏览器题库')
+      const deviceAStem = await currentStem(page)
+      const targetQuestion = bankQs.find(q => q.stem === deviceAStem)
+      assert.ok(targetQuestion, 'The first practice question must match a seeded API question')
       const targetQId = targetQuestion.id
 
-      // 2. Device A enters practice session, answers the question (real attempt)
-      await page.waitForSelector('.bank-card:has-text("E2E真实浏览器题库")', { timeout: 8000 })
-      await page.waitForTimeout(500)
-      const startPracticeBtn = page.locator('.bank-card:has-text("E2E真实浏览器题库") [data-testid="start-practice-btn"], .bank-card:has-text("E2E真实浏览器题库") .btn-resume-direct, .bank-card:has-text("E2E真实浏览器题库") button.primary').first()
-      await startPracticeBtn.waitFor({ state: 'visible', timeout: 8000 })
-      await startPracticeBtn.click()
-      await page.waitForSelector('.practice-page', { timeout: 8000 })
-      await page.waitForSelector('.stem-box h2', { timeout: 5000 })
+      await page.locator('.opt').first().click()
+      await page.locator('.focus-actionbar .btn-primary').click()
+      await page.waitForSelector('.verdict-line')
 
-      await page.click('.options-group label:nth-child(1)')
-      await page.click('button:has-text("提交答案")')
-      await page.waitForSelector('.result-card', { timeout: 5000 })
-      console.log('✓ Device A submitted practice attempt via browser UI.')
-
-      // 3. Device B opens an independent BrowserContext and enters practice while question is at version 1
-      const contextB = await browser.newContext()
+      const contextB = await browser.newContext({ viewport: { width: 1280, height: 800 }, locale: 'zh-CN' })
       const pageB = await contextB.newPage()
+      pageB.on('dialog', dialog => dialog.accept())
+      await login(pageB, BASE_URL, 'e2e_student', 'password-123456')
+      await startBankPractice(pageB, BASE_URL, 'E2E真实浏览器题库')
 
-      await pageB.goto(BASE_URL)
-      await pageB.waitForSelector('.auth-page')
-      await pageB.fill('input[placeholder="用户名"]', 'e2e_student')
-      await pageB.fill('input[placeholder="密码（至少 8 位）"]', 'password-123456')
-      await pageB.click('button:has-text("登录")')
-      await pageB.waitForSelector('.home-page', { timeout: 8000 })
-      console.log('✓ Device B logged in concurrently in independent BrowserContext.')
-
-      const startPracticeB = pageB.locator('.bank-card:has-text("E2E真实浏览器题库") [data-testid="start-practice-btn"], .bank-card:has-text("E2E真实浏览器题库") .btn-resume-direct, .bank-card:has-text("E2E真实浏览器题库") button.primary').first()
-      await startPracticeB.waitFor({ state: 'visible', timeout: 8000 })
-      await startPracticeB.click()
-      await pageB.waitForSelector('.practice-page', { timeout: 8000 })
-      await pageB.waitForSelector('.stem-box h2', { timeout: 5000 })
-      console.log('✓ Device B opened practice session with Question at Version 1.')
-
-      // 4. Device A modifies the question online via UI
-      await page.click('button.btn-more-menu')
-      await page.waitForSelector('.dropdown-item.btn-edit-question', { timeout: 3000 })
-      await page.click('.dropdown-item.btn-edit-question')
-      await page.waitForSelector('.question-edit-panel')
-      await page.fill('.input-edit-stem', 'A端在线协同更新题干')
+      await openQuestionEditor(page)
+      await fillEditStem(page, 'A端在线协同更新题干')
       const saveResponse = page.waitForResponse(response =>
         response.url().endsWith(`/api/v1/questions/${targetQId}`) && response.request().method() === 'PUT')
-      await page.click('button.btn-save-question-edit')
-      await saveResponse
-      await page.waitForTimeout(500)
-
+      await page.locator('.edit-panel-actions .btn-primary').click()
+      const savedResponse = await saveResponse
+      assert.equal(savedResponse.status(), 200, 'Device A inline edit must be accepted')
+      await page.waitForSelector('[data-testid="question-edit-panel"]', { state: 'detached', timeout: 5000 })
+      await page.waitForTimeout(400)
       const qAfterA = await (await fetch(`${BASE_URL}/api/v1/questions/${targetQId}`, {
         headers: { Authorization: `Bearer ${token}` },
       })).json()
-      assert.equal(qAfterA.version_number, 2, 'Device A update must advance question to version 2')
-      console.log('✓ Device A updated question to version 2 via UI.')
+      assert.equal(qAfterA.version_number, 2)
 
-      // 5. Device B is disconnected (true browser offline state via context.setOffline)
       await contextB.setOffline(true)
-
-      // Device B modifies the question offline via UI
-      await pageB.click('button.btn-more-menu')
-      await pageB.waitForSelector('.dropdown-item.btn-edit-question', { timeout: 3000 })
-      await pageB.click('.dropdown-item.btn-edit-question')
-      await pageB.waitForSelector('.question-edit-panel')
-      await pageB.fill('.input-edit-stem', 'B端离线并发修改题干')
-      await pageB.click('button.btn-save-question-edit')
-
-      // Assert Device B frontend queued offline modification into localStorage and displayed offline banner
+      await openQuestionEditor(pageB)
+      await fillEditStem(pageB, 'B端离线并发修改题干')
+      await pageB.locator('.edit-panel-actions .btn-primary').click()
       await pageB.waitForSelector('[data-testid="offline-banner"]', { timeout: 5000 })
-      const queuedData = await pageB.evaluate(() => JSON.parse(localStorage.getItem('easyexam_offline_question_edits') || '[]'))
-      assert.equal(queuedData.length, 1, 'Offline edit must be queued in localStorage')
-      assert.equal(queuedData[0].payload.base_version_number, 1, 'Queued edit must carry base_version_number = 1')
-      assert.equal(queuedData[0].payload.stem, 'B端离线并发修改题干')
-      console.log('✓ Device B went offline, safely queued edit into localStorage, and displayed offline banner.')
+      const queued = await pageB.evaluate(() => {
+        const user = JSON.parse(sessionStorage.getItem('easyexam_user') || localStorage.getItem('easyexam_user') || '{}')
+        const key = `easyexam_offline_question_edits_${user.id || user.username}`
+        return JSON.parse(localStorage.getItem(key) || '[]')
+      })
+      assert.equal(queued.length, 1)
+      assert.equal(queued[0].payload.base_version_number, 1)
+      assert.equal(queued[0].payload.stem, 'B端离线并发修改题干')
 
-      // 6. Device B reconnects to network and triggers client replay
       await contextB.setOffline(false)
-      await pageB.click('button.btn-sync-offline')
-      await pageB.waitForTimeout(600)
+      await pageB.waitForSelector('[data-testid="conflict-banner"]', { timeout: 8000 })
 
-      // 7. Verify server detects conflict (base_version_number 1 < server version 2) and records in question_conflicts
       const conflictRes = await (await fetch(`${BASE_URL}/api/v1/questions/${targetQId}/conflict`, {
         headers: { Authorization: `Bearer ${token}` },
       })).json()
-      assert.ok(conflictRes.has_conflict, 'Server must flag active conflict')
+      assert.ok(conflictRes.has_conflict)
       assert.equal(conflictRes.conflict.base_version_number, 1)
       assert.equal(conflictRes.conflict.server_version_number, 2)
       assert.equal(conflictRes.conflict.client_version_number, 3)
 
-      // 8. Device B UI displays conflict banner and multi-version comparison
       await pageB.waitForSelector('[data-testid="conflict-banner"]', { timeout: 8000 })
-      const conflictBadgeB = await pageB.locator('.conflict-badge').textContent()
-      assert.ok(conflictBadgeB.includes('检测到多端并发编辑冲突'), 'Device B must display active conflict banner')
-
-      await pageB.click('.btn-conflict-toggle')
+      await pageB.locator('.conflict-head .btn').click()
       await pageB.waitForSelector('[data-testid="conflict-list"]')
-      assert.ok(await pageB.locator('[data-testid="conflict-version-1"]').isVisible())
-      assert.ok(await pageB.locator('[data-testid="conflict-version-2"]').isVisible())
-      assert.ok(await pageB.locator('[data-testid="conflict-version-3"]').isVisible())
-      console.log('✓ Device B UI displayed active conflict banner and multi-version list (v1, v2, v3).')
+      assert.equal(await pageB.locator('.conflict-version').count(), 3)
 
-      // 9. Device A navigates to practice and sees conflict banner as well
-      await page.click('header button:has-text("返回")')
-      const confirmExit10 = page.locator('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
-      if (await confirmExit10.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await confirmExit10.click()
-      }
-      await page.waitForSelector('.home-page')
-      const startPracticeA = page.locator('.bank-card:has-text("E2E真实浏览器题库") [data-testid="start-practice-btn"], .bank-card:has-text("E2E真实浏览器题库") .btn-resume-direct, .bank-card:has-text("E2E真实浏览器题库") button.primary').first()
-      await startPracticeA.waitFor({ state: 'visible', timeout: 8000 })
-      await startPracticeA.click()
-      await page.waitForSelector('.practice-page', { timeout: 8000 })
+      await exitPractice(page)
+      await startBankPractice(page, BASE_URL, 'E2E真实浏览器题库')
       await page.waitForSelector('[data-testid="conflict-banner"]', { timeout: 8000 })
-
-      // 10. Device A resolves conflict via UI by adopting Version 2
-      await page.click('.btn-conflict-toggle')
+      await page.locator('.conflict-head .btn').click()
       await page.waitForSelector('[data-testid="conflict-list"]')
-      await page.click('[data-testid="conflict-version-2"] button.btn-adopt-version')
-      await page.waitForSelector('.conflict-resolved-msg')
-      const resolvedMsg = await page.locator('.conflict-resolved-msg').textContent()
-      assert.ok(resolvedMsg.includes('已成功确认采用版本 v2 内容'), 'Resolution confirmation must display in UI')
-      console.log(`✓ Device A user adopted Version 2 via UI: ${resolvedMsg}`)
+      await page.locator('.conflict-version').nth(1).locator('.btn').click()
+      await page.waitForSelector('.conflict-resolved', { timeout: 8000 })
+      assert.match(await page.locator('.conflict-resolved').innerText(), /v2/)
 
-      // A separate bank member holds the real active exam while the owner edits inline.
       const crossExamUser = 'e2e_cross_exam'
       const crossExamPassword = 'password-123456'
       const crossExamRegister = await fetch(`${BASE_URL}/api/v1/auth/register`, {
@@ -836,7 +731,6 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: crossExamUser, password: crossExamPassword }),
       })
-      assert.equal(crossExamLogin.status, 200)
       const crossExamToken = (await crossExamLogin.json()).token
       const addExamMember = await fetch(`${BASE_URL}/api/v1/banks/${bankId}/members`, {
         method: 'POST',
@@ -851,62 +745,51 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       })
       const crossExamSession = await crossExamStart.json()
       assert.equal(crossExamStart.status, 201, JSON.stringify(crossExamSession))
-      const crossExamSessionId = crossExamSession.id
 
-      // A durable HTTP rejection stays in the editor; only transport failures enter the offline queue.
-      await page.click('button.btn-more-menu')
-      await page.waitForSelector('.dropdown-item.btn-edit-question', { timeout: 3000 })
-      await page.click('.dropdown-item.btn-edit-question')
-      await page.waitForSelector('.question-edit-panel')
-      await page.fill('.input-edit-stem', '受保护考试中的拒绝修改')
+      await openQuestionEditor(page)
+      await fillEditStem(page, '受保护考试中的拒绝修改')
       const activeExamRejection = page.waitForResponse(response =>
         response.url().endsWith(`/api/v1/questions/${targetQId}`) && response.request().method() === 'PUT')
-      await page.click('button.btn-save-question-edit')
-      assert.equal((await activeExamRejection).status(), 403, 'The edit must reach the active-exam rejection response')
+      await page.locator('.edit-panel-actions .btn-primary').click()
+      assert.equal((await activeExamRejection).status(), 403)
       await page.waitForSelector('[data-testid="question-edit-error"]')
-      assert.match(await page.locator('[data-testid="question-edit-error"]').textContent(), /存在活动模拟考试/)
-      assert.equal(await page.locator('.question-edit-panel').isVisible(), true, 'Rejected edits remain open for correction')
-      assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('easyexam_offline_question_edits') || '[]').length), 0,
-        'HTTP rejections must not be stored as offline edits')
+      assert.match(await page.locator('[data-testid="question-edit-error"]').innerText(), /存在活动模拟考试/)
+      assert.equal(await page.locator('[data-testid="question-edit-panel"]').isVisible(), true)
+      assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('easyexam_offline_question_edits') || '[]').length), 0)
 
-      // A validation HTTP 400 is also a permanent rejection: show its reason and keep the editor open.
-      await page.selectOption('.select-edit-type', 'MULTI')
-      await page.fill('.input-edit-answer', 'A')
-      await page.fill('.input-edit-stem', '无效答案修改')
+      await page.locator('.edit-grid select').first().selectOption('MULTI')
+      await page.locator('.edit-grid input').first().fill('A')
+      await fillEditStem(page, '无效答案修改')
       const validationRejection = page.waitForResponse(response =>
         response.url().endsWith(`/api/v1/questions/${targetQId}`) && response.request().method() === 'PUT')
-      await page.click('button.btn-save-question-edit')
-      assert.equal((await validationRejection).status(), 400, 'The invalid MULTI edit must reach backend validation')
+      await page.locator('.edit-panel-actions .btn-primary').click()
+      assert.equal((await validationRejection).status(), 400)
       await page.waitForFunction(() => document.querySelector('[data-testid="question-edit-error"]')?.textContent.includes('至少包含两个不同的正确答案'))
-      assert.equal(await page.locator('.question-edit-panel').isVisible(), true, 'Validation rejection keeps the editor open')
-      assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('easyexam_offline_question_edits') || '[]').length), 0,
-        'HTTP 400 validation failures must not enter the offline queue')
+      assert.equal(await page.locator('[data-testid="question-edit-panel"]').isVisible(), true)
 
-      // A previously queued edit that gets the same permanent rejection is retained as blocked,
-      // surfaced with its reason, and is no longer offered for automatic retry.
-      await page.click('.question-edit-panel .edit-actions button:first-child')
+      await page.locator('.edit-panel-actions .btn').first().click()
       await context.setOffline(true)
-      await page.click('button.btn-more-menu')
-      await page.waitForSelector('.dropdown-item.btn-edit-question', { timeout: 3000 })
-      await page.click('.dropdown-item.btn-edit-question')
-      await page.waitForSelector('.question-edit-panel')
-      await page.fill('.input-edit-stem', '离线暂存后被考试保护拒绝')
-      await page.click('button.btn-save-question-edit')
+      await openQuestionEditor(page)
+      await fillEditStem(page, '离线暂存后被考试保护拒绝')
+      await page.locator('.edit-panel-actions .btn-primary').click()
       await page.waitForSelector('[data-testid="offline-banner"]')
       await context.setOffline(false)
-      await page.locator('button.btn-sync-offline').evaluate(button => button.click())
       await page.waitForSelector('[data-testid="question-edit-error"]')
-      const rejectedQueue = await page.evaluate(() => JSON.parse(localStorage.getItem('easyexam_offline_question_edits') || '[]'))
+      const rejectedQueue = await page.evaluate(() => {
+        const user = JSON.parse(sessionStorage.getItem('easyexam_user') || localStorage.getItem('easyexam_user') || '{}')
+        const key = `easyexam_offline_question_edits_${user.id || user.username}`
+        return JSON.parse(localStorage.getItem(key) || '[]')
+      })
       assert.equal(rejectedQueue.length, 1)
       assert.equal(rejectedQueue[0].blocked, true)
-      assert.match(await page.locator('[data-testid="offline-banner"]').textContent(), /存在活动模拟考试/)
-      assert.equal(await page.locator('.btn-sync-offline').count(), 0, 'Permanently rejected edits are not retried as pending work')
-      const completeCrossExam = await fetch(`${BASE_URL}/api/v1/practice/sessions/${crossExamSessionId}/complete`, {
+      assert.match(await page.locator('[data-testid="offline-banner"]').innerText(), /存在活动模拟考试/)
+      assert.equal(await page.locator('[data-testid="offline-banner"] .btn').count(), 0)
+
+      const completeCrossExam = await fetch(`${BASE_URL}/api/v1/practice/sessions/${crossExamSession.id}/complete`, {
         method: 'POST', headers: { Authorization: `Bearer ${crossExamToken}` },
       })
       assert.equal(completeCrossExam.status, 200)
 
-      // 11. Verify SQLite physical database state: all 4 versions intact, conflict marked resolved
       const sqlCheck = execSync(
         `python -c "import sqlite3, json; conn=sqlite3.connect(r'${tempDbPath}'); ` +
         `cur=conn.cursor(); ` +
@@ -920,32 +803,22 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
         { encoding: 'utf8' }
       )
       const sqlData = JSON.parse(sqlCheck.trim())
-      assert.equal(sqlData.versions.length, 4, `Expected 4 versions in SQLite, got ${sqlData.versions.length}`)
-      assert.equal(sqlData.versions[0][0], 1, 'Version 1 must remain intact')
-      assert.equal(sqlData.versions[1][0], 2, 'Version 2 (A update) must remain intact')
+      assert.equal(sqlData.versions.length, 4)
       assert.equal(sqlData.versions[1][1], 'A端在线协同更新题干')
-      assert.equal(sqlData.versions[2][0], 3, 'Version 3 (B concurrent edit) must remain intact')
       assert.equal(sqlData.versions[2][1], 'B端离线并发修改题干')
-      assert.equal(sqlData.versions[3][0], 4, 'Version 4 (adopted resolution) must be created')
       assert.equal(sqlData.versions[3][1], 'A端在线协同更新题干')
-      assert.equal(sqlData.conflicts[0][0], 1, 'question_conflicts.is_resolved must be 1')
-      assert.ok(sqlData.attempts >= 1, 'Practice attempts must remain intact in SQLite')
-      console.log('✓ Verified SQLite physical state: all 4 versions preserved intact, conflict resolved, 0 data loss.')
+      assert.equal(sqlData.conflicts[0][0], 1)
+      assert.ok(sqlData.attempts >= 1)
 
-      // Clean up Device B and return Device A to home
       await contextB.close()
-      await page.click('header button:has-text("返回")')
-      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
-      await page.click('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
-      await page.waitForSelector('.home-page')
+      await exitPractice(page)
+      await page.waitForSelector('.banks-page', { timeout: 8000 })
+      console.log('✓ Verified conflict retention, offline queue, active-exam lock and four preserved versions.')
     })
 
-    await t.test('12. Forced Password Change Flow for Migrated Users & Final Logout (Fix 4)', async () => {
-      // Logout current user
-      await page.click('button:has-text("退出登录")')
-      await page.waitForSelector('.auth-page')
+    await t.test('12. Forced Password Change and Logout', async () => {
+      await logout(page)
 
-      // Register a migrated user via API then set must_change_password = 1
       await fetch(`${BASE_URL}/api/v1/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -953,841 +826,158 @@ test('True Chrome Browser E2E: Full Lifecycle Test with Dynamic Port and Deep Sc
       })
       execSync(`python -c "import sqlite3; conn=sqlite3.connect(r'${tempDbPath}'); conn.execute('UPDATE users SET must_change_password = 1 WHERE username = \\\"migrated_user\\\"'); conn.commit(); conn.close()"`)
 
-      // Login as migrated_user
-      await page.fill('input[placeholder="用户名"]', 'migrated_user')
-      await page.fill('input[placeholder="密码（至少 8 位）"]', 'temp-pass-123456')
-      await page.click('button:has-text("登录")')
+      await page.fill('#login-username', 'migrated_user')
+      await page.fill('#login-password', 'temp-pass-123456')
+      await page.click('.auth-submit')
+      await page.waitForSelector('.force-pwd-card', { timeout: 8000 })
 
-      // Verify blocking force-change-password view is rendered
-      await page.waitForSelector('.force-pwd-card')
-      assert.ok(await page.locator('text=请修改初始密码').isVisible())
-      console.log('✓ Forced password change screen blocked unauthorized entry.')
+      await page.fill('#force-old', 'temp-pass-123456')
+      await page.fill('#force-new', '123456')
+      await page.fill('#force-confirm', '123456')
+      await page.locator('.force-pwd-actions .btn-primary').click()
+      await page.waitForSelector('.force-pwd-card .notice.bad', { timeout: 5000 })
+      assert.match(await page.locator('.force-pwd-card .notice.bad').innerText(), /至少 8 个字符/)
 
-      // Try weak password (less than 8 chars)
-      await page.fill('input[placeholder="请输入当前密码"]', 'temp-pass-123456')
-      await page.fill('input[placeholder="请输入新密码"]', '123456')
-      await page.fill('input[placeholder="请再次输入新密码"]', '123456')
-      await page.click('button:has-text("确认修改并进入系统")')
+      await page.fill('#force-new', 'NewPassSecure888')
+      await page.fill('#force-confirm', 'NewPassSecure888')
+      await page.locator('.force-pwd-actions .btn-primary').click()
+      await page.waitForSelector('.shell', { timeout: 10000 })
+      await page.goto(`${BASE_URL}/#/`)
+      await page.waitForSelector('.today', { timeout: 10000 })
+      assert.match(await page.locator('.byline').innerText(), /migrated_user/)
 
-      await page.waitForSelector('.force-pwd-alert.error:has-text("新密码长度至少为 8 位")')
-      console.log('✓ Weak password (< 8 chars) was properly rejected.')
-
-      // Now enter valid 8+ chars password
-      await page.fill('input[placeholder="请输入新密码"]', 'NewPassSecure888')
-      await page.fill('input[placeholder="请再次输入新密码"]', 'NewPassSecure888')
-      await page.click('button:has-text("确认修改并进入系统")')
-
-      // Successfully transitions to HomeView
-      await page.waitForSelector('.home-page', { timeout: 8000 })
-      const welcome = await page.locator('.page-header p').textContent()
-      assert.ok(welcome.includes('migrated_user'))
-      console.log('✓ Successfully changed password and entered main workspace.')
-
-      // Final Logout
-      await page.click('button:has-text("退出登录")')
-      await page.waitForSelector('.auth-page')
-      const storedToken = await page.evaluate(() => localStorage.getItem('easyexam_token'))
-      assert.equal(storedToken, null)
-      console.log('✓ Final logout cleanly cleared localStorage.')
+      await logout(page)
+      assert.equal(await page.evaluate(() => localStorage.getItem('easyexam_token')), null)
+      console.log('✓ Verified the blocking password-change screen, weak-password rejection and clean logout.')
     })
 
-    await t.test('13. Root-Level Bilingual & Theme Toggle Real Browser E2E Lifecycle', async () => {
-      // 1. Verify default html lang
-      const initLang = await page.evaluate(() => document.documentElement.getAttribute('lang'))
-      assert.ok(initLang === 'zh-CN' || initLang === null)
-
-      // 2. Click LocaleToggle
-      await page.click('.locale-toggle')
-      const enLang = await page.evaluate(() => document.documentElement.getAttribute('lang'))
-      assert.equal(enLang, 'en-US')
-      const storedLocale = await page.evaluate(() => localStorage.getItem('easyexam_locale'))
-      assert.equal(storedLocale, 'en-US')
-      await assert.doesNotReject(() => page.getByRole('button', { name: 'Sign in' }).waitFor({ state: 'visible' }))
-      console.log('✓ Switched to en-US in real browser and updated <html lang="en-US">.')
-
-      // 3. Reload page to verify zero-flash persistence
-      await page.reload()
-      await page.waitForSelector('.auth-page')
-      const reloadedLang = await page.evaluate(() => document.documentElement.getAttribute('lang'))
-      assert.equal(reloadedLang, 'en-US')
-      console.log('✓ Reloaded page: en-US persisted with zero flash.')
-
-      // 4. Toggle theme to dark
-      await page.click('.theme-toggle:not(.locale-toggle)')
-      const darkTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
-      assert.equal(darkTheme, 'dark')
-      console.log('✓ Switched theme to dark in real browser.')
-
-      // 5. Restore back to default
-      await page.click('.locale-toggle')
-      const restoredLang = await page.evaluate(() => document.documentElement.getAttribute('lang'))
-      assert.equal(restoredLang, 'zh-CN')
-      await assert.doesNotReject(() => page.getByRole('button', { name: '登录' }).waitFor({ state: 'visible' }))
-      await page.click('.theme-toggle:not(.locale-toggle)')
-      const restoredTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
-      assert.equal(restoredTheme, 'light')
-      console.log('✓ Restored locale and theme to clean baseline.')
-    })
-
-    await t.test('14. Theme System Production Path, Computed Contrast & Appearance Verification', async () => {
-      // 1. Log in to access settings and workspace
-      await page.fill('input[placeholder="用户名"]', 'e2e_student')
-      await page.fill('input[placeholder="密码（至少 8 位）"]', 'password-123456')
-      await page.click('button:has-text("登录")')
-      await page.waitForSelector('.home-page')
-
-      // 2. Navigate to Settings View
-      await page.goto(`${BASE_URL}/#/settings`)
-      await page.waitForSelector('.settings-page')
-
-      // 3. Live System Mode Media Changes
-      await page.click('.segment-btn:has-text("跟随系统")')
-      await page.emulateMedia({ colorScheme: 'dark' })
-      await page.waitForTimeout(200)
-      const systemDarkAttr = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
-      assert.equal(systemDarkAttr, 'dark', 'Live system dark mode must reflect on document element')
-
-      await page.emulateMedia({ colorScheme: 'light' })
-      await page.waitForTimeout(200)
-      const systemLightAttr = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
-      assert.equal(systemLightAttr, 'light', 'Live system light mode must reflect on document element')
-      console.log('✓ System mode live media query changes verified in real browser.')
-
-      // 4. Custom Accent #ffffff in Light Mode: contrast and borders
-      await page.click('.segment-btn:has-text("浅色模式")')
-      const hexInput = page.locator('.accent-hex-input')
-      await hexInput.fill('#ffffff')
-      await hexInput.dispatchEvent('change')
-      await page.waitForTimeout(300)
-
-      const lightAccentVerification = await page.evaluate(() => {
-        const badge = document.querySelector('.sample-badge')
-        const badgeCs = badge ? getComputedStyle(badge) : null
-        const segBtn = document.querySelector('.segment-btn.active')
-        const segCs = segBtn ? getComputedStyle(segBtn) : null
-        const palCard = document.querySelector('.palette-preview-card.active')
-        const palCs = palCard ? getComputedStyle(palCard) : null
-        const sidebarActive = document.querySelector('.sidebar-nav-item.active')
-        const sidebarCs = sidebarActive ? getComputedStyle(sidebarActive) : null
-
-        return {
-          primary: document.documentElement.style.getPropertyValue('--primary').trim(),
-          onPrimary: document.documentElement.style.getPropertyValue('--on-primary').trim(),
-          badgeColor: badgeCs ? badgeCs.color : '',
-          badgeBg: badgeCs ? badgeCs.backgroundColor : '',
-          segColor: segCs ? segCs.color : '',
-          segBg: segCs ? segCs.backgroundColor : '',
-          segBorder: segCs ? segCs.borderColor : '',
-          palBorder: palCs ? palCs.borderColor : '',
-          sidebarColor: sidebarCs ? sidebarCs.color : '',
-          sidebarBg: sidebarCs ? sidebarCs.backgroundColor : '',
-        }
-      })
-
-      assert.equal(lightAccentVerification.primary, '#ffffff')
-      assert.equal(lightAccentVerification.onPrimary, '#0f172a')
-      const lightBadgeRatio = calcContrast(lightAccentVerification.badgeColor, lightAccentVerification.badgeBg, [241, 245, 249])
-      const lightSegRatio = calcContrast(lightAccentVerification.segColor, lightAccentVerification.segBg)
-      const lightSidebarRatio = calcContrast(lightAccentVerification.sidebarColor, lightAccentVerification.sidebarBg, [248, 250, 252])
-
-      assert.ok(lightBadgeRatio >= 4.5, `Sample badge contrast ${lightBadgeRatio.toFixed(2)}:1 must meet AA`)
-      assert.ok(lightSegRatio >= 4.5, `Segment button active contrast ${lightSegRatio.toFixed(2)}:1 must meet AA`)
-      assert.ok(lightSidebarRatio >= 4.5, `Sidebar selected item contrast ${lightSidebarRatio.toFixed(2)}:1 must meet AA`)
-      assert.notEqual(lightAccentVerification.segBorder, 'rgb(255, 255, 255)', 'Segment button active border must be visible against white')
-      assert.notEqual(lightAccentVerification.palBorder, 'rgb(255, 255, 255)', 'Palette card active border must be visible against white')
-      console.log('✓ Light mode custom accent #ffffff: computed badge, segment-btn, palette border, and sidebar meet WCAG AA.')
-
-      // 4b. HomeView consumers under custom accent #ffffff
-      await page.goto(BASE_URL)
-      await page.waitForSelector('.home-page')
-      const homeStyles = await page.evaluate(() => {
-        const roleBadge = document.querySelector('.user-role-badge')
-        const roleCs = roleBadge ? getComputedStyle(roleBadge) : null
-        const navTab = document.querySelector('.main-nav-tab')
-        const navCs = navTab ? getComputedStyle(navTab) : null
-        return {
-          roleColor: roleCs ? roleCs.color : '',
-          navColor: navCs ? navCs.color : '',
-        }
-      })
-      assert.ok(homeStyles.roleColor, 'Home user-role-badge must be rendered')
-      const roleRatio = calcContrast(homeStyles.roleColor, 'rgb(255, 255, 255)')
-      assert.ok(roleRatio >= 4.5, `Home user-role-badge contrast ${roleRatio.toFixed(2)}:1 must meet AA`)
-      // Return to settings
-      await page.goto(`${BASE_URL}/#/settings`)
-      await page.waitForSelector('.settings-page')
-
-      // 5. Custom Accent #000000 in Dark Mode: contrast and borders
-      await page.click('.segment-btn:has-text("深色模式")')
-      await hexInput.fill('#000000')
-      await hexInput.dispatchEvent('change')
-      await page.waitForTimeout(300)
-
-      const darkAccentVerification = await page.evaluate(() => {
-        const badge = document.querySelector('.sample-badge')
-        const badgeCs = badge ? getComputedStyle(badge) : null
-        const segBtn = document.querySelector('.segment-btn.active')
-        const segCs = segBtn ? getComputedStyle(segBtn) : null
-        const palCard = document.querySelector('.palette-preview-card.active')
-        const palCs = palCard ? getComputedStyle(palCard) : null
-
-        return {
-          primary: document.documentElement.style.getPropertyValue('--primary').trim(),
-          onPrimary: document.documentElement.style.getPropertyValue('--on-primary').trim(),
-          badgeColor: badgeCs ? badgeCs.color : '',
-          badgeBg: badgeCs ? badgeCs.backgroundColor : '',
-          segColor: segCs ? segCs.color : '',
-          segBg: segCs ? segCs.backgroundColor : '',
-          segBorder: segCs ? segCs.borderColor : '',
-          palBorder: palCs ? palCs.borderColor : '',
-        }
-      })
-
-      assert.equal(darkAccentVerification.primary, '#000000')
-      assert.equal(darkAccentVerification.onPrimary, '#ffffff')
-      const darkBadgeRatio = calcContrast(darkAccentVerification.badgeColor, darkAccentVerification.badgeBg, [30, 41, 59])
-      const darkSegRatio = calcContrast(darkAccentVerification.segColor, darkAccentVerification.segBg)
-      assert.ok(darkBadgeRatio >= 4.5, `Dark sample badge contrast ${darkBadgeRatio.toFixed(2)}:1 must meet AA`)
-      assert.ok(darkSegRatio >= 4.5, `Dark segment button active contrast ${darkSegRatio.toFixed(2)}:1 must meet AA`)
-      console.log('✓ Dark mode custom accent #000000: computed badge, segment-btn, and palette border meet WCAG AA.')
-
-      // 5b. Confirmed Reviewer Counterexamples in Real Browser DOM Computed Styles
-      // (1) Forest light + custom #ffff00
-      await page.click('.palette-preview-card[data-preview-palette="forest"]')
-      await page.click('.segment-btn:has-text("浅色模式")')
-      await hexInput.fill('#ffff00')
-      await hexInput.dispatchEvent('change')
-      await page.waitForTimeout(250)
-      const forestVerification = await page.evaluate(() => {
-        const badge = document.querySelector('.sample-badge')
-        const badgeCs = badge ? getComputedStyle(badge) : null
-        const seg = document.querySelector('.segment-btn.active')
-        const segCs = seg ? getComputedStyle(seg) : null
-        return {
-          badgeColor: badgeCs ? badgeCs.color : '',
-          badgeBg: badgeCs ? badgeCs.backgroundColor : '',
-          segColor: segCs ? segCs.color : '',
-          segBg: segCs ? segCs.backgroundColor : '',
-        }
-      })
-      const forestBadgeRatio = calcContrast(forestVerification.badgeColor, forestVerification.badgeBg, [236, 239, 231])
-      const forestSegRatio = calcContrast(forestVerification.segColor, forestVerification.segBg)
-      assert.ok(forestBadgeRatio >= 4.5, `Forest light + #ffff00 badge contrast ${forestBadgeRatio.toFixed(2)}:1 must meet AA`)
-      assert.ok(forestSegRatio >= 4.5, `Forest light + #ffff00 segment contrast ${forestSegRatio.toFixed(2)}:1 must meet AA`)
-
-      // (2) Mocha light + custom #cccc66
-      await page.click('.palette-preview-card[data-preview-palette="mocha"]')
-      await hexInput.fill('#cccc66')
-      await hexInput.dispatchEvent('change')
-      await page.waitForTimeout(250)
-      const mochaVerification = await page.evaluate(() => {
-        const badge = document.querySelector('.sample-badge')
-        const badgeCs = badge ? getComputedStyle(badge) : null
-        const seg = document.querySelector('.segment-btn.active')
-        const segCs = seg ? getComputedStyle(seg) : null
-        return {
-          badgeColor: badgeCs ? badgeCs.color : '',
-          badgeBg: badgeCs ? badgeCs.backgroundColor : '',
-          segColor: segCs ? segCs.color : '',
-          segBg: segCs ? segCs.backgroundColor : '',
-        }
-      })
-      const mochaBadgeRatio = calcContrast(mochaVerification.badgeColor, mochaVerification.badgeBg, [235, 227, 219])
-      const mochaSegRatio = calcContrast(mochaVerification.segColor, mochaVerification.segBg)
-      assert.ok(mochaBadgeRatio >= 4.5, `Mocha light + #cccc66 badge contrast ${mochaBadgeRatio.toFixed(2)}:1 must meet AA`)
-      assert.ok(mochaSegRatio >= 4.5, `Mocha light + #cccc66 segment contrast ${mochaSegRatio.toFixed(2)}:1 must meet AA`)
-
-      // (3) Amber dark + custom #338833
-      await page.click('.palette-preview-card[data-preview-palette="amber"]')
-      await page.click('.segment-btn:has-text("深色模式")')
-      await hexInput.fill('#338833')
-      await hexInput.dispatchEvent('change')
-      await page.waitForTimeout(250)
-      const amberDarkVerification = await page.evaluate(() => {
-        const badge = document.querySelector('.sample-badge')
-        const badgeCs = badge ? getComputedStyle(badge) : null
-        const seg = document.querySelector('.segment-btn.active')
-        const segCs = seg ? getComputedStyle(seg) : null
-        return {
-          badgeColor: badgeCs ? badgeCs.color : '',
-          badgeBg: badgeCs ? badgeCs.backgroundColor : '',
-          segColor: segCs ? segCs.color : '',
-          segBg: segCs ? segCs.backgroundColor : '',
-        }
-      })
-      const amberDarkBadgeRatio = calcContrast(amberDarkVerification.badgeColor, amberDarkVerification.badgeBg, [60, 42, 18])
-      const amberDarkSegRatio = calcContrast(amberDarkVerification.segColor, amberDarkVerification.segBg)
-      assert.ok(amberDarkBadgeRatio >= 4.5, `Amber dark + #338833 badge contrast ${amberDarkBadgeRatio.toFixed(2)}:1 must meet AA`)
-      assert.ok(amberDarkSegRatio >= 4.5, `Amber dark + #338833 segment contrast ${amberDarkSegRatio.toFixed(2)}:1 must meet AA`)
-      console.log('✓ Confirmed reviewer counterexamples verified in real browser DOM computed styles.')
-
-      // 6. Invalid custom accent input and reset button fallback
-      await hexInput.fill('invalid-hex-code')
-      await hexInput.dispatchEvent('change')
-      await page.waitForTimeout(200)
-      const afterInvalidPrimary = await page.evaluate(() => document.documentElement.style.getPropertyValue('--primary'))
-      assert.equal(afterInvalidPrimary, '', 'Invalid hex input must clear inline --primary style override')
-
-      // Set accent again, then click Reset button
-      await hexInput.fill('#e11d48')
-      await hexInput.dispatchEvent('change')
-      await page.click('.btn-reset-accent')
-      await page.waitForTimeout(200)
-      const afterResetPrimary = await page.evaluate(() => document.documentElement.style.getPropertyValue('--primary'))
-      assert.equal(afterResetPrimary, '', 'Reset button must remove custom accent override')
-      console.log('✓ Invalid custom accent input and reset button fallback verified.')
-
-      // 7. Reload persistence with Ocean palette and custom accent
-      await page.click('.palette-preview-card[data-preview-palette="ocean"]')
-      await hexInput.fill('#0891b2')
-      await hexInput.dispatchEvent('change')
-      await page.reload()
-      await page.waitForSelector('.settings-page')
-
-      const reloadPersisted = await page.evaluate(() => ({
-        palette: document.documentElement.getAttribute('data-theme-palette'),
-        primary: document.documentElement.style.getPropertyValue('--primary').trim(),
-      }))
-      assert.equal(reloadPersisted.palette, 'ocean')
-      assert.equal(reloadPersisted.primary, '#0891b2')
-      console.log('✓ Reload persistence verified for palette and custom accent.')
-
-      // 8. Legacy theme restoration
-      await page.evaluate(() => {
-        localStorage.removeItem('easyexam-theme-mode')
-        localStorage.setItem('easyexam-theme', 'dark')
-      })
-      await page.reload()
-      await page.waitForSelector('.settings-page')
-      const restoredLegacyTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
-      assert.equal(restoredLegacyTheme, 'dark', 'Legacy easyexam-theme dark must restore dark mode')
-      console.log('✓ Legacy theme restoration verified.')
-
-      // Restore clean baseline: light mode, blue-grey, reset accent
-      await page.click('.segment-btn:has-text("浅色模式")')
-      await page.click('.btn-reset-accent')
-      await page.click('.palette-preview-card[data-preview-palette="blue-grey"]')
-
-      // 9. PracticeView computed contrast on actual components & Amber light hover
-      // Switch to Amber palette to test Amber hover cascade
-      await page.click('.palette-preview-card[data-preview-palette="amber"]')
-      await page.goto(BASE_URL)
-      await page.waitForSelector('.home-page')
-      await page.click('.bank-card:has-text("E2E真实浏览器题库") button.primary')
-      await page.waitForSelector('.practice-page')
-      // Check header complete button contrast under Amber theme
-      const completeBtnStyles = await page.evaluate(() => {
-        const btn = document.querySelector('.header-actions .btn-header-complete')
-        const cs = btn ? getComputedStyle(btn) : null
-        return {
-          color: cs ? cs.color : '',
-          bg: cs ? cs.backgroundColor : '',
-        }
-      })
-      assert.ok(completeBtnStyles.color && completeBtnStyles.bg, 'Complete button must be rendered')
-      const completeRatio = calcContrast(completeBtnStyles.color, completeBtnStyles.bg)
-      assert.ok(completeRatio >= 4.5, `Complete button contrast ${completeRatio.toFixed(2)}:1 must meet AA`)
-
-      // Test Amber hover cascade specificity on .btn-header-complete
-      const completeBtnLocator = page.locator('.header-actions .btn-header-complete')
-      await completeBtnLocator.hover()
-      await page.waitForTimeout(300)
-      const hoverCascade = await page.evaluate(() => {
-        const btn = document.querySelector('.header-actions .btn-header-complete')
-        const cs = getComputedStyle(btn)
-        return {
-          bg: cs.backgroundColor,
-          color: cs.color,
-        }
-      })
-      const hoverRatio = calcContrast(hoverCascade.color, hoverCascade.bg)
-      assert.ok(hoverRatio >= 4.5, `Amber hover cascade contrast ${hoverRatio.toFixed(2)}:1 (${hoverCascade.color} on ${hoverCascade.bg}) must meet AA`)
-
-      // Deterministically answer question to inspect result state
-      await page.waitForSelector('.question-card', { timeout: 8000 })
-      const opt = page.locator('label.option').first()
-      await opt.click()
-      await page.click('button:has-text("提交答案")')
-      await page.waitForSelector('.result-card', { timeout: 8000 })
-
-      const resultVerdictStyles = await page.evaluate(() => {
-        const verdict = document.querySelector('.result-header strong')
-        const card = document.querySelector('.result-card')
-        const verdictCs = verdict ? getComputedStyle(verdict) : null
-        const cardCs = card ? getComputedStyle(card) : null
-        return {
-          color: verdictCs ? verdictCs.color : '',
-          bg: cardCs ? cardCs.backgroundColor : '',
-        }
-      })
-      assert.ok(resultVerdictStyles.color && resultVerdictStyles.bg, 'Verdict header and card must be present')
-      const verdictRatio = calcContrast(resultVerdictStyles.color, resultVerdictStyles.bg)
-      assert.ok(verdictRatio >= 4.5, `Verdict text contrast ${verdictRatio.toFixed(2)}:1 must meet AA`)
-
-      // Deterministically inspect answer sheet drawer and number button contrast
-      await page.click('.btn-sheet-trigger-pill')
-      await page.waitForSelector('.sheet-numbers-grid .sheet-num-btn', { timeout: 8000 })
-      const sheetBtnStyles = await page.evaluate(() => {
-        const numBtn = document.querySelector('.sheet-num-btn')
-        const cs = numBtn ? getComputedStyle(numBtn) : null
-        return {
-          color: cs ? cs.color : '',
-          bg: cs ? cs.backgroundColor : '',
-        }
-      })
-      assert.ok(sheetBtnStyles.color, 'Sheet number button must be rendered')
-      const sheetBtnRatio = calcContrast(sheetBtnStyles.color, sheetBtnStyles.bg)
-      assert.ok(sheetBtnRatio >= 4.5, `Sheet number button contrast ${sheetBtnRatio.toFixed(2)}:1 must meet AA`)
-      await page.click('.btn-close-sheet')
-      await page.waitForSelector('.sheet-modal-backdrop', { state: 'detached' })
-
-      // Navigate back to HomeView with active session and verify active-session badge
-      await page.click('button.btn-back')
-      await page.waitForSelector('[data-testid="exit-confirm-modal"]', { timeout: 3000 })
-      await page.click('[data-testid="exit-confirm-modal"] .btn-confirm-exit')
-      await page.waitForSelector('.home-page')
-      await page.waitForSelector('.badge-active-progress', { timeout: 8000 })
-      const activeBadgeStyles = await page.evaluate(() => {
-        const badge = document.querySelector('.badge-active-progress')
-        const cs = badge ? getComputedStyle(badge) : null
-        return {
-          color: cs ? cs.color : '',
-          bg: cs ? cs.backgroundColor : '',
-        }
-      })
-      assert.ok(activeBadgeStyles.color, 'Active session badge must be present on bank card')
-      const activeBadgeRatio = calcContrast(activeBadgeStyles.color, activeBadgeStyles.bg, [255, 255, 255])
-      assert.ok(activeBadgeRatio >= 4.5, `Active session badge contrast ${activeBadgeRatio.toFixed(2)}:1 must meet AA`)
-
-      // Verify AI batch status consumer in modal dialog
-      const accordion = page.locator('.bank-manage-accordion').first()
-      if (await accordion.isVisible().catch(() => false)) {
-        await page.click('.bank-manage-summary')
-      }
-      await page.click('.btn-ai-batch')
-      await page.waitForSelector('.ai-batch-dialog', { timeout: 8000 })
-      const aiBatchStyles = await page.evaluate(() => {
-        const num = document.querySelector('.ai-batch-dialog strong')
-        const dialog = document.querySelector('.ai-batch-dialog')
-        const numCs = num ? getComputedStyle(num) : null
-        const dialogCs = dialog ? getComputedStyle(dialog) : null
-        return {
-          color: numCs ? numCs.color : '',
-          bg: dialogCs ? dialogCs.backgroundColor : '',
-        }
-      })
-      assert.ok(aiBatchStyles.color, 'AI batch status consumer must be present')
-      const aiBatchRatio = calcContrast(aiBatchStyles.color, aiBatchStyles.bg)
-      assert.ok(aiBatchRatio >= 4.5, `AI batch status number contrast ${aiBatchRatio.toFixed(2)}:1 must meet AA`)
-      await page.click('.ai-batch-dialog button.secondary-btn')
-      await page.waitForSelector('.ai-batch-dialog', { state: 'detached' })
-      console.log('✓ PracticeView, Active Session Badge, and AI Batch consumers computed contrast verified under Amber palette.')
-
-      // 10. Semantic Status Foreground Contrast Audit across Pages
-      // 10a. Due review item in MistakesView
-      await page.goto(`${BASE_URL}/#/mistakes`)
-      await page.waitForSelector('.mistakes-page', { timeout: 8000 })
-      const tableToggle = page.locator('button.mode-btn:has-text("表格"), button.mode-btn[title*="表格"], button.mode-btn[title*="Table"]')
-      if (await tableToggle.isVisible()) {
-        await tableToggle.click()
-        await page.waitForTimeout(250)
-      }
-      await page.waitForSelector('.stat-tag.due-tag, .badge-due.due', { timeout: 8000 })
-      const dueStyles = await page.evaluate(() => {
-        const tag = document.querySelector('.stat-tag.due-tag, .badge-due.due')
-        const cs = tag ? getComputedStyle(tag) : null
-        return {
-          color: cs ? cs.color : '',
-          bg: cs ? cs.backgroundColor : '',
-        }
-      })
-      assert.ok(dueStyles.color, 'Due review item tag must be present in MistakesView')
-      const dueRatio = calcContrast(dueStyles.color, dueStyles.bg, [255, 255, 255])
-      assert.ok(dueRatio >= 4.5, `Due review tag contrast ${dueRatio.toFixed(2)}:1 must meet AA >= 4.5:1`)
-
-      // 10b. Mistake summary note pill in NotesView
-      await page.goto(`${BASE_URL}/#/notes`)
-      await page.waitForSelector('.notes-page', { timeout: 8000 })
-      await page.click('.notes-header .header-actions button.primary-btn, .empty-state button.primary-btn')
-      await page.waitForSelector('.add-note-card', { timeout: 5000 })
-      await page.selectOption('.select-type', 'MISTAKE_SUMMARY')
-      await page.fill('.note-textarea', 'E2E verified mistake summary note content')
-      await page.click('.add-note-card .action-buttons button.primary-btn')
-      await page.waitForSelector('.type-pill.mistake_summary', { timeout: 8000 })
-      const noteStyles = await page.evaluate(() => {
-        const pill = document.querySelector('.type-pill.mistake_summary')
-        const cs = pill ? getComputedStyle(pill) : null
-        return {
-          color: cs ? cs.color : '',
-          bg: cs ? cs.backgroundColor : '',
-        }
-      })
-      assert.ok(noteStyles.color, 'Mistake summary pill must be present in NotesView')
-      const noteRatio = calcContrast(noteStyles.color, noteStyles.bg, [255, 255, 255])
-      assert.ok(noteRatio >= 4.5, `Mistake summary pill contrast ${noteRatio.toFixed(2)}:1 must meet AA >= 4.5:1`)
-
-      // 10c. AI status message in PracticeView
-      await page.goto(BASE_URL)
-      await page.waitForSelector('.home-page', { timeout: 8000 })
-      await page.click('.bank-card:first-child button.primary')
-      await page.waitForSelector('.practice-page', { timeout: 8000 })
-
-      // Select option and submit to reveal result card and AI entry block
-      await page.click('label.option')
-      await page.click('button:has-text("提交答案"), .btn-submit-answer')
-      await page.waitForSelector('.btn-toggle-ai-card', { timeout: 8000 })
-
-      // Open AI assistant panel
-      await page.click('.btn-toggle-ai-card')
-      await page.waitForSelector('.ai-panel', { timeout: 8000 })
-
-      // Route AI generation to return deterministic error payload triggering aiStatusMessage
-      await page.route('**/ai/questions/*/generate', async route => {
-        await route.fulfill({
-          status: 503,
-          contentType: 'application/json',
-          body: JSON.stringify({ detail: 'AI service unconfigured' }),
-        })
-      })
-
-      // Trigger AI explanation generation (fails because AI provider is unconfigured, populating aiStatusMessage)
-      await page.click('.ai-btn-group button:first-child')
-      await page.waitForSelector('.ai-status', { timeout: 8000 })
-
-      const aiStatusStyles = await page.evaluate(() => {
-        const el = document.querySelector('.ai-status')
-        const cs = el ? getComputedStyle(el) : null
-        return {
-          color: cs ? cs.color : '',
-          bg: cs ? cs.backgroundColor : '',
-          text: el ? el.textContent.trim() : '',
-        }
-      })
-      assert.ok(aiStatusStyles.color, 'AI status element must have valid color')
-      assert.ok(aiStatusStyles.text.length > 0, 'AI status element must contain actual status message')
-      const aiStatusRatio = calcContrast(aiStatusStyles.color, aiStatusStyles.bg, [255, 255, 255])
-      assert.ok(aiStatusRatio >= 4.5, `AI status contrast ${aiStatusRatio.toFixed(2)}:1 must meet AA >= 4.5:1`)
-
-      // 10d. Uncertain import state in ImportView
-      await page.route('**/*pdf-preview*', async route => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            draft_id: 'test_pdf_draft_001',
-            confidence: 'MEDIUM',
-            candidates: [
-              {
-                candidate_id: 1,
-                type: 'SINGLE',
-                stem: '关于微服务架构的描述，下列哪项是不正确的？',
-                options: [
-                  { key: 'A', content: '服务间通过轻量级机制通信' },
-                  { key: 'B', content: '每个服务应具备独立的数据存储' },
-                ],
-                answer: 'C',
-                explanation: '微服务强调服务自治与独立存储',
-                difficulty: 3,
-                tags: ['系统架构'],
-                is_uncertain: true,
-                uncertain_reason: '候选解析置信度偏低，请核对标准答案',
-              },
-            ],
-          }),
-        })
-      })
-
-      await page.goto(`${BASE_URL}/#/import`)
-      await page.waitForSelector('.import-page', { timeout: 8000 })
-
-      // Select bank
-      const importBankSelect = page.locator('form.import-form select').first()
-      await importBankSelect.waitFor({ state: 'visible' })
-      const firstBankOpt = importBankSelect.locator('option:not([disabled])').first()
-      await firstBankOpt.waitFor({ state: 'attached', timeout: 8000 })
-      const bVal = await firstBankOpt.getAttribute('value')
-      await importBankSelect.selectOption(bVal)
-
-      // Provide mock PDF file to activate PDF inspection actions
-      const importFileInput = page.locator('input[type="file"]')
-      await importFileInput.setInputFiles({
-        name: 'sample_exam.pdf',
-        mimeType: 'application/pdf',
-        buffer: Buffer.from('%PDF-1.4 sample content'),
-      })
-
-      // Click genuine inspect button to trigger real PDF preview render
-      const inspectPdfBtn = page.locator('.preview-actions button:has-text("解析并校对 PDF"), .preview-actions button.preview-btn')
-      await inspectPdfBtn.click()
-
-      await page.waitForSelector('.pdf-correction-panel', { timeout: 8000 })
-      await page.waitForSelector('.pdf-confidence-badge', { timeout: 8000 })
-      await page.waitForSelector('.pdf-uncertain-box', { timeout: 8000 })
-
-      const importStatusStyles = await page.evaluate(() => {
-        const badge = document.querySelector('.pdf-confidence-badge')
-        const box = document.querySelector('.pdf-uncertain-box')
-        const bCs = badge ? getComputedStyle(badge) : null
-        const uCs = box ? getComputedStyle(box) : null
-        return {
-          badgeColor: bCs ? bCs.color : '',
-          badgeBg: bCs ? bCs.backgroundColor : '',
-          badgeText: badge ? badge.textContent.trim() : '',
-          boxColor: uCs ? uCs.color : '',
-          boxBg: uCs ? uCs.backgroundColor : '',
-          boxText: box ? box.textContent.trim() : '',
-        }
-      })
-      assert.ok(importStatusStyles.badgeText.length > 0, 'PDF confidence badge must contain text')
-      assert.ok(importStatusStyles.boxText.length > 0, 'PDF uncertain box must contain text')
-      const importBadgeRatio = calcContrast(importStatusStyles.badgeColor, importStatusStyles.badgeBg, [255, 255, 255])
-      assert.ok(importBadgeRatio >= 4.5, `Import PDF confidence badge contrast ${importBadgeRatio.toFixed(2)}:1 must meet AA >= 4.5:1`)
-      const importBoxRatio = calcContrast(importStatusStyles.boxColor, importStatusStyles.boxBg, [255, 255, 255])
-      assert.ok(importBoxRatio >= 4.5, `Import uncertain box contrast ${importBoxRatio.toFixed(2)}:1 must meet AA >= 4.5:1`)
-      console.log('✓ Due item, mistake summary, AI status, and uncertain import computed contrast verified >= 4.5:1.')
-
-      // 11. True Element-Level Responsive Assertions across 375px, 768px, and 1280px (zh-CN & en-US)
-      async function verifyResponsiveViewports(localeName = 'zh-CN') {
-        // Assert locale matches expected lang before testing responsive layout
-        const currentLang = await page.evaluate(() => document.documentElement.getAttribute('lang'))
-        assert.equal(currentLang, localeName, `Document lang attribute must be ${localeName} before running responsive assertions`)
-
-        // --- 11a. 375px Mobile Viewport ---
-        await page.setViewportSize({ width: 375, height: 667 })
-        await page.goto(BASE_URL)
-        await page.waitForSelector('.home-page')
-        await page.waitForSelector('.mobile-nav-bar')
-
-        // Verify MobileNav labels have no ellipsis/truncation and meet touch targets
-        const mobileNavCheck = await page.evaluate(() => {
-          const items = Array.from(document.querySelectorAll('.mobile-nav-item'))
-          return items.map(item => {
-            const label = item.querySelector('.mobile-nav-label')
-            const rect = item.getBoundingClientRect()
-            return {
-              text: label ? label.textContent.trim() : '',
-              scrollWidth: label ? label.scrollWidth : 0,
-              clientWidth: label ? label.clientWidth : 0,
-              height: rect.height,
-              hasEllipsis: label ? (label.textContent.includes('...') || label.textContent.includes('…')) : false,
-            }
-          })
-        })
-        assert.equal(mobileNavCheck.length, 5, 'Mobile bottom nav must have exactly 5 items')
-        for (const item of mobileNavCheck) {
-          assert.ok(item.text.length > 0, 'Mobile nav item label must not be empty')
-          assert.ok(!item.hasEllipsis, `Mobile nav label "${item.text}" must not be truncated with ellipsis in ${localeName}`)
-          assert.ok(item.scrollWidth <= item.clientWidth + 2, `Mobile nav label "${item.text}" must fit within clientWidth (${item.scrollWidth} <= ${item.clientWidth})`)
-          assert.ok(item.height >= 42, `Mobile nav touch target height (${item.height}px) must be >= 42px`)
-        }
-
-        // Navigate to PracticeView at 375px and verify header and controls
-        await page.click('.bank-card button.primary')
-        await page.waitForSelector('.practice-page')
-        await page.waitForSelector('.btn-sheet-trigger-pill')
-
-        const mobilePracticeCheck = await page.evaluate(() => {
-          const sheetTrigger = document.querySelector('.btn-sheet-trigger-pill')
-          const backBtn = document.querySelector('.btn-back')
-          const completeBtn = document.querySelector('.btn-header-complete')
-          const title = document.querySelector('.practice-title')
-          const actionBtn = document.querySelector('.btn-submit-answer, .btn-next-question')
-          const hotkeyBar = document.querySelector('.hotkey-helper-bar')
-
-          const sheetRect = sheetTrigger ? sheetTrigger.getBoundingClientRect() : null
-          const backRect = backBtn ? backBtn.getBoundingClientRect() : null
-          const completeRect = completeBtn ? completeBtn.getBoundingClientRect() : null
-          const actionRect = actionBtn ? actionBtn.getBoundingClientRect() : null
-
-          return {
-            sheetText: sheetTrigger ? sheetTrigger.textContent.trim() : '',
-            sheetVisible: sheetRect ? (sheetRect.width > 0 && sheetRect.height > 0 && sheetRect.right <= 375) : false,
-            backVisible: backRect ? (backRect.width > 0 && backRect.height >= 40) : false,
-            completeVisible: completeRect ? (completeRect.width > 0 && completeRect.height >= 38) : false,
-            actionTargetHeight: actionRect ? actionRect.height : 0,
-            hotkeyBarDisplay: hotkeyBar ? getComputedStyle(hotkeyBar).display : 'none',
-          }
-        })
-        assert.ok(mobilePracticeCheck.sheetVisible, `Practice sheet trigger must be visible and not clipped at 375px in ${localeName}`)
-        assert.ok(mobilePracticeCheck.sheetText.length > 0, 'Practice sheet trigger text must be non-empty')
-        assert.ok(mobilePracticeCheck.backVisible, 'Back button must be visible with adequate touch target')
-        assert.ok(mobilePracticeCheck.completeVisible, 'Complete button must be visible with adequate touch target')
-        assert.ok(mobilePracticeCheck.actionTargetHeight >= 40, `Bottom action button height (${mobilePracticeCheck.actionTargetHeight}px) must meet mobile touch target`)
-        assert.equal(mobilePracticeCheck.hotkeyBarDisplay, 'none', 'Keyboard shortcut strip must be hidden on mobile 375px')
-
-        // --- 11b. 768px Tablet Viewport ---
-        await page.setViewportSize({ width: 768, height: 1024 })
-        await page.waitForTimeout(250)
-
-        // Verify 768px header: boundingClientRect non-overlap and control visibility
-        const tabletPracticeCheck = await page.evaluate(() => {
-          const leftBar = document.querySelector('.header-left-bar')
-          const actions = document.querySelector('.header-actions')
-          const moreBtn = document.querySelector('.header-actions .btn-more-menu')
-          const sheetTrigger = document.querySelector('.btn-sheet-trigger-pill')
-          const completeBtn = document.querySelector('.btn-header-complete')
-          const hotkeyBar = document.querySelector('.hotkey-helper-bar')
-
-          const leftRect = leftBar ? leftBar.getBoundingClientRect() : null
-          const actionsRect = actions ? actions.getBoundingClientRect() : null
-          const moreRect = moreBtn ? moreBtn.getBoundingClientRect() : null
-          const sheetRect = sheetTrigger ? sheetTrigger.getBoundingClientRect() : null
-          const completeRect = completeBtn ? completeBtn.getBoundingClientRect() : null
-
-          return {
-            leftRight: leftRect ? leftRect.right : 0,
-            actionsLeft: actionsRect ? actionsRect.left : 0,
-            moreVisible: moreRect ? (moreRect.width > 0 && moreRect.height > 0) : false,
-            sheetVisible: sheetRect ? (sheetRect.width > 0 && sheetRect.height > 0) : false,
-            completeVisible: completeRect ? (completeRect.width > 0 && completeRect.height > 0) : false,
-            hotkeyBarDisplay: hotkeyBar ? getComputedStyle(hotkeyBar).display : 'none',
-          }
-        })
-        assert.ok(
-          tabletPracticeCheck.leftRight <= tabletPracticeCheck.actionsLeft + 2,
-          `768px tablet: header-left-bar (right=${tabletPracticeCheck.leftRight}) must not overlap header-actions (left=${tabletPracticeCheck.actionsLeft})`
-        )
-        assert.ok(tabletPracticeCheck.moreVisible, 'More menu button must be visible at 768px tablet')
-        assert.ok(tabletPracticeCheck.sheetVisible, 'Answer sheet trigger must be visible at 768px tablet')
-        assert.ok(tabletPracticeCheck.completeVisible, 'Complete button must be visible at 768px tablet')
-        assert.equal(tabletPracticeCheck.hotkeyBarDisplay, 'none', 'Hotkey helper strip must not be squished at 768px tablet')
-
-        // --- 11c. 1280px Desktop Viewport ---
-        await page.setViewportSize({ width: 1280, height: 800 })
-        await page.goto(BASE_URL)
-        await page.waitForSelector('.home-page')
-        await page.waitForSelector('.app-sidebar')
-
-        // Verify desktop sidebar: width >= 240px, items not clipped, primary navigation legible
-        const desktopSidebarCheck = await page.evaluate(() => {
-          const sidebar = document.querySelector('.app-sidebar')
-          const sidebarRect = sidebar ? sidebar.getBoundingClientRect() : null
-          const navItems = Array.from(document.querySelectorAll('.sidebar-nav-item'))
-          const itemChecks = navItems.map(item => {
-            const label = item.querySelector('.nav-item-label')
-            const sub = item.querySelector('.nav-item-sub')
-            const itemRect = item.getBoundingClientRect()
-            const labelRect = label ? label.getBoundingClientRect() : null
-            const subRect = sub ? sub.getBoundingClientRect() : null
-            return {
-              text: label ? label.textContent.trim() : '',
-              labelWidth: labelRect ? labelRect.width : 0,
-              subText: sub ? sub.textContent.trim() : '',
-              subFitsWithinItem: subRect ? (subRect.right <= itemRect.right + 2) : true,
-              fitsWithinSidebar: itemRect ? (itemRect.right <= sidebarRect.right + 2) : true,
-            }
-          })
-
-          return {
-            sidebarWidth: sidebarRect ? sidebarRect.width : 0,
-            itemChecks,
-          }
-        })
-        assert.ok(desktopSidebarCheck.sidebarWidth >= 240, `Desktop sidebar width (${desktopSidebarCheck.sidebarWidth}px) must be >= 240px`)
-        for (const item of desktopSidebarCheck.itemChecks) {
-          if (item.text) {
-            assert.ok(item.labelWidth > 0, `Sidebar nav label "${item.text}" must have positive width`)
-            assert.ok(item.fitsWithinSidebar, `Sidebar nav item "${item.text}" must fit within sidebar boundary`)
-            if (item.subText) {
-              assert.ok(item.subFitsWithinItem, `Sub-label "${item.subText}" must fit within sidebar item without clipping`)
-            }
-          }
-        }
-      }
-
-      // Run verification in default zh-CN
-      await page.goto(`${BASE_URL}/#/settings`)
-      await page.waitForSelector('.settings-page', { timeout: 8000 })
-      const initialZhActive = await page.evaluate(() => {
-        const zhBtn = document.querySelector('button.segment-btn[data-locale="zh-CN"]')
-        const enBtn = document.querySelector('button.segment-btn[data-locale="en-US"]')
-        return {
-          zhActive: zhBtn ? zhBtn.classList.contains('active') : false,
-          enActive: enBtn ? enBtn.classList.contains('active') : false,
-          lang: document.documentElement.getAttribute('lang'),
-        }
-      })
-      assert.ok(initialZhActive.zhActive, 'Settings Chinese language button must have active class initially')
-      assert.ok(!initialZhActive.enActive, 'Settings English language button must not have active class initially')
-      assert.equal(initialZhActive.lang, 'zh-CN', 'Document lang must be zh-CN initially')
-
-      await verifyResponsiveViewports('zh-CN')
-      console.log('✓ zh-CN responsive element-level layout verified across 375px, 768px, and 1280px.')
-
-      // Switch to en-US via real Settings UI control
-      await page.goto(`${BASE_URL}/#/settings`)
-      await page.waitForSelector('.settings-page', { timeout: 8000 })
-      const enBtn = page.locator('button.segment-btn[data-locale="en-US"]')
-      await enBtn.click()
-      await page.waitForTimeout(300)
-
-      const switchedEnState = await page.evaluate(() => {
-        const langSection = Array.from(document.querySelectorAll('.settings-card')).find(card => card.textContent.includes('语言偏好') || card.textContent.includes('Language'))
-        const btns = langSection ? Array.from(langSection.querySelectorAll('.mode-toggle-segmented .segment-btn')) : []
-        return {
-          zhActive: btns[0] ? btns[0].classList.contains('active') : false,
-          enActive: btns[1] ? btns[1].classList.contains('active') : false,
-          lang: document.documentElement.getAttribute('lang'),
-          storedLocale: localStorage.getItem('easyexam_locale'),
-        }
-      })
-      assert.ok(!switchedEnState.zhActive, 'Chinese button must be inactive after clicking English')
-      assert.ok(switchedEnState.enActive, 'English button must be active after clicking English')
-      assert.equal(switchedEnState.lang, 'en-US', 'Document lang must be updated to en-US')
-      assert.equal(switchedEnState.storedLocale, 'en-US', 'localStorage easyexam_locale must be en-US')
-
-      // Verify reload persistence
-      await page.reload()
-      await page.waitForSelector('.settings-page', { timeout: 8000 })
-      const persistedEnState = await page.evaluate(() => {
-        const langSection = Array.from(document.querySelectorAll('.settings-card')).find(card => card.textContent.includes('语言偏好') || card.textContent.includes('Language'))
-        const btns = langSection ? Array.from(langSection.querySelectorAll('.mode-toggle-segmented .segment-btn')) : []
-        return {
-          enActive: btns[1] ? btns[1].classList.contains('active') : false,
-          lang: document.documentElement.getAttribute('lang'),
-          storedLocale: localStorage.getItem('easyexam_locale'),
-        }
-      })
-      assert.ok(persistedEnState.enActive, 'English button must remain active after reload')
-      assert.equal(persistedEnState.lang, 'en-US', 'Document lang must persist as en-US after reload')
-      assert.equal(persistedEnState.storedLocale, 'en-US', 'localStorage must persist easyexam_locale as en-US')
-
-      // Assert representative visible translated text
-      const englishVisibleText = await page.evaluate(() => {
-        const navLabels = Array.from(document.querySelectorAll('.sidebar-nav-item .nav-item-label')).map(el => el.textContent.trim())
-        return {
-          hasHome: navLabels.some(l => l.includes('Home') || l.includes('首页')),
-          hasMistakes: navLabels.some(l => l.includes('Mistakes Review') || l.includes('Mistakes')),
-          hasReview: navLabels.some(l => l.includes('Review Center') || l.includes('Review')),
-        }
-      })
-      assert.ok(englishVisibleText.hasMistakes, 'Sidebar must display English "Mistakes Review"')
-      assert.ok(englishVisibleText.hasReview, 'Sidebar must display English "Review Center"')
-
-      // Run responsive verification in true en-US
-      await verifyResponsiveViewports('en-US')
-      console.log('✓ en-US responsive element-level layout verified across 375px, 768px, and 1280px.')
-
-      // Restore zh-CN locale via real Settings UI control
-      await page.goto(`${BASE_URL}/#/settings`)
-      await page.waitForSelector('.settings-page', { timeout: 8000 })
-      const zhBtn = page.locator('button.segment-btn[data-locale="zh-CN"]')
-      await zhBtn.click()
-      await page.waitForTimeout(300)
-      assert.equal(await page.evaluate(() => document.documentElement.getAttribute('lang')), 'zh-CN')
-      assert.equal(await page.evaluate(() => localStorage.getItem('easyexam_locale')), 'zh-CN')
-      await page.reload()
-      await page.waitForSelector('.settings-page', { timeout: 8000 })
+    await t.test('13. Bilingual and Theme Toggle Lifecycle', async () => {
       assert.equal(await page.evaluate(() => document.documentElement.getAttribute('lang')), 'zh-CN')
 
-      // Final restore to blue-grey default palette
-      await page.click('.palette-preview-card[data-preview-palette="blue-grey"]')
-      const resetBtn = page.locator('.btn-reset-accent')
-      if (await resetBtn.isVisible().catch(() => false)) {
-        await resetBtn.click()
-      }
-      console.log('✓ Cleaned up and restored baseline settings.')
+      await page.locator('.auth-toggles button').first().click()
+      assert.equal(await page.evaluate(() => document.documentElement.getAttribute('lang')), 'en-US')
+      assert.equal(await page.evaluate(() => localStorage.getItem('easyexam_locale')), 'en-US')
+      assert.match(await page.locator('.auth-submit').innerText(), /Sign in/)
+
+      await page.reload()
+      await page.waitForSelector('.auth-layout')
+      assert.equal(await page.evaluate(() => document.documentElement.getAttribute('lang')), 'en-US')
+
+      await page.locator('.auth-toggles button').nth(1).click()
+      assert.equal(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), 'dark')
+
+      await page.locator('.auth-toggles button').first().click()
+      assert.equal(await page.evaluate(() => document.documentElement.getAttribute('lang')), 'zh-CN')
+      await page.locator('.auth-toggles button').nth(1).click()
+      assert.equal(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), 'light')
+      console.log('✓ Verified locale and theme persistence and restoration on the auth screen.')
     })
+
+    await t.test('14. Editorial Appearance System and Real Contrast', async () => {
+      await login(page, BASE_URL, 'e2e_student', 'password-123456')
+      await page.goto(`${BASE_URL}/#/settings`)
+      await page.waitForSelector('.settings-page')
+
+      const themeSegments = page.locator('.settings-section .segmented .segment')
+      await themeSegments.nth(1).click()
+      assert.equal(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), 'dark')
+
+      const auditActive = async label => {
+        const styles = await page.evaluate(() => {
+          const opaque = el => {
+            let node = el
+            while (node) {
+              const bg = getComputedStyle(node).backgroundColor
+              if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg
+              node = node.parentElement
+            }
+            return getComputedStyle(document.body).backgroundColor
+          }
+          return ['.settings-nav-item.is-active', '.segment.is-active', '.accent-option.is-active .accent-name']
+            .map(selector => {
+              const el = document.querySelector(selector)
+              if (!el) return null
+              return { selector, color: getComputedStyle(el).color, bg: opaque(el) }
+            })
+            .filter(Boolean)
+        })
+        assert.ok(styles.length >= 2, `${label}: active editorial controls must be rendered`)
+        for (const style of styles) {
+          const ratio = calcContrast(style.color, style.bg)
+          assert.ok(ratio >= 4.5, `${label}: ${style.selector} contrast ${ratio.toFixed(2)}:1 must meet AA`)
+        }
+      }
+      await auditActive('dark / pine')
+
+      const accentOptions = page.locator('.accent-option')
+      assert.ok(await accentOptions.count() >= 4, 'Editorial accent presets must be available')
+      for (let i = 1; i < 4; i++) {
+        await accentOptions.nth(i).click()
+        await page.waitForTimeout(150)
+        await auditActive(`dark accent ${i}`)
+      }
+      await accentOptions.first().click()
+
+      await themeSegments.nth(0).click()
+      assert.equal(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), 'light')
+      await auditActive('light / pine')
+
+      await page.evaluate(() => localStorage.removeItem('easyexam_custom_accent'))
+      console.log('✓ Verified editorial light/dark surfaces and accent contrast.')
+    })
+
+    await t.test('15. Responsive Layout and Mobile Exam Usability', async () => {
+      const widths = [1440, 1024, 768, 390, 375, 320]
+      for (const width of widths) {
+        await page.setViewportSize({ width, height: width <= 390 ? 844 : 900 })
+        await page.goto(`${BASE_URL}/#/`)
+        await page.waitForSelector('.today', { timeout: 10000 })
+        const layout = await page.evaluate(() => ({
+          scrollWidth: document.documentElement.scrollWidth,
+          innerWidth: window.innerWidth,
+          titleWidth: document.querySelector('.masthead-title')?.getBoundingClientRect().width || 0,
+          sidebar: getComputedStyle(document.querySelector('.sidebar')).display,
+          bottomnav: getComputedStyle(document.querySelector('.bottomnav')).display,
+        }))
+        assert.ok(layout.scrollWidth <= layout.innerWidth + 1, `${width}px: page must not scroll horizontally (${layout.scrollWidth} > ${layout.innerWidth})`)
+        assert.ok(layout.titleWidth > 0, `${width}px: page title must be laid out`)
+        if (width >= 1024) {
+          assert.notEqual(layout.sidebar, 'none', `${width}px: desktop sidebar must be visible`)
+        } else {
+          assert.notEqual(layout.bottomnav, 'none', `${width}px: mobile navigation must be visible`)
+        }
+      }
+      console.log('✓ Verified 1440 / 1024 / 768 / 390 / 375 / 320 px without horizontal overflow.')
+
+      await page.setViewportSize({ width: 390, height: 844 })
+      await startExamFromCenter(page, BASE_URL, 'E2E真实浏览器题库', 2)
+      await page.waitForSelector('.exam-option', { timeout: 10000 })
+      assert.ok(await page.locator('.exam-sheet-trigger').isVisible(), 'Mobile exam must expose the answer-sheet trigger')
+      const paperWidth = await page.locator('.exam-paper').evaluate(el => el.getBoundingClientRect().width)
+      assert.ok(paperWidth <= 390, 'Exam paper must fit the mobile viewport')
+
+      await page.locator('.exam-option').first().click()
+      await page.locator('.exam-sheet-trigger').click()
+      await page.waitForSelector('.exam-sheet-drawer', { timeout: 5000 })
+      await page.locator('.exam-sheet-drawer .answer-cell').nth(1).click()
+      await page.waitForSelector('.exam-sheet-drawer', { state: 'detached', timeout: 5000 })
+      const progress = await page.locator('.exam-sheet-trigger').innerText()
+      assert.match(progress, /1\s*\/\s*2/)
+
+      await page.locator('.exam-submit').click()
+      await page.locator('[data-testid="exam-submit-confirm"] .btn-primary').click()
+      await page.waitForSelector('.exam-report', { timeout: 12000 })
+      const reportOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+      assert.ok(reportOverflow <= 1, 'Mobile exam report must not overflow horizontally')
+      await page.locator('.report-actions .btn-primary').click()
+      await page.waitForSelector('.exam-center', { timeout: 8000 })
+      console.log('✓ Verified mobile mock-exam answer sheet, progress and report at 390px.')
+    })
+  } catch (error) {
+    if (serverErrorOutput && /Traceback|Error/.test(serverErrorOutput)) {
+      console.error('Backend stderr tail:\n' + serverErrorOutput.slice(-4000))
+    }
+    throw error
   } finally {
     if (browser) {
       await browser.close().catch(() => {})

@@ -380,6 +380,12 @@ MIGRATIONS = {
     );
     CREATE INDEX idx_pdf_drafts_user_bank ON pdf_import_drafts(user_id, bank_id, status);
     """,
+    18: """
+    -- Persist uploaded reference files so notes/materials can be previewed and downloaded later.
+    ALTER TABLE personal_assets ADD COLUMN file_name TEXT;
+    ALTER TABLE personal_assets ADD COLUMN mime_type TEXT;
+    ALTER TABLE personal_assets ADD COLUMN storage_key TEXT;
+    """,
 }
 
 

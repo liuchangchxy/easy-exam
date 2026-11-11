@@ -1,12 +1,55 @@
 from backend.app.domain.learning.scoring import score_answer
 
 
+EXAM_TIME_EXPIRED = "EXAM_TIME_EXPIRED"
+
+
+class ExamTimeExpiredError(ValueError):
+    """An answer/draft arrived after the exam deadline (plus grace window).
+
+    The server must never extend the deadline or score answers that arrived
+    late. The stable ``EXAM_TIME_EXPIRED`` marker lets the client treat this as
+    terminal (stop the offline retry loop) and fetch the final report from the
+    answers the server already holds, instead of retrying forever.
+    """
+
+    code = EXAM_TIME_EXPIRED
+
+    def __init__(self, message: str | None = None):
+        super().__init__(message or f"模考时间已到，已超时，请交卷 [{EXAM_TIME_EXPIRED}]")
+
+
+
+def _has_meaningful_answer(value) -> bool:
+    """Blank drafts (empty string/list/dict) must not become scored attempts."""
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, tuple, set, dict)):
+        return len(value) > 0
+    return True
+
+
 class PracticeService:
     def __init__(self, practices, questions, banks=None, exams=None):
         self.practices = practices
         self.questions = questions
         self.banks = banks
         self.exams = exams
+
+    def _candidate_questions_for_bank(self, mode: str, bank_id: str, user_id: str) -> list[dict]:
+        if mode == "ELIMINATION":
+            return self.questions.list_for_elimination(bank_id, user_id)
+        if mode == "MISTAKE":
+            mistakes = self.practices.list_mistakes(user_id, bank_id)
+            mistake_qids = {m["question_id"] for m in mistakes if not m.get("is_cleared")}
+            return [q for q in self.questions.list_for_bank(bank_id, user_id) if q["id"] in mistake_qids]
+        if mode == "FSRS":
+            dues = self.practices.list_due_reviews(user_id, bank_id)
+            due_qids = {d["question_id"] for d in dues}
+            return [q for q in self.questions.list_for_bank(bank_id, user_id) if q["id"] in due_qids]
+        return self.questions.list_for_bank(bank_id, user_id)
 
     def start_session(
         self,
@@ -20,21 +63,31 @@ class PracticeService:
         question_ids: list[str] | None = None,
         config: dict | None = None,
         record_mistakes: bool | None = None,
+        bank_ids: list[str] | None = None,
     ) -> dict:
-        if self.banks and not self.banks.get_for_user(bank_id, user_id):
-            raise LookupError("question bank not found")
-        if mode == "ELIMINATION":
-            candidate_questions = self.questions.list_for_elimination(bank_id, user_id)
-        elif mode == "MISTAKE":
-            mistakes = self.practices.list_mistakes(user_id, bank_id)
-            mistake_qids = {m["question_id"] for m in mistakes if not m.get("is_cleared")}
-            candidate_questions = [q for q in self.questions.list_for_bank(bank_id, user_id) if q["id"] in mistake_qids]
-        elif mode == "FSRS":
-            dues = self.practices.list_due_reviews(user_id, bank_id)
-            due_qids = {d["question_id"] for d in dues}
-            candidate_questions = [q for q in self.questions.list_for_bank(bank_id, user_id) if q["id"] in due_qids]
-        else:
-            candidate_questions = self.questions.list_for_bank(bank_id, user_id)
+        """Start a session.
+
+        ``bank_ids`` lets a scoped review (due/mistakes/killed/plan) span several
+        banks in one session. The primary ``bank_id`` remains the session's
+        display/report context; every bank in the set is permission-checked.
+        """
+        requested_banks: list[str] = []
+        for bid in [bank_id, *(bank_ids or [])]:
+            if bid and bid not in requested_banks:
+                requested_banks.append(bid)
+        if self.banks:
+            for bid in requested_banks:
+                if not self.banks.get_for_user(bid, user_id):
+                    raise LookupError("question bank not found")
+
+        candidate_questions: list[dict] = []
+        seen_ids: set[str] = set()
+        for bid in requested_banks:
+            for item in self._candidate_questions_for_bank(mode, bid, user_id):
+                if item["id"] in seen_ids:
+                    continue
+                seen_ids.add(item["id"])
+                candidate_questions.append(item)
 
         # EE-001: Dynamic exam blueprint assembly and section-based question selection
         if blueprint_id and self.exams:
@@ -53,9 +106,13 @@ class PracticeService:
             raise ValueError(f"当前题库没有符合条件的题目")
 
         selected = questions if blueprint_id else (questions[:total_questions] if total_questions > 0 else questions)
-        question_refs = [{"question_id": item["id"], "version_id": item["version_id"]} for item in selected]
+        question_refs = [
+            {"question_id": item["id"], "version_id": item["version_id"], "bank_id": item["bank_id"]}
+            for item in selected
+        ]
 
         session_config = dict(config or {})
+        session_config["bank_ids"] = requested_banks
         if record_mistakes is not None:
             session_config["record_mistakes"] = record_mistakes
 
@@ -97,24 +154,53 @@ class PracticeService:
         count = self.practices.abandon_all_sessions(user_id)
         return {"status": "abandoned_all", "count": count}
 
+    def _exam_expired(self, session: dict) -> bool:
+        """Whether the exam's hard deadline (plus the fixed 60s grace) has passed."""
+        if session.get("mode") != "EXAM":
+            return False
+        try:
+            limit_sec = int(session.get("time_limit") or 0) * 60
+        except (TypeError, ValueError):
+            return False
+        if limit_sec <= 0:
+            return False
+        created_at_str = session.get("created_at")
+        if not created_at_str:
+            return False
+        from datetime import datetime, timezone
+        try:
+            created_dt = datetime.fromisoformat(str(created_at_str).replace("Z", "+00:00"))
+            if created_dt.tzinfo is None:
+                created_dt = created_dt.replace(tzinfo=timezone.utc)
+            elapsed_sec = (datetime.now(timezone.utc) - created_dt).total_seconds()
+        except Exception:
+            return False
+        return elapsed_sec > limit_sec + 60
+
     def _check_exam_timeout(self, session: dict):
-        if session.get("mode") == "EXAM" and int(session.get("time_limit") or 0) > 0:
-            created_at_str = session.get("created_at")
-            if created_at_str:
-                from datetime import datetime, timezone
-                try:
-                    created_dt = datetime.fromisoformat(str(created_at_str).replace("Z", "+00:00"))
-                    if created_dt.tzinfo is None:
-                        created_dt = created_dt.replace(tzinfo=timezone.utc)
-                    now_dt = datetime.now(timezone.utc)
-                    elapsed_sec = (now_dt - created_dt).total_seconds()
-                    limit_sec = int(session["time_limit"]) * 60
-                    if elapsed_sec > limit_sec + 60:
-                        raise ValueError("模考时间已到，已超时，请交卷")
-                except ValueError:
-                    raise
-                except Exception:
-                    pass
+        if self._exam_expired(session):
+            raise ExamTimeExpiredError()
+
+    def _resolve_session_question(self, session: dict, version_ref: dict):
+        """Resolve the pinned question version for an in-progress session.
+
+        The session snapshot is authoritative: questions can be moved between
+        banks or archived after the session starts, and that must not break the
+        member's ongoing practice nor change where the attempt is attributed.
+        """
+        user_id = session.get("user_id")
+        question = None
+        getter = getattr(self.questions, "get_version_for_session", None)
+        if getter is not None and session.get("id"):
+            question = getter(version_ref["question_id"], version_ref["version_id"], user_id, session["id"])
+        if question is None:
+            question = self.questions.get_version_for_user(version_ref["question_id"], version_ref["version_id"], user_id)
+        if not question:
+            return None
+        attribution_bank = version_ref.get("bank_id") or session.get("bank_id")
+        if attribution_bank:
+            question = {**question, "bank_id": attribution_bank}
+        return question
 
     def submit_attempt(
         self,
@@ -124,7 +210,11 @@ class PracticeService:
         user_answer,
         fsrs_rating: int | None = None,
         mistake_cause: str | None = None,
+        client_attempt_id: str | None = None,
     ):
+        if client_attempt_id is not None:
+            if not isinstance(client_attempt_id, str) or not client_attempt_id.strip() or len(client_attempt_id.strip()) > 200:
+                raise ValueError("client_attempt_id must be a non-empty string of at most 200 characters")
         session = self.practices.get_session(session_id, user_id)
         if not session:
             raise LookupError("practice session not found")
@@ -135,8 +225,8 @@ class PracticeService:
         version_ref = next((item for item in snapshot if item["question_id"] == question_id), None)
         if not version_ref:
             raise LookupError("question not in this session")
-        question = self.questions.get_version_for_user(question_id, version_ref["version_id"], user_id)
-        if not question or question["bank_id"] != session["bank_id"]:
+        question = self._resolve_session_question(session, version_ref)
+        if not question:
             raise LookupError("question not found in session bank")
         result = score_answer(question["type"], user_answer, question["answer"])
         if fsrs_rating is not None:
@@ -146,7 +236,10 @@ class PracticeService:
                 raise ValueError("答错时 FSRS 评级必须为 Again(1)")
             if result["correctness"] == "PARTIAL" and fsrs_rating > 2:
                 raise ValueError("部分得分最多只能选择 Hard(2)")
-        saved = self.practices.save_attempt(user_id, session, question, user_answer, result, fsrs_rating, mistake_cause)
+        saved = self.practices.save_attempt(
+            user_id, session, question, user_answer, result, fsrs_rating, mistake_cause,
+            client_attempt_id=client_attempt_id,
+        )
         if session["mode"] == "EXAM":
             return {
                 "id": saved["id"],
@@ -173,7 +266,7 @@ class PracticeService:
             question["bank_id"],
             "FSRS",
             1,
-            question_refs=[{"question_id": question["id"], "version_id": question["version_id"]}],
+            question_refs=[{"question_id": question["id"], "version_id": question["version_id"], "bank_id": question["bank_id"]}],
         )
         attempt_res = self.submit_attempt(user_id, session["id"], question_id, user_answer, rating, mistake_cause)
         self.complete_session(user_id, session["id"])
@@ -189,12 +282,16 @@ class PracticeService:
         session["answers"] = __import__("json").loads(session.get("answers_json") or "{}")
         session["flags"] = __import__("json").loads(session.get("flags_json") or "[]")
         session["is_completed"] = bool(session.get("is_completed"))
+        # Additive contract: an unfinished exam whose deadline has passed cannot
+        # accept more answers. The client should stop retrying and complete the
+        # session with the server-held answers; local unsent answers stay local.
+        session["is_expired"] = self._exam_expired(session)
         snapshot = __import__("json").loads(session.get("questions_json") or "[]")
         session.pop("user_id", None)
         session.pop("answers_json", None)
         session.pop("flags_json", None)
         session.pop("questions_json", None)
-        session["questions"] = self.questions.list_for_snapshot(snapshot, user_id)
+        session["questions"] = self.questions.list_for_snapshot(snapshot, user_id, session_id=session.get("id"))
         session["question_ids"] = [q["id"] for q in session["questions"]]
         if session["mode"] == "EXAM" and not session["is_completed"]:
             for question in session["questions"]:
@@ -214,7 +311,10 @@ class PracticeService:
         sess = self.practices.get_session(session_id, user_id)
         if sess:
             self._check_exam_timeout(sess)
-        updated = self.practices.update_draft(user_id, session_id, payload.get("current_index"), payload.get("answers"), payload.get("flags"), payload.get("time_spent"))
+        updated = self.practices.update_draft(
+            user_id, session_id, payload.get("current_index"), payload.get("answers"),
+            payload.get("flags"), payload.get("time_spent"), payload.get("base_answers"),
+        )
         if not updated:
             raise LookupError("practice session not found")
         session = self.get_session(user_id, session_id)
@@ -247,10 +347,10 @@ class PracticeService:
                 for q_id, ans_val in answers_map.items():
                     if q_id not in latest:
                         raw_ans = ans_val.get("user_answer", ans_val.get("answer")) if isinstance(ans_val, dict) else ans_val
-                        if raw_ans is not None and raw_ans != "":
+                        if _has_meaningful_answer(raw_ans):
                             v_ref = next((item for item in snapshot if item["question_id"] == q_id), None)
                             if v_ref:
-                                question = self.questions.get_version_for_user(q_id, v_ref["version_id"], user_id)
+                                question = self._resolve_session_question(raw_session, v_ref)
                                 if question:
                                     scored = score_answer(question["type"], raw_ans, question["answer"])
                                     self.practices.save_attempt(user_id, raw_session, question, raw_ans, scored, None, None)
@@ -301,7 +401,21 @@ class PracticeService:
             for item in attempts
         }
         snapshot = __import__("json").loads(session.get("questions_json") or "[]")
-        questions_in_session = self.questions.list_for_snapshot(snapshot, user_id) if hasattr(self.questions, "list_for_snapshot") else []
+        questions_in_session = self.questions.list_for_snapshot(snapshot, user_id, session_id=session.get("id")) if hasattr(self.questions, "list_for_snapshot") else []
+        if session["mode"] == "EXAM":
+            # The report's review section must also cover blank questions, so
+            # expose the standard answer for every question without an attempt.
+            for question in questions_in_session:
+                if question.get("id") in answers:
+                    continue
+                answers[question["id"]] = {
+                    "user_answer": None,
+                    "correct_answer": question.get("answer"),
+                    "score_ratio": 0.0,
+                    "correctness": "UNANSWERED",
+                    "mastery_status": "UNSEEN",
+                    "explanation": question.get("explanation"),
+                }
         if questions_in_session:
             objective_total = sum(1 for q in questions_in_session if str(q.get("type", "SINGLE")).upper() not in {"ESSAY", "SHORT_ANSWER", "SUBJECTIVE"})
         else:
@@ -312,19 +426,21 @@ class PracticeService:
         return {
             "session_id": session_id,
             "bank_id": session["bank_id"],
+            "bank_ids": __import__("json").loads(session.get("config_json") or "{}").get("bank_ids") or [session["bank_id"]],
             "mode": session["mode"],
             "exam_profile_id": session.get("exam_profile_id"),
             "blueprint_id": session.get("blueprint_id"),
             "is_completed": True,
             "total_questions": session["total_questions"],
             "objective_total": objective_total,
-            "answered_count": len(answers),
+            "answered_count": len(attempts),
             "correct_count": correct_count,
             "partial_count": partial_count,
             "incorrect_count": incorrect_count,
             "unanswered_count": unanswered_count,
             "score": total_score,
             "accuracy": accuracy,
+            "time_spent": int(session.get("time_spent") or 0),
             "type_stats": type_stats,
             "tag_stats": tag_stats,
             "answers": answers,

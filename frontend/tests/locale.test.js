@@ -104,7 +104,7 @@ test('English runtime catalog contains no untranslated Chinese copy', () => {
     for (const [key, value] of Object.entries(dictionary)) {
       const keyPath = prefix ? `${prefix}.${key}` : key
       if (typeof value === 'string' && /[\u4e00-\u9fff]/u.test(value)
-          && !['ui.k0645', 'ui.k0646'].includes(keyPath)) untranslated.push(`${keyPath}: ${value}`)
+          && !['ui.k0645', 'ui.k0646', 'ep.settings.lang_zh', 'ep.settings.about_languages_value'].includes(keyPath)) untranslated.push(`${keyPath}: ${value}`)
       else if (value && typeof value === 'object') walk(value, keyPath)
     }
   }
@@ -227,6 +227,17 @@ test('critical session actions and mistakes launchpad keys are present and local
   assert.equal(t('mistakes.cause_oversight'), '审题遗漏')
 })
 
+test('today trend summary renders a natural day window in both locales', () => {
+  // HomeView composes: t('ui.k0392') 7 t('ui.k0393'): attempts
+  setLocale('en-US')
+  assert.equal(`${t('ui.k0392')} 7 ${t('ui.k0393')}`, 'Last 7 days')
+  assert.equal(t('ui.k0394'), 'times')
+  assert.equal(t('ui.k0396'), 'seconds')
+
+  setLocale('zh-CN')
+  assert.equal(`${t('ui.k0392')} 7 ${t('ui.k0393')}`, '近 7 天作答')
+})
+
 test('no raw un-localized Chinese characters remain in Vue template markup', () => {
   const srcDir = path.resolve(fileURLToPath(import.meta.url), '../../src')
   const chineseRegex = /[\u4e00-\u9fa5]/
@@ -248,7 +259,7 @@ test('no raw un-localized Chinese characters remain in Vue template markup', () 
         const noComments = templateContent.replace(/<!--[\s\S]*?-->/g, '')
         const lines = noComments.split('\n')
         lines.forEach((line, idx) => {
-          if (chineseRegex.test(line)) {
+          if (chineseRegex.test(line) && !line.includes('class="brand-mark"')) {
             violations.push(`${ent.name}:${idx + 1} -> ${line.trim()}`)
           }
         })

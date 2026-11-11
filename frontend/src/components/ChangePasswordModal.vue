@@ -1,40 +1,42 @@
 <template>
   <div class="exam-setup-backdrop" @click.self="$emit('close')" @keydown.esc="$emit('close')">
-    <div class="exam-setup-dialog change-pwd-dialog" role="dialog" aria-modal="true" style="width: min(100%, 30rem);">
-      <div class="change-pwd-header">
-        <div class="change-pwd-badge">
-          <LinearIcon name="key" size="14" />
-          <span>{{ t('ui.k0001') }}</span>
+    <section class="exam-setup-dialog change-pwd-dialog" role="dialog" aria-modal="true" aria-labelledby="change-pwd-title">
+      <div class="dialog-header-flex">
+        <div>
+          <div class="rule-label">{{ t('ui.k0001') }}</div>
+          <h2 id="change-pwd-title">{{ t('ui.k0002') }}</h2>
+          <p class="change-pwd-desc">{{ t('ui.k0003') }}</p>
         </div>
-        <h2>{{ t('ui.k0002') }}</h2>
-        <p class="change-pwd-desc">{{ t('ui.k0003') }}</p>
+        <button type="button" class="btn-close-icon" :aria-label="t('ep.common.close')" @click="$emit('close')">
+          <LinearIcon name="x" size="16" />
+        </button>
       </div>
 
-      <div v-if="changePwdError" class="alert-box error">{{ changePwdError }}</div>
-      <div v-if="changePwdSuccess" class="alert-box success">{{ changePwdSuccess }}</div>
+      <div v-if="changePwdError" class="notice bad" role="alert">{{ changePwdError }}</div>
+      <div v-if="changePwdSuccess" class="notice ok">{{ changePwdSuccess }}</div>
 
-      <form @submit.prevent="handleSubmit">
-        <div class="form-field">
-          <label>{{ t('ui.k0004') }}</label>
-          <input v-model="oldPassword" type="password" :placeholder="t('ui.k0005')" required autocomplete="current-password" />
-        </div>
-        <div class="form-field">
-          <label>{{ t('ui.k0006') }}</label>
-          <input v-model="newPassword" type="password" :placeholder="t('ui.k0007')" required minlength="8" autocomplete="new-password" />
-        </div>
-        <div class="form-field">
-          <label>{{ t('ui.k0008') }}</label>
-          <input v-model="confirmPassword" type="password" :placeholder="t('ui.k0009')" required minlength="8" autocomplete="new-password" />
-        </div>
+      <form class="change-pwd-form" @submit.prevent="handleSubmit">
+        <label class="field">
+          <span class="label">{{ t('ui.k0004') }}</span>
+          <input v-model="oldPassword" class="input" type="password" :placeholder="t('ui.k0005')" required autocomplete="current-password" />
+        </label>
+        <label class="field">
+          <span class="label">{{ t('ui.k0006') }}</span>
+          <input v-model="newPassword" class="input" type="password" :placeholder="t('ui.k0007')" required minlength="8" autocomplete="new-password" />
+        </label>
+        <label class="field">
+          <span class="label">{{ t('ui.k0008') }}</span>
+          <input v-model="confirmPassword" class="input" type="password" :placeholder="t('ui.k0009')" required minlength="8" autocomplete="new-password" />
+        </label>
 
-        <div class="dialog-actions">
-          <button type="button" class="secondary-btn" @click="$emit('close')">{{ t('common.cancel') }}</button>
-          <button type="submit" class="primary-btn" :disabled="submitting">
+        <div class="dialog-actions-row">
+          <button type="button" class="btn" @click="$emit('close')">{{ t('common.cancel') }}</button>
+          <button type="submit" class="btn btn-primary" :disabled="submitting">
             {{ submitting ? t('ui.k0640') : t('ui.k0641') }}
           </button>
         </div>
       </form>
-    </div>
+    </section>
   </div>
 </template>
 
@@ -95,119 +97,21 @@ async function handleSubmit() {
 </script>
 
 <style scoped>
-.change-pwd-header {
-  margin-bottom: 1.25rem;
-}
-
-.change-pwd-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.75rem;
+.change-pwd-dialog { width: min(100%, 430px); gap: 0; padding: 22px 24px 20px; }
+.change-pwd-dialog h2 {
+  margin: 3px 0 6px;
+  font-family: var(--font-serif);
+  font-size: 24px;
   font-weight: 600;
-  color: var(--primary-fg, var(--primary));
-  background: var(--primary-light);
-  padding: 0.15rem 0.5rem;
-  border-radius: 4px;
-  margin-bottom: 0.5rem;
 }
-
-.change-pwd-header h2 {
-  margin: 0 0 0.35rem;
-  font-size: 1.25rem;
-  color: var(--text-main);
-}
-
-.change-pwd-desc {
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
-.form-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  margin-bottom: 1rem;
-}
-
-.form-field label {
-  font-size: 0.825rem;
-  font-weight: 500;
-  color: var(--text-main);
-}
-
-.form-field input {
-  padding: 0.5rem 0.75rem;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-strong);
-  background: var(--bg-card);
-  color: var(--text-main);
-  font-size: 0.9rem;
-}
-
-.form-field input:focus {
-  outline: none;
-  border-color: var(--primary-fg, var(--primary));
-  box-shadow: 0 0 0 2px var(--primary-light);
-}
-
-.alert-box {
-  padding: 0.65rem 0.85rem;
-  border-radius: var(--radius-md);
-  font-size: 0.85rem;
-  margin-bottom: 1rem;
-}
-
-.alert-box.error {
-  background: var(--danger-light);
-  color: var(--danger-fg, var(--danger));
-  border: 1px solid var(--danger-border);
-}
-
-.alert-box.success {
-  background: var(--success-light);
-  color: var(--success-fg, var(--success));
-  border: 1px solid rgba(16, 185, 129, 0.28);
-}
-
-.dialog-actions {
+.change-pwd-desc { margin: 0; color: var(--ink-3); font-size: 12.5px; line-height: 1.65; }
+.change-pwd-form { display: flex; flex-direction: column; gap: 12px; margin-top: 18px; }
+.dialog-actions-row {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 1.5rem;
-  border-top: 1px solid var(--border);
-  padding-top: 1rem;
-}
-
-.primary-btn {
-  padding: 0.5rem 1.2rem;
-  background: var(--primary);
-  color: var(--on-primary);
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity 120ms ease;
-}
-
-.primary-btn:hover:not(:disabled) {
-  opacity: 0.9;
-}
-
-.primary-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.secondary-btn {
-  padding: 0.5rem 1rem;
-  background: transparent;
-  color: var(--text-main);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  font-size: 0.875rem;
-  cursor: pointer;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
 }
 </style>

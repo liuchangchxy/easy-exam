@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from backend.app.application.ai_tutor_service import AiGenerationError, AiNotConfiguredError
 from backend.app.dependencies import current_user
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -143,9 +144,19 @@ def get_message_thread(message_id: str, request: Request, user=Depends(current_u
 
 
 class VariantGeneratePayload(BaseModel):
-    original_question_id: str
-    target_bank_id: str
+    original_question_id: str | None = None
+    question_id: str | None = None
+    target_bank_id: str | None = None
     prompt_hint: str = ""
+    prompt: str | None = None
+
+    def resolved(self) -> tuple[str, str | None, str]:
+        original_question_id = (self.original_question_id or self.question_id or "").strip()
+        if not original_question_id:
+            raise ValueError("original_question_id is required")
+        target_bank_id = (self.target_bank_id or "").strip() or None
+        prompt_hint = (self.prompt_hint or self.prompt or "").strip()
+        return original_question_id, target_bank_id, prompt_hint
 
 
 class DraftAcceptPayload(BaseModel):
@@ -155,21 +166,28 @@ class DraftAcceptPayload(BaseModel):
 @router.post("/variants", status_code=201)
 def generate_variant(payload: VariantGeneratePayload, request: Request, user=Depends(current_user)):
     try:
+        original_question_id, target_bank_id, prompt_hint = payload.resolved()
         return request.app.state.services.ai.generate_variant_draft(
             user_id=user["id"],
-            original_question_id=payload.original_question_id,
-            target_bank_id=payload.target_bank_id,
-            prompt_hint=payload.prompt_hint,
+            original_question_id=original_question_id,
+            target_bank_id=target_bank_id,
+            prompt_hint=prompt_hint,
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except AiNotConfiguredError as exc:
+        raise HTTPException(status_code=503, detail="AI 未配置或暂不可用") from exc
+    except AiGenerationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.get("/drafts")
-def list_drafts(status: str = "DRAFT", request: Request = None, user=Depends(current_user)):
-    return request.app.state.services.ai.list_variant_drafts(user["id"], status)
+def list_drafts(status: str = "DRAFT", bank_id: str | None = None, request: Request = None, user=Depends(current_user)):
+    return request.app.state.services.ai.list_variant_drafts(user["id"], status, bank_id)
 
 
 @router.get("/drafts/{draft_id}")

@@ -3,45 +3,39 @@ import { mount } from '@vue/test-utils'
 import MobileNav from '../../src/components/MobileNav.vue'
 
 describe('MobileNav component integration', () => {
-  it('opens more menu on click and emits navigate event when clicking item', async () => {
+  it('renders the five destinations plus the 更多 chrome menu', async () => {
     const wrapper = mount(MobileNav, {
       props: {
-        currentPage: 'home',
+        currentPage: 'review',
       },
     })
 
-    // 1. Initial state: “更多” popup is closed
-    expect(wrapper.find('.mobile-nav-more-popup').exists()).toBe(false)
+    const buttons = wrapper.findAll('button.bn-item')
+    expect(buttons.length).toBe(6)
+    expect(wrapper.findAll('.bn-item.is-active').length).toBe(1)
+    expect(wrapper.findAll('.bn-item.is-active')[0].attributes('class')).toContain('is-active')
 
-    // 2. User clicks “更多” button
-    const moreBtn = wrapper.find('.mobile-nav-item-more')
-    expect(moreBtn.exists()).toBe(true)
-    await moreBtn.trigger('click')
-
-    // 3. Popup appears, import and settings items exist
-    const popup = wrapper.find('.mobile-nav-more-popup')
-    expect(popup.exists()).toBe(true)
-
-    const buttons = popup.findAll('button.more-popup-item')
-    expect(buttons.length).toBe(2)
-
-    // 4. Click import button and verify navigate event
-    const importBtn = buttons[0]
-    await importBtn.trigger('click')
-
+    await buttons[2].trigger('click')
     expect(wrapper.emitted('navigate')).toBeTruthy()
-    expect(wrapper.emitted('navigate')[0]).toEqual(['import'])
+    expect(wrapper.emitted('navigate')[0]).toEqual(['review'])
 
-    // Popup is closed after selection
-    expect(wrapper.find('.mobile-nav-more-popup').exists()).toBe(false)
+    await buttons[4].trigger('click')
+    expect(wrapper.emitted('navigate')[1]).toEqual(['notes'])
+  })
 
-    // 5. Open again and click settings button
-    await moreBtn.trigger('click')
-    expect(wrapper.find('.mobile-nav-more-popup').exists()).toBe(true)
+  it('the 更多 item opens the chrome menu instead of navigating', async () => {
+    const wrapper = mount(MobileNav, { props: { currentPage: 'notes' } })
+    const more = wrapper.findAll('button.bn-item')[5]
+    expect(more.attributes('data-more-trigger')).toBeDefined()
+    expect(more.attributes('aria-haspopup')).toBe('menu')
+    expect(more.attributes('aria-expanded')).toBe('false')
 
-    const settingsBtn = wrapper.find('.mobile-nav-more-popup').findAll('button.more-popup-item')[1]
-    await settingsBtn.trigger('click')
+    await more.trigger('click')
+    expect(wrapper.emitted('more')).toHaveLength(1)
+    expect(wrapper.emitted('navigate')).toBeUndefined()
 
-    expect(wrapper.emitted('navigate')[1]).toEqual(['settings'])
+    await wrapper.setProps({ moreOpen: true, currentPage: 'notes' })
+    expect(wrapper.findAll('button.bn-item')[5].attributes('aria-expanded')).toBe('true')
+    expect(wrapper.findAll('.bn-item.is-active').length).toBe(2)
   })
 })

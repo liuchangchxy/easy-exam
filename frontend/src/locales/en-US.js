@@ -1,6 +1,8 @@
 import ui from './ui-en-US.js'
+import ep from './ep-en-US.js'
 export default {
   ui,
+  ep,
   "app": {
     "name": "EasyExam",
     "subtitle": "Private Cloud Intelligent Exam & Study System"
@@ -345,7 +347,6 @@ export default {
   },
   "sidebar": {
     "config_tools": "Settings & Tools",
-    "blueprint": "Smart Exam Blueprint",
     "drafts": "AI Question Generator",
     "ai_search": "AI Settings",
     "profile": "Knowledge Notes & Profile",
@@ -389,6 +390,7 @@ export default {
     "desc_logout": "Clear credentials & sign out",
     "bank_questions": "{count} Questions",
     "bank_action_practice": "Start Practice",
+    "bank_action_open": "Open bank",
     "no_results": "No matching commands or question banks found",
     "search_placeholder": "Type bank name or command... (ESC to close, ↑↓ to move, ↵ to select)",
     "footer_hint_navigate": "Navigate",
@@ -402,23 +404,9 @@ export default {
     "AUTH_ACCOUNT_EXISTS": "Username already exists",
     "EXAM_ACTIVE_PROTECTED": "Mock exam in progress: The question bank is currently locked to protect active exams and cannot be modified or imported.",
     "QUESTION_INVALID_MULTI": "Multiple-choice questions must contain at least 2 options and at least 2 distinct correct answers.",
-    "VALIDATION_FAILED": "Validation failed: {detail}"
-  },
-  "blueprint": {
-    "mode_simple": "Simple Mode",
-    "mode_advanced": "Advanced Mode",
-    "hide_guide": "Don't show again",
-    "show_guide": "Blueprint Guide",
-    "simple_title": "Question Type & Score Allocation",
-    "simple_desc": "Set question count per type; questions are picked automatically to match standard rules",
-    "total_summary": "{count} questions in total",
-    "sec_single": "Single Choice",
-    "sec_multi": "Multiple Choice",
-    "sec_judge": "True / False",
-    "sec_essay": "Essay / Other",
-    "uniform_difficulty": "Difficulty",
-    "diff_any": "Any Difficulty",
-    "guide_banner": "Configure question type counts and difficulty to generate standardized exam papers with one click"
+    "VALIDATION_FAILED": "Validation failed: {detail}",
+    "AI_NOT_CONFIGURED": "AI is not configured or is unavailable. Check the AI service in Settings.",
+    "AI_GENERATION_FAILED": "AI could not produce a valid variant question. Try again or adjust the prompt."
   },
   "settings": {
     "title": "Settings",
@@ -511,6 +499,23 @@ export default {
     "invalid_answer": "Answer cannot be empty and must match a valid option",
     "answer_reset_prompt": "Question type changed. Please select the correct answer.",
     "reload_latest": "Reload Latest Version",
-    "conflict_detected": "Concurrent edit conflict detected: Question was modified. Server latest version preserved. Please reload."
+    "conflict_detected": "Concurrent edit conflict detected: Question was modified. Server latest version preserved. Please reload.",
+    "conflict_draft_kept": "Your edits are still in the form. Save them as a new version, or discard the draft and load the server version.",
+    "save_as_branch": "Keep my edits as a new version",
+    "discard_and_reload": "Discard draft and load latest",
+    "branch_saved": "Your edits were kept as a new version",
+    "regrade_title": "Standard answer changed",
+    "regrade_offer": "Also re-grade existing attempts",
+    "regrade_hint": "By default only a new version is saved; existing attempts stay scored on the original version.",
+    "regrade_warning": "Re-grading rewrites existing attempts, mistake and mastery state, and may reschedule FSRS. It affects every user who answered this question.",
+    "regrade_fsrs": "Also reschedule FSRS reviews",
+    "version_history": "Version history",
+    "version_history_empty": "No historical versions yet",
+    "version_current": "Current version",
+    "version_view": "View",
+    "version_back": "Back to editing",
+    "version_preview_hint": "Historical versions are read-only; practice and editing always use the current version.",
+    "version_created": "Created {date}",
+    "version_load_failed": "Failed to load version history"
   }
 }
