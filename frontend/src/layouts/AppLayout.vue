@@ -6,13 +6,10 @@
       :bank-count="banks.length"
       :review-count="reviewCount"
       :learning-trends="learningTrends"
-      :theme="theme"
       @navigate="handleNavigate"
       @action="handleSidebarAction"
       @change-password="showChangePasswordModal = true"
       @logout="auth.logout"
-      @toggle-theme="toggleTheme"
-      @toggle-locale="toggleLocale"
     />
     <div class="main">
       <header class="topbar">

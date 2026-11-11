@@ -574,8 +574,6 @@ img { max-width: 100%; }
 .side-foot .nav-item { height: 34px; }
 .user-mini { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 2px; width: 100%; color: var(--d-spine-ink-2); }
 .user-mini:hover { background: var(--d-spine-hover); color: var(--d-spine-ink); }
-.sidebar .icon-btn { color: var(--d-spine-ink-3); }
-.sidebar .icon-btn:hover { color: var(--d-spine-ink); background: var(--d-spine-hover); }
 .user-meta { display: flex; flex-direction: column; min-width: 0; }
 .user-name { font-size: 12.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--d-spine-ink); }
 .user-sub { font-size: 12px; color: var(--d-spine-ink-3); }
@@ -1704,8 +1702,6 @@ dialog.dlg:focus { outline: none; }
   .nav-item { justify-content: center; padding: 0; height: 38px; }
   .nav-item .label, .nav-count { display: none; }
   .nav-item.is-active::before { left: 0; top: 10px; bottom: 10px; }
-  .side-tools { justify-content: center; }
-  .side-tools-note { display: none; }
   .side-foot .user-mini { justify-content: center; padding: 4px; }
   .bank-body { grid-template-columns: 160px minmax(0, 1fr); gap: 24px; }
 }

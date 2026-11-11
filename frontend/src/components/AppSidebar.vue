@@ -53,16 +53,6 @@
         <span class="label">{{ t('ep.nav.settings') }}</span>
       </button>
 
-      <div class="side-tools">
-        <button type="button" class="icon-btn" :title="t('ep.action.theme')" :aria-label="t('ep.action.theme')" @click="$emit('toggle-theme')">
-          <LinearIcon :name="theme === 'dark' ? 'sun' : 'moon'" :size="16" />
-        </button>
-        <button type="button" class="icon-btn" :title="t('ep.action.language')" :aria-label="t('ep.action.language')" @click="$emit('toggle-locale')">
-          <LinearIcon name="globe" :size="16" />
-        </button>
-        <span class="side-tools-note">{{ localeLabel }}</span>
-      </div>
-
       <button type="button" class="user-mini" :aria-label="t('ep.account.menu')" @click="showUserMenu = !showUserMenu">
         <span class="avatar">{{ userInitial }}</span>
         <span class="user-meta">
@@ -88,14 +78,6 @@
             <LinearIcon name="key" :size="15" />
             <span>{{ t('ep.account.change_password') }}</span>
           </button>
-          <button type="button" class="popover-action" @click="handleAction('theme')">
-            <LinearIcon :name="theme === 'dark' ? 'sun' : 'moon'" :size="15" />
-            <span>{{ t('ep.action.theme') }}</span>
-          </button>
-          <button type="button" class="popover-action" @click="handleAction('locale')">
-            <LinearIcon name="globe" :size="15" />
-            <span>{{ t('ep.action.language') }}</span>
-          </button>
           <button type="button" class="popover-action is-danger" @click="handleAction('logout')">
             <LinearIcon name="logout" :size="15" />
             <span>{{ t('ep.account.logout') }}</span>
@@ -111,7 +93,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import LinearIcon from './LinearIcon.vue'
 import { useLocale } from '../composables/useLocale.js'
 
-const { t, locale } = useLocale()
+const { t } = useLocale()
 
 const props = defineProps({
   currentPage: { type: String, default: 'today' },
@@ -119,10 +101,9 @@ const props = defineProps({
   bankCount: { type: Number, default: 0 },
   reviewCount: { type: Number, default: 0 },
   learningTrends: { type: Object, default: null },
-  theme: { type: String, default: 'light' },
 })
 
-const emit = defineEmits(['navigate', 'action', 'logout', 'toggle-theme', 'toggle-locale', 'change-password'])
+const emit = defineEmits(['navigate', 'action', 'logout', 'change-password'])
 
 const showUserMenu = ref(false)
 
@@ -139,7 +120,6 @@ const userInitial = computed(() => {
   return name ? name.charAt(0).toUpperCase() : '?'
 })
 
-const localeLabel = computed(() => (locale.value === 'en-US' ? t('ep.settings.lang_en') : t('ep.settings.lang_zh')))
 const coveragePercent = computed(() => {
   const value = Number(props.learningTrends?.coverage_percent)
   return Number.isFinite(value) ? Math.max(0, Math.min(100, Math.round(value))) : 0
@@ -153,8 +133,6 @@ function handleAction(action) {
   showUserMenu.value = false
   if (action === 'settings') emit('navigate', 'settings')
   else if (action === 'change-password') emit('change-password')
-  else if (action === 'theme') emit('toggle-theme')
-  else if (action === 'locale') emit('toggle-locale')
   else if (action === 'logout') emit('logout')
 }
 
@@ -184,21 +162,6 @@ onUnmounted(() => {
   text-align: left;
   cursor: pointer;
   color: inherit;
-}
-
-.side-tools {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px 0 6px;
-}
-
-.side-tools-note {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--d-spine-ink-3);
-  letter-spacing: .04em;
 }
 
 .user-popover {
