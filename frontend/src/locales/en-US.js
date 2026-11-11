@@ -347,7 +347,6 @@ export default {
   },
   "sidebar": {
     "config_tools": "Settings & Tools",
-    "blueprint": "Smart Exam Blueprint",
     "drafts": "AI Question Generator",
     "ai_search": "AI Settings",
     "profile": "Knowledge Notes & Profile",
@@ -408,22 +407,6 @@ export default {
     "VALIDATION_FAILED": "Validation failed: {detail}",
     "AI_NOT_CONFIGURED": "AI is not configured or is unavailable. Check the AI service in Settings.",
     "AI_GENERATION_FAILED": "AI could not produce a valid variant question. Try again or adjust the prompt."
-  },
-  "blueprint": {
-    "mode_simple": "Simple Mode",
-    "mode_advanced": "Advanced Mode",
-    "hide_guide": "Don't show again",
-    "show_guide": "Blueprint Guide",
-    "simple_title": "Question Type & Score Allocation",
-    "simple_desc": "Set question count per type; questions are picked automatically to match standard rules",
-    "total_summary": "{count} questions in total",
-    "sec_single": "Single Choice",
-    "sec_multi": "Multiple Choice",
-    "sec_judge": "True / False",
-    "sec_essay": "Essay / Other",
-    "uniform_difficulty": "Difficulty",
-    "diff_any": "Any Difficulty",
-    "guide_banner": "Configure question type counts and difficulty to generate standardized exam papers with one click"
   },
   "settings": {
     "title": "Settings",

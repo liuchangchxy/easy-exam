@@ -347,7 +347,6 @@ export default {
   },
   "sidebar": {
     "config_tools": "配置与工具",
-    "blueprint": "智能组卷",
     "drafts": "AI智能出题",
     "ai_search": "AI模型设置",
     "profile": "知识笔记 / 个人中心",
@@ -408,22 +407,6 @@ export default {
     "VALIDATION_FAILED": "输入校验失败：{detail}",
     "AI_NOT_CONFIGURED": "AI 尚未配置或暂不可用，请在设置中检查 AI 服务。",
     "AI_GENERATION_FAILED": "AI 未能生成有效的变式题，请稍后重试或调整提示。"
-  },
-  "blueprint": {
-    "mode_simple": "简易模式",
-    "mode_advanced": "高级模式",
-    "hide_guide": "不再提示",
-    "show_guide": "组卷说明",
-    "simple_title": "题型与分值配比",
-    "simple_desc": "直接设定各题型出题量，系统将自动从题库按规则精准组卷",
-    "total_summary": "共 {count} 道题目",
-    "sec_single": "单选题 (道)",
-    "sec_multi": "多选题 (道)",
-    "sec_judge": "判断题 (道)",
-    "sec_essay": "简答/其他 (道)",
-    "uniform_difficulty": "试题难度",
-    "diff_any": "难度不限 (随机)",
-    "guide_banner": "设置模考中各题型的题目数量与难度比例，一键智能生成标准化考卷"
   },
   "settings": {
     "title": "系统设置",

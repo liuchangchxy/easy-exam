@@ -139,9 +139,7 @@
       @practice-bank="handlePracticeBank"
     />
 
-    <BlueprintModal v-if="activeDialog === 'blueprint'" :token="auth.token.value" @close="activeDialog = null" />
     <AiDraftsModal v-if="activeDialog === 'drafts'" :token="auth.token.value" @close="activeDialog = null" />
-    <AiConfigModal v-if="activeDialog === 'ai'" :token="auth.token.value" @close="activeDialog = null" />
     <ChangePasswordModal v-if="showChangePasswordModal" :token="auth.token.value" @close="showChangePasswordModal = false" />
   </div>
 </template>
@@ -152,9 +150,7 @@ import { useRouter, useRoute } from 'vue-router'
 import AppSidebar from '../components/AppSidebar.vue'
 import MobileNav from '../components/MobileNav.vue'
 import CommandPalette from '../components/CommandPalette.vue'
-import BlueprintModal from '../components/BlueprintModal.vue'
 import AiDraftsModal from '../components/AiDraftsModal.vue'
-import AiConfigModal from '../components/AiConfigModal.vue'
 import ChangePasswordModal from '../components/ChangePasswordModal.vue'
 import LinearIcon from '../components/LinearIcon.vue'
 import { useAuthStore } from '../stores/authStore'
@@ -422,7 +418,7 @@ function handleNavigate(targetPage) {
 }
 
 function handleSidebarAction(action) {
-  if (action === 'blueprint' || action === 'drafts' || action === 'ai') {
+  if (action === 'drafts') {
     activeDialog.value = action
   } else if (action === 'change-password') {
     showChangePasswordModal.value = true

@@ -16,6 +16,17 @@
 
 ---
 
+### [2026-11-12] W2-3：退役不可达的旧版组卷 / AI 配置弹窗
+- **触发背景**：W1 波次已把智能组卷改为跳转 `/exams`（由考试中心的单一蓝图抽屉编辑），AI 配置改为跳转 `/settings?section=ai`；命令面板也不再有这两项入口。但 `AppLayout.vue` 仍导入并渲染 `BlueprintModal` 与 `AiConfigModal`，`handleSidebarAction` 仍映射 `blueprint` / `ai`。全仓 census 后确认：`easyexam:open-dialog` 只投递 `drafts`（首页 `easyexam:action` 与题库管理页），命令面板只保留 `drafts` 行，键盘监听只有 Escape；没有任何可达 UI 路径能产生 `activeDialog === 'blueprint' | 'ai'`。
+- **核心决策**：
+  1. **删除两个不可达组件**：`BlueprintModal.vue` 与 `AiConfigModal.vue` 连同 `AppLayout` 的导入、渲染分支和 `blueprint` / `ai` 侧栏动作映射一并移除；`handleSidebarAction` 只保留仍可达的 `drafts`。
+  2. **保留 `AiDraftsModal`**：命令面板「AI 智能出题」行、首页 `easyexam:action === 'drafts'`（含 `/?action=drafts`）以及题库管理页「打开草稿」三条路径均可触发，未退役。
+  3. **同步清理只被退役组件消费的词典键**：`blueprint.*` 命名空间、`sidebar.blueprint`，以及仅由这两个组件引用的 70 个 `ui.kNNNN` 键；`ep.*` 中同名字符串仍被 `ExamCenterView` / `SettingsView` / `AiDraftsModal` 使用，全部保留。JS 词典与生成 JSON 同步删除并通过 `tests/locale.test.js` 的 deepEqual 平价。
+  4. **测试随组件退役（`guard_test_tampering.py` 登记）**：`frontend/tests/components/blueprint_modal.test.js` 测的是已不存在的组件与已被考试中心抽屉取代的 simple/advanced 组卷交互，无法迁移到新编辑器（drawer 的 DOM 与数据模型不同）。因此随组件删除，而非放宽或改写断言；`guard_test_tampering.py` 会把文件删除记为“断言被删除”并告警，按该门禁要求在提交说明与本条登记：这是合法退役，不是为制造成全绿而删测试。
+  5. **脚本中的陈旧引用一并清理**：`scan_localized_templates.js` 移除 `AiConfigModal` 白名单项（同名 URL/密钥占位串在 `SettingsView` 仍被使用）；`verify_and_capture_ui.mjs` 删除已失效的 `.sidebar-nav-item.sub:has-text("智能组卷")` 截图步骤及复制映射。
+- **对应 SPEC 章节**：SPEC.md 前端信息架构（考试中心为唯一组卷编辑器；AI 配置归属设置页）。
+- **影响范围**：`frontend/src/layouts/AppLayout.vue`, `frontend/src/components/{BlueprintModal,AiConfigModal}.vue`（删除）, `frontend/tests/components/blueprint_modal.test.js`（删除）, `frontend/src/locales/{en-US,zh-CN}.{js,json}`, `frontend/src/locales/{ui-en-US,ui-zh-CN}.js`, `frontend/scripts/{scan_localized_templates.js,verify_and_capture_ui.mjs}`, `DECISIONS.md`。
+
 ### [2026-11-12] W2-2：页面级对话框迁移到 AppDialog，并保留 NotesView 双重守卫互不干扰
 - **触发背景**：`新建笔记`、`新建题库`、首页 `创建题库` 与刷题页 `退出练习` 四个对话框各自在 backdrop 上绑定 `keydown.esc`，Escape 只在焦点恰好位于遮罩内时生效；打开时也不移动焦点。W1-2 已为笔记阅读器加入未保存守卫，若直接迁移，create 对话框的 Escape 会继续冒泡到 reader 的 window 监听，误触发关闭/未保存提示。
 - **核心决策**：

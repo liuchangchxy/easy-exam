@@ -31,11 +31,6 @@ const ALLOWLIST = {
     'ESSAY': 'Question-type enum used to select translated input guidance.',
     'SUBJECTIVE': 'Question-type enum used to select translated input guidance.',
   },
-  'components/AiConfigModal.vue': {
-    'https://api.openai.com/v1': 'Example endpoint URL entered by the operator.',
-    'sk-...': 'API key format example, not translatable prose.',
-    'http://localhost:8000/v1/search': 'Example endpoint URL entered by the operator.',
-  },
   'views/MistakesView.vue': {
     'mistakes': 'Tab state enum, not user-facing prose.',
   },
