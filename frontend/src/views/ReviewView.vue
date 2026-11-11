@@ -29,8 +29,8 @@
 
     <template v-else>
       <!-- Due -->
-      <div v-if="activeTab === 'due'" class="review-layout">
-        <div class="review-main">
+      <div v-if="activeTab === 'due'" class="review-layout review-workspace">
+        <div class="review-main review-hub-main">
           <div class="stat-row review-stats">
             <div class="stat">
               <div class="stat-num">{{ dueReviews.length }}</div>
@@ -101,7 +101,7 @@
           </div>
         </div>
 
-        <aside class="review-rail">
+        <aside class="review-rail review-hub-rail">
           <div class="rail-block">
             <div class="rail-title">{{ t('ep.review.tab_mistakes') }}</div>
             <p class="rail-note">{{ t('ep.review.mistakes_empty_hint') }}</p>
@@ -552,23 +552,34 @@ onMounted(load)
 </script>
 
 <style scoped>
-.review-page { padding-top: 26px; }
+.review-page { padding-top: 0; }
+.review-workspace { width: 100%; max-width: 100%; min-width: 0; }
+.review-hub-main,
+.review-hub-rail { min-width: 0; }
+.review-page .page-eyebrow,
+.review-page .panel-title { font-size: 12px; }
+.review-page .tag,
+.review-page .rule-label,
+.review-page .hint,
+.review-page .stat-cap,
+.review-page .list-meta,
+.review-page .section-note { font-size: 12px; }
 .review-notice { margin-top: 16px; }
-.review-layout { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 40px; margin-top: 20px; align-items: start; }
+.review-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 56px; margin-top: 24px; align-items: start; }
 .review-main { min-width: 0; }
 .review-single { margin-top: 18px; }
 .review-stats { margin-bottom: 20px; }
-.review-rail { border-top: 1px solid var(--line); padding-top: 14px; }
+.review-rail { border-left: 1px solid var(--line); padding: 4px 0 0 22px; }
 .rail-block + .rail-block { margin-top: 26px; }
-.rail-title { font-size: 11px; font-weight: 600; letter-spacing: .06em; color: var(--ink-2); }
-.rail-note { margin: 7px 0 12px; font-size: 11.5px; line-height: 1.7; color: var(--ink-3); }
+.rail-title { font-size: 12px; font-weight: 600; letter-spacing: .06em; color: var(--ink-2); }
+.rail-note { margin: 7px 0 12px; font-size: 12px; line-height: 1.7; color: var(--ink-3); }
 .review-toolbar { border-top: 0; margin-top: 0; }
 .due-row, .mistake-row { align-items: flex-start; }
-.qtype { font-size: 10px; letter-spacing: .04em; color: var(--ink-3); width: 46px; flex: none; padding-top: 4px; }
+.qtype { font-size: 12px; letter-spacing: .04em; color: var(--ink-3); width: 52px; flex: none; padding-top: 3px; }
 .qrow-stem {
   display: block;
   font-family: var(--font-serif);
-  font-size: 14px;
+  font-size: 14.5px;
   line-height: 1.7;
   color: var(--ink);
   overflow: hidden;
@@ -577,20 +588,29 @@ onMounted(load)
   -webkit-box-orient: vertical;
 }
 .mistake-actions { gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
-.cause-select { height: 28px; font-size: 11px; width: 104px; }
-.diagnosis-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; margin: 4px 0 24px; }
-.rank, .day-no { font-size: 10.5px; color: var(--ink-4); width: 26px; flex: none; }
+.cause-select { height: 32px; font-size: 12px; width: 112px; }
+.diagnosis-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; margin: 4px 0 24px; }
+.rank, .day-no { font-size: 12px; color: var(--ink-4); width: 28px; flex: none; }
 .plan-row .list-side { margin-left: 12px; }
+@media (max-width: 1280px) {
+  .review-layout { gap: 40px; }
+}
+@media (max-width: 1100px) {
+  .review-layout { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .review-rail {
+    border-left: 0;
+    border-top: 1px solid var(--line-strong);
+    padding: 20px 0 0;
+  }
+}
 @media (max-width: 900px) {
-  .review-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
-  .review-rail { display: none; }
   .diagnosis-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
   .review-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 640px) {
   .mistake-row { flex-wrap: wrap; }
-  .mistake-actions { width: 100%; justify-content: flex-start; padding-left: 46px; }
-  .cause-select { width: 96px; }
+  .mistake-actions { width: 100%; justify-content: flex-start; padding-left: 52px; }
+  .cause-select { width: 104px; }
   .review-page .page-actions .btn { width: 100%; }
 }
 </style>

@@ -6,6 +6,7 @@
       type="button"
       class="bn-item"
       :class="{ 'is-active': currentPage === item.key }"
+      :aria-current="currentPage === item.key ? 'page' : undefined"
       @click="$emit('navigate', item.key)"
     >
       <LinearIcon :name="item.icon" :size="21" />

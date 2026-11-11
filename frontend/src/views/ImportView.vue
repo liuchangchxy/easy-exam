@@ -11,12 +11,54 @@
       </div>
     </div>
 
-    <ol class="import-steps">
-      <li v-for="(label, idx) in steps" :key="label" class="import-step" :class="{ 'is-active': stepNo === idx + 1, 'is-done': stepNo > idx + 1 }">
+    <ol class="import-steps" :aria-label="importCopy.stepsLabel">
+      <li
+        v-for="(step, idx) in steps"
+        :key="step.key"
+        class="import-step"
+        :class="{ 'is-active': stepNo === idx + 1, 'is-done': stepNo > idx + 1 }"
+        :data-step-state="stepState(idx + 1)"
+        :aria-current="stepNo === idx + 1 ? 'step' : undefined"
+      >
         <span class="step-idx mono">{{ String(idx + 1).padStart(2, '0') }}</span>
-        <span class="step-label">{{ t(label) }}</span>
+        <span class="step-label">{{ step.label }}</span>
+        <span class="step-state">{{ stepStateLabel(idx + 1) }}</span>
       </li>
     </ol>
+    <div
+      class="import-progress"
+      role="progressbar"
+      :aria-label="importCopy.stepsLabel"
+      :aria-valuemin="1"
+      :aria-valuemax="4"
+      :aria-valuenow="stepNo"
+    >
+      <i :style="{ width: `${stepPercent}%` }"></i>
+    </div>
+
+    <section v-if="previewing || precheckPanel" class="import-precheck-panel" aria-live="polite">
+      <div class="import-precheck-panel-head">
+        <span class="rule-label">{{ importCopy.precheckTitle }}</span>
+        <span class="tag" :class="precheckPanel && precheckPanel.accepted ? 'ok' : 'warn'">
+          {{ previewing && !precheckPanel ? importCopy.prechecking : precheckPanel?.status }}
+        </span>
+      </div>
+      <div v-if="precheckPanel" class="import-precheck-grid">
+        <div class="import-precheck-cell">
+          <b>{{ precheckPanel.count }}</b>
+          <span>{{ importCopy.parsed }}</span>
+        </div>
+        <div class="import-precheck-cell">
+          <b :class="{ 'is-warn': precheckPanel.duplicates > 0 }">{{ precheckPanel.duplicates }}</b>
+          <span>{{ importCopy.duplicates }}</span>
+        </div>
+        <div class="import-precheck-cell">
+          <b :class="{ 'is-warn': precheckPanel.attention > 0 }">{{ precheckPanel.attention }}</b>
+          <span>{{ importCopy.needsAttention }}</span>
+        </div>
+      </div>
+      <p v-else class="import-precheck-loading">{{ importCopy.prechecking }}</p>
+    </section>
 
     <div class="import-layout">
       <div class="import-main">
@@ -89,15 +131,15 @@
               <span class="tag mono">.pdf</span>
             </div>
 
-            <div v-if="!spreadsheetPreview && !pdfPreview && !duplicatePreview && !result" class="import-actions">
-              <button v-if="isSpreadsheet" type="button" class="btn btn-primary" :disabled="loading || !bankId || !file || !canImport" @click="inspectSpreadsheet">
+            <div v-if="!spreadsheetPreview && !pdfPreview && !textPreview && !duplicatePreview && !result" class="import-actions">
+              <button v-if="isSpreadsheet" type="button" class="btn btn-primary" :disabled="loading || previewing || !bankId || !file || !canImport" @click="inspectSpreadsheet">
                 {{ loading ? t('ep.imports.uploading') : t('ep.imports.inspect_sheet') }}
               </button>
-              <button v-else-if="isPdf" type="button" class="btn btn-primary" :disabled="loading || !bankId || !file || !canImport" @click="inspectPdf">
+              <button v-else-if="isPdf" type="button" class="btn btn-primary" :disabled="loading || previewing || !bankId || !file || !canImport" @click="inspectPdf">
                 {{ loading ? t('ep.imports.uploading') : t('ep.imports.inspect_pdf') }}
               </button>
-              <button v-else type="submit" class="btn btn-primary" :disabled="loading || !bankId || !file || !canImport">
-                {{ loading ? t('ep.imports.uploading') : t('ep.imports.submit_import') }}
+              <button v-else type="button" class="btn btn-primary" :disabled="loading || previewing || !bankId || !file || !canImport" @click="inspectText">
+                {{ loading || previewing ? t('ep.imports.uploading') : t('ep.imports.submit_preview') }}
               </button>
             </div>
           </section>
@@ -105,7 +147,7 @@
           <!-- Spreadsheet field mapping -->
           <section v-if="spreadsheetPreview" class="step-block">
             <div class="step-head">
-              <span class="step-no mono">02</span>
+              <span class="step-no mono">03</span>
               <div>
                 <div class="step-title">{{ t('ep.imports.fields_title') }}</div>
                 <div class="step-sub">{{ t('ep.imports.fields_hint') }}</div>
@@ -215,7 +257,7 @@
           <!-- PDF correction draft -->
           <section v-if="pdfPreview" class="step-block">
             <div class="step-head">
-              <span class="step-no mono">02</span>
+              <span class="step-no mono">03</span>
               <div>
                 <div class="step-title">{{ t('ep.imports.pdf_title') }}</div>
                 <div class="step-sub">{{ t('ep.imports.pdf_hint') }}</div>
@@ -318,6 +360,48 @@
             </div>
           </section>
 
+          <!-- Text precheck and correction -->
+          <section v-if="textPreview" class="step-block import-text-section">
+            <div class="step-head">
+              <span class="step-no mono">03</span>
+              <div>
+                <div class="step-title">{{ importCopy.correctionTitle }}</div>
+                <div class="step-sub">{{ importCopy.textHint }}</div>
+              </div>
+            </div>
+
+            <div v-if="textPreview.duplicates?.length" class="pdf-duplicates import-text-duplicates">
+              <div class="notice warn">
+                <LinearIcon name="alert" :size="15" />
+                <span>{{ t('ep.imports.dup_hint', { count: textPreview.duplicates.length }) }}</span>
+              </div>
+              <div class="list dup-list">
+                <div v-for="(dup, idx) in textPreview.duplicates.slice(0, 8)" :key="idx" class="list-row">
+                  <span class="mono small dim">{{ String(idx + 1).padStart(2, '0') }}</span>
+                  <span class="list-main">
+                    <span class="qrow-stem">{{ dup.stem || dup.question_stem || dup.id }}</span>
+                  </span>
+                </div>
+              </div>
+              <div class="field" style="margin-top: 12px; max-width: 320px">
+                <span class="label">{{ t('ep.imports.strategy') }}</span>
+                <select v-model="duplicateStrategy" class="select">
+                  <option value="" disabled>{{ t('ep.imports.strategy_choose') }}</option>
+                  <option value="skip">{{ t('ep.imports.strategy_skip') }}</option>
+                  <option value="new">{{ t('ep.imports.strategy_new') }}</option>
+                  <option value="merge">{{ t('ep.imports.strategy_merge') }}</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="import-actions">
+              <button type="button" class="btn btn-primary" :disabled="loading || !canImport || textStrategyMissing" @click="submitText">
+                {{ loading ? t('ep.imports.uploading') : t('ep.imports.submit_confirm') }}
+              </button>
+              <button type="button" class="btn btn-quiet" @click="resetTextPreview">{{ t('ep.imports.cancel_preview') }}</button>
+            </div>
+          </section>
+
           <!-- Duplicate strategy -->
           <section v-if="duplicatePreview" class="step-block">
             <div class="step-head">
@@ -396,10 +480,10 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
 import { listBanks } from '../api/banks'
-import { previewFileImport, uploadImport, previewPdfImport, confirmPdfImport } from '../api/imports'
+import { previewImport, previewFileImport, uploadImport, previewPdfImport, confirmPdfImport } from '../api/imports'
 import { useLocale } from '../composables/useLocale.js'
 
-const { t } = useLocale()
+const { t, locale } = useLocale()
 
 const props = defineProps({ token: { type: String, required: true } })
 defineEmits(['back'])
@@ -411,6 +495,7 @@ const file = ref(null)
 const isDragging = ref(false)
 const fileInputRef = ref(null)
 const loading = ref(false)
+const previewing = ref(false)
 const error = ref(null)
 const errorText = computed(() => {
   if (error.value instanceof Error) return error.value.message
@@ -420,6 +505,7 @@ const result = ref(null)
 const duplicatePreview = ref(null)
 const duplicateStrategy = ref('skip')
 const spreadsheetPreview = ref(null)
+const textPreview = ref(null)
 const pdfPreview = ref(null)
 const pdfCandidates = ref([])
 const pdfDuplicateStrategy = ref('')
@@ -435,19 +521,99 @@ const currentMapping = ref({
   options: [],
 })
 
-const steps = [
-  'ep.imports.step_source',
-  'ep.imports.step_fields',
-  'ep.imports.step_duplicates',
-  'ep.imports.step_result',
-]
 const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+
+const importCopy = computed(() => locale.value === 'en-US'
+  ? {
+      stepsLabel: 'Import progress',
+      precheckStep: 'Precheck',
+      correctStep: 'Correct',
+      precheckTitle: 'File precheck',
+      parsed: 'Rows parsed',
+      duplicates: 'Possible duplicates',
+      needsAttention: 'Need correction',
+      prechecking: 'Checking file…',
+      duplicatesFound: 'Duplicates found',
+      needsCorrection: 'Needs confirmation',
+      ready: 'Precheck passed',
+      correctionTitle: 'Review and correct',
+      textHint: 'The text file is parsed. Confirm duplicate handling before writing.',
+      done: 'Done',
+      active: 'In progress',
+      pending: 'Pending',
+    }
+  : {
+      stepsLabel: '导入进度',
+      precheckStep: '预检',
+      correctStep: '纠错',
+      precheckTitle: '文件预检',
+      parsed: '解析出题目',
+      duplicates: '疑似重复',
+      needsAttention: '待纠错',
+      prechecking: '正在预检…',
+      duplicatesFound: '发现重复题目',
+      needsCorrection: '需要人工确认',
+      ready: '预检通过',
+      correctionTitle: '人工纠错',
+      textHint: '文本已解析完成；确认重复处理后再写入题库。',
+      done: '已完成',
+      active: '进行中',
+      pending: '待处理',
+    })
+
+const steps = computed(() => [
+  { key: 'source', label: t('ep.imports.step_source') },
+  { key: 'precheck', label: importCopy.value.precheckStep },
+  { key: 'correct', label: importCopy.value.correctStep },
+  { key: 'result', label: t('ep.imports.step_result') },
+])
 
 const stepNo = computed(() => {
   if (result.value) return 4
-  if (duplicatePreview.value) return 3
-  if (spreadsheetPreview.value || pdfPreview.value) return 2
+  if (duplicatePreview.value || spreadsheetPreview.value || pdfPreview.value || textPreview.value) return 3
+  if (previewing.value) return 2
   return 1
+})
+
+const stepPercent = computed(() => ((stepNo.value - 1) / 3) * 100)
+
+function stepState(index) {
+  if (stepNo.value > index) return 'done'
+  if (stepNo.value === index) return 'active'
+  return 'pending'
+}
+
+function stepStateLabel(index) {
+  const state = stepState(index)
+  return importCopy.value[state]
+}
+
+const precheckPanel = computed(() => {
+  const source = spreadsheetPreview.value || pdfPreview.value || textPreview.value || duplicatePreview.value
+  if (!source) return null
+  const duplicates = Array.isArray(source.duplicates) ? source.duplicates.length : 0
+  let count = Number(source.question_count || 0)
+  let attention = Array.isArray(source.missing) ? source.missing.length : 0
+  let accepted = Boolean(source.accepted)
+  let status = source.reason || ''
+
+  if (source === pdfPreview.value) {
+    count = Number(source.question_count || pdfCandidates.value.length || 0)
+    attention = pdfCandidates.value.filter(candidate => candidate.is_uncertain).length
+    accepted = duplicates === 0 && attention === 0
+    status = duplicates ? importCopy.value.duplicatesFound : attention ? importCopy.value.needsCorrection : importCopy.value.ready
+  } else {
+    accepted = duplicates === 0 && attention === 0 && source.accepted !== false
+    status = duplicates
+      ? importCopy.value.duplicatesFound
+      : attention
+        ? importCopy.value.needsCorrection
+        : accepted
+          ? importCopy.value.ready
+          : (status || importCopy.value.needsCorrection)
+  }
+
+  return { count, duplicates, attention, accepted, status }
 })
 
 const isSpreadsheet = computed(() => {
@@ -460,6 +626,11 @@ const isPdf = computed(() => {
   return name.endsWith('.pdf')
 })
 
+const isTextFile = computed(() => {
+  const name = file.value?.name?.toLowerCase() || ''
+  return name.endsWith('.json') || name.endsWith('.md') || name.endsWith('.markdown') || name.endsWith('.txt')
+})
+
 const selectedBank = computed(() => banks.value.find(b => b.id === bankId.value) || null)
 
 // Import writes questions, so member-level access must be rejected before the
@@ -470,6 +641,7 @@ const canImport = computed(() => {
 })
 
 const pdfStrategyMissing = computed(() => Boolean(pdfPreview.value?.duplicates?.length) && !pdfDuplicateStrategy.value)
+const textStrategyMissing = computed(() => Boolean(textPreview.value?.duplicates?.length) && !duplicateStrategy.value)
 
 const optionSlots = ref(Array(8).fill(''))
 
@@ -499,6 +671,7 @@ function handleSelectedFile(selected) {
   result.value = null
   duplicatePreview.value = null
   spreadsheetPreview.value = null
+  textPreview.value = null
   pdfPreview.value = null
   pdfCandidates.value = []
   pdfDuplicateStrategy.value = ''
@@ -544,6 +717,7 @@ onMounted(async () => {
 
 async function inspectSpreadsheet() {
   if (!file.value || !bankId.value) return
+  previewing.value = true
   loading.value = true
   error.value = ''
   try {
@@ -562,12 +736,14 @@ async function inspectSpreadsheet() {
   } catch (err) {
     error.value = err
   } finally {
+    previewing.value = false
     loading.value = false
   }
 }
 
 async function inspectPdf() {
   if (!file.value || !bankId.value) return
+  previewing.value = true
   loading.value = true
   error.value = ''
   try {
@@ -577,6 +753,51 @@ async function inspectPdf() {
     pdfDuplicateStrategy.value = prev.duplicates?.length ? '' : 'skip'
   } catch (err) {
     error.value = err
+  } finally {
+    previewing.value = false
+    loading.value = false
+  }
+}
+
+async function inspectText() {
+  if (!file.value || !bankId.value || !isTextFile.value) return
+  previewing.value = true
+  loading.value = true
+  error.value = ''
+  try {
+    const text = await file.value.text()
+    const format = file.value.name.toLowerCase().endsWith('.json') ? 'json' : 'markdown'
+    textPreview.value = await previewImport(props.token, bankId.value, { format, content: text })
+    duplicateStrategy.value = textPreview.value?.duplicates?.length ? '' : 'skip'
+  } catch (err) {
+    error.value = err
+  } finally {
+    previewing.value = false
+    loading.value = false
+  }
+}
+
+function resetTextPreview() {
+  textPreview.value = null
+  duplicateStrategy.value = 'skip'
+}
+
+async function submitText() {
+  if (!textPreview.value || !canImport.value || textStrategyMissing.value) return
+  loading.value = true
+  error.value = ''
+  try {
+    const strategy = textPreview.value.duplicates?.length ? duplicateStrategy.value : 'skip'
+    result.value = await uploadImport(props.token, bankId.value, file.value, strategy, null)
+    textPreview.value = null
+    duplicatePreview.value = null
+  } catch (err) {
+    if (err.status === 409 && err.detail && typeof err.detail === 'object') {
+      duplicatePreview.value = err.detail
+      textPreview.value = null
+    } else {
+      error.value = err
+    }
   } finally {
     loading.value = false
   }
@@ -701,6 +922,15 @@ async function submit() {
     await inspectSpreadsheet()
     return
   }
+  if (isTextFile.value && !textPreview.value && !duplicatePreview.value) {
+    await inspectText()
+    return
+  }
+  if (isTextFile.value && textPreview.value) {
+    await submitText()
+    return
+  }
+  if (isPdf.value && pdfPreview.value) return
 
   loading.value = true
   error.value = ''
@@ -738,6 +968,7 @@ function resetImport() {
   result.value = null
   duplicatePreview.value = null
   spreadsheetPreview.value = null
+  textPreview.value = null
   pdfPreview.value = null
   pdfCandidates.value = []
   pdfDuplicateStrategy.value = ''
@@ -752,26 +983,40 @@ function resetImport() {
 .link-btn { border: 0; background: none; padding: 0; color: var(--ink-3); font: inherit; cursor: pointer; }
 .link-btn:hover { color: var(--brand); }
 
-.import-steps { display: flex; gap: 28px; margin: 22px 0 0; padding: 12px 0; list-style: none; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-.import-step { display: flex; align-items: baseline; gap: 7px; color: var(--ink-4); }
+.import-steps { display: flex; gap: 18px; margin: 22px 0 0; padding: 12px 0; list-style: none; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.import-step { display: flex; align-items: baseline; gap: 7px; flex: 1 1 150px; min-width: 0; color: var(--ink-4); }
 .import-step.is-active { color: var(--ink); }
 .import-step.is-done { color: var(--ink-3); }
-.step-idx { font-size: 10px; letter-spacing: .04em; }
+.step-idx { font-size: 12px; letter-spacing: .04em; }
 .step-label { font-size: 12px; }
+.step-state { margin-left: auto; font-size: 12px; color: var(--ink-4); white-space: nowrap; }
+.import-step[data-step-state="active"] .step-state { color: var(--brand); }
+.import-step[data-step-state="done"] .step-state { color: var(--ok); }
 .import-step.is-active .step-label { font-weight: 600; }
+.import-progress { height: 2px; margin: 0 0 18px; background: var(--line); overflow: hidden; }
+.import-progress i { display: block; height: 100%; background: var(--brand); transition: width .2s var(--ease); }
+
+.import-precheck-panel { margin-bottom: 18px; padding: 14px 16px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface-2); }
+.import-precheck-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.import-precheck-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 12px; }
+.import-precheck-cell { min-width: 0; }
+.import-precheck-cell b { display: block; font-family: var(--font-mono); font-size: 24px; font-weight: 500; line-height: 1.15; color: var(--ink); }
+.import-precheck-cell b.is-warn { color: var(--warn); }
+.import-precheck-cell span { display: block; margin-top: 3px; font-size: 12px; color: var(--ink-3); }
+.import-precheck-loading { margin: 8px 0 0; font-size: 12px; color: var(--ink-3); }
 
 .import-layout { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 44px; margin-top: 26px; align-items: start; }
 .import-main { min-width: 0; }
 .import-rail { border-top: 1px solid var(--line); padding-top: 13px; }
-.rail-title { font-size: 11px; font-weight: 600; letter-spacing: .06em; color: var(--ink-2); }
+.rail-title { font-size: 12px; font-weight: 600; letter-spacing: .06em; color: var(--ink-2); }
 .rules-list { margin: 10px 0 0; padding: 0 0 0 15px; }
-.rules-list li { font-size: 11.5px; line-height: 1.8; color: var(--ink-3); margin-bottom: 6px; }
+.rules-list li { font-size: 12px; line-height: 1.8; color: var(--ink-3); margin-bottom: 6px; }
 
 .step-block { padding: 22px 0 26px; border-top: 1px solid var(--line); }
 .step-block:first-of-type { border-top: 0; padding-top: 0; }
 .step-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 20px; }
 .step-head .tag { margin-left: auto; }
-.step-no { font-size: 10px; letter-spacing: .04em; color: var(--ink-4); padding-top: 3px; }
+.step-no { font-size: 12px; letter-spacing: .04em; color: var(--ink-4); padding-top: 3px; }
 .step-title { font-family: var(--font-serif); font-size: 19px; font-weight: 600; line-height: 1.3; }
 .step-sub { margin-top: 4px; font-size: 12px; line-height: 1.7; color: var(--ink-3); max-width: 62ch; }
 
@@ -781,18 +1026,18 @@ function resetImport() {
 .file-icon { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--line); color: var(--ink-3); flex: none; }
 .file-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
 .file-name { font-size: 13px; color: var(--ink); overflow-wrap: anywhere; }
-.file-meta { font-size: 11px; color: var(--ink-3); }
+.file-meta { font-size: 12px; color: var(--ink-3); }
 .file-input-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .file-formats { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
-.file-formats .tag { font-size: 10px; }
+.file-formats .tag { font-size: 12px; }
 
 .import-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
 
 .mapping-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 18px; }
 .sample-block { margin-top: 22px; }
 .sample-scroll { overflow-x: auto; border-top: 1px solid var(--line); }
-.sample-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
-.sample-table th { padding: 7px 10px; text-align: left; font-size: 10px; letter-spacing: .05em; font-weight: 600; color: var(--ink-3); border-bottom: 1px solid var(--line); white-space: nowrap; }
+.sample-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.sample-table th { padding: 7px 10px; text-align: left; font-size: 12px; letter-spacing: .05em; font-weight: 600; color: var(--ink-3); border-bottom: 1px solid var(--line); white-space: nowrap; }
 .sample-table td { padding: 7px 10px; border-bottom: 1px solid var(--line); color: var(--ink-2); vertical-align: top; max-width: 220px; }
 
 .pdf-list { display: flex; flex-direction: column; gap: 0; }
@@ -820,6 +1065,9 @@ function resetImport() {
   .import-page { overflow-x: hidden; }
   .import-steps { gap: 14px; }
   .import-step { flex: 1 1 40%; min-width: 0; }
+  .step-state { display: none; }
+  .import-precheck-grid { gap: 8px; }
+  .import-precheck-cell b { font-size: 20px; }
   .mapping-grid, .pdf-grid { grid-template-columns: minmax(0, 1fr); }
   .file-drop { flex-wrap: wrap; }
   .file-drop .btn { margin-left: 0; flex: 1 1 auto; justify-content: center; }

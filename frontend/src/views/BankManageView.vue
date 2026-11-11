@@ -1,6 +1,6 @@
 <template>
-  <div class="manage-page">
-    <div class="page-head manage-head">
+  <div class="manage-page bank-manage-page">
+    <div class="page-head manage-head bank-manage-head">
       <div class="page-head-main">
         <div class="page-eyebrow">
           <button type="button" class="link-btn" @click="router.push('/banks')">{{ t('ep.banks.title') }}</button>
@@ -28,30 +28,30 @@
       </div>
     </div>
 
-    <div v-if="hasActiveExam" class="notice warn manage-notice">
+    <div v-if="hasActiveExam" class="notice warn manage-notice bank-manage-notice">
       <LinearIcon name="lock" :size="15" />
       <span><strong>{{ t('ep.manage.locked_title') }}</strong> {{ t('ep.manage.locked_desc') }}</span>
     </div>
-    <div v-if="showArchived" class="notice info manage-notice">
+    <div v-if="showArchived" class="notice info manage-notice bank-manage-notice">
       <LinearIcon name="archive" :size="15" />
       <span>{{ t('ep.manage.archived_note') }}</span>
     </div>
-    <div v-else-if="bank && !canEdit" class="notice info manage-notice">
+    <div v-else-if="bank && !canEdit" class="notice info manage-notice bank-manage-notice">
       <LinearIcon name="info" :size="15" />
       <span>{{ t('ep.manage.readonly_note') }}</span>
     </div>
-    <div v-if="successToast" class="notice ok manage-notice">
+    <div v-if="successToast" class="notice ok manage-notice bank-manage-notice">
       <LinearIcon name="check" :size="15" /><span>{{ successToast }}</span>
     </div>
-    <div v-if="conflictAlert" class="notice warn manage-notice">
+    <div v-if="conflictAlert" class="notice warn manage-notice bank-manage-notice">
       <LinearIcon name="alert" :size="15" /><span>{{ conflictAlert }}</span>
       <button type="button" class="btn btn-sm btn-quiet" @click="loadData">{{ t('ep.common.retry') }}</button>
     </div>
-    <div v-if="error" class="notice bad manage-notice">
+    <div v-if="error" class="notice bad manage-notice bank-manage-notice">
       <LinearIcon name="alert" :size="15" /><span>{{ error }}</span>
     </div>
 
-    <div class="tabs manage-tabs">
+    <div class="tabs manage-tabs bank-manage-tabs">
       <button v-for="tab in tabs" :key="tab.key" type="button" class="tab" :class="{ 'is-active': activeTab === tab.key }" @click="activeTab = tab.key">
         {{ t(tab.label) }}<span v-if="tab.count != null" class="count">{{ tab.count }}</span>
       </button>
@@ -61,8 +61,8 @@
 
     <template v-else>
       <!-- Questions workspace -->
-      <section v-if="activeTab === 'questions'" class="manage-workspace">
-        <div class="manage-toolbar">
+      <section v-if="activeTab === 'questions'" class="manage-workspace bank-manage-workspace">
+        <div class="manage-toolbar bank-manage-toolbar">
           <div class="search-box">
             <LinearIcon name="search" :size="15" />
             <input v-model.trim="filters.keyword" class="input" :placeholder="t('ep.manage.search')" />
@@ -95,7 +95,7 @@
           <span class="small dim mono">{{ t('ep.manage.shown', { shown: filteredQuestions.length, total: questions.length }) }}</span>
         </div>
 
-        <div v-if="canEdit && selectedIds.size" class="batch-bar">
+        <div v-if="canEdit && selectedIds.size" class="batch-bar bank-manage-batch">
           <div class="batch-bar-head">
             <span class="batch-title">{{ t('ep.manage.batch_title') }}</span>
             <span class="small dim">{{ t('ep.manage.selected_count', { count: selectedIds.size }) }}</span>
@@ -144,11 +144,11 @@
           <p v-if="batchError" class="error">{{ batchError }}</p>
         </div>
 
-        <div v-if="filteredQuestions.length" class="mtable-wrap">
-          <table class="mtable">
+        <div v-if="filteredQuestions.length" class="mtable-wrap bank-manage-table-wrap">
+          <table class="mtable bank-manage-table">
             <thead>
               <tr>
-                <th v-if="canEdit" class="select-cell">
+                <th v-if="canEdit" class="select-cell bank-manage-col-select">
                   <input
                     type="checkbox"
                     data-testid="select-all"
@@ -157,18 +157,18 @@
                     @change="toggleSelectAll($event.target.checked)"
                   />
                 </th>
-                <th style="width: 88px">{{ t('ep.manage.col_no') }}</th>
-                <th>{{ t('ep.manage.col_stem') }}</th>
-                <th style="width: 92px">{{ t('ep.manage.col_type') }}</th>
-                <th style="width: 140px">{{ t('ep.manage.col_chapter') }}</th>
-                <th style="width: 90px">{{ t('ep.manage.col_difficulty') }}</th>
-                <th style="width: 70px">{{ t('ep.manage.col_version') }}</th>
-                <th style="width: 84px">{{ t('ep.manage.col_actions') }}</th>
+                <th class="bank-manage-col-id">{{ t('ep.manage.col_no') }}</th>
+                <th class="bank-manage-col-stem">{{ t('ep.manage.col_stem') }}</th>
+                <th class="bank-manage-col-type">{{ t('ep.manage.col_type') }}</th>
+                <th class="bank-manage-col-chapter">{{ t('ep.manage.col_chapter') }}</th>
+                <th class="bank-manage-col-difficulty">{{ t('ep.manage.col_difficulty') }}</th>
+                <th class="bank-manage-col-version">{{ t('ep.manage.col_version') }}</th>
+                <th class="bank-manage-col-actions">{{ t('ep.manage.col_actions') }}</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="q in filteredQuestions" :key="q.id" class="mtable-row" :class="{ 'is-archived': q.archived }" @click="openEdit(q)">
-                <td v-if="canEdit" class="select-cell" @click.stop>
+              <tr v-for="q in filteredQuestions" :key="q.id" class="mtable-row bank-manage-row" :class="{ 'is-archived': q.archived }" @click="openEdit(q)">
+                <td v-if="canEdit" class="select-cell bank-manage-col-select" @click.stop>
                   <input
                     type="checkbox"
                     class="row-select"
@@ -178,8 +178,8 @@
                     @change="toggleRowSelection(q.id)"
                   />
                 </td>
-                <td class="mono id-cell">{{ questionCode(q.id) }}</td>
-                <td class="stem-cell">
+                <td class="mono id-cell bank-manage-col-id">{{ questionCode(q.id) }}</td>
+                <td class="stem-cell bank-manage-col-stem">
                   <span class="stem-text">{{ stripHtml(q.stem) }}</span>
                   <span v-if="q.tags?.length" class="row-tags">
                     <span v-for="tag in q.tags" :key="tag" class="tag">{{ tag }}</span>
@@ -187,11 +187,11 @@
                   <span v-if="q.archived" class="tag">{{ t('ep.manage.archived_badge') }}</span>
                   <span v-if="q.locked_by_active_exam" class="tag warn">{{ t('ep.manage.active_exam_badge') }}</span>
                 </td>
-                <td>{{ formatTypeName(q.type) }}</td>
-                <td class="dim-cell">{{ getChapterName(q.chapter_id) }}</td>
-                <td>{{ difficultyLabel(q.difficulty) }}</td>
-                <td class="mono dim-cell">{{ t('ep.manage.version_value', { version: q.version_number || 1 }) }}</td>
-                <td>
+                <td class="bank-manage-col-type">{{ formatTypeName(q.type) }}</td>
+                <td class="dim-cell bank-manage-col-chapter">{{ getChapterName(q.chapter_id) }}</td>
+                <td class="bank-manage-col-difficulty">{{ difficultyLabel(q.difficulty) }}</td>
+                <td class="mono dim-cell bank-manage-col-version">{{ t('ep.manage.version_value', { version: q.version_number || 1 }) }}</td>
+                <td class="bank-manage-col-actions">
                   <button type="button" class="btn btn-sm btn-quiet" @click.stop="openEdit(q)">
                     {{ rowEditable(q) ? t('ep.manage.edit') : t('ep.manage.view') }}
                   </button>
@@ -920,6 +920,7 @@ onMounted(loadData)
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 10px 0; border-bottom: 1px solid var(--line);
 }
+.bank-manage-toolbar { border-top: 1px solid var(--ink); }
 .manage-toolbar .search-box { min-width: 220px; flex: 1 1 260px; }
 .manage-toolbar .select { height: 32px; font-size: 12px; }
 .small { font-size: 12px; }
@@ -948,23 +949,30 @@ onMounted(loadData)
 .mtable-row.is-archived { opacity: .68; }
 .mtable th {
   padding: 9px 10px; text-align: left;
-  font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
+  font-size: 12px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
   color: var(--ink-3); border-bottom: 1px solid var(--line); white-space: nowrap;
 }
 .mtable td { padding: 0 10px; height: 44px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--ink-2); vertical-align: middle; }
 .mtable-row { cursor: pointer; }
 .mtable-row:hover { background: var(--surface-2); }
-.id-cell { color: var(--ink-4); font-size: 10.5px; letter-spacing: .02em; white-space: nowrap; }
+.bank-manage-table .bank-manage-col-id { width: 78px; }
+.bank-manage-table .bank-manage-col-stem { width: auto; }
+.bank-manage-table .bank-manage-col-type { width: 88px; }
+.bank-manage-table .bank-manage-col-chapter { width: 136px; }
+.bank-manage-table .bank-manage-col-difficulty { width: 86px; }
+.bank-manage-table .bank-manage-col-version { width: 62px; }
+.bank-manage-table .bank-manage-col-actions { width: 76px; }
+.id-cell { color: var(--ink-4); font-size: 12px; letter-spacing: .02em; white-space: nowrap; }
 .stem-cell { line-height: 1.5; }
 .stem-text { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; color: var(--ink); }
 .row-tags { display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: middle; }
-.row-tags .tag { font-size: 9.5px; height: 17px; padding: 0 5px; }
+.row-tags .tag { font-size: 12px; height: 17px; padding: 0 5px; }
 .dim-cell { color: var(--ink-3); }
 .small.dim { white-space: nowrap; }
 
 .manage-single { max-width: 860px; }
 .tag-cloud { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 0 4px; }
-.tag-count { margin-left: 5px; color: var(--ink-4); font-size: 9.5px; }
+.tag-count { margin-left: 5px; color: var(--ink-4); font-size: 12px; }
 .chapter-add { display: flex; gap: 8px; padding: 12px 0 2px; border-top: 1px solid var(--line); }
 .chapter-add .input { max-width: 280px; }
 .chapter-row .chapter-input { max-width: 320px; }
@@ -979,13 +987,24 @@ onMounted(loadData)
 .create-opt-row { display: flex; align-items: center; gap: 7px; margin-top: 6px; }
 .opt-key-btn {
   width: 30px; height: 30px; flex: none; border: 1px solid var(--line-strong);
-  background: none; color: var(--ink-2); cursor: pointer; font-size: 11px;
+  background: none; color: var(--ink-2); cursor: pointer; font-size: 12px;
 }
 .opt-key-btn.is-on { background: var(--brand); border-color: var(--brand); color: var(--brand-contrast); }
 
 @media (max-width: 900px) {
   .mtable { min-width: 800px; }
   .create-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 1180px) {
+  .bank-manage-table .bank-manage-col-id { width: 62px; }
+  .bank-manage-table .bank-manage-col-type { width: 76px; }
+  .bank-manage-table .bank-manage-col-chapter { width: 112px; }
+  .bank-manage-table .bank-manage-col-difficulty { width: 72px; }
+  .bank-manage-table .bank-manage-col-version { width: 56px; }
+  .bank-manage-table .bank-manage-col-actions { width: 64px; }
+  .bank-manage-table th,
+  .bank-manage-table td { padding-left: 8px; padding-right: 8px; }
+  .bank-manage-table .stem-text { font-size: 12.5px; }
 }
 @media (max-width: 640px) {
   .manage-head .page-actions { width: 100%; }

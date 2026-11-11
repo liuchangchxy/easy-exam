@@ -1,6 +1,6 @@
 <template>
-  <main class="exam-mode" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
-    <header class="exam-topbar" :class="{ 'is-report': Boolean(report) }">
+  <main class="exam-mode exam-shell" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
+    <header class="exam-topbar exam-bar" :class="{ 'is-report': Boolean(report) }">
       <div class="exam-top-left">
         <button type="button" class="exam-back" @click="handleBack">
           <LinearIcon name="arrow-left" :size="15" />
@@ -13,16 +13,19 @@
         </div>
       </div>
 
-      <div class="exam-top-right">
+      <div class="exam-bar-center">
         <div v-if="!report" class="exam-timer" :class="{ low: session?.time_limit && remainingSeconds <= 300 }" data-testid="exam-timer" role="timer" aria-live="off">
           <span class="timer-cap">{{ session?.time_limit ? t('ep.exam.remaining') : t('ep.exam.elapsed') }}</span>
           <strong class="mono">{{ formatRemainingTime(session?.time_limit ? remainingSeconds : elapsedSeconds) }}</strong>
         </div>
+      </div>
+
+      <div class="exam-top-right">
         <div v-if="!report" class="exam-utils">
           <ThemeToggle compact />
           <LocaleToggle compact />
         </div>
-        <button v-if="!report" type="button" class="btn btn-sm exam-submit" :disabled="loading || isSubmitting || Boolean(report) || syncExpired" @click="showSubmitConfirm = true">
+        <button v-if="!report" type="button" class="btn btn-sm btn-primary exam-submit" :disabled="loading || isSubmitting || Boolean(report) || syncExpired" @click="showSubmitConfirm = true">
           {{ t('ep.exam.submit') }}
         </button>
       </div>
@@ -1015,27 +1018,35 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .exam-mode {
+  --exam-bar-h: 60px;
   min-height: 100vh;
   background: var(--paper);
   color: var(--ink);
-  padding-top: var(--topbar-h);
+  padding-top: var(--exam-bar-h);
   padding-bottom: 76px;
 }
 
 /* ---------- instrument top bar ---------- */
 .exam-topbar {
+  --exam-chrome-bg: var(--d-spine, var(--ink));
+  --exam-chrome-ink: var(--d-spine-ink, var(--brand-contrast));
+  --exam-chrome-quiet: var(--d-spine-ink-2, color-mix(in srgb, var(--brand-contrast) 68%, transparent));
+  --exam-chrome-line: var(--d-spine-line, color-mix(in srgb, var(--brand-contrast) 22%, transparent));
+  --exam-accent-bg: var(--d-spine-accent, var(--brand-contrast));
+  --exam-accent-ink: var(--d-spine, var(--ink));
+  --exam-warn-ink: color-mix(in srgb, var(--bad) 58%, var(--d-spine-ink, var(--brand-contrast)));
   position: fixed;
   inset: 0 0 auto;
   z-index: 40;
-  height: var(--topbar-h);
-  display: flex;
+  height: var(--exam-bar-h);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   padding: 0 18px;
-  background: color-mix(in srgb, var(--paper) 94%, transparent);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--line);
+  background: var(--exam-chrome-bg);
+  color: var(--exam-chrome-ink);
+  border-bottom: 1px solid var(--exam-chrome-line);
 }
 .exam-top-left,
 .exam-top-right {
@@ -1044,21 +1055,28 @@ onBeforeUnmount(() => {
   gap: 10px;
   min-width: 0;
 }
-.exam-top-left { gap: 12px; }
+.exam-top-left { gap: 12px; justify-content: flex-start; }
+.exam-top-right { justify-content: flex-end; }
+.exam-bar-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
 .exam-back {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   border: 0;
   background: transparent;
-  color: var(--ink-2);
+  color: var(--exam-chrome-quiet);
   font-family: var(--font-sans);
   font-size: 12.5px;
   padding: 4px 2px;
   cursor: pointer;
 }
-.exam-back:hover { color: var(--ink); }
-.exam-sep { width: 1px; height: 18px; background: var(--line); }
+.exam-back:hover { color: var(--exam-chrome-ink); }
+.exam-sep { width: 1px; height: 18px; background: var(--exam-chrome-line); }
 .exam-identity { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .exam-kicker {
   font-family: var(--font-sans);
@@ -1066,43 +1084,94 @@ onBeforeUnmount(() => {
   font-weight: 650;
   letter-spacing: .02em;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--exam-chrome-ink);
 }
 .exam-sub {
   font-family: var(--font-sans);
-  font-size: 10.5px;
-  color: var(--ink-3);
+  font-size: 12px;
+  color: var(--exam-chrome-quiet);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.exam-timer {
+.exam-topbar .exam-timer {
   display: inline-flex;
   align-items: baseline;
   gap: 8px;
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-xs);
-  background: var(--surface);
+  padding: 4px 16px;
+  border: 0;
+  border-left: 1px solid var(--exam-chrome-line);
+  border-right: 1px solid var(--exam-chrome-line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--exam-chrome-ink);
 }
-.exam-timer .timer-cap {
+.exam-topbar .exam-timer .timer-cap {
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: .07em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--exam-chrome-quiet);
 }
-.exam-timer strong { font-size: 13px; font-weight: 600; letter-spacing: .04em; }
-.exam-timer.low { border-color: var(--bad-line); background: var(--bad-soft); }
-.exam-timer.low strong { color: var(--bad); }
-.exam-utils { display: flex; align-items: center; gap: 6px; }
+.exam-topbar .exam-timer strong { font-size: 22px; font-weight: 600; letter-spacing: .04em; }
+.exam-topbar .exam-timer.low {
+  border-color: color-mix(in srgb, var(--bad) 58%, transparent);
+  background: color-mix(in srgb, var(--bad) 16%, transparent);
+}
+.exam-topbar .exam-timer.low strong { color: var(--exam-warn-ink); }
+.exam-utils { display: flex; align-items: center; gap: 6px; color: var(--exam-chrome-ink); }
+.exam-topbar .theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--exam-chrome-quiet);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.exam-topbar .theme-toggle:hover {
+  color: var(--exam-chrome-ink);
+  border-color: var(--exam-chrome-line);
+  background: color-mix(in srgb, var(--exam-chrome-ink) 12%, transparent);
+}
+.exam-topbar .btn {
+  background: transparent;
+  border-color: var(--exam-chrome-line);
+  color: var(--exam-chrome-ink);
+}
+.exam-topbar .btn:hover {
+  background: color-mix(in srgb, var(--exam-chrome-ink) 12%, transparent);
+  border-color: var(--exam-chrome-quiet);
+  color: var(--exam-chrome-ink);
+}
+.exam-topbar .btn-primary {
+  background: var(--exam-accent-bg);
+  border-color: var(--exam-accent-bg);
+  color: var(--exam-accent-ink);
+}
+.exam-topbar .btn-primary:hover {
+  background: color-mix(in srgb, var(--exam-accent-bg) 86%, var(--exam-chrome-bg));
+  border-color: color-mix(in srgb, var(--exam-accent-bg) 86%, var(--exam-chrome-bg));
+  color: var(--exam-accent-ink);
+}
 .exam-submit { white-space: nowrap; }
 
 /* ---------- runner layout ---------- */
-.exam-layout {
+.exam-mode .exam-layout {
   display: grid;
   grid-template-columns: minmax(0, var(--reading-w)) 232px;
   gap: clamp(32px, 5vw, 72px);
   justify-content: center;
   align-items: start;
   width: min(100% - 48px, 1120px);
+  max-width: none;
   margin: 0 auto;
   padding: 40px 0 48px;
 }
@@ -1113,7 +1182,7 @@ onBeforeUnmount(() => {
   gap: 12px;
   margin-bottom: 18px;
   font-family: var(--font-sans);
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: .06em;
   text-transform: uppercase;
   color: var(--ink-3);
@@ -1184,7 +1253,7 @@ onBeforeUnmount(() => {
 /* ---------- answer sheet rail ---------- */
 .exam-sheet {
   position: sticky;
-  top: calc(var(--topbar-h) + 24px);
+  top: calc(var(--exam-bar-h) + 24px);
   padding-top: 4px;
 }
 .sheet-head {
@@ -1196,7 +1265,7 @@ onBeforeUnmount(() => {
 }
 .sheet-title {
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 650;
   letter-spacing: .09em;
   text-transform: uppercase;
@@ -1219,7 +1288,7 @@ onBeforeUnmount(() => {
 .sheet-facts div { display: flex; flex-direction: column; gap: 2px; }
 .sheet-facts dt {
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 12px;
   color: var(--ink-4);
   letter-spacing: .04em;
 }
@@ -1235,7 +1304,7 @@ onBeforeUnmount(() => {
   border-radius: var(--r-xs);
   background: transparent;
   color: var(--ink-3);
-  font-size: 10.5px;
+  font-size: 12px;
   cursor: pointer;
 }
 .answer-cell:hover { border-color: var(--line-strong); color: var(--ink); }
@@ -1246,7 +1315,7 @@ onBeforeUnmount(() => {
   margin: 16px 0 0;
   padding-top: 12px;
   border-top: 1px solid var(--line);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--ink-4);
 }
@@ -1272,7 +1341,7 @@ onBeforeUnmount(() => {
 .exam-flag.is-on { border-color: var(--warn-line); background: var(--warn-soft); color: var(--warn); }
 .exam-flag kbd { margin-left: 2px; }
 .exam-sheet-trigger { display: none; }
-.exam-sheet-trigger .mono { margin-left: 2px; color: var(--ink-3); font-size: 10px; }
+.exam-sheet-trigger .mono { margin-left: 2px; color: var(--ink-3); font-size: 12px; }
 
 /* ---------- report ---------- */
 .exam-report {
@@ -1299,7 +1368,7 @@ onBeforeUnmount(() => {
 .report-score-cap {
   margin: 6px 0 0;
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--ink-3);
@@ -1312,7 +1381,7 @@ onBeforeUnmount(() => {
 .report-facts div { display: flex; flex-direction: column; gap: 4px; }
 .report-facts dt {
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: .06em;
   text-transform: uppercase;
   color: var(--ink-3);
@@ -1327,7 +1396,7 @@ onBeforeUnmount(() => {
 .report-section { margin-top: 34px; }
 .section-title {
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 650;
   letter-spacing: .09em;
   text-transform: uppercase;
@@ -1340,7 +1409,7 @@ onBeforeUnmount(() => {
   padding: 8px 10px;
   border-bottom: 1px solid var(--line-strong);
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 650;
   letter-spacing: .07em;
   text-transform: uppercase;
@@ -1467,7 +1536,7 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 14px;
   margin: 6px 0 14px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-3);
 }
 .sheet-legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -1530,29 +1599,36 @@ onBeforeUnmount(() => {
 .exam-expired-body { min-width: 0; flex: 1; }
 .exam-expired-body strong { display: block; font-family: var(--font-sans); font-size: 12.5px; color: var(--ink); }
 .exam-expired-body p { margin: 6px 0 0; font-size: 12px; color: var(--ink-3); }
-.exam-expired-number { margin-left: 6px; font-family: var(--font-mono); font-size: 11.5px; color: var(--ink); }
-.exam-expired-kept { font-size: 11.5px; }
+.exam-expired-number { margin-left: 6px; font-family: var(--font-mono); font-size: 12px; color: var(--ink); }
+.exam-expired-kept { font-size: 12px; }
 .exam-expired-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .empty-title { font-family: var(--font-sans); font-size: 15px; font-weight: 650; }
 .empty-desc { font-size: 13px; color: var(--ink-3); margin-bottom: 12px; }
 
 /* ---------- responsive ---------- */
-@media (max-width: 1024px) {
-  .exam-layout {
-    grid-template-columns: minmax(0, var(--reading-w));
-    width: min(100% - 40px, var(--reading-w));
-    padding-top: 30px;
+@media (max-width: 1280px) {
+  .exam-mode .exam-layout { gap: 40px; }
+}
+@media (max-width: 1100px) {
+  .exam-mode .exam-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    width: 100%;
+    max-width: none;
+    padding: 26px 24px 48px;
   }
   .exam-sheet { display: none; }
   .exam-sheet-trigger { display: inline-flex; }
 }
 @media (max-width: 768px) {
-  .exam-mode { padding-bottom: 70px; }
+  .exam-mode { --exam-bar-h: 54px; padding-bottom: 70px; }
   .exam-topbar { padding: 0 12px; gap: 8px; }
   .exam-utils,
   .exam-sep,
   .exam-sub { display: none; }
-  .exam-layout { width: 100%; padding: 20px 16px 40px; }
+  .exam-topbar .exam-timer { padding: 2px 8px; border: 0; gap: 5px; }
+  .exam-topbar .exam-timer strong { font-size: 17px; }
+  .exam-mode .exam-layout { width: 100%; padding: 20px 16px 40px; }
   .exam-stem { font-size: 18.5px; }
   .option-content-text { font-size: 16px; }
   .exam-option { padding: 13px 6px; }
@@ -1567,8 +1643,8 @@ onBeforeUnmount(() => {
 }
 @media (max-width: 420px) {
   .exam-back span { display: none; }
-  .exam-timer { padding: 5px 7px; gap: 5px; }
-  .exam-timer .timer-cap { display: none; }
+  .exam-topbar .exam-timer { padding: 4px 6px; gap: 4px; }
+  .exam-topbar .exam-timer .timer-cap { display: none; }
   .exam-stem { font-size: 17.5px; line-height: 1.7; }
   .exam-option { grid-template-columns: 24px minmax(0, 1fr) 16px; }
   .option-content-text { font-size: 15.5px; }

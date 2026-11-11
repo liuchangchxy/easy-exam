@@ -19,10 +19,10 @@
           </div>
         </div>
         <div class="masthead-figures">
-          <div class="mf"><div class="mf-n">{{ dueMistakesCount }}</div><div class="mf-c">{{ t('ep.today.figure_due') }}</div></div>
-          <div class="mf"><div class="mf-n">{{ mistakesCount }}</div><div class="mf-c">{{ t('ep.today.figure_mistakes') }}</div></div>
-          <div class="mf"><div class="mf-n">{{ accuracyText }}</div><div class="mf-c">{{ t('ep.today.figure_accuracy') }}</div></div>
           <div class="mf"><div class="mf-n">{{ summary?.attempts ?? '—' }}</div><div class="mf-c">{{ t('ep.today.figure_attempts') }}</div></div>
+          <div class="mf"><div class="mf-n">{{ dueMistakesCount }}</div><div class="mf-c">{{ t('ep.today.figure_due') }}</div></div>
+          <div class="mf"><div class="mf-n">{{ accuracyText }}</div><div class="mf-c">{{ t('ep.today.figure_accuracy') }}</div></div>
+          <div class="mf"><div class="mf-n">{{ mistakesCount }}</div><div class="mf-c">{{ t('ep.today.figure_mistakes') }}</div></div>
         </div>
       </div>
     </header>
@@ -109,9 +109,6 @@
                   <span>{{ t('ep.banks.questions', { count: bank.question_count || 0 }) }}</span>
                 </span>
               </span>
-              <span v-if="getActiveSessionForBank(bank.id)" class="tag brand">
-                {{ t('ep.today.active_badge') }} {{ getActiveSessionForBank(bank.id).answered_count }}/{{ getActiveSessionForBank(bank.id).total_questions }}
-              </span>
               <span class="bank-row-actions">
                 <span class="btn btn-sm" @click.stop="emit('start', bank)">{{ t('ep.today.start_practice') }}</span>
                 <LinearIcon name="chevron-right" :size="16" />
@@ -130,19 +127,20 @@
 
       <aside class="today-rail">
         <div class="rail-block">
-          <div class="rail-title">{{ t('ep.today.quick_start') }}</div>
-          <button type="button" class="rail-link" @click="router.push('/review')">
-            <span class="list-main"><span class="rail-link-title">{{ t('ep.today.plan_due') }}</span><span class="rail-note">{{ t('ep.today.quick_due_hint') }}</span></span>
-            <span class="rail-link-n">{{ dueMistakesCount }}</span>
-          </button>
-          <button type="button" class="rail-link" @click="router.push('/review?tab=mistakes')">
-            <span class="list-main"><span class="rail-link-title">{{ t('ep.today.plan_mistakes') }}</span><span class="rail-note">{{ t('ep.today.quick_mistakes_hint') }}</span></span>
-            <span class="rail-link-n">{{ mistakesCount }}</span>
-          </button>
-          <button type="button" class="rail-link" @click="startSprint">
-            <span class="list-main"><span class="rail-link-title">{{ t('ep.today.plan_new') }}</span><span class="rail-note">{{ t('ep.today.sprint_hint') }}</span></span>
-            <span class="rail-link-n">→</span>
-          </button>
+          <div class="rail-title">{{ t('ep.today.next') }} · 7</div>
+          <div v-if="planDays.length" class="d-week-bars" aria-hidden="true">
+            <div v-for="day in planDays" :key="day.day_number" class="d-week-bar" :title="`${day.day_number}: ${day.question_count}`">
+              <i :style="{ height: planBarHeight(day.question_count) }"></i>
+              <em>{{ day.day_number }}</em>
+            </div>
+          </div>
+          <div v-else class="rail-note">{{ t('ep.today.plan_empty') }}</div>
+          <div v-if="todayPlan" class="rail-note weekly-plan-note">
+            {{ todayPlan.question_count || 0 }} {{ t('ui.k0101') }} · {{ todayPlan.planned_minutes || 0 }} {{ t('ui.k0231') }}
+          </div>
+          <div class="rail-note weekly-plan-note">
+            {{ t('ui.k0392') }} 7 {{ t('ui.k0393') }}: {{ trends?.recent?.attempts || 0 }} · {{ recentMinutes }} {{ t('ui.k0231') }}
+          </div>
         </div>
         <div class="rail-block">
           <div class="rail-title">{{ t('ep.today.next') }}</div>
@@ -495,6 +493,22 @@ const accuracyText = computed(() => {
   return Number.isFinite(rate) ? `${Math.round(rate)}%` : '—'
 })
 
+const planDays = computed(() => {
+  const days = Array.isArray(todayPlan.value?.days) ? todayPlan.value.days.slice(0, 7) : []
+  return days.map((day, index) => ({
+    day_number: day.day_number || index + 1,
+    question_count: Number(day.question_count) || 0,
+  }))
+})
+
+const maxPlanQuestions = computed(() => Math.max(1, ...planDays.value.map(day => day.question_count)))
+const recentMinutes = computed(() => Math.round((Number(trends.value?.recent?.time_spent) || 0) / 60))
+
+function planBarHeight(questionCount) {
+  const value = Number(questionCount) || 0
+  return value ? `${Math.max(8, Math.round((value / maxPlanQuestions.value) * 34))}px` : '2px'
+}
+
 const difficultyOptions = computed(() => [1, 2, 3, 4, 5].map(value => ({ value, label: t('ep.difficulty.' + value) })))
 
 const todayPlanCount = computed(() => {
@@ -527,10 +541,6 @@ async function refreshLearningStats() {
 function sessionPercent(session) {
   if (!session?.total_questions) return 0
   return Math.min(100, Math.round((session.answered_count / session.total_questions) * 100))
-}
-
-function getActiveSessionForBank(bankId) {
-  return activeSessions.value.find(s => s.bank_id === bankId) || null
 }
 
 function formatSessionMode(mode) {
@@ -1140,43 +1150,22 @@ defineExpose({ openCreateBankDialog, showCreateDialog, closeAllModals })
 
 <style scoped>
 .today {
-  padding-top: 34px;
+  padding-top: 0;
 }
 
-.masthead { border-bottom: 1px solid var(--ink); padding-bottom: 20px; }
-.masthead-actions { margin-top: 18px; flex-wrap: wrap; gap: 8px; }
-
-.today-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 292px;
-  gap: 48px;
-  padding-top: 28px;
-  align-items: start;
-}
+.masthead-actions { margin-top: 0; flex-wrap: wrap; gap: 8px; }
 
 .today-section { margin-top: 36px; }
 .today-section:first-child { margin-top: 0; }
-
-.resume-card {
-  border-top: 1px solid var(--ink);
-  padding-top: 16px;
-}
 
 .resume-kicker {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 10.5px;
+  font-size: 12px;
   letter-spacing: .12em;
   text-transform: uppercase;
   color: var(--ink-3);
-}
-
-.resume-title {
-  font-family: var(--font-serif);
-  font-size: 22px;
-  font-weight: 600;
-  margin-top: 6px;
 }
 
 .resume-meta { color: var(--ink-3); font-size: 12.5px; margin: 4px 0 12px; }
@@ -1201,7 +1190,7 @@ defineExpose({ openCreateBankDialog, showCreateDialog, closeAllModals })
 .today-bank-row:hover { background: var(--surface-2); }
 .bank-name-cell { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .bank-name { font-size: 14px; font-weight: 500; color: var(--ink); }
-.bank-meta { display: flex; gap: 12px; font-size: 11.5px; color: var(--ink-3); }
+.bank-meta { display: flex; gap: 12px; font-size: 12.5px; color: var(--ink-3); }
 .bank-row-actions { display: flex; align-items: center; gap: 8px; color: var(--ink-4); }
 
 .session-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
@@ -1230,18 +1219,13 @@ defineExpose({ openCreateBankDialog, showCreateDialog, closeAllModals })
 .strong { font-weight: 600; }
 
 .spacer { flex: 1; }
-
-@media (max-width: 1024px) {
-  .today-grid { grid-template-columns: minmax(0, 1fr) 240px; gap: 32px; }
-}
+.weekly-plan-note { margin-top: 9px; }
 
 @media (max-width: 900px) {
-  .today-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  .today-rail { display: none; }
+  .today-grid { gap: 30px; }
 }
 
 @media (max-width: 768px) {
-  .today { padding-top: 18px; }
   .session-row { flex-direction: column; align-items: flex-start; }
 }
 </style>

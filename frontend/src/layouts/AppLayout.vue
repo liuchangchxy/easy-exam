@@ -5,6 +5,7 @@
       :user="auth.user.value"
       :bank-count="banks.length"
       :review-count="reviewCount"
+      :learning-trends="learningTrends"
       :theme="theme"
       @navigate="handleNavigate"
       @action="handleSidebarAction"
@@ -44,7 +45,7 @@
             <LinearIcon name="search" :size="17" />
           </button>
           <button type="button" class="icon-btn" :aria-label="t('ep.account.menu')" @click="router.push('/settings')">
-            <span class="avatar" style="width: 26px; height: 26px; font-size: 11px">{{ userInitial }}</span>
+            <span class="avatar" style="width: 26px; height: 26px; font-size: 12px">{{ userInitial }}</span>
           </button>
         </span>
       </header>
@@ -83,7 +84,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppSidebar from '../components/AppSidebar.vue'
 import MobileNav from '../components/MobileNav.vue'
@@ -97,6 +98,7 @@ import { useAuthStore } from '../stores/authStore'
 import { listBanks } from '../api/banks'
 import { listDueMistakes } from '../api/mistakes'
 import { startSession } from '../api/practice'
+import { getLearningTrends } from '../api/learning'
 import { useLocale } from '../composables/useLocale.js'
 import { useTheme } from '../composables/useTheme.js'
 
@@ -109,6 +111,7 @@ const { theme, toggleTheme } = useTheme()
 const commandPaletteRef = ref(null)
 const banks = ref([])
 const reviewCount = ref(0)
+const learningTrends = ref(null)
 const activeDialog = ref(null)
 const showChangePasswordModal = ref(false)
 
@@ -152,23 +155,38 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('easyexam:open-dialog', handleOpenDialogEvent)
+  delete document.body.dataset.route
 })
 
 async function loadShellData() {
   if (!auth.token.value) return
-  try {
-    const res = await listBanks(auth.token.value)
+  const [bankResult, dueResult, trendResult] = await Promise.allSettled([
+    listBanks(auth.token.value),
+    listDueMistakes(auth.token.value),
+    getLearningTrends(auth.token.value, { window_days: 7 }),
+  ])
+
+  if (bankResult.status === 'fulfilled') {
+    const res = bankResult.value
     banks.value = res?.banks || (Array.isArray(res) ? res : [])
-  } catch (err) {
-    console.error('Failed to load banks for command palette', err)
+  } else {
+    console.error('Failed to load banks for command palette', bankResult.reason)
   }
-  try {
-    const due = await listDueMistakes(auth.token.value)
-    reviewCount.value = Array.isArray(due) ? due.length : 0
-  } catch (_) {
-    reviewCount.value = 0
-  }
+
+  reviewCount.value = dueResult.status === 'fulfilled' && Array.isArray(dueResult.value)
+    ? dueResult.value.length
+    : 0
+  learningTrends.value = trendResult.status === 'fulfilled' ? trendResult.value : null
 }
+
+watch(
+  () => route.name,
+  name => {
+    if (typeof document === 'undefined') return
+    document.body.dataset.route = typeof name === 'string' ? name : 'today'
+  },
+  { immediate: true }
+)
 
 function handleNavigate(targetPage) {
   if (targetPage === 'today') router.push('/')

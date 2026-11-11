@@ -46,17 +46,17 @@
             </div>
           </div>
 
-          <div class="setting-row setting-row-top">
+          <div class="setting-row setting-row-top settings-stack-row settings-palette-row">
             <div class="setting-label">
               <div class="setting-name">{{ t('ep.settings.palette') }}</div>
               <div class="setting-desc">{{ t('ep.settings.palette_note') }}</div>
             </div>
-            <div class="palette-grid" role="radiogroup" :aria-label="t('ep.settings.palette')">
+            <div class="palette-grid settings-palette-grid" role="radiogroup" :aria-label="t('ep.settings.palette')">
               <button
                 v-for="id in palettes"
                 :key="id"
                 type="button"
-                class="palette-option"
+                class="palette-option settings-palette-card"
                 :class="{ 'is-active': palette === id }"
                 role="radio"
                 :aria-checked="palette === id"
@@ -65,10 +65,39 @@
                 @click="setPalette(id)"
               >
                 <span class="palette-swatch" :style="{ background: paletteSwatch(id).paper }">
-                  <span class="palette-swatch-dot" :style="{ background: paletteSwatch(id).accent }"></span>
+                  <i
+                    v-for="(color, stopIndex) in paletteSwatch(id).stops"
+                    :key="stopIndex"
+                    :style="{ background: color }"
+                  ></i>
                 </span>
-                <span class="palette-name">{{ t(`ep.settings.palette_${id}`) }}</span>
-                <LinearIcon v-if="palette === id" name="check" :size="13" />
+                <span class="palette-name">
+                  <span>{{ t(`ep.settings.palette_${id}`) }}</span>
+                  <LinearIcon v-if="palette === id" name="check" :size="13" />
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div class="setting-row setting-row-top settings-stack-row settings-density-row">
+            <div class="setting-label">
+              <div class="setting-name">{{ densityLabel }}</div>
+              <div class="setting-desc">{{ densityNote }}</div>
+            </div>
+            <div class="settings-density-options" role="radiogroup" :aria-label="densityLabel">
+              <button
+                v-for="option in densityOptions"
+                :key="option.key"
+                type="button"
+                class="settings-density-option"
+                :class="{ 'is-active': density === option.key }"
+                role="radio"
+                :aria-checked="density === option.key"
+                :data-density-option="option.key"
+                @click="setDensity(option.key)"
+              >
+                <LinearIcon :name="option.icon" :size="14" />
+                <span>{{ option.label }}</span>
               </button>
             </div>
           </div>
@@ -277,6 +306,8 @@ const { mode, setMode, palette, palettes, setPalette, customAccent, setCustomAcc
 const activeSection = ref('appearance')
 const showPasswordModal = ref(false)
 const appVersion = pkg.version
+const DENSITY_STORAGE_KEY = 'easyexam-density'
+const density = ref('balanced')
 
 const navItems = [
   { key: 'appearance', label: 'ep.settings.nav_appearance', icon: 'sun' },
@@ -288,10 +319,10 @@ const navItems = [
 ]
 
 const PALETTE_SWATCHES = {
-  editorial: { paper: '#fbf9f4', accent: '#23554b' },
-  gruvbox: { paper: '#fbf1c7', accent: '#d79921' },
-  everforest: { paper: '#fdf6e3', accent: '#8da101' },
-  catppuccin: { paper: '#eff1f5', accent: '#8839ef' },
+  editorial: { paper: '#f5f2ea', accent: '#23554b', stops: ['#f5f2ea', '#fbf9f4', '#191b18', '#23554b'] },
+  gruvbox: { paper: '#fbf1c7', accent: '#af3a03', stops: ['#fbf1c7', '#fff9e4', '#3c3836', '#af3a03'] },
+  everforest: { paper: '#fdf6e3', accent: '#4e6b3f', stops: ['#fdf6e3', '#fffcf0', '#3d484d', '#4e6b3f'] },
+  catppuccin: { paper: '#eff1f5', accent: '#8839ef', stops: ['#eff1f5', '#f7f8fb', '#4c4f69', '#8839ef'] },
 }
 
 function paletteSwatch(id) {
@@ -310,6 +341,46 @@ const accentPresets = computed(() => {
 })
 
 const activeAccent = computed(() => customAccent.value || '#23554b')
+
+const densityLabel = computed(() => currentLocale.value === 'en-US' ? 'Density' : '信息密度')
+const densityNote = computed(() => currentLocale.value === 'en-US'
+  ? 'Balanced for reading; dense for management and bulk review. Practice always uses the focused layout.'
+  : '宽松适合阅读，紧凑适合管理与批量校对。练习页始终使用专注布局。')
+const densityOptions = computed(() => currentLocale.value === 'en-US'
+  ? [
+      { key: 'balanced', label: 'Balanced', icon: 'list' },
+      { key: 'dense', label: 'Dense', icon: 'grid' },
+    ]
+  : [
+      { key: 'balanced', label: '宽松', icon: 'list' },
+      { key: 'dense', label: '紧凑', icon: 'grid' },
+    ])
+
+function applyDensity(value, persist = true) {
+  const next = value === 'dense' ? 'dense' : 'balanced'
+  density.value = next
+  if (typeof document !== 'undefined') document.documentElement.setAttribute('data-density', next)
+  if (!persist) return
+  try {
+    globalThis.localStorage?.setItem(DENSITY_STORAGE_KEY, next)
+  } catch {
+    // Keep the in-page preference when storage is unavailable.
+  }
+}
+
+function setDensity(value) {
+  applyDensity(value)
+}
+
+function restoreDensity() {
+  let saved = ''
+  try {
+    saved = globalThis.localStorage?.getItem(DENSITY_STORAGE_KEY) || ''
+  } catch {
+    saved = ''
+  }
+  applyDensity(saved, false)
+}
 
 const userInitial = computed(() => {
   const name = props.user?.username
@@ -392,7 +463,10 @@ async function saveWeb() {
   }
 }
 
-onMounted(loadConfig)
+onMounted(() => {
+  restoreDensity()
+  loadConfig()
+})
 </script>
 
 <style scoped>
@@ -419,7 +493,7 @@ onMounted(loadConfig)
 .setting-row-top { align-items: flex-start; }
 .setting-label { min-width: 0; }
 .setting-name { font-size: 13px; font-weight: 500; color: var(--ink); }
-.setting-desc { margin-top: 3px; font-size: 11.5px; line-height: 1.65; color: var(--ink-3); max-width: 44ch; }
+.setting-desc { margin-top: 3px; font-size: 12px; line-height: 1.65; color: var(--ink-3); max-width: 44ch; }
 
 .segmented { display: inline-flex; border: 1px solid var(--line-strong); flex: none; }
 .segment {
@@ -436,7 +510,7 @@ onMounted(loadConfig)
 .palette-option {
   display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px;
   border: 1px solid var(--line); background: none; color: var(--ink-2);
-  font-size: 11.5px; cursor: pointer;
+  font-size: 12px; cursor: pointer;
 }
 .palette-option:hover { border-color: var(--ink-4); }
 .palette-option.is-active { border-color: var(--brand-line); color: var(--brand); }
@@ -445,10 +519,41 @@ onMounted(loadConfig)
   display: inline-flex; align-items: center; justify-content: center;
 }
 .palette-swatch-dot { width: 7px; height: 7px; border-radius: 50%; }
+
+.settings-stack-row { flex-direction: column; align-items: stretch; gap: 12px; }
+.settings-palette-row .settings-palette-grid {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px; justify-content: stretch; width: 100%;
+}
+.settings-palette-card {
+  display: flex; flex-direction: column; align-items: stretch; gap: 7px;
+  height: auto; padding: 8px; text-align: left;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--surface);
+}
+.settings-palette-card:hover { border-color: var(--ink-4); }
+.settings-palette-card.is-active { border-color: var(--ink); color: var(--ink); }
+.settings-palette-card .palette-swatch {
+  width: 100%; height: 46px; border: 1px solid var(--line); border-radius: 2px;
+  overflow: hidden; display: flex; align-items: stretch; justify-content: stretch;
+}
+.settings-palette-card .palette-swatch i { flex: 1; display: block; }
+.settings-palette-card .palette-name {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  font-size: 12.5px; font-weight: 600;
+}
+.settings-density-options { display: flex; gap: 8px; flex-wrap: wrap; }
+.settings-density-option {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 34px; padding: 0 14px;
+  border: 1px solid var(--line-strong); border-radius: 2px;
+  background: none; color: var(--ink-2); font-size: 12px; cursor: pointer;
+}
+.settings-density-option:hover { background: var(--surface-2); color: var(--ink); }
+.settings-density-option.is-active { background: var(--brand-soft); border-color: var(--brand-line); color: var(--brand); font-weight: 600; }
 .accent-option {
   display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px;
   border: 1px solid var(--line); background: none; color: var(--ink-2);
-  font-size: 11.5px; cursor: pointer; position: relative;
+  font-size: 12px; cursor: pointer; position: relative;
 }
 .accent-option:hover { border-color: var(--ink-4); }
 .accent-option.is-active { border-color: var(--brand-line); color: var(--brand); }
@@ -459,13 +564,13 @@ onMounted(loadConfig)
 .settings-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; }
 .settings-note { margin-top: 20px; }
 .settings-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); }
-.settings-saved { font-size: 11.5px; color: var(--ok); }
+.settings-saved { font-size: 12px; color: var(--ok); }
 .settings-saved.is-error { color: var(--bad); }
 
 .account-block { display: flex; align-items: center; gap: 14px; padding: 16px 0; border-top: 1px solid var(--line); }
 .account-main { min-width: 0; }
 .account-name { font-size: 15px; font-weight: 500; }
-.account-role { margin-top: 2px; font-size: 11px; color: var(--ink-3); letter-spacing: .03em; }
+.account-role { margin-top: 2px; font-size: 12px; color: var(--ink-3); letter-spacing: .03em; }
 .about-kv { border-top: 1px solid var(--line); }
 
 @media (max-width: 880px) {
@@ -480,5 +585,9 @@ onMounted(loadConfig)
   .settings-fields { grid-template-columns: minmax(0, 1fr); }
   .segmented { width: 100%; }
   .segment { flex: 1; justify-content: center; }
+  .settings-palette-row .settings-palette-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .settings-palette-card .palette-swatch { height: 38px; }
+  .settings-density-options { width: 100%; }
+  .settings-density-option { flex: 1; justify-content: center; }
 }
 </style>

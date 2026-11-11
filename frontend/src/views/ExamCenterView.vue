@@ -1,6 +1,6 @@
 <template>
   <div class="exam-center">
-    <div class="page-head">
+    <div class="page-head exam-center-head">
       <div class="page-head-main">
         <div class="page-eyebrow">{{ t('ep.nav.study') }}</div>
         <h1 class="page-title">{{ t('ep.exam.title') }}</h1>
@@ -20,7 +20,7 @@
       <LinearIcon name="alert" :size="15" /><span>{{ notice }}</span>
     </div>
 
-    <section v-if="activeSessions.length" class="active-exam panel">
+    <section v-if="activeSessions.length" class="active-exam exam-active panel">
       <div class="panel-head">
         <span class="panel-title">{{ t('ep.exam.active_title') }}</span>
         <span class="section-note">{{ t('ep.exam.active_desc') }}</span>
@@ -50,24 +50,24 @@
       <div class="skeleton"></div><div class="skeleton"></div>
     </div>
 
-    <div v-else class="exam-layout">
-      <div class="exam-main">
+    <div v-else class="exam-layout exam-center-grid">
+      <div class="exam-main exam-center-main">
         <section class="panel">
           <div class="panel-head">
             <span class="panel-title">{{ t('ep.exam.papers') }}</span>
             <span class="section-note">{{ t('ep.common.count', { count: profiles.length }) }}</span>
           </div>
 
-          <div v-if="profiles.length" class="list">
-            <div v-for="profile in profiles" :key="profile.id" class="list-row paper-row">
-              <span class="list-main">
-                <span class="list-title">{{ profile.name }}</span>
-                <span class="list-meta">
+          <div v-if="profiles.length" class="list exam-paper-list">
+            <div v-for="profile in profiles" :key="profile.id" class="list-row paper-row exam-paper-row">
+              <span class="list-main exam-paper-main">
+                <span class="list-title exam-paper-title">{{ profile.name }}</span>
+                <span class="list-meta exam-paper-sub">
                   <span v-if="blueprintOf(profile)">{{ t('ep.exam.blueprint_sections', { count: blueprintOf(profile).sections?.length || 0 }) }}</span>
                   <span v-if="blueprintOf(profile)">{{ blueprintTotal(profile) }} {{ t('ep.practice.index') }}</span>
                   <span v-if="Number(blueprintOf(profile)?.negative_mark) > 0">{{ t('ep.exam.negative', { points: blueprintOf(profile).negative_mark }) }}</span>
-                  <span v-if="profile.description" class="od-truncate">{{ profile.description }}</span>
                 </span>
+                <span v-if="profile.description" class="exam-paper-desc">{{ profile.description }}</span>
               </span>
               <span class="list-side">
                 <button type="button" class="btn btn-sm btn-quiet" @click="openBlueprint(profile)">
@@ -91,15 +91,15 @@
           </div>
         </section>
 
-        <section class="panel" style="margin-top: 28px">
+        <section class="panel exam-bank-section" style="margin-top: 28px">
           <div class="panel-head">
             <span class="panel-title">{{ t('ep.exam.start_from_bank') }}</span>
             <span class="section-note">{{ t('ep.exam.start_hint') }}</span>
           </div>
-          <div v-if="banks.length" class="list">
-            <div v-for="bank in banks" :key="bank.id" class="list-row">
+          <div v-if="banks.length" class="list exam-bank-list">
+            <div v-for="bank in banks" :key="bank.id" class="list-row exam-bank-row">
               <span class="list-main">
-                <span class="list-title">{{ bank.name }}</span>
+                <span class="list-title exam-bank-title">{{ bank.name }}</span>
                 <span class="list-meta">
                   <span>{{ t('ep.banks.questions', { count: bank.question_count || 0 }) }}</span>
                   <span v-if="bank.has_active_exam" class="tag warn">{{ t('ep.today.active_badge') }}</span>
@@ -121,21 +121,21 @@
         </section>
       </div>
 
-      <aside class="exam-rail">
-        <div class="rail-block">
-          <div class="rail-title">{{ t('ep.exam.blueprint') }}</div>
-          <p class="rail-note">{{ t('ep.exam.profile_note') }}</p>
-          <div v-if="profiles.length" class="rail-list">
-            <button v-for="profile in profiles" :key="profile.id" type="button" class="rail-link" @click="openBlueprint(profile)">
+      <aside class="exam-rail exam-center-rail">
+        <div class="rail-block exam-rail-block">
+          <div class="rail-title exam-rail-title">{{ t('ep.exam.blueprint') }}</div>
+          <p class="rail-note exam-rail-note">{{ t('ep.exam.profile_note') }}</p>
+          <div v-if="profiles.length" class="rail-list exam-rail-list">
+            <button v-for="profile in profiles" :key="profile.id" type="button" class="rail-link exam-rail-link" @click="openBlueprint(profile)">
               <span class="rail-link-title od-truncate">{{ profile.name }}</span>
               <span class="tiny mono">{{ blueprintTotal(profile) }}</span>
             </button>
           </div>
           <div v-else class="tiny dim">{{ t('ep.exam.papers_empty') }}</div>
         </div>
-        <div class="rail-block">
-          <div class="rail-title">{{ t('ep.exam.report') }}</div>
-          <p class="rail-note">{{ t('ep.exam.scores_note') }}</p>
+        <div class="rail-block exam-rail-block">
+          <div class="rail-title exam-rail-title">{{ t('ep.exam.report') }}</div>
+          <p class="rail-note exam-rail-note">{{ t('ep.exam.scores_note') }}</p>
         </div>
       </aside>
     </div>
@@ -532,18 +532,71 @@ onMounted(load)
 
 <style scoped>
 .exam-center { padding-top: 26px; }
+.exam-center-head { padding-bottom: 18px; }
 .active-exam { margin-top: 20px; }
-.exam-layout { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 40px; margin-top: 20px; align-items: start; }
-.exam-main { min-width: 0; }
-.exam-rail { border-top: 1px solid var(--line); padding-top: 14px; }
-.rail-block + .rail-block { margin-top: 26px; }
-.rail-title { font-size: 11px; font-weight: 600; letter-spacing: .06em; color: var(--ink-2); }
-.rail-note { margin: 7px 0 10px; font-size: 11.5px; line-height: 1.7; color: var(--ink-3); }
+.exam-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 48px;
+  margin: 26px 0 0;
+  padding: 0;
+  max-width: none;
+  align-items: start;
+}
+.exam-main { min-width: 0; max-width: none; }
+.exam-rail {
+  border-top: 0;
+  border-left: 1px solid var(--line);
+  padding: 4px 0 0 22px;
+}
+.rail-block + .rail-block {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.rail-title {
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.rail-note { margin: 8px 0 12px; font-size: 12px; line-height: 1.75; color: var(--ink-3); }
 .rail-list { display: flex; flex-direction: column; }
-.rail-link { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border: 0; background: none; color: var(--ink-2); font-size: 12px; text-align: left; cursor: pointer; border-top: 1px solid var(--line); }
+.rail-link {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: var(--ink-2);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
 .rail-link:hover { color: var(--brand); }
 .rail-link-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.paper-row { align-items: flex-start; }
+.paper-row { align-items: flex-start; padding: 16px 4px 18px; }
+.paper-row:hover .exam-paper-title { color: var(--brand); }
+.exam-paper-main { gap: 3px; }
+.exam-paper-title {
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.4;
+  transition: color .14s var(--ease);
+}
+.exam-paper-sub { gap: 6px 12px; }
+.exam-paper-desc {
+  margin-top: 4px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--ink-3);
+}
+.exam-paper-row .list-side { padding-top: 2px; }
+.exam-bank-row .exam-bank-title { font-size: 13.5px; }
 .bp-total { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; border-top: 1px solid var(--line); padding-top: 12px; }
 .bp-negative { width: 140px; }
 .bp-sections { display: flex; flex-direction: column; }
@@ -551,9 +604,18 @@ onMounted(load)
 .bp-section:first-child { border-top: 0; }
 .bp-count { text-align: right; }
 .setup-check { display: flex; flex-direction: row; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); }
+@media (max-width: 1100px) {
+  .exam-layout { grid-template-columns: minmax(0, 1fr) 236px; gap: 28px; }
+}
 @media (max-width: 900px) {
-  .exam-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
-  .exam-rail { display: none; }
+  .exam-layout { grid-template-columns: minmax(0, 1fr); gap: 30px; }
+  .exam-rail {
+    display: block;
+    border-left: 0;
+    border-top: 1px solid var(--line-strong);
+    padding: 20px 0 0;
+  }
+  .rail-block + .rail-block { margin-top: 24px; }
 }
 @media (max-width: 640px) {
   .paper-row { flex-wrap: wrap; }

@@ -52,9 +52,12 @@
           </span>
           <span class="bank-meta">
             <span>{{ bank.category || t('ep.nav.banks') }}</span>
-            <span>{{ t('ep.banks.questions', { count: bank.question_count || 0 }) }}</span>
             <span v-if="bank.description" class="od-truncate">{{ bank.description }}</span>
           </span>
+        </span>
+        <span class="bank-count">
+          <strong>{{ bank.question_count || 0 }}</strong>
+          <span>{{ t('ui.k0101') }}</span>
         </span>
         <span class="bank-actions-cell">
           <button type="button" class="btn btn-sm" @click.stop="startPractice(bank)">{{ t('ep.banks.practice') }}</button>
@@ -64,7 +67,7 @@
             :title="bank.has_active_exam ? t('ep.manage.locked_desc') : ''"
             @click.stop="router.push(`/banks/${bank.id}/manage`)"
           >{{ t('ep.banks.manage') }}</button>
-          <LinearIcon name="chevron-right" :size="16" />
+          <span class="bank-go"><LinearIcon name="chevron-right" :size="16" /></span>
         </span>
       </div>
     </div>
@@ -190,21 +193,37 @@ onMounted(load)
 </script>
 
 <style scoped>
-.banks-page { padding-top: 30px; }
-.banks-row { width: 100%; flex-wrap: wrap; row-gap: 10px; cursor: pointer; }
+.banks-page { padding-top: 0; }
+.banks-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px auto 14px;
+  gap: 20px;
+  align-items: center;
+  cursor: pointer;
+}
 .banks-row:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .bank-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
 .bank-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; min-width: 0; }
 .bank-meta .od-truncate { max-width: min(420px, 100%); }
+.bank-count { display: flex; align-items: baseline; gap: 5px; justify-content: flex-end; }
+.bank-count strong { font-family: var(--font-mono); font-size: 17px; font-weight: 500; }
+.bank-count span { font-size: 12px; color: var(--ink-3); }
+.bank-go { display: flex; justify-content: flex-end; color: var(--ink-4); }
 .bank-actions-cell { display: flex; align-items: center; gap: 8px; color: var(--ink-4); flex-wrap: wrap; }
 .small { font-size: 12px; }
+@media (max-width: 900px) {
+  .banks-row { grid-template-columns: minmax(0, 1fr) auto 14px; gap: 14px; }
+  .bank-count { display: none; }
+}
 @media (max-width: 640px) {
   .banks-page { overflow-x: hidden; }
   .page-head .page-actions { width: 100%; flex-wrap: wrap; }
   .page-head .page-actions .btn { flex: 1 1 auto; justify-content: center; }
   .toolbar { flex-wrap: wrap; }
   .toolbar .search-box { flex: 1 1 100%; min-width: 0; }
-  .bank-actions-cell { width: 100%; justify-content: flex-end; }
+  .banks-row { grid-template-columns: minmax(0, 1fr) 14px; }
+  .bank-actions-cell { grid-column: 1 / -1; grid-row: 2; width: 100%; justify-content: flex-end; }
+  .bank-go { grid-column: 2; grid-row: 1; }
   .bank-meta .od-truncate { max-width: 100%; }
 }
 </style>

@@ -26,6 +26,22 @@
       </button>
     </nav>
 
+    <div v-if="learningTrends" class="side-study-state">
+      <div class="ss-label">{{ t('ep.today.figure_due') }}</div>
+      <div class="ss-value">{{ reviewCount }}<small>{{ t('ui.k0101') }}</small></div>
+      <div class="ss-bar" role="progressbar" :aria-valuenow="coveragePercent" aria-valuemin="0" aria-valuemax="100">
+        <div class="ss-bar-fill" :style="{ width: coveragePercent + '%' }"></div>
+      </div>
+      <div class="ss-row">
+        <span>{{ t('ui.k0386') }}</span>
+        <strong>{{ coveragePercent }}%</strong>
+      </div>
+      <div class="ss-row">
+        <span>{{ t('ui.k0391') }}</span>
+        <strong>{{ accuracyText }}</strong>
+      </div>
+    </div>
+
     <div class="side-foot">
       <button
         type="button"
@@ -102,6 +118,7 @@ const props = defineProps({
   user: { type: Object, default: null },
   bankCount: { type: Number, default: 0 },
   reviewCount: { type: Number, default: 0 },
+  learningTrends: { type: Object, default: null },
   theme: { type: String, default: 'light' },
 })
 
@@ -123,6 +140,14 @@ const userInitial = computed(() => {
 })
 
 const localeLabel = computed(() => (locale.value === 'en-US' ? t('ep.settings.lang_en') : t('ep.settings.lang_zh')))
+const coveragePercent = computed(() => {
+  const value = Number(props.learningTrends?.coverage_percent)
+  return Number.isFinite(value) ? Math.max(0, Math.min(100, Math.round(value))) : 0
+})
+const accuracyText = computed(() => {
+  const value = Number(props.learningTrends?.recent?.correct_rate)
+  return Number.isFinite(value) ? `${Math.round(value)}%` : '—'
+})
 
 function handleAction(action) {
   showUserMenu.value = false
@@ -171,8 +196,8 @@ onUnmounted(() => {
 .side-tools-note {
   margin-left: auto;
   font-family: var(--font-mono);
-  font-size: 9.5px;
-  color: var(--ink-4);
+  font-size: 12px;
+  color: var(--d-spine-ink-3);
   letter-spacing: .04em;
 }
 

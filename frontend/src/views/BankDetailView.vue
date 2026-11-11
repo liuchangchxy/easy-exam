@@ -1,6 +1,6 @@
 <template>
   <div class="bank-detail-page">
-    <div class="page-head">
+    <div class="page-head bank-detail-head">
       <div class="page-head-main">
         <div class="page-eyebrow">
           <button type="button" class="link-btn" @click="router.push('/banks')">{{ t('ep.banks.title') }}</button>
@@ -27,16 +27,16 @@
       </div>
     </div>
 
-    <div v-if="bankLocked" class="notice warn bank-notice">
+    <div v-if="bankLocked" class="notice warn bank-notice bank-detail-notice">
       <LinearIcon name="lock" :size="15" />
       <span>{{ t('ep.banks.locked_banner') }}</span>
     </div>
-    <div v-else-if="bank && !canEditContent" class="notice info bank-notice">
+    <div v-else-if="bank && !canEditContent" class="notice info bank-notice bank-detail-notice">
       <LinearIcon name="info" :size="15" />
       <span>{{ t('ep.banks.readonly_banner') }}</span>
     </div>
 
-    <div class="tabs">
+    <div class="tabs bank-detail-tabs">
       <button v-for="tab in tabs" :key="tab.key" type="button" class="tab" :class="{ 'is-active': activeTab === tab.key }" @click="activeTab = tab.key">
         {{ t(tab.label) }}<span v-if="tab.count != null" class="count">{{ tab.count }}</span>
       </button>
@@ -45,8 +45,8 @@
     <div v-if="loading" class="skeleton-rows"><div class="skeleton"></div><div class="skeleton"></div></div>
 
     <template v-else>
-      <section v-if="activeTab === 'questions'" class="bank-questions-layout">
-        <aside class="bank-chapter-rail">
+      <section v-if="activeTab === 'questions'" class="bank-questions-layout bank-detail-layout">
+        <aside class="bank-chapter-rail bank-detail-chapter-rail">
           <div class="rule-label">{{ t('ep.banks.structure') }}</div>
           <button type="button" class="chapter-item" :class="{ 'is-active': chapterFilter === '' }" @click="chapterFilter = ''">
             <span>{{ t('ep.banks.chapter_all') }}</span><span class="count">{{ questions.length }}</span>
@@ -57,8 +57,8 @@
           <div v-if="!chapters.length" class="tiny dim">{{ t('ep.banks.chapter_empty') }}</div>
         </aside>
 
-        <div class="bank-question-main">
-          <div class="toolbar bank-toolbar">
+        <div class="bank-question-main bank-detail-question-main">
+          <div class="toolbar bank-toolbar bank-detail-toolbar">
             <div class="search-box">
               <LinearIcon name="search" :size="15" />
               <input v-model.trim="query" class="input" :placeholder="t('ep.banks.search_questions')" />
@@ -67,8 +67,8 @@
             <span class="small dim">{{ t('ep.common.count', { count: filteredQuestions.length }) }}</span>
           </div>
 
-          <div v-if="filteredQuestions.length" class="qlist">
-            <button v-for="(q, index) in filteredQuestions" :key="q.id" type="button" class="qrow bank-qrow" @click="openQuestion(q)">
+          <div v-if="filteredQuestions.length" class="qlist bank-detail-qlist">
+            <button v-for="(q, index) in filteredQuestions" :key="q.id" type="button" class="qrow bank-qrow bank-detail-qrow" @click="openQuestion(q)">
               <span class="qrow-num mono">{{ String(index + 1).padStart(2, '0') }}</span>
               <span class="qrow-main">
                 <span class="qrow-stem">{{ stripHtml(q.stem) }}</span>
@@ -135,8 +135,8 @@
     </template>
 
     <div v-if="selectedQuestion" class="drawer-scrim" @click="selectedQuestion = null"></div>
-    <aside v-if="selectedQuestion" class="drawer" role="dialog" aria-modal="true">
-      <div class="drawer-head">
+    <aside v-if="selectedQuestion" class="drawer bank-detail-drawer" role="dialog" aria-modal="true">
+      <div class="drawer-head bank-detail-drawer-head">
         <div style="flex: 1; min-width: 0">
           <div class="drawer-title">{{ t('ep.banks.detail') }}</div>
           <div class="drawer-sub">
@@ -148,7 +148,7 @@
           <LinearIcon name="x" :size="17" />
         </button>
       </div>
-      <div class="drawer-body">
+      <div class="drawer-body bank-detail-drawer-body">
         <section class="version-panel">
           <div class="version-panel-head">
             <span class="rule-label">{{ t('ep.banks.version_history') }}</span>
@@ -207,7 +207,7 @@
           </div>
         </div>
       </div>
-      <div class="drawer-foot">
+      <div class="drawer-foot bank-detail-drawer-foot">
         <button v-if="!versionPreview" type="button" class="btn btn-primary" @click="practiceOne(selectedQuestion)">
           <LinearIcon name="play" :size="14" />{{ t('ep.banks.practice_one') }}
         </button>
@@ -426,11 +426,16 @@ onMounted(load)
 .version-item.is-active { background: var(--surface-2); color: var(--ink); }
 .version-item.is-current { font-weight: 600; }
 .version-item .od-truncate { flex: 1; min-width: 0; }
-.version-preview-note { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 8px; font-size: 11.5px; color: var(--ink-3); }
+.version-preview-note { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; color: var(--ink-3); }
 .copy-form { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .copy-select { max-width: 170px; height: 30px; font-size: 12px; }
 .copy-notice { color: var(--ink-3); overflow-wrap: anywhere; max-width: 220px; }
 .bank-questions-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px; margin-top: 18px; align-items: start; }
+.bank-detail-toolbar { border-top: 1px solid var(--ink); }
+.bank-detail-qrow { padding: 13px 4px; }
+.bank-detail-qrow .qrow-stem { line-height: 1.55; overflow-wrap: anywhere; }
+.bank-detail-qrow .qrow-side { width: 64px; justify-content: flex-end; flex: none; }
+.bank-detail-drawer .bank-q-stem { font-family: var(--font-serif); font-size: 20px; line-height: 1.9; }
 .bank-chapter-rail { border-top: 1px solid var(--line); padding-top: 10px; }
 .chapter-item {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -439,14 +444,18 @@ onMounted(load)
 }
 .chapter-item:hover { background: var(--surface-2); color: var(--ink); }
 .chapter-item.is-active { color: var(--brand); font-weight: 600; }
-.chapter-item .count { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-4); }
+.chapter-item .count { font-family: var(--font-mono); font-size: 12px; color: var(--ink-4); }
 .bank-toolbar { margin-top: 0; border-top: 0; }
 .bank-qrow { width: 100%; }
 .bank-q-stem,
 .bank-q-explain { white-space: pre-wrap; overflow-wrap: anywhere; }
-.qrow-side { font-size: 11.5px; color: var(--ink-3); }
+.qrow-side { font-size: 12px; color: var(--ink-3); }
 .qrow-meta { display: flex; flex-wrap: wrap; gap: 10px; }
 .small { font-size: 12px; }
+@media (max-width: 1180px) {
+  .bank-detail-layout { grid-template-columns: 168px minmax(0, 1fr); gap: 24px; }
+  .bank-detail-chapter-rail .chapter-item { padding: 0 6px; }
+}
 @media (max-width: 900px) {
   .bank-questions-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .bank-chapter-rail { display: flex; gap: 4px; overflow-x: auto; border-top: 0; padding-top: 0; }

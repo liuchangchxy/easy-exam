@@ -1,6 +1,6 @@
 <template>
   <div class="exam-setup-backdrop" @click.self="$emit('close')" @keydown.esc="$emit('close')">
-    <section class="exam-setup-dialog blueprint-dialog" role="dialog" aria-modal="true" aria-labelledby="blueprint-title">
+    <section class="exam-setup-dialog blueprint-dialog exam-blueprint-dialog" role="dialog" aria-modal="true" aria-labelledby="blueprint-title">
       <div class="dialog-header-flex">
         <div>
           <div class="rule-label">{{ t('ep.exam.blueprint') }}</div>
@@ -443,7 +443,8 @@ async function handleSaveBlueprint() {
 </script>
 
 <style scoped>
-.blueprint-dialog { width: min(100%, 660px); gap: 0; }
+.blueprint-dialog { gap: 0; }
+.exam-blueprint-dialog { width: min(100%, 720px); }
 .blueprint-dialog h2 { margin: 3px 0 0; }
 .seg-control {
   display: inline-flex;
@@ -456,7 +457,7 @@ async function handleSaveBlueprint() {
   background: transparent;
   color: var(--ink-3);
   font-family: var(--font-sans);
-  font-size: 11.5px;
+  font-size: 12px;
   padding: 5px 10px;
   cursor: pointer;
 }
@@ -466,25 +467,26 @@ async function handleSaveBlueprint() {
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  margin-top: 18px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  background: var(--surface-2);
+  margin-top: 16px;
+  padding: 2px 0 2px 14px;
+  border: 0;
+  border-left: 2px solid var(--brand);
+  background: transparent;
   color: var(--ink-3);
 }
 .guide-body { flex: 1; min-width: 0; }
 .guide-body strong { font-family: var(--font-sans); font-size: 12px; color: var(--ink); }
 .guide-body p { margin: 3px 0 8px; font-size: 12px; line-height: 1.6; color: var(--ink-3); }
 .guide-templates { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.guide-label { font-family: var(--font-sans); font-size: 11px; font-weight: 600; color: var(--ink-2); }
+.guide-label { font-family: var(--font-sans); font-size: 12px; font-weight: 600; color: var(--ink-2); }
 .guide-dismiss { flex-shrink: 0; width: 24px; height: 24px; }
-.guide-restore { align-self: flex-end; margin-top: 10px; font-size: 11px; }
+.guide-restore { align-self: flex-end; margin-top: 10px; font-size: 12px; }
 .link-btn {
   border: 0;
   background: transparent;
   color: var(--brand);
   font-family: var(--font-sans);
-  font-size: 11.5px;
+  font-size: 12px;
   padding: 0;
   cursor: pointer;
   text-decoration: underline;
@@ -523,7 +525,7 @@ async function handleSaveBlueprint() {
 }
 .editor-head h3 { margin: 0; font-family: var(--font-sans); font-size: 13px; font-weight: 650; }
 .blueprint-error { margin: 0 0 10px; }
-.editor-count { font-size: 10.5px; color: var(--ink-3); }
+.editor-count { font-size: 12px; color: var(--ink-3); }
 .simple-panel .hint { margin: 0 0 10px; }
 .simple-grid {
   display: grid;
@@ -539,24 +541,34 @@ async function handleSaveBlueprint() {
 .section-bar { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
 .section-empty { padding: 14px; text-align: center; border: 1px solid var(--line); }
 .section-row {
-  padding: 10px;
-  border: 1px solid var(--line);
-  background: var(--surface-2);
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
 }
-.section-main { display: flex; align-items: center; gap: 6px; }
-.section-name { width: 150px; }
+.section-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 86px 74px 88px 30px;
+  align-items: center;
+  gap: 6px;
+}
+.section-name { width: auto; min-width: 0; }
 .section-type { width: 84px; }
 .section-count { width: 64px; }
 .section-diff { width: 80px; }
 .section-remove { color: var(--bad); flex-shrink: 0; }
 .section-filter { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
-.section-filter .input { font-size: 11.5px; }
+.section-filter .input { font-size: 12px; }
 .editor-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
 .blueprint-dialog .dialog-actions { margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--line); }
 @media (max-width: 640px) {
   .simple-grid { grid-template-columns: 1fr 1fr; }
-  .section-main { flex-wrap: wrap; }
-  .section-name { flex: 1; min-width: 120px; }
+  .section-main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .section-name { grid-column: 1 / -1; min-width: 0; }
+  .section-type,
+  .section-count,
+  .section-diff { width: 100%; }
+  .section-remove { justify-self: end; }
   .section-filter { grid-template-columns: 1fr; }
   .seg-control { margin-left: 0; }
 }

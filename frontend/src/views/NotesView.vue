@@ -1,5 +1,5 @@
 <template>
-  <div class="library-page">
+  <div class="library-page notes-page" :class="{ 'is-reader-open': readerOpen && selected }">
     <div class="page-head">
       <div class="page-head-main">
         <div class="page-eyebrow">{{ t('ep.nav.study') }}</div>
@@ -17,12 +17,12 @@
       </div>
     </div>
 
-    <div class="toolbar library-toolbar">
+    <div class="toolbar library-toolbar notes-toolbar">
       <div class="search-box">
         <LinearIcon name="search" :size="15" />
         <input v-model.trim="searchQuery" class="input" :placeholder="t('ep.library.search')" />
       </div>
-      <div class="tabs library-tabs">
+      <div class="tabs library-tabs notes-tabs">
         <button v-for="tab in tabs" :key="tab.key" type="button" class="tab" :class="{ 'is-active': filterType === tab.key }" @click="filterType = tab.key">
           {{ t(tab.label) }}<span class="count">{{ tab.count }}</span>
         </button>
@@ -37,7 +37,7 @@
       <div class="skeleton"></div><div class="skeleton"></div>
     </div>
 
-    <div v-else-if="!filteredAssets.length" class="empty library-empty">
+    <div v-else-if="!filteredAssets.length" class="empty library-empty notes-empty">
       <div class="empty-mark"><LinearIcon name="note" :size="26" /></div>
       <div class="empty-title">{{ searchQuery ? t('ep.library.no_results') : t('ep.library.empty') }}</div>
       <div class="empty-desc">{{ searchQuery ? t('ep.library.search') : t('ep.library.empty_hint') }}</div>
@@ -47,15 +47,15 @@
       </div>
     </div>
 
-    <div v-else class="library-layout">
-      <div class="library-list">
+    <div v-else class="library-layout notes-layout">
+      <div class="library-list notes-list">
         <button
           v-for="item in filteredAssets"
           :key="item.id"
           type="button"
-          class="library-row"
+          class="library-row notes-row"
           :class="{ 'is-active': selectedId === item.id }"
-          @click="selectedId = item.id"
+          @click="openReader(item)"
         >
           <span class="library-row-main">
             <span class="library-row-title">{{ plainTitle(item) }}</span>
@@ -69,13 +69,24 @@
         </button>
       </div>
 
-      <article v-if="selected" class="library-reader">
-        <div class="reader-head">
-          <div class="page-eyebrow">{{ formatType(selected.asset_type) }} · {{ formatDate(selected.created_at) }}</div>
-          <h2 class="reader-title">{{ plainTitle(selected) }}</h2>
+      <article
+        v-if="selected"
+        class="library-reader notes-reader"
+        :class="{ 'is-open': readerOpen }"
+        role="dialog"
+        :aria-label="plainTitle(selected)"
+      >
+        <div class="reader-head notes-reader-head">
+          <div style="min-width: 0; flex: 1">
+            <div class="page-eyebrow">{{ formatType(selected.asset_type) }} · {{ formatDate(selected.created_at) }}</div>
+            <h2 class="reader-title notes-reader-title">{{ plainTitle(selected) }}</h2>
+          </div>
+          <button type="button" class="icon-btn notes-reader-close" :aria-label="t('ep.common.close')" @click="closeReader">
+            <LinearIcon name="x" :size="17" />
+          </button>
         </div>
 
-        <div v-if="editingNote" class="reader-edit">
+        <div v-if="editingNote" class="reader-edit notes-reader-edit">
           <textarea v-model="editContent" class="textarea reader-edit-input" rows="10" :placeholder="t('ep.library.note_body_placeholder')"></textarea>
           <div class="reader-edit-actions">
             <button type="button" class="btn btn-sm" :disabled="savingNote" @click="cancelEdit">{{ t('ep.common.cancel') }}</button>
@@ -84,9 +95,9 @@
             </button>
           </div>
         </div>
-        <div v-else class="reader-body">{{ selected.content || selected.file_name }}</div>
+        <div v-else class="reader-body notes-reader-body">{{ selected.content || selected.file_name }}</div>
 
-        <div v-if="selected.file_name" class="reader-file">
+        <div v-if="selected.file_name" class="reader-file notes-reader-file">
           <LinearIcon name="file" :size="15" />
           <span class="mono reader-file-name">{{ selected.file_name }}</span>
           <span class="reader-file-actions">
@@ -94,7 +105,7 @@
             <button type="button" class="btn btn-sm btn-quiet file-download" @click="downloadFile(selected)">{{ t('ep.library.download_file') }}</button>
           </span>
         </div>
-        <div class="reader-foot">
+        <div class="reader-foot notes-reader-foot">
           <button v-if="!editingNote" type="button" class="btn btn-sm note-edit" @click="startEdit(selected)">
             {{ t('ep.library.note_edit') }}
           </button>
@@ -153,6 +164,7 @@ const newAssetContent = ref('')
 const filterType = ref('ALL')
 const searchQuery = ref('')
 const selectedId = ref('')
+const readerOpen = ref(false)
 const notice = ref('')
 const noticeIsError = ref(false)
 const editingNote = ref(false)
@@ -196,6 +208,18 @@ watch(selectedId, () => {
   editingNote.value = false
   editContent.value = ''
 })
+
+function openReader(item) {
+  if (!item) return
+  selectedId.value = item.id
+  readerOpen.value = true
+}
+
+function closeReader() {
+  readerOpen.value = false
+  editingNote.value = false
+  editContent.value = ''
+}
 
 function showNotice(message, isError = true) {
   notice.value = message || ''
@@ -341,6 +365,7 @@ async function handleDelete(id) {
   notice.value = ''
   try {
     await deleteAsset(props.token, id)
+    closeReader()
     await fetchAssets()
   } catch (err) {
     showNotice(err.detail || err.message)
@@ -383,8 +408,8 @@ onMounted(fetchAssets)
 .library-toolbar { border-top: 0; margin-top: 0; }
 .library-tabs { border-bottom: 0; }
 .library-empty { margin-top: 28px; }
-.library-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 0; margin-top: 18px; border-top: 1px solid var(--line); }
-.library-list { border-right: 1px solid var(--line); max-height: 72vh; overflow-y: auto; }
+.notes-layout { margin-top: 18px; border-top: 1px solid var(--line); transition: padding-right .18s var(--ease); }
+.notes-list { max-height: none; overflow-y: visible; }
 .library-row {
   display: flex; align-items: center; gap: 12px; width: 100%;
   padding: 13px 14px 13px 4px; border: 0; border-bottom: 1px solid var(--line);
@@ -394,23 +419,37 @@ onMounted(fetchAssets)
 .library-row.is-active { background: var(--surface); box-shadow: inset 2px 0 0 var(--brand); }
 .library-row-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
 .library-row-title { font-size: 13px; line-height: 1.55; color: var(--ink); overflow-wrap: anywhere; }
-.library-row-meta { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: 10.5px; color: var(--ink-3); }
-.library-reader { padding: 24px 30px 30px; min-width: 0; }
-.reader-head { border-bottom: 1px solid var(--line); padding-bottom: 16px; }
+.library-row-meta { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: 12px; color: var(--ink-3); }
+.notes-reader {
+  position: fixed; top: var(--topbar-h); right: 0; bottom: 0;
+  z-index: 45; width: min(460px, 100vw);
+  display: flex; flex-direction: column; min-width: 0;
+  background: var(--surface);
+  border-left: 1px solid var(--line-strong);
+  box-shadow: -24px 0 60px -40px rgba(20, 23, 19, .5);
+  transform: translateX(100%); visibility: hidden;
+  transition: transform .18s var(--ease), visibility .18s;
+}
+.notes-reader.is-open { transform: none; visibility: visible; }
+.notes-reader-head { flex: none; display: flex; align-items: flex-start; gap: 12px; padding: 20px 24px 14px; border-bottom: 1px solid var(--line); }
+.notes-reader-title { margin-top: 4px; }
+.notes-reader-close { flex: none; }
+.notes-reader-body { flex: 1; overflow-y: auto; padding: 22px 24px 30px; }
+.notes-reader-edit { flex: 1; overflow-y: auto; padding: 18px 24px; }
+.notes-reader-file { padding: 10px 24px; background: var(--surface); }
+.notes-reader-foot { flex: none; padding: 12px 24px calc(12px + env(safe-area-inset-bottom)); }
 .reader-title { margin: 6px 0 0; font-family: var(--font-serif); font-size: 24px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
-.reader-body { padding: 22px 0; font-family: var(--font-serif); font-size: 15.5px; line-height: 1.95; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
-.reader-edit { padding: 18px 0; display: flex; flex-direction: column; gap: 10px; }
+.reader-body { font-family: var(--font-serif); font-size: 15.5px; line-height: 1.95; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.reader-edit { display: flex; flex-direction: column; gap: 10px; }
 .reader-edit-input { width: 100%; min-height: 220px; resize: vertical; font-family: var(--font-serif); line-height: 1.8; }
 .reader-edit-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.reader-file { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--ink-2); }
+.reader-file { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-2); }
 .reader-file-name { overflow-wrap: anywhere; }
 .reader-file-actions { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; }
-.reader-foot { display: flex; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+.reader-foot { display: flex; gap: 8px; border-top: 1px solid var(--line); }
 .library-dialog { width: min(100%, 520px); }
-@media (max-width: 860px) {
-  .library-layout { grid-template-columns: minmax(0, 1fr); }
-  .library-list { border-right: 0; max-height: none; }
-  .library-reader { padding: 20px 0 24px; border-top: 1px solid var(--line); }
+@media (min-width: 1100px) {
+  .notes-page.is-reader-open .notes-layout { padding-right: 460px; }
 }
 @media (max-width: 640px) {
   .library-toolbar { flex-wrap: wrap; gap: 10px; }
@@ -418,5 +457,17 @@ onMounted(fetchAssets)
   .library-tabs { gap: 16px; overflow-x: auto; }
   .library-tabs .tab { white-space: nowrap; }
   .reader-title { font-size: 20px; }
+}
+@media (max-width: 768px) {
+  .notes-reader {
+    top: 52px; width: 100%; z-index: 80;
+    border-left: 0; box-shadow: none;
+  }
+  .notes-reader-head { padding: 16px 16px 12px; }
+  .notes-reader-body { padding: 16px 16px 24px; }
+  .notes-reader-edit { padding: 16px 16px 20px; }
+  .notes-reader-file { padding: 10px 16px; }
+  .notes-reader-foot { padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
+  .notes-reader-foot .btn { flex: 1; }
 }
 </style>

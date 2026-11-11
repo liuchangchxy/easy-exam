@@ -200,7 +200,9 @@ async function run() {
     )
 
     // Check 8: question palette drawer
-    await page.click('.focus-counter')
+    // `.focus-counter` is hidden at 390px (PracticeViewV1.vue @media 768px);
+    // `.practice-sheet-btn` is the visible mobile entry to the same drawer.
+    await page.click('.practice-sheet-btn')
     await page.waitForSelector('.sheet-dialog')
     const isDrawerOpen = await page.isVisible('.sheet-dialog')
     console.log('[Check 8] Question palette drawer opened:', isDrawerOpen)
@@ -212,8 +214,8 @@ async function run() {
     })
     console.log('[Check 9] Q1 palette class:', q1PaletteClass)
     assert(
-      q1PaletteClass.includes('correct') || q1PaletteClass.includes('incorrect'),
-      'Q1 in palette should be marked answered (correct/incorrect)'
+      q1PaletteClass.includes('is-answered'),
+      'Q1 in palette should be marked answered (is-answered)'
     )
 
     // Check 10: jump to Q10 via the palette
@@ -234,7 +236,12 @@ async function run() {
     // handleTouchStart/handleTouchEnd), so a mouse drag never reaches it — real
     // touch events must be dispatched via CDP Input.dispatchTouchEvent.
     const box = await page.locator('.focus-mode').boundingBox()
-    const cy = box.y + box.height / 2
+    // Swipe on the stem area: the page centre can land on an option button,
+    // and the practice touch handler intentionally ignores button/input targets.
+    const stemBox = await page.locator('.q-stem').first().boundingBox()
+    const cy = stemBox
+      ? Math.min(Math.max(stemBox.y + stemBox.height / 2, box.y + 10), box.y + box.height - 10)
+      : box.y + box.height / 2
     const cdp = await context.newCDPSession(page)
     // Start beyond the 25px iOS-back edge guard (isSwipeGestureValid).
     const startX = box.x + box.width - 40

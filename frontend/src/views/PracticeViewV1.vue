@@ -13,6 +13,16 @@
         </div>
       </div>
       <div class="focus-top-right">
+        <button
+          v-if="question"
+          type="button"
+          class="btn btn-sm practice-sheet-btn"
+          :aria-label="t('ep.exam.sheet_open', { answered: answeredCount, total: questions.length })"
+          @click="showSheetModal = true"
+        >
+          <LinearIcon name="layers" :size="14" /><span class="practice-sheet-label">{{ t('ep.exam.sheet') }}</span>
+          <span class="practice-sheet-progress mono">{{ index + 1 }} / {{ questions.length }}</span>
+        </button>
         <button v-if="question" type="button" class="focus-counter mono" @click="showSheetModal = true">
           {{ index + 1 }} / {{ questions.length }}
           <LinearIcon name="layers" :size="13" />
@@ -20,7 +30,7 @@
         <button v-if="question" type="button" class="icon-btn" :class="{ 'is-on': isWeak }" :title="isWeak ? t('ep.banks.unmark_weak') : t('ep.banks.mark_weak')" :aria-label="isWeak ? t('ep.banks.unmark_weak') : t('ep.banks.mark_weak')" @click="toggleWeak">
           <LinearIcon name="flag" :size="16" />
         </button>
-        <button type="button" class="icon-btn" :title="t('ep.practice.shortcuts_title')" :aria-label="t('ep.practice.shortcuts_title')" @click="showHelpTip = !showHelpTip">
+        <button type="button" class="icon-btn focus-help-btn" :title="t('ep.practice.shortcuts_title')" :aria-label="t('ep.practice.shortcuts_title')" @click="showHelpTip = !showHelpTip">
           <LinearIcon name="command" :size="16" />
         </button>
         <div class="focus-more">
@@ -67,33 +77,39 @@
     </div>
 
     <!-- Answer sheet -->
-    <div v-if="showSheetModal" class="focus-overlay" @click.self="showSheetModal = false" data-testid="practice-sheet-drawer">
-      <div class="focus-dialog sheet-dialog" role="dialog" aria-modal="true">
+    <div v-if="showSheetModal" class="focus-overlay practice-sheet-overlay" @click.self="showSheetModal = false" data-testid="practice-sheet-drawer">
+      <div class="focus-dialog sheet-dialog practice-sheet-dialog" role="dialog" aria-modal="true">
         <div class="dialog-head">
           <div>
-            <span class="dialog-title">{{ t('ep.practice.index') }}</span>
+            <span class="dialog-title">{{ t('ep.exam.sheet') }}</span>
             <span class="dialog-sub">{{ t('ep.practice.answered_ratio', { answered: answeredCount, total: questions.length }) }}</span>
           </div>
           <button type="button" class="icon-btn" :aria-label="t('ep.common.close')" @click="showSheetModal = false"><LinearIcon name="x" :size="16" /></button>
         </div>
-        <div class="sheet-body">
-          <div class="sheet-legend">
-            <span><i class="dot blank"></i>{{ t('ep.practice.unanswered') }}</span>
-            <span><i class="dot ok"></i>{{ t('ep.practice.correct') }}</span>
-            <span><i class="dot bad"></i>{{ t('ep.practice.incorrect') }}</span>
-            <span><i class="dot part"></i>{{ t('ep.practice.partial') }}</span>
+        <div class="sheet-body practice-sheet-body">
+          <div class="sheet-legend practice-sheet-legend">
+            <span><i class="practice-sheet-dot is-answered"></i>{{ t('ep.exam.answered') }}</span>
+            <span><i class="practice-sheet-dot"></i>{{ t('ep.practice.unanswered') }}</span>
+            <span><i class="practice-sheet-dot is-current"></i>{{ t('ui.k0098') }}</span>
+            <span><i class="practice-sheet-dot is-flagged"></i>{{ t('ep.exam.flagged') }}</span>
           </div>
-          <div class="sheet-grid">
+          <div class="sheet-grid practice-sheet-grid">
             <button
               v-for="(qItem, qIdx) in questions"
               :key="qItem.id"
               type="button"
-              class="sheet-num mono"
+              class="sheet-num practice-sheet-cell mono"
               :class="getSheetButtonClass(qItem.id, qIdx)"
+              :aria-current="qIdx === index ? 'true' : undefined"
               @click="goTo(qIdx)"
             >{{ qIdx + 1 }}</button>
           </div>
-          <button type="button" class="btn btn-sm" @click="jumpNextUnanswered">{{ t('ep.practice.jump_unanswered') }}</button>
+          <div class="practice-sheet-actions">
+            <button type="button" class="btn btn-sm" :class="{ 'is-on': isFlagged }" @click="toggleCurrentFlag">
+              <LinearIcon name="flag" :size="13" />{{ isFlagged ? t('ep.exam.flagged') : t('ep.exam.flag') }}
+            </button>
+            <button type="button" class="btn btn-sm" @click="jumpNextUnanswered">{{ t('ep.practice.jump_unanswered') }}</button>
+          </div>
         </div>
       </div>
     </div>
@@ -165,8 +181,8 @@
     </div>
 
     <template v-else-if="question">
-      <div class="focus-layout">
-        <article class="focus-reading">
+      <div class="focus-layout practice-study-layout">
+        <article class="focus-reading practice-study-main">
           <div v-if="offlineNotice" class="notice warn focus-offline" data-testid="offline-banner">
             <LinearIcon name="alert" :size="15" />
             <span>{{ offlineNotice }}</span>
@@ -288,7 +304,7 @@
             </div>
           </section>
 
-          <div :key="question.id" class="q-sheet reading-page focus-sheet" :class="slideTransition">
+          <div :key="question.id" class="q-sheet reading-page focus-sheet practice-paper" :class="slideTransition">
             <div class="q-meta">
               <span>{{ t('ep.practice.question_no', { current: index + 1 }) }}</span>
               <span>{{ formatType(question.type) }}</span>
@@ -329,10 +345,9 @@
                 :placeholder="t('ep.practice.essay_placeholder')"
               ></textarea>
             </div>
-          </div>
 
-          <!-- Feedback -->
-          <section v-if="result" class="feedback-block">
+            <!-- Feedback: stays inside the paper so grading has one work surface. -->
+            <section v-if="result" class="feedback-block practice-feedback">
             <div class="verdict-line" :class="result.correctness.toLowerCase()">
               <span class="verdict-mark">
                 <LinearIcon :name="result.correctness === 'CORRECT' ? 'check' : 'x'" :size="16" />
@@ -434,15 +449,16 @@
               </div>
               <p v-else class="hint">{{ t('ep.practice.ai_empty') }}</p>
             </section>
-          </section>
+            </section>
+          </div>
 
-          <div v-else class="reading-hint">
+          <div v-if="!result" class="reading-hint">
             <LinearIcon name="command" :size="15" />
             <span>{{ t('ui.k0577') }} · {{ t('ui.k0580') }} <kbd>Enter</kbd></span>
           </div>
         </article>
 
-        <aside class="focus-rail">
+        <aside class="focus-rail practice-study-rail">
           <div class="rail-block">
             <div class="rail-title">{{ t('ep.practice.progress_label') }}</div>
             <div class="focus-progress">
@@ -452,17 +468,30 @@
             <div class="rail-note">{{ t('ep.practice.session_title') }}</div>
           </div>
 
-          <div class="rail-block">
-            <div class="rail-title">{{ t('ep.practice.index') }}</div>
-            <div class="sheet-mini">
+          <div class="rail-block practice-answer-card">
+            <div class="practice-rail-head">
+              <div class="rail-title">{{ t('ep.exam.sheet') }}</div>
+              <button type="button" class="practice-flag-toggle" :class="{ 'is-on': isFlagged }" @click="toggleCurrentFlag">
+                <LinearIcon name="flag" :size="12" />{{ isFlagged ? t('ep.exam.flagged') : t('ep.exam.flag') }}
+              </button>
+            </div>
+            <div class="practice-answer-count mono">{{ t('ep.practice.answered_ratio', { answered: answeredCount, total: questions.length }) }}</div>
+            <div class="sheet-mini practice-answer-grid">
               <button
                 v-for="(qItem, qIdx) in questions"
                 :key="qItem.id"
                 type="button"
-                class="sheet-num mono"
+                class="sheet-num practice-answer-cell mono"
                 :class="getSheetButtonClass(qItem.id, qIdx)"
+                :aria-current="qIdx === index ? 'true' : undefined"
                 @click="goTo(qIdx)"
               >{{ qIdx + 1 }}</button>
+            </div>
+            <div class="practice-answer-legend">
+              <span><i class="practice-sheet-dot is-answered"></i>{{ t('ep.exam.answered') }}</span>
+              <span><i class="practice-sheet-dot"></i>{{ t('ep.practice.unanswered') }}</span>
+              <span><i class="practice-sheet-dot is-current"></i>{{ t('ui.k0098') }}</span>
+              <span><i class="practice-sheet-dot is-flagged"></i>{{ t('ep.exam.flagged') }}</span>
             </div>
           </div>
 
@@ -522,7 +551,7 @@ import ThemeToggle from '../components/ThemeToggle.vue'
 import LocaleToggle from '../components/LocaleToggle.vue'
 import { useLocale } from '../composables/useLocale.js'
 import { useAuthStore } from '../stores/authStore'
-import { getSession, getSessionQuestions, submitAttempt, completeSession, syncDraft } from '../api/practice'
+import { getSession, getSessionQuestions, submitAttempt, completeSession, syncDraft, toggleFlag } from '../api/practice'
 import { getQuestion, listQuestionVersions, updateQuestion, getQuestionConflict, resolveQuestionConflict } from '../api/questions'
 import { generateAnswer, listAnswerVersions, adoptAnswer, saveCandidate, verifyWeb, listQuestionConversations, listConversationMessages, sendChatMessage, generateVariant } from '../api/ai'
 import { markWeak, unmarkWeak } from '../api/learning'
@@ -733,6 +762,7 @@ const customQuery = ref('')
 const editingVersionId = ref(null)
 const editDraft = ref('')
 const isWeak = ref(false)
+const flaggedIds = ref([])
 const questionVersions = ref([])
 const activeConflict = ref(null)
 const showConflictModal = ref(false)
@@ -767,6 +797,7 @@ let drainingAttempts = false
 
 
 const question = computed(() => questions.value[index.value])
+const isFlagged = computed(() => Boolean(question.value && flaggedIds.value.includes(question.value.id)))
 
 const hasAnswer = computed(() => {
   if (!question.value) return false
@@ -1030,6 +1061,7 @@ onMounted(async () => {
       router.replace(`/exam/${props.sessionId}`)
       return
     }
+    flaggedIds.value = Array.isArray(session.value?.flags) ? [...session.value.flags] : []
     questions.value = await getSessionQuestions(props.token, props.sessionId)
     if (session.value) {
       const hydrated = hydrateSessionPractice(session.value, questions.value?.length || 0)
@@ -1496,6 +1528,27 @@ async function toggleWeak() {
   }
 }
 
+/**
+ * Session review flag, persisted by the existing practice toggle-flag
+ * endpoint. Optimistic so the answer card responds immediately; a failed write
+ * rolls back and reports through the offline notice instead of losing state.
+ */
+async function toggleCurrentFlag() {
+  if (!question.value) return
+  const qid = question.value.id
+  const previous = [...flaggedIds.value]
+  flaggedIds.value = previous.includes(qid)
+    ? previous.filter(id => id !== qid)
+    : [...previous, qid]
+  try {
+    const response = await toggleFlag(authToken.value, props.sessionId, qid)
+    if (Array.isArray(response?.flags)) flaggedIds.value = response.flags
+  } catch (err) {
+    flaggedIds.value = previous
+    offlineNotice.value = err?.detail || err?.message || t('api_errors.REQUEST_FAILED')
+  }
+}
+
 // 斩杀此题：直接将完全掌握的题目移入斩杀题库 (EE-013)
 async function handleKill() {
   if (!question.value) return
@@ -1505,6 +1558,7 @@ async function handleKill() {
     await killQuestion(authToken.value, killedId)
     delete sessionAnswers.value[killedId]
     delete draftBase.value[killedId]
+    flaggedIds.value = flaggedIds.value.filter(id => id !== killedId)
     if (clientAttemptIds.value[killedId]) {
       const nextIds = { ...clientAttemptIds.value }
       delete nextIds[killedId]
@@ -1581,11 +1635,10 @@ function getSheetButtonClass(qid, qIdx) {
   const isAnswered = Boolean(res || (Array.isArray(saved?.answer) ? saved.answer.length : saved?.answer || saved?.textAnswer))
 
   return {
-    current: isCurrent,
-    answered: isAnswered && !res,
-    correct: res?.correctness === 'CORRECT',
-    incorrect: res?.correctness === 'INCORRECT',
-    partial: res?.correctness === 'PARTIAL',
+    'is-current': isCurrent,
+    'is-answered': isAnswered,
+    'is-unanswered': !isAnswered,
+    'is-flagged': flaggedIds.value.includes(qid),
   }
 }
 
@@ -2033,11 +2086,17 @@ function handleRestartPractice() {
 <style scoped>
 .focus-mode {
   min-height: 100vh;
-  background: var(--paper);
+  background: var(--d-gasket, var(--paper));
   color: var(--ink);
   padding-top: var(--topbar-h);
   padding-bottom: 76px;
 }
+.focus-mode .tag,
+.focus-mode .rule-label,
+.focus-mode .hint,
+.focus-mode .stat-cap,
+.focus-mode .list-meta { font-size: 12px; }
+.focus-mode .rule-label { letter-spacing: .08em; }
 
 /* ---------- top bar ---------- */
 .focus-topbar {
@@ -2050,7 +2109,7 @@ function handleRestartPractice() {
   justify-content: space-between;
   gap: 16px;
   padding: 0 18px;
-  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  background: color-mix(in srgb, var(--d-gasket, var(--paper)) 95%, transparent);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
 }
@@ -2094,7 +2153,7 @@ function handleRestartPractice() {
   white-space: nowrap;
 }
 .focus-type {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-3);
   white-space: nowrap;
 }
@@ -2106,12 +2165,18 @@ function handleRestartPractice() {
   background: transparent;
   color: var(--ink-2);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   padding: 5px 9px;
   border-radius: var(--r-xs);
   cursor: pointer;
 }
 .focus-counter:hover { border-color: var(--line-strong); color: var(--ink); }
+.practice-sheet-btn { display: none; gap: 6px; white-space: nowrap; }
+.practice-sheet-progress {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-2);
+}
 .focus-menu {
   position: absolute;
   top: calc(var(--topbar-h) - 4px);
@@ -2147,17 +2212,27 @@ function handleRestartPractice() {
 /* ---------- layout ---------- */
 .focus-layout {
   display: grid;
-  grid-template-columns: minmax(0, var(--reading-w)) 244px;
-  gap: clamp(32px, 5vw, 72px);
+  grid-template-columns: minmax(0, 744px) 280px;
+  gap: 56px;
   justify-content: center;
   align-items: start;
-  width: min(100% - 48px, 1120px);
+  width: min(100%, 1140px);
   margin: 0 auto;
-  padding: 44px 0 56px;
+  padding: 30px 26px 120px;
 }
-.focus-reading { min-width: 0; }
+.practice-study-main { min-width: 0; max-width: 744px; }
 .focus-sheet {
   padding-bottom: 8px;
+}
+.practice-paper {
+  width: 100%;
+  max-width: 744px;
+  min-width: 0;
+  padding: 34px 38px 36px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  box-shadow: var(--shadow-1);
 }
 .focus-sheet .q-meta {
   display: flex;
@@ -2165,7 +2240,7 @@ function handleRestartPractice() {
   gap: 12px;
   margin-bottom: 18px;
   font-family: var(--font-sans);
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: .06em;
   color: var(--ink-3);
   text-transform: uppercase;
@@ -2173,7 +2248,7 @@ function handleRestartPractice() {
 .focus-sheet .q-stem {
   font-family: var(--font-serif);
   font-size: 20px;
-  line-height: 1.72;
+  line-height: 1.9;
   letter-spacing: .01em;
   margin-bottom: 30px;
   white-space: pre-wrap;
@@ -2196,8 +2271,8 @@ function handleRestartPractice() {
   color: var(--ink);
   text-align: left;
   font-family: var(--font-serif);
-  font-size: 16.5px;
-  line-height: 1.65;
+  font-size: 14.5px;
+  line-height: 1.68;
   cursor: pointer;
   transition: background .14s var(--ease);
 }
@@ -2205,7 +2280,7 @@ function handleRestartPractice() {
 .opt:disabled { cursor: default; }
 .opt-key {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-3);
 }
 .opt-text { white-space: pre-wrap; }
@@ -2240,7 +2315,7 @@ function handleRestartPractice() {
 .verdict-line.ungraded { color: var(--ink-2); }
 .verdict-ratio {
   margin-left: auto;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-3);
 }
 .answer-line {
@@ -2265,8 +2340,8 @@ function handleRestartPractice() {
 .explain-body {
   margin-top: 10px;
   font-family: var(--font-serif);
-  font-size: 16px;
-  line-height: 1.8;
+  font-size: 15.5px;
+  line-height: 1.92;
   color: var(--ink-2);
   white-space: pre-wrap;
 }
@@ -2277,7 +2352,7 @@ function handleRestartPractice() {
 }
 .fsrs-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .fsrs-buttons .btn.is-on { border-color: var(--brand); color: var(--brand); background: var(--brand-soft); }
-.fsrs-buttons .mono { color: var(--ink-3); font-size: 10.5px; }
+.fsrs-buttons .mono { color: var(--ink-3); font-size: 12px; }
 
 /* ---------- AI (secondary) ---------- */
 .ai-entry {
@@ -2319,15 +2394,15 @@ function handleRestartPractice() {
   display: flex;
   justify-content: space-between;
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--ink-3);
   margin-bottom: 4px;
 }
 .chat-sender { font-weight: 600; }
 .chat-text {
   font-family: var(--font-serif);
-  font-size: 14.5px;
-  line-height: 1.7;
+  font-size: 15.5px;
+  line-height: 1.92;
   color: var(--ink-2);
   white-space: pre-wrap;
   margin: 0;
@@ -2346,8 +2421,8 @@ function handleRestartPractice() {
 .ai-version-head .dim { margin-left: auto; }
 .ai-version-text {
   font-family: var(--font-serif);
-  font-size: 14.5px;
-  line-height: 1.7;
+  font-size: 15.5px;
+  line-height: 1.92;
   color: var(--ink-2);
   white-space: pre-wrap;
   margin: 0 0 8px;
@@ -2360,21 +2435,22 @@ function handleRestartPractice() {
 .ai-version.is-adopted { background: color-mix(in srgb, var(--brand-soft) 46%, transparent); }
 
 /* ---------- rail ---------- */
-.focus-rail {
+.practice-study-rail {
   position: sticky;
-  top: calc(var(--topbar-h) + 24px);
+  top: calc(var(--topbar-h) + 20px);
   display: flex;
   flex-direction: column;
   gap: 22px;
-  padding-top: 4px;
+  padding: 4px 0 0 22px;
+  border-left: 1px solid var(--line);
 }
 .rail-block { padding-bottom: 20px; border-bottom: 1px solid var(--line); }
 .rail-block:last-child { border-bottom: 0; padding-bottom: 0; }
 .rail-title {
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 650;
-  letter-spacing: .09em;
+  letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--ink-3);
   margin-bottom: 10px;
@@ -2392,37 +2468,83 @@ function handleRestartPractice() {
   background: var(--brand);
   transition: width .3s var(--ease);
 }
-.rail-note { margin-top: 8px; font-size: 11.5px; color: var(--ink-4); }
+.rail-note { margin-top: 8px; font-size: 12px; line-height: 1.6; color: var(--ink-4); }
 .sheet-mini {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 4px;
+  gap: 5px;
 }
 .sheet-num {
-  min-width: 26px;
-  height: 26px;
+  min-width: 28px;
+  height: 30px;
   padding: 0 4px;
   border: 1px solid var(--line);
-  background: transparent;
+  background: var(--surface);
   color: var(--ink-3);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 12px;
   border-radius: var(--r-xs);
   cursor: pointer;
 }
 .sheet-num:hover { border-color: var(--line-strong); color: var(--ink); }
-.sheet-num.current { border-color: var(--ink); color: var(--ink); font-weight: 700; }
-.sheet-num.answered { background: var(--surface-2); color: var(--ink-2); }
-.sheet-num.correct { background: var(--ok-soft); border-color: var(--ok-line); color: var(--ok); }
-.sheet-num.incorrect { background: var(--bad-soft); border-color: var(--bad-line); color: var(--bad); }
-.sheet-num.partial { background: var(--warn-soft); border-color: var(--warn-line); color: var(--warn); }
+.sheet-num.is-answered { background: var(--brand-soft); border-color: var(--brand-line); color: var(--brand-ink); }
+.sheet-num.is-unanswered { background: transparent; color: var(--ink-3); }
+.sheet-num.is-current { border-color: var(--ink); color: var(--ink); font-weight: 700; }
+.sheet-num.is-flagged { box-shadow: inset 0 -3px 0 var(--flag); }
+
+.practice-rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.practice-rail-head .rail-title { margin-bottom: 0; }
+.practice-flag-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--ink-3);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+}
+.practice-flag-toggle:hover { border-color: var(--line-strong); color: var(--ink); }
+.practice-flag-toggle.is-on { color: var(--flag); border-color: var(--warn-line); background: var(--warn-soft); }
+.practice-answer-count { margin-bottom: 8px; font-size: 12px; color: var(--ink-3); }
+.practice-answer-grid { gap: 5px; }
+.practice-answer-cell { height: 30px; min-width: 30px; }
+.practice-answer-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.practice-answer-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.practice-sheet-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  background: transparent;
+}
+.practice-sheet-dot.is-answered { background: var(--brand-soft); border-color: var(--brand); }
+.practice-sheet-dot.is-current { border-color: var(--ink); }
+.practice-sheet-dot.is-flagged { background: var(--flag); border-color: var(--flag); }
 .rail-keys { display: flex; flex-direction: column; gap: 7px; }
 .rail-keys span {
   display: flex;
   align-items: center;
   gap: 7px;
   font-family: var(--font-sans);
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-3);
 }
 kbd {
@@ -2437,7 +2559,7 @@ kbd {
   border-radius: var(--r-xs);
   background: var(--surface);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   color: var(--ink-2);
 }
 .rail-tools {
@@ -2452,7 +2574,7 @@ kbd {
   position: fixed;
   inset: auto 0 0;
   z-index: 40;
-  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  background: color-mix(in srgb, var(--d-gasket, var(--paper)) 96%, transparent);
   backdrop-filter: blur(10px);
   border-top: 1px solid var(--line);
   padding: 10px 18px calc(10px + env(safe-area-inset-bottom, 0px));
@@ -2508,7 +2630,7 @@ kbd {
 .dialog-sub {
   display: block;
   margin-top: 3px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-3);
 }
 .dialog-actions {
@@ -2524,7 +2646,7 @@ kbd {
   flex-wrap: wrap;
   gap: 14px;
   margin-bottom: 14px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-3);
 }
 .sheet-legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -2540,6 +2662,8 @@ kbd {
   margin-bottom: 16px;
 }
 .sheet-grid .sheet-num { height: 32px; }
+.practice-sheet-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.practice-sheet-actions .btn { min-height: 32px; }
 .report-body { padding: 22px 20px; }
 .report-stats { margin-bottom: 18px; }
 .report-counts { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -2628,7 +2752,7 @@ kbd {
   align-items: center;
   gap: 8px;
   margin-bottom: 5px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .conflict-stem {
   margin: 0 0 8px;
@@ -2642,7 +2766,7 @@ kbd {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-3);
 }
 .focus-offline {
@@ -2682,22 +2806,43 @@ kbd {
 .focus-empty .empty-desc { margin-bottom: 12px; }
 
 /* ---------- responsive ---------- */
-@media (max-width: 1024px) {
+@media (max-width: 1280px) {
+  .focus-layout { gap: 40px; }
+}
+@media (max-width: 1100px) {
   .focus-layout {
-    grid-template-columns: minmax(0, var(--reading-w));
-    width: min(100% - 40px, var(--reading-w));
-    padding-top: 34px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    width: 100%;
+    max-width: 820px;
+    padding: 22px 26px 120px;
   }
-  .focus-rail { display: none; }
+  .practice-study-main { max-width: 100%; }
+  .practice-paper { max-width: 100%; }
+  .practice-study-rail {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+    margin-top: 32px;
+    padding: 24px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--line-strong);
+  }
 }
 @media (max-width: 768px) {
   .focus-mode { padding-bottom: 72px; }
   .focus-topbar { padding: 0 12px; gap: 8px; }
   .focus-type,
-  .focus-sep { display: none; }
-  .focus-layout { width: 100%; padding: 20px 16px 40px; }
-  .focus-sheet .q-stem { font-size: 18.5px; }
-  .opt { font-size: 16px; padding: 13px 6px; }
+  .focus-sep,
+  .focus-counter,
+  .focus-help-btn { display: none; }
+  .practice-sheet-btn { display: inline-flex; }
+  .focus-layout { width: 100%; max-width: none; padding: 14px 14px 120px; }
+  .practice-study-rail { display: none; }
+  .practice-paper { padding: 20px 16px 22px; }
+  .focus-sheet .q-stem { font-size: 18px; line-height: 1.85; }
+  .opt { font-size: 15px; padding: 13px 6px; }
   .focus-actionbar { padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)); }
   .focus-action-inner .focus-counter { display: none; }
   .focus-action-inner .spacer { display: none; }
@@ -2705,18 +2850,29 @@ kbd {
   .focus-action-inner > .btn-primary { flex: 1.6; }
   .edit-grid { grid-template-columns: 1fr 1fr; }
   .sheet-grid { grid-template-columns: repeat(5, 1fr); }
+  .practice-sheet-overlay { align-items: flex-end; padding: 0; }
+  .practice-sheet-dialog {
+    width: 100%;
+    max-width: none;
+    max-height: 82vh;
+    border-radius: 8px 8px 0 0;
+    border-bottom: 0;
+  }
+  .practice-sheet-body { padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+  .practice-sheet-grid .practice-sheet-cell { height: 42px; }
 }
 @media (max-width: 420px) {
   .focus-mode-label { max-width: 96px; overflow: hidden; text-overflow: ellipsis; }
   .focus-exit span { display: none; }
-  .focus-sheet .q-stem { font-size: 17.5px; line-height: 1.7; }
-  .focus-sheet .q-meta { gap: 8px; font-size: 10.5px; }
-  .opt { grid-template-columns: 24px minmax(0, 1fr) 16px; font-size: 15.5px; }
+  .practice-sheet-btn .practice-sheet-label { display: none; }
+  .focus-sheet .q-stem { font-size: 17.5px; line-height: 1.8; }
+  .focus-sheet .q-meta { gap: 8px; font-size: 12px; }
+  .opt { grid-template-columns: 24px minmax(0, 1fr) 16px; font-size: 15px; }
   .edit-grid { grid-template-columns: 1fr; }
   .ai-toolbar { flex-direction: column; }
   .answer-yours { margin-left: 0; }
   .verdict-ratio { margin-left: 0; }
   .focus-finish { padding-left: 9px; padding-right: 9px; }
-  .focus-overlay { padding: 10px; }
+  .focus-overlay:not(.practice-sheet-overlay) { padding: 10px; }
 }
 </style>
