@@ -4,6 +4,7 @@ import { createRouter, createMemoryHistory } from 'vue-router'
 import { nextTick } from 'vue'
 import AppLayout from '../../src/layouts/AppLayout.vue'
 import { useAuthStore } from '../../src/stores/authStore'
+import { t } from '../../src/composables/useLocale.js'
 
 vi.mock('../../src/api/auth', () => ({
   login: vi.fn(),
@@ -49,21 +50,36 @@ afterEach(() => {
 })
 
 describe('AppLayout shared account menu', () => {
-  it('opens one menu from the topbar and the sidebar trigger, without identity or Settings rows', async () => {
+  it('opens one menu with an identity header and no Settings row; the sidebar owns no trigger', async () => {
     await mountLayout()
+    expect(wrapper.find('.sidebar [data-account-trigger]').exists()).toBe(false)
+    expect(wrapper.find('.sidebar .avatar').exists()).toBe(false)
+
     await wrapper.find('.topbar [data-account-trigger]').trigger('click')
     expect(wrapper.findAll('.account-menu')).toHaveLength(1)
 
-    const menuText = wrapper.find('.account-menu').text()
-    expect(menuText).not.toContain('alice')
+    const menu = wrapper.find('.account-menu')
+    expect(menu.find('.account-menu-name').text()).toBe('alice')
+    expect(menu.find('.account-menu-role').text()).toBe(t('ep.role.user'))
+    const menuText = menu.text()
     expect(menuText).not.toContain('设置')
     expect(menuText).not.toContain('Settings')
 
-    // The sidebar avatar drives the very same menu instance.
-    await wrapper.find('.sidebar [data-account-trigger]').trigger('click')
+    // The mobile-top avatar opens the very same menu instance.
+    await wrapper.find('.mobile-top [data-account-trigger]').trigger('click')
     expect(wrapper.findAll('.account-menu')).toHaveLength(1)
-    expect(wrapper.find('.sidebar [data-account-trigger]').attributes('aria-expanded')).toBe('true')
+    expect(wrapper.find('.mobile-top [data-account-trigger]').attributes('aria-expanded')).toBe('true')
     expect(wrapper.find('.topbar [data-account-trigger]').attributes('aria-expanded')).toBe('false')
+  })
+
+  it('shows the admin role label in the menu header for admins', async () => {
+    await mountLayout()
+    const auth = useAuthStore()
+    auth.user.value = { username: 'alice', is_admin: true }
+    await nextTick()
+    await wrapper.find('.topbar [data-account-trigger]').trigger('click')
+    expect(wrapper.find('.account-menu-name').text()).toBe('alice')
+    expect(wrapper.find('.account-menu-role').text()).toBe(t('ep.role.admin'))
   })
 
   it('asks for confirmation before signing out from the account menu', async () => {

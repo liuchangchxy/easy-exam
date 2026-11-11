@@ -2,13 +2,10 @@
   <div class="shell">
     <AppSidebar
       :current-page="currentPage"
-      :user="auth.user.value"
       :bank-count="banks.length"
       :review-count="reviewCount"
       :learning-trends="learningTrends"
-      :account-menu-open="accountMenuOpen && accountMenuAnchor === 'sidebar'"
       @navigate="handleNavigate"
-      @account-menu="toggleAccountMenu"
     />
     <div class="main">
       <header class="topbar">
@@ -97,6 +94,14 @@
       :style="accountMenuStyle"
       @focusout="handleAccountMenuFocusOut"
     >
+      <div class="account-menu-head" role="presentation">
+        <span class="avatar" aria-hidden="true">{{ userInitial }}</span>
+        <span class="account-menu-identity">
+          <span class="account-menu-name">{{ userName }}</span>
+          <span class="account-menu-role">{{ roleLabel }}</span>
+        </span>
+      </div>
+      <div class="account-menu-sep" role="separator"></div>
       <button type="button" role="menuitem" class="popover-action" @click="openChangePassword">
         <LinearIcon name="key" :size="15" />
         <span>{{ t('ep.account.change_password') }}</span>
@@ -190,6 +195,9 @@ const userInitial = computed(() => {
   return name ? name.charAt(0).toUpperCase() : '?'
 })
 
+const userName = computed(() => auth.user.value?.username || t('ep.account.guest'))
+const roleLabel = computed(() => (auth.user.value?.is_admin ? t('ep.role.admin') : t('ep.role.user')))
+
 const currentPage = computed(() => {
   const n = route.name
   if (n === 'home') return 'today'
@@ -271,7 +279,7 @@ watch(
   { immediate: true }
 )
 
-/* ---------- Account menu (one implementation, three anchors) ---------- */
+/* ---------- Account menu (one implementation, two anchors) ---------- */
 
 function toggleAccountMenu(trigger) {
   if (accountMenuOpen.value && accountMenuTrigger.value === trigger) {
@@ -280,9 +288,7 @@ function toggleAccountMenu(trigger) {
   }
   closeMoreMenu(false)
   accountMenuTrigger.value = trigger || null
-  if (trigger?.closest?.('.sidebar')) accountMenuAnchor.value = 'sidebar'
-  else if (trigger?.closest?.('.mobile-top')) accountMenuAnchor.value = 'mobile'
-  else accountMenuAnchor.value = 'topbar'
+  accountMenuAnchor.value = trigger?.closest?.('.mobile-top') ? 'mobile' : 'topbar'
   accountMenuOpen.value = true
   nextTick(() => {
     positionAccountMenu()
@@ -294,15 +300,8 @@ function positionAccountMenu() {
   if (!accountMenuTrigger.value || typeof window === 'undefined') return
   const rect = accountMenuTrigger.value.getBoundingClientRect()
   const width = 208
-  if (accountMenuAnchor.value === 'sidebar') {
-    accountMenuStyle.value = {
-      left: `${Math.min(rect.right + 8, window.innerWidth - width - 8)}px`,
-      bottom: `${Math.max(8, window.innerHeight - rect.bottom)}px`,
-    }
-  } else {
-    const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))
-    accountMenuStyle.value = { left: `${left}px`, top: `${rect.bottom + 6}px` }
-  }
+  const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))
+  accountMenuStyle.value = { left: `${left}px`, top: `${rect.bottom + 6}px` }
 }
 
 function closeAccountMenu(restoreFocus) {
@@ -501,6 +500,14 @@ function handlePracticeBank(bank) {
   z-index: 130;
 }
 
+.topbar .user-mini {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+}
+.topbar .user-mini:hover { background: var(--surface-2); }
+
 .chrome-more-menu {
   left: 12px;
   right: 12px;
@@ -523,6 +530,25 @@ function handlePracticeBank(bank) {
   text-align: left;
   cursor: pointer;
 }
+
+.account-menu-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 9px 8px;
+}
+.account-menu-head .avatar { width: 30px; height: 30px; font-size: 13px; }
+.account-menu-identity { display: flex; flex-direction: column; min-width: 0; }
+.account-menu-name {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.account-menu-role { font-size: 11.5px; color: var(--ink-3); }
+.account-menu-sep { height: 1px; margin: 2px 0 4px; background: var(--line); }
 
 .popover-action:hover { background: var(--surface-2); color: var(--ink); }
 .popover-action.is-danger { color: var(--bad); }

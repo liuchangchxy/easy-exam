@@ -6,7 +6,6 @@ function mountSidebar(overrides = {}) {
   return mount(AppSidebar, {
     props: {
       currentPage: 'today',
-      user: { username: 'alice', is_admin: false },
       bankCount: 0,
       reviewCount: 0,
       learningTrends: null,
@@ -15,7 +14,7 @@ function mountSidebar(overrides = {}) {
   })
 }
 
-describe('AppSidebar account entry', () => {
+describe('AppSidebar footer', () => {
   it('keeps exactly one Settings path and no duplicated account header', () => {
     const wrapper = mountSidebar()
     const settingsButtons = wrapper.findAll('.side-foot > button.nav-item')
@@ -25,21 +24,13 @@ describe('AppSidebar account entry', () => {
     expect(wrapper.findAll('.popover-action')).toHaveLength(0)
   })
 
-  it('the sidebar avatar asks the shell to open the shared account menu', async () => {
-    const wrapper = mountSidebar()
-    const trigger = wrapper.find('.user-mini')
-    expect(trigger.attributes('data-account-trigger')).toBeDefined()
-    expect(trigger.attributes('aria-haspopup')).toBe('menu')
-    expect(trigger.attributes('aria-expanded')).toBe('false')
-
-    await trigger.trigger('click')
-    const emitted = wrapper.emitted('account-menu')
-    expect(emitted).toHaveLength(1)
-    expect(emitted[0][0]).toBe(trigger.element)
-  })
-
-  it('reflects the shared menu state on the trigger', () => {
-    const wrapper = mountSidebar({ accountMenuOpen: true })
-    expect(wrapper.find('.user-mini').attributes('aria-expanded')).toBe('true')
+  it('owns no identity: no avatar, name, role or account trigger in the sidebar', () => {
+    const wrapper = mountSidebar({ currentPage: 'settings' })
+    expect(wrapper.find('.avatar').exists()).toBe(false)
+    expect(wrapper.find('.user-mini').exists()).toBe(false)
+    expect(wrapper.find('.user-name').exists()).toBe(false)
+    expect(wrapper.find('.user-sub').exists()).toBe(false)
+    expect(wrapper.find('[data-account-trigger]').exists()).toBe(false)
+    expect(wrapper.emitted('account-menu')).toBeUndefined()
   })
 })

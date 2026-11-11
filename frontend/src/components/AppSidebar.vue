@@ -52,22 +52,6 @@
         <span class="nav-ico"><LinearIcon name="settings" :size="17" /></span>
         <span class="label">{{ t('ep.nav.settings') }}</span>
       </button>
-
-      <button
-        type="button"
-        class="user-mini"
-        data-account-trigger
-        aria-haspopup="menu"
-        :aria-expanded="accountMenuOpen ? 'true' : 'false'"
-        :aria-label="t('ep.account.menu')"
-        @click="$emit('account-menu', $event.currentTarget)"
-      >
-        <span class="avatar">{{ userInitial }}</span>
-        <span class="user-meta">
-          <span class="user-name">{{ user?.username || t('ep.account.guest') }}</span>
-          <span class="user-sub">{{ user?.is_admin ? t('ep.role.admin') : t('ep.role.user') }}</span>
-        </span>
-      </button>
     </div>
   </aside>
 </template>
@@ -81,14 +65,12 @@ const { t } = useLocale()
 
 const props = defineProps({
   currentPage: { type: String, default: 'today' },
-  user: { type: Object, default: null },
   bankCount: { type: Number, default: 0 },
   reviewCount: { type: Number, default: 0 },
   learningTrends: { type: Object, default: null },
-  accountMenuOpen: { type: Boolean, default: false },
 })
 
-defineEmits(['navigate', 'account-menu'])
+defineEmits(['navigate'])
 
 const navItems = [
   { key: 'today', label: 'ep.nav.today', icon: 'home' },
@@ -97,11 +79,6 @@ const navItems = [
   { key: 'exam', label: 'ep.nav.exams', icon: 'exam' },
   { key: 'notes', label: 'ep.nav.library', icon: 'note' },
 ]
-
-const userInitial = computed(() => {
-  const name = props.user?.username
-  return name ? name.charAt(0).toUpperCase() : '?'
-})
 
 const coveragePercent = computed(() => {
   const value = Number(props.learningTrends?.coverage_percent)

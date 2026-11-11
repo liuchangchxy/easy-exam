@@ -460,3 +460,15 @@
   4. 命令面板新增焦点陷阱、文档级 Escape 与触发器焦点恢复；题库行改为打开题库，开始刷题降级为行内显式次要按钮；移除「智能组卷」入口，AI 入口改为跳转 `/settings?section=ai`。
 - **对应 SPEC 章节**：无（外壳交互与信息架构修复，不改变业务语义）。
 - **影响范围**：`frontend/src/layouts/AppLayout.vue`、`frontend/src/components/AppSidebar.vue`、`frontend/src/components/CommandPalette.vue`、`frontend/src/components/MobileNav.vue`、`frontend/src/style.css`、`frontend/src/locales/*`、`frontend/tests/components/`、`frontend/tests/fast_ui_interaction.test.js`、`frontend/tests/browser_e2e.test.js`。
+
+### [2026-11-12] 单一身份锚点：侧栏去账户化，账户菜单补回身份头部
+
+- **触发背景**：W1-4 之后侧栏页脚仍保留头像、姓名与角色，与顶栏头像构成两个账户入口；设计确认侧栏只承担导航。页脚只保留常驻「设置」，顶栏头像（≤768 为移动顶栏头像）成为唯一身份锚点，姓名/角色改由打开后的账户菜单承载。
+- **核心决策**：
+  1. 侧栏页脚只保留「设置」导航项，删除 `user-mini` 账户按钮及其头像/姓名/角色；`AppSidebar` 不再接收 `user`、`accountMenuOpen`，也不再抛出 `account-menu` 事件，侧栏不再是账户菜单锚点。
+  2. 账户菜单只保留两个锚点：顶栏（≥769）与移动顶栏（≤768），两者互斥渲染；移除侧栏右侧弹出定位分支，两处 `aria-expanded` 各自只反映自己的锚点。
+  3. 菜单内部补回身份头部：头像 + 用户名 + `ep.role.admin`/`ep.role.user`（Admin / 成员），分隔线之下仍是「修改密码」「退出登录」；头部不重复设置入口。
+  4. 主题/语言仍只在顶栏（≥769）与移动「更多」（≤768）；769–1024 侧栏图标轨保持纯导航 + 设置图标，学习状态块、调色板、宽度与断点不变。
+  5. 测试断言变更：`app_sidebar.test.js` 原「侧栏触发器打开共享菜单 / 反映菜单状态」两条行为断言随侧栏去账户化失效，改为断言侧栏不存在 `avatar`、`user-mini`、`user-name`、`user-sub`、`data-account-trigger`，且不再 emit `account-menu`；`app_layout.test.js` 改为断言侧栏 0 个触发器、菜单内的用户名/角色头部、移动顶栏复用同一菜单实例。这是结构变更后的等价断言，不是放宽断言。
+- **对应 SPEC 章节**：无（外壳交互与信息架构修复，不改变业务语义）。
+- **影响范围**：`frontend/src/layouts/AppLayout.vue`、`frontend/src/components/AppSidebar.vue`、`frontend/src/style.css`、`frontend/tests/components/app_layout.test.js`、`frontend/tests/components/app_sidebar.test.js`、`frontend/tests/browser_e2e.test.js`。

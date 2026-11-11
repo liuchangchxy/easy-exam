@@ -107,7 +107,7 @@ async function login(page, baseUrl, username, password) {
 }
 
 async function logout(page) {
-  await page.locator('.sidebar .user-mini').click()
+  await page.locator('.topbar [data-account-trigger]').click()
   await page.locator('.account-menu .popover-action.is-danger').click()
   await page.waitForSelector('.auth-layout')
 }
