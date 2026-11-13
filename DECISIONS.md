@@ -633,3 +633,19 @@
   9. **`/health` 不再回吐令牌**：改为 `instance_fingerprint`（令牌的 sha256 前 16 位）；它回答"我在和哪个实例讲话"，但不发布令牌本身。所有验收脚本同步改为比对指纹。
 - **对应 SPEC 章节**：§5.3、§7.9。
 - **影响范围**：`backend/app/infrastructure/db/{connection,repositories/user_repository,repositories/bank_repository,repositories/instance_settings_repository}.py`、`backend/app/{application/auth_service,dependencies,main}.py`、`backend/app/api/routes/{admin,users,auth,banks,system}.py`、`tests/test_instance_admin.py`、`tests/test_bank_members_p4.py`、`frontend/src/{api/admin.js,api/users.js,views/InstanceAdminView.vue,views/SettingsView.vue,views/BankManageView.vue,views/BanksView.vue,router/index.js}`、`frontend/tests/*`。
+
+### [2026-11-13] Core UX P5：导入可续做、任务可取消、设置逐字段写
+
+- **触发背景**：导入是一条"选文件→祈祷"的同步链路，关页即丢、大文件卡死页面且无法中止、失败只有一句笼统错误；设置页把整份配置一次性 PUT 回去，改一个字段就会用页面上的旧值覆盖其它字段（"改 AI 模型冲掉联网地址"），并写着"保存配置/启用 AI"这类根本不存在的控件。
+- **核心决策**：
+  1. **草稿是服务端一等对象**：迁移 22 新增 `import_drafts`（用户 + 题库 + 步骤 + `state_json` + `OPEN/CONSUMED/DISCARDED`）。向导 600ms 防抖保存步骤与映射，步骤/草稿 ID 进 URL，刷新回到原步骤；离开给出"稍后继续"（存草稿）与"放弃"两条明确出口。草稿只属于创建者，别人读到 404，不确认存在。
+  2. **大文件走后台任务**：`POST /imports/banks/{id}/jobs` 立即返回 202，前端按 800ms 轮询进度并可取消。工作面 25 条一批提交，`progress` 只在批次提交时前进，重启的 worker 从检查点续跑，已提交批次不重放。解析/格式错误以 `FAILED + reason` 终止，不再无限转圈；`PRECHECK_FAILED` 只留给"重复策略需要用户决定"。
+  3. **`import_jobs` 必须重建而不是加列**：SQLite 不能就地放宽 CHECK，旧表根本写不进 `RUNNING/COMPLETED/CANCELLED`。迁移 22 重命名→建新表（保留 `IMPORTED` 语义）→拷贝→删除旧表，历史行全部保留。
+  4. **同步端点保留为后备**：`POST /imports/banks/{id}` 与 `pdf-confirm` 契约不变（PDF 校对是一次人工确认，放进后台反而失去"看得见地改"的意义）；前端在后端没有 job 端点时自动退回同步导入，不把旧后端变成死路。
+  5. **配置写"改过的键"，不写"页面知道的全部"**：新增 `PATCH /ai/config`，只写请求里出现的字段；掩码/空密钥保留原密文。设置页每个 `@change` 只提交自己那一个键。
+  6. **测试连接不写配置**：`POST /ai/config/test {kind: "ai"|"search"}` 先冲刷未保存编辑再探测，永远 200 `{ok, message}`；失败不落库；消息只含 HTTP 状态或异常类，不含 URL 与密钥。无效 kind 返回 422。
+  7. **没兑现的文案下线而不是补控件**：删除"保存配置"（本来就是自动保存）与"启用 AI/联网"开关（启用由凭据与提供商决定）；密钥提示改为"已保存的密钥不会显示，输入新值即替换"，不再承诺空白会保留旧值。
+  8. **设置按"谁配置"分组**：个人 / 协作与实例 / 运维 / 关于；六个既有条目 DOM 顺序不变（索引测试与键盘顺序稳定），仅管理员看得到"协作与实例"。
+- **重复项在提交前按用户映射重算**：重复检测属于（文件 + 映射 + 当前题库）三者，旧流程只在提交返回 409 时才列重复。改为后台任务后没有 409，向导会在离开"校对"步时用当前映射重新预检，第 3 步展示这份结果，避免"看不到重复、按 skip 静默丢弃"。
+- **对应 SPEC 章节**：§5.3（配置分层）、§7.5（内容生命周期入口）。
+- **影响范围**：`backend/app/infrastructure/db/{connection.py,repositories/import_job_repository.py,repositories/import_draft_repository.py(新),repositories/ai_config_repository.py}`、`backend/app/application/{import_service.py,ai_tutor_service.py}`、`backend/app/api/routes/{imports.py,ai.py}`、`backend/app/main.py`、`tests/test_import_wizard_p5.py`、`tests/test_ai_config_layering_p5.py`、`frontend/src/{api/imports.js,api/ai.js,views/ImportView.vue,views/BankManageView.vue,views/SettingsView.vue,components/LinearIcon.vue,components/CommandPalette.vue,composables/useTheme.js}`、`frontend/index.html`、`frontend/tests/p5_import_settings_e2e.mjs`（新）。

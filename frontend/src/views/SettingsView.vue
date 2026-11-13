@@ -10,12 +10,24 @@
 
     <div class="settings-layout">
       <nav class="settings-nav" :aria-label="t('ep.settings.title')">
+        <!-- Group headings are ordered visually by CSS `order`, so the six
+             nav items keep their historic DOM order (index-based tests and
+             keyboard order stay stable). -->
+        <div
+          v-for="group in navGroups"
+          :key="group.key"
+          class="settings-nav-group"
+          :data-group="group.key"
+          :style="{ order: group.order }"
+          aria-hidden="true"
+        >{{ t(group.label) }}</div>
         <button
           v-for="item in navItems"
           :key="item.key"
           type="button"
           class="settings-nav-item"
           :class="{ 'is-active': activeSection === item.key }"
+          :style="{ order: item.order }"
           @click="onNavClick(item)"
         >
           <LinearIcon :name="item.icon" :size="14" />
@@ -141,22 +153,24 @@
           <div class="settings-fields">
             <label class="field">
               <span class="label">{{ t('ep.settings.ai_provider') }}</span>
-              <select v-model="config.ai_provider" class="select" @change="saveAi">
+              <select v-model="config.ai_provider" class="select" @change="saveField('ai_provider')">
                 <option value="openai">{{ t('ep.settings.ai_provider_openai') }}</option>
                 <option value="ollama">{{ t('ep.settings.ai_provider_ollama') }}</option>
               </select>
             </label>
             <label class="field">
               <span class="label">{{ t('ep.settings.ai_base_url') }}</span>
-              <input v-model.trim="config.ai_api_base" class="input" type="text" placeholder="https://api.openai.com/v1" @change="saveAi" />
+              <input v-model.trim="config.ai_api_base" class="input" type="text" placeholder="https://api.openai.com/v1" @change="saveField('ai_api_base')" />
+              <span class="hint">{{ t('ep.settings.default_hint') }}</span>
             </label>
             <label class="field">
               <span class="label">{{ t('ep.settings.ai_model') }}</span>
-              <input v-model.trim="config.ai_model" class="input" type="text" placeholder="gpt-4o-mini" @change="saveAi" />
+              <input v-model.trim="config.ai_model" class="input" type="text" placeholder="gpt-4o-mini" @change="saveField('ai_model')" />
+              <span class="hint">{{ t('ep.settings.default_hint') }}</span>
             </label>
             <label class="field">
               <span class="label">{{ t('ep.settings.ai_key') }}</span>
-              <input v-model="config.ai_api_key" class="input" type="password" :placeholder="t('ep.settings.ai_key_placeholder')" @change="saveAi" />
+              <input v-model="config.ai_api_key" class="input" type="password" :placeholder="t('ep.settings.ai_key_placeholder')" @change="saveField('ai_api_key')" />
               <span v-if="config.ai_api_key" class="hint">{{ t('ep.settings.ai_key_set') }}</span>
             </label>
           </div>
@@ -168,8 +182,24 @@
 
           <div class="settings-actions">
             <span class="settings-hint">{{ t('ep.settings.auto_save_hint') }}</span>
+            <button
+              type="button"
+              class="btn btn-sm"
+              data-testid="ai-test"
+              :disabled="aiTesting || savingAi"
+              @click="testConnection('ai')"
+            >
+              <LinearIcon name="zap" :size="14" />{{ t('ep.settings.ai_test') }}
+            </button>
             <span v-if="savingAi" class="settings-saved">{{ t('ep.settings.saving') }}</span>
             <span v-else-if="aiNotice" class="settings-saved" :class="{ 'is-error': aiError }">{{ aiNotice }}</span>
+            <span v-if="aiTesting" class="settings-saved" role="status">{{ t('ep.settings.test_testing') }}</span>
+            <span
+              v-else-if="aiTestMessage"
+              class="settings-saved"
+              :class="{ 'is-error': aiTestFailed }"
+              :role="aiTestFailed ? 'alert' : 'status'"
+            >{{ aiTestMessage }}</span>
           </div>
         </section>
 
@@ -183,25 +213,42 @@
           <div class="settings-fields">
             <label class="field">
               <span class="label">{{ t('ep.settings.web_provider') }}</span>
-              <select v-model="config.search_provider" class="select" @change="saveWeb">
+              <select v-model="config.search_provider" class="select" @change="saveField('search_provider')">
                 <option value="open-webSearch">{{ t('ep.settings.web_on') }}</option>
                 <option value="offline">{{ t('ep.settings.web_off') }}</option>
               </select>
             </label>
             <label v-if="config.search_provider !== 'offline'" class="field">
               <span class="label">{{ t('ep.settings.web_base_url') }}</span>
-              <input v-model.trim="config.search_api_base" class="input" type="text" placeholder="http://localhost:8000/v1/search" @change="saveWeb" />
+              <input v-model.trim="config.search_api_base" class="input" type="text" placeholder="http://localhost:8000/v1/search" @change="saveField('search_api_base')" />
+              <span class="hint">{{ t('ep.settings.default_hint') }}</span>
             </label>
             <label v-if="config.search_provider !== 'offline'" class="field">
               <span class="label">{{ t('ep.settings.web_key') }}</span>
-              <input v-model="config.search_api_key" class="input" type="password" :placeholder="t('ep.settings.ai_key_placeholder')" @change="saveWeb" />
+              <input v-model="config.search_api_key" class="input" type="password" :placeholder="t('ep.settings.ai_key_placeholder')" @change="saveField('search_api_key')" />
             </label>
           </div>
 
           <div class="settings-actions">
             <span class="settings-hint">{{ t('ep.settings.auto_save_hint') }}</span>
+            <button
+              type="button"
+              class="btn btn-sm"
+              data-testid="web-test"
+              :disabled="webTesting || savingWeb"
+              @click="testConnection('web')"
+            >
+              <LinearIcon name="zap" :size="14" />{{ t('ep.settings.ai_test') }}
+            </button>
             <span v-if="savingWeb" class="settings-saved">{{ t('ep.settings.saving') }}</span>
             <span v-else-if="webNotice" class="settings-saved" :class="{ 'is-error': webError }">{{ webNotice }}</span>
+            <span v-if="webTesting" class="settings-saved" role="status">{{ t('ep.settings.test_testing') }}</span>
+            <span
+              v-else-if="webTestMessage"
+              class="settings-saved"
+              :class="{ 'is-error': webTestFailed }"
+              :role="webTestFailed ? 'alert' : 'status'"
+            >{{ webTestMessage }}</span>
           </div>
         </section>
 
@@ -331,7 +378,7 @@ import ChangePasswordModal from '../components/ChangePasswordModal.vue'
 import { useLocale } from '../composables/useLocale.js'
 import { useTheme } from '../composables/useTheme.js'
 import { DENSITY_STORAGE_KEY, normalizeDensityPreference, restoreDensityPreference } from '../composables/density.js'
-import { getAiConfig, updateAiConfig } from '../api/ai'
+import { getAiConfig, updateAiConfig, testAiConfig } from '../api/ai'
 import { listSessions, revokeOtherSessions } from '../api/admin'
 import pkg from '../../package.json'
 
@@ -401,6 +448,18 @@ const showPasswordModal = ref(false)
 const appVersion = pkg.version
 const density = ref('balanced')
 
+// CSS `order` values keep the historic item DOM order while showing four
+// groups: personal, collaboration/instance, operations, about.
+const NAV_ITEM_ORDER = {
+  appearance: 2,
+  language: 3,
+  account: 4,
+  instance: 6,
+  ai: 8,
+  web: 9,
+  about: 11,
+}
+
 const navItems = computed(() => {
   const items = [
     { key: 'appearance', label: 'ep.settings.nav_appearance', icon: 'sun' },
@@ -414,8 +473,15 @@ const navItems = computed(() => {
   if (props.user?.is_admin) {
     items.push({ key: 'instance', label: 'ep.settings.nav_instance', icon: 'users', route: 'instance-admin' })
   }
-  return items
+  return items.map(item => ({ ...item, order: NAV_ITEM_ORDER[item.key] }))
 })
+
+const navGroups = computed(() => [
+  { key: 'personal', label: 'ep.settings.group_personal', order: 1 },
+  { key: 'collab', label: 'ep.settings.group_collab', order: 5, adminOnly: true },
+  { key: 'ops', label: 'ep.settings.group_ops', order: 7 },
+  { key: 'about', label: 'ep.settings.group_about', order: 10 },
+].filter(group => !group.adminOnly || props.user?.is_admin))
 
 const PALETTE_SWATCHES = {
   editorial: { paper: '#f5f2ea', stops: ['#f5f2ea', '#fbf9f4', '#191b18', '#23554b'] },
@@ -554,15 +620,21 @@ watch(
   { immediate: true }
 )
 
+const AI_FIELDS = ['ai_provider', 'ai_api_base', 'ai_model', 'ai_api_key']
+const WEB_FIELDS = ['search_provider', 'search_api_base', 'search_api_key']
+
 const config = ref({
   ai_provider: 'openai',
-  ai_api_base: 'https://api.openai.com/v1',
-  ai_model: 'gpt-4o-mini',
+  ai_api_base: '',
+  ai_model: '',
   ai_api_key: '',
   search_provider: 'open-webSearch',
   search_api_key: '',
-  search_api_base: 'http://localhost:8000/v1/search',
+  search_api_base: '',
 })
+// Last known server state, used to flush only genuinely pending field edits
+// before a connection test.
+const savedConfig = ref({ ...config.value })
 
 const savingAi = ref(false)
 const savingWeb = ref(false)
@@ -571,6 +643,12 @@ const webNotice = ref('')
 const aiError = ref(false)
 const webError = ref(false)
 const aiConfigured = ref(false)
+const aiTesting = ref(false)
+const webTesting = ref(false)
+const aiTestMessage = ref('')
+const webTestMessage = ref('')
+const aiTestFailed = ref(false)
+const webTestFailed = ref(false)
 
 async function loadConfig() {
   if (!props.token) return
@@ -579,50 +657,104 @@ async function loadConfig() {
     aiConfigured.value = Boolean(res.is_configured)
     config.value = {
       ai_provider: res.ai_provider || 'openai',
-      ai_api_base: res.ai_api_base || 'https://api.openai.com/v1',
-      ai_model: res.ai_model || 'gpt-4o-mini',
+      ai_api_base: res.ai_api_base ?? '',
+      ai_model: res.ai_model ?? '',
       ai_api_key: res.ai_api_key || '',
       search_provider: res.search_provider || 'open-webSearch',
       search_api_key: res.search_api_key || '',
-      search_api_base: res.search_api_base || 'http://localhost:8000/v1/search',
+      search_api_base: res.search_api_base ?? '',
     }
+    savedConfig.value = { ...config.value }
   } catch (err) {
     aiError.value = true
     aiNotice.value = `${t('ep.settings.ai_load_failed')}${err.detail || err.message || ''}`
   }
 }
 
-async function saveAi() {
-  savingAi.value = true
-  aiNotice.value = ''
-  aiError.value = false
-  try {
-    const updated = await updateAiConfig(props.token, config.value)
-    config.value.ai_api_key = updated.ai_api_key ?? ''
-    aiConfigured.value = Boolean(updated.is_configured)
-    aiNotice.value = t('ep.settings.ai_saved')
-  } catch (err) {
-    aiError.value = true
-    aiNotice.value = err.detail || err.message
-  } finally {
-    savingAi.value = false
+// A PATCH response may echo the whole row. Only the masked secret fields and
+// the configured flag are trusted; echoing the other fields would clobber an
+// edit the user is still typing.
+function applyServerConfig(updated, savedKeys = []) {
+  if (!updated || typeof updated !== 'object') return
+  if (updated.is_configured !== undefined) aiConfigured.value = Boolean(updated.is_configured)
+  for (const key of ['ai_api_key', 'search_api_key']) {
+    if (!savedKeys.includes(key) || updated[key] === undefined) continue
+    config.value[key] = updated[key] ?? ''
+    savedConfig.value[key] = config.value[key]
   }
 }
 
-async function saveWeb() {
-  savingWeb.value = true
-  webNotice.value = ''
-  webError.value = false
+async function saveField(key) {
+  if (!props.token) return
+  const isWeb = WEB_FIELDS.includes(key)
+  const saving = isWeb ? savingWeb : savingAi
+  const notice = isWeb ? webNotice : aiNotice
+  const error = isWeb ? webError : aiError
+  saving.value = true
+  notice.value = ''
+  error.value = false
+  if (isWeb) {
+    webTestMessage.value = ''
+    webTestFailed.value = false
+  } else {
+    aiTestMessage.value = ''
+    aiTestFailed.value = false
+  }
   try {
-    const updated = await updateAiConfig(props.token, config.value)
-    config.value.search_api_key = updated.search_api_key ?? ''
-    aiConfigured.value = Boolean(updated.is_configured)
-    webNotice.value = t('ep.settings.web_saved')
+    const updated = await updateAiConfig(props.token, { [key]: config.value[key] })
+    savedConfig.value[key] = config.value[key]
+    applyServerConfig(updated, [key])
+    notice.value = t(isWeb ? 'ep.settings.web_saved' : 'ep.settings.ai_saved')
   } catch (err) {
-    webError.value = true
-    webNotice.value = err.detail || err.message
+    error.value = true
+    notice.value = err.detail || err.message
   } finally {
-    savingWeb.value = false
+    saving.value = false
+  }
+}
+
+async function flushPendingFields(kind) {
+  const keys = (kind === 'web' ? WEB_FIELDS : AI_FIELDS)
+    .filter(key => config.value[key] !== savedConfig.value[key])
+  if (!keys.length) return false
+  const payload = Object.fromEntries(keys.map(key => [key, config.value[key]]))
+  const updated = await updateAiConfig(props.token, payload)
+  for (const key of keys) savedConfig.value[key] = config.value[key]
+  applyServerConfig(updated, keys)
+  return true
+}
+
+async function testConnection(kind) {
+  if (!props.token) return
+  const isWeb = kind === 'web'
+  const testing = isWeb ? webTesting : aiTesting
+  if (testing.value) return
+  const message = isWeb ? webTestMessage : aiTestMessage
+  const failed = isWeb ? webTestFailed : aiTestFailed
+  const notice = isWeb ? webNotice : aiNotice
+  const error = isWeb ? webError : aiError
+  testing.value = true
+  message.value = ''
+  failed.value = false
+  try {
+    // The endpoint must test what the user sees, so pending auto-saves run
+    // first. If that write fails, do not claim a test result.
+    if (await flushPendingFields(kind)) {
+      error.value = false
+      notice.value = t(isWeb ? 'ep.settings.web_saved' : 'ep.settings.ai_saved')
+    }
+    const result = await testAiConfig(props.token, isWeb ? 'search' : 'ai')
+    if (result?.ok) {
+      message.value = t('ep.settings.test_success')
+    } else {
+      failed.value = true
+      message.value = result?.message || t('ep.settings.test_failed')
+    }
+  } catch (err) {
+    failed.value = true
+    message.value = err?.detail || err?.message || t('ep.settings.test_failed')
+  } finally {
+    testing.value = false
   }
 }
 
@@ -635,7 +767,13 @@ onMounted(() => {
 <style scoped>
 .settings-page { padding-top: 26px; }
 .settings-layout { display: grid; grid-template-columns: 184px minmax(0, 1fr); gap: 48px; margin-top: 26px; align-items: start; }
-.settings-nav { border-top: 1px solid var(--line); padding-top: 8px; position: sticky; top: 66px; }
+.settings-nav { display: flex; flex-direction: column; border-top: 1px solid var(--line); padding-top: 8px; position: sticky; top: 66px; }
+.settings-nav-group {
+  margin: 12px 8px 2px; padding: 0;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--ink-4);
+}
+.settings-nav-group:first-of-type { margin-top: 0; }
 .settings-nav-item {
   display: flex; align-items: center; gap: 9px; width: 100%; min-height: 36px;
   padding: 0 8px; border: 0; background: none; color: var(--ink-2);
@@ -761,7 +899,9 @@ onMounted(() => {
 
 @media (max-width: 880px) {
   .settings-layout { grid-template-columns: minmax(0, 1fr); gap: 14px; }
-  .settings-nav { display: flex; gap: 2px; overflow-x: auto; position: static; border-top: 0; border-bottom: 1px solid var(--line); padding: 0 0 8px; }
+  .settings-nav { display: flex; flex-direction: row; gap: 2px; overflow-x: auto; position: static; border-top: 0; border-bottom: 1px solid var(--line); padding: 0 0 8px; }
+  .settings-nav-group { margin: 0 4px 0 8px; align-self: center; white-space: nowrap; }
+  .settings-nav-group:first-of-type { margin-left: 0; }
   .settings-nav-item { width: auto; white-space: nowrap; }
   .settings-body { max-width: 100%; }
 }

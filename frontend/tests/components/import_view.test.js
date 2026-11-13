@@ -12,6 +12,7 @@ const route = { query: { bankId: 'b1' } }
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push, replace }),
   useRoute: () => route,
+  onBeforeRouteLeave: vi.fn(),
 }))
 
 vi.mock('../../src/api/banks', () => ({
@@ -24,6 +25,14 @@ vi.mock('../../src/api/imports', () => ({
   uploadImport: vi.fn(),
   previewPdfImport: vi.fn(),
   confirmPdfImport: vi.fn(),
+  createImportDraft: vi.fn(),
+  listImportDrafts: vi.fn(),
+  getImportDraft: vi.fn(),
+  updateImportDraft: vi.fn(),
+  deleteImportDraft: vi.fn(),
+  startImportJob: vi.fn(),
+  getImportJob: vi.fn(),
+  cancelImportJob: vi.fn(),
 }))
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0))

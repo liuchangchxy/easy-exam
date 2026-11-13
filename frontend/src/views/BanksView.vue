@@ -12,7 +12,7 @@
       </div>
       <div class="page-actions">
         <button type="button" class="btn" @click="router.push('/import')">
-          <LinearIcon name="upload" :size="14" />{{ t('ep.common.import') }}
+          <LinearIcon name="import" :size="14" />{{ t('ep.common.import') }}
         </button>
         <button type="button" class="btn btn-primary" @click="openCreate">
           <LinearIcon name="plus" :size="14" />{{ t('ep.today.create_bank') }}
@@ -73,7 +73,7 @@
           data-testid="bank-recycle-toggle"
           @click="setView(!showRecycle)"
         >
-          <LinearIcon name="archive" :size="13" />{{ t('ep.banks.recycle') }}
+          <LinearIcon name="trash" :size="13" />{{ t('ep.banks.recycle') }}
         </button>
       </div>
     </div>

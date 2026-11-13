@@ -5,11 +5,18 @@
       <div class="cmd-palette-search-row">
         <LinearIcon name="search" size="18" class="cmd-search-icon" />
         <input
+          id="cmd-palette-input"
           ref="inputRef"
           v-model="query"
           type="text"
-          :placeholder="t('commands.search_placeholder')"
           class="cmd-palette-input"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded="true"
+          aria-controls="cmd-palette-listbox"
+          :aria-activedescendant="activeOptionId"
+          :aria-label="t('commands.search_placeholder')"
+          :placeholder="t('commands.search_placeholder')"
           @keydown.down.prevent="moveSelection(1)"
           @keydown.up.prevent="moveSelection(-1)"
           @keydown.enter.prevent="executeSelected"
@@ -18,14 +25,22 @@
       </div>
 
       <!-- 搜索结果列表 -->
-      <div class="cmd-palette-list">
+      <div
+        id="cmd-palette-listbox"
+        class="cmd-palette-list"
+        role="listbox"
+        :aria-label="t('commands.search_placeholder')"
+      >
         <!-- 1. 题库检索结果组 -->
         <template v-if="matchedBanks.length > 0">
-          <div class="cmd-group-label">{{ t('commands.category_banks') }}</div>
+          <div class="cmd-group-label" role="presentation">{{ t('commands.category_banks') }}</div>
           <div
             v-for="(bank, bIdx) in matchedBanks"
             :key="'bank-' + bank.id"
+            :id="optionId('bank', bIdx)"
             class="cmd-palette-item bank-item"
+            role="option"
+            :aria-selected="currentFlatIndex === bIdx"
             :class="{ active: currentFlatIndex === bIdx }"
             @click="selectBank(bank)"
             @mouseenter="currentFlatIndex = bIdx"
@@ -56,11 +71,14 @@
 
         <!-- 2. 功能与页面导航结果组 -->
         <template v-if="matchedCommands.length > 0">
-          <div class="cmd-group-label">{{ t('commands.category_actions') }}</div>
+          <div class="cmd-group-label" role="presentation">{{ t('commands.category_actions') }}</div>
           <div
             v-for="(cmd, cIdx) in matchedCommands"
             :key="cmd.id"
+            :id="optionId('action', cIdx)"
             class="cmd-palette-item action-item"
+            role="option"
+            :aria-selected="currentFlatIndex === (matchedBanks.length + cIdx)"
             :class="{ active: currentFlatIndex === (matchedBanks.length + cIdx) }"
             @click="execute(cmd)"
             @mouseenter="currentFlatIndex = matchedBanks.length + cIdx"
@@ -81,7 +99,7 @@
         </template>
 
         <!-- 空状态 -->
-        <div v-if="totalItemsCount === 0" class="cmd-palette-empty">
+        <div v-if="totalItemsCount === 0" class="cmd-palette-empty" role="presentation">
           <LinearIcon name="search" size="24" class="empty-icon" />
           <p>{{ t('commands.no_results') }}</p>
         </div>
@@ -153,6 +171,46 @@ const matchedCommands = computed(() => {
 
 const totalItemsCount = computed(() => matchedBanks.value.length + matchedCommands.value.length)
 
+// Stable per-row ids so the combobox can point at the active option.
+function optionId(kind, index) {
+  return `cmd-palette-opt-${kind}-${index}`
+}
+
+const activeOptionId = computed(() => {
+  if (totalItemsCount.value === 0) return undefined
+  const bankCount = matchedBanks.value.length
+  return currentFlatIndex.value < bankCount
+    ? optionId('bank', currentFlatIndex.value)
+    : optionId('action', currentFlatIndex.value - bankCount)
+})
+
+// Background scroll lock while the palette is open. Restores whatever the page
+// had before instead of assuming it was scrollable.
+let lockedBody = null
+let previousOverflow = ''
+let previousPaddingRight = ''
+
+function lockBackgroundScroll() {
+  const body = typeof document !== 'undefined' ? document.body : null
+  if (!body || lockedBody) return
+  lockedBody = body
+  previousOverflow = body.style.overflow
+  previousPaddingRight = body.style.paddingRight
+  const root = document.documentElement
+  const scrollbarWidth = globalThis.innerWidth && root
+    ? Math.max(0, globalThis.innerWidth - root.clientWidth)
+    : 0
+  body.style.overflow = 'hidden'
+  if (scrollbarWidth > 0) body.style.paddingRight = `${scrollbarWidth}px`
+}
+
+function unlockBackgroundScroll() {
+  if (!lockedBody) return
+  lockedBody.style.overflow = previousOverflow
+  lockedBody.style.paddingRight = previousPaddingRight
+  lockedBody = null
+}
+
 watch([matchedBanks, matchedCommands], () => {
   currentFlatIndex.value = 0
 })
@@ -165,6 +223,7 @@ function open() {
   isOpen.value = true
   query.value = ''
   currentFlatIndex.value = 0
+  lockBackgroundScroll()
   nextTick(() => {
     inputRef.value?.focus()
   })
@@ -173,6 +232,7 @@ function open() {
 function close() {
   if (!isOpen.value) return
   isOpen.value = false
+  unlockBackgroundScroll()
   const target = lastFocusedElement
   lastFocusedElement = null
   nextTick(() => {
@@ -272,6 +332,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  unlockBackgroundScroll()
   window.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('keydown', handleDocumentKeydown)
 })

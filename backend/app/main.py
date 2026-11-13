@@ -69,8 +69,12 @@ def create_app(db_path: str | None = None, dist_dir: str | Path | None = None) -
     services.ai_conversations = ai_conversations
     services.ai_drafts = ai_drafts
     services.ai_configs = ai_configs
+    from backend.app.infrastructure.db.repositories.import_draft_repository import ImportDraftRepository
+    import_drafts = ImportDraftRepository(resolved)
+    services.import_jobs = import_jobs
+    services.import_drafts = import_drafts
     from backend.app.application.import_service import ImportService
-    services.importer = ImportService(bank_repo, question_repo, import_jobs)
+    services.importer = ImportService(bank_repo, question_repo, import_jobs, import_drafts)
     from backend.app.application.learning_service import LearningService
     services.learning = LearningService(practices)
     services.exams = exams_repo

@@ -19,7 +19,7 @@
           <LinearIcon name="columns" :size="14" />{{ t('ep.banks.manage') }}
         </button>
         <button type="button" class="btn" @click="router.push(`/import?bankId=${bankId}`)">
-          <LinearIcon name="upload" :size="14" />{{ t('ep.common.import') }}
+          <LinearIcon name="import" :size="14" />{{ t('ep.common.import') }}
         </button>
         <span v-if="!loading && !questions.length" class="practice-empty-note">{{ t('ep.banks.practice_empty') }}</span>
         <button type="button" class="btn btn-primary" :disabled="!questions.length" @click="startPractice">
@@ -66,7 +66,7 @@
           <div class="toolbar bank-toolbar bank-detail-toolbar">
             <div class="search-box">
               <LinearIcon name="search" :size="15" />
-              <input v-model.trim="query" class="input" :placeholder="t('ep.banks.search_questions')" />
+              <input v-model.trim="query" class="input" :placeholder="t('ep.banks.search_questions')" :aria-label="t('ep.banks.search_questions')" />
             </div>
             <div class="spacer"></div>
             <span class="small dim">{{ t('ep.common.count', { count: filteredQuestions.length }) }}</span>

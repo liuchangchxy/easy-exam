@@ -606,7 +606,10 @@ test('True Chrome Browser E2E: Editorial Precision Full Lifecycle', async (t) =>
       await mapField('解析').selectOption('7')
 
       await page.locator('.import-actions .btn-primary').click()
-      await page.waitForSelector('.result-block', { timeout: 10000 })
+      // P5 splits the old single click into: mapping -> duplicate strategy -> result.
+      await page.waitForSelector('[data-step="duplicates"]', { timeout: 10000 })
+      await page.locator('[data-step="duplicates"] .import-actions .btn-primary').click()
+      await page.waitForSelector('[data-testid="result-bank"]', { timeout: 20000 })
       assert.match(await page.locator('.result-block').innerText(), /导入完成/)
 
       // Re-import the same content under a new filename: duplicate detection is content based.
@@ -625,7 +628,7 @@ test('True Chrome Browser E2E: Editorial Precision Full Lifecycle', async (t) =>
       assert.match(await page.locator('.dup-list').innerText(), /浏览器手工映射五选项题目/)
       await page.locator('.step-block select').last().selectOption('merge')
       await page.locator('.step-block .import-actions .btn-primary').last().click()
-      await page.waitForSelector('.result-block', { timeout: 10000 })
+      await page.waitForSelector('[data-testid="result-bank"]', { timeout: 20000 })
 
       // Sparse mapping keeps the original option keys B and E.
       await page.locator('.result-block button:has-text("再导入一批")').click()
@@ -646,7 +649,9 @@ test('True Chrome Browser E2E: Editorial Precision Full Lifecycle', async (t) =>
       await mapField('选项 B').selectOption('1')
       await mapField('选项 E').selectOption('2')
       await page.locator('.mapping-grid ~ .import-actions .btn-primary:not([disabled])').click()
-      await page.waitForSelector('.result-block', { timeout: 10000 })
+      await page.waitForSelector('[data-step="duplicates"]', { timeout: 10000 })
+      await page.locator('[data-step="duplicates"] .import-actions .btn-primary').click()
+      await page.waitForSelector('[data-testid="result-bank"]', { timeout: 20000 })
 
       const bankQs = await (await fetch(`${BASE_URL}/api/v1/banks/${bankId}/questions`, {
         headers: { Authorization: `Bearer ${token}` },

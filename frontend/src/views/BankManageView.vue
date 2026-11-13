@@ -21,10 +21,10 @@
           {{ startingPractice ? t('ep.common.starting') : t('ep.banks.practice') }}
         </button>
         <button v-if="canEdit" type="button" class="btn" data-testid="manage-import" @click="router.push(`/import?bankId=${bankId}`)">
-          <LinearIcon name="upload" :size="14" />{{ t('ep.common.import') }}
+          <LinearIcon name="import" :size="14" />{{ t('ep.common.import') }}
         </button>
         <button type="button" class="btn" data-testid="manage-export" @click="focusExportPanel">
-          <LinearIcon name="download" :size="14" />{{ t('ep.manage.export') }}
+          <LinearIcon name="export" :size="14" />{{ t('ep.manage.export') }}
         </button>
         <button v-if="canEdit" type="button" class="btn" data-testid="manage-create" @click="openCreate">
           <LinearIcon name="plus" :size="14" />{{ t('ep.manage.new_question') }}
@@ -262,7 +262,7 @@
                     :title="q.archived ? t('ep.manage.restore') : t('ep.manage.archive')"
                     @click.stop="toggleQuestionArchive(q)"
                   >
-                    <LinearIcon :name="q.archived ? 'rotate-ccw' : 'archive'" :size="13" />
+                    <LinearIcon :name="q.archived ? 'restore' : 'archive'" :size="13" />
                   </button>
                 </td>
               </tr>
@@ -540,6 +540,31 @@
           <div class="panel-head"><span class="panel-title">{{ t('ep.manage.tab_imports') }}</span></div>
           <p class="section-note">{{ t('ep.manage.imports_note') }}</p>
           <p class="section-note" style="margin-top: 6px">{{ t('ep.manage.formats_note') }}</p>
+
+          <!-- Unfinished wizard drafts. Each row re-opens the wizard at its
+               saved step instead of starting from the file again. -->
+          <div v-if="importDrafts.length" class="manage-drafts" data-testid="import-drafts" style="margin-top: 16px">
+            <div class="rule-label">{{ t('ep.imports.resume_title') }}</div>
+            <p class="section-note" style="margin-top: 6px">{{ t('ep.imports.resume_hint') }}</p>
+            <div class="list" style="margin-top: 10px">
+              <div v-for="draft in importDrafts" :key="draft.id" class="list-row" data-testid="draft-row">
+                <span class="list-main">
+                  <span class="qrow-stem">{{ draft.filename || t('ep.imports.untitled') }}</span>
+                  <span class="hint">
+                    {{ importDraftKind(draft.source_kind) }}<template v-if="draft.updated_at"> · {{ formatDateTime(draft.updated_at, locale) }}</template>
+                  </span>
+                </span>
+                <button type="button" class="btn btn-sm" data-testid="draft-resume" @click="resumeImportDraft(draft)">
+                  {{ t('ep.imports.resume_continue') }}
+                </button>
+                <button type="button" class="btn btn-sm btn-quiet" data-testid="draft-delete" @click="removeImportDraft(draft)">
+                  {{ t('ep.imports.resume_delete') }}
+                </button>
+              </div>
+            </div>
+            <p v-if="importDraftsError" class="hint bad-text" role="alert" data-testid="imports-drafts-error">{{ importDraftsError }}</p>
+          </div>
+
           <div v-if="importJobs.length" class="mtable-wrap" style="margin-top: 14px">
             <table class="mtable import-table">
               <thead>
@@ -574,7 +599,7 @@
           <p v-else class="hint" style="margin-top: 14px">{{ t('ep.manage.import_empty') }}</p>
           <div class="empty-actions" style="justify-content: flex-start; margin-top: 18px">
             <button v-if="canEdit" type="button" class="btn btn-primary" @click="router.push(`/import?bankId=${bankId}`)">
-              <LinearIcon name="upload" :size="14" />{{ t('ep.manage.go_import') }}
+              <LinearIcon name="import" :size="14" />{{ t('ep.manage.go_import') }}
             </button>
           </div>
         </div>
@@ -869,6 +894,7 @@ import {
   downloadBankExport,
 } from '../api/banks'
 import { searchUsers } from '../api/users'
+import { listImportDrafts, deleteImportDraft } from '../api/imports'
 import { useLocale } from '../composables/useLocale'
 import { useDirtyGuard } from '../composables/useDirtyGuard'
 import { useStartStudy } from '../composables/useStartStudy.js'
@@ -1071,6 +1097,10 @@ const newTagName = ref('')
 const editingTagId = ref('')
 
 const importJobs = ref([])
+// Unfinished import-wizard drafts live separately from completed jobs: a draft
+// is a resumable workflow, a job is a record of an attempt.
+const importDrafts = ref([])
+const importDraftsError = ref('')
 const auditRows = ref([])
 
 // Per-resource load failures. These secondary resources must never collapse
@@ -1373,6 +1403,7 @@ function resetBankScopedState() {
   membersError.value = ''
   tagsError.value = ''
   importsError.value = ''
+  importDraftsError.value = ''
   banksError.value = ''
   retryAction.value = null
   bank.value = null
@@ -1382,6 +1413,7 @@ function resetBankScopedState() {
   banks.value = []
   tagRows.value = []
   importJobs.value = []
+  importDrafts.value = []
   auditRows.value = []
   hasActiveExam.value = false
   settingsForm.value = { name: '', category: '', description: '' }
@@ -1604,9 +1636,14 @@ function formatJoinedAt(member) {
 
 const IMPORT_STATUS_KEYS = {
   PENDING: 'ep.manage.import_status_pending',
+  QUEUED: 'ep.imports.job_pending',
+  RUNNING: 'ep.imports.job_running',
+  PROCESSING: 'ep.imports.job_running',
   PRECHECK_FAILED: 'ep.manage.import_status_precheck_failed',
   IMPORTED: 'ep.manage.import_status_imported',
+  COMPLETED: 'ep.manage.import_status_imported',
   FAILED: 'ep.manage.import_status_failed',
+  CANCELLED: 'ep.imports.job_cancelled',
 }
 
 const AUDIT_ACTION_KEYS = {
@@ -2338,9 +2375,25 @@ async function reloadTags() {
   }
 }
 
+async function reloadImportDrafts(targetBankId) {
+  try {
+    const drafts = await listImportDrafts(props.token, targetBankId, 'OPEN')
+    if (bankId.value !== targetBankId) return
+    importDrafts.value = Array.isArray(drafts) ? drafts : []
+    importDraftsError.value = ''
+  } catch (err) {
+    if (bankId.value !== targetBankId) return
+    importDrafts.value = []
+    importDraftsError.value = resourceErrorMessage(err)
+  }
+}
+
 async function reloadImports() {
   const targetBankId = bankId.value
   if (!targetBankId) return
+  // Drafts are secondary: they must never hold the workspace hostage, so their
+  // request runs beside the job history instead of inside this await chain.
+  void reloadImportDrafts(targetBankId)
   try {
     const res = await listBankImports(props.token, targetBankId)
     if (bankId.value !== targetBankId) return
@@ -2349,6 +2402,38 @@ async function reloadImports() {
   } catch (err) {
     if (bankId.value !== targetBankId) return
     importsError.value = resourceErrorMessage(err)
+  }
+}
+
+function importDraftKind(kind) {
+  const raw = String(kind || '').toLowerCase()
+  if (['spreadsheet', 'sheet', 'xlsx', 'csv'].includes(raw)) return t('ep.imports.source_sheet')
+  if (raw === 'pdf') return t('ep.imports.source_pdf')
+  if (['text', 'markdown', 'json'].includes(raw)) return t('ep.imports.source_text')
+  return t('ep.imports.untitled')
+}
+
+function resumeImportDraft(draft) {
+  if (!draft?.id) return
+  router.push({
+    name: 'import',
+    query: {
+      bankId: String(bankId.value),
+      draft: String(draft.id),
+      step: String(draft.step || 1),
+      from: 'manage',
+    },
+  })
+}
+
+async function removeImportDraft(draft) {
+  if (!draft?.id) return
+  try {
+    await deleteImportDraft(props.token, draft.id)
+    importDrafts.value = importDrafts.value.filter(row => String(row.id) !== String(draft.id))
+    importDraftsError.value = ''
+  } catch (err) {
+    importDraftsError.value = resourceErrorMessage(err)
   }
 }
 

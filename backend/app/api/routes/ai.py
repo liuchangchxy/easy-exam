@@ -32,6 +32,20 @@ class AiConfigPayload(BaseModel):
     search_api_base: str = "http://localhost:8000/v1/search"
 
 
+class AiConfigPatchPayload(BaseModel):
+    ai_provider: str | None = None
+    ai_api_base: str | None = None
+    ai_model: str | None = None
+    ai_api_key: str | None = None
+    search_provider: str | None = None
+    search_api_key: str | None = None
+    search_api_base: str | None = None
+
+
+class AiConfigTestPayload(BaseModel):
+    kind: str = "ai"
+
+
 @router.get("/config")
 def get_ai_config(request: Request, user=Depends(current_user)):
     try:
@@ -50,6 +64,33 @@ def update_ai_config(payload: AiConfigPayload, request: Request, user=Depends(cu
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.patch("/config")
+def patch_ai_config(payload: AiConfigPatchPayload, request: Request, user=Depends(current_user)):
+    # Only sent keys are written: the instance default search_api_base must
+    # never be stamped into a user row just because ai_model changed.
+    fields = {
+        key: value
+        for key, value in payload.model_dump(exclude_unset=True).items()
+        if value is not None
+    }
+    try:
+        return request.app.state.services.ai.patch_user_ai_config(user["id"], fields)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/config/test")
+def test_ai_config(payload: AiConfigTestPayload, request: Request, user=Depends(current_user)):
+    try:
+        return request.app.state.services.ai.test_user_ai_config(user["id"], payload.kind)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/questions/{question_id}/answers", status_code=201)

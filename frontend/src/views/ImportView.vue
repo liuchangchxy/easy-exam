@@ -49,6 +49,36 @@
       <i :style="{ width: `${stepPercent}%` }"></i>
     </div>
 
+    <p v-if="draftSaveError" class="notice bad import-draft-error" role="status" data-testid="draft-save-error">
+      <LinearIcon name="alert" :size="15" />
+      <span>{{ t('ep.imports.draft_save_failed', { message: draftSaveError }) }}</span>
+    </p>
+
+    <section v-if="openDrafts.length" class="import-resume" data-testid="import-resume">
+      <div class="import-resume-head">
+        <span class="rule-label">{{ t('ep.imports.resume_title') }}</span>
+        <span class="mono small dim">{{ t('ep.imports.resume_count', { count: openDrafts.length }) }}</span>
+      </div>
+      <p class="hint">{{ t('ep.imports.resume_hint') }}</p>
+      <div class="list import-resume-list">
+        <div v-for="draft in openDrafts" :key="draft.id" class="list-row import-resume-row" data-testid="draft-row">
+          <span class="list-main">
+            <span class="qrow-stem">{{ draft.filename || t('ep.imports.untitled') }}</span>
+            <span class="hint">
+              {{ sourceKindLabel(draft.source_kind) }}<template v-if="draft.updated_at"> · {{ formatDateTime(draft.updated_at, locale) }}</template>
+            </span>
+          </span>
+          <button type="button" class="btn btn-sm" data-testid="draft-resume" @click="resumeDraftFromBanner(draft)">
+            {{ t('ep.imports.resume_continue') }}
+          </button>
+          <button type="button" class="btn btn-sm btn-quiet" data-testid="draft-delete" @click="removeDraft(draft)">
+            {{ t('ep.imports.resume_delete') }}
+          </button>
+        </div>
+      </div>
+      <p v-if="draftListError" class="hint bad-text" role="status">{{ t('ep.imports.draft_load_failed', { message: draftListError }) }}</p>
+    </section>
+
     <section v-if="previewing || precheckPanel" class="import-precheck-panel" aria-live="polite">
       <div class="import-precheck-panel-head">
         <span class="rule-label">{{ t('ep.imports.submit_preview') }}</span>
@@ -75,16 +105,10 @@
 
     <div class="import-layout">
       <div class="import-main">
-        <form class="import-form" @submit.prevent="submit">
-          <section class="step-block">
-            <div class="step-head">
-              <span class="step-no mono">01</span>
-              <div>
-                <div class="step-title">{{ t('ep.imports.step_source') }}</div>
-                <div class="step-sub">{{ t('ep.imports.preview_hint') }}</div>
-              </div>
-            </div>
-
+        <form class="import-form" @submit.prevent="onFormSubmit">
+          <!-- The target bank stays reachable on every step: it is the context
+               of the whole wizard, not a field of the file picker. -->
+          <div class="import-target" data-step="target">
             <div class="field" style="margin-bottom: 18px">
               <label class="label" for="import-bank">{{ t('ep.imports.bank') }}</label>
               <select
@@ -92,8 +116,8 @@
                 v-model="bankId"
                 class="select"
                 required
-                :disabled="requestInFlight"
-                :title="requestInFlight ? t('ep.imports.bank_locked_busy') : undefined"
+                :disabled="bankBusy"
+                :title="bankBusy ? t('ep.imports.bank_locked_busy') : undefined"
               >
                 <option value="" disabled>{{ t('ep.imports.bank_placeholder') }}</option>
                 <option v-for="bank in banks" :key="bank.id" :value="bank.id">{{ bank.name }} · {{ t('ep.banks.questions', { count: bank.question_count || 0 }) }}</option>
@@ -110,9 +134,56 @@
               <LinearIcon name="lock" :size="15" />
               <span>{{ t('ep.imports.readonly_bank') }}</span>
             </div>
+          </div>
 
-            <div
-              class="file-drop"
+          <!-- Completed source step, kept as a compact receipt while later steps run. -->
+          <section v-if="stepNo > 1" class="step-block step-summary" data-step="source-summary">
+            <div class="step-head">
+              <span class="step-no mono">01</span>
+              <div>
+                <div class="step-title">{{ t('ep.imports.step_source') }}</div>
+                <div class="step-sub">{{ sourceSummary }}</div>
+              </div>
+              <button type="button" class="btn btn-sm btn-quiet" @click="goStep(1)">
+                {{ t('ep.imports.change_source') }}
+              </button>
+            </div>
+          </section>
+
+          <!-- Step 1: source -->
+          <section v-if="stepNo === 1" class="step-block" data-step="source">
+            <div class="step-head">
+              <span class="step-no mono">01</span>
+              <div>
+                <div class="step-title">{{ t('ep.imports.step_source') }}</div>
+                <div class="step-sub">{{ t('ep.imports.preview_hint') }}</div>
+              </div>
+            </div>
+
+            <div class="source-modes">
+              <button
+                type="button"
+                class="btn btn-sm"
+                :class="{ 'is-active': sourceMode === 'file' }"
+                data-testid="source-mode-file"
+                @click="setSourceMode('file')"
+              >
+                {{ t('ep.imports.source_file') }}
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm"
+                :class="{ 'is-active': sourceMode === 'paste' }"
+                data-testid="source-mode-paste"
+                @click="setSourceMode('paste')"
+              >
+                {{ t('ep.imports.source_paste') }}
+              </button>
+            </div>
+
+            <template v-if="sourceMode === 'file'">
+              <div
+                class="file-drop"
               :class="{ 'is-dragging': isDragging, 'has-file': Boolean(file) }"
               @click="onDropZoneClick"
               @dragenter.prevent="isDragging = true"
@@ -157,320 +228,314 @@
               <span class="tag mono">.md / .txt</span>
               <span class="tag mono">.pdf</span>
             </div>
+            </template>
 
-            <div v-if="!spreadsheetPreview && !pdfPreview && !textPreview && !duplicatePreview && !result" class="import-actions">
-              <button v-if="isSpreadsheet" type="button" class="btn btn-primary" :disabled="loading || previewing || !bankId || !file || !canImport" @click="inspectSpreadsheet">
-                {{ loading ? t('ep.imports.uploading') : t('ep.imports.inspect_sheet') }}
-              </button>
-              <button v-else-if="isPdf" type="button" class="btn btn-primary" :disabled="loading || previewing || !bankId || !file || !canImport" @click="inspectPdf">
-                {{ loading ? t('ep.imports.uploading') : t('ep.imports.inspect_pdf') }}
-              </button>
-              <button v-else type="button" class="btn btn-primary" :disabled="loading || previewing || !bankId || !file || !canImport" @click="inspectText">
-                {{ loading || previewing ? t('ep.imports.uploading') : t('ep.imports.submit_preview') }}
-              </button>
-            </div>
-          </section>
-
-          <div v-if="error" ref="errorNoticeRef" class="notice bad import-error" role="alert" tabindex="-1">
-            <LinearIcon name="alert" :size="15" /><span>{{ errorText }}</span>
-          </div>
-
-          <!-- Spreadsheet field mapping -->
-          <section v-if="spreadsheetPreview" class="step-block" data-step="fields">
-            <div class="step-head">
-              <span class="step-no mono">02</span>
-              <div>
-                <div class="step-title">{{ t('ep.imports.fields_title') }}</div>
-                <div class="step-sub">{{ t('ep.imports.fields_hint') }}</div>
-              </div>
-            </div>
-
-            <div class="mapping-grid">
-              <label class="field">
-                <span class="label">{{ t('ep.imports.col_stem') }}</span>
-                <select v-model.number="currentMapping.stem" class="select">
-                  <option :value="null">{{ t('ep.imports.none') }}</option>
-                  <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
-                </select>
+            <template v-else>
+              <p class="hint" style="margin-bottom: 10px">{{ t('ep.imports.paste_hint') }}</p>
+              <label class="field" for="import-paste">
+                <span class="label">{{ t('ep.imports.source_paste') }}</span>
+                <textarea
+                  id="import-paste"
+                  v-model="pastedText"
+                  class="textarea"
+                  rows="10"
+                  :placeholder="t('ep.imports.paste_placeholder')"
+                ></textarea>
               </label>
-              <label class="field">
-                <span class="label">{{ t('ep.imports.col_answer') }}</span>
-                <select v-model.number="currentMapping.answer" class="select">
-                  <option :value="null">{{ t('ep.imports.none') }}</option>
-                  <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
-                </select>
-              </label>
-              <label class="field">
-                <span class="label">{{ t('ep.imports.col_type') }}</span>
-                <select v-model.number="currentMapping.type" class="select">
-                  <option :value="null">{{ t('ep.imports.auto') }}</option>
-                  <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
-                </select>
-              </label>
-              <label class="field">
-                <span class="label">{{ t('ep.imports.col_explanation') }}</span>
-                <select v-model.number="currentMapping.explanation" class="select">
-                  <option :value="null">{{ t('ep.imports.none') }}</option>
-                  <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
-                </select>
-              </label>
-              <label class="field">
-                <span class="label">{{ t('ep.imports.col_difficulty') }}</span>
-                <select v-model.number="currentMapping.difficulty" class="select">
-                  <option :value="null">{{ t('ep.imports.none') }}</option>
-                  <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
-                </select>
-              </label>
-              <label class="field">
-                <span class="label">{{ t('ep.imports.col_tags') }}</span>
-                <select v-model.number="currentMapping.tags" class="select">
-                  <option :value="null">{{ t('ep.imports.none') }}</option>
-                  <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
-                </select>
-              </label>
-              <label class="field">
-                <span class="label">{{ t('ep.imports.col_options') }}</span>
-                <select v-model.number="currentMapping.combined_options" class="select">
-                  <option :value="null">{{ t('ep.imports.none') }}</option>
-                  <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
-                </select>
-              </label>
-              <label v-if="currentMapping.combined_options !== null" class="field">
-                <span class="label">{{ t('ep.imports.delimiter') }}</span>
-                <select v-model="currentMapping.options_delimiter" class="select">
-                  <option value="">{{ t('ep.imports.auto') }}</option>
-                  <option value="prefix">{{ t('ep.imports.delimiter_prefix') }}</option>
-                  <option value=";">{{ t('ep.imports.delimiter_semicolon') }}</option>
-                  <option value="；">{{ t('ep.imports.delimiter_cn_semicolon') }}</option>
-                  <option value="\n">{{ t('ep.imports.delimiter_newline') }}</option>
-                  <option value="|">{{ t('ep.imports.delimiter_pipe') }}</option>
-                  <option value="、">{{ t('ep.imports.delimiter_dunhao') }}</option>
-                </select>
-              </label>
-              <label v-for="(letter, slotIdx) in optionLetters" :key="letter" class="field">
-                <span class="label">{{ t('ep.imports.col_option', { letter }) }}</span>
-                <select :value="getOptionCol(slotIdx)" class="select" @change="setOptionCol(slotIdx, $event.target.value)">
-                  <option value="">{{ t('ep.imports.none') }}</option>
-                  <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
-                </select>
-              </label>
-            </div>
-
-            <div v-if="spreadsheetPreview.missing?.length" class="notice warn" style="margin-top: 14px">
-              <LinearIcon name="alert" :size="15" />
-              <span>{{ t('ep.imports.missing_fields') }}{{ spreadsheetPreview.missing.join(', ') }}</span>
-            </div>
-
-            <div v-if="spreadsheetPreview.preview_rows?.length" class="sample-block">
-              <div class="rule-label">{{ t('ep.imports.sample') }} · {{ t('ep.imports.rows', { count: spreadsheetPreview.preview_rows.length }) }}</div>
-              <div class="sample-scroll">
-                <table class="sample-table">
-                  <thead>
-                    <tr><th v-for="(h, idx) in spreadsheetPreview.headers" :key="idx">{{ h }}</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="(row, rIdx) in spreadsheetPreview.preview_rows" :key="rIdx">
-                      <td v-for="(cell, cIdx) in row" :key="cIdx">{{ cell }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            </template>
 
             <div class="import-actions">
-              <button type="submit" class="btn btn-primary" :disabled="loading || !bankId || !file || !canImport">
-                {{ loading ? t('ep.imports.uploading') : t('ep.imports.submit_import') }}
+              <button
+                type="button"
+                class="btn btn-primary"
+                :disabled="Boolean(nextDisabledReason)"
+                :title="nextDisabledReason ? t(nextDisabledReason) : undefined"
+                @click="nextFromSource"
+              >
+                {{ loading || previewing ? t('ep.imports.uploading') : t('ep.imports.next') }}
               </button>
-              <button type="button" class="btn btn-quiet" @click="requestDiscard('spreadsheet')">{{ t('ep.imports.cancel_preview') }}</button>
             </div>
           </section>
 
-          <!-- PDF correction draft -->
-          <section v-if="pdfPreview" class="step-block">
-            <div class="step-head">
-              <span class="step-no mono">03</span>
-              <div>
-                <div class="step-title">{{ t('ep.imports.pdf_title') }}</div>
-                <div class="step-sub">{{ t('ep.imports.pdf_hint') }}</div>
+          <!-- Step 2: check (field mapping / PDF correction / text precheck) -->
+          <section v-if="stepNo === 2" class="step-block" data-step="check">
+            <!-- Spreadsheet field mapping -->
+            <template v-if="mode === 'spreadsheet' && spreadsheetPreview">
+              <div class="step-head">
+                <span class="step-no mono">02</span>
+                <div>
+                  <div class="step-title">{{ t('ep.imports.fields_title') }}</div>
+                  <div class="step-sub">{{ t('ep.imports.fields_hint') }}</div>
+                </div>
               </div>
-              <span class="tag" :class="pdfPreview.confidence === 'HIGH' ? 'ok' : 'warn'">
-                {{ pdfPreview.confidence === 'HIGH' ? t('ep.imports.pdf_high') : t('ep.imports.pdf_low') }}
-              </span>
-            </div>
 
-            <div v-if="pdfCandidates.length" class="pdf-list">
-              <article v-for="(cand, cIdx) in pdfCandidates" :key="cIdx" class="pdf-card">
-                <div class="pdf-card-head">
-                  <span class="mono small">{{ t('ep.imports.candidate_no', { index: cIdx + 1 }) }}</span>
-                  <span class="pdf-card-actions">
-                    <button v-if="cIdx > 0" type="button" class="btn btn-sm btn-quiet" @click="mergeWithPrev(cIdx)">{{ t('ep.imports.merge_prev') }}</button>
-                    <button type="button" class="btn btn-sm btn-quiet" @click="splitCandidate(cIdx)">{{ t('ep.imports.split') }}</button>
-                    <button type="button" class="btn btn-sm btn-quiet" @click="removeCandidate(cIdx)">{{ t('ep.imports.remove') }}</button>
-                  </span>
-                </div>
-
-                <div v-if="cand.is_uncertain" class="notice warn" style="margin-bottom: 12px">
-                  <LinearIcon name="alert" :size="14" />
-                  <span>{{ t('ep.imports.uncertain', { reason: cand.uncertain_reason }) }}</span>
-                </div>
-
-                <div class="pdf-grid">
-                  <label class="field">
-                    <span class="label">{{ t('ep.imports.type') }}</span>
-                    <select v-model="cand.type" class="select">
-                      <option value="SINGLE">{{ t('ep.question_types.single') }}</option>
-                      <option value="MULTI">{{ t('ep.question_types.multi') }}</option>
-                      <option value="JUDGE">{{ t('ep.question_types.judge') }}</option>
-                      <option value="QA">{{ t('ep.question_types.essay') }}</option>
-                    </select>
-                  </label>
-                  <label class="field">
-                    <span class="label">{{ t('ep.imports.answer') }}</span>
-                    <input v-model="cand.answer" class="input" :placeholder="t('ep.imports.answer_placeholder')" />
-                  </label>
-                </div>
-
-                <label class="field" style="margin-top: 12px">
-                  <span class="label">{{ t('ep.imports.stem') }}</span>
-                  <textarea v-model="cand.stem" class="textarea" rows="3"></textarea>
+              <div class="mapping-grid">
+                <label class="field">
+                  <span class="label">{{ t('ep.imports.col_stem') }}</span>
+                  <select v-model.number="currentMapping.stem" class="select">
+                    <option :value="null">{{ t('ep.imports.none') }}</option>
+                    <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
+                  </select>
                 </label>
-
-                <div v-if="cand.type === 'SINGLE' || cand.type === 'MULTI'" class="pdf-options">
-                  <div class="pdf-options-head">
-                    <span class="label">{{ t('ep.imports.options') }}</span>
-                    <button type="button" class="btn btn-sm btn-quiet" @click="addCandidateOption(cand)">{{ t('ep.imports.add_option') }}</button>
-                  </div>
-                  <div v-for="(opt, optIdx) in cand.options" :key="optIdx" class="pdf-option-row">
-                    <input v-model="opt.key" class="input opt-key" placeholder="A" />
-                    <input v-model="opt.content" class="input" :placeholder="t('ep.imports.option_text')" />
-                    <button type="button" class="icon-btn" :aria-label="t('ep.imports.remove')" @click="cand.options.splice(optIdx, 1)">
-                      <LinearIcon name="x" :size="14" />
-                    </button>
-                  </div>
-                </div>
-
-                <label class="field" style="margin-top: 12px">
-                  <span class="label">{{ t('ep.imports.explanation') }}</span>
-                  <input v-model="cand.explanation" class="input" :placeholder="t('ep.imports.explanation_placeholder')" />
+                <label class="field">
+                  <span class="label">{{ t('ep.imports.col_answer') }}</span>
+                  <select v-model.number="currentMapping.answer" class="select">
+                    <option :value="null">{{ t('ep.imports.none') }}</option>
+                    <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
+                  </select>
                 </label>
-              </article>
-            </div>
+                <label class="field">
+                  <span class="label">{{ t('ep.imports.col_type') }}</span>
+                  <select v-model.number="currentMapping.type" class="select">
+                    <option :value="null">{{ t('ep.imports.auto') }}</option>
+                    <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="label">{{ t('ep.imports.col_explanation') }}</span>
+                  <select v-model.number="currentMapping.explanation" class="select">
+                    <option :value="null">{{ t('ep.imports.none') }}</option>
+                    <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="label">{{ t('ep.imports.col_difficulty') }}</span>
+                  <select v-model.number="currentMapping.difficulty" class="select">
+                    <option :value="null">{{ t('ep.imports.none') }}</option>
+                    <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="label">{{ t('ep.imports.col_tags') }}</span>
+                  <select v-model.number="currentMapping.tags" class="select">
+                    <option :value="null">{{ t('ep.imports.none') }}</option>
+                    <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="label">{{ t('ep.imports.col_options') }}</span>
+                  <select v-model.number="currentMapping.combined_options" class="select">
+                    <option :value="null">{{ t('ep.imports.none') }}</option>
+                    <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
+                  </select>
+                </label>
+                <label v-if="currentMapping.combined_options !== null" class="field">
+                  <span class="label">{{ t('ep.imports.delimiter') }}</span>
+                  <select v-model="currentMapping.options_delimiter" class="select">
+                    <option value="">{{ t('ep.imports.auto') }}</option>
+                    <option value="prefix">{{ t('ep.imports.delimiter_prefix') }}</option>
+                    <option value=";">{{ t('ep.imports.delimiter_semicolon') }}</option>
+                    <option value="；">{{ t('ep.imports.delimiter_cn_semicolon') }}</option>
+                    <option value="\n">{{ t('ep.imports.delimiter_newline') }}</option>
+                    <option value="|">{{ t('ep.imports.delimiter_pipe') }}</option>
+                    <option value="、">{{ t('ep.imports.delimiter_dunhao') }}</option>
+                  </select>
+                </label>
+                <label v-for="(letter, slotIdx) in optionLetters" :key="letter" class="field">
+                  <span class="label">{{ t('ep.imports.col_option', { letter }) }}</span>
+                  <select :value="getOptionCol(slotIdx)" class="select" @change="setOptionCol(slotIdx, $event.target.value)">
+                    <option value="">{{ t('ep.imports.none') }}</option>
+                    <option v-for="(h, idx) in spreadsheetPreview.headers" :key="idx" :value="idx">{{ idx }}: {{ h }}</option>
+                  </select>
+                </label>
+              </div>
+
+              <div v-if="spreadsheetPreview.missing?.length" class="notice warn" style="margin-top: 14px">
+                <LinearIcon name="alert" :size="15" />
+                <span>{{ t('ep.imports.missing_fields') }}{{ spreadsheetPreview.missing.join(', ') }}</span>
+              </div>
+
+              <div v-if="spreadsheetPreview.preview_rows?.length" class="sample-block">
+                <div class="rule-label">{{ t('ep.imports.sample') }} · {{ t('ep.imports.rows', { count: spreadsheetPreview.preview_rows.length }) }}</div>
+                <div class="sample-scroll">
+                  <table class="sample-table">
+                    <thead>
+                      <tr><th v-for="(h, idx) in spreadsheetPreview.headers" :key="idx">{{ h }}</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(row, rIdx) in spreadsheetPreview.preview_rows" :key="rIdx">
+                        <td v-for="(cell, cIdx) in row" :key="cIdx">{{ cell }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </template>
+
+            <!-- PDF correction draft -->
+            <template v-else-if="mode === 'pdf' && pdfPreview">
+              <div class="step-head">
+                <span class="step-no mono">02</span>
+                <div>
+                  <div class="step-title">{{ t('ep.imports.pdf_title') }}</div>
+                  <div class="step-sub">{{ t('ep.imports.pdf_hint') }}</div>
+                </div>
+                <span class="tag" :class="pdfPreview.confidence === 'HIGH' ? 'ok' : 'warn'">
+                  {{ pdfPreview.confidence === 'HIGH' ? t('ep.imports.pdf_high') : t('ep.imports.pdf_low') }}
+                </span>
+              </div>
+
+              <div v-if="pdfCandidates.length" class="pdf-list">
+                <article v-for="(cand, cIdx) in pdfCandidates" :key="cIdx" class="pdf-card">
+                  <div class="pdf-card-head">
+                    <span class="mono small">{{ t('ep.imports.candidate_no', { index: cIdx + 1 }) }}</span>
+                    <span class="pdf-card-actions">
+                      <button v-if="cIdx > 0" type="button" class="btn btn-sm btn-quiet" @click="mergeWithPrev(cIdx)">{{ t('ep.imports.merge_prev') }}</button>
+                      <button type="button" class="btn btn-sm btn-quiet" @click="splitCandidate(cIdx)">{{ t('ep.imports.split') }}</button>
+                      <button type="button" class="btn btn-sm btn-quiet" @click="removeCandidate(cIdx)">{{ t('ep.imports.remove') }}</button>
+                    </span>
+                  </div>
+
+                  <div v-if="cand.is_uncertain" class="notice warn" style="margin-bottom: 12px">
+                    <LinearIcon name="alert" :size="14" />
+                    <span>{{ t('ep.imports.uncertain', { reason: cand.uncertain_reason }) }}</span>
+                  </div>
+
+                  <div class="pdf-grid">
+                    <label class="field">
+                      <span class="label">{{ t('ep.imports.type') }}</span>
+                      <select v-model="cand.type" class="select">
+                        <option value="SINGLE">{{ t('ep.question_types.single') }}</option>
+                        <option value="MULTI">{{ t('ep.question_types.multi') }}</option>
+                        <option value="JUDGE">{{ t('ep.question_types.judge') }}</option>
+                        <option value="QA">{{ t('ep.question_types.essay') }}</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span class="label">{{ t('ep.imports.answer') }}</span>
+                      <input v-model="cand.answer" class="input" :placeholder="t('ep.imports.answer_placeholder')" />
+                    </label>
+                  </div>
+
+                  <label class="field" style="margin-top: 12px">
+                    <span class="label">{{ t('ep.imports.stem') }}</span>
+                    <textarea v-model="cand.stem" class="textarea" rows="3"></textarea>
+                  </label>
+
+                  <div v-if="cand.type === 'SINGLE' || cand.type === 'MULTI'" class="pdf-options">
+                    <div class="pdf-options-head">
+                      <span class="label">{{ t('ep.imports.options') }}</span>
+                      <button type="button" class="btn btn-sm btn-quiet" @click="addCandidateOption(cand)">{{ t('ep.imports.add_option') }}</button>
+                    </div>
+                    <div v-for="(opt, optIdx) in cand.options" :key="optIdx" class="pdf-option-row">
+                      <input v-model="opt.key" class="input opt-key" placeholder="A" />
+                      <input v-model="opt.content" class="input" :placeholder="t('ep.imports.option_text')" />
+                      <button type="button" class="icon-btn" :aria-label="t('ep.imports.remove')" @click="cand.options.splice(optIdx, 1)">
+                        <LinearIcon name="x" :size="14" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <label class="field" style="margin-top: 12px">
+                    <span class="label">{{ t('ep.imports.explanation') }}</span>
+                    <input v-model="cand.explanation" class="input" :placeholder="t('ep.imports.explanation_placeholder')" />
+                  </label>
+                </article>
+              </div>
+              <div v-else class="empty" style="padding: 24px 0">
+                <div class="empty-desc">{{ t('ep.imports.no_candidates') }}</div>
+              </div>
+            </template>
+
+            <!-- Text precheck -->
+            <template v-else-if="mode === 'text' && textPreview">
+              <div class="step-head">
+                <span class="step-no mono">02</span>
+                <div>
+                  <div class="step-title">{{ t('ep.imports.text_precheck_title') }}</div>
+                  <div class="step-sub">{{ t('ep.imports.text_precheck_hint') }}</div>
+                </div>
+                <span class="tag" :class="textPreview.accepted === false ? 'warn' : 'ok'">
+                  {{ textPreview.accepted === false ? t('ep.imports.pdf_low') : t('ep.imports.pdf_high') }}
+                </span>
+              </div>
+              <div class="import-precheck-grid">
+                <div class="import-precheck-cell">
+                  <b>{{ Number(textPreview.question_count || 0) }}</b>
+                  <span>{{ t('ep.imports.rows', { count: Number(textPreview.question_count || 0) }) }}</span>
+                </div>
+                <div class="import-precheck-cell">
+                  <b :class="{ 'is-warn': duplicateList.length > 0 }">{{ duplicateList.length }}</b>
+                  <span>{{ t('ep.imports.step_duplicates') }}</span>
+                </div>
+              </div>
+
+              <div v-if="duplicateList.length" class="pdf-duplicates">
+                <div class="notice warn">
+                  <LinearIcon name="alert" :size="15" />
+                  <span>{{ t('ep.imports.dup_hint', { count: duplicateList.length }) }}</span>
+                </div>
+                <div class="list dup-list">
+                  <div v-for="(dup, idx) in duplicateList.slice(0, 8)" :key="idx" class="list-row">
+                    <span class="mono small dim">{{ String(idx + 1).padStart(2, '0') }}</span>
+                    <span class="list-main">
+                      <span class="qrow-stem">{{ dup.stem || dup.question_stem || dup.id }}</span>
+                    </span>
+                  </div>
+                  <details v-if="duplicateList.length > 8" class="dup-more">
+                    <summary class="dup-more-summary">{{ t('ep.common.more_count', { count: duplicateList.length - 8 }) }}</summary>
+                    <div v-for="(dup, idx) in duplicateList.slice(8)" :key="`more-${idx}`" class="list-row">
+                      <span class="mono small dim">{{ String(idx + 9).padStart(2, '0') }}</span>
+                      <span class="list-main">
+                        <span class="qrow-stem">{{ dup.stem || dup.question_stem || dup.id }}</span>
+                      </span>
+                    </div>
+                  </details>
+                </div>
+              </div>
+              <p v-else class="hint" style="margin-top: 14px">{{ t('ep.imports.no_duplicates') }}</p>
+            </template>
+
             <div v-else class="empty" style="padding: 24px 0">
-              <div class="empty-desc">{{ t('ep.imports.no_candidates') }}</div>
+              <div class="empty-desc">{{ t('ep.imports.resume_need_file') }}</div>
+              <div class="empty-actions">
+                <button type="button" class="btn btn-sm" @click="triggerResumeFileInput">{{ t('ep.imports.resume_pick_file') }}</button>
+              </div>
+              <input ref="resumeFileInputRef" type="file" class="file-input-hidden" @change="selectResumeFile" />
             </div>
 
-            <div v-if="pdfPreview.duplicates?.length" class="pdf-duplicates">
-              <div class="notice warn">
-                <LinearIcon name="alert" :size="15" />
-                <span>{{ t('ep.imports.dup_hint', { count: pdfPreview.duplicates.length }) }}</span>
-              </div>
-              <div v-if="pdfPreview.duplicates.length" class="list dup-list">
-                <div v-for="(dup, idx) in pdfPreview.duplicates.slice(0, 8)" :key="idx" class="list-row">
-                  <span class="mono small dim">{{ String(idx + 1).padStart(2, '0') }}</span>
-                  <span class="list-main">
-                    <span class="qrow-stem">{{ dup.stem || dup.question_stem || dup.id }}</span>
-                  </span>
-                </div>
-                <details v-if="pdfPreview.duplicates.length > 8" class="dup-more">
-                  <summary class="dup-more-summary">{{ t('ep.common.more_count', { count: pdfPreview.duplicates.length - 8 }) }}</summary>
-                  <div v-for="(dup, idx) in pdfPreview.duplicates.slice(8)" :key="`more-${idx}`" class="list-row">
-                    <span class="mono small dim">{{ String(idx + 9).padStart(2, '0') }}</span>
-                    <span class="list-main">
-                      <span class="qrow-stem">{{ dup.stem || dup.question_stem || dup.id }}</span>
-                    </span>
-                  </div>
-                </details>
-              </div>
-              <div class="field" style="margin-top: 12px; max-width: 320px">
-                <span class="label">{{ t('ep.imports.strategy') }}</span>
-                <select v-model="pdfDuplicateStrategy" class="select">
-                  <option value="" disabled>{{ t('ep.imports.strategy_choose') }}</option>
-                  <option value="skip">{{ t('ep.imports.strategy_skip') }}</option>
-                  <option value="new">{{ t('ep.imports.strategy_new') }}</option>
-                  <option value="merge">{{ t('ep.imports.strategy_merge') }}</option>
-                </select>
-              </div>
+            <div v-if="needsFile" class="notice warn" style="margin-top: 14px" data-testid="resume-needs-file">
+              <LinearIcon name="alert" :size="15" />
+              <span>{{ t('ep.imports.resume_need_file') }}</span>
+              <button type="button" class="btn btn-sm" @click="triggerResumeFileInput">{{ t('ep.imports.resume_pick_file') }}</button>
+              <input ref="resumeFileInputRef" type="file" class="file-input-hidden" @change="selectResumeFile" />
             </div>
 
             <div class="import-actions">
-              <button type="button" class="btn btn-primary" :disabled="loading || !pdfCandidates.length || !canImport || pdfStrategyMissing" @click="confirmPdfImportAction">
-                {{ loading ? t('ep.imports.uploading') : t('ep.imports.confirm_pdf') }}
+              <button type="button" class="btn btn-quiet" @click="goStep(1)">{{ t('ep.imports.prev') }}</button>
+              <button
+                type="button"
+                class="btn btn-primary"
+                :disabled="Boolean(checkDisabledReason)"
+                :title="checkDisabledReason ? t(checkDisabledReason) : undefined"
+                @click="nextFromCheck"
+              >
+                {{ t('ep.imports.next') }}
               </button>
-              <button type="button" class="btn btn-quiet" @click="requestDiscard('pdf')">{{ t('ep.imports.cancel_preview') }}</button>
+              <button type="button" class="btn btn-quiet" @click="requestDiscard(mode)">{{ t('ep.imports.cancel_preview') }}</button>
             </div>
           </section>
 
-          <!-- Text precheck and correction -->
-          <section v-if="textPreview" class="step-block">
-            <div class="step-head">
-              <span class="step-no mono">03</span>
-              <div>
-                <div class="step-title">{{ t('ep.imports.step_duplicates') }}</div>
-                <div class="step-sub">{{ t('ep.imports.preview_hint') }}</div>
-              </div>
-            </div>
-
-            <div v-if="textPreview.duplicates?.length" class="pdf-duplicates">
-              <div class="notice warn">
-                <LinearIcon name="alert" :size="15" />
-                <span>{{ t('ep.imports.dup_hint', { count: textPreview.duplicates.length }) }}</span>
-              </div>
-              <div class="list dup-list">
-                <div v-for="(dup, idx) in textPreview.duplicates.slice(0, 8)" :key="idx" class="list-row">
-                  <span class="mono small dim">{{ String(idx + 1).padStart(2, '0') }}</span>
-                  <span class="list-main">
-                    <span class="qrow-stem">{{ dup.stem || dup.question_stem || dup.id }}</span>
-                  </span>
-                </div>
-                <details v-if="textPreview.duplicates.length > 8" class="dup-more">
-                  <summary class="dup-more-summary">{{ t('ep.common.more_count', { count: textPreview.duplicates.length - 8 }) }}</summary>
-                  <div v-for="(dup, idx) in textPreview.duplicates.slice(8)" :key="`more-${idx}`" class="list-row">
-                    <span class="mono small dim">{{ String(idx + 9).padStart(2, '0') }}</span>
-                    <span class="list-main">
-                      <span class="qrow-stem">{{ dup.stem || dup.question_stem || dup.id }}</span>
-                    </span>
-                  </div>
-                </details>
-              </div>
-              <div class="field" style="margin-top: 12px; max-width: 320px">
-                <span class="label">{{ t('ep.imports.strategy') }}</span>
-                <select v-model="duplicateStrategy" class="select">
-                  <option value="" disabled>{{ t('ep.imports.strategy_choose') }}</option>
-                  <option value="skip">{{ t('ep.imports.strategy_skip') }}</option>
-                  <option value="new">{{ t('ep.imports.strategy_new') }}</option>
-                  <option value="merge">{{ t('ep.imports.strategy_merge') }}</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="import-actions">
-              <button type="button" class="btn btn-primary" :disabled="loading || !canImport || textStrategyMissing" @click="submitText">
-                {{ loading ? t('ep.imports.uploading') : t('ep.imports.submit_confirm') }}
-              </button>
-              <button type="button" class="btn btn-quiet" @click="requestDiscard('text')">{{ t('ep.imports.cancel_preview') }}</button>
-            </div>
-          </section>
-
-          <!-- Duplicate strategy -->
-          <section v-if="duplicatePreview" class="step-block">
+          <!-- Step 3: duplicates -->
+          <section v-if="stepNo === 3" class="step-block" data-step="duplicates">
             <div class="step-head">
               <span class="step-no mono">03</span>
               <div>
                 <div class="step-title">{{ t('ep.imports.dup_title') }}</div>
-                <div class="step-sub">{{ t('ep.imports.dup_hint', { count: duplicatePreview.duplicates?.length || 0 }) }}</div>
+                <div class="step-sub">{{ duplicateList.length ? t('ep.imports.dup_hint', { count: duplicateList.length }) : t('ep.imports.no_duplicates') }}</div>
               </div>
             </div>
 
-            <div v-if="duplicatePreview.duplicates?.length" class="list dup-list">
-              <div v-for="(dup, idx) in duplicatePreview.duplicates.slice(0, 8)" :key="idx" class="list-row">
+            <div v-if="duplicateList.length" class="list dup-list">
+              <div v-for="(dup, idx) in duplicateList.slice(0, 8)" :key="idx" class="list-row">
                 <span class="mono small dim">{{ String(idx + 1).padStart(2, '0') }}</span>
                 <span class="list-main">
                   <span class="qrow-stem">{{ dup.stem || dup.question_stem || dup.id }}</span>
                 </span>
               </div>
-              <details v-if="duplicatePreview.duplicates.length > 8" class="dup-more">
-                <summary class="dup-more-summary">{{ t('ep.common.more_count', { count: duplicatePreview.duplicates.length - 8 }) }}</summary>
-                <div v-for="(dup, idx) in duplicatePreview.duplicates.slice(8)" :key="`more-${idx}`" class="list-row">
+              <details v-if="duplicateList.length > 8" class="dup-more">
+                <summary class="dup-more-summary">{{ t('ep.common.more_count', { count: duplicateList.length - 8 }) }}</summary>
+                <div v-for="(dup, idx) in duplicateList.slice(8)" :key="`more-${idx}`" class="list-row">
                   <span class="mono small dim">{{ String(idx + 9).padStart(2, '0') }}</span>
                   <span class="list-main">
                     <span class="qrow-stem">{{ dup.stem || dup.question_stem || dup.id }}</span>
@@ -480,8 +545,8 @@
             </div>
 
             <div class="field" style="margin-top: 16px; max-width: 320px">
-              <span class="label">{{ t('ep.imports.strategy') }}</span>
-              <select v-model="duplicateStrategy" class="select">
+              <label class="label" for="import-strategy">{{ t('ep.imports.strategy') }}</label>
+              <select id="import-strategy" v-model="currentStrategy" class="select">
                 <option value="" disabled>{{ t('ep.imports.strategy_choose') }}</option>
                 <option value="skip">{{ t('ep.imports.strategy_skip') }}</option>
                 <option value="new">{{ t('ep.imports.strategy_new') }}</option>
@@ -490,40 +555,104 @@
             </div>
 
             <div class="import-actions">
-              <button type="submit" class="btn btn-primary" :disabled="loading || !bankId || !file || !canImport || duplicateStrategyMissing">
+              <button type="button" class="btn btn-quiet" @click="goStep(2)">{{ t('ep.imports.prev') }}</button>
+              <button
+                type="button"
+                class="btn btn-primary"
+                :disabled="Boolean(confirmDisabledReason)"
+                :title="confirmDisabledReason ? t(confirmDisabledReason) : undefined"
+                @click="confirmImport"
+              >
                 {{ loading ? t('ep.imports.uploading') : t('ep.imports.submit_confirm') }}
               </button>
             </div>
           </section>
 
-          <!-- Result -->
-          <section v-if="result" class="step-block result-block" aria-live="polite" data-testid="import-result">
+          <!-- Step 4: result / running job -->
+          <section
+            v-if="stepNo === 4"
+            class="step-block result-block"
+            aria-live="polite"
+            data-testid="import-result"
+          >
             <div class="step-head">
               <span class="step-no mono">04</span>
               <div>
-                <div class="step-title">{{ t('ep.imports.result_title') }}</div>
-                <div class="step-sub">{{ t('ep.imports.result_desc', { count: result.imported_count }) }}</div>
+                <div class="step-title">
+                  <template v-if="result">{{ t('ep.imports.result_title') }}</template>
+                  <template v-else-if="jobFailed">{{ t('ep.imports.job_failed') }}</template>
+                  <template v-else-if="jobCancelled">{{ t('ep.imports.job_cancelled') }}</template>
+                  <template v-else>{{ t('ep.imports.job_title') }}</template>
+                </div>
+                <div class="step-sub">
+                  <template v-if="result">{{ t('ep.imports.result_desc', { count: resultImportedCount }) }}</template>
+                  <template v-else-if="jobFailed">{{ t('ep.imports.job_failed_reason', { reason: jobReason }) }}</template>
+                  <template v-else-if="jobCancelled">{{ t('ep.imports.job_cancelled') }}</template>
+                  <template v-else>{{ t('ep.imports.job_progress', { done: jobDone, total: jobTotal }) }}</template>
+                </div>
               </div>
+              <span v-if="jobStatusLabel" class="tag" :class="jobStatusClass">{{ jobStatusLabel }}</span>
             </div>
-            <div class="kv">
-              <div class="kv-row"><span class="kv-key">{{ t('ep.imports.job') }}</span><span class="kv-val mono">{{ result.job_id }}</span></div>
-              <div class="kv-row"><span class="kv-key">{{ t('ep.imports.result_bank') }}</span><span class="kv-val" data-testid="result-bank">{{ resultBank || t('ep.common.none') }}</span></div>
-            </div>
-            <div
-              v-if="resultBankChanged"
-              class="notice warn result-bank-changed"
-              data-testid="result-bank-changed"
-              role="status"
-            >
-              <LinearIcon name="alert" :size="15" />
-              <span>{{ t('ep.imports.result_bank_changed', { bank: resultBank }) }}</span>
-              <span class="dim">{{ t('ep.imports.bank') }} {{ bankNameFor(bankId) }}</span>
-            </div>
-            <div class="import-actions">
-              <button type="button" class="btn btn-primary" @click="goBank">{{ t('ep.imports.view_bank') }}</button>
-              <button type="button" class="btn" @click="resetImport">{{ t('ep.imports.again') }}</button>
-            </div>
+
+            <template v-if="result">
+              <div class="kv">
+                <div class="kv-row"><span class="kv-key">{{ t('ep.imports.job') }}</span><span class="kv-val mono">{{ result.job_id }}</span></div>
+                <div class="kv-row"><span class="kv-key">{{ t('ep.imports.result_bank') }}</span><span class="kv-val" data-testid="result-bank">{{ resultBank || t('ep.common.none') }}</span></div>
+              </div>
+              <div
+                v-if="resultBankChanged"
+                class="notice warn result-bank-changed"
+                data-testid="result-bank-changed"
+                role="status"
+              >
+                <LinearIcon name="alert" :size="15" />
+                <span>{{ t('ep.imports.result_bank_changed', { bank: resultBank }) }}</span>
+                <span class="dim">{{ t('ep.imports.bank') }} {{ bankNameFor(bankId) }}</span>
+              </div>
+              <div class="import-actions">
+                <button type="button" class="btn btn-primary" @click="goBank">{{ t('ep.imports.view_bank') }}</button>
+                <button type="button" class="btn" @click="resetImport">{{ t('ep.imports.again') }}</button>
+              </div>
+            </template>
+
+            <template v-else>
+              <div v-if="jobRunning" class="job-progress" data-testid="job-progress">
+                <div class="job-bar"><i :style="{ width: `${jobPercent}%` }"></i></div>
+                <div class="job-meta mono">{{ t('ep.imports.job_progress', { done: jobDone, total: jobTotal }) }}</div>
+                <p class="hint">{{ t('ep.imports.job_left_hint') }}</p>
+              </div>
+              <div v-else class="notice bad job-failure" data-testid="job-error" role="alert">
+                <LinearIcon name="alert" :size="15" />
+                <span>{{ jobFailed ? t('ep.imports.job_failed_reason', { reason: jobReason }) : t('ep.imports.job_cancelled') }}</span>
+              </div>
+              <div class="import-actions">
+                <button
+                  v-if="jobRunning"
+                  type="button"
+                  class="btn btn-danger"
+                  data-testid="job-cancel"
+                  :disabled="jobCancelling"
+                  @click="cancelJob"
+                >
+                  {{ jobCancelling ? t('ep.imports.job_cancelling') : t('ep.imports.job_cancel') }}
+                </button>
+                <button
+                  v-else
+                  type="button"
+                  class="btn btn-primary"
+                  data-testid="job-retry"
+                  @click="retryImport"
+                >
+                  {{ t('ep.imports.job_retry') }}
+                </button>
+                <button type="button" class="btn btn-quiet" @click="goStep(3)">{{ t('ep.imports.prev') }}</button>
+              </div>
+            </template>
           </section>
+
+          <div v-if="error" ref="errorNoticeRef" class="notice bad import-error" role="alert" tabindex="-1">
+            <LinearIcon name="alert" :size="15" /><span>{{ errorText }}</span>
+          </div>
         </form>
       </div>
 
@@ -565,19 +694,50 @@
         <button type="button" class="btn btn-danger discard-preview-accept" @click="acceptDiscard">{{ t('ep.imports.cancel_preview') }}</button>
       </template>
     </AppDialog>
+
+    <AppDialog
+      :open="leaveDialogOpen"
+      :title="t('ep.imports.leave_title')"
+      initial-focus=".leave-stay"
+      data-testid="leave-dialog"
+      @close="stayOnPage"
+    >
+      <p class="hint">{{ t('ep.imports.leave_hint') }}</p>
+      <template #foot>
+        <button type="button" class="btn btn-quiet leave-stay" @click="stayOnPage">{{ t('ep.imports.leave_stay') }}</button>
+        <button type="button" class="btn btn-danger leave-discard" @click="discardAndLeave">{{ t('ep.imports.leave_discard') }}</button>
+        <button type="button" class="btn btn-primary leave-later" @click="leaveForLater">{{ t('ep.imports.leave_later') }}</button>
+      </template>
+    </AppDialog>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
 import AppDialog from '../components/AppDialog.vue'
 import { listBanks } from '../api/banks'
-import { previewImport, previewFileImport, uploadImport, previewPdfImport, confirmPdfImport } from '../api/imports'
+import {
+  previewImport,
+  previewFileImport,
+  uploadImport,
+  previewPdfImport,
+  confirmPdfImport,
+  createImportDraft,
+  listImportDrafts,
+  getImportDraft,
+  updateImportDraft,
+  deleteImportDraft,
+  startImportJob,
+  getImportJob,
+  cancelImportJob,
+} from '../api/imports'
 import { useLocale } from '../composables/useLocale.js'
+import { formatDateTime } from '../utils/datetime.js'
+import { readQueryNumber, readQueryString, queriesEqual } from '../utils/routeQuery.js'
 
-const { t } = useLocale()
+const { t, locale } = useLocale()
 
 const props = defineProps({ token: { type: String, required: true } })
 defineEmits(['back'])
@@ -588,9 +748,9 @@ const bankId = ref('')
 
 // Contextual import entry: ?bankId= turns the top-level page into a child of
 // the bank. The control points at a deterministic route, never history.
-const isFromManage = computed(() => String(route.query.from || '') === 'manage')
+const isFromManage = computed(() => String(route.query?.from || '') === 'manage')
 const backBankId = computed(() => {
-  const preset = String(route.query.bankId || '')
+  const preset = String(route.query?.bankId || '')
   if (preset) return preset
   return isFromManage.value ? String(bankId.value || '') : ''
 })
@@ -608,14 +768,23 @@ function backToBank() {
   }
   router.push({ name: 'bank-detail', params: { bankId: backBankId.value } })
 }
+
 const file = ref(null)
+// Text can be pasted directly instead of living in a file; both paths run the
+// same preview/import pipeline, only the source of `content` differs.
+const sourceMode = ref('file')
+const pastedText = ref('')
 const isDragging = ref(false)
 const fileInputRef = ref(null)
+const resumeFileInputRef = ref(null)
 const loading = ref(false)
 const previewing = ref(false)
-// Any preview or upload request owns the bank selector while it runs: swapping
+// Any preview or import request owns the bank selector while it runs: swapping
 // the target mid-request would let a stale response describe another bank.
 const requestInFlight = computed(() => previewing.value || loading.value)
+// The selector is locked whenever a request owns it: a preview, an upload, or
+// a background job writing into the bank that was chosen when it started.
+const bankBusy = computed(() => previewing.value || loading.value || jobRunning.value)
 const error = ref(null)
 const errorNoticeRef = ref(null)
 const errorText = computed(() => {
@@ -623,9 +792,9 @@ const errorText = computed(() => {
   return typeof error.value === 'string' ? error.value : ''
 })
 
-// The error notice sits under the primary action row, but the correction and
-// result blocks can still push it off-screen. Bring it into view and focus it
-// so the failure is announced instead of silently appearing below the fold.
+// The error notice sits under the current step block, but later blocks can
+// still push it off-screen. Bring it into view and focus it so the failure is
+// announced instead of silently appearing below the fold.
 watch(errorText, async (text) => {
   if (!text) return
   await nextTick()
@@ -636,6 +805,7 @@ watch(errorText, async (text) => {
   }
   if (typeof el.focus === 'function') el.focus({ preventScroll: true })
 })
+
 const result = ref(null)
 // Snapshot of the bank that actually accepted the job. The select can move on
 // (or be reset) while the upload is in flight; the receipt must not follow it.
@@ -655,6 +825,16 @@ const textPreview = ref(null)
 const pdfPreview = ref(null)
 const pdfCandidates = ref([])
 const pdfDuplicateStrategy = ref('')
+const textContent = ref('')
+const textFormat = ref('')
+const resumedFilename = ref('')
+const resumedSourceKind = ref('')
+// Job state is declared early: the draft snapshot watcher serializes it during
+// setup, before the job section below is reached.
+const job = ref(null)
+const jobId = ref('')
+const jobCancelling = ref(false)
+let jobTimer = null
 
 function defaultMapping() {
   return {
@@ -683,29 +863,18 @@ let previewSeq = 0
 const discardConfirmOpen = ref(false)
 const discardKind = ref('')
 
-const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
-
-// Pending steps carry no state label. Completed steps say "done"; the active
-// step names what it is actually waiting for (a file, a preview, an import),
-// and only claims to be working while a request really is in flight.
-const STEP_DONE_KEY = 'ep.common.done'
+// --- Wizard step ------------------------------------------------------------
+// The step is addressable (?step=) so reload and back/forward land on the same
+// place. Local state is kept in sync when the query changes from the outside.
+const initialStep = readQueryNumber(route.query?.step, 1, { min: 1, max: 4 })
+const stepNo = ref(initialStep)
 
 const steps = computed(() => [
   { key: 'source', label: t('ep.imports.step_source') },
-  { key: 'precheck', label: t('ep.imports.step_fields') },
-  { key: 'correct', label: t('ep.imports.step_duplicates') },
+  { key: 'check', label: t('ep.imports.step_fields') },
+  { key: 'duplicates', label: t('ep.imports.step_duplicates') },
   { key: 'result', label: t('ep.imports.step_result') },
 ])
-
-// Derive the active step from the block actually rendered, not from a transient
-// loading flag: a spreadsheet preview is the field-mapping step (02), PDF/text
-// correction and duplicate resolution are 03, and only a result is 04.
-const stepNo = computed(() => {
-  if (result.value) return 4
-  if (duplicatePreview.value || pdfPreview.value || textPreview.value) return 3
-  if (spreadsheetPreview.value) return 2
-  return 1
-})
 
 const stepPercent = computed(() => ((stepNo.value - 1) / 3) * 100)
 
@@ -716,7 +885,7 @@ function stepState(index) {
 }
 
 function activeStepKey(index) {
-  if (index === 4) return 'ep.imports.result_title'
+  if (index === 4) return jobRunning.value ? 'ep.imports.job_running' : 'ep.imports.result_title'
   if (requestInFlight.value) return 'ep.imports.uploading'
   if (index === 1) {
     if (!bankId.value) return 'ep.imports.bank_placeholder'
@@ -724,15 +893,70 @@ function activeStepKey(index) {
     return 'ep.imports.submit_preview'
   }
   if (index === 2) return 'ep.imports.submit_import'
-  if (pdfPreview.value) return 'ep.imports.confirm_pdf'
+  if (mode.value === 'pdf') return 'ep.imports.confirm_pdf'
   return 'ep.imports.submit_confirm'
 }
 
 function stepStateLabel(index) {
   const state = stepState(index)
-  if (state === 'done') return t(STEP_DONE_KEY)
+  if (state === 'done') return t('ep.common.done')
   if (state === 'active') return t(activeStepKey(index))
   return ''
+}
+
+const mode = computed(() => {
+  if (pdfPreview.value) return 'pdf'
+  if (spreadsheetPreview.value) return 'spreadsheet'
+  if (textPreview.value) return 'text'
+  return ''
+})
+
+const isSpreadsheet = computed(() => {
+  const name = file.value?.name?.toLowerCase() || ''
+  return name.endsWith('.xlsx') || name.endsWith('.csv')
+})
+
+const isPdf = computed(() => {
+  const name = file.value?.name?.toLowerCase() || ''
+  return name.endsWith('.pdf')
+})
+
+const isTextFile = computed(() => {
+  const name = file.value?.name?.toLowerCase() || ''
+  return name.endsWith('.json') || name.endsWith('.md') || name.endsWith('.markdown') || name.endsWith('.txt')
+})
+
+const selectedBank = computed(() => banks.value.find(b => String(b.id) === String(bankId.value)) || null)
+
+// Import writes questions, so member-level access must be rejected before the
+// user spends time mapping columns or correcting a PDF draft.
+const canImport = computed(() => {
+  const role = String(selectedBank.value?.role || '').toUpperCase()
+  return role === 'ADMIN' || role === 'EDITOR'
+})
+
+const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+const optionSlots = ref(Array(8).fill(''))
+
+function syncOptionsFromSlots() {
+  const slots = optionSlots.value.map(v => (v !== '' && v !== null && v !== undefined ? Number(v) : null))
+  let lastIdx = -1
+  for (let i = slots.length - 1; i >= 0; i--) {
+    if (slots[i] !== null) {
+      lastIdx = i
+      break
+    }
+  }
+  currentMapping.value.options = lastIdx >= 0 ? slots.slice(0, lastIdx + 1) : []
+}
+
+function getOptionCol(index) {
+  return optionSlots.value[index] || ''
+}
+
+function setOptionCol(index, rawVal) {
+  optionSlots.value[index] = rawVal !== undefined && rawVal !== null ? String(rawVal) : ''
+  syncOptionsFromSlots()
 }
 
 const precheckPanel = computed(() => {
@@ -759,62 +983,425 @@ const precheckPanel = computed(() => {
   return { count, duplicates, attention, accepted, status }
 })
 
-const isSpreadsheet = computed(() => {
-  const name = file.value?.name?.toLowerCase() || ''
-  return name.endsWith('.xlsx') || name.endsWith('.csv')
+const duplicateSource = computed(() => (
+  duplicatePreview.value || pdfPreview.value || spreadsheetPreview.value || textPreview.value || null
+))
+const duplicateList = computed(() => (
+  Array.isArray(duplicateSource.value?.duplicates) ? duplicateSource.value.duplicates : []
+))
+
+const currentStrategy = computed({
+  get: () => (mode.value === 'pdf' ? pdfDuplicateStrategy.value : duplicateStrategy.value),
+  set: (value) => {
+    if (mode.value === 'pdf') pdfDuplicateStrategy.value = value
+    else duplicateStrategy.value = value
+  },
 })
 
-const isPdf = computed(() => {
-  const name = file.value?.name?.toLowerCase() || ''
-  return name.endsWith('.pdf')
+const strategyMissing = computed(() => duplicateList.value.length > 0 && !currentStrategy.value)
+
+const textNeedsCheck = computed(() => {
+  const preview = textPreview.value
+  if (!preview) return false
+  return Boolean(preview.duplicates?.length) || preview.accepted === false
 })
 
-const isTextFile = computed(() => {
-  const name = file.value?.name?.toLowerCase() || ''
-  return name.endsWith('.json') || name.endsWith('.md') || name.endsWith('.markdown') || name.endsWith('.txt')
+const needsFile = computed(() => Boolean(
+  (spreadsheetPreview.value || pdfPreview.value) && !file.value,
+))
+
+const sourceKind = computed(() => {
+  if (mode.value) return mode.value
+  if (isPdf.value) return 'pdf'
+  if (isSpreadsheet.value) return 'spreadsheet'
+  if (isTextFile.value) return 'text'
+  return resumedSourceKind.value
 })
 
-const selectedBank = computed(() => banks.value.find(b => b.id === bankId.value) || null)
-
-// Import writes questions, so member-level access must be rejected before the
-// user spends time mapping columns or correcting a PDF draft.
-const canImport = computed(() => {
-  const role = String(selectedBank.value?.role || '').toUpperCase()
-  return role === 'ADMIN' || role === 'EDITOR'
-})
-
-const pdfStrategyMissing = computed(() => Boolean(pdfPreview.value?.duplicates?.length) && !pdfDuplicateStrategy.value)
-const textStrategyMissing = computed(() => Boolean(textPreview.value?.duplicates?.length) && !duplicateStrategy.value)
-const duplicateStrategyMissing = computed(() => Boolean(duplicatePreview.value) && !duplicateStrategy.value)
-
-const optionSlots = ref(Array(8).fill(''))
-
-function syncOptionsFromSlots() {
-  const slots = optionSlots.value.map(v => (v !== '' && v !== null && v !== undefined ? Number(v) : null))
-  let lastIdx = -1
-  for (let i = slots.length - 1; i >= 0; i--) {
-    if (slots[i] !== null) {
-      lastIdx = i
-      break
-    }
+const currentFilename = computed(() => {
+  if (sourceMode.value === 'paste') {
+    return pastedText.value.trim() ? t('ep.imports.pasted_source') : ''
   }
-  currentMapping.value.options = lastIdx >= 0 ? slots.slice(0, lastIdx + 1) : []
+  return file.value?.name || resumedFilename.value || ''
+})
+
+function sourceKindLabel(kind) {
+  const raw = String(kind || '').toLowerCase()
+  if (raw === 'spreadsheet' || raw === 'sheet' || raw === 'xlsx' || raw === 'csv') return t('ep.imports.source_sheet')
+  if (raw === 'pdf') return t('ep.imports.source_pdf')
+  if (raw === 'text' || raw === 'markdown' || raw === 'json') return t('ep.imports.source_text')
+  return t('ep.imports.untitled')
 }
 
-function getOptionCol(index) {
-  return optionSlots.value[index] || ''
+const sourceSummary = computed(() => t('ep.imports.summary_source', {
+  bank: (bankId.value && bankNameFor(bankId.value)) || t('ep.imports.summary_source_unknown_bank'),
+  file: currentFilename.value || t('ep.imports.untitled'),
+}))
+
+const nextDisabledReason = computed(() => {
+  if (requestInFlight.value) return 'ep.imports.next_reason_busy'
+  if (!bankId.value) return 'ep.imports.bank_placeholder'
+  if (!canImport.value) return 'ep.imports.readonly_bank'
+  if (sourceMode.value === 'paste') {
+    return pastedText.value.trim() ? '' : 'ep.imports.paste_empty'
+  }
+  if (!file.value) return 'ep.imports.next_reason_file'
+  return ''
+})
+
+const checkDisabledReason = computed(() => {
+  if (requestInFlight.value) return 'ep.imports.next_reason_busy'
+  if (mode.value === 'pdf' && !pdfCandidates.value.length) return 'ep.imports.next_reason_candidates'
+  return ''
+})
+
+const confirmDisabledReason = computed(() => {
+  if (requestInFlight.value || jobRunning.value) return 'ep.imports.next_reason_busy'
+  if (!bankId.value) return 'ep.imports.bank_placeholder'
+  if (!canImport.value) return 'ep.imports.readonly_bank'
+  if (mode.value === 'pdf' && !pdfCandidates.value.length) return 'ep.imports.next_reason_candidates'
+  if (needsFile.value) return 'ep.imports.resume_need_file'
+  if (mode.value === 'text' && !textContent.value) return 'ep.imports.resume_need_file'
+  if (strategyMissing.value) return 'ep.imports.next_reason_strategy'
+  return ''
+})
+
+// --- Draft persistence ------------------------------------------------------
+const draftId = ref(String(route.query?.draft || ''))
+const draftSaving = ref(false)
+const draftSaveError = ref('')
+const draftListError = ref('')
+const openDrafts = ref([])
+const restoring = ref(false)
+let draftTimer = null
+let draftSeq = 0
+const DRAFT_DEBOUNCE_MS = 600
+
+const hasImportState = computed(() => Boolean(
+  spreadsheetPreview.value ||
+  textPreview.value ||
+  pdfPreview.value ||
+  duplicatePreview.value ||
+  result.value,
+))
+
+const hasWizardState = computed(() => Boolean(
+  hasImportState.value ||
+  file.value ||
+  pastedText.value ||
+  currentFilename.value ||
+  job.value ||
+  stepNo.value > 1,
+))
+
+const wizardDirty = computed(() => !result.value && Boolean(
+  spreadsheetPreview.value ||
+  textPreview.value ||
+  pdfPreview.value ||
+  file.value ||
+  pastedText.value ||
+  currentFilename.value ||
+  job.value,
+))
+
+function buildState() {
+  return {
+    step: stepNo.value,
+    source_mode: sourceMode.value,
+    source_kind: sourceKind.value,
+    filename: currentFilename.value,
+    spreadsheet_preview: spreadsheetPreview.value,
+    text_preview: textPreview.value,
+    pdf_preview: pdfPreview.value,
+    pdf_candidates: pdfCandidates.value,
+    mapping: currentMapping.value,
+    option_slots: optionSlots.value,
+    duplicate_strategy: duplicateStrategy.value,
+    pdf_duplicate_strategy: pdfDuplicateStrategy.value,
+    duplicate_preview: duplicatePreview.value,
+    text_content: textContent.value,
+    text_format: textFormat.value,
+    pasted_text: pastedText.value,
+    job_id: jobId.value,
+    job: job.value,
+    result: result.value,
+    result_bank: resultBank.value,
+    result_bank_id: resultBankId.value,
+  }
 }
 
-function setOptionCol(index, rawVal) {
-  optionSlots.value[index] = rawVal !== undefined && rawVal !== null ? String(rawVal) : ''
-  syncOptionsFromSlots()
+const wizardSnapshot = computed(() => JSON.stringify(buildState()))
+
+watch(wizardSnapshot, () => {
+  if (restoring.value || !hasWizardState.value) return
+  scheduleDraftSave()
+})
+
+function scheduleDraftSave() {
+  if (draftTimer !== null) clearTimeout(draftTimer)
+  draftTimer = setTimeout(() => {
+    draftTimer = null
+    void persistDraft()
+  }, DRAFT_DEBOUNCE_MS)
 }
 
+function saveDraftNow(status) {
+  if (draftTimer !== null) {
+    clearTimeout(draftTimer)
+    draftTimer = null
+  }
+  return persistDraft(status)
+}
+
+async function persistDraft(status) {
+  if (restoring.value) return
+  const bankAtStart = String(bankId.value || '')
+  if (!bankAtStart || !hasWizardState.value) return
+  const seq = ++draftSeq
+  draftSaving.value = true
+  const payload = {
+    source_kind: sourceKind.value || 'text',
+    filename: currentFilename.value,
+    step: stepNo.value,
+    state: buildState(),
+    ...(status ? { status } : {}),
+  }
+  try {
+    const saved = draftId.value
+      ? await updateImportDraft(props.token, draftId.value, payload)
+      : await createImportDraft(props.token, bankAtStart, payload)
+    if (seq !== draftSeq) return
+    if (saved?.id) {
+      draftId.value = String(saved.id)
+      syncDraftQuery()
+    }
+    draftSaveError.value = ''
+  } catch (err) {
+    if (seq !== draftSeq) return
+    // Saving is a convenience; a failed save must never block local editing.
+    draftSaveError.value = err?.message || t('ep.imports.error_fallback')
+  } finally {
+    if (seq === draftSeq) draftSaving.value = false
+  }
+}
+
+function syncDraftQuery() {
+  const current = route.query || {}
+  if (String(current.draft || '') === draftId.value) return
+  const next = { ...current }
+  if (bankId.value) next.bankId = String(bankId.value)
+  if (draftId.value) next.draft = draftId.value
+  else delete next.draft
+  router.replace({ query: next })
+}
+
+async function loadOpenDrafts() {
+  const targetBankId = String(bankId.value || '')
+  if (!targetBankId) {
+    openDrafts.value = []
+    return
+  }
+  try {
+    const rows = await listImportDrafts(props.token, targetBankId, 'OPEN')
+    if (String(bankId.value) !== targetBankId) return
+    openDrafts.value = (Array.isArray(rows) ? rows : [])
+      .filter(row => row && row.id && String(row.id) !== draftId.value)
+    draftListError.value = ''
+  } catch (err) {
+    if (String(bankId.value) !== targetBankId) return
+    openDrafts.value = []
+    draftListError.value = err?.message || t('ep.imports.error_fallback')
+  }
+}
+
+function applyDraft(draft) {
+  if (!draft) return false
+  const state = draft.state && typeof draft.state === 'object' ? draft.state : {}
+  draftId.value = String(draft.id || '')
+  spreadsheetPreview.value = state.spreadsheet_preview || null
+  textPreview.value = state.text_preview || null
+  pdfPreview.value = state.pdf_preview || null
+  pdfCandidates.value = Array.isArray(state.pdf_candidates)
+    ? JSON.parse(JSON.stringify(state.pdf_candidates))
+    : []
+  duplicatePreview.value = state.duplicate_preview || null
+  currentMapping.value = { ...defaultMapping(), ...(state.mapping || {}) }
+  optionSlots.value = Array(8).fill('')
+  if (Array.isArray(state.option_slots)) {
+    state.option_slots.slice(0, 8).forEach((value, idx) => {
+      optionSlots.value[idx] = value !== null && value !== undefined ? String(value) : ''
+    })
+  }
+  if (Array.isArray(state.mapping?.options)) {
+    state.mapping.options.slice(0, 8).forEach((colIdx, slotIdx) => {
+      optionSlots.value[slotIdx] = colIdx !== null && colIdx !== undefined ? String(colIdx) : ''
+    })
+  }
+  duplicateStrategy.value = state.duplicate_strategy || 'skip'
+  pdfDuplicateStrategy.value = state.pdf_duplicate_strategy || ''
+  textContent.value = state.text_content || ''
+  textFormat.value = state.text_format || ''
+  pastedText.value = state.pasted_text || ''
+  sourceMode.value = state.source_mode === 'paste' || (!state.source_mode && pastedText.value) ? 'paste' : 'file'
+  resumedFilename.value = draft.filename || state.filename || ''
+  resumedSourceKind.value = draft.source_kind || state.source_kind || ''
+  jobId.value = String(state.job_id || '')
+  job.value = state.job || null
+  result.value = state.result || null
+  resultBank.value = state.result_bank || ''
+  resultBankId.value = state.result_bank_id || ''
+  const savedStepRaw = Number(draft.step ?? state.step ?? 1)
+  const savedStep = Number.isFinite(savedStepRaw) ? Math.min(4, Math.max(1, Math.trunc(savedStepRaw))) : 1
+  stepNo.value = clampStep(savedStep)
+  error.value = ''
+  if (jobRunning.value) startPolling()
+  return true
+}
+
+function clampStep(step) {
+  if (step <= 1) return 1
+  if (step === 2) return (spreadsheetPreview.value || pdfPreview.value || textPreview.value) ? 2 : 1
+  if (step === 3) return (spreadsheetPreview.value || pdfPreview.value || textPreview.value || duplicatePreview.value) ? 3 : 1
+  if (!result.value && !job.value && !jobId.value) return 3
+  return 4
+}
+
+async function resumeDraft(id) {
+  if (!id) return false
+  restoring.value = true
+  try {
+    const draft = await getImportDraft(props.token, id)
+    const applied = applyDraft(draft)
+    await nextTick()
+    return applied
+  } catch (err) {
+    error.value = err
+    return false
+  } finally {
+    restoring.value = false
+  }
+}
+
+async function resumeDraftFromBanner(draft) {
+  if (!draft?.id) return
+  const ok = await resumeDraft(draft.id)
+  if (!ok) return
+  openDrafts.value = openDrafts.value.filter(row => String(row.id) !== String(draft.id))
+  syncStepQuery()
+}
+
+async function removeDraft(draft) {
+  if (!draft?.id) return
+  try {
+    await deleteImportDraft(props.token, draft.id)
+    openDrafts.value = openDrafts.value.filter(row => String(row.id) !== String(draft.id))
+    if (draftId.value === String(draft.id)) {
+      draftId.value = ''
+      syncDraftQuery()
+    }
+  } catch (err) {
+    draftSaveError.value = err?.message || t('ep.imports.error_fallback')
+  }
+}
+
+async function discardDraft() {
+  const current = draftId.value
+  draftId.value = ''
+  if (!current) return
+  try {
+    await deleteImportDraft(props.token, current)
+  } catch {
+    // Discarding is best effort; the stale draft is harmless and can be removed
+    // from the import records later.
+  }
+}
+
+// --- Step navigation --------------------------------------------------------
+function validateStep(next) {
+  const step = Math.max(1, Math.min(4, Number(next) || 1))
+  if (step >= 2 && !(spreadsheetPreview.value || pdfPreview.value || textPreview.value || duplicatePreview.value)) return 1
+  if (step === 4 && !(result.value || job.value || jobId.value)) return 3
+  return step
+}
+
+function syncStepQuery() {
+  const current = route.query || {}
+  const next = { ...current }
+  if (bankId.value) next.bankId = String(bankId.value)
+  if (stepNo.value > 1) next.step = String(stepNo.value)
+  else delete next.step
+  if (draftId.value) next.draft = draftId.value
+  else delete next.draft
+  if (queriesEqual(next, current)) return
+  // A step change is a real navigation: browser Back walks the wizard too.
+  router.push({ query: next })
+}
+
+function goStep(next) {
+  const target = validateStep(next)
+  if (target === stepNo.value) return
+  stepNo.value = target
+  syncStepQuery()
+  void saveDraftNow()
+}
+
+watch(() => route.query?.step, (value) => {
+  if (value === undefined || value === null || value === '') return
+  const next = validateStep(readQueryNumber(value, 1, { min: 1, max: 4 }))
+  if (next !== stepNo.value) stepNo.value = next
+})
+
+// --- Source step ------------------------------------------------------------
 const SUPPORTED_EXTENSIONS = ['.xlsx', '.csv', '.json', '.txt', '.md', '.markdown', '.pdf']
 
 function isSupportedFile(candidate) {
   const lower = String(candidate?.name || '').toLowerCase()
   return SUPPORTED_EXTENSIONS.some(ext => lower.endsWith(ext))
+}
+
+// Switching between a file and pasted text changes where the import content
+// comes from, so any preview produced by the previous source is dropped. The
+// typed text itself is kept while toggling, so a detour to the picker does not
+// throw away what the user pasted.
+function setSourceMode(next) {
+  const target = next === 'paste' ? 'paste' : 'file'
+  if (sourceMode.value === target) return
+  sourceMode.value = target
+  if (target === 'paste') file.value = null
+  else pastedText.value = ''
+  previewSeq += 1
+  if (previewing.value) {
+    previewing.value = false
+    loading.value = false
+  }
+  clearPreviews()
+  resetJobState()
+  error.value = ''
+  if (stepNo.value !== 1) goStep(1)
+  void saveDraftNow()
+}
+
+function clearPreviews() {
+  duplicatePreview.value = null
+  duplicateStrategy.value = 'skip'
+  spreadsheetPreview.value = null
+  textPreview.value = null
+  pdfPreview.value = null
+  pdfCandidates.value = []
+  pdfDuplicateStrategy.value = ''
+  currentMapping.value = defaultMapping()
+  optionSlots.value = Array(8).fill('')
+  textContent.value = ''
+  textFormat.value = ''
+}
+
+function resetJobState() {
+  stopPolling()
+  jobId.value = ''
+  job.value = null
+  result.value = null
+  resultBank.value = ''
+  resultBankId.value = ''
 }
 
 function handleSelectedFile(selected) {
@@ -825,18 +1412,13 @@ function handleSelectedFile(selected) {
     loading.value = false
   }
   file.value = selected || null
+  resumedFilename.value = selected?.name || ''
+  resumedSourceKind.value = ''
   result.value = null
   resultBank.value = ''
   resultBankId.value = ''
-  duplicatePreview.value = null
-  duplicateStrategy.value = 'skip'
-  spreadsheetPreview.value = null
-  textPreview.value = null
-  pdfPreview.value = null
-  pdfCandidates.value = []
-  pdfDuplicateStrategy.value = ''
-  currentMapping.value = defaultMapping()
-  optionSlots.value = Array(8).fill('')
+  resetJobState()
+  clearPreviews()
   error.value = ''
 }
 
@@ -864,6 +1446,32 @@ function selectFile(event) {
 
 function triggerFileInput() {
   fileInputRef.value?.click()
+}
+
+function triggerResumeFileInput() {
+  resumeFileInputRef.value?.click()
+}
+
+// Re-selecting the original file after a reload restores the ability to import
+// without discarding the preview, mapping or PDF corrections restored from the
+// draft. A different file means the draft no longer describes it.
+function selectResumeFile(event) {
+  const selected = event.target?.files?.[0] || null
+  if (event.target) {
+    try { event.target.value = '' } catch { /* read-only in some environments */ }
+  }
+  if (!selected) return
+  if (!isSupportedFile(selected)) {
+    error.value = t('ep.imports.supported')
+    return
+  }
+  if (resumedFilename.value && selected.name !== resumedFilename.value) {
+    handleSelectedFile(selected)
+    goStep(1)
+    return
+  }
+  file.value = selected
+  error.value = ''
 }
 
 function onDropZoneClick(event) {
@@ -894,7 +1502,7 @@ async function loadBanks() {
   banksLoading.value = true
   try {
     banks.value = await listBanks(props.token)
-    const preset = String(route.query.bankId || '')
+    const preset = String(route.query?.bankId || '')
     if (preset && banks.value.some(b => String(b.id) === preset)) {
       suppressBankWatch = true
       bankId.value = preset
@@ -909,18 +1517,29 @@ async function loadBanks() {
   }
 }
 
-const hasImportState = computed(() => Boolean(
-  spreadsheetPreview.value ||
-  textPreview.value ||
-  pdfPreview.value ||
-  duplicatePreview.value ||
-  result.value,
-))
+async function initializeWizard() {
+  const presetDraft = readQueryString(route.query?.draft)
+  if (presetDraft && bankId.value) {
+    const ok = await resumeDraft(presetDraft)
+    if (ok) return
+  }
+  stepNo.value = validateStep(stepNo.value)
+  if (bankId.value) void loadOpenDrafts()
+}
+
+onMounted(async () => {
+  await loadBanks()
+  await initializeWizard()
+})
 
 function syncBankQuery(nextId) {
   const currentQuery = route.query || {}
   if (!nextId || String(currentQuery.bankId || '') === String(nextId)) return
-  router.replace({ query: { ...currentQuery, bankId: String(nextId) } })
+  const next = { ...currentQuery, bankId: String(nextId) }
+  // A new target bank starts a fresh wizard; step/draft belong to the old one.
+  delete next.step
+  delete next.draft
+  router.replace({ query: next })
 }
 
 // Changing the target bank while a preview/mapping/result exists is destructive:
@@ -931,6 +1550,7 @@ watch(bankId, (next, prev) => {
   if (!nextId) return
   if (!hasImportState.value) {
     syncBankQuery(nextId)
+    void loadOpenDrafts()
     return
   }
   previousBankId.value = String(prev || '')
@@ -953,28 +1573,36 @@ function acceptBankChange() {
   const nextId = pendingBankId.value
   bankConfirmOpen.value = false
   pendingBankId.value = ''
+  void discardDraft()
   resetImportState()
   syncBankQuery(nextId)
+  void loadOpenDrafts()
 }
-
-onMounted(loadBanks)
 
 function isCurrentPreview(requestId, bankAtStart) {
   return requestId === previewSeq && String(bankId.value) === bankAtStart
 }
 
-async function inspectSpreadsheet() {
-  if (!file.value || !bankId.value) return
+// --- Preview requests -------------------------------------------------------
+async function inspectSpreadsheet(customMapping = null) {
+  if (!file.value || !bankId.value) return false
   const bankAtStart = String(bankId.value)
   const requestId = ++previewSeq
   previewing.value = true
   loading.value = true
   error.value = ''
   try {
-    const prev = await previewFileImport(props.token, bankAtStart, file.value)
-    if (!isCurrentPreview(requestId, bankAtStart)) return
+    // Keep the three-argument call when the user has not mapped anything yet;
+    // the mapping is only added when it is a real choice to verify.
+    const prev = customMapping
+      ? await previewFileImport(props.token, bankAtStart, file.value, customMapping)
+      : await previewFileImport(props.token, bankAtStart, file.value)
+    if (!isCurrentPreview(requestId, bankAtStart)) return false
     spreadsheetPreview.value = prev
-    if (prev.mapping) {
+    if (Array.isArray(prev.duplicates) && prev.duplicates.length) duplicateStrategy.value = ''
+    // A caller-supplied mapping is the user's decision; only adopt the server's
+    // auto-detection when the user has not mapped the columns themselves.
+    if (prev.mapping && !customMapping) {
       currentMapping.value = { ...currentMapping.value, ...prev.mapping }
       optionSlots.value = Array(8).fill('')
       if (Array.isArray(prev.mapping.options)) {
@@ -984,9 +1612,11 @@ async function inspectSpreadsheet() {
       }
       syncOptionsFromSlots()
     }
+    return true
   } catch (err) {
-    if (!isCurrentPreview(requestId, bankAtStart)) return
+    if (!isCurrentPreview(requestId, bankAtStart)) return false
     error.value = err
+    return false
   } finally {
     if (requestId === previewSeq) {
       previewing.value = false
@@ -996,7 +1626,7 @@ async function inspectSpreadsheet() {
 }
 
 async function inspectPdf() {
-  if (!file.value || !bankId.value) return
+  if (!file.value || !bankId.value) return false
   const bankAtStart = String(bankId.value)
   const requestId = ++previewSeq
   previewing.value = true
@@ -1004,13 +1634,15 @@ async function inspectPdf() {
   error.value = ''
   try {
     const prev = await previewPdfImport(props.token, bankAtStart, file.value)
-    if (!isCurrentPreview(requestId, bankAtStart)) return
+    if (!isCurrentPreview(requestId, bankAtStart)) return false
     pdfPreview.value = prev
     pdfCandidates.value = JSON.parse(JSON.stringify(prev.candidates || []))
     pdfDuplicateStrategy.value = prev.duplicates?.length ? '' : 'skip'
+    return true
   } catch (err) {
-    if (!isCurrentPreview(requestId, bankAtStart)) return
+    if (!isCurrentPreview(requestId, bankAtStart)) return false
     error.value = err
+    return false
   } finally {
     if (requestId === previewSeq) {
       previewing.value = false
@@ -1020,7 +1652,7 @@ async function inspectPdf() {
 }
 
 async function inspectText() {
-  if (!file.value || !bankId.value || !isTextFile.value) return
+  if (!file.value || !bankId.value || !isTextFile.value) return false
   const bankAtStart = String(bankId.value)
   const requestId = ++previewSeq
   previewing.value = true
@@ -1029,13 +1661,17 @@ async function inspectText() {
   try {
     const text = await file.value.text()
     const format = file.value.name.toLowerCase().endsWith('.json') ? 'json' : 'markdown'
+    textContent.value = text
+    textFormat.value = format
     const preview = await previewImport(props.token, bankAtStart, { format, content: text })
-    if (!isCurrentPreview(requestId, bankAtStart)) return
+    if (!isCurrentPreview(requestId, bankAtStart)) return false
     textPreview.value = preview
     duplicateStrategy.value = preview?.duplicates?.length ? '' : 'skip'
+    return true
   } catch (err) {
-    if (!isCurrentPreview(requestId, bankAtStart)) return
+    if (!isCurrentPreview(requestId, bankAtStart)) return false
     error.value = err
+    return false
   } finally {
     if (requestId === previewSeq) {
       previewing.value = false
@@ -1044,29 +1680,274 @@ async function inspectText() {
   }
 }
 
-function resetTextPreview() {
-  textPreview.value = null
-  duplicateStrategy.value = 'skip'
-}
-
-async function submitText() {
-  if (!textPreview.value || !canImport.value || textStrategyMissing.value) return
-  const targetBankId = String(bankId.value)
-  const targetBankName = bankNameFor(targetBankId)
+async function inspectPastedText() {
+  const text = pastedText.value
+  if (!text.trim() || !bankId.value) return false
+  const bankAtStart = String(bankId.value)
+  const requestId = ++previewSeq
+  previewing.value = true
   loading.value = true
   error.value = ''
   try {
-    const strategy = textPreview.value.duplicates?.length ? duplicateStrategy.value : 'skip'
-    result.value = await uploadImport(props.token, targetBankId, file.value, strategy, null)
-    resultBank.value = targetBankName
-    resultBankId.value = targetBankId
-    textPreview.value = null
-    duplicatePreview.value = null
+    const trimmed = text.trim()
+    const format = trimmed.startsWith('{') || trimmed.startsWith('[') ? 'json' : 'markdown'
+    textContent.value = text
+    textFormat.value = format
+    const preview = await previewImport(props.token, bankAtStart, { format, content: text })
+    if (!isCurrentPreview(requestId, bankAtStart)) return false
+    textPreview.value = preview
+    duplicateStrategy.value = preview?.duplicates?.length ? '' : 'skip'
+    return true
+  } catch (err) {
+    if (!isCurrentPreview(requestId, bankAtStart)) return false
+    error.value = err
+    return false
+  } finally {
+    if (requestId === previewSeq) {
+      previewing.value = false
+      loading.value = false
+    }
+  }
+}
+
+async function nextFromSource() {
+  if (nextDisabledReason.value) return
+  let ok = false
+  if (sourceMode.value === 'paste') ok = await inspectPastedText()
+  else if (isSpreadsheet.value) ok = await inspectSpreadsheet()
+  else if (isPdf.value) ok = await inspectPdf()
+  else ok = await inspectText()
+  if (!ok) return
+  // Text has no mapping UI: its precheck is only worth a step when it found
+  // something to decide (duplicates or rejected rows); otherwise go straight
+  // to the duplicate strategy.
+  if (mode.value === 'text') goStep(textNeedsCheck.value ? 2 : 3)
+  else goStep(2)
+}
+
+// Leaving the mapping step re-reads the file with the columns the user chose.
+// Duplicates are a property of (file + mapping + current bank), so step 3 must
+// never show the duplicate list computed from the auto-detected mapping.
+async function nextFromCheck() {
+  if (checkDisabledReason.value) return
+  if (mode.value === 'spreadsheet' && file.value) {
+    syncOptionsFromSlots()
+    const ok = await inspectSpreadsheet({ ...currentMapping.value })
+    if (!ok) return
+  }
+  goStep(3)
+}
+
+function onFormSubmit() {
+  if (stepNo.value === 1) {
+    void nextFromSource()
+    return
+  }
+  if (stepNo.value === 2) {
+    void nextFromCheck()
+    return
+  }
+  if (stepNo.value === 3) void confirmImport()
+}
+
+// --- Import job -------------------------------------------------------------
+const JOB_POLL_MS = 800
+const JOB_DONE_STATUSES = ['COMPLETED', 'IMPORTED', 'SUCCESS', 'SUCCEEDED', 'DONE', 'FINISHED']
+const JOB_FAILED_STATUSES = ['FAILED', 'FAILURE', 'ERROR', 'PRECHECK_FAILED']
+const JOB_CANCELLED_STATUSES = ['CANCELLED', 'CANCELED']
+
+function normalizedJobStatus(status) {
+  return String(status || '').toUpperCase()
+}
+
+const jobRunning = computed(() => {
+  if (!job.value) return false
+  const status = normalizedJobStatus(job.value.status)
+  return ![...JOB_DONE_STATUSES, ...JOB_FAILED_STATUSES, ...JOB_CANCELLED_STATUSES].includes(status)
+})
+
+const jobFailed = computed(() => Boolean(job.value) && JOB_FAILED_STATUSES.includes(normalizedJobStatus(job.value.status)))
+const jobCancelled = computed(() => Boolean(job.value) && JOB_CANCELLED_STATUSES.includes(normalizedJobStatus(job.value.status)))
+
+const jobDone = computed(() => Number(job.value?.imported_count || 0))
+const jobTotal = computed(() => {
+  const total = Number(job.value?.total)
+  if (Number.isFinite(total) && total > 0) return total
+  return Number(precheckPanel.value?.count || 0)
+})
+const jobPercent = computed(() => {
+  if (jobTotal.value > 0) return Math.min(100, Math.max(0, Math.round((jobDone.value / jobTotal.value) * 100)))
+  const progress = Number(job.value?.progress)
+  return Number.isFinite(progress) ? Math.min(100, Math.max(0, Math.round(progress))) : 0
+})
+
+const jobReason = computed(() => job.value?.reason || t('ep.imports.job_unknown_reason'))
+
+const JOB_STATUS_KEYS = {
+  QUEUED: 'ep.imports.job_pending',
+  PENDING: 'ep.imports.job_pending',
+  PROCESSING: 'ep.imports.job_running',
+  RUNNING: 'ep.imports.job_running',
+  COMPLETED: 'ep.common.done',
+  IMPORTED: 'ep.common.done',
+  SUCCESS: 'ep.common.done',
+  DONE: 'ep.common.done',
+  FAILED: 'ep.imports.job_failed',
+  PRECHECK_FAILED: 'ep.imports.job_failed',
+  CANCELLED: 'ep.imports.job_cancelled',
+}
+
+const jobStatusLabel = computed(() => {
+  if (!job.value) return ''
+  const key = JOB_STATUS_KEYS[normalizedJobStatus(job.value.status)]
+  return key ? t(key) : ''
+})
+const jobStatusClass = computed(() => (
+  jobFailed.value ? 'bad' : jobCancelled.value ? 'warn' : jobRunning.value ? '' : 'ok'
+))
+
+const resultImportedCount = computed(() => Number(result.value?.imported_count || 0))
+
+function stopPolling() {
+  if (jobTimer !== null) {
+    clearInterval(jobTimer)
+    jobTimer = null
+  }
+}
+
+function startPolling() {
+  stopPolling()
+  if (!jobId.value) return
+  jobTimer = setInterval(() => { void pollJobOnce() }, JOB_POLL_MS)
+}
+
+async function pollJobOnce() {
+  if (!jobId.value) return
+  try {
+    const snapshot = await getImportJob(props.token, jobId.value)
+    if (!snapshot) return
+    applyJobSnapshot(snapshot)
+  } catch {
+    // A transient poll failure is not the job's verdict. Keep the last known
+    // status and let the next tick retry.
+  }
+}
+
+function applyJobSnapshot(snapshot) {
+  const status = normalizedJobStatus(snapshot?.status) || normalizedJobStatus(job.value?.status)
+  job.value = { ...(job.value || {}), ...snapshot, status }
+  if (jobRunning.value) return
+  stopPolling()
+  if (jobFailed.value || jobCancelled.value) {
+    void saveDraftNow()
+    return
+  }
+  result.value = {
+    job_id: jobId.value,
+    imported_count: Number(job.value.imported_count || 0),
+    total: job.value.total,
+  }
+  void saveDraftNow('DONE')
+}
+
+function beginJob(started, targetBankId, targetBankName) {
+  const id = started?.job_id || started?.id
+  if (!id) {
+    finishWithResult(started, targetBankId, targetBankName)
+    return
+  }
+  jobId.value = String(id)
+  job.value = {
+    id: jobId.value,
+    status: started.status || 'QUEUED',
+    imported_count: Number(started.imported_count || 0),
+    total: Number(started.total ?? precheckPanel.value?.count ?? 0),
+    progress: Number(started.progress || 0),
+    reason: started.reason || '',
+  }
+  resultBank.value = targetBankName
+  resultBankId.value = targetBankId
+  stepNo.value = 4
+  syncStepQuery()
+  void saveDraftNow()
+  if (jobRunning.value) startPolling()
+  else applyJobSnapshot(started)
+}
+
+function finishWithResult(receipt, targetBankId, targetBankName) {
+  result.value = {
+    ...(receipt || {}),
+    imported_count: Number(receipt?.imported_count || 0),
+  }
+  if (receipt?.job_id) jobId.value = String(receipt.job_id)
+  job.value = null
+  resultBank.value = targetBankName
+  resultBankId.value = targetBankId
+  stepNo.value = 4
+  syncStepQuery()
+  void saveDraftNow('DONE')
+}
+
+async function confirmImport() {
+  if (confirmDisabledReason.value) return
+  const targetBankId = String(bankId.value)
+  const targetBankName = bankNameFor(targetBankId)
+  const strategy = duplicateList.value.length ? currentStrategy.value : (mode.value === 'pdf' ? (pdfDuplicateStrategy.value || 'skip') : (duplicateStrategy.value || 'skip'))
+  loading.value = true
+  error.value = ''
+  try {
+    if (mode.value === 'pdf' && pdfPreview.value) {
+      // PDF corrections are submitted as the corrected candidate list; the
+      // backend's pdf-confirm endpoint stays synchronous by contract.
+      const receipt = await confirmPdfImport(props.token, targetBankId, {
+        draft_id: pdfPreview.value.draft_id,
+        questions: pdfCandidates.value,
+        duplicate_strategy: strategy,
+      })
+      finishWithResult(receipt, targetBankId, targetBankName)
+      return
+    }
+    if (mode.value === 'spreadsheet' && spreadsheetPreview.value) {
+      syncOptionsFromSlots()
+      const started = await startImportJob(props.token, targetBankId, {
+        file: file.value,
+        column_mapping: currentMapping.value,
+        duplicate_strategy: strategy,
+      })
+      if (started) {
+        beginJob(started, targetBankId, targetBankName)
+        return
+      }
+      // Older backends have no job endpoint. The synchronous file import stays
+      // available, so the wizard still completes instead of dead-ending.
+      const receipt = await uploadImport(props.token, targetBankId, file.value, strategy, currentMapping.value)
+      finishWithResult(receipt, targetBankId, targetBankName)
+      return
+    }
+
+    if (!textContent.value && file.value) {
+      textContent.value = await file.value.text()
+      textFormat.value = file.value.name.toLowerCase().endsWith('.json') ? 'json' : 'markdown'
+    }
+    const started = await startImportJob(props.token, targetBankId, {
+      format: textFormat.value || 'markdown',
+      content: textContent.value,
+      duplicate_strategy: strategy,
+    })
+    if (started) {
+      beginJob(started, targetBankId, targetBankName)
+      return
+    }
+    const fallbackFile = file.value || new File([textContent.value], currentFilename.value || 'import.md', { type: 'text/markdown' })
+    const receipt = await uploadImport(props.token, targetBankId, fallbackFile, strategy, null)
+    finishWithResult(receipt, targetBankId, targetBankName)
   } catch (err) {
     if (err.status === 409 && err.detail && typeof err.detail === 'object') {
+      // Duplicates appeared after the preview (another editor changed the bank).
+      // Keep the corrections and let the user choose a strategy here.
       duplicatePreview.value = err.detail
       duplicateStrategy.value = ''
-      textPreview.value = null
+      goStep(3)
     } else {
       error.value = err
     }
@@ -1075,12 +1956,171 @@ async function submitText() {
   }
 }
 
-function resetPdfPreview() {
+async function retryImport() {
+  if (jobRunning.value) return
+  job.value = null
+  jobId.value = ''
+  result.value = null
+  stepNo.value = 3
+  syncStepQuery()
+  await confirmImport()
+}
+
+async function cancelJob() {
+  if (!jobId.value || jobCancelling.value) return
+  jobCancelling.value = true
+  try {
+    await cancelImportJob(props.token, jobId.value)
+  } catch (err) {
+    // The job may already have reached a terminal state; the next poll or the
+    // explicit status below is the source of truth.
+    error.value = err
+  } finally {
+    stopPolling()
+    job.value = { ...(job.value || {}), status: 'CANCELLED' }
+    jobCancelling.value = false
+    void saveDraftNow()
+  }
+}
+
+// --- Discard / reset --------------------------------------------------------
+function resetPreviewState() {
+  duplicatePreview.value = null
+  duplicateStrategy.value = 'skip'
+  spreadsheetPreview.value = null
+  textPreview.value = null
   pdfPreview.value = null
   pdfCandidates.value = []
   pdfDuplicateStrategy.value = ''
+  currentMapping.value = defaultMapping()
+  optionSlots.value = Array(8).fill('')
+  textContent.value = ''
+  textFormat.value = ''
+  pastedText.value = ''
+  sourceMode.value = 'file'
+  resumedFilename.value = ''
+  resumedSourceKind.value = ''
 }
 
+function resetImportState() {
+  resetJobState()
+  resetPreviewState()
+  stepNo.value = 1
+  error.value = ''
+}
+
+function resetImport() {
+  void discardDraft()
+  resetImportState()
+  file.value = null
+  draftId.value = ''
+  syncStepQuery()
+}
+
+function performDiscard(kind) {
+  if (kind === 'spreadsheet') {
+    spreadsheetPreview.value = null
+    currentMapping.value = defaultMapping()
+    optionSlots.value = Array(8).fill('')
+  } else if (kind === 'pdf') {
+    pdfPreview.value = null
+    pdfCandidates.value = []
+    pdfDuplicateStrategy.value = ''
+  } else if (kind === 'text') {
+    textPreview.value = null
+    textContent.value = ''
+    textFormat.value = ''
+    duplicateStrategy.value = 'skip'
+  }
+  stepNo.value = 1
+  syncStepQuery()
+  void saveDraftNow()
+}
+
+// The destructive "leave the preview" action must name what it does and ask
+// before throwing away field edits, corrected PDF candidates or a preview.
+function requestDiscard(kind) {
+  discardKind.value = kind
+  if (hasImportState.value || stepNo.value > 1) {
+    discardConfirmOpen.value = true
+    return
+  }
+  performDiscard(kind)
+}
+
+function cancelDiscard() {
+  discardConfirmOpen.value = false
+  discardKind.value = ''
+}
+
+function acceptDiscard() {
+  const kind = discardKind.value
+  discardConfirmOpen.value = false
+  discardKind.value = ''
+  performDiscard(kind)
+}
+
+// --- Leave guard ------------------------------------------------------------
+const leaveDialogOpen = ref(false)
+let leaveNext = null
+
+onBeforeRouteLeave((to, from, next) => {
+  // A running job belongs to the server; leaving is safe and the workspace
+  // shows its status. Nothing else needs a prompt when the wizard is clean.
+  if (jobRunning.value || !wizardDirty.value) {
+    void saveDraftNow()
+    next()
+    return
+  }
+  leaveNext = next
+  void saveDraftNow()
+  leaveDialogOpen.value = true
+})
+
+function stayOnPage() {
+  const next = leaveNext
+  leaveNext = null
+  leaveDialogOpen.value = false
+  if (next) next(false)
+}
+
+async function leaveForLater() {
+  const next = leaveNext
+  leaveNext = null
+  leaveDialogOpen.value = false
+  await saveDraftNow()
+  if (next) next()
+}
+
+async function discardAndLeave() {
+  const next = leaveNext
+  leaveNext = null
+  leaveDialogOpen.value = false
+  stopPolling()
+  await discardDraft()
+  resetPreviewState()
+  resetJobState()
+  if (next) next()
+}
+
+onBeforeUnmount(() => {
+  if (draftTimer !== null) clearTimeout(draftTimer)
+  draftTimer = null
+  stopPolling()
+})
+
+function goBank() {
+  // Follow the bank that accepted the job, not whatever the selector shows now.
+  const targetBankId = String(resultBankId.value || '')
+  if (!targetBankId) return
+  if (isFromManage.value) {
+    router.push({ name: 'bank-manage', params: { bankId: targetBankId }, query: { tab: 'imports' } })
+    return
+  }
+  router.push(`/banks/${targetBankId}`)
+}
+
+// --- PDF candidates ---------------------------------------------------------
 function mergeWithPrev(idx) {
   if (idx <= 0) return
   const current = pdfCandidates.value[idx]
@@ -1160,159 +2200,6 @@ function addCandidateOption(cand) {
   const nextKey = String.fromCharCode(65 + cand.options.length)
   cand.options.push({ key: nextKey, content: '' })
 }
-
-async function confirmPdfImportAction() {
-  if (!pdfPreview.value || !pdfCandidates.value.length || !canImport.value) return
-  if (pdfStrategyMissing.value) return
-  const targetBankId = String(bankId.value)
-  const targetBankName = bankNameFor(targetBankId)
-  loading.value = true
-  error.value = ''
-  try {
-    result.value = await confirmPdfImport(props.token, targetBankId, {
-      draft_id: pdfPreview.value.draft_id,
-      questions: pdfCandidates.value,
-      duplicate_strategy: pdfDuplicateStrategy.value || 'skip',
-    })
-    resultBank.value = targetBankName
-    resultBankId.value = targetBankId
-    resetPdfPreview()
-  } catch (err) {
-    if (err.status === 409 && err.detail && typeof err.detail === 'object') {
-      // Duplicates appeared after the preview (another editor changed the bank).
-      // Keep the corrected PDF draft and let the user choose a strategy here.
-      if (pdfPreview.value) {
-        pdfPreview.value = { ...pdfPreview.value, duplicates: err.detail.duplicates || [] }
-      }
-      pdfDuplicateStrategy.value = ''
-    } else {
-      error.value = err
-    }
-  } finally {
-    loading.value = false
-  }
-}
-
-async function submit() {
-  if (isSpreadsheet.value && !spreadsheetPreview.value && !duplicatePreview.value) {
-    await inspectSpreadsheet()
-    return
-  }
-  if (isTextFile.value && !textPreview.value && !duplicatePreview.value) {
-    await inspectText()
-    return
-  }
-  if (isTextFile.value && textPreview.value) {
-    await submitText()
-    return
-  }
-  if (isPdf.value && pdfPreview.value) return
-  if (!canImport.value) return
-  if (duplicatePreview.value && duplicateStrategyMissing.value) return
-
-  const targetBankId = String(bankId.value)
-  const targetBankName = bankNameFor(targetBankId)
-  loading.value = true
-  error.value = ''
-  result.value = null
-  try {
-    if (spreadsheetPreview.value) {
-      syncOptionsFromSlots()
-    }
-    const mappingToSend = spreadsheetPreview.value ? currentMapping.value : null
-    result.value = await uploadImport(
-      props.token,
-      targetBankId,
-      file.value,
-      duplicatePreview.value ? duplicateStrategy.value : 'prompt',
-      mappingToSend,
-    )
-    resultBank.value = targetBankName
-    resultBankId.value = targetBankId
-    duplicatePreview.value = null
-    spreadsheetPreview.value = null
-  } catch (err) {
-    if (err.status === 409 && err.detail && typeof err.detail === 'object') {
-      duplicatePreview.value = err.detail
-      duplicateStrategy.value = ''
-    } else {
-      error.value = err
-    }
-  } finally {
-    loading.value = false
-  }
-}
-
-function goBank() {
-  // Follow the bank that accepted the job, not whatever the selector shows now.
-  const targetBankId = String(resultBankId.value || '')
-  if (!targetBankId) return
-  if (isFromManage.value) {
-    router.push({ name: 'bank-manage', params: { bankId: targetBankId }, query: { tab: 'imports' } })
-    return
-  }
-  router.push(`/banks/${targetBankId}`)
-}
-
-function resetImportState() {
-  result.value = null
-  resultBank.value = ''
-  resultBankId.value = ''
-  duplicatePreview.value = null
-  duplicateStrategy.value = 'skip'
-  spreadsheetPreview.value = null
-  textPreview.value = null
-  pdfPreview.value = null
-  pdfCandidates.value = []
-  pdfDuplicateStrategy.value = ''
-  currentMapping.value = defaultMapping()
-  optionSlots.value = Array(8).fill('')
-  error.value = ''
-}
-
-function resetImport() {
-  resetImportState()
-  file.value = null
-}
-
-function performDiscard(kind) {
-  if (kind === 'spreadsheet') {
-    spreadsheetPreview.value = null
-    currentMapping.value = defaultMapping()
-    optionSlots.value = Array(8).fill('')
-    return
-  }
-  if (kind === 'pdf') {
-    resetPdfPreview()
-    return
-  }
-  if (kind === 'text') {
-    resetTextPreview()
-  }
-}
-
-// The destructive "leave the preview" action must name what it does and ask
-// before throwing away field edits, corrected PDF candidates or a preview.
-function requestDiscard(kind) {
-  discardKind.value = kind
-  if (hasImportState.value) {
-    discardConfirmOpen.value = true
-    return
-  }
-  performDiscard(kind)
-}
-
-function cancelDiscard() {
-  discardConfirmOpen.value = false
-  discardKind.value = ''
-}
-
-function acceptDiscard() {
-  const kind = discardKind.value
-  discardConfirmOpen.value = false
-  discardKind.value = ''
-  performDiscard(kind)
-}
 </script>
 
 <style scoped>
@@ -1356,6 +2243,13 @@ function acceptDiscard() {
 .import-progress { height: 2px; margin: 0 0 18px; background: var(--line); overflow: hidden; }
 .import-progress i { display: block; height: 100%; background: var(--brand); transition: width .2s var(--ease); }
 
+.import-draft-error { margin: 0 0 16px; }
+.import-resume { margin-bottom: 18px; padding: 14px 16px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface-2); }
+.import-resume-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.import-resume-list { margin-top: 10px; }
+.import-resume-row .list-main { display: flex; flex-direction: column; gap: 3px; }
+.import-resume-row .qrow-stem { -webkit-line-clamp: 1; }
+
 .import-precheck-panel { margin-bottom: 18px; padding: 14px 16px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface-2); }
 .import-precheck-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .import-precheck-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 12px; }
@@ -1376,9 +2270,16 @@ function acceptDiscard() {
 .step-block:first-of-type { border-top: 0; padding-top: 0; }
 .step-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 20px; }
 .step-head .tag { margin-left: auto; }
+.step-head .btn-quiet { margin-left: auto; }
 .step-no { font-size: 12px; letter-spacing: .04em; color: var(--ink-4); padding-top: 3px; }
 .step-title { font-family: var(--font-serif); font-size: 19px; font-weight: 600; line-height: 1.3; }
 .step-sub { margin-top: 4px; font-size: 12px; line-height: 1.7; color: var(--ink-3); max-width: 62ch; }
+.step-summary { padding: 16px 0 18px; }
+.step-summary .step-head { margin-bottom: 0; }
+.step-summary .step-title { font-size: 15px; }
+
+.source-modes { display: flex; gap: 6px; margin: 18px 0 12px; }
+.source-modes .btn.is-active { border-color: var(--brand-line); color: var(--brand); background: var(--surface-2); }
 
 .file-drop { display: flex; align-items: center; gap: 12px; min-height: 76px; padding: 16px 18px; border: 1px dashed var(--line-strong); background: var(--surface); cursor: pointer; transition: border-color .15s ease, background .15s ease; }
 .file-drop:hover, .file-drop.is-dragging { border-color: var(--brand-line); background: var(--surface-2); }
@@ -1392,6 +2293,7 @@ function acceptDiscard() {
 .file-formats .tag { font-size: 12px; }
 
 .import-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
+.import-target { margin-bottom: 6px; }
 
 .mapping-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 18px; }
 .sample-block { margin-top: 22px; }
@@ -1430,6 +2332,12 @@ function acceptDiscard() {
 .qrow-stem { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-family: var(--font-serif); font-size: 13.5px; line-height: 1.65; }
 .result-block .kv { margin-top: 2px; }
 
+.job-progress { margin-top: 4px; }
+.job-bar { height: 4px; background: var(--line); overflow: hidden; }
+.job-bar i { display: block; height: 100%; background: var(--brand); transition: width .3s var(--ease); }
+.job-meta { margin-top: 8px; font-size: 12px; color: var(--ink-3); }
+.job-failure { margin-top: 4px; }
+
 @media (max-width: 960px) {
   .import-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
   .import-rail { display: none; }
@@ -1453,6 +2361,7 @@ function acceptDiscard() {
   .pdf-card-actions { width: 100%; justify-content: flex-end; }
   .pdf-option-row { flex-wrap: wrap; }
   .import-actions .btn { flex: 1 1 auto; justify-content: center; }
+  .step-summary .step-head .btn-quiet { margin-left: 0; }
 }
 
 /* Touch targets: the contextual back control is the primary exit on a phone. */

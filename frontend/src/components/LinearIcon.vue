@@ -10,15 +10,27 @@
     stroke-linecap="round"
     stroke-linejoin="round"
     class="linear-icon"
+    :data-icon="name"
     aria-hidden="true"
   >
     <g v-if="name === 'home'">
       <path d="M3 10.5 12 3l9 7.5" />
       <path d="M5 9.5V21h14V9.5" />
     </g>
-    <g v-else-if="name === 'library' || name === 'book'">
-      <path d="M4 19.5V5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 1-2-2z" />
-      <line x1="8" y1="7" x2="15" y2="7" />
+    <!-- 题库: three shelved spines, not a single sheet of paper — kept visually
+         apart from 资料 (`note`), which is a notebook with a spiral binding. -->
+    <g v-else-if="name === 'library'">
+      <path d="M4 4h4v16H4z" />
+      <path d="M10 4h4v16h-4z" />
+      <path d="m16.5 5.1 3.2-.9 3.5 14.7-3.2.9z" />
+    </g>
+    <g v-else-if="name === 'activity'">
+      <polyline points="3 12 7 12 10 6 14 18 17 12 21 12" />
+    </g>
+    <g v-else-if="name === 'alert-triangle'">
+      <path d="M10.3 3.6 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
     </g>
     <g v-else-if="name === 'review' || name === 'refresh'">
       <path d="M21 12a9 9 0 1 1-2.6-6.4" />
@@ -28,7 +40,17 @@
       <path d="M3 12a9 9 0 1 0 2.6-6.4" />
       <polyline points="3 3 3 9 9 9" />
     </g>
-    <g v-else-if="name === 'note' || name === 'file-text'">
+    <!-- 资料: a bound notebook. Distinct from `file-text` (a loose document with
+         text lines) and from `draft` (a document being revised with a pencil). -->
+    <g v-else-if="name === 'note'">
+      <path d="M6 3h13a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6z" />
+      <line x1="3" y1="7" x2="6" y2="7" />
+      <line x1="3" y1="12" x2="6" y2="12" />
+      <line x1="3" y1="17" x2="6" y2="17" />
+      <line x1="10" y1="8" x2="16" y2="8" />
+      <line x1="10" y1="12" x2="16" y2="12" />
+    </g>
+    <g v-else-if="name === 'file-text'">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
       <polyline points="14 2 14 8 20 8" />
       <line x1="16" y1="13" x2="8" y2="13" />
@@ -90,11 +112,12 @@
       <line x1="3" y1="9" x2="21" y2="9" />
       <line x1="9" y1="9" x2="9" y2="21" />
     </g>
+    <!-- 草稿: a document still being revised — the folded corner plus a pencil,
+         so it no longer collapses into `file-text`. -->
     <g v-else-if="name === 'draft'">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h8" />
       <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
+      <path d="M19.5 12.5 22 15l-5.6 5.6-3 .4.4-3z" />
     </g>
     <g v-else-if="name === 'user'">
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -168,6 +191,25 @@
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <polyline points="7 10 12 15 17 10" />
       <line x1="12" y1="15" x2="12" y2="3" />
+    </g>
+    <!-- 导入 brings content in: an arrow pointing down INTO the tray.
+         `upload` stays available for a literal file transfer leaving the device. -->
+    <g v-else-if="name === 'import'">
+      <path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+      <polyline points="7 10 12 15 17 10" />
+    </g>
+    <!-- 导出 is the mirror of 导入: an arrow pointing up OUT of the tray. -->
+    <g v-else-if="name === 'export'">
+      <path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+      <polyline points="7 8 12 3 17 8" />
+    </g>
+    <!-- 恢复: an undo arrow, deliberately not the circular `rotate-ccw` that
+         reads as "refresh". -->
+    <g v-else-if="name === 'restore'">
+      <path d="M9 14 4 9l5-5" />
+      <path d="M4 9h9.5a5.5 5.5 0 0 1 0 11H9" />
     </g>
     <g v-else-if="name === 'sparkles'">
       <path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" />

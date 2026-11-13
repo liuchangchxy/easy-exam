@@ -55,6 +55,7 @@
               id="login-username"
               v-model.trim="username"
               class="input"
+              name="username"
               autocomplete="username"
               autocapitalize="off"
               autocorrect="off"
@@ -70,13 +71,21 @@
                 id="login-password"
                 v-model="password"
                 class="input"
+                name="password"
                 :type="showPassword ? 'text' : 'password'"
                 :autocomplete="registering ? 'new-password' : 'current-password'"
                 :placeholder="t('ep.auth.password')"
                 required
                 minlength="8"
               />
-              <button type="button" class="link-btn auth-eye" tabindex="-1" @click="showPassword = !showPassword">
+              <button
+                type="button"
+                class="link-btn auth-eye"
+                aria-controls="login-password"
+                :aria-pressed="showPassword"
+                :aria-label="showPassword ? t('ep.auth.hide_password') : t('ep.auth.show_password')"
+                @click="showPassword = !showPassword"
+              >
                 {{ showPassword ? t('ep.auth.hide_password') : t('ep.auth.show_password') }}
               </button>
             </div>
@@ -89,13 +98,21 @@
                 id="login-confirm"
                 v-model="confirmPassword"
                 class="input"
+                name="confirm_password"
                 :type="showConfirmPassword ? 'text' : 'password'"
                 autocomplete="new-password"
                 :placeholder="t('ep.auth.confirm_password')"
                 required
                 minlength="8"
               />
-              <button type="button" class="link-btn auth-eye" tabindex="-1" @click="showConfirmPassword = !showConfirmPassword">
+              <button
+                type="button"
+                class="link-btn auth-eye"
+                aria-controls="login-confirm"
+                :aria-pressed="showConfirmPassword"
+                :aria-label="showConfirmPassword ? t('ep.auth.hide_password') : t('ep.auth.show_password')"
+                @click="showConfirmPassword = !showConfirmPassword"
+              >
                 {{ showConfirmPassword ? t('ep.auth.hide_password') : t('ep.auth.show_password') }}
               </button>
             </div>

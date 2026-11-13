@@ -42,7 +42,7 @@
               <LinearIcon name="edit" :size="14" />{{ isEditingQuestion ? t('ep.practice.edit_exit') : t('ep.practice.edit_question') }}
             </button>
             <button type="button" class="focus-menu-item is-danger" @click="handleKill">
-              <LinearIcon name="x" :size="14" />{{ t('ep.practice.kill') }}
+              <LinearIcon name="trash" :size="14" />{{ t('ep.practice.kill') }}
             </button>
           </div>
         </div>
@@ -236,8 +236,8 @@
               </div>
               <div v-for="(opt, oIdx) in editOptions" :key="oIdx" class="edit-option-row">
                 <input v-model="opt.key" class="input opt-key-input mono" :aria-label="t('ep.practice.edit_option_key')" />
-                <input v-model="opt.content" class="input" :placeholder="t('ep.practice.edit_option_text')" />
-                <button type="button" class="icon-btn" :aria-label="t('ep.common.delete')" @click="removeOption(oIdx)"><LinearIcon name="x" :size="13" /></button>
+                <input v-model="opt.content" class="input" :placeholder="t('ep.practice.edit_option_text')" :aria-label="t('ep.practice.edit_option_text')" />
+                <button type="button" class="icon-btn" :aria-label="t('ep.common.delete')" @click="removeOption(oIdx)"><LinearIcon name="trash" :size="13" /></button>
               </div>
             </div>
             <label class="field">
@@ -401,7 +401,7 @@
               </div>
 
               <div class="ai-ask">
-                <input v-model="customQuery" class="input" type="text" :placeholder="t('ep.practice.ai_ask_placeholder')" @keyup.enter="askCustomQuery" />
+                <input v-model="customQuery" class="input" type="text" :placeholder="t('ep.practice.ai_ask_placeholder')" :aria-label="t('ep.practice.ai_ask_placeholder')" @keyup.enter="askCustomQuery" />
                 <button type="button" class="btn btn-sm" :disabled="!customQuery.trim() || aiLoading" @click="askCustomQuery">{{ t('ep.practice.ai_send') }}</button>
               </div>
               <p v-if="aiStatusMessage" class="hint">{{ aiStatusMessage }}</p>
@@ -443,7 +443,7 @@
                     </div>
                   </div>
                   <div v-else class="ai-version-edit">
-                    <textarea v-model="editDraft" class="textarea" rows="4"></textarea>
+                    <textarea v-model="editDraft" class="textarea" rows="4" :aria-label="t('ep.practice.ai_edit')"></textarea>
                     <div class="ai-version-actions">
                       <button type="button" class="btn btn-sm" @click="editingVersionId = null">{{ t('ep.common.cancel') }}</button>
                       <button type="button" class="btn btn-sm btn-primary" :disabled="!editDraft.trim()" @click="savePersonalExplanation">{{ t('ep.practice.ai_save') }}</button>

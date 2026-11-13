@@ -20,7 +20,7 @@
     <div class="toolbar library-toolbar">
       <div class="search-box">
         <LinearIcon name="search" :size="15" />
-        <input v-model.trim="searchQuery" class="input" :placeholder="t('ep.library.search')" />
+        <input v-model.trim="searchQuery" class="input" :placeholder="t('ep.library.search')" :aria-label="t('ep.library.search')" />
       </div>
       <div class="tabs library-tabs">
         <button v-for="tab in tabs" :key="tab.key" type="button" class="tab" :class="{ 'is-active': filterType === tab.key }" @click="filterType = tab.key">
@@ -92,7 +92,7 @@
         </div>
 
         <div v-if="editingNote" class="reader-edit notes-reader-edit">
-          <textarea v-model="editContent" class="textarea reader-edit-input" rows="10" :placeholder="t('ep.library.note_body_placeholder')"></textarea>
+          <textarea v-model="editContent" class="textarea reader-edit-input" rows="10" :placeholder="t('ep.library.note_body_placeholder')" :aria-label="t('ep.library.note_body')"></textarea>
           <div class="reader-edit-actions">
             <button type="button" class="btn btn-sm" :disabled="savingNote" @click="cancelEdit">{{ t('ep.common.cancel') }}</button>
             <button type="button" class="btn btn-sm btn-primary" :disabled="savingNote || !editContent.trim()" @click="saveNote">

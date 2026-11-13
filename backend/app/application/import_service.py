@@ -1,5 +1,6 @@
 import json
 from typing import Any, Dict, List, Optional
+import threading
 import uuid
 
 from backend.app.infrastructure.db.connection import transaction
@@ -12,6 +13,11 @@ from backend.app.infrastructure.importers.spreadsheet_importer import (
     read_xlsx_rows,
 )
 
+# One persistence batch is also the cancellation checkpoint: the worker only
+# advances progress after a batch transaction has committed, so a retried
+# worker resumes at a committed boundary instead of re-importing a half batch.
+ASYNC_IMPORT_BATCH_SIZE = 25
+
 
 class DuplicateImportError(ValueError):
     def __init__(self, preview: dict):
@@ -20,10 +26,11 @@ class DuplicateImportError(ValueError):
 
 
 class ImportService:
-    def __init__(self, banks, questions, jobs=None):
+    def __init__(self, banks, questions, jobs=None, drafts=None):
         self.banks = banks
         self.questions = questions
         self.jobs = jobs
+        self.drafts = drafts
 
     def _begin(self, user_id: str, bank_id: str, fmt: str, filename: str | None = None):
         return self.jobs.create(user_id, bank_id, fmt, filename) if self.jobs else None
@@ -77,31 +84,16 @@ class ImportService:
             raise ValueError("no recognizable questions found")
         return items
 
-    def _persist_items(
-        self,
-        user_id: str,
-        bank_id: str,
-        job: dict | None,
-        items: list[dict],
-        duplicates: list[dict],
-        duplicate_strategy: str,
-        conn=None,
-    ) -> dict:
+    def _build_operations(self, items: list[dict], duplicates: list[dict], duplicate_strategy: str) -> list[dict]:
         if duplicates and duplicate_strategy not in {"skip", "new", "merge"}:
-            preview = {
-                "accepted": False,
-                "reason": "发现重复题目，请选择处理策略",
-                "question_count": len(items),
-                "duplicates": duplicates,
-            }
-            if conn is None:
-                self._finish(user_id, job, "PRECHECK_FAILED", reason=preview["reason"])
-            elif job:
-                conn.execute(
-                    "UPDATE import_jobs SET status = 'PRECHECK_FAILED', reason = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    (preview["reason"], job["id"]),
-                )
-            raise DuplicateImportError(preview)
+            raise DuplicateImportError(
+                {
+                    "accepted": False,
+                    "reason": "发现重复题目，请选择处理策略",
+                    "question_count": len(items),
+                    "duplicates": duplicates,
+                }
+            )
 
         duplicate_by_index = {item["index"]: item for item in duplicates}
         operations = []
@@ -131,6 +123,30 @@ class ImportService:
         # 将归并好的新题目加入 operations
         for idx in sorted(merged_batch_items.keys()):
             operations.append({"op": "create", "payload": merged_batch_items[idx]})
+        return operations
+
+    def _persist_items(
+        self,
+        user_id: str,
+        bank_id: str,
+        job: dict | None,
+        items: list[dict],
+        duplicates: list[dict],
+        duplicate_strategy: str,
+        conn=None,
+    ) -> dict:
+        try:
+            operations = self._build_operations(items, duplicates, duplicate_strategy)
+        except DuplicateImportError as exc:
+            preview = exc.preview
+            if conn is None:
+                self._finish(user_id, job, "PRECHECK_FAILED", reason=preview["reason"])
+            elif job:
+                conn.execute(
+                    "UPDATE import_jobs SET status = 'PRECHECK_FAILED', reason = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (preview["reason"], job["id"]),
+                )
+            raise
 
         try:
             created = self.questions.batch_create_or_update_questions(user_id, bank_id, operations, conn=conn) if operations else []
@@ -428,3 +444,197 @@ class ImportService:
             return self.import_content(user_id, bank_id, "markdown" if suffix in {"txt", "md", "markdown"} else suffix, text, duplicate_strategy)
 
         raise ValueError("仅支持 PDF、XLSX、CSV、JSON、TXT 和 Markdown 文件")
+
+    # ------------------------------------------------------- asynchronous jobs
+
+    def _require_editor(self, user_id: str, bank_id: str) -> None:
+        bank = self.banks.get_for_user(bank_id, user_id)
+        if not bank:
+            raise LookupError("bank not found")
+        if bank.get("role") not in ("ADMIN", "EDITOR"):
+            raise PermissionError("member cannot import into this bank")
+
+    def _job_view(self, job: dict) -> dict:
+        return {
+            "id": job.get("id"),
+            "bank_id": job.get("bank_id"),
+            "filename": job.get("filename"),
+            "format": job.get("format"),
+            "status": job.get("status"),
+            "progress": int(job.get("progress") or 0),
+            "total": int(job.get("total") or 0),
+            "imported_count": int(job.get("imported_count") or 0),
+            "reason": job.get("reason"),
+            "created_at": job.get("created_at"),
+            "completed_at": job.get("completed_at"),
+        }
+
+    def _can_view_job(self, job: dict, user_id: str) -> bool:
+        if job.get("user_id") == user_id:
+            return True
+        bank_id = job.get("bank_id")
+        bank = self.banks.get_for_user(bank_id, user_id) if bank_id else None
+        return bool(bank and bank.get("role") in ("ADMIN", "EDITOR"))
+
+    def start_job(
+        self,
+        user_id: str,
+        bank_id: str,
+        filename: str | None,
+        fmt: str,
+        content,
+        duplicate_strategy: str = "prompt",
+        custom_mapping: Optional[Dict[str, Any]] = None,
+    ) -> dict:
+        """Validate access and start the cancellable worker. Returns immediately."""
+        self._require_editor(user_id, bank_id)
+        if not self.jobs:
+            raise RuntimeError("import jobs are not configured")
+        job = self.jobs.create_async(user_id, bank_id, fmt, filename)
+        worker = threading.Thread(
+            target=self._run_job,
+            args=(job["id"], user_id, bank_id, fmt, content, duplicate_strategy, custom_mapping),
+            name=f"import-job-{job['id']}",
+            daemon=True,
+        )
+        worker.start()
+        return {"job_id": job["id"], "status": job["status"]}
+
+    def get_job(self, user_id: str, job_id: str) -> dict:
+        job = self.jobs.get_any(job_id) if self.jobs else None
+        if not job or not self._can_view_job(job, user_id):
+            # Foreign jobs must look missing, never merely forbidden.
+            raise LookupError("job not found")
+        return self._job_view(job)
+
+    def cancel_job(self, user_id: str, job_id: str) -> dict:
+        job = self.jobs.get_any(job_id) if self.jobs else None
+        if not job or not self._can_view_job(job, user_id):
+            raise LookupError("job not found")
+        if job.get("status") in ("PENDING", "RUNNING"):
+            self.jobs.request_cancel(job_id)
+            job = self.jobs.get_any(job_id) or job
+        return self._job_view(job)
+
+    def _parse_job_content(self, fmt: str, content, custom_mapping: Optional[Dict[str, Any]]) -> list[dict]:
+        normalized = (fmt or "").strip().lower()
+        if normalized == "pdf":
+            return parse_pdf_questions(content)
+
+        if normalized == "xlsx":
+            headers, rows = read_xlsx_rows(content)
+            if custom_mapping:
+                if custom_mapping.get("stem") is None or custom_mapping.get("answer") is None:
+                    raise ValueError("Excel 至少需要题干和答案列")
+                items = parse_rows_with_mapping(rows, custom_mapping)
+                if not items:
+                    raise ValueError("Excel 中未识别到有效题目")
+                return items
+            analysis = analyze_spreadsheet_structure(headers, rows)
+            if analysis["mapping"].get("stem") is None or analysis["mapping"].get("answer") is None:
+                raise ValueError("Excel 至少需要题干和答案列")
+            items = parse_rows_with_mapping(rows, analysis["mapping"])
+            if not items:
+                raise ValueError("Excel 中未识别到有效题目")
+            return items
+
+        if isinstance(content, bytes):
+            try:
+                text = content.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise ValueError("文件必须使用 UTF-8 编码") from exc
+        else:
+            text = str(content)
+
+        if normalized == "csv":
+            try:
+                headers, rows = read_csv_rows(text)
+            except Exception:
+                headers, rows = [], []
+            if custom_mapping:
+                if custom_mapping.get("stem") is None or custom_mapping.get("answer") is None:
+                    raise ValueError("CSV 至少需要题干和答案列")
+                items = parse_rows_with_mapping(rows, custom_mapping)
+                if not items:
+                    raise ValueError("CSV 中未识别到有效题目")
+                return items
+            if rows:
+                try:
+                    analysis = analyze_spreadsheet_structure(headers, rows)
+                    if analysis["mapping"].get("stem") is not None and analysis["mapping"].get("answer") is not None:
+                        items = parse_rows_with_mapping(rows, analysis["mapping"])
+                        if items:
+                            return items
+                except Exception:
+                    pass
+            return self._parse("csv", text)
+
+        return self._parse(normalized, text)
+
+    def _run_job(self, job_id: str, user_id: str, bank_id: str, fmt: str, content, duplicate_strategy: str, custom_mapping) -> None:
+        """Worker entry point. Each batch commits progress atomically with its rows."""
+        job = self.jobs.get(job_id, user_id)
+        if not job:
+            return
+        progress = int(job.get("progress") or 0)
+        total = int(job.get("total") or 0)
+        imported = int(job.get("imported_count") or 0)
+        try:
+            if self.jobs.is_cancel_requested(job_id):
+                self.jobs.finish_async(job_id, "CANCELLED", imported, "已取消", progress=progress, total=total)
+                return
+
+            items = self._parse_job_content(fmt, content, custom_mapping)
+            duplicates = self._find_duplicates(user_id, bank_id, items)
+            try:
+                operations = self._build_operations(items, duplicates, duplicate_strategy)
+            except DuplicateImportError as exc:
+                self.jobs.finish_async(
+                    job_id,
+                    "PRECHECK_FAILED",
+                    imported,
+                    exc.preview.get("reason"),
+                    progress=progress,
+                    total=len(items),
+                )
+                return
+
+            total = len(operations)
+            self.jobs.set_total(job_id, total)
+
+            # Resume at the last committed batch boundary. A worker that is
+            # retried therefore never replays rows that were already persisted.
+            pending = operations[progress:]
+            for start in range(0, len(pending), ASYNC_IMPORT_BATCH_SIZE):
+                if self.jobs.is_cancel_requested(job_id):
+                    self.jobs.finish_async(job_id, "CANCELLED", imported, "已取消", progress=progress, total=total)
+                    return
+                chunk = pending[start:start + ASYNC_IMPORT_BATCH_SIZE]
+                with transaction(self.questions.db_path) as conn:
+                    created = self.questions.batch_create_or_update_questions(user_id, bank_id, chunk, conn=conn)
+                    progress += len(chunk)
+                    imported += len(created)
+                    conn.execute(
+                        "UPDATE import_jobs SET progress = ?, total = ?, imported_count = ? WHERE id = ? AND status = 'RUNNING'",
+                        (progress, total, imported, job_id),
+                    )
+
+            if self.jobs.is_cancel_requested(job_id):
+                self.jobs.finish_async(job_id, "CANCELLED", imported, "已取消", progress=progress, total=total)
+                return
+            self.jobs.finish_async(job_id, "COMPLETED", imported, None, progress=total, total=total)
+        except DuplicateImportError as exc:
+            self.jobs.finish_async(job_id, "PRECHECK_FAILED", imported, exc.preview.get("reason"), progress=progress, total=total)
+        except ValueError as exc:
+            # Parsing/format problems are terminal worker failures, not a
+            # still-running job: report FAILED with the parse reason.
+            self.jobs.finish_async(job_id, "FAILED", imported, str(exc), progress=progress, total=total)
+        except Exception as exc:
+            # A worker exception must never leave the job stuck in RUNNING.
+            reason = str(exc) or exc.__class__.__name__
+            try:
+                self.jobs.finish_async(job_id, "FAILED", imported, reason, progress=progress, total=total)
+            except Exception:
+                # If the final write itself fails there is nothing more this
+                # thread can do; the job row still carries its last checkpoint.
+                pass

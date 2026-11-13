@@ -414,6 +414,49 @@ MIGRATIONS = {
     ALTER TABLE user_sessions ADD COLUMN last_seen_at TEXT;
     CREATE INDEX idx_question_bank_members_user ON question_bank_members(user_id);
     """,
+    22: """
+    -- P5: resumable import drafts and cancellable asynchronous import jobs.
+    CREATE TABLE import_drafts (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        bank_id TEXT NOT NULL REFERENCES question_banks(id) ON DELETE CASCADE,
+        source_kind TEXT NOT NULL DEFAULT 'file',
+        filename TEXT,
+        step INTEGER NOT NULL DEFAULT 1,
+        state_json TEXT NOT NULL DEFAULT '{}',
+        status TEXT NOT NULL DEFAULT 'OPEN' CHECK(status IN ('OPEN', 'CONSUMED', 'DISCARDED')),
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX idx_import_drafts_user_bank ON import_drafts(user_id, bank_id, status);
+
+    -- import_jobs gains RUNNING/COMPLETED/CANCELLED plus progress reporting.
+    -- SQLite cannot widen a CHECK constraint in place, so rebuild and copy rows.
+    ALTER TABLE import_jobs RENAME TO import_jobs_legacy;
+    CREATE TABLE import_jobs (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        bank_id TEXT REFERENCES question_banks(id) ON DELETE SET NULL,
+        filename TEXT,
+        format TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN (
+            'PENDING', 'RUNNING', 'PRECHECK_FAILED', 'IMPORTED', 'COMPLETED', 'FAILED', 'CANCELLED'
+        )),
+        reason TEXT,
+        imported_count INTEGER NOT NULL DEFAULT 0,
+        progress INTEGER NOT NULL DEFAULT 0,
+        total INTEGER NOT NULL DEFAULT 0,
+        cancel_requested INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        completed_at TEXT
+    );
+    INSERT INTO import_jobs(
+        id, user_id, bank_id, filename, format, status, reason, imported_count, created_at, completed_at
+    )
+    SELECT id, user_id, bank_id, filename, format, status, reason, imported_count, created_at, completed_at
+    FROM import_jobs_legacy;
+    DROP TABLE import_jobs_legacy;
+    """,
 }
 
 

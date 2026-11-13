@@ -48,6 +48,25 @@ function syncRoot() {
     palette: palette.value,
     isSystemDark: getSystemDark(),
   })
+  syncThemeColor(root)
+}
+
+/**
+ * Keep the browser chrome (mobile status bar, address-bar tint) in step with
+ * the active palette + mode. `index.html` carries a static fallback for the
+ * first paint before this runs.
+ */
+function syncThemeColor(root) {
+  const doc = globalThis.document
+  const meta = doc?.querySelector?.('meta[name="theme-color"]')
+  if (!meta) return
+  let color = ''
+  try {
+    color = globalThis.getComputedStyle?.(root)?.getPropertyValue?.('--surface')?.trim() || ''
+  } catch {
+    color = ''
+  }
+  if (color) meta.setAttribute('content', color)
 }
 
 function setupMediaListener() {
