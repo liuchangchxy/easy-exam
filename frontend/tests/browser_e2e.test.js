@@ -86,8 +86,11 @@ async function waitForServer(url, expectedToken, timeoutMs = 25000) {
       const res = await fetch(`${url}/api/v1/health`)
       if (res.ok) {
         const body = await res.json()
-        if (expectedToken && body.instance_token !== expectedToken) {
-          throw new Error(`Instance token mismatch: expected ${expectedToken} but got ${body.instance_token}`)
+        const expectedFingerprint = expectedToken
+          ? crypto.createHash('sha256').update(expectedToken).digest('hex').slice(0, 16)
+          : ''
+        if (expectedFingerprint && body.instance_fingerprint !== expectedFingerprint) {
+          throw new Error(`Instance fingerprint mismatch: expected ${expectedFingerprint} but got ${body.instance_fingerprint}`)
         }
         return true
       }
@@ -114,6 +117,10 @@ async function logout(page) {
 
 async function openBanks(page, baseUrl) {
   await page.goto(`${baseUrl}/#/banks`)
+  // Steps seed data through the API while the browser sits on this same hash
+  // URL, and a same-URL goto in Chromium is a no-op. Reload so the workspace
+  // always renders server truth exactly as a fresh visit would.
+  await page.reload()
   await page.waitForSelector('.banks-page')
 }
 
@@ -122,6 +129,17 @@ async function startBankPractice(page, baseUrl, bankName) {
   const row = page.locator('.banks-row').filter({ hasText: bankName }).first()
   await row.waitFor({ state: 'visible', timeout: 10000 })
   await row.locator('.btn-sm').first().click()
+  // P6 routes every start through the shared decision, so an account that
+  // already has an unfinished session is asked instead of silently opening a
+  // second one. These flows want to keep working in that session.
+  const panel = page.locator('[data-testid="start-study-panel"]')
+  await Promise.race([
+    page.waitForSelector('.focus-mode', { timeout: 12000 }),
+    panel.waitFor({ state: 'visible', timeout: 12000 }),
+  ])
+  if (await panel.isVisible()) {
+    await panel.locator('[data-testid="start-study-continue"]').click()
+  }
   await page.waitForSelector('.focus-mode', { timeout: 12000 })
   await page.waitForSelector('.q-stem', { timeout: 8000 })
 }
@@ -491,11 +509,15 @@ test('True Chrome Browser E2E: Editorial Precision Full Lifecycle', async (t) =>
 
     await t.test('7. Killed Questions: Scoped Review and Restoration on Wrong', async () => {
       await page.locator('.review-page .tabs .tab').nth(2).click()
+      await page.waitForTimeout(500)
       const killedRow = page.locator('.review-single .list-row').filter({ hasText: killedStem.slice(0, 8) }).first()
       await killedRow.waitFor({ state: 'visible', timeout: 8000 })
 
       await page.locator('.review-toolbar .btn').first().click()
       await page.waitForSelector('.focus-mode', { timeout: 10000 })
+      // The session payload arrives after the shell; wait for the real mode
+      // label instead of reading the pre-load fallback.
+      await page.locator('.focus-mode-label').filter({ hasText: '斩杀' }).waitFor({ state: 'visible', timeout: 10000 })
       const modeLabel = await page.locator('.focus-mode-label').innerText()
       assert.match(modeLabel, /斩杀/)
 
@@ -595,7 +617,10 @@ test('True Chrome Browser E2E: Editorial Precision Full Lifecycle', async (t) =>
       await mapField('解析').selectOption('7')
 
       await page.locator('.import-actions .btn-primary').click()
-      await page.waitForSelector('.result-block', { timeout: 10000 })
+      // P5 splits the old single click into: mapping -> duplicate strategy -> result.
+      await page.waitForSelector('[data-step="duplicates"]', { timeout: 10000 })
+      await page.locator('[data-step="duplicates"] .import-actions .btn-primary').click()
+      await page.waitForSelector('[data-testid="result-bank"]', { timeout: 20000 })
       assert.match(await page.locator('.result-block').innerText(), /导入完成/)
 
       // Re-import the same content under a new filename: duplicate detection is content based.
@@ -614,7 +639,7 @@ test('True Chrome Browser E2E: Editorial Precision Full Lifecycle', async (t) =>
       assert.match(await page.locator('.dup-list').innerText(), /浏览器手工映射五选项题目/)
       await page.locator('.step-block select').last().selectOption('merge')
       await page.locator('.step-block .import-actions .btn-primary').last().click()
-      await page.waitForSelector('.result-block', { timeout: 10000 })
+      await page.waitForSelector('[data-testid="result-bank"]', { timeout: 20000 })
 
       // Sparse mapping keeps the original option keys B and E.
       await page.locator('.result-block button:has-text("再导入一批")').click()
@@ -635,7 +660,9 @@ test('True Chrome Browser E2E: Editorial Precision Full Lifecycle', async (t) =>
       await mapField('选项 B').selectOption('1')
       await mapField('选项 E').selectOption('2')
       await page.locator('.mapping-grid ~ .import-actions .btn-primary:not([disabled])').click()
-      await page.waitForSelector('.result-block', { timeout: 10000 })
+      await page.waitForSelector('[data-step="duplicates"]', { timeout: 10000 })
+      await page.locator('[data-step="duplicates"] .import-actions .btn-primary').click()
+      await page.waitForSelector('[data-testid="result-bank"]', { timeout: 20000 })
 
       const bankQs = await (await fetch(`${BASE_URL}/api/v1/banks/${bankId}/questions`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -893,7 +920,7 @@ test('True Chrome Browser E2E: Editorial Precision Full Lifecycle', async (t) =>
             }
             return getComputedStyle(document.body).backgroundColor
           }
-          return ['.settings-nav-item.is-active', '.segment.is-active', '.accent-option.is-active .accent-name']
+          return ['.settings-nav-item.is-active', '.segment.is-active', '.settings-palette-card.is-active .palette-name']
             .map(selector => {
               const el = document.querySelector(selector)
               if (!el) return null
@@ -907,23 +934,23 @@ test('True Chrome Browser E2E: Editorial Precision Full Lifecycle', async (t) =>
           assert.ok(ratio >= 4.5, `${label}: ${style.selector} contrast ${ratio.toFixed(2)}:1 must meet AA`)
         }
       }
-      await auditActive('dark / pine')
+      await auditActive('dark / editorial')
 
-      const accentOptions = page.locator('.accent-option')
-      assert.ok(await accentOptions.count() >= 4, 'Editorial accent presets must be available')
+      const paletteCards = page.locator('.settings-palette-card')
+      assert.ok(await paletteCards.count() >= 4, 'All four palette families must be available')
       for (let i = 1; i < 4; i++) {
-        await accentOptions.nth(i).click()
+        await paletteCards.nth(i).click()
         await page.waitForTimeout(150)
-        await auditActive(`dark accent ${i}`)
+        await auditActive(`dark palette ${i}`)
       }
-      await accentOptions.first().click()
+      await paletteCards.first().click()
 
       await themeSegments.nth(0).click()
       assert.equal(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), 'light')
-      await auditActive('light / pine')
+      await auditActive('light / editorial')
 
-      await page.evaluate(() => localStorage.removeItem('easyexam_custom_accent'))
-      console.log('✓ Verified editorial light/dark surfaces and accent contrast.')
+      await page.evaluate(() => localStorage.removeItem('easyexam-theme-palette'))
+      console.log('✓ Verified editorial light/dark surfaces and palette accent contrast.')
     })
 
     await t.test('15. Responsive Layout and Mobile Exam Usability', async () => {

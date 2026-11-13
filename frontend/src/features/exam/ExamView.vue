@@ -1,6 +1,6 @@
 <template>
   <main class="exam-mode exam-shell" @touchstart="handleTouchStart" @touchend="handleTouchEnd">
-    <header class="exam-topbar exam-bar" :class="{ 'is-report': Boolean(report) }">
+    <header class="exam-topbar exam-bar" :class="{ 'is-report': Boolean(report) || reportLoadFailed }">
       <div class="exam-top-left">
         <button type="button" class="exam-back" @click="handleBack">
           <LinearIcon name="arrow-left" :size="15" />
@@ -8,24 +8,24 @@
         </button>
         <span class="exam-sep" aria-hidden="true"></span>
         <div class="exam-identity">
-          <span class="exam-kicker">{{ report ? t('ep.exam.report') : t('ep.exam.runner_title') }}</span>
+          <span class="exam-kicker">{{ report || reportLoadFailed ? t('ep.exam.report') : t('ep.exam.runner_title') }}</span>
           <span v-if="!report && question" class="exam-sub">{{ formatQuestionTypeName(question.type) }} · {{ currentIndex + 1 }} / {{ questions.length }}</span>
         </div>
       </div>
 
       <div class="exam-bar-center">
-        <div v-if="!report" class="exam-timer" :class="{ low: session?.time_limit && remainingSeconds <= 300 }" data-testid="exam-timer" role="timer" aria-live="off">
+        <div v-if="!report && !reportLoadFailed" class="exam-timer" :class="{ low: session?.time_limit && remainingSeconds <= 300 }" data-testid="exam-timer" role="timer" aria-live="off">
           <span class="timer-cap">{{ session?.time_limit ? t('ep.exam.remaining') : t('ep.exam.elapsed') }}</span>
           <strong class="mono">{{ formatRemainingTime(session?.time_limit ? remainingSeconds : elapsedSeconds) }}</strong>
         </div>
       </div>
 
       <div class="exam-top-right">
-        <div v-if="!report" class="exam-utils">
+        <div v-if="!report && !reportLoadFailed" class="exam-utils">
           <ThemeToggle compact />
           <LocaleToggle compact />
         </div>
-        <button v-if="!report" type="button" class="btn btn-sm btn-primary exam-submit" :disabled="loading || isSubmitting || Boolean(report) || syncExpired" @click="showSubmitConfirm = true">
+        <button v-if="!report && !reportLoadFailed" type="button" class="btn btn-sm btn-primary exam-submit" :disabled="loading || isSubmitting || Boolean(report) || syncExpired" @click="showSubmitConfirm = true">
           {{ t('ep.exam.submit') }}
         </button>
       </div>
@@ -70,6 +70,12 @@
     </div>
     <div v-if="loading" class="exam-loading skeleton-rows">
       <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+    </div>
+
+    <div v-else-if="reportLoadFailed" class="exam-loading" data-testid="exam-report-load-failed" role="alert">
+      <div class="empty-title">{{ t('ep.common.load_failed') }}</div>
+      <div class="empty-desc">{{ t('ep.exam.report_unavailable') }}</div>
+      <button type="button" class="btn" data-testid="exam-report-retry" @click="retryLoadReport">{{ t('ep.common.retry') }}</button>
     </div>
 
     <section v-else-if="report" class="exam-report" aria-labelledby="exam-report-title">
@@ -365,11 +371,13 @@ import LinearIcon from '../../components/LinearIcon.vue'
 import ThemeToggle from '../../components/ThemeToggle.vue'
 import LocaleToggle from '../../components/LocaleToggle.vue'
 import { useLocale, getCurrentLocale } from '../../composables/useLocale.js'
+import { useKeyboardInset } from '../../composables/useKeyboardInset.js'
 import { useAuthStore } from '../../stores/authStore'
 import { completeSession, getSession, getSessionQuestions, submitAttempt, syncDraft, toggleFlag } from '../../api/practice'
 import { buildExamDraftBase, buildExamDraftPayload, buildExamLocalDraft, calculateAccuracy, examAnswerState, examAnswersToBase, examLocalDraftDiffers, examLocalDraftKey, examRecoveryBase, findFirstUnansweredIndex, formatQuestionTypeName, formatRemainingTime, isExamNetworkError, isExamTimeExpiredError, isExamReviewItem, isSwipeGestureValid, mergeExamLocalDraft, normalizeDraftConflicts, resolveExamUserKey, unsubmittedExamAnswers } from '../../domain/exam'
 
 const { t } = useLocale()
+useKeyboardInset()
 const router = useRouter()
 const auth = useAuthStore()
 const examUserKey = computed(() => resolveExamUserKey(auth.user?.value || auth.user))
@@ -380,11 +388,15 @@ const emit = defineEmits(['back'])
 const showExitConfirmModal = ref(false)
 
 function handleBack() {
-  if (report.value || session.value?.is_completed) {
+  if (report.value || reportLoadFailed.value || isSessionCompleted(session.value)) {
     doExit()
     return
   }
   showExitConfirmModal.value = true
+}
+
+function isSessionCompleted(value) {
+  return Boolean(value?.is_completed) || value?.status === 'completed'
 }
 
 async function handleConfirmExit() {
@@ -412,6 +424,7 @@ const flags = ref([])
 const currentIndex = ref(0)
 const elapsedSeconds = ref(0)
 const report = ref(null)
+const reportLoadFailed = ref(false)
 const loading = ref(true)
 const error = ref('')
 const showMobileSheet = ref(false)
@@ -579,7 +592,7 @@ function readLocalExamDraft() {
 
 function saveLocalExamDraft() {
   const { scoped, legacy } = draftStorageKeys()
-  if (!scoped || typeof localStorage === 'undefined' || !session.value || report.value) return
+  if (!scoped || typeof localStorage === 'undefined' || !session.value || report.value || isSessionCompleted(session.value)) return
   try {
     localStorage.setItem(scoped, JSON.stringify(buildExamLocalDraft({
       answers: answers.value,
@@ -680,7 +693,7 @@ async function recoverPendingSubmit() {
 }
 
 function handleOnline() {
-  if (report.value || !session.value) return
+  if (report.value || reportLoadFailed.value || !session.value) return
   // After the deadline the server will keep rejecting drafts; retrying on every
   // reconnect is the endless loop this guard prevents.
   if (syncExpired.value) return
@@ -697,11 +710,11 @@ function scheduleDraftSave() {
 }
 
 async function persistDraft(force = false) {
-  if (!session.value || (isSubmitting.value && !force) || report.value) return false
+  if (!session.value || isSessionCompleted(session.value) || (isSubmitting.value && !force) || report.value) return false
   if (draftPromise) {
     try { await draftPromise } catch (_) { /* reported by the owning call */ }
   }
-  if (!session.value || (isSubmitting.value && !force) || report.value) return false
+  if (!session.value || isSessionCompleted(session.value) || (isSubmitting.value && !force) || report.value) return false
   const changedAnswers = buildExamDraftPayload(answers.value, draftBase.value)
   const payload = {
     current_index: currentIndex.value,
@@ -946,6 +959,25 @@ function handleKeyDown(e) {
   }
 }
 
+async function retryLoadReport() {
+  if (loading.value) return
+  reportLoadFailed.value = false
+  loading.value = true
+  try {
+    const fresh = await getSession(props.token, props.sessionId)
+    session.value = fresh
+    if (fresh?.report) {
+      report.value = fresh.report
+    } else {
+      reportLoadFailed.value = true
+    }
+  } catch (_) {
+    reportLoadFailed.value = true
+  } finally {
+    loading.value = false
+  }
+}
+
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('online', handleOnline)
@@ -953,6 +985,17 @@ onMounted(async () => {
     session.value = await getSession(props.token, props.sessionId)
     if (session.value?.mode !== 'EXAM') {
       router.replace(`/practice/${props.sessionId}`)
+      return
+    }
+    if (isSessionCompleted(session.value)) {
+      // A finished paper is a report, not a runner. Starting the ticker or the
+      // draft pipeline here would treat it as an active exam again.
+      if (session.value?.report) {
+        report.value = session.value.report
+        clearLocalExamDraft()
+      } else {
+        reportLoadFailed.value = true
+      }
       return
     }
     questions.value = await getSessionQuestions(props.token, props.sessionId)
@@ -970,10 +1013,6 @@ onMounted(async () => {
     elapsedSeconds.value = Math.max(Number(session.value.time_spent || 0), Number(localDraft?.timeSpent || 0))
     pendingSubmit.value = Boolean(localDraft?.pendingSubmit)
     const localDiverged = Boolean(localDraft) && examLocalDraftDiffers(localDraft, serverAnswers)
-    if (session.value.is_completed) {
-      report.value = await completeSession(props.token, props.sessionId)
-      clearLocalExamDraft()
-    }
     if (!report.value && session.value.time_limit > 0) {
       const createdAt = Date.parse(`${session.value.created_at}Z`)
       if (Number.isFinite(createdAt)) elapsedSeconds.value = Math.max(elapsedSeconds.value, Math.floor((Date.now() - createdAt) / 1000))
@@ -1009,7 +1048,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('online', handleOnline)
   clearInterval(tickHandle)
   clearTimeout(draftHandle)
-  if (session.value && !report.value) {
+  if (session.value && !report.value && !reportLoadFailed.value && !isSessionCompleted(session.value)) {
     saveLocalExamDraft()
     void persistDraft()
   }
@@ -1166,7 +1205,7 @@ onBeforeUnmount(() => {
 /* ---------- runner layout ---------- */
 .exam-mode .exam-layout {
   display: grid;
-  grid-template-columns: minmax(0, var(--reading-w)) 232px;
+  grid-template-columns: minmax(0, var(--reading-w)) var(--rail-exam, 232px);
   gap: clamp(32px, 5vw, 72px);
   justify-content: center;
   align-items: start;
@@ -1323,7 +1362,7 @@ onBeforeUnmount(() => {
 /* ---------- bottom instrument bar ---------- */
 .exam-actionbar {
   position: fixed;
-  inset: auto 0 0;
+  inset: auto 0 var(--kb-inset, 0px);
   z-index: 40;
   background: color-mix(in srgb, var(--paper) 94%, transparent);
   backdrop-filter: blur(10px);
@@ -1525,6 +1564,7 @@ onBeforeUnmount(() => {
 .exam-sheet-drawer {
   width: 100%;
   max-height: 82vh;
+  max-height: 82dvh;
   overflow-y: auto;
   padding: 18px 18px calc(18px + env(safe-area-inset-bottom, 0px));
   background: var(--surface);
@@ -1609,7 +1649,7 @@ onBeforeUnmount(() => {
 @media (max-width: 1280px) {
   .exam-mode .exam-layout { gap: 40px; }
 }
-@media (max-width: 1100px) {
+@media (max-width: 1024px) {
   .exam-mode .exam-layout {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
@@ -1655,5 +1695,9 @@ onBeforeUnmount(() => {
   .answer-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .exam-overlay { padding: 10px; }
   .report-facts { flex-wrap: wrap; }
+}
+@media (pointer: coarse) {
+  /* The answer grid pins a 30px height; min-height wins over it. */
+  .answer-cell { min-height: 44px; }
 }
 </style>

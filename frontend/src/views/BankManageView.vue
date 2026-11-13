@@ -1,44 +1,49 @@
 <template>
-  <div class="manage-page">
+  <AccessDeniedState v-if="accessError" :kind="accessError" @back="goToBankList" />
+  <div v-else class="manage-page">
     <div class="page-head manage-head">
       <div class="page-head-main">
-        <div class="page-eyebrow">
-          <button type="button" class="link-btn" @click="router.push('/banks')">{{ t('ep.banks.title') }}</button>
-          <span aria-hidden="true">/</span>
-          <span class="mono">{{ t('ep.manage.tab_settings') }}</span>
-        </div>
-        <h1 class="page-title">{{ bank?.name || t('ep.common.loading') }}</h1>
+        <h1 class="page-title">{{ bank?.name || (loadFailed ? t('ep.common.load_failed') : t('ep.common.loading')) }}</h1>
         <p class="page-sub bank-sub">
-          <span>{{ formatRole(bank?.role) }}</span>
           <span v-if="bank?.category">{{ bank.category }}</span>
           <span>{{ t('ep.banks.questions', { count: questions.length }) }}</span>
-          <span>{{ t('ep.banks.chapters', { count: chapters.length }) }}</span>
         </p>
       </div>
       <div class="page-actions">
-        <button type="button" class="btn" @click="router.push(`/banks/${bankId}`)">
-          <LinearIcon name="book" :size="14" />{{ t('ep.banks.open') }}
+        <button
+          type="button"
+          class="btn btn-primary"
+          data-testid="bank-practice"
+          :disabled="!practicableCount || startingPractice"
+          @click="startPractice"
+        >
+          <LinearIcon name="play" :size="14" />
+          {{ startingPractice ? t('ep.common.starting') : t('ep.banks.practice') }}
         </button>
-        <button type="button" class="btn" @click="router.push(`/import?bankId=${bankId}`)">
-          <LinearIcon name="upload" :size="14" />{{ t('ep.common.import') }}
+        <button v-if="canEdit" type="button" class="btn" data-testid="manage-import" @click="router.push(`/import?bankId=${bankId}`)">
+          <LinearIcon name="import" :size="14" />{{ t('ep.common.import') }}
         </button>
-        <button type="button" class="btn btn-primary" :disabled="!canEdit" :title="canEdit ? '' : t('ep.manage.readonly_note')" @click="openCreate">
+        <button type="button" class="btn" data-testid="manage-export" @click="focusExportPanel">
+          <LinearIcon name="export" :size="14" />{{ t('ep.manage.export') }}
+        </button>
+        <button v-if="canEdit" type="button" class="btn" data-testid="manage-create" @click="openCreate">
           <LinearIcon name="plus" :size="14" />{{ t('ep.manage.new_question') }}
         </button>
       </div>
+    </div>
+
+    <div v-if="practiceError" class="notice bad manage-notice" role="alert">
+      <LinearIcon name="alert" :size="15" /><span>{{ practiceError }}</span>
     </div>
 
     <div v-if="hasActiveExam" class="notice warn manage-notice">
       <LinearIcon name="lock" :size="15" />
       <span><strong>{{ t('ep.manage.locked_title') }}</strong> {{ t('ep.manage.locked_desc') }}</span>
     </div>
-    <div v-if="showArchived" class="notice info manage-notice">
-      <LinearIcon name="archive" :size="15" />
-      <span>{{ t('ep.manage.archived_note') }}</span>
-    </div>
-    <div v-else-if="bank && !canEdit" class="notice info manage-notice">
+    <div v-if="bank && !canEdit" class="notice info manage-notice">
       <LinearIcon name="info" :size="15" />
       <span>{{ t('ep.manage.readonly_note') }}</span>
+      <span v-if="isMember" class="block" data-testid="member-readonly-notice">{{ t('ep.collab.readonly_notice') }}</span>
     </div>
     <div v-if="successToast" class="notice ok manage-notice">
       <LinearIcon name="check" :size="15" /><span>{{ successToast }}</span>
@@ -47,51 +52,98 @@
       <LinearIcon name="alert" :size="15" /><span>{{ conflictAlert }}</span>
       <button type="button" class="btn btn-sm btn-quiet" @click="loadData">{{ t('ep.common.retry') }}</button>
     </div>
-    <div v-if="error" class="notice bad manage-notice">
+    <div v-if="error && !loadFailed" class="notice bad manage-notice">
       <LinearIcon name="alert" :size="15" /><span>{{ error }}</span>
+      <button type="button" class="btn btn-sm btn-quiet" data-testid="error-retry" @click="retryLastAction">{{ t('ep.common.retry') }}</button>
     </div>
 
-    <div class="tabs manage-tabs">
-      <button v-for="tab in tabs" :key="tab.key" type="button" class="tab" :class="{ 'is-active': activeTab === tab.key }" @click="activeTab = tab.key">
+    <div ref="tabsRef" class="tabs manage-tabs" role="tablist" @keydown="onTabKeydown">
+      <button
+        v-for="tab in tabs"
+        :key="tab.key"
+        type="button"
+        class="tab"
+        role="tab"
+        :class="{ 'is-active': activeTab === tab.key }"
+        :aria-selected="activeTab === tab.key ? 'true' : 'false'"
+        :tabindex="activeTab === tab.key ? 0 : -1"
+        @click="setActiveTab(tab.key)"
+      >
         {{ t(tab.label) }}<span v-if="tab.count != null" class="count">{{ tab.count }}</span>
       </button>
     </div>
 
     <div v-if="loading" class="skeleton-rows"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
 
+    <div v-else-if="loadFailed" class="empty" data-testid="load-error" role="alert">
+      <div class="empty-mark"><LinearIcon name="alert" :size="24" /></div>
+      <div class="empty-title">{{ t('ep.common.load_failed') }}</div>
+      <div class="empty-desc">{{ error }}</div>
+      <div class="empty-actions">
+        <button type="button" class="btn" data-testid="load-retry" @click="loadData">{{ t('common.retry') }}</button>
+      </div>
+    </div>
+
     <template v-else>
       <!-- Questions workspace -->
       <section v-if="activeTab === 'questions'" class="manage-workspace">
+        <div v-if="showArchived" class="notice info manage-archived-note">
+          <LinearIcon name="archive" :size="15" />
+          <span>{{ t('ep.manage.archived_note') }}</span>
+        </div>
         <div class="manage-toolbar bank-manage-toolbar">
           <div class="search-box">
             <LinearIcon name="search" :size="15" />
-            <input v-model.trim="filters.keyword" class="input" :placeholder="t('ep.manage.search')" />
+            <input v-model.trim="filters.keyword" class="input" :placeholder="t('ep.manage.search')" :aria-label="t('ep.manage.search')" />
           </div>
-          <select v-model="filters.type" class="select">
+          <select v-model="filters.type" class="select" :aria-label="t('ep.manage.filter_type')">
             <option value="">{{ t('ep.manage.filter_type') }}</option>
             <option value="SINGLE">{{ t('ep.question_types.single') }}</option>
             <option value="MULTI">{{ t('ep.question_types.multi') }}</option>
             <option value="JUDGE">{{ t('ep.question_types.judge') }}</option>
+            <option value="FILL">{{ t('ep.question_types.fill') }}</option>
             <option value="ESSAY">{{ t('ep.question_types.essay') }}</option>
           </select>
-          <select v-if="chapters.length" v-model="filters.chapterId" class="select">
+          <select v-if="chapters.length" v-model="filters.chapterId" class="select" :aria-label="t('ep.manage.filter_chapter')">
             <option value="">{{ t('ep.manage.filter_chapter') }}</option>
             <option v-for="c in chapters" :key="c.id" :value="c.id">{{ c.name }}</option>
           </select>
-          <select v-model="filters.difficulty" class="select">
+          <select v-model="filters.difficulty" class="select" :aria-label="t('ep.manage.filter_difficulty')">
             <option value="">{{ t('ep.manage.filter_difficulty') }}</option>
             <option v-for="opt in difficultyOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
-          <select v-if="allTags.length" v-model="filters.tag" class="select">
+          <select v-if="allTags.length" v-model="filters.tag" class="select" :aria-label="t('ep.manage.filter_tag')">
             <option value="">{{ t('ep.manage.filter_tag') }}</option>
             <option v-for="tag in allTags" :key="tag" :value="tag">{{ tag }}</option>
           </select>
-          <button v-if="hasActiveFilters" type="button" class="btn btn-sm btn-quiet" @click="resetFilters">{{ t('ep.manage.reset') }}</button>
+          <span class="toolbar-divider" aria-hidden="true"></span>
+          <label class="toolbar-field">
+            <span class="toolbar-field-label">{{ t('ep.manage.filter_sort_label') }}</span>
+            <select v-model="questionSort" class="select" data-testid="question-sort" :aria-label="t('ep.manage.filter_sort_label')">
+              <option value="default">{{ t('ep.manage.sort_default') }}</option>
+              <option value="id">{{ t('ep.manage.sort_id') }}</option>
+              <option value="difficulty">{{ t('ep.manage.sort_difficulty') }}</option>
+              <option value="updated">{{ t('ep.manage.sort_updated') }}</option>
+            </select>
+          </label>
+          <button v-if="hasActiveReset" type="button" class="btn btn-sm btn-quiet" @click="resetFilters">{{ t('ep.manage.reset') }}</button>
           <div class="spacer"></div>
+          <label v-if="canEdit" class="select-all-toggle">
+            <input
+              type="checkbox"
+              data-testid="select-all"
+              :checked="allVisibleSelected"
+              :aria-label="t('ep.manage.select_all')"
+              @change="toggleSelectAll($event.target.checked)"
+            />
+            <span>{{ t('ep.manage.select_all') }}</span>
+            <span class="small dim mono">{{ t('ep.manage.select_scope', { total: filteredQuestions.length, selected: selectedIds.size }) }}</span>
+          </label>
           <label class="archived-toggle">
             <input v-model="showArchived" type="checkbox" data-testid="show-archived" @change="onArchivedToggle" />
-            <span>{{ t(showArchived ? 'ep.manage.hide_archived' : 'ep.manage.show_archived') }}</span>
+            <span>{{ t('ep.manage.show_archived') }}</span>
           </label>
+          <span v-if="questionsLoading" class="small dim">{{ t('ep.manage.archived_updating') }}</span>
           <span class="small dim mono">{{ t('ep.manage.shown', { shown: filteredQuestions.length, total: questions.length }) }}</span>
         </div>
 
@@ -102,40 +154,49 @@
             <button type="button" class="btn btn-sm btn-quiet" @click="clearSelection">{{ t('ep.manage.clear_selection') }}</button>
           </div>
           <div class="batch-controls">
-            <div class="batch-group">
-              <select v-model="batchChapterId" class="select" data-testid="batch-chapter" :disabled="batchBusy || batchBlocked">
-                <option value="">{{ t('ep.manage.batch_chapter_clear') }}</option>
-                <option v-for="c in chapters" :key="c.id" :value="c.id">{{ c.name }}</option>
-              </select>
-              <button type="button" class="btn btn-sm" data-testid="batch-apply-chapter" :disabled="batchBusy || batchBlocked" @click="runBatch('chapter')">
-                {{ t('ep.manage.batch_apply_chapter') }}
+            <template v-if="!showArchived">
+              <div class="batch-group">
+                <select v-model="batchChapterId" class="select" data-testid="batch-chapter" :aria-label="t('ep.manage.batch_chapter_label')" :disabled="batchBusy || batchBlocked">
+                  <option value="" disabled>{{ t('ep.manage.batch_chapter_placeholder') }}</option>
+                  <option v-for="c in chapters" :key="c.id" :value="c.id">{{ c.name }}</option>
+                </select>
+                <button type="button" class="btn btn-sm" data-testid="batch-apply-chapter" :disabled="batchBusy || batchBlocked || !batchChapterId" @click="runBatch('chapter')">
+                  {{ t('ep.manage.batch_apply_chapter') }}
+                </button>
+                <button type="button" class="btn btn-sm btn-quiet" data-testid="batch-clear-chapter" :disabled="batchBusy || batchBlocked" @click="clearBatchChapter">
+                  {{ t('ep.manage.batch_chapter_clear_action') }}
+                </button>
+              </div>
+              <div class="batch-group">
+                <input v-model.trim="batchTags" class="input" data-testid="batch-tags" :placeholder="t('ep.manage.batch_tags_placeholder')" :disabled="batchBusy || batchBlocked" />
+                <button type="button" class="btn btn-sm" data-testid="batch-add-tags" :disabled="batchBusy || batchBlocked || !batchTags" @click="runBatch('add_tags')">
+                  {{ t('ep.manage.batch_add_tags') }}
+                </button>
+                <button type="button" class="btn btn-sm btn-quiet" data-testid="batch-remove-tags" :disabled="batchBusy || batchBlocked || !batchTags" @click="runBatch('remove_tags')">
+                  {{ t('ep.manage.batch_remove_tags') }}
+                </button>
+              </div>
+              <div v-if="batchTargets.length" class="batch-group">
+                <select v-model="batchTargetBankId" class="select" data-testid="batch-target" :disabled="batchBusy || batchBlocked">
+                  <option value="" disabled>{{ t('ep.manage.batch_target_placeholder') }}</option>
+                  <option v-for="b in batchTargets" :key="b.id" :value="b.id">{{ b.name }}</option>
+                </select>
+                <button type="button" class="btn btn-sm" data-testid="batch-move" :disabled="batchBusy || batchBlocked || !batchTargetBankId" @click="runBatch('move')">
+                  {{ t('ep.manage.batch_move_label') }}
+                </button>
+                <button type="button" class="btn btn-sm" data-testid="batch-copy" :disabled="batchBusy || batchBlocked || !batchTargetBankId" @click="runBatch('copy')">
+                  {{ t('ep.manage.batch_copy_label') }}
+                </button>
+              </div>
+              <div v-else-if="banksError" class="batch-group" data-testid="batch-targets-error" role="alert">
+                <span class="small bad-text">{{ t('ep.common.load_failed') }}</span>
+                <button type="button" class="btn btn-sm btn-quiet" data-testid="batch-targets-retry" @click="reloadBanks">{{ t('ep.common.retry') }}</button>
+              </div>
+              <span v-else class="small dim">{{ t('ep.manage.batch_no_target') }}</span>
+              <button type="button" class="btn btn-sm btn-quiet" data-testid="batch-archive" :disabled="batchBusy || batchBlocked" @click="archiveSelected">
+                {{ t('ep.manage.batch_archive') }}
               </button>
-            </div>
-            <div class="batch-group">
-              <input v-model.trim="batchTags" class="input" data-testid="batch-tags" :placeholder="t('ep.manage.batch_tags_placeholder')" :disabled="batchBusy || batchBlocked" />
-              <button type="button" class="btn btn-sm" data-testid="batch-add-tags" :disabled="batchBusy || batchBlocked || !batchTags" @click="runBatch('add_tags')">
-                {{ t('ep.manage.batch_add_tags') }}
-              </button>
-              <button type="button" class="btn btn-sm btn-quiet" data-testid="batch-remove-tags" :disabled="batchBusy || batchBlocked || !batchTags" @click="runBatch('remove_tags')">
-                {{ t('ep.manage.batch_remove_tags') }}
-              </button>
-            </div>
-            <div v-if="batchTargets.length" class="batch-group">
-              <select v-model="batchTargetBankId" class="select" data-testid="batch-target" :disabled="batchBusy || batchBlocked">
-                <option value="" disabled>{{ t('ep.manage.batch_target_placeholder') }}</option>
-                <option v-for="b in batchTargets" :key="b.id" :value="b.id">{{ b.name }}</option>
-              </select>
-              <button type="button" class="btn btn-sm" data-testid="batch-move" :disabled="batchBusy || batchBlocked || !batchTargetBankId" @click="runBatch('move')">
-                {{ t('ep.manage.batch_move_label') }}
-              </button>
-              <button type="button" class="btn btn-sm" data-testid="batch-copy" :disabled="batchBusy || batchBlocked || !batchTargetBankId" @click="runBatch('copy')">
-                {{ t('ep.manage.batch_copy_label') }}
-              </button>
-            </div>
-            <span v-else class="small dim">{{ t('ep.manage.batch_no_target') }}</span>
-            <button v-if="!showArchived" type="button" class="btn btn-sm btn-quiet" data-testid="batch-archive" :disabled="batchBusy || batchBlocked" @click="archiveSelected">
-              {{ t('ep.manage.batch_archive') }}
-            </button>
+            </template>
             <button v-else type="button" class="btn btn-sm" data-testid="batch-restore" :disabled="batchBusy || batchBlocked" @click="restoreSelected">
               {{ t('ep.manage.batch_restore') }}
             </button>
@@ -144,19 +205,11 @@
           <p v-if="batchError" class="error">{{ batchError }}</p>
         </div>
 
-        <div v-if="filteredQuestions.length" class="mtable-wrap">
+        <div v-if="filteredQuestions.length" class="mtable-wrap" :class="{ 'is-busy': questionsLoading }" :aria-busy="questionsLoading ? 'true' : 'false'">
           <table class="mtable bank-manage-table">
             <thead>
               <tr>
-                <th v-if="canEdit" class="select-cell">
-                  <input
-                    type="checkbox"
-                    data-testid="select-all"
-                    :checked="allVisibleSelected"
-                    :aria-label="t('ep.manage.select_all')"
-                    @change="toggleSelectAll($event.target.checked)"
-                  />
-                </th>
+                <th v-if="canEdit" class="select-cell" aria-hidden="true"></th>
                 <th class="bank-manage-col-id">{{ t('ep.manage.col_no') }}</th>
                 <th class="bank-manage-col-stem">{{ t('ep.manage.col_stem') }}</th>
                 <th class="bank-manage-col-type">{{ t('ep.manage.col_type') }}</th>
@@ -167,20 +220,25 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="q in filteredQuestions" :key="q.id" class="mtable-row" :class="{ 'is-archived': q.archived }" @click="openEdit(q)">
+              <tr v-for="q in pagedQuestions" :key="q.id" class="mtable-row" :class="{ 'is-archived': q.archived }">
                 <td v-if="canEdit" class="select-cell" @click.stop>
-                  <input
-                    type="checkbox"
-                    class="row-select"
-                    :data-question-id="q.id"
-                    :checked="selectedIds.has(q.id)"
-                    :aria-label="t('ep.manage.select_question')"
-                    @change="toggleRowSelection(q.id)"
-                  />
+                  <label class="select-hit">
+                    <input
+                      type="checkbox"
+                      class="row-select"
+                      :data-question-id="q.id"
+                      :checked="selectedIds.has(q.id)"
+                      :aria-label="t('ep.manage.select_question')"
+                      @change="toggleRowSelection(q.id)"
+                    />
+                  </label>
                 </td>
                 <td class="mono id-cell bank-manage-col-id">{{ questionCode(q.id) }}</td>
                 <td class="stem-cell bank-manage-col-stem">
-                  <span class="stem-text">{{ stripHtml(q.stem) }}</span>
+                  <router-link
+                    class="stem-text stem-link"
+                    :to="{ name: 'question', params: { bankId, questionId: q.id } }"
+                  >{{ stripHtml(q.stem) }}</router-link>
                   <span v-if="q.tags?.length" class="row-tags">
                     <span v-for="tag in q.tags" :key="tag" class="tag">{{ tag }}</span>
                   </span>
@@ -192,23 +250,47 @@
                 <td class="bank-manage-col-difficulty">{{ difficultyLabel(q.difficulty) }}</td>
                 <td class="mono dim-cell bank-manage-col-version">{{ t('ep.manage.version_value', { version: q.version_number || 1 }) }}</td>
                 <td class="bank-manage-col-actions">
-                  <button type="button" class="btn btn-sm btn-quiet" @click.stop="openEdit(q)">
+                  <button type="button" class="btn btn-sm btn-quiet" data-testid="row-edit" @click.stop="openEdit(q)">
                     {{ rowEditable(q) ? t('ep.manage.edit') : t('ep.manage.view') }}
+                  </button>
+                  <button
+                    v-if="canEdit && !q.locked_by_active_exam"
+                    type="button"
+                    class="btn btn-sm btn-quiet row-archive-btn"
+                    data-testid="row-archive"
+                    :aria-label="q.archived ? t('ep.manage.restore') : t('ep.manage.archive')"
+                    :title="q.archived ? t('ep.manage.restore') : t('ep.manage.archive')"
+                    @click.stop="toggleQuestionArchive(q)"
+                  >
+                    <LinearIcon :name="q.archived ? 'restore' : 'archive'" :size="13" />
                   </button>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
+        <div v-if="filteredQuestions.length" class="mtable-foot">
+          <span class="small dim mono">{{ pageInfoText }}</span>
+          <span class="list-side">
+            <label class="page-size">
+              <span class="page-size-label">{{ t('ep.manage.page_size') }}</span>
+              <select class="select page-size-select" data-testid="page-size" :value="pageSize" @change="changePageSize">
+                <option v-for="size in pageSizeOptions" :key="size" :value="size">{{ t('ep.manage.page_size_unit', { size }) }}</option>
+              </select>
+            </label>
+            <button type="button" class="btn btn-sm btn-quiet" :disabled="pageState.page <= 1" @click="goPage(pageState.page - 1)">{{ t('ep.manage.prev_page') }}</button>
+            <button type="button" class="btn btn-sm btn-quiet" :disabled="pageState.page >= pageState.pages" @click="goPage(pageState.page + 1)">{{ t('ep.manage.next_page') }}</button>
+          </span>
+        </div>
 
         <div v-else class="empty">
           <div class="empty-mark"><LinearIcon name="layers" :size="24" /></div>
-          <div class="empty-title">{{ questions.length ? t('ep.manage.no_match') : t('ep.manage.empty_bank') }}</div>
-          <div class="empty-desc">{{ questions.length ? t('ep.manage.no_match_hint') : t('ep.manage.empty_bank_hint') }}</div>
+          <div class="empty-title">{{ emptyState.title }}</div>
+          <div class="empty-desc">{{ emptyState.hint }}</div>
           <div class="empty-actions">
             <button v-if="canEdit" type="button" class="btn" @click="openCreate">{{ t('ep.manage.new_question') }}</button>
-            <button type="button" class="btn" @click="router.push(`/import?bankId=${bankId}`)">{{ t('ep.common.import') }}</button>
-            <button v-if="hasActiveFilters" type="button" class="btn btn-quiet" @click="resetFilters">{{ t('ep.manage.reset') }}</button>
+            <button v-if="canEdit" type="button" class="btn" @click="router.push(`/import?bankId=${bankId}`)">{{ t('ep.common.import') }}</button>
+            <button v-if="hasActiveReset" type="button" class="btn btn-quiet" @click="resetFilters">{{ t('ep.manage.reset') }}</button>
           </div>
         </div>
       </section>
@@ -217,75 +299,238 @@
       <section v-else-if="activeTab === 'structure'" class="manage-single">
         <div class="section-note" style="margin-bottom: 12px">{{ t('ep.manage.structure_note') }}</div>
         <div class="panel">
-          <div v-if="chapters.length" class="list">
-            <div v-for="c in chapters" :key="c.id" class="list-row chapter-row">
-              <template v-if="editingChapterId === c.id">
-                <input v-model.trim="chapterDraft" class="input chapter-input" :placeholder="t('ep.manage.chapter_name_placeholder')" />
-                <span class="list-side">
-                  <button type="button" class="btn btn-sm" :disabled="chapterSaving || !chapterDraft" @click="saveChapter(c)">{{ t('ep.common.save') }}</button>
-                  <button type="button" class="btn btn-sm btn-quiet" @click="cancelChapterEdit">{{ t('ep.common.cancel') }}</button>
-                </span>
-              </template>
-              <template v-else>
-                <span class="list-main">
-                  <span class="list-title">{{ c.name }}</span>
-                  <span class="list-meta">{{ t('ep.manage.chapter_count', { count: chapterCount(c.id) }) }}</span>
-                </span>
-                <span v-if="canEdit" class="list-side">
-                  <button type="button" class="btn btn-sm btn-quiet" @click="startChapterEdit(c)">{{ t('ep.banks.chapter_rename') }}</button>
-                  <button type="button" class="btn btn-sm btn-quiet" @click="removeChapter(c)">{{ t('ep.manage.chapter_delete') }}</button>
-                </span>
-              </template>
+          <div v-if="chaptersError && !chapterTree.length" class="empty" style="padding: 26px 0" data-testid="chapters-error" role="alert">
+            <div class="empty-title">{{ t('ep.common.load_failed') }}</div>
+            <div class="empty-desc">{{ chaptersError }}</div>
+            <div class="empty-actions">
+              <button type="button" class="btn btn-sm" data-testid="chapters-retry" @click="reloadChapters">{{ t('ep.common.retry') }}</button>
             </div>
+          </div>
+          <div v-else-if="chapterTree.length" class="list">
+            <template v-for="c in chapterTree" :key="c.id">
+              <div
+                class="list-row chapter-row"
+                :style="{ paddingLeft: `${c.depth * 22}px` }"
+              >
+                <template v-if="editingChapterId === c.id">
+                  <input v-model.trim="chapterDraft" class="input chapter-input" :placeholder="t('ep.manage.chapter_name_placeholder')" />
+                  <select v-model="chapterParentDraft" class="select">
+                    <option value="">{{ t('ep.manage.chapter_root') }}</option>
+                    <option v-for="opt in chapterParentOptions(c.id)" :key="opt.id" :value="opt.id">{{ opt.name }}</option>
+                  </select>
+                  <span class="list-side">
+                    <button type="button" class="btn btn-sm" :disabled="chapterSaving || !chapterDraft" @click="saveChapter(c)">{{ t('ep.common.save') }}</button>
+                    <button type="button" class="btn btn-sm btn-quiet" @click="cancelChapterEdit">{{ t('ep.common.cancel') }}</button>
+                  </span>
+                </template>
+                <template v-else>
+                  <span class="list-main">
+                    <span class="list-title">{{ c.name }}</span>
+                    <span class="list-meta">{{ t('ep.manage.chapter_count', { count: chapterCount(c.id) }) }}</span>
+                  </span>
+                  <span v-if="canEdit" class="list-side">
+                    <button type="button" class="btn btn-sm btn-quiet" @click="startChildChapter(c)">{{ t('ep.manage.chapter_add_child') }}</button>
+                    <button type="button" class="btn btn-sm btn-quiet" :disabled="!canMoveChapter(c, 'up')" @click="moveChapter(c, 'up')">{{ t('ep.manage.move_up') }}</button>
+                    <button type="button" class="btn btn-sm btn-quiet" :disabled="!canMoveChapter(c, 'down')" @click="moveChapter(c, 'down')">{{ t('ep.manage.move_down') }}</button>
+                    <button type="button" class="btn btn-sm btn-quiet" @click="startChapterEdit(c)">{{ t('ep.banks.chapter_rename') }}</button>
+                    <button type="button" class="btn btn-sm btn-danger" @click="removeChapter(c)">{{ t('ep.manage.chapter_delete') }}</button>
+                  </span>
+                </template>
+              </div>
+              <form
+                v-if="canEdit && childParentId === c.id"
+                class="child-chapter-form"
+                :style="{ paddingLeft: `${c.depth * 22 + 10}px` }"
+                @submit.prevent="addChildChapter"
+              >
+                <input
+                  v-model.trim="childChapterName"
+                  class="input"
+                  :placeholder="t('ep.manage.chapter_add_child_placeholder')"
+                  :aria-label="t('ep.manage.chapter_add_child_placeholder')"
+                  @keydown.esc.prevent="cancelChildChapter"
+                />
+                <button type="submit" class="btn btn-sm" :disabled="chapterSaving || !childChapterName">{{ t('ep.banks.chapter_add') }}</button>
+                <button type="button" class="btn btn-sm btn-quiet" @click="cancelChildChapter">{{ t('ep.common.cancel') }}</button>
+              </form>
+            </template>
           </div>
           <div v-else class="empty" style="padding: 26px 0">
             <div class="empty-desc">{{ t('ep.banks.chapter_empty') }}</div>
           </div>
           <form v-if="canEdit" class="chapter-add" @submit.prevent="addChapter">
             <input v-model.trim="newChapterName" class="input" :placeholder="t('ep.manage.chapter_name_placeholder')" />
+            <select v-model="newChapterParentId" class="select">
+              <option value="">{{ t('ep.manage.chapter_root') }}</option>
+              <option v-for="c in chapterTree" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </select>
             <button type="submit" class="btn btn-sm" :disabled="chapterSaving || !newChapterName">{{ t('ep.banks.chapter_add') }}</button>
           </form>
         </div>
-        <div v-if="allTags.length" class="panel" style="margin-top: 24px">
+
+        <div class="panel" style="margin-top: 24px">
           <div class="panel-head"><span class="panel-title">{{ t('ep.manage.col_tags') }}</span></div>
-          <div class="tag-cloud">
-            <span v-for="tag in allTags" :key="tag" class="tag">{{ tag }}<span class="tag-count mono">{{ tagCount(tag) }}</span></span>
+          <div class="tag-list">
+            <div v-for="tag in tagRows" :key="tag.id" class="tag-row">
+              <template v-if="editingTagId === tag.id">
+                <input
+                  v-model.trim="tag.draft"
+                  class="input tag-row-input"
+                  :aria-label="t('ep.manage.tag_rename')"
+                  @keydown.enter.prevent="renameTag(tag)"
+                  @keydown.esc.prevent="cancelTagEdit(tag)"
+                />
+                <span class="tag-count mono">{{ tag.question_count }}</span>
+                <button type="button" class="btn btn-sm" data-testid="tag-save" :disabled="!tag.draft || tag.draft === tag.name" @click="renameTag(tag)">{{ t('ep.manage.tag_save') }}</button>
+                <button type="button" class="btn btn-sm btn-quiet" @click="cancelTagEdit(tag)">{{ t('ep.common.cancel') }}</button>
+                <button type="button" class="btn btn-sm btn-danger" @click="removeTag(tag)">{{ t('ep.manage.tag_delete') }}</button>
+              </template>
+              <template v-else>
+                <span class="tag-name">{{ tag.name }}</span>
+                <span class="tag-count mono">{{ tag.question_count }}</span>
+                <template v-if="canEdit">
+                  <button type="button" class="btn btn-sm btn-quiet" @click="startTagEdit(tag)">{{ t('ep.manage.tag_rename') }}</button>
+                  <button type="button" class="btn btn-sm btn-danger" @click="removeTag(tag)">{{ t('ep.manage.tag_delete') }}</button>
+                </template>
+              </template>
+            </div>
+            <div v-if="tagsError && !tagRows.length" class="empty" style="padding: 12px 0" data-testid="tags-error" role="alert">
+              <div class="empty-desc">{{ tagsError }}</div>
+              <div class="empty-actions">
+                <button type="button" class="btn btn-sm" data-testid="tags-retry" @click="reloadTags">{{ t('ep.common.retry') }}</button>
+              </div>
+            </div>
+            <p v-else-if="!tagRows.length" class="hint">{{ t('ep.manage.tag_empty') }}</p>
           </div>
+          <form v-if="canEdit" class="tag-add" @submit.prevent="addTag">
+            <input v-model.trim="newTagName" class="input" :placeholder="t('ep.manage.tag_placeholder')" />
+            <button type="submit" class="btn btn-sm" :disabled="!newTagName">{{ t('ep.manage.tag_add') }}</button>
+          </form>
         </div>
       </section>
 
       <!-- Members -->
       <section v-else-if="activeTab === 'members'" class="manage-single">
         <div class="section-note" style="margin-bottom: 12px">{{ t('ep.manage.members_note') }}</div>
+        <p v-if="!isOwner" class="hint" data-testid="owner-members-note">{{ t('ep.manage.owner_members_note') }}</p>
         <div class="panel">
           <div class="list">
-            <div v-for="m in members" :key="m.user_id" class="list-row">
+            <div
+              v-for="m in members"
+              :key="m.user_id"
+              class="list-row member-row"
+              :data-user-id="m.user_id"
+              :data-role="m.role"
+            >
               <span class="avatar sm">{{ (m.username || '?').charAt(0).toUpperCase() }}</span>
               <span class="list-main">
-                <span class="list-title">{{ m.username }}</span>
-                <span class="list-meta">{{ formatRole(m.role) }}</span>
+                <span class="list-title">
+                  {{ m.username }}
+                  <span v-if="m.is_self" class="tag" data-testid="member-self-badge">{{ t('ep.collab.self_badge') }}</span>
+                </span>
+                <span class="list-meta" data-testid="member-role">{{ formatRole(m.role) }}</span>
+                <span class="list-meta mono" data-testid="member-joined-at">{{ t('ep.collab.joined_at') }} · {{ formatJoinedAt(m) }}</span>
               </span>
-              <span v-if="isOwner && m.role !== 'ADMIN'" class="list-side">
-                <button type="button" class="btn btn-sm btn-quiet" @click="removeMember(m)">{{ t('ep.manage.remove_member') }}</button>
+              <span v-if="isOwner && m.role !== 'ADMIN'" class="list-side member-actions">
+                <select
+                  :value="m.role"
+                  class="select"
+                  :disabled="memberBusyId === m.user_id"
+                  :aria-label="t('ep.collab.change_role')"
+                  :data-testid="`member-role-select-${m.user_id}`"
+                  @change="changeMemberRole(m, $event.target.value)"
+                >
+                  <option value="EDITOR">{{ t('ep.banks.editor') }}</option>
+                  <option value="MEMBER">{{ t('ep.banks.member') }}</option>
+                </select>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-quiet"
+                  data-testid="member-transfer"
+                  :disabled="memberBusyId === m.user_id"
+                  @click="requestTransfer(m)"
+                >{{ t('ep.collab.transfer_action') }}</button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-quiet"
+                  data-testid="member-remove"
+                  :disabled="memberBusyId === m.user_id"
+                  @click="requestRemoveMember(m)"
+                >{{ t('ep.collab.remove_action') }}</button>
               </span>
+              <span
+                v-if="memberActionError.userId === m.user_id"
+                class="hint bad-text member-row-error"
+                role="alert"
+                data-testid="member-row-error"
+              >{{ memberActionError.message }}</span>
             </div>
-            <div v-if="!members.length" class="empty" style="padding: 24px 0">
+            <div v-if="membersError && !members.length" class="empty" style="padding: 24px 0" data-testid="members-error" role="alert">
+              <div class="empty-desc">{{ membersError }}</div>
+              <div class="empty-actions">
+                <button type="button" class="btn btn-sm" data-testid="members-retry" @click="reloadMembers">{{ t('ep.common.retry') }}</button>
+              </div>
+            </div>
+            <div v-else-if="!members.length" class="empty" style="padding: 24px 0">
               <div class="empty-desc">{{ t('ep.common.none') }}</div>
             </div>
+          </div>
+          <div v-if="!isOwner && bank" class="member-leave">
+            <button type="button" class="btn btn-sm btn-quiet" data-testid="member-leave" @click="leaveCurrentBank">{{ t('ep.manage.leave_bank') }}</button>
           </div>
         </div>
 
         <div v-if="isOwner" class="member-add panel" style="margin-top: 24px">
           <div class="panel-head"><span class="panel-title">{{ t('ep.manage.add_member') }}</span></div>
           <form class="member-form" @submit.prevent="addMember">
-            <input v-model.trim="memberForm.username" class="input" :placeholder="t('ep.manage.username_placeholder')" required />
-            <select v-model="memberForm.role" class="select">
+            <div class="member-search-field">
+              <input
+                v-model.trim="memberSearch"
+                class="input"
+                role="combobox"
+                aria-autocomplete="list"
+                :aria-expanded="memberSearchOpen ? 'true' : 'false'"
+                aria-controls="member-search-listbox"
+                :aria-activedescendant="memberActiveOptionId || undefined"
+                :placeholder="t('ep.collab.search_placeholder')"
+                :aria-label="t('ep.collab.search_placeholder')"
+                autocomplete="off"
+                data-testid="member-search-input"
+                @keydown="onMemberSearchKeydown"
+              />
+              <ul
+                v-if="memberSearchOpen && memberResults.length"
+                id="member-search-listbox"
+                class="member-search-list"
+                role="listbox"
+                :aria-label="t('ep.collab.search_placeholder')"
+              >
+                <li
+                  v-for="(candidate, idx) in memberResults"
+                  :id="memberOptionId(candidate)"
+                  :key="candidate.id"
+                  class="member-search-option"
+                  role="option"
+                  :aria-selected="idx === memberActiveIndex ? 'true' : 'false'"
+                  :class="{ 'is-active': idx === memberActiveIndex }"
+                  @mouseenter="memberActiveIndex = idx"
+                  @mousedown.prevent="selectMemberCandidate(candidate)"
+                >{{ candidate.username }}</li>
+              </ul>
+              <p v-if="memberSearchBusy" class="hint member-search-hint">{{ t('ep.common.loading') }}</p>
+              <p v-else-if="memberSearchError" class="hint bad-text member-search-hint" role="alert" data-testid="member-search-error">{{ t('ep.collab.search_error', { message: memberSearchError }) }}</p>
+              <p v-else-if="memberSearchNoResults" class="hint member-search-hint" data-testid="member-search-empty">{{ t('ep.collab.no_results') }}</p>
+            </div>
+            <span v-if="memberSelected" class="member-selected" data-testid="member-selected">{{ t('ep.collab.selected_user', { name: memberSelected.username }) }}</span>
+            <select v-model="memberRole" class="select" :aria-label="t('ep.collab.change_role')" data-testid="member-add-role">
               <option value="EDITOR">{{ t('ep.banks.editor') }}</option>
               <option value="MEMBER">{{ t('ep.banks.member') }}</option>
             </select>
-            <button type="submit" class="btn" :disabled="memberSaving || !memberForm.username">{{ t('ep.manage.add') }}</button>
+            <button type="submit" class="btn" data-testid="member-add-submit" :disabled="memberSaving || !memberSelected">
+              {{ memberSaving ? t('ep.common.loading') : t('ep.manage.add') }}
+            </button>
           </form>
-          <div class="hint" style="margin-top: 8px">{{ t('ep.manage.owner_only') }}</div>
+          <p v-if="memberAddError" class="error" role="alert" data-testid="member-add-error">{{ memberAddError }}</p>
         </div>
       </section>
 
@@ -295,9 +540,66 @@
           <div class="panel-head"><span class="panel-title">{{ t('ep.manage.tab_imports') }}</span></div>
           <p class="section-note">{{ t('ep.manage.imports_note') }}</p>
           <p class="section-note" style="margin-top: 6px">{{ t('ep.manage.formats_note') }}</p>
+
+          <!-- Unfinished wizard drafts. Each row re-opens the wizard at its
+               saved step instead of starting from the file again. -->
+          <div v-if="importDrafts.length" class="manage-drafts" data-testid="import-drafts" style="margin-top: 16px">
+            <div class="rule-label">{{ t('ep.imports.resume_title') }}</div>
+            <p class="section-note" style="margin-top: 6px">{{ t('ep.imports.resume_hint') }}</p>
+            <div class="list" style="margin-top: 10px">
+              <div v-for="draft in importDrafts" :key="draft.id" class="list-row" data-testid="draft-row">
+                <span class="list-main">
+                  <span class="qrow-stem">{{ draft.filename || t('ep.imports.untitled') }}</span>
+                  <span class="hint">
+                    {{ importDraftKind(draft.source_kind) }}<template v-if="draft.updated_at"> · {{ formatDateTime(draft.updated_at, locale) }}</template>
+                  </span>
+                </span>
+                <button type="button" class="btn btn-sm" data-testid="draft-resume" @click="resumeImportDraft(draft)">
+                  {{ t('ep.imports.resume_continue') }}
+                </button>
+                <button type="button" class="btn btn-sm btn-quiet" data-testid="draft-delete" @click="removeImportDraft(draft)">
+                  {{ t('ep.imports.resume_delete') }}
+                </button>
+              </div>
+            </div>
+            <p v-if="importDraftsError" class="hint bad-text" role="alert" data-testid="imports-drafts-error">{{ importDraftsError }}</p>
+          </div>
+
+          <div v-if="importJobs.length" class="mtable-wrap" style="margin-top: 14px">
+            <table class="mtable import-table">
+              <thead>
+                <tr>
+                  <th>{{ t('ep.manage.import_file') }}</th>
+                  <th>{{ t('ep.manage.import_format') }}</th>
+                  <th>{{ t('ep.manage.import_status') }}</th>
+                  <th>{{ t('ep.manage.import_count') }}</th>
+                  <th>{{ t('ep.manage.import_time') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="job in importJobs" :key="job.id" class="mtable-row import-row">
+                  <td class="od-truncate">{{ job.filename || '—' }}</td>
+                  <td class="mono">{{ job.format }}</td>
+                  <td>
+                    <span class="tag" :data-status="job.status" :class="{ ok: job.status === 'IMPORTED', bad: job.status === 'FAILED' || job.status === 'PRECHECK_FAILED' }">{{ importStatusLabel(job.status) }}</span>
+                    <span v-if="job.reason" class="hint block">{{ job.reason }}</span>
+                  </td>
+                  <td class="mono">{{ job.imported_count || 0 }}</td>
+                  <td class="mono dim">{{ formatDateTime(job.completed_at || job.created_at, locale) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else-if="importsError" class="empty" style="padding: 18px 0" data-testid="imports-error" role="alert">
+            <div class="empty-desc">{{ importsError }}</div>
+            <div class="empty-actions">
+              <button type="button" class="btn btn-sm" data-testid="imports-retry" @click="reloadImports">{{ t('ep.common.retry') }}</button>
+            </div>
+          </div>
+          <p v-else class="hint" style="margin-top: 14px">{{ t('ep.manage.import_empty') }}</p>
           <div class="empty-actions" style="justify-content: flex-start; margin-top: 18px">
-            <button type="button" class="btn btn-primary" @click="router.push(`/import?bankId=${bankId}`)">
-              <LinearIcon name="upload" :size="14" />{{ t('ep.manage.go_import') }}
+            <button v-if="canEdit" type="button" class="btn btn-primary" @click="router.push(`/import?bankId=${bankId}`)">
+              <LinearIcon name="import" :size="14" />{{ t('ep.manage.go_import') }}
             </button>
           </div>
         </div>
@@ -309,8 +611,8 @@
           <div class="panel-head"><span class="panel-title">{{ t('ep.manage.tab_drafts') }}</span></div>
           <p class="section-note">{{ t('ep.manage.drafts_note') }}</p>
           <div class="empty-actions" style="justify-content: flex-start; margin-top: 18px">
-            <button type="button" class="btn" @click="openDialog('drafts')">{{ t('ep.manage.open_drafts') }}</button>
-            <button type="button" class="btn btn-quiet" @click="openAiSettings">{{ t('ep.manage.ai_configure') }}</button>
+            <button type="button" class="btn" data-testid="open-local-drafts" @click="showDrafts = true">{{ t('ep.manage.open_drafts') }}</button>
+            <button type="button" class="btn btn-quiet" :title="t('ep.manage.ai_configure')" @click="openAiSettings">{{ t('ep.manage.ai_configure') }}</button>
           </div>
         </div>
       </section>
@@ -320,25 +622,76 @@
         <div class="panel">
           <div class="panel-head"><span class="panel-title">{{ t('ep.manage.tab_settings') }}</span></div>
           <p class="section-note">{{ t('ep.manage.settings_note') }}</p>
-          <div class="kv" style="margin-top: 12px">
-            <div class="kv-row"><span class="kv-key">{{ t('ep.manage.name_label') }}</span><span class="kv-val">{{ bank?.name }}</span></div>
-            <div class="kv-row"><span class="kv-key">{{ t('ep.manage.category_label') }}</span><span class="kv-val">{{ bank?.category || t('ep.common.none') }}</span></div>
-            <div class="kv-row"><span class="kv-key">{{ t('ep.manage.description_label') }}</span><span class="kv-val">{{ bank?.description || t('ep.common.none') }}</span></div>
-            <div class="kv-row"><span class="kv-key">{{ t('ep.manage.permission_label') }}</span><span class="kv-val">{{ formatRole(bank?.role) }}</span></div>
-            <div class="kv-row"><span class="kv-key">{{ t('ep.manage.locked_meta') }}</span><span class="kv-val">{{ hasActiveExam ? t('ep.manage.locked_title') : t('ep.common.none') }}</span></div>
+          <p v-if="!isOwner" class="hint" data-testid="owner-settings-note">{{ t('ep.manage.owner_settings_note') }}</p>
+          <form class="form-grid settings-form" @submit.prevent="saveBankSettings">
+            <label class="field"><span class="label">{{ t('ep.manage.name_label') }}</span>
+              <input v-model.trim="settingsForm.name" class="input" :disabled="!isOwner || settingsSaving" required />
+            </label>
+            <label class="field"><span class="label">{{ t('ep.manage.category_label') }}</span>
+              <input v-model.trim="settingsForm.category" class="input" :disabled="!isOwner || settingsSaving" :placeholder="t('ep.manage.default_category')" />
+            </label>
+            <label class="field"><span class="label">{{ t('ep.manage.description_label') }}</span>
+              <textarea v-model.trim="settingsForm.description" class="textarea" rows="3" :disabled="!isOwner || settingsSaving"></textarea>
+            </label>
+            <div class="kv">
+              <div class="kv-row"><span class="kv-key">{{ t('ep.manage.permission_label') }}</span><span class="kv-val">{{ formatRole(bank?.role) }}</span></div>
+              <div class="kv-row"><span class="kv-key">{{ t('ep.manage.locked_meta') }}</span><span class="kv-val">{{ hasActiveExam ? t('ep.manage.locked_title') : t('ep.common.none') }}</span></div>
+            </div>
+            <div v-if="isOwner" class="empty-actions" style="justify-content: flex-start">
+              <button type="submit" class="btn btn-primary" :disabled="settingsSaving || !settingsForm.name">{{ settingsSaving ? t('common.loading') : t('common.save') }}</button>
+            </div>
+          </form>
+        </div>
+
+        <div ref="exportPanelRef" class="panel export-panel" data-testid="export-panel" tabindex="-1" style="margin-top: 24px">
+          <div class="panel-head"><span class="panel-title">{{ t('ep.manage.export') }}</span></div>
+          <p class="section-note">{{ t('ep.manage.export_note') }}</p>
+          <div class="export-actions">
+            <button v-for="fmt in exportFormats" :key="fmt" type="button" class="btn btn-sm" :data-testid="`export-${fmt}`" @click="exportBankFile(fmt)">{{ fmt.toUpperCase() }}</button>
+            <label class="archived-toggle">
+              <input v-model="exportIncludeArchived" type="checkbox" data-testid="export-include-archived" />
+              <span>{{ t('ep.manage.export_include_archived') }}</span>
+            </label>
           </div>
+        </div>
+
+        <div v-if="isOwner" class="panel danger-zone" style="margin-top: 24px">
+          <div class="panel-head"><span class="panel-title">{{ t('ep.manage.danger_zone') }}</span></div>
+          <p class="section-note">{{ t('ep.manage.danger_note') }}</p>
+          <div class="empty-actions" style="justify-content: flex-start">
+            <button type="button" class="btn danger-btn" data-testid="bank-archive" :disabled="hasActiveExam" @click="archiveCurrentBank">{{ t('ep.manage.archive_bank') }}</button>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top: 24px">
+          <div class="panel-head"><span class="panel-title">{{ t('ep.manage.audit') }}</span></div>
+          <p class="section-note">{{ t('ep.manage.audit_note') }}</p>
+          <div v-if="isOwner && auditRows.length" class="audit-list">
+            <div v-for="row in auditRows" :key="row.id" class="audit-row" :data-action="row.action">
+              <span class="mono small dim">{{ formatDateTime(row.created_at, locale) }}</span>
+              <span class="mono">{{ auditActionLabel(row.action) }}</span>
+              <span class="small dim od-truncate">{{ auditSummary(row) }}</span>
+            </div>
+          </div>
+          <p v-else-if="isOwner" class="hint">{{ t('ep.manage.audit_empty') }}</p>
+          <p v-else class="hint" data-testid="audit-owner-note">{{ t('ep.manage.audit_owner_only') }}</p>
         </div>
       </section>
     </template>
 
     <!-- Create question -->
-    <div v-if="showCreate" class="exam-setup-backdrop" @click.self="showCreate = false">
-      <form class="exam-setup-dialog manage-create" role="dialog" aria-modal="true" @submit.prevent="saveQuestion">
-        <h2>{{ t('ep.manage.create_title') }}</h2>
-        <p class="hint">{{ t('ep.manage.create_desc') }}</p>
-
+    <AppDialog
+      :open="showCreate"
+      :title="t('ep.manage.create_title')"
+      panel-class="manage-create"
+      :close-on-backdrop="false"
+      initial-focus="#create-stem"
+      @close="requestCreateClose"
+    >
+      <p class="hint">{{ t('ep.manage.create_desc') }}</p>
+      <form id="manage-create-form" class="create-form" @submit.prevent="saveQuestion">
         <label>{{ t('ep.manage.stem') }}
-          <textarea v-model.trim="createForm.stem" rows="3" :placeholder="t('ep.manage.stem_placeholder')" required></textarea>
+          <textarea id="create-stem" v-model.trim="createForm.stem" rows="3" :placeholder="t('ep.manage.stem_placeholder')" required></textarea>
         </label>
         <div class="create-grid">
           <label>{{ t('ep.manage.type') }}
@@ -346,6 +699,7 @@
               <option value="SINGLE">{{ t('ep.question_types.single') }}</option>
               <option value="MULTI">{{ t('ep.question_types.multi') }}</option>
               <option value="JUDGE">{{ t('ep.question_types.judge') }}</option>
+              <option value="FILL">{{ t('ep.question_types.fill') }}</option>
               <option value="ESSAY">{{ t('ep.question_types.essay') }}</option>
             </select>
           </label>
@@ -362,7 +716,7 @@
           </label>
         </div>
 
-        <div v-if="createForm.type !== 'ESSAY'" class="create-options">
+        <div v-if="!['ESSAY', 'FILL'].includes(createForm.type)" class="create-options">
           <div class="create-options-head">
             <span class="label">{{ t('ep.manage.options') }}</span>
             <button v-if="createForm.type !== 'JUDGE'" type="button" class="btn btn-sm btn-quiet" @click="addOption">{{ t('ep.manage.add_option') }}</button>
@@ -375,7 +729,7 @@
               @click="toggleAnswer(opt.key)"
             >{{ opt.key }}</button>
             <input v-model="opt.content" class="input" :placeholder="t('ep.manage.option_text')" />
-            <button v-if="createForm.type !== 'JUDGE' && createForm.options.length > 2" type="button" class="icon-btn" :aria-label="t('ep.manage.remove_member')" @click="removeOption(idx)">
+            <button v-if="createForm.type !== 'JUDGE' && createForm.options.length > 2" type="button" class="icon-btn" :aria-label="t('ep.manage.remove_option')" @click="removeOption(idx)">
               <LinearIcon name="x" :size="13" />
             </button>
           </div>
@@ -396,14 +750,89 @@
         </label>
 
         <p v-if="createError" class="error">{{ createError }}</p>
-        <div class="bank-actions">
-          <button type="button" @click="showCreate = false">{{ t('ep.manage.cancel') }}</button>
-          <button type="submit" class="primary" :disabled="creating || !createForm.stem || !createForm.answer">
-            {{ creating ? t('ep.manage.saving') : t('ep.manage.save_question') }}
-          </button>
-        </div>
       </form>
-    </div>
+      <template #foot>
+        <button type="button" class="btn btn-quiet" :disabled="creating" @click="requestCreateClose">{{ t('ep.manage.cancel') }}</button>
+        <button type="submit" form="manage-create-form" class="btn btn-primary" :disabled="creating || !createForm.stem || !createForm.answer">
+          {{ creating ? t('ep.manage.saving') : t('ep.manage.save_question') }}
+        </button>
+      </template>
+    </AppDialog>
+
+    <AppDialog
+      :open="createDiscardOpen"
+      :title="t('ep.common.unsaved_title')"
+      panel-class="create-discard-dialog"
+      style="--app-dialog-width: 420px"
+      initial-focus=".create-discard-keep"
+      @close="cancelCreateDiscard"
+    >
+      <p class="hint">{{ t('ep.common.unsaved_desc') }}</p>
+      <template #foot>
+        <button type="button" class="btn btn-quiet create-discard-keep" @click="cancelCreateDiscard">{{ t('ep.common.keep_editing') }}</button>
+        <button type="button" class="btn create-discard-accept" @click="acceptCreateDiscard">{{ t('ep.common.discard') }}</button>
+      </template>
+    </AppDialog>
+
+    <AppDialog
+      :open="Boolean(removeTarget)"
+      :title="t('ep.collab.remove_title')"
+      panel-class="member-remove-dialog"
+      style="--app-dialog-width: 440px"
+      @close="closeRemoveDialog"
+    >
+      <p class="hint">{{ t('ep.collab.remove_desc', { name: removeTarget?.username || '' }) }}</p>
+      <p v-if="removeError" class="error" role="alert">{{ removeError }}</p>
+      <template #foot>
+        <button type="button" class="btn btn-quiet" @click="closeRemoveDialog">{{ t('ep.common.cancel') }}</button>
+        <button
+          type="button"
+          class="btn btn-danger"
+          data-testid="member-remove-confirm"
+          :disabled="Boolean(memberBusyId)"
+          @click="removeMember(removeTarget)"
+        >{{ t('ep.collab.remove_action') }}</button>
+      </template>
+    </AppDialog>
+
+    <AppDialog
+      :open="Boolean(transferTarget)"
+      :title="t('ep.collab.transfer_title')"
+      panel-class="member-transfer-dialog danger-dialog"
+      style="--app-dialog-width: 460px"
+      initial-focus=".transfer-confirm-input"
+      @close="closeTransferDialog"
+    >
+      <p class="hint">{{ t('ep.collab.transfer_desc', { name: transferTarget?.username || '' }) }}</p>
+      <label class="field">
+        <span class="label">{{ t('ep.collab.transfer_confirm_label', { name: bank?.name || '' }) }}</span>
+        <input
+          v-model="transferNameDraft"
+          class="input transfer-confirm-input"
+          data-testid="transfer-confirm-input"
+          :placeholder="t('ep.collab.transfer_placeholder')"
+          autocomplete="off"
+        />
+      </label>
+      <p v-if="transferError" class="error" role="alert">{{ transferError }}</p>
+      <template #foot>
+        <button type="button" class="btn btn-quiet" :disabled="transferBusy" @click="closeTransferDialog">{{ t('ep.common.cancel') }}</button>
+        <button
+          type="button"
+          class="btn btn-danger"
+          data-testid="transfer-confirm"
+          :disabled="!transferNameMatches || transferBusy"
+          @click="transferOwnership"
+        >{{ t('ep.collab.transfer_action_confirm') }}</button>
+      </template>
+    </AppDialog>
+
+    <AiDraftsModal
+      v-if="showDrafts"
+      :token="token"
+      :bank-id="bankId"
+      @close="showDrafts = false"
+    />
 
     <QuestionEditModal
       :show="Boolean(activeModalQuestion)"
@@ -416,14 +845,27 @@
       @reloaded="handleQuestionReloaded"
       @conflict="handleConflictDetected"
     />
+
+    <StartStudyPanel
+      :show="showStartStudyPanel"
+      :sessions="startStudySessions"
+      :busy="startingPractice"
+      @continue="handleStartStudyContinue"
+      @end-and-start="handleStartStudyEndAndStart"
+      @cancel="handleStartStudyCancel"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
+import AppDialog from '../components/AppDialog.vue'
+import StartStudyPanel from '../components/StartStudyPanel.vue'
+import AiDraftsModal from '../components/AiDraftsModal.vue'
 import QuestionEditModal from '../components/QuestionEditModal.vue'
+import AccessDeniedState from '../components/AccessDeniedState.vue'
 import {
   getBank,
   listBanks,
@@ -432,17 +874,41 @@ import {
   listBankMembers,
   addBankMember,
   removeBankMember,
+  updateBankMemberRole,
+  leaveBank,
+  transferBankOwnership,
   createChapter,
   updateChapter,
   deleteChapter,
+  reorderChapters,
   createQuestion,
   batchBankQuestions,
+  updateBank,
+  deleteBank,
+  listBankAudit,
+  listBankImports,
+  listTags,
+  createTag,
+  updateTag,
+  deleteTag,
+  downloadBankExport,
 } from '../api/banks'
+import { searchUsers } from '../api/users'
+import { listImportDrafts, deleteImportDraft } from '../api/imports'
 import { useLocale } from '../composables/useLocale'
+import { useDirtyGuard } from '../composables/useDirtyGuard'
+import { useConfirm } from '../composables/useConfirm.js'
+import { useStartStudy } from '../composables/useStartStudy.js'
+import { formatDateTime } from '../utils/datetime.js'
+import { readStoredBankListQuery } from '../utils/bankListQuery.js'
+import { notifyBanksChanged } from '../utils/shellEvents.js'
+import { readQueryEnum, readQueryNumber, readQueryString, replaceQueryState } from '../utils/routeQuery.js'
 import {
   createEmptyBankFilters,
   isFilterActive,
   canEditQuestionInBank,
+  isBankMemberRole,
+  isBankOwner,
   isQuestionLocked,
   createSelection,
   toggleSelection,
@@ -450,6 +916,10 @@ import {
   isAllVisibleSelected,
   buildBatchRequest,
   filterBankQuestions,
+  flattenChapterTree,
+  buildChapterReorderPayload,
+  paginateList,
+  sortQuestionList,
   adaptOptionsOnTypeChange,
   adaptAnswerOnTypeChange,
   validateQuestionEdit,
@@ -462,9 +932,64 @@ const props = defineProps({
 
 const route = useRoute()
 const router = useRouter()
-const { t } = useLocale()
+const { t, locale } = useLocale()
+const { confirm: confirmAction } = useConfirm()
+
+const TAB_KEYS = ['questions', 'structure', 'members', 'imports', 'drafts', 'settings']
+const PAGE_SIZE_OPTIONS = [25, 50, 75, 100]
+const PAGE_SIZE_STORAGE_KEY = 'easyexam.bankManage.pageSize'
+const QUESTION_TYPES = ['SINGLE', 'MULTI', 'JUDGE', 'FILL', 'ESSAY']
+const QUESTION_SORTS = ['default', 'id', 'difficulty', 'updated']
+
+// The question list is a view people refresh, bookmark and share, so every
+// filter it shows lives in the address. Defaults stay out of the URL.
+const WORKSPACE_QUERY_DEFAULTS = {
+  q: '',
+  type: '',
+  difficulty: '',
+  tag: '',
+  chapter: '',
+  sort: 'default',
+  page: 1,
+}
+
+function readFiltersFromQuery(query) {
+  const rawDifficulty = readQueryString(query?.difficulty)
+  const difficulty = rawDifficulty ? Math.min(5, Math.max(1, Number(rawDifficulty) || 0)) : ''
+  return {
+    ...createEmptyBankFilters(),
+    keyword: readQueryString(query?.q),
+    type: readQueryEnum(query?.type, QUESTION_TYPES, ''),
+    difficulty: difficulty || '',
+    tag: readQueryString(query?.tag),
+    chapterId: readQueryString(query?.chapter),
+  }
+}
+
+function normalizeSort(value) {
+  return readQueryEnum(value, QUESTION_SORTS, 'default')
+}
+
+function normalizeTab(value) {
+  const raw = Array.isArray(value) ? value[0] : value
+  return TAB_KEYS.includes(raw) ? raw : 'questions'
+}
+
+function readStoredPageSize() {
+  try {
+    const parsed = Number(globalThis.localStorage?.getItem(PAGE_SIZE_STORAGE_KEY))
+    return PAGE_SIZE_OPTIONS.includes(parsed) ? parsed : PAGE_SIZE_OPTIONS[0]
+  } catch {
+    return PAGE_SIZE_OPTIONS[0]
+  }
+}
 
 const bankId = computed(() => route.params.bankId)
+
+function readArchivedQuery(value) {
+  const raw = Array.isArray(value) ? value[0] : value
+  return raw === '1' || raw === 1 || raw === true || raw === 'true'
+}
 
 const bank = ref(null)
 const questions = ref([])
@@ -473,15 +998,34 @@ const members = ref([])
 const banks = ref([])
 const hasActiveExam = ref(false)
 const loading = ref(true)
+const loadFailed = ref(false)
+// 'forbidden' | 'missing' when the bank itself is unreachable (not a member,
+// bank gone). Other failures keep the retryable banner.
+const accessError = ref('')
+const {
+  pending: startingPractice,
+  error: practiceError,
+  clearError: clearPracticeError,
+  start: startStudy,
+  continueSession: continueStudySession,
+  endAndStart: endAndStartStudy,
+} = useStartStudy(computed(() => props.token))
+const showStartStudyPanel = ref(false)
+const startStudySessions = ref([])
+const pendingStartStudyPayload = ref(null)
+const questionsLoading = ref(false)
 const error = ref('')
 const successToast = ref('')
 const conflictAlert = ref('')
-const activeTab = ref('questions')
+const activeTab = ref(normalizeTab(route.query?.tab))
+const tabsRef = ref(null)
+const exportPanelRef = ref(null)
 
-const filters = ref(createEmptyBankFilters())
+const filters = ref(readFiltersFromQuery(route.query))
 const activeModalQuestion = ref(null)
 
-const showArchived = ref(false)
+const showArchived = ref(readArchivedQuery(route.query?.archived))
+const showDrafts = ref(false)
 const selectedIds = ref(createSelection())
 const batchChapterId = ref('')
 const batchTags = ref('')
@@ -494,15 +1038,97 @@ const creating = ref(false)
 const createError = ref('')
 const createForm = ref(emptyForm())
 
-const memberForm = ref({ username: '', role: 'EDITOR' })
+const createDirty = computed(() => {
+  const form = createForm.value
+  if (!form) return false
+  return Boolean(
+    form.stem
+    || form.answer
+    || form.explanation
+    || form.tags
+    || (Array.isArray(form.options) && form.options.some(opt => String(opt.content || '').trim()))
+  )
+})
+
+const {
+  confirmDiscard: requestCreateDiscard,
+  discardPromptOpen: createDiscardOpen,
+  confirmDiscardAccept: acceptCreateDiscard,
+  confirmDiscardCancel: cancelCreateDiscard,
+} = useDirtyGuard(() => createDirty.value, () => { showCreate.value = false })
+
+// Member picker: a debounced prefix search instead of a blind username input.
+// `memberSelected` is the candidate the owner picked; typing again clears it.
+const memberSearch = ref('')
+const memberResults = ref([])
+const memberSearchOpen = ref(false)
+const memberSearchBusy = ref(false)
+const memberSearchError = ref('')
+const memberActiveIndex = ref(-1)
+const memberSelected = ref(null)
+const memberRole = ref('EDITOR')
 const memberSaving = ref(false)
+const memberAddError = ref('')
+const memberBusyId = ref('')
+const memberActionError = ref({ userId: '', message: '' })
+const removeTarget = ref(null)
+const removeError = ref('')
+const transferTarget = ref(null)
+const transferNameDraft = ref('')
+const transferError = ref('')
+const transferBusy = ref(false)
+let memberSearchTimer = null
+let memberSearchSeq = 0
 
 const newChapterName = ref('')
+const newChapterParentId = ref('')
 const editingChapterId = ref('')
 const chapterDraft = ref('')
+const chapterParentDraft = ref('')
 const chapterSaving = ref(false)
+const childParentId = ref('')
+const childChapterName = ref('')
+
+const questionSort = ref(normalizeSort(route.query?.sort))
+const currentPage = ref(readQueryNumber(route.query?.page, 1, { min: 1, max: 100000 }))
+const pageSize = ref(readStoredPageSize())
+const pageSizeOptions = PAGE_SIZE_OPTIONS
+
+const tagRows = ref([])
+const newTagName = ref('')
+const editingTagId = ref('')
+
+const importJobs = ref([])
+// Unfinished import-wizard drafts live separately from completed jobs: a draft
+// is a resumable workflow, a job is a record of an attempt.
+const importDrafts = ref([])
+const importDraftsError = ref('')
+const auditRows = ref([])
+
+// Per-resource load failures. These secondary resources must never collapse
+// into an "empty" state: an empty list is a fact, a failed request is not.
+const chaptersError = ref('')
+const membersError = ref('')
+const tagsError = ref('')
+const importsError = ref('')
+const banksError = ref('')
+// Retry hook for the generic error notice (e.g. a failed archived reload).
+const retryAction = ref(null)
+
+const settingsForm = ref({ name: '', category: '', description: '' })
+const settingsSaving = ref(false)
+const exportIncludeArchived = ref(false)
+const exportFormats = ['json', 'csv', 'txt', 'xlsx']
 
 const longTimer = ref(null)
+// Monotonic request sequence: a response is only applied when no newer
+// request (including a bank switch) has started since.
+let loadSeq = 0
+// Question-list reloads (archived toggle, retry) get their own sequence. They
+// must not borrow `loadSeq`, or a reload started while the page is still
+// loading would make `loadData`'s finally see a newer sequence and leave the
+// skeleton up forever with valid rows behind it.
+let questionsSeq = 0
 
 const tabs = computed(() => [
   { key: 'questions', label: 'ep.manage.tab_questions', count: questions.value.length },
@@ -517,6 +1143,8 @@ const difficultyOptions = computed(() => [1, 2, 3, 4, 5].map(value => ({ value, 
 
 const hasActiveFilters = computed(() => isFilterActive(filters.value))
 
+const hasActiveReset = computed(() => hasActiveFilters.value || questionSort.value !== 'default')
+
 const allTags = computed(() => {
   const set = new Set()
   for (const q of questions.value) {
@@ -529,7 +1157,38 @@ const allTags = computed(() => {
   return Array.from(set).sort()
 })
 
+// Practice draws from active rows only; an archived-only view has nothing to practise.
+const practicableCount = computed(() => questions.value.filter(q => !q.archived).length)
+
+const emptyState = computed(() => {
+  if (!questions.value.length) {
+    return showArchived.value
+      ? { title: t('ep.manage.archived_empty'), hint: t('ep.manage.archived_empty_hint') }
+      : { title: t('ep.manage.empty_bank'), hint: t('ep.manage.empty_bank_hint') }
+  }
+  return { title: t('ep.manage.no_match'), hint: t('ep.manage.no_match_hint') }
+})
+
 const filteredQuestions = computed(() => filterBankQuestions(questions.value, filters.value))
+
+const sortedQuestions = computed(() => sortQuestionList(filteredQuestions.value, questionSort.value))
+
+const pageState = computed(() => paginateList(sortedQuestions.value, currentPage.value, pageSize.value))
+
+const pageInfoText = computed(() => {
+  if (hasActiveFilters.value) {
+    return t('ep.manage.page_info_filtered', { total: pageState.value.total })
+  }
+  return t('ep.manage.page_info', {
+    page: pageState.value.page,
+    pages: pageState.value.pages,
+    total: pageState.value.total,
+  })
+})
+
+const pagedQuestions = computed(() => pageState.value.items)
+
+const chapterTree = computed(() => flattenChapterTree(chapters.value))
 
 const canEdit = computed(() => canEditQuestionInBank({
   role: bank.value?.role,
@@ -553,7 +1212,25 @@ const selectedLockedCount = computed(() => selectedQuestions.value.filter(q => i
 
 const batchBlocked = computed(() => selectedLockedCount.value > 0)
 
-const isOwner = computed(() => String(bank.value?.role || '').toUpperCase() === 'ADMIN')
+const isOwner = computed(() => isBankOwner(bank.value?.role))
+// The member-only notice is a role statement, so it must not reuse `canEdit`:
+// an exam lock also disables editing, and that is a different explanation.
+const isMember = computed(() => isBankMemberRole(bank.value?.role))
+
+const memberActiveOptionId = computed(() => {
+  const candidate = memberResults.value[memberActiveIndex.value]
+  return candidate ? memberOptionId(candidate) : ''
+})
+
+const memberSearchNoResults = computed(() => Boolean(memberSearch.value.trim())
+  && memberSearchOpen.value
+  && !memberSearchBusy.value
+  && !memberSearchError.value
+  && !memberSelected.value
+  && memberResults.value.length === 0)
+
+const transferNameMatches = computed(() => Boolean(transferTarget.value)
+  && transferNameDraft.value.trim() === String(bank.value?.name || ''))
 
 function rowEditable(question) {
   return canEdit.value && !isQuestionLocked(question) && !question?.archived
@@ -562,6 +1239,209 @@ function rowEditable(question) {
 function toggleRowSelection(questionId) {
   selectedIds.value = toggleSelection(selectedIds.value, questionId)
 }
+
+function goPage(page) {
+  currentPage.value = Math.max(1, Number(page) || 1)
+}
+
+function changePageSize(event) {
+  const next = Number(event?.target?.value)
+  if (!PAGE_SIZE_OPTIONS.includes(next)) return
+  pageSize.value = next
+  currentPage.value = 1
+  try {
+    globalThis.localStorage?.setItem(PAGE_SIZE_STORAGE_KEY, String(next))
+  } catch {
+    // storage unavailable (private mode): keep the in-memory choice
+  }
+}
+
+function setActiveTab(tabKey) {
+  if (!TAB_KEYS.includes(tabKey)) return
+  activeTab.value = tabKey
+  if (route.query?.tab === tabKey) return
+  router.replace({ query: { ...(route.query || {}), tab: tabKey } })
+}
+
+function focusTab(index) {
+  const buttons = tabsRef.value?.querySelectorAll?.('[role="tab"]')
+  const target = buttons?.[index]
+  if (target && typeof target.focus === 'function') target.focus()
+}
+
+// Roving tabindex: only the active tab is in the tab order, and arrows/Home/End
+// move both focus and selection so keyboard users can reach every tab.
+function onTabKeydown(event) {
+  const { key } = event
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return
+  event.preventDefault()
+  const current = Math.max(0, TAB_KEYS.indexOf(activeTab.value))
+  let next = current
+  if (key === 'ArrowLeft') next = (current - 1 + TAB_KEYS.length) % TAB_KEYS.length
+  else if (key === 'ArrowRight') next = (current + 1) % TAB_KEYS.length
+  else if (key === 'Home') next = 0
+  else if (key === 'End') next = TAB_KEYS.length - 1
+  setActiveTab(TAB_KEYS[next])
+  nextTick(() => focusTab(next))
+}
+
+function persistArchivedQuery(enabled) {
+  const query = { ...(route.query || {}), tab: activeTab.value }
+  if (enabled) query.archived = '1'
+  else delete query.archived
+  router.replace({ query })
+}
+
+function scrollActiveTabIntoView() {
+  nextTick(() => {
+    const active = tabsRef.value?.querySelector?.('.tab.is-active')
+    if (active && typeof active.scrollIntoView === 'function') {
+      active.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    }
+  })
+}
+
+watch(() => route.query?.tab, value => {
+  activeTab.value = normalizeTab(value)
+  scrollActiveTabIntoView()
+})
+
+watch(() => route.query?.archived, value => {
+  const next = readArchivedQuery(value)
+  if (next === showArchived.value) return
+  showArchived.value = next
+  clearSelection()
+  currentPage.value = 1
+  reloadQuestions()
+})
+
+// Set while the address is writing the controls, so restoring `page` from a
+// URL is not immediately undone by the "a new filter starts at page one" rule.
+let applyingRoute = false
+
+watch([filters, questionSort, showArchived], () => {
+  if (!applyingRoute) currentPage.value = 1
+  // A new filter/sort can hide rows that are still selected; the batch bar
+  // must never act on rows the user can no longer see.
+  clearSelection()
+}, { deep: true })
+
+// The workspace view lives in the URL: refresh, bookmark and "send this list
+// to a teammate" must all land on the same rows. Defaults are omitted so the
+// bare bank URL stays clean.
+function persistWorkspaceQuery() {
+  replaceQueryState(router, route.query, {
+    q: filters.value.keyword,
+    type: filters.value.type,
+    difficulty: filters.value.difficulty,
+    tag: filters.value.tag,
+    chapter: filters.value.chapterId,
+    sort: questionSort.value,
+    page: currentPage.value > 1 ? currentPage.value : '',
+  }, WORKSPACE_QUERY_DEFAULTS)
+}
+
+watch([filters, questionSort, currentPage], persistWorkspaceQuery, { deep: true })
+
+// Address → state. Browser back/forward and pasted links must drive the
+// controls, not just the other way round.
+watch(() => [
+  route.query?.q,
+  route.query?.type,
+  route.query?.difficulty,
+  route.query?.tag,
+  route.query?.chapter,
+  route.query?.sort,
+  route.query?.page,
+], () => {
+  const nextFilters = readFiltersFromQuery(route.query)
+  const current = filters.value
+  const filtersChanged = Object.keys(nextFilters).some(key => String(nextFilters[key] ?? '') !== String(current?.[key] ?? ''))
+  const nextSort = normalizeSort(route.query?.sort)
+  const nextPage = readQueryNumber(route.query?.page, 1, { min: 1, max: 100000 })
+  applyingRoute = true
+  if (filtersChanged) filters.value = nextFilters
+  if (nextSort !== questionSort.value) questionSort.value = nextSort
+  if (nextPage !== currentPage.value) currentPage.value = nextPage
+  nextTick(() => { applyingRoute = false })
+})
+
+function resetBankScopedState() {
+  // Invalidate anything still in flight for the previous bank.
+  loadSeq += 1
+  questionsSeq += 1
+  activeTab.value = normalizeTab(route.query?.tab)
+  showArchived.value = readArchivedQuery(route.query?.archived)
+  // The address survives a bank switch; the new bank should open on the same
+  // filtered view the link asked for, not on an empty one.
+  filters.value = readFiltersFromQuery(route.query)
+  questionSort.value = normalizeSort(route.query?.sort)
+  currentPage.value = readQueryNumber(route.query?.page, 1, { min: 1, max: 100000 })
+  clearSelection()
+  batchChapterId.value = ''
+  batchTags.value = ''
+  batchTargetBankId.value = ''
+  batchError.value = ''
+  error.value = ''
+  accessError.value = ''
+  practiceError.value = ''
+  startingPractice.value = false
+  showStartStudyPanel.value = false
+  startStudySessions.value = []
+  pendingStartStudyPayload.value = null
+  successToast.value = ''
+  conflictAlert.value = ''
+  createError.value = ''
+  showCreate.value = false
+  activeModalQuestion.value = null
+  showDrafts.value = false
+  editingChapterId.value = ''
+  chapterDraft.value = ''
+  chapterParentDraft.value = ''
+  childParentId.value = ''
+  childChapterName.value = ''
+  editingTagId.value = ''
+  chaptersError.value = ''
+  membersError.value = ''
+  tagsError.value = ''
+  importsError.value = ''
+  importDraftsError.value = ''
+  banksError.value = ''
+  retryAction.value = null
+  bank.value = null
+  questions.value = []
+  chapters.value = []
+  members.value = []
+  banks.value = []
+  tagRows.value = []
+  importJobs.value = []
+  importDrafts.value = []
+  auditRows.value = []
+  hasActiveExam.value = false
+  settingsForm.value = { name: '', category: '', description: '' }
+  memberSearch.value = ''
+  memberResults.value = []
+  memberSearchOpen.value = false
+  memberSearchBusy.value = false
+  memberSearchError.value = ''
+  memberSelected.value = null
+  memberAddError.value = ''
+  memberBusyId.value = ''
+  memberActionError.value = { userId: '', message: '' }
+  removeTarget.value = null
+  removeError.value = ''
+  transferTarget.value = null
+  transferNameDraft.value = ''
+  transferError.value = ''
+}
+
+// The router reuses this component between /banks/A/manage and
+// /banks/B/manage, so every bank-scoped bit of state must be reset explicitly.
+watch(() => route.params?.bankId, (nextId, prevId) => {
+  if (!nextId || nextId === prevId) return
+  resetBankScopedState()
+  loadData()
+})
 
 function toggleSelectAll(checked) {
   selectedIds.value = toggleVisibleSelection(selectedIds.value, visibleQuestionIds.value, checked)
@@ -572,14 +1452,77 @@ function clearSelection() {
 }
 
 function onArchivedToggle() {
+  const next = showArchived.value
+  return applyArchivedChange(next, !next)
+}
+
+async function applyArchivedChange(next, revertTo) {
+  showArchived.value = next
   clearSelection()
-  loadData()
+  currentPage.value = 1
+  const result = await reloadQuestions()
+  if (result === 'error') {
+    // The rows on screen are still the previous view. Never leave the toggle
+    // claiming a filter that was never fetched successfully.
+    showArchived.value = revertTo
+    retryAction.value = () => applyArchivedChange(next, revertTo)
+    return result
+  }
+  // Persist only after the matching rows arrived, so a failed toggle never
+  // rewrites the URL to a view that was not loaded.
+  if (result === 'ok') persistArchivedQuery(next)
+  retryAction.value = null
+  return result
+}
+
+async function retryLastAction() {
+  const action = retryAction.value
+  retryAction.value = null
+  if (action) await action()
+  else await loadData()
+}
+
+// A filter whose facet disappeared (chapter deleted, last tagged question
+// archived) would keep narrowing the list with no control left to undo it.
+// Only prune against facets that actually loaded; a failed chapter request
+// knows nothing about which chapters exist.
+function pruneStaleFacetFilters() {
+  if (filters.value.tag && !allTags.value.includes(filters.value.tag)) {
+    filters.value.tag = ''
+  }
+  if (filters.value.chapterId && !chaptersError.value
+      && !chapters.value.some(c => String(c.id) === String(filters.value.chapterId))) {
+    filters.value.chapterId = ''
+  }
+}
+
+async function reloadQuestions() {
+  if (!bankId.value) return 'stale'
+  const targetBankId = bankId.value
+  const requestId = ++questionsSeq
+  questionsLoading.value = true
+  error.value = ''
+  try {
+    const res = await listBankQuestionsContent(props.token, targetBankId, { includeArchived: showArchived.value })
+    if (requestId !== questionsSeq || bankId.value !== targetBankId) return 'stale'
+    questions.value = Array.isArray(res) ? res : []
+    pruneStaleFacetFilters()
+    return 'ok'
+  } catch (err) {
+    if (requestId !== questionsSeq) return 'stale'
+    error.value = err.detail || err.message
+    retryAction.value = reloadQuestions
+    return 'error'
+  } finally {
+    if (requestId === questionsSeq) questionsLoading.value = false
+  }
 }
 
 async function runBatch(operation) {
   if (!canEdit.value || batchBlocked.value) return
   let extras = {}
   if (operation === 'chapter') {
+    if (!batchChapterId.value) return
     extras = { chapterId: batchChapterId.value }
   } else if (operation === 'add_tags' || operation === 'remove_tags') {
     extras = { tags: batchTags.value.split(/[,，\s]+/).filter(Boolean) }
@@ -594,15 +1537,42 @@ async function runBatch(operation) {
   await sendBatch(built.payload)
 }
 
-async function archiveSelected() {
+async function clearBatchChapter() {
   if (!canEdit.value || batchBlocked.value || !selectedQuestions.value.length) return
-  if (!window.confirm(t('ep.manage.batch_archive_confirm', { count: selectedQuestions.value.length }))) return
-  await sendBatch({ question_ids: selectedQuestions.value.map(q => q.id), operation: 'archive' })
+  const accepted = await confirmAction(
+    { title: t('ep.manage.batch_chapter_clear_confirm', { count: selectedQuestions.value.length }) },
+    () => true,
+  )
+  if (accepted !== true) return
+  const built = buildBatchRequest('chapter', selectedQuestions.value.map(q => q.id), { chapterId: '' })
+  if (built.error) {
+    batchError.value = t('ep.manage.batch_failed')
+    return
+  }
+  await sendBatch(built.payload)
+}
+
+function selectedByArchived(archived) {
+  return selectedQuestions.value.filter(q => Boolean(q.archived) === archived)
+}
+
+async function archiveSelected() {
+  const targets = selectedByArchived(false)
+  if (!canEdit.value || batchBlocked.value || !targets.length) return
+  const accepted = await confirmAction(
+    { title: t('ep.manage.batch_archive_confirm', { count: targets.length }), danger: true },
+    () => true,
+  )
+  if (accepted !== true) return
+  await sendBatch({ question_ids: targets.map(q => q.id), operation: 'archive' })
 }
 
 async function restoreSelected() {
-  if (!canEdit.value || batchBlocked.value || !selectedQuestions.value.length) return
-  await sendBatch({ question_ids: selectedQuestions.value.map(q => q.id), operation: 'restore' })
+  // With "show archived" on the list mixes both kinds; restoring the active
+  // ones would be a silent no-op the success toast still claims to have done.
+  const targets = selectedByArchived(true)
+  if (!canEdit.value || batchBlocked.value || !targets.length) return
+  await sendBatch({ question_ids: targets.map(q => q.id), operation: 'restore' })
 }
 
 async function sendBatch(payload) {
@@ -615,6 +1585,28 @@ async function sendBatch(payload) {
     batchTags.value = ''
     await loadData()
     flashSuccess(t('ep.manage.batch_done'))
+  } catch (err) {
+    batchError.value = err.detail || err.message || t('ep.manage.batch_failed')
+  } finally {
+    batchBusy.value = false
+  }
+}
+
+async function toggleQuestionArchive(question) {
+  if (!canEdit.value || !question || question.locked_by_active_exam) return
+  const wasArchived = Boolean(question.archived)
+  batchBusy.value = true
+  batchError.value = ''
+  try {
+    await batchBankQuestions(props.token, bankId.value, {
+      question_ids: [question.id],
+      operation: wasArchived ? 'restore' : 'archive',
+    })
+    await loadData()
+    // Archiving with "show archived" off drops the row from the filtered list;
+    // never keep a selected id the user can no longer see.
+    pruneSelectionToVisible()
+    flashSuccess(t(wasArchived ? 'ep.manage.restore_done' : 'ep.manage.archive_done'))
   } catch (err) {
     batchError.value = err.detail || err.message || t('ep.manage.batch_failed')
   } finally {
@@ -646,6 +1638,62 @@ function formatRole(role) {
   if (upper === 'ADMIN') return t('ep.banks.owner')
   if (upper === 'EDITOR') return t('ep.banks.editor')
   return t('ep.banks.member')
+}
+
+function formatJoinedAt(member) {
+  return formatDateTime(member?.joined_at, locale.value) || '—'
+}
+
+const IMPORT_STATUS_KEYS = {
+  PENDING: 'ep.manage.import_status_pending',
+  QUEUED: 'ep.imports.job_pending',
+  RUNNING: 'ep.imports.job_running',
+  PROCESSING: 'ep.imports.job_running',
+  PRECHECK_FAILED: 'ep.manage.import_status_precheck_failed',
+  IMPORTED: 'ep.manage.import_status_imported',
+  COMPLETED: 'ep.manage.import_status_imported',
+  FAILED: 'ep.manage.import_status_failed',
+  CANCELLED: 'ep.imports.job_cancelled',
+}
+
+const AUDIT_ACTION_KEYS = {
+  BANK_CREATED: 'ep.manage.audit_bank_created',
+  BANK_UPDATED: 'ep.manage.audit_bank_updated',
+  BANK_DELETED: 'ep.manage.audit_bank_deleted',
+  BANK_RESTORED: 'ep.manage.audit_bank_restored',
+  BANK_BATCH: 'ep.manage.audit_bank_batch',
+  BANK_CATEGORY_RENAMED: 'ep.manage.audit_bank_category_renamed',
+  BANK_CATEGORY_DELETED: 'ep.manage.audit_bank_category_deleted',
+  BANK_MEMBER_ADDED: 'ep.manage.audit_bank_member_added',
+  BANK_MEMBER_REMOVED: 'ep.manage.audit_bank_member_removed',
+  BANK_MEMBER_LEFT: 'ep.manage.audit_bank_member_left',
+  BANK_MEMBER_ROLE_CHANGED: 'ep.manage.audit_bank_member_role_changed',
+  BANK_OWNER_TRANSFERRED: 'ep.manage.audit_bank_owner_transferred',
+  CHAPTER_CREATED: 'ep.manage.audit_chapter_created',
+  CHAPTER_UPDATED: 'ep.manage.audit_chapter_updated',
+  CHAPTER_DELETED: 'ep.manage.audit_chapter_deleted',
+  CHAPTERS_REORDERED: 'ep.manage.audit_chapters_reordered',
+  TAG_CREATED: 'ep.manage.audit_tag_created',
+  TAG_RENAMED: 'ep.manage.audit_tag_renamed',
+  TAG_DELETED: 'ep.manage.audit_tag_deleted',
+  TAG_MERGED: 'ep.manage.audit_tag_merged',
+}
+
+function humanizeEnum(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const words = raw.replace(/_/g, ' ').toLowerCase()
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+function importStatusLabel(status) {
+  const key = IMPORT_STATUS_KEYS[String(status || '').toUpperCase()]
+  return key ? t(key) : humanizeEnum(status)
+}
+
+function auditActionLabel(action) {
+  const key = AUDIT_ACTION_KEYS[String(action || '').toUpperCase()]
+  return key ? t(key) : humanizeEnum(action)
 }
 
 function formatTypeName(type) {
@@ -686,6 +1734,7 @@ function stripHtml(html) {
 
 function resetFilters() {
   filters.value = createEmptyBankFilters()
+  questionSort.value = 'default'
 }
 
 function openEdit(q) {
@@ -697,6 +1746,7 @@ function handleQuestionSaved(updatedQ) {
   const idx = questions.value.findIndex(item => item.id === updatedQ.id)
   if (idx !== -1) questions.value[idx] = updatedQ
   else questions.value.unshift(updatedQ)
+  pruneSelectionToVisible()
   if (updatedQ.conflict) {
     conflictAlert.value = t('bank_manage.conflict_detected')
     successToast.value = ''
@@ -710,6 +1760,7 @@ function handleQuestionReloaded(latestQ) {
   if (!latestQ) return
   const idx = questions.value.findIndex(item => item.id === latestQ.id)
   if (idx !== -1) questions.value[idx] = latestQ
+  pruneSelectionToVisible()
 }
 
 function handleConflictDetected() {
@@ -727,6 +1778,11 @@ function openCreate() {
   createForm.value = emptyForm()
   createError.value = ''
   showCreate.value = true
+}
+
+function requestCreateClose() {
+  if (creating.value) return
+  requestCreateDiscard()
 }
 
 function onTypeChange() {
@@ -753,7 +1809,7 @@ function toggleAnswer(key) {
     const parts = new Set(String(createForm.value.answer || '').split(/[\s,;]+/).filter(Boolean))
     if (parts.has(key)) parts.delete(key)
     else parts.add(key)
-    createForm.value.answer = Array.from(parts).join('')
+    createForm.value.answer = Array.from(parts).join(',')
   } else {
     createForm.value.answer = key
   }
@@ -790,34 +1846,218 @@ async function saveQuestion() {
 }
 
 async function addMember() {
-  if (!memberForm.value.username) return
+  if (!memberSelected.value || memberSaving.value) return
+  const candidate = memberSelected.value
   memberSaving.value = true
-  error.value = ''
+  memberAddError.value = ''
   try {
-    await addBankMember(props.token, bankId.value, memberForm.value.username, memberForm.value.role)
-    memberForm.value = { username: '', role: 'EDITOR' }
-    members.value = await listBankMembers(props.token, bankId.value).catch(() => members.value)
+    await addBankMember(props.token, bankId.value, candidate.username, memberRole.value)
+    memberSelected.value = null
+    memberSearch.value = ''
+    await reloadMembers()
+    notifyBanksChanged()
     flashSuccess(t('ep.manage.member_added'))
   } catch (err) {
-    error.value = err.detail || err.message
+    memberAddError.value = Number(err?.status) === 409
+      ? t('ep.collab.already_member', { name: candidate.username })
+      : t('ep.collab.add_failed', { message: err?.detail || err?.message || t('ep.common.load_failed') })
   } finally {
     memberSaving.value = false
   }
 }
 
+function memberOptionId(candidate) {
+  return `member-option-${candidate?.id ?? ''}`
+}
+
+function selectMemberCandidate(candidate) {
+  if (!candidate) return
+  memberSelected.value = candidate
+  memberResults.value = []
+  memberSearchOpen.value = false
+  memberActiveIndex.value = -1
+  memberSearchError.value = ''
+  memberAddError.value = ''
+}
+
+function onMemberSearchKeydown(event) {
+  const { key } = event
+  if (key === 'ArrowDown' && memberResults.value.length) {
+    event.preventDefault()
+    memberSearchOpen.value = true
+    memberActiveIndex.value = Math.min(memberActiveIndex.value + 1, memberResults.value.length - 1)
+    return
+  }
+  if (key === 'ArrowUp' && memberResults.value.length) {
+    event.preventDefault()
+    memberActiveIndex.value = Math.max(memberActiveIndex.value - 1, 0)
+    return
+  }
+  if (key === 'Enter' && memberResults.value.length && memberSearchOpen.value) {
+    event.preventDefault()
+    selectMemberCandidate(memberResults.value[memberActiveIndex.value] || memberResults.value[0])
+    return
+  }
+  if (key === 'Escape' && memberSearchOpen.value) {
+    event.preventDefault()
+    memberSearchOpen.value = false
+    memberActiveIndex.value = -1
+  }
+}
+
+async function runMemberSearch(term) {
+  const requestId = ++memberSearchSeq
+  try {
+    const res = await searchUsers(props.token, term)
+    if (requestId !== memberSearchSeq) return
+    memberResults.value = Array.isArray(res) ? res : []
+    memberSearchError.value = ''
+    memberSearchOpen.value = true
+    memberActiveIndex.value = memberResults.value.length ? 0 : -1
+  } catch (err) {
+    if (requestId !== memberSearchSeq) return
+    memberResults.value = []
+    memberSearchError.value = err?.detail || err?.message || t('ep.common.load_failed')
+    memberSearchOpen.value = true
+    memberActiveIndex.value = -1
+  } finally {
+    if (requestId === memberSearchSeq) memberSearchBusy.value = false
+  }
+}
+
+// Typing is the owner's intent, so it clears the previous pick and restarts
+// the 250ms debounce. An empty term closes the list without a request.
+watch(memberSearch, value => {
+  memberSelected.value = null
+  memberAddError.value = ''
+  memberSearchError.value = ''
+  memberActiveIndex.value = -1
+  memberSearchSeq += 1
+  if (memberSearchTimer) clearTimeout(memberSearchTimer)
+  const term = String(value || '').trim()
+  if (!term) {
+    memberResults.value = []
+    memberSearchOpen.value = false
+    memberSearchBusy.value = false
+    return
+  }
+  memberResults.value = []
+  memberSearchOpen.value = true
+  memberSearchBusy.value = true
+  memberSearchTimer = setTimeout(() => {
+    memberSearchTimer = null
+    void runMemberSearch(term)
+  }, 250)
+})
+
 async function removeMember(member) {
-  if (!window.confirm(t('ep.manage.remove_member_confirm', { name: member.username }))) return
+  if (!isOwner.value || !member || memberBusyId.value) return
+  const target = member
+  memberBusyId.value = target.user_id
+  removeError.value = ''
+  memberActionError.value = { userId: '', message: '' }
+  try {
+    await removeBankMember(props.token, bankId.value, target.user_id)
+    removeTarget.value = null
+    await reloadMembers()
+    notifyBanksChanged()
+    flashSuccess(t('ep.collab.member_removed'))
+  } catch (err) {
+    removeError.value = err?.detail || err?.message
+    memberActionError.value = { userId: target.user_id, message: removeError.value }
+  } finally {
+    memberBusyId.value = ''
+  }
+}
+
+function requestRemoveMember(member) {
+  if (!isOwner.value || memberBusyId.value) return
+  removeTarget.value = member
+  removeError.value = ''
+}
+
+function closeRemoveDialog() {
+  if (memberBusyId.value) return
+  removeTarget.value = null
+  removeError.value = ''
+}
+
+async function changeMemberRole(member, role) {
+  if (!isOwner.value || !member || member.role === role || memberBusyId.value) return
+  memberBusyId.value = member.user_id
+  memberActionError.value = { userId: '', message: '' }
+  try {
+    await updateBankMemberRole(props.token, bankId.value, member.user_id, role)
+    await reloadMembers()
+    notifyBanksChanged()
+    flashSuccess(t('ep.manage.member_updated'))
+  } catch (err) {
+    // Reload so the select falls back to the role the server still holds.
+    memberActionError.value = { userId: member.user_id, message: err?.detail || err?.message }
+    await reloadMembers()
+  } finally {
+    memberBusyId.value = ''
+  }
+}
+
+function requestTransfer(member) {
+  if (!isOwner.value || memberBusyId.value) return
+  transferTarget.value = member
+  transferNameDraft.value = ''
+  transferError.value = ''
+}
+
+function closeTransferDialog() {
+  if (transferBusy.value) return
+  transferTarget.value = null
+  transferNameDraft.value = ''
+  transferError.value = ''
+}
+
+async function transferOwnership() {
+  if (!transferTarget.value || !transferNameMatches.value || transferBusy.value) return
+  const target = transferTarget.value
+  transferBusy.value = true
+  transferError.value = ''
+  try {
+    await transferBankOwnership(props.token, bankId.value, target.username)
+    transferTarget.value = null
+    transferNameDraft.value = ''
+    notifyBanksChanged()
+    await loadData()
+    flashSuccess(t('ep.collab.transfer_done'))
+  } catch (err) {
+    transferError.value = err?.detail || err?.message
+  } finally {
+    transferBusy.value = false
+  }
+}
+
+async function leaveCurrentBank() {
+  if (isOwner.value) return
+  const accepted = await confirmAction(
+    { title: t('ep.manage.leave_confirm', { name: bank.value?.name || '' }), danger: true },
+    () => true,
+  )
+  if (accepted !== true) return
   error.value = ''
   try {
-    await removeBankMember(props.token, bankId.value, member.user_id)
-    members.value = members.value.filter(m => m.user_id !== member.user_id)
+    await leaveBank(props.token, bankId.value)
+    notifyBanksChanged()
+    router.push('/banks')
   } catch (err) {
     error.value = err.detail || err.message
   }
 }
 
-function openDialog(dialog) {
-  window.dispatchEvent(new CustomEvent('easyexam:open-dialog', { detail: dialog }))
+function focusExportPanel() {
+  setActiveTab('settings')
+  nextTick(() => {
+    const el = exportPanelRef.value
+    if (!el) return
+    if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    if (typeof el.focus === 'function') el.focus()
+  })
 }
 
 function openAiSettings() {
@@ -829,9 +2069,13 @@ async function addChapter() {
   chapterSaving.value = true
   error.value = ''
   try {
-    const created = await createChapter(props.token, bankId.value, { name: newChapterName.value })
+    const created = await createChapter(props.token, bankId.value, {
+      name: newChapterName.value,
+      parent_id: newChapterParentId.value || null,
+    })
     chapters.value.push(created)
     newChapterName.value = ''
+    newChapterParentId.value = ''
     flashSuccess(t('ep.manage.chapter_added'))
   } catch (err) {
     error.value = err.detail || err.message
@@ -843,11 +2087,61 @@ async function addChapter() {
 function startChapterEdit(chapter) {
   editingChapterId.value = chapter.id
   chapterDraft.value = chapter.name
+  chapterParentDraft.value = chapter.parent_id || ''
+}
+
+function startChildChapter(chapter) {
+  childParentId.value = chapter.id
+  childChapterName.value = ''
+  nextTick(() => {
+    const input = document.querySelector('.child-chapter-form .input')
+    if (input && typeof input.focus === 'function') input.focus()
+  })
+}
+
+function cancelChildChapter() {
+  childParentId.value = ''
+  childChapterName.value = ''
+}
+
+async function addChildChapter() {
+  if (!childParentId.value || !childChapterName.value) return
+  chapterSaving.value = true
+  error.value = ''
+  try {
+    const created = await createChapter(props.token, bankId.value, {
+      name: childChapterName.value,
+      parent_id: childParentId.value,
+    })
+    chapters.value.push(created)
+    cancelChildChapter()
+    flashSuccess(t('ep.manage.chapter_added'))
+  } catch (err) {
+    error.value = err.detail || err.message
+  } finally {
+    chapterSaving.value = false
+  }
 }
 
 function cancelChapterEdit() {
   editingChapterId.value = ''
   chapterDraft.value = ''
+  chapterParentDraft.value = ''
+}
+
+function chapterParentOptions(chapterId) {
+  const blocked = new Set([chapterId])
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const chapter of chapters.value) {
+      if (chapter.parent_id && blocked.has(chapter.parent_id) && !blocked.has(chapter.id)) {
+        blocked.add(chapter.id)
+        changed = true
+      }
+    }
+  }
+  return chapterTree.value.filter(chapter => !blocked.has(chapter.id))
 }
 
 async function saveChapter(chapter) {
@@ -857,7 +2151,7 @@ async function saveChapter(chapter) {
   try {
     const updated = await updateChapter(props.token, bankId.value, chapter.id, {
       name: chapterDraft.value,
-      parent_id: chapter.parent_id ?? null,
+      parent_id: chapterParentDraft.value || null,
     })
     const idx = chapters.value.findIndex(c => c.id === chapter.id)
     if (idx !== -1) chapters.value[idx] = { ...chapters.value[idx], ...updated }
@@ -869,8 +2163,34 @@ async function saveChapter(chapter) {
   }
 }
 
+function canMoveChapter(chapter, direction) {
+  const siblings = chapterTree.value.filter(c => (c.parent_id || null) === (chapter.parent_id || null))
+  const index = siblings.findIndex(c => c.id === chapter.id)
+  return direction === 'up' ? index > 0 : index !== -1 && index < siblings.length - 1
+}
+
+async function moveChapter(chapter, direction) {
+  const built = buildChapterReorderPayload(chapters.value, chapter.id, direction)
+  if (built.error) return
+  chapterSaving.value = true
+  error.value = ''
+  try {
+    const updated = await reorderChapters(props.token, bankId.value, built.items)
+    if (Array.isArray(updated)) chapters.value = updated
+    else await loadData()
+  } catch (err) {
+    error.value = err.detail || err.message
+  } finally {
+    chapterSaving.value = false
+  }
+}
+
 async function removeChapter(chapter) {
-  if (!window.confirm(t('ep.manage.chapter_delete_confirm', { name: chapter.name }))) return
+  const accepted = await confirmAction(
+    { title: t('ep.manage.chapter_delete_confirm', { name: chapter.name }), danger: true },
+    () => true,
+  )
+  if (accepted !== true) return
   error.value = ''
   try {
     await deleteChapter(props.token, bankId.value, chapter.id)
@@ -884,32 +2204,405 @@ async function removeChapter(chapter) {
   }
 }
 
-async function loadData() {
-  if (!bankId.value) return
-  loading.value = true
+async function addTag() {
+  if (!newTagName.value) return
   error.value = ''
   try {
-    const [bankRes, questionsRes, chaptersRes, membersRes, banksRes] = await Promise.all([
-      getBank(props.token, bankId.value),
-      listBankQuestionsContent(props.token, bankId.value, { includeArchived: showArchived.value }),
-      listChapters(props.token, bankId.value).catch(() => []),
-      listBankMembers(props.token, bankId.value).catch(() => []),
-      listBanks(props.token).catch(() => []),
-    ])
-    bank.value = bankRes
-    questions.value = Array.isArray(questionsRes) ? questionsRes : []
-    chapters.value = Array.isArray(chaptersRes) ? chaptersRes : []
-    members.value = Array.isArray(membersRes) ? membersRes : []
-    banks.value = Array.isArray(banksRes) ? banksRes : (banksRes?.banks || [])
-    hasActiveExam.value = Boolean(bankRes?.locked_by_active_exam || bankRes?.has_active_exam || questions.value.some(q => q.locked_by_active_exam))
+    const name = newTagName.value
+    const created = await createTag(props.token, bankId.value, name)
+    newTagName.value = ''
+    const row = created && typeof created === 'object'
+      ? { ...created, name: created.name || name, draft: created.name || name }
+      : { id: `local-${Date.now()}`, name, question_count: 0, draft: name }
+    tagRows.value = [...tagRows.value, row]
+    flashSuccess(t('ep.manage.tag_added'))
   } catch (err) {
     error.value = err.detail || err.message
-  } finally {
-    loading.value = false
   }
 }
 
-onMounted(loadData)
+function startTagEdit(tag) {
+  editingTagId.value = tag.id
+  tag.draft = tag.name
+}
+
+function cancelTagEdit(tag) {
+  tag.draft = tag.name
+  editingTagId.value = ''
+}
+
+async function renameTag(tag) {
+  if (!tag.draft || tag.draft === tag.name) return
+  error.value = ''
+  const nextName = tag.draft
+  const target = tagRows.value.find(row => row.id !== tag.id && row.name === nextName)
+  if (target) {
+    const accepted = await confirmAction(
+      { title: t('ep.manage.tag_merge_confirm', { name: nextName }), danger: true },
+      () => true,
+    )
+    if (accepted !== true) return
+  }
+  try {
+    const updated = await updateTag(props.token, bankId.value, tag.id, nextName)
+    if (target) {
+      target.question_count = Number(target.question_count || 0) + Number(tag.question_count || 0)
+      tagRows.value = tagRows.value.filter(row => row.id !== tag.id)
+    } else {
+      const idx = tagRows.value.findIndex(row => row.id === tag.id)
+      if (idx !== -1) {
+        const resolved = updated && typeof updated === 'object' ? updated : {}
+        tagRows.value[idx] = { ...tagRows.value[idx], ...resolved, name: resolved.name || nextName, draft: resolved.name || nextName }
+      }
+    }
+    for (const question of questions.value) {
+      if (Array.isArray(question.tags) && question.tags.includes(tag.name)) {
+        question.tags = question.tags.map(name => (name === tag.name ? nextName : name))
+      }
+    }
+    editingTagId.value = ''
+    flashSuccess(t('ep.manage.tag_renamed'))
+  } catch (err) {
+    error.value = err.detail || err.message
+  }
+}
+
+async function removeTag(tag) {
+  const accepted = await confirmAction(
+    { title: t('ep.manage.tag_delete_confirm', { name: tag.name, count: tag.question_count ?? tagCount(tag.name) }), danger: true },
+    () => true,
+  )
+  if (accepted !== true) return
+  error.value = ''
+  try {
+    await deleteTag(props.token, bankId.value, tag.id)
+    tagRows.value = tagRows.value.filter(row => row.id !== tag.id)
+    for (const question of questions.value) {
+      if (Array.isArray(question.tags)) question.tags = question.tags.filter(name => name !== tag.name)
+    }
+    if (editingTagId.value === tag.id) editingTagId.value = ''
+    flashSuccess(t('ep.manage.tag_deleted'))
+  } catch (err) {
+    error.value = err.detail || err.message
+  }
+}
+
+async function saveBankSettings() {
+  if (!isOwner.value || !settingsForm.value.name) return
+  settingsSaving.value = true
+  error.value = ''
+  try {
+    const payload = {
+      name: settingsForm.value.name,
+      description: settingsForm.value.description,
+    }
+    // A blank category means "leave it alone"; writing the localized label in
+    // would stamp UI text from one language into every member's bank record.
+    if (settingsForm.value.category) payload.category = settingsForm.value.category
+    const updated = await updateBank(props.token, bankId.value, payload)
+    bank.value = { ...bank.value, ...updated }
+    notifyBanksChanged()
+    await loadData()
+    flashSuccess(t('ep.manage.settings_saved'))
+  } catch (err) {
+    error.value = err.detail || err.message
+  } finally {
+    settingsSaving.value = false
+  }
+}
+
+async function exportBankFile(format) {
+  error.value = ''
+  try {
+    await downloadBankExport(props.token, bankId.value, format, exportIncludeArchived.value)
+    flashSuccess(t('ep.manage.export_done'))
+  } catch (err) {
+    error.value = err.detail || err.message
+  }
+}
+
+async function archiveCurrentBank() {
+  if (!isOwner.value || hasActiveExam.value) return
+  const accepted = await confirmAction(
+    { title: t('ep.manage.archive_confirm', { name: bank.value?.name || '' }), danger: true },
+    () => true,
+  )
+  if (accepted !== true) return
+  error.value = ''
+  try {
+    await deleteBank(props.token, bankId.value)
+    notifyBanksChanged()
+    router.push('/banks')
+  } catch (err) {
+    error.value = err.detail || err.message
+  }
+}
+
+function pruneSelectionToVisible() {
+  const visible = new Set(visibleQuestionIds.value)
+  const next = createSelection()
+  let changed = false
+  for (const id of selectedIds.value) {
+    if (visible.has(id)) next.add(id)
+    else changed = true
+  }
+  if (changed) selectedIds.value = next
+}
+
+function auditSummary(row) {
+  const details = row?.details
+  if (!details || typeof details !== 'object') return '—'
+  // Audit payloads may nest a `fields` map (BANK_UPDATED) or be flat. Show the
+  // changed field names only: readable, short, and never raw JSON.
+  const source = details.fields && typeof details.fields === 'object' ? details.fields : details
+  const names = Object.entries(source)
+    .filter(([, value]) => value !== null && value !== undefined && value !== '')
+    .map(([key]) => key)
+  return names.join(', ') || '—'
+}
+
+function resourceErrorMessage(err) {
+  return err?.detail || err?.message || t('ep.common.load_failed')
+}
+
+async function reloadChapters() {
+  const targetBankId = bankId.value
+  if (!targetBankId) return
+  try {
+    const res = await listChapters(props.token, targetBankId)
+    if (bankId.value !== targetBankId) return
+    chapters.value = Array.isArray(res) ? res : []
+    chaptersError.value = ''
+  } catch (err) {
+    if (bankId.value !== targetBankId) return
+    chaptersError.value = resourceErrorMessage(err)
+  }
+}
+
+async function reloadMembers() {
+  const targetBankId = bankId.value
+  if (!targetBankId) return
+  try {
+    const res = await listBankMembers(props.token, targetBankId)
+    if (bankId.value !== targetBankId) return
+    members.value = Array.isArray(res) ? res : []
+    membersError.value = ''
+  } catch (err) {
+    if (bankId.value !== targetBankId) return
+    membersError.value = resourceErrorMessage(err)
+  }
+}
+
+async function reloadTags() {
+  const targetBankId = bankId.value
+  if (!targetBankId) return
+  try {
+    const res = await listTags(props.token, targetBankId)
+    if (bankId.value !== targetBankId) return
+    tagRows.value = (Array.isArray(res) ? res : []).map(tag => ({ ...tag, draft: tag.name }))
+    tagsError.value = ''
+  } catch (err) {
+    if (bankId.value !== targetBankId) return
+    tagsError.value = resourceErrorMessage(err)
+  }
+}
+
+async function reloadImportDrafts(targetBankId) {
+  try {
+    const drafts = await listImportDrafts(props.token, targetBankId, 'OPEN')
+    if (bankId.value !== targetBankId) return
+    importDrafts.value = Array.isArray(drafts) ? drafts : []
+    importDraftsError.value = ''
+  } catch (err) {
+    if (bankId.value !== targetBankId) return
+    importDrafts.value = []
+    importDraftsError.value = resourceErrorMessage(err)
+  }
+}
+
+async function reloadImports() {
+  const targetBankId = bankId.value
+  if (!targetBankId) return
+  // Drafts are secondary: they must never hold the workspace hostage, so their
+  // request runs beside the job history instead of inside this await chain.
+  void reloadImportDrafts(targetBankId)
+  try {
+    const res = await listBankImports(props.token, targetBankId)
+    if (bankId.value !== targetBankId) return
+    importJobs.value = Array.isArray(res) ? res : []
+    importsError.value = ''
+  } catch (err) {
+    if (bankId.value !== targetBankId) return
+    importsError.value = resourceErrorMessage(err)
+  }
+}
+
+function importDraftKind(kind) {
+  const raw = String(kind || '').toLowerCase()
+  if (['spreadsheet', 'sheet', 'xlsx', 'csv'].includes(raw)) return t('ep.imports.source_sheet')
+  if (raw === 'pdf') return t('ep.imports.source_pdf')
+  if (['text', 'markdown', 'json'].includes(raw)) return t('ep.imports.source_text')
+  return t('ep.imports.untitled')
+}
+
+function resumeImportDraft(draft) {
+  if (!draft?.id) return
+  router.push({
+    name: 'import',
+    query: {
+      bankId: String(bankId.value),
+      draft: String(draft.id),
+      step: String(draft.step || 1),
+      from: 'manage',
+    },
+  })
+}
+
+async function removeImportDraft(draft) {
+  if (!draft?.id) return
+  try {
+    await deleteImportDraft(props.token, draft.id)
+    importDrafts.value = importDrafts.value.filter(row => String(row.id) !== String(draft.id))
+    importDraftsError.value = ''
+  } catch (err) {
+    importDraftsError.value = resourceErrorMessage(err)
+  }
+}
+
+async function reloadBanks() {
+  try {
+    const res = await listBanks(props.token)
+    banks.value = Array.isArray(res) ? res : (res?.banks || [])
+    banksError.value = ''
+  } catch (err) {
+    banksError.value = resourceErrorMessage(err)
+  }
+}
+
+async function loadData() {
+  if (!bankId.value) return
+  const targetBankId = bankId.value
+  const requestId = ++loadSeq
+  questionsSeq += 1
+  // The row list this request will return belongs to the archived mode it was
+  // started with. If the view changed while it was in flight (a back/forward
+  // that flips ?archived), its rows describe a view the user already left.
+  const archivedRequested = showArchived.value
+  loading.value = true
+  loadFailed.value = false
+  error.value = ''
+  retryAction.value = null
+  try {
+    const [bankRes, questionsRes] = await Promise.all([
+      getBank(props.token, targetBankId),
+      listBankQuestionsContent(props.token, targetBankId, { includeArchived: showArchived.value }),
+    ])
+    if (requestId !== loadSeq) return
+    bank.value = bankRes
+    accessError.value = ''
+    if (showArchived.value === archivedRequested) {
+      questions.value = Array.isArray(questionsRes) ? questionsRes : []
+    } else {
+      void reloadQuestions()
+    }
+    settingsForm.value = {
+      name: bankRes?.name || '',
+      category: bankRes?.category || '',
+      description: bankRes?.description || '',
+    }
+    hasActiveExam.value = Boolean(bankRes?.locked_by_active_exam || bankRes?.has_active_exam || questions.value.some(q => q.locked_by_active_exam))
+    // Secondary resources fail independently: one broken endpoint must not
+    // blank the whole page or masquerade as an empty list.
+    await Promise.all([reloadChapters(), reloadMembers(), reloadTags(), reloadImports(), reloadBanks()])
+    if (requestId !== loadSeq) return
+    pruneStaleFacetFilters()
+    if (isOwner.value) {
+      auditRows.value = await listBankAudit(props.token, targetBankId).catch(() => [])
+      if (requestId !== loadSeq) return
+      auditRows.value = Array.isArray(auditRows.value) ? auditRows.value : []
+    } else {
+      auditRows.value = []
+    }
+  } catch (err) {
+    if (requestId !== loadSeq) return
+    const status = Number(err?.status)
+    if (status === 403 || status === 404) {
+      accessError.value = status === 403 ? 'forbidden' : 'missing'
+      loadFailed.value = false
+      error.value = ''
+      return
+    }
+    loadFailed.value = true
+    error.value = err.detail || err.message
+  } finally {
+    if (requestId === loadSeq) loading.value = false
+  }
+}
+
+// The workspace owns the one "start practising this bank" action; every other
+// entry point (today, review) is a different session source. The composable
+// first asks the server whether an unfinished session exists, so a click never
+// silently starts a second one behind the user's back.
+async function startPractice() {
+  if (!practicableCount.value || startingPractice.value) return
+  const payload = { bank_id: bankId.value, mode: 'PRACTICE' }
+  const result = await startStudy(payload, { navigate: navigateToSession })
+  if (result?.blocked?.length) {
+    pendingStartStudyPayload.value = payload
+    startStudySessions.value = result.blocked
+    showStartStudyPanel.value = true
+  } else if (!result?.error) {
+    closeStartStudyPanel()
+  }
+}
+
+function navigateToSession(session) {
+  if (!session?.id) return
+  router.push(session.mode === 'EXAM' ? `/exam/${session.id}` : `/practice/${session.id}`)
+}
+
+function closeStartStudyPanel() {
+  showStartStudyPanel.value = false
+  startStudySessions.value = []
+  pendingStartStudyPayload.value = null
+}
+
+function handleStartStudyContinue() {
+  const session = startStudySessions.value[0]
+  closeStartStudyPanel()
+  clearPracticeError()
+  continueStudySession(session, navigateToSession)
+}
+
+async function handleStartStudyEndAndStart() {
+  const result = await endAndStartStudy(
+    startStudySessions.value,
+    pendingStartStudyPayload.value,
+    navigateToSession,
+  )
+  if (!result?.error) closeStartStudyPanel()
+}
+
+function handleStartStudyCancel() {
+  closeStartStudyPanel()
+}
+
+function goToBankList() {
+  router.push({ name: 'banks', query: readStoredBankListQuery() })
+}
+
+onMounted(async () => {
+  await loadData()
+  scrollActiveTabIntoView()
+})
+
+onBeforeUnmount(() => {
+  if (memberSearchTimer) {
+    clearTimeout(memberSearchTimer)
+    memberSearchTimer = null
+  }
+  if (longTimer.value) clearTimeout(longTimer.value)
+})
 </script>
 
 <style scoped>
@@ -919,14 +2612,22 @@ onMounted(loadData)
 .bank-sub { display: flex; flex-wrap: wrap; gap: 14px; }
 .manage-notice { margin-top: 14px; }
 .manage-tabs { margin-top: 18px; }
+.manage-tabs .tab[role="tab"] { cursor: pointer; }
 .manage-workspace { margin-top: 0; }
+.manage-archived-note { margin-top: 12px; }
 .manage-toolbar {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 10px 0; border-bottom: 1px solid var(--line);
 }
 .bank-manage-toolbar { border-top: 1px solid var(--ink); }
-.manage-toolbar .search-box { min-width: 220px; flex: 1 1 260px; }
-.manage-toolbar .select { height: 32px; font-size: 12px; }
+.manage-toolbar .search-box { min-width: 220px; max-width: 340px; flex: 1 1 260px; }
+.manage-toolbar .select { height: 32px; font-size: 12px; width: auto; max-width: 168px; flex: 0 1 auto; }
+.toolbar-divider { width: 1px; height: 18px; background: var(--line-strong); flex: none; }
+.toolbar-field { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.toolbar-field-label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.select-all-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-3); cursor: pointer; }
+.select-all-toggle input { width: 14px; height: 14px; cursor: pointer; }
+.mtable-wrap.is-busy { opacity: .62; transition: opacity 120ms ease; }
 .small { font-size: 12px; }
 .bad-text { color: var(--bad); }
 .archived-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-3); cursor: pointer; }
@@ -948,6 +2649,7 @@ onMounted(loadData)
 .mtable { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .mtable th.select-cell,
 .mtable td.select-cell { width: 36px; padding: 0 4px; text-align: center; }
+.select-hit { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 .mtable th.select-cell input,
 .mtable td.select-cell input { width: 14px; height: 14px; cursor: pointer; }
 .mtable-row.is-archived { opacity: .68; }
@@ -957,7 +2659,7 @@ onMounted(loadData)
   color: var(--ink-3); border-bottom: 1px solid var(--line); white-space: nowrap;
 }
 .mtable td { padding: 0 10px; height: 44px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--ink-2); vertical-align: middle; }
-.mtable-row { cursor: pointer; }
+.mtable-row { cursor: default; }
 .mtable-row:hover { background: var(--surface-2); }
 .bank-manage-table .bank-manage-col-id { width: 78px; }
 .bank-manage-table .bank-manage-col-stem { width: auto; }
@@ -965,7 +2667,11 @@ onMounted(loadData)
 .bank-manage-table .bank-manage-col-chapter { width: 136px; }
 .bank-manage-table .bank-manage-col-difficulty { width: 86px; }
 .bank-manage-table .bank-manage-col-version { width: 62px; }
-.bank-manage-table .bank-manage-col-actions { width: 76px; }
+.bank-manage-table .bank-manage-col-actions { width: 104px; }
+.row-archive-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0; flex: none;
+}
 .id-cell { color: var(--ink-4); font-size: 12px; letter-spacing: .02em; white-space: nowrap; }
 .stem-cell { line-height: 1.5; }
 .stem-text { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; color: var(--ink); }
@@ -976,15 +2682,75 @@ onMounted(loadData)
 
 .manage-single { max-width: 860px; }
 .tag-cloud { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 0 4px; }
+.tag-list { display: flex; flex-direction: column; gap: 6px; padding: 8px 0 4px; }
+.tag-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tag-row .tag-name { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
+.tag-row .tag-row-input { flex: 1 1 160px; min-width: 0; }
+.tag-row .tag-count { text-align: right; margin-left: auto; }
+.settings-form { margin-top: 12px; }
+.export-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+.danger-zone { border-color: var(--bad); }
+.danger-btn { color: var(--bad); border-color: var(--bad); }
+.audit-list { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; }
+.audit-row {
+  display: grid; grid-template-columns: 132px 210px minmax(0, 1fr);
+  gap: 10px; align-items: center; padding: 7px 0;
+  border-bottom: 1px solid var(--line); min-width: 0;
+}
+.member-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.member-actions .select { height: 30px; font-size: 12px; width: 104px; }
+.member-row-error { flex-basis: 100%; }
+.member-search-field { position: relative; flex: 1 1 220px; min-width: 0; }
+.member-search-field .input { width: 100%; }
+.member-search-list {
+  position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 25;
+  margin: 0; padding: 4px 0; list-style: none;
+  max-height: 220px; overflow-y: auto;
+  border: 1px solid var(--line-strong); background: var(--surface);
+}
+.member-search-option {
+  padding: 7px 12px; font-size: 12.5px; color: var(--ink-2); cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.member-search-option.is-active { background: var(--surface-2); color: var(--ink); }
+.member-search-hint { margin: 5px 0 0; }
+.member-selected { font-size: 12px; color: var(--ink-3); align-self: center; }
+.member-remove-dialog .btn-danger,
+.member-transfer-dialog .btn-danger { border-color: var(--bad); color: var(--bad); }
+.member-transfer-dialog .field { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.member-leave { padding-top: 12px; border-top: 1px solid var(--line); margin-top: 8px; }
+.mtable-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap;
+}
+.mtable-foot .list-side { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.page-size { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.page-size-select { height: 32px; width: auto; font-size: 12px; padding: 0 6px; }
+.import-table { min-width: 620px; }
+.import-table th, .import-table td { padding: 8px 10px; }
+.block { display: block; }
+.chapter-row .select { max-width: 180px; }
+.chapter-row { flex-wrap: wrap; }
+.chapter-row .list-side { flex-wrap: wrap; }
 .tag-count { margin-left: 5px; color: var(--ink-4); font-size: 12px; }
 .chapter-add { display: flex; gap: 8px; padding: 12px 0 2px; border-top: 1px solid var(--line); }
 .chapter-add .input { max-width: 280px; }
+.tag-add { display: flex; gap: 8px; padding: 12px 0 2px; border-top: 1px solid var(--line); }
+.tag-add .input { max-width: 280px; }
+.child-chapter-form {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  padding: 8px 0 8px 10px; border-bottom: 1px solid var(--line);
+}
+.child-chapter-form .input { max-width: 280px; }
 .chapter-row .chapter-input { max-width: 320px; }
 .member-form { display: flex; gap: 8px; padding: 4px 0 2px; }
 .member-form .input { flex: 1; }
 .member-form .select { width: 140px; }
 
 .manage-create { width: min(100%, 640px); }
+.export-panel:focus { outline: 2px solid var(--brand); outline-offset: 2px; }
+.create-form { display: flex; flex-direction: column; gap: 14px; }
+.create-form label { display: flex; flex-direction: column; gap: 6px; }
 .create-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .create-options { margin: 4px 0 8px; }
 .create-options-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
@@ -1005,7 +2771,7 @@ onMounted(loadData)
   .bank-manage-table .bank-manage-col-chapter { width: 112px; }
   .bank-manage-table .bank-manage-col-difficulty { width: 72px; }
   .bank-manage-table .bank-manage-col-version { width: 56px; }
-  .bank-manage-table .bank-manage-col-actions { width: 64px; }
+  .bank-manage-table .bank-manage-col-actions { width: 88px; }
   .bank-manage-table th,
   .bank-manage-table td { padding-left: 8px; padding-right: 8px; }
   .bank-manage-table .stem-text { font-size: 12.5px; }
@@ -1015,7 +2781,10 @@ onMounted(loadData)
   .manage-head .page-actions .btn { flex: 1 1 auto; justify-content: center; }
   .manage-tabs { gap: 16px; overflow-x: auto; flex-wrap: nowrap; }
   .manage-tabs .tab { white-space: nowrap; }
-  .manage-toolbar .search-box { flex-basis: 100%; }
+  .manage-toolbar .search-box { flex-basis: 100%; max-width: none; }
+  .manage-toolbar .select { flex: 1 1 120px; max-width: none; }
+  .manage-toolbar .toolbar-field { flex: 1 1 150px; min-width: 0; }
+  .manage-toolbar .toolbar-field .select { flex: 1 1 auto; width: 100%; max-width: none; }
   .archived-toggle { flex-basis: 100%; }
   .batch-controls { flex-direction: column; align-items: stretch; }
   .batch-group { width: 100%; }
@@ -1025,5 +2794,36 @@ onMounted(loadData)
   .member-form { flex-wrap: wrap; }
   .member-form .input { flex-basis: 100%; }
   .create-grid { grid-template-columns: minmax(0, 1fr); }
+  .tag-row { grid-template-columns: minmax(0, 1fr) 40px; }
+  .tag-row .btn { grid-column: span 1; }
+  .audit-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .mtable-foot .list-side { flex: 1 1 100%; }
+
+  /* Compact question table: keep checkbox + stem + one action, no h-scroll. */
+  .mtable { min-width: 0; }
+  .mtable th.select-cell,
+  .mtable td.select-cell { width: 36px; padding: 0; }
+  .mtable .select-hit { width: 32px; height: 32px; }
+  .mtable th.select-cell input,
+  .mtable td.select-cell input { width: 18px; height: 18px; }
+  .mtable .bank-manage-col-id,
+  .mtable .bank-manage-col-type,
+  .mtable .bank-manage-col-chapter,
+  .mtable .bank-manage-col-difficulty,
+  .mtable .bank-manage-col-version { display: none; }
+  .mtable .bank-manage-col-stem { width: auto; min-width: 0; }
+  .mtable .stem-cell { min-width: 0; overflow: hidden; }
+  .mtable .stem-text { -webkit-line-clamp: 2; white-space: normal; overflow-wrap: anywhere; }
+  .mtable .bank-manage-col-actions { width: 88px; padding-left: 4px; padding-right: 4px; }
+  .mtable th,
+  .mtable td { padding-left: 6px; padding-right: 6px; }
+  .mtable th.select-cell,
+  .mtable td.select-cell { padding-left: 0; padding-right: 0; }
+  .chapter-add,
+  .tag-add,
+  .child-chapter-form { flex-wrap: wrap; }
+  .chapter-add .input,
+  .tag-add .input,
+  .child-chapter-form .input { flex: 1 1 100%; max-width: none; }
 }
 </style>

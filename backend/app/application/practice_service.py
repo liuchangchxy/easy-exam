@@ -75,10 +75,13 @@ class PracticeService:
         for bid in [bank_id, *(bank_ids or [])]:
             if bid and bid not in requested_banks:
                 requested_banks.append(bid)
+        bank_rows: dict[str, dict] = {}
         if self.banks:
             for bid in requested_banks:
-                if not self.banks.get_for_user(bid, user_id):
+                row = self.banks.get_for_user(bid, user_id)
+                if not row:
                     raise LookupError("question bank not found")
+                bank_rows[bid] = row
 
         candidate_questions: list[dict] = []
         seen_ids: set[str] = set()
@@ -102,10 +105,17 @@ class PracticeService:
         else:
             questions = candidate_questions
 
-        if not questions and (mode in ("MISTAKE", "FSRS", "ELIMINATION") or question_ids is not None):
-            raise ValueError(f"当前题库没有符合条件的题目")
-
         selected = questions if blueprint_id else (questions[:total_questions] if total_questions > 0 else questions)
+        if not selected:
+            # A bank with nothing in it cannot produce a paper; every mode must
+            # refuse, or the practice page opens onto an empty session. A bank
+            # that has questions but none matching the request keeps the old
+            # behaviour (the caller may still show an empty scoped session).
+            empty_bank = bool(bank_rows) and all(
+                int(row.get("question_count") or 0) == 0 for row in bank_rows.values()
+            )
+            if empty_bank or mode in ("MISTAKE", "FSRS", "ELIMINATION") or question_ids is not None:
+                raise ValueError("当前题库没有符合条件的题目")
         question_refs = [
             {"question_id": item["id"], "version_id": item["version_id"], "bank_id": item["bank_id"]}
             for item in selected
@@ -291,6 +301,7 @@ class PracticeService:
         session.pop("answers_json", None)
         session.pop("flags_json", None)
         session.pop("questions_json", None)
+        session.pop("result_json", None)
         session["questions"] = self.questions.list_for_snapshot(snapshot, user_id, session_id=session.get("id"))
         session["question_ids"] = [q["id"] for q in session["questions"]]
         if session["mode"] == "EXAM" and not session["is_completed"]:
@@ -331,10 +342,47 @@ class PracticeService:
             raise LookupError("practice session not found")
         return flags
 
+    _SUBJECTIVE_TYPES = {"ESSAY", "SHORT_ANSWER", "SUBJECTIVE"}
+
+    def _schedule_exam_reviews(self, user_id: str, session: dict, attempts: list[dict]) -> None:
+        """Send a completed exam's objective mistakes into the FSRS queue.
+
+        Only called on the active -> completed transition. Per-answer handling
+        skips exams entirely, so this is the single point where mock-exam
+        outcomes affect future review scheduling.
+        """
+        if session.get("mode") != "EXAM":
+            return
+        if not self.practices.record_mistakes_for_session(user_id, session):
+            return
+        for attempt in attempts:
+            question_type = str(attempt.get("type", "SINGLE")).upper()
+            if question_type in self._SUBJECTIVE_TYPES:
+                continue
+            record = self.practices.learning_record(user_id, attempt["question_id"])
+            prior_mistakes = int(record.get("mistake_count") or 0) if record else 0
+            self.practices.schedule_exam_review(
+                user_id,
+                attempt["question_id"],
+                attempt["correctness"],
+                prior_mistakes > 0,
+            )
+
     def complete_session(self, user_id: str, session_id: str) -> dict:
         raw_session = self.practices.get_session(session_id, user_id)
         if not raw_session:
             raise LookupError("practice session not found")
+
+        # A completed session keeps its original outcome verbatim. Re-scoring it
+        # would let later question edits (or a lost response retry) change a
+        # historical report.
+        if raw_session.get("is_completed") and raw_session.get("report") is not None:
+            return raw_session["report"]
+
+        was_active = (
+            raw_session.get("status", "active") == "active"
+            and not raw_session.get("is_completed")
+        )
 
         # If not yet completed, score and save any unsubmitted answers from draft before marking complete
         if not raw_session.get("is_completed"):
@@ -423,7 +471,7 @@ class PracticeService:
             objective_total = max(0, int(session.get("total_questions", 0)) - subjective_attempts)
 
         accuracy = round(correct_count / max(1, objective_total) * 100, 2) if objective_total > 0 else 0.0
-        return {
+        report = {
             "session_id": session_id,
             "bank_id": session["bank_id"],
             "bank_ids": __import__("json").loads(session.get("config_json") or "{}").get("bank_ids") or [session["bank_id"]],
@@ -445,3 +493,7 @@ class PracticeService:
             "tag_stats": tag_stats,
             "answers": answers,
         }
+        self.practices.save_result(user_id, session_id, report)
+        if was_active:
+            self._schedule_exam_reviews(user_id, session, attempts)
+        return report

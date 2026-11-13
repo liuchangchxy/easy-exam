@@ -30,8 +30,11 @@ async function waitForServer(url, expectedToken, timeoutMs = 25000) {
       const res = await fetch(`${url}/api/v1/health`)
       if (res.ok) {
         const body = await res.json()
-        if (expectedToken && body.instance_token !== expectedToken) {
-          throw new Error(`Instance token mismatch: expected ${expectedToken} but got ${body.instance_token}`)
+        const expectedFingerprint = expectedToken
+          ? crypto.createHash('sha256').update(expectedToken).digest('hex').slice(0, 16)
+          : ''
+        if (expectedFingerprint && body.instance_fingerprint !== expectedFingerprint) {
+          throw new Error(`Instance fingerprint mismatch: expected ${expectedFingerprint} but got ${body.instance_fingerprint}`)
         }
         return true
       }
@@ -179,7 +182,11 @@ test('Fast UI Interaction: mobile nav, review page, practice tools and finish', 
     // -------------------------------------------------------------
     await desktopPage.locator('.sidebar .nav-item').nth(0).click()
     await desktopPage.waitForSelector('.today')
-    await desktopPage.locator('.masthead .btn-primary').click()
+    // The masthead primary control starts as "create bank" while today's plan is
+    // still loading; wait for the practice action itself before clicking.
+    const startPracticeBtn = desktopPage.locator('.masthead .btn-primary:has-text("开始练习")')
+    await startPracticeBtn.waitFor({ state: 'visible', timeout: 12000 })
+    await startPracticeBtn.click()
     await desktopPage.waitForSelector('.focus-mode', { timeout: 12000 })
 
     await desktopPage.waitForSelector('.btn-more-menu', { timeout: 12000 })
@@ -188,6 +195,14 @@ test('Fast UI Interaction: mobile nav, review page, practice tools and finish', 
     assert.equal(await desktopPage.locator('.focus-menu').count(), 0, 'Menu should initially be closed')
     await practiceMoreBtn.click()
     await desktopPage.waitForSelector('.focus-menu')
+    // The menu paints its items in the same frame as the container, but under
+    // load the second item can land a tick later; wait for the settled state
+    // instead of sampling it once.
+    await desktopPage.waitForFunction(
+      () => document.querySelectorAll('.focus-menu .focus-menu-item').length === 2,
+      null,
+      { timeout: 5000 }
+    )
     assert.equal(await desktopPage.locator('.focus-menu .focus-menu-item').count(), 2, 'Menu should expose edit and kill actions')
     await practiceMoreBtn.click()
 

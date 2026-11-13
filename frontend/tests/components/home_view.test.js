@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import HomeView from '../../src/views/HomeView.vue'
 import { t } from '../../src/composables/useLocale.js'
 import { startSession, listActiveSessions } from '../../src/api/practice'
+import { listBanks } from '../../src/api/banks'
 import { getBlueprint } from '../../src/api/exams'
 
 const routerPush = vi.hoisted(() => vi.fn())
@@ -201,6 +202,90 @@ describe('HomeView today plan across banks', () => {
 
     wrapper.unmount()
     document.body.innerHTML = ''
+  })
+
+  it('moves focus into the active-sessions dialog and closes it on Escape', async () => {
+    listActiveSessions.mockResolvedValue([
+      {
+        id: 's1',
+        bank_name: 'Bank One',
+        mode: 'PRACTICE',
+        answered_count: 1,
+        total_questions: 5,
+        created_at: '2026-11-11T08:00:00Z',
+      },
+      {
+        id: 's2',
+        bank_name: 'Bank Two',
+        mode: 'EXAM',
+        answered_count: 2,
+        total_questions: 10,
+        created_at: '2026-11-11T09:00:00Z',
+      },
+    ])
+    const wrapper = mount(HomeView, { props: { token: 'test-token' }, attachTo: document.body })
+    await flushPromises()
+
+    await wrapper.find('.resume-actions .btn-quiet').trigger('click')
+    await flushPromises()
+
+    const panel = document.querySelector('[data-testid="active-sessions-dialog"]')
+    expect(panel).not.toBeNull()
+    expect(document.activeElement).toBe(panel.querySelector('.session-row .primary'))
+    expect(panel.contains(document.activeElement)).toBe(true)
+    expect(document.body.style.overflow).toBe('hidden')
+
+    document.body.setAttribute('tabindex', '-1')
+    document.body.focus()
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    await flushPromises()
+
+    expect(document.querySelector('[data-testid="active-sessions-dialog"]')).toBeNull()
+    expect(document.body.style.overflow).toBe('')
+
+    wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+
+  it('moves focus into the exam-setup dialog and closes it on Escape', async () => {
+    const wrapper = mount(HomeView, { props: { token: 'test-token' }, attachTo: document.body })
+    await flushPromises()
+
+    await wrapper.vm.openExamSetup({ id: 'b1', name: 'Bank One', question_count: 5 })
+    await flushPromises()
+
+    const panel = document.querySelector('[data-testid="home-exam-setup-dialog"]')
+    expect(panel).not.toBeNull()
+    expect(document.activeElement).toBe(panel.querySelector('#home-exam-total'))
+    expect(panel.contains(document.activeElement)).toBe(true)
+    expect(document.body.style.overflow).toBe('hidden')
+
+    document.body.setAttribute('tabindex', '-1')
+    document.body.focus()
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    await flushPromises()
+
+    expect(document.querySelector('[data-testid="home-exam-setup-dialog"]')).toBeNull()
+    expect(document.body.style.overflow).toBe('')
+
+    wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+
+  it('keeps the masthead primary action disabled until banks and sessions settle', async () => {
+    let resolveBanks
+    listBanks.mockImplementationOnce(() => new Promise(resolve => { resolveBanks = resolve }))
+
+    const wrapper = mount(HomeView, { props: { token: 'test-token' } })
+    await Promise.resolve()
+
+    expect(wrapper.find('.masthead .btn-primary').attributes('disabled')).toBeDefined()
+
+    resolveBanks([{ id: 'b1', name: 'Bank One', question_count: 5 }])
+    await flushPromises()
+
+    expect(wrapper.find('.masthead .btn-primary').attributes('disabled')).toBeUndefined()
+    wrapper.unmount()
   })
 
   it('reads the exam profile blueprint summary from the wrapped blueprint payload', async () => {

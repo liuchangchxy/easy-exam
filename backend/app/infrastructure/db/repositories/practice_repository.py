@@ -109,7 +109,18 @@ class PracticeRepository:
     def get_session(self, session_id: str, user_id: str) -> dict | None:
         with transaction(self.db_path) as conn:
             row = conn.execute("SELECT * FROM practice_sessions WHERE id = ? AND user_id = ?", (session_id, user_id)).fetchone()
-            return dict(row) if row else None
+            if not row:
+                return None
+            session = dict(row)
+            raw_result = session.get("result_json")
+            if raw_result:
+                try:
+                    session["report"] = json.loads(raw_result)
+                except (TypeError, ValueError):
+                    session["report"] = None
+            else:
+                session["report"] = None
+            return session
 
     def list_active_sessions(self, user_id: str, mode: str | None = None) -> list[dict]:
         with transaction(self.db_path) as conn:
@@ -125,7 +136,8 @@ class PracticeRepository:
     def abandon_session(self, session_id: str, user_id: str) -> bool:
         with transaction(self.db_path) as conn:
             cur = conn.execute(
-                "UPDATE practice_sessions SET is_completed = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ? AND is_completed = 0",
+                "UPDATE practice_sessions SET is_completed = 1, status = 'abandoned', updated_at = CURRENT_TIMESTAMP "
+                "WHERE id = ? AND user_id = ? AND is_completed = 0",
                 (session_id, user_id),
             )
             return cur.rowcount > 0
@@ -133,7 +145,8 @@ class PracticeRepository:
     def abandon_all_sessions(self, user_id: str) -> int:
         with transaction(self.db_path) as conn:
             cur = conn.execute(
-                "UPDATE practice_sessions SET is_completed = 1, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND is_completed = 0",
+                "UPDATE practice_sessions SET is_completed = 1, status = 'abandoned', updated_at = CURRENT_TIMESTAMP "
+                "WHERE user_id = ? AND is_completed = 0",
                 (user_id,),
             )
             return cur.rowcount
@@ -641,8 +654,127 @@ class PracticeRepository:
 
     def complete(self, user_id: str, session_id: str) -> dict | None:
         with transaction(self.db_path) as conn:
-            conn.execute("UPDATE practice_sessions SET is_completed = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?", (session_id, user_id))
+            conn.execute(
+                """UPDATE practice_sessions
+                   SET is_completed = 1, status = 'completed',
+                       completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP),
+                       updated_at = CURRENT_TIMESTAMP
+                   WHERE id = ? AND user_id = ?""",
+                (session_id, user_id),
+            )
         return self.get_session(session_id, user_id)
+
+    def save_result(self, user_id: str, session_id: str, result: dict) -> bool:
+        """Persist a completed session's report exactly once.
+
+        Returns whether this call wrote the report. A session that already
+        carries a result keeps the original report, so repeated completion calls
+        stay idempotent and never overwrite the historical outcome.
+        """
+        payload = json.dumps(result, ensure_ascii=False)
+        with transaction(self.db_path) as conn:
+            cur = conn.execute(
+                """UPDATE practice_sessions
+                   SET result_json = ?, score = ?, time_spent = ?
+                   WHERE id = ? AND user_id = ?
+                     AND (result_json IS NULL OR result_json = '')""",
+                (
+                    payload,
+                    float(result.get("score") or 0),
+                    int(result.get("time_spent") or 0),
+                    session_id,
+                    user_id,
+                ),
+            )
+            return cur.rowcount > 0
+
+    def record_mistakes_for_session(self, user_id: str, session: dict) -> bool:
+        """Mirror save_attempt's record_mistakes resolution for a session.
+
+        The session config wins; an exam blueprint is the fallback. This keeps
+        completion-time review scheduling consistent with per-answer handling.
+        """
+        record_mistakes = True
+        try:
+            cfg = json.loads(session.get("config_json") or "{}")
+        except (TypeError, ValueError):
+            cfg = {}
+        if "record_mistakes" in cfg:
+            return bool(cfg["record_mistakes"])
+        if session.get("mode") == "EXAM" and session.get("blueprint_id"):
+            with transaction(self.db_path) as conn:
+                bp_row = conn.execute(
+                    "SELECT blueprint_json FROM exam_blueprints WHERE id = ?",
+                    (session["blueprint_id"],),
+                ).fetchone()
+            if bp_row:
+                try:
+                    bp_dict = json.loads(bp_row[0] or "{}")
+                except (TypeError, ValueError):
+                    bp_dict = {}
+                if "record_mistakes" in bp_dict:
+                    return bool(bp_dict["record_mistakes"])
+        return record_mistakes
+
+    def learning_record(self, user_id: str, question_id: str) -> dict | None:
+        with transaction(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT * FROM learning_records WHERE user_id = ? AND question_id = ?",
+                (user_id, question_id),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def schedule_exam_review(
+        self,
+        user_id: str,
+        question_id: str,
+        correctness: str,
+        had_previous_mistakes: bool,
+    ) -> bool:
+        """Schedule a review for a mock-exam outcome at completion time.
+
+        Per-answer submission deliberately skips FSRS for exams, so the exam's
+        final outcome is where its mistakes enter the review queue. Returns
+        whether a card was scheduled.
+        """
+        if correctness in {"INCORRECT", "PARTIAL"}:
+            rating = 1
+        elif correctness == "CORRECT":
+            rating = 3 if had_previous_mistakes else 2
+        else:
+            return False
+        now = datetime.now(timezone.utc)
+        with transaction(self.db_path) as conn:
+            card = conn.execute(
+                "SELECT stability, difficulty, last_review_at FROM fsrs_cards WHERE user_id = ? AND question_id = ?",
+                (user_id, question_id),
+            ).fetchone()
+            stability = float(card["stability"]) if card else 0.0
+            difficulty = float(card["difficulty"]) if card else 5.0
+            elapsed_days = 0.0
+            if card and card["last_review_at"]:
+                last_review = datetime.fromisoformat(card["last_review_at"])
+                if last_review.tzinfo is None:
+                    last_review = last_review.replace(tzinfo=timezone.utc)
+                elapsed_days = max(0.0, (now - last_review).total_seconds() / 86400)
+            fsrs_result = self.fsrs.schedule(
+                rating=rating,
+                stability=stability,
+                difficulty=difficulty,
+                elapsed_days=elapsed_days,
+                now=now,
+            )
+            conn.execute(
+                """INSERT INTO fsrs_cards(user_id, question_id, state, stability, difficulty, due_at, last_review_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(user_id, question_id) DO UPDATE SET
+                     state=excluded.state, stability=excluded.stability,
+                     difficulty=excluded.difficulty, due_at=excluded.due_at,
+                     last_review_at=excluded.last_review_at""",
+                (user_id, question_id, fsrs_result.state, fsrs_result.stability,
+                 fsrs_result.difficulty, fsrs_result.due.isoformat(), now.isoformat()),
+            )
+        return True
 
     def list_attempts(self, user_id: str, session_id: str) -> list[dict]:
         with transaction(self.db_path) as conn:
@@ -757,6 +889,35 @@ class PracticeRepository:
                     (user_id, question_id, user_id, question_id),
                 )
             return bool(cursor.rowcount)
+
+    def list_weak_questions(self, user_id: str, bank_id: str | None = None) -> list[dict]:
+        """Every question the user explicitly flagged as weak, due or not.
+
+        ``list_due_reviews`` only mentions weak flags that already have a card
+        and have come due, so a review queue that merges "weak" from that payload
+        would show an empty reason forever. This is the authoritative source.
+        """
+        sql = """SELECT w.question_id, i.bank_id, qv.stem, qv.type,
+                        COALESCE(m.mistake_count, 0) AS mistake_count,
+                        w.created_at AS flagged_at
+                 FROM weak_question_flags w
+                 JOIN questions q ON q.id = w.question_id AND q.is_deleted = 0
+                 JOIN bank_question_items i ON i.question_id = w.question_id
+                 JOIN question_bank_members bm ON bm.bank_id = i.bank_id AND bm.user_id = w.user_id
+                 JOIN question_versions qv ON qv.question_id = w.question_id
+                 LEFT JOIN mistake_records m ON m.user_id = w.user_id AND m.question_id = w.question_id
+                 LEFT JOIN kill_records k ON k.user_id = w.user_id AND k.question_id = w.question_id
+                 WHERE w.user_id = ? AND k.question_id IS NULL
+                   AND qv.version_number = (
+                     SELECT MAX(version_number) FROM question_versions WHERE question_id = w.question_id
+                   )"""
+        params = [user_id]
+        if bank_id:
+            sql += " AND i.bank_id = ?"
+            params.append(bank_id)
+        sql += " ORDER BY w.created_at DESC"
+        with transaction(self.db_path) as conn:
+            return [dict(row) for row in conn.execute(sql, params).fetchall()]
 
     def list_due_reviews(self, user_id: str, bank_id: str | None = None) -> list[dict]:
         sql = """SELECT f.user_id, f.question_id, i.bank_id, qv.stem, qv.type,

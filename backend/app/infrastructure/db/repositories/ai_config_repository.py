@@ -1,16 +1,54 @@
 import base64
 import hashlib
 import os
+from pathlib import Path
 from typing import Any, Dict
 from cryptography.fernet import Fernet, InvalidToken
 from backend.app.infrastructure.db.connection import transaction
 
 
+_SECRET_ENV_NAMES = ("EASYEXAM_SECRET_KEY", "SECRET_KEY")
+
+
+def _read_persisted_secret() -> str:
+    """Read the FPK-managed secret from DATA_DIR/.env.
+
+    fnOS launches the docker project directly, bypassing cmd/main, so the
+    compose-time environment can contain an empty EASYEXAM_SECRET_KEY even
+    though the persistent .env exists. The data volume is the durable source.
+    """
+    data_dir = os.environ.get("DATA_DIR")
+    if not data_dir:
+        return ""
+    try:
+        lines = (Path(data_dir) / ".env").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return ""
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, _, value = line.partition("=")
+        if name.strip() in _SECRET_ENV_NAMES:
+            value = value.strip().strip('"').strip("'")
+            if value:
+                return value
+    return ""
+
+
+def _resolve_seed() -> str:
+    for name in _SECRET_ENV_NAMES:
+        value = os.environ.get(name)
+        if value and value.strip():
+            return value.strip()
+    return _read_persisted_secret()
+
+
 def _get_fernet() -> Fernet:
-    seed = os.environ.get("EASYEXAM_SECRET_KEY") or os.environ.get("SECRET_KEY")
-    if not seed or not seed.strip():
+    seed = _resolve_seed()
+    if not seed:
         raise RuntimeError("EASYEXAM_SECRET_KEY or SECRET_KEY environment variable is not configured; refusing to encrypt or decrypt sensitive credentials.")
-    key = base64.urlsafe_b64encode(hashlib.sha256(seed.strip().encode("utf-8")).digest())
+    key = base64.urlsafe_b64encode(hashlib.sha256(seed.encode("utf-8")).digest())
     return Fernet(key)
 
 
@@ -48,6 +86,16 @@ def mask_secret(secret: str | None) -> str:
 
 
 class AiConfigRepository:
+    _PATCHABLE_FIELDS = (
+        "ai_provider",
+        "ai_api_base",
+        "ai_model",
+        "ai_api_key",
+        "search_provider",
+        "search_api_key",
+        "search_api_base",
+    )
+
     def __init__(self, db_path: str):
         self.db_path = db_path
 
@@ -92,6 +140,16 @@ class AiConfigRepository:
                     (upgraded_ai, upgraded_search, user_id),
                 )
 
+            # A PATCH may have created the row without touching unrelated
+            # columns; blank means "not chosen", so display the documented
+            # defaults here and let the effective-config probe fall back to
+            # the instance environment.
+            data["ai_provider"] = data.get("ai_provider") or "openai"
+            data["ai_api_base"] = data.get("ai_api_base") or "https://api.openai.com/v1"
+            data["ai_model"] = data.get("ai_model") or "gpt-4o-mini"
+            data["search_provider"] = data.get("search_provider") or "open-webSearch"
+            data["search_api_base"] = data.get("search_api_base") or "http://localhost:8000/v1/search"
+
             data["is_configured"] = bool(plain_ai_key.strip() or "localhost" in data.get("ai_api_base", ""))
             if mask_secrets:
                 data["ai_api_key"] = mask_secret(plain_ai_key)
@@ -100,6 +158,86 @@ class AiConfigRepository:
                 data["ai_api_key"] = plain_ai_key
                 data["search_api_key"] = plain_search_key
             return data
+
+    def get_raw_config(self, user_id: str) -> dict | None:
+        """Return exactly what the user saved, without defaults or masking.
+
+        ``None`` means the user has no row at all; blank values mean the user
+        never chose that column (it may inherit the instance environment).
+        """
+        with transaction(self.db_path) as conn:
+            row = conn.execute(
+                """SELECT ai_provider, ai_api_base, ai_model, ai_api_key,
+                          search_provider, search_api_key, search_api_base
+                   FROM user_ai_configs WHERE user_id = ?""",
+                (user_id,),
+            ).fetchone()
+        if not row:
+            return None
+        data = dict(row)
+        data["ai_api_key"] = decrypt_secret(data.get("ai_api_key"))
+        data["search_api_key"] = decrypt_secret(data.get("search_api_key"))
+        return data
+
+    def patch_config(self, user_id: str, fields: Dict[str, Any]) -> dict:
+        """Update only the supplied columns.
+
+        Unlike ``save_config`` (kept for PUT compatibility) this never fills a
+        missing column with a schema default, which is what made saving
+        ``ai_model`` overwrite the instance-level ``search_api_base``.
+        """
+        provided = {
+            key: value
+            for key, value in fields.items()
+            if key in self._PATCHABLE_FIELDS and value is not None
+        }
+        if not provided:
+            return self.get_config(user_id, mask_secrets=True)
+        with transaction(self.db_path) as conn:
+            existing = conn.execute(
+                "SELECT * FROM user_ai_configs WHERE user_id = ?", (user_id,)
+            ).fetchone()
+            if not existing:
+                values = {key: "" for key in self._PATCHABLE_FIELDS}
+                values.update(provided)
+                for key in ("ai_api_key", "search_api_key"):
+                    raw = values.get(key) or ""
+                    values[key] = encrypt_secret(raw.strip()) if raw and "******" not in raw else ""
+                conn.execute(
+                    """INSERT INTO user_ai_configs(
+                        user_id, ai_provider, ai_api_base, ai_model, ai_api_key,
+                        search_provider, search_api_key, search_api_base, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)""",
+                    (
+                        user_id,
+                        values["ai_provider"],
+                        values["ai_api_base"],
+                        values["ai_model"],
+                        values["ai_api_key"],
+                        values["search_provider"],
+                        values["search_api_key"],
+                        values["search_api_base"],
+                    ),
+                )
+            else:
+                assignments = []
+                params: list = []
+                for key, value in provided.items():
+                    if key in ("ai_api_key", "search_api_key"):
+                        if not str(value).strip() or "******" in str(value):
+                            # Blank or masked input keeps the stored ciphertext.
+                            continue
+                        value = encrypt_secret(str(value).strip())
+                    assignments.append(f"{key} = ?")
+                    params.append(value)
+                if assignments:
+                    assignments.append("updated_at = CURRENT_TIMESTAMP")
+                    params.append(user_id)
+                    conn.execute(
+                        f"UPDATE user_ai_configs SET {', '.join(assignments)} WHERE user_id = ?",
+                        params,
+                    )
+        return self.get_config(user_id, mask_secrets=True)
 
     def save_config(self, user_id: str, payload: Dict[str, Any]) -> dict:
         with transaction(self.db_path) as conn:

@@ -85,4 +85,17 @@ describe('BankDetailView practice affordances', () => {
     expect(notice.text()).toContain(t('ep.banks.practice_start_failed', { message: 'start failed' }))
     expect(push).not.toHaveBeenCalled()
   })
+
+  it('labels the import action with the import glyph, not the upload glyph', async () => {
+    listBankQuestionsContent.mockResolvedValue([question])
+    const wrapper = mountView()
+    await flush()
+
+    const importButton = wrapper
+      .findAll('.page-actions .btn')
+      .find(btn => btn.text() === t('ep.common.import'))
+    expect(importButton).toBeTruthy()
+    expect(importButton.find('[data-icon="import"]').exists()).toBe(true)
+    expect(importButton.find('[data-icon="upload"]').exists()).toBe(false)
+  })
 })

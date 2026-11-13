@@ -386,8 +386,138 @@ MIGRATIONS = {
     ALTER TABLE personal_assets ADD COLUMN mime_type TEXT;
     ALTER TABLE personal_assets ADD COLUMN storage_key TEXT;
     """,
+    19: """
+    -- Give archiving a real timestamp so it stays distinguishable from deletion.
+    -- is_deleted remains the visibility source of truth while archived_at is the audit trail.
+    ALTER TABLE questions ADD COLUMN archived_at TEXT;
+    UPDATE questions SET archived_at = updated_at WHERE is_deleted = 1 AND archived_at IS NULL;
+    """,
+    20: """
+    -- Session outcomes become first-class: distinguish completed from abandoned
+    -- and persist the report once. is_completed stays the derived column so all
+    -- existing visibility queries keep working.
+    ALTER TABLE practice_sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'active';
+    ALTER TABLE practice_sessions ADD COLUMN completed_at TEXT;
+    ALTER TABLE practice_sessions ADD COLUMN result_json TEXT;
+    UPDATE practice_sessions SET status = 'completed', completed_at = COALESCE(completed_at, updated_at) WHERE is_completed = 1;
+    CREATE INDEX idx_practice_sessions_user_status ON practice_sessions(user_id, status);
+    """,
+    21: """
+    -- Instance-level administration and collaboration (P4).
+    -- users.is_admin is the instance role, while bank roles stay in question_bank_members.
+    ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0;
+    CREATE TABLE instance_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL DEFAULT ''
+    );
+    ALTER TABLE user_sessions ADD COLUMN user_agent TEXT;
+    ALTER TABLE user_sessions ADD COLUMN last_seen_at TEXT;
+    CREATE INDEX idx_question_bank_members_user ON question_bank_members(user_id);
+    """,
+    22: """
+    -- P5: resumable import drafts and cancellable asynchronous import jobs.
+    CREATE TABLE import_drafts (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        bank_id TEXT NOT NULL REFERENCES question_banks(id) ON DELETE CASCADE,
+        source_kind TEXT NOT NULL DEFAULT 'file',
+        filename TEXT,
+        step INTEGER NOT NULL DEFAULT 1,
+        state_json TEXT NOT NULL DEFAULT '{}',
+        status TEXT NOT NULL DEFAULT 'OPEN' CHECK(status IN ('OPEN', 'CONSUMED', 'DISCARDED')),
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX idx_import_drafts_user_bank ON import_drafts(user_id, bank_id, status);
+
+    -- import_jobs gains RUNNING/COMPLETED/CANCELLED plus progress reporting.
+    -- SQLite cannot widen a CHECK constraint in place, so rebuild and copy rows.
+    ALTER TABLE import_jobs RENAME TO import_jobs_legacy;
+    CREATE TABLE import_jobs (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        bank_id TEXT REFERENCES question_banks(id) ON DELETE SET NULL,
+        filename TEXT,
+        format TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN (
+            'PENDING', 'RUNNING', 'PRECHECK_FAILED', 'IMPORTED', 'COMPLETED', 'FAILED', 'CANCELLED'
+        )),
+        reason TEXT,
+        imported_count INTEGER NOT NULL DEFAULT 0,
+        progress INTEGER NOT NULL DEFAULT 0,
+        total INTEGER NOT NULL DEFAULT 0,
+        cancel_requested INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        completed_at TEXT
+    );
+    INSERT INTO import_jobs(
+        id, user_id, bank_id, filename, format, status, reason, imported_count, created_at, completed_at
+    )
+    SELECT id, user_id, bank_id, filename, format, status, reason, imported_count, created_at, completed_at
+    FROM import_jobs_legacy;
+    DROP TABLE import_jobs_legacy;
+    """,
+    23: """
+    -- Decision 2 (docs/UX_CORE_REDESIGN_2026-11-13.md §7.5/§7.6): a question
+    -- belongs to exactly one bank. Enforce it at the write layer with triggers
+    -- rather than a UNIQUE index so installations that already hold historical
+    -- duplicates can still upgrade. The triggers only guard new writes; legacy
+    -- rows are left untouched for explicit cleanup.
+    CREATE TRIGGER IF NOT EXISTS trg_bank_question_single_bank
+    BEFORE INSERT ON bank_question_items
+    WHEN EXISTS (SELECT 1 FROM bank_question_items WHERE question_id = NEW.question_id)
+    BEGIN
+        SELECT RAISE(ABORT, 'question already belongs to a bank');
+    END;
+
+    -- An UPDATE could otherwise attach a second membership. Excluding the row
+    -- being updated keeps no-op updates and legitimate single-home rewrites valid.
+    CREATE TRIGGER IF NOT EXISTS trg_bank_question_single_bank_update
+    BEFORE UPDATE OF question_id ON bank_question_items
+    WHEN EXISTS (
+        SELECT 1 FROM bank_question_items
+        WHERE question_id = NEW.question_id
+          AND NOT (bank_id = OLD.bank_id AND question_id = OLD.question_id)
+    )
+    BEGIN
+        SELECT RAISE(ABORT, 'question already belongs to a bank');
+    END;
+    """,
 }
 
+
+def _split_sql_statements(script: str) -> Generator[str, None, None]:
+    """Split a migration script on semicolons without cutting trigger bodies.
+
+    Migration scripts contain triggers, whose BEGIN ... END bodies hold internal
+    semicolons. `sqlite3.complete_statement` understands both nested trigger
+    bodies and quoted literals/comments, so it identifies the real boundaries
+    while the migration still runs statement-by-statement inside one transaction.
+    """
+    buffer = ""
+    for char in script:
+        buffer += char
+        if char != ";" or not sqlite3.complete_statement(buffer):
+            continue
+        statement = buffer.strip()
+        buffer = ""
+        if _has_sql_content(statement):
+            yield statement
+    tail = buffer.strip()
+    if _has_sql_content(tail):
+        yield tail
+
+
+def _has_sql_content(statement: str) -> bool:
+    """Whether a fragment is more than whitespace and `--` comment lines."""
+    return any(line.strip() and not line.strip().startswith("--") for line in statement.splitlines())
+
+
+# Migrations that rebuild an existing table. Their INSERT ... SELECT re-inserts
+# historical rows, so they must run with foreign-key enforcement disabled; see
+# `migrate()` for why. Keep this list explicit so a new rebuild is a conscious
+# decision rather than something a future migration inherits by accident.
+MIGRATIONS_REBUILDING_TABLES = frozenset({22})
 
 
 def migrate(db_path: str) -> None:
@@ -400,17 +530,31 @@ def migrate(db_path: str) -> None:
         for version in sorted(MIGRATIONS):
             if version in applied:
                 continue
-            conn.execute("BEGIN IMMEDIATE")
-            try:
-                for stmt in MIGRATIONS[version].split(";"):
-                    stmt = stmt.strip()
-                    if stmt:
-                        conn.execute(stmt)
-                conn.execute("INSERT INTO schema_migrations(version) VALUES (?)", (version,))
+            # SQLite's documented table-rebuild procedure runs with foreign keys
+            # disabled, and this is not cosmetic: the rebuild re-inserts every
+            # existing row, and a long-lived database can already contain orphan
+            # rows whose parent was deleted before constraints were enforced
+            # (EasyExam's own production baseline has such rows). With enforcement
+            # on, the first orphan aborts the whole upgrade and the schema stops
+            # short. The migration neither creates nor repairs those legacy
+            # violations; it only stops them from blocking a schema change.
+            rebuild = version in MIGRATIONS_REBUILDING_TABLES
+            if rebuild:
                 conn.commit()
-            except Exception:
-                conn.rollback()
-                raise
+                conn.execute("PRAGMA foreign_keys = OFF")
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                try:
+                    for stmt in _split_sql_statements(MIGRATIONS[version]):
+                        conn.execute(stmt)
+                    conn.execute("INSERT INTO schema_migrations(version) VALUES (?)", (version,))
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                    raise
+            finally:
+                if rebuild:
+                    conn.execute("PRAGMA foreign_keys = ON")
     finally:
         conn.close()
 

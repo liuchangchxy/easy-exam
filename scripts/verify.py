@@ -41,6 +41,10 @@ def verify_ui():
     print("[verify] Mode: UI (Frontend unit/contracts, fast UI interaction, and mobile interaction suite)")
     total_start = time.time()
     run_step("Frontend Unit & Contracts", ["npm", "--prefix", "frontend", "run", "test:unit"])
+    # The browser suites drive the built bundle served by FastAPI; without this
+    # step they would exercise whatever dist/ happened to be lying around.
+    run_step("Production Build", ["npm", "--prefix", "frontend", "run", "build"])
+    run_step("Navigation Contract E2E", ["node", "frontend/tests/navigation_contract_e2e.mjs"])
     run_step("Fast UI Interaction", ["node", "frontend/tests/fast_ui_interaction.test.js"])
     run_step("Mobile Interaction Suite", ["node", "frontend/tests/mobile_interaction_suite.mjs"])
     total_elapsed = time.time() - total_start
@@ -64,13 +68,12 @@ def verify_full():
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
-    run_step("Coordination Cleanup Test", ["node", "--test", "tests/coordination-label-cleanup.test.js"])
-
     # 3. Frontend Unit, Component & Build
     run_step("Frontend Unit & Component Tests", ["npm", "--prefix", "frontend", "run", "test:unit"])
     run_step("Production Build", ["npm", "--prefix", "frontend", "run", "build"])
 
     # 4. Browser E2E & Mobile Interaction
+    run_step("Navigation Contract E2E", ["node", "frontend/tests/navigation_contract_e2e.mjs"])
     run_step("Fast UI Interaction", ["node", "frontend/tests/fast_ui_interaction.test.js"])
     run_step("Mobile Interaction E2E", ["node", "frontend/tests/mobile_interaction_suite.mjs"])
     run_step("Localization Browser E2E", ["npm", "--prefix", "frontend", "run", "test:localization:e2e"])

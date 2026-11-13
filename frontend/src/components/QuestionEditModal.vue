@@ -25,6 +25,10 @@
     </template>
 
     <form id="question-edit-form" class="modal-body-form" @submit.prevent="handleSave">
+        <div v-if="showLockedNotice" class="notice warn locked-question-note" data-testid="locked-question-note">
+          <strong>{{ t('ep.manage.locked_title') }}</strong>
+          <span>{{ t('ep.banks.question_locked_note') }}</span>
+        </div>
         <section v-if="showVersionHistory" class="version-history" aria-live="polite">
           <div class="version-history-head">
             <span class="rule-label">{{ t('bank_manage.version_history') }}</span>
@@ -32,25 +36,47 @@
               <LinearIcon name="x" size="14" />
             </button>
           </div>
-          <p v-if="versionError" class="hint bad-text">{{ versionError }}</p>
+          <div v-if="versionError" class="notice bad version-error" role="alert">
+            <LinearIcon name="alert" size="15" />
+            <span class="hint bad-text">{{ versionError }}</span>
+            <button type="button" class="btn btn-sm version-retry" data-testid="version-retry" @click="loadVersions">
+              {{ t('ep.common.retry') }}
+            </button>
+          </div>
           <p v-else-if="versionsLoading" class="hint">{{ t('common.loading') }}</p>
           <p v-else-if="!versions.length" class="hint">{{ t('bank_manage.version_history_empty') }}</p>
           <div v-else class="version-list">
-            <button
-              v-for="ver in versions"
-              :key="ver.id"
-              type="button"
-              class="version-row"
-              :class="{ 'is-current': ver.version_number === baseVersion }"
-              @click="versionPreview = ver"
-            >
-              <span class="mono">v{{ ver.version_number }}</span>
-              <span class="version-meta">
-                <span v-if="ver.version_number === baseVersion" class="tag ok">{{ t('bank_manage.version_current') }}</span>
-                <span class="dim">{{ t('bank_manage.version_created', { date: formatVersionDate(ver.created_at) }) }}</span>
-              </span>
-              <span class="version-view">{{ t('bank_manage.version_view') }}</span>
-            </button>
+            <div v-for="ver in versions" :key="ver.id" class="version-row-group">
+              <div
+                class="version-row"
+                :class="{ 'is-current': ver.version_number === baseVersion }"
+                role="button"
+                tabindex="0"
+                :aria-label="versionPreviewLabel(ver)"
+                @click="versionPreview = ver"
+                @keydown.enter.prevent="versionPreview = ver"
+                @keydown.space.prevent="versionPreview = ver"
+              >
+                <span class="mono">v{{ ver.version_number }}</span>
+                <span class="version-meta">
+                  <span v-if="ver.version_number === baseVersion" class="tag ok">{{ t('bank_manage.version_current') }}</span>
+                  <span class="dim">{{ t('bank_manage.version_created', { date: formatVersionDate(ver.created_at) }) }}</span>
+                </span>
+                <span class="version-view">{{ t('bank_manage.version_view') }}</span>
+              </div>
+              <button
+                v-if="!readOnly && ver.version_number !== baseVersion"
+                type="button"
+                class="icon-btn version-delete"
+                data-testid="version-delete"
+                :aria-label="t('bank_manage.version_delete')"
+                :title="t('bank_manage.version_delete')"
+                :disabled="versionDeleting"
+                @click="deleteVersion(ver)"
+              >
+                <LinearIcon name="trash" size="13" />
+              </button>
+            </div>
           </div>
 
           <div v-if="versionPreview" class="version-preview">
@@ -110,6 +136,7 @@
               <option value="SINGLE">{{ t('bank_manage.type_single') }}</option>
               <option value="MULTI">{{ t('bank_manage.type_multi') }}</option>
               <option value="JUDGE">{{ t('bank_manage.type_judge') }}</option>
+              <option value="FILL">{{ t('bank_manage.type_fill') }}</option>
               <option value="ESSAY">{{ t('bank_manage.type_essay') }}</option>
             </select>
           </label>
@@ -229,6 +256,9 @@
     @close="confirmDiscardCancel"
   >
     <p class="hint">{{ t('ep.common.unsaved_desc') }}</p>
+    <div v-if="discardPromptError" class="notice bad discard-prompt-error" role="alert">
+      <span>{{ discardPromptError }}</span>
+    </div>
     <template #foot>
       <button type="button" class="btn btn-quiet" @click="confirmDiscardCancel">{{ t('ep.common.cancel') }}</button>
       <button type="button" class="btn discard-discard" @click="confirmDiscardAccept">{{ t('ep.common.discard') }}</button>
@@ -241,9 +271,10 @@
 import { ref, computed, watch } from 'vue'
 import AppDialog from './AppDialog.vue'
 import LinearIcon from './LinearIcon.vue'
-import { updateQuestion, getQuestion, getQuestionConflict, listQuestionVersions } from '../api/questions'
+import { updateQuestion, getQuestion, getQuestionConflict, listQuestionVersions, deleteQuestionVersion } from '../api/questions'
 import { useLocale } from '../composables/useLocale'
 import { useDirtyGuard } from '../composables/useDirtyGuard'
+import { useConfirm } from '../composables/useConfirm'
 import {
   validateQuestionEdit,
   sanitizeAnswerOnOptionRemove,
@@ -277,6 +308,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'saved', 'conflict', 'reloaded'])
 
 const { t } = useLocale()
+const { confirm: confirmAction } = useConfirm()
 
 const stem = ref('')
 const type = ref('SINGLE')
@@ -298,6 +330,8 @@ const versions = ref([])
 const versionsLoading = ref(false)
 const versionError = ref('')
 const versionPreview = ref(null)
+const versionDeleting = ref(false)
+const discardPromptError = ref('')
 
 const isChoiceType = computed(() => {
   return ['SINGLE', 'MULTI', 'JUDGE'].includes(type.value)
@@ -307,6 +341,12 @@ const regradeAvailable = computed(() => {
   if (props.readOnly) return false
   return shouldOfferRegrade(original.value, { type: type.value, answer: answer.value })
 })
+
+const showLockedNotice = computed(() => Boolean(
+  props.question?.locked_by_active_exam
+  && !props.question?.answer
+  && !props.question?.explanation
+))
 
 const dialogTitle = computed(() => (
   props.readOnly ? t('bank_manage.view_question') : t('bank_manage.edit_question')
@@ -340,6 +380,11 @@ const {
   confirmDiscardAccept,
   confirmDiscardCancel,
 } = useDirtyGuard(() => isDirty.value, () => emit('close'))
+
+// Each time the prompt opens it starts without a stale validation message.
+watch(discardPromptOpen, (open) => {
+  if (open) discardPromptError.value = ''
+})
 
 watch(
   () => props.question,
@@ -381,6 +426,7 @@ watch(
       versions.value = []
       versionPreview.value = null
       versionError.value = ''
+      discardPromptError.value = ''
       errorMsg.value = ''
       isConflict.value = false
       // Apply the same type normalisation the type watcher would queue, then
@@ -414,7 +460,7 @@ function normalizeForTypeChange(newType, oldType) {
         { key: 'D', content: '' },
       ]
     }
-  } else if (newType === 'ESSAY') {
+  } else if (newType === 'ESSAY' || newType === 'FILL') {
     options.value = []
   }
 
@@ -449,9 +495,33 @@ function handleClose() {
   confirmDiscard()
 }
 
-function saveFromDiscardPrompt() {
+function validateBeforeSave() {
+  if (!stem.value.trim()) {
+    errorMsg.value = t('ui.k0165')
+    return false
+  }
+  const validation = validateQuestionEdit(type.value, options.value, answer.value)
+  if (!validation.valid) {
+    errorMsg.value = t('bank_manage.invalid_answer')
+    return false
+  }
+  return true
+}
+
+async function saveFromDiscardPrompt() {
+  if (props.readOnly || !props.question) {
+    confirmDiscardCancel()
+    return
+  }
+  discardPromptError.value = ''
+  if (!validateBeforeSave()) {
+    // Same validation path as a normal save; keep the prompt open so the
+    // message is visible instead of closing silently.
+    discardPromptError.value = errorMsg.value
+    return
+  }
   confirmDiscardCancel()
-  handleSave()
+  await handleSave()
 }
 
 async function handleReloadLatest() {
@@ -503,6 +573,11 @@ async function toggleVersionHistory() {
   showVersionHistory.value = true
   versionPreview.value = null
   if (versions.value.length || !props.question) return
+  await loadVersions()
+}
+
+async function loadVersions() {
+  if (!props.question) return
   versionsLoading.value = true
   versionError.value = ''
   try {
@@ -515,6 +590,10 @@ async function toggleVersionHistory() {
   }
 }
 
+function versionPreviewLabel(version) {
+  return `${t('bank_manage.version_view')} ${t('bank_manage.version_badge', { ver: version.version_number })}`
+}
+
 function formatVersionDate(value) {
   if (!value) return '—'
   const date = new Date(value)
@@ -522,9 +601,29 @@ function formatVersionDate(value) {
   return date.toLocaleString()
 }
 
+async function deleteVersion(version) {
+  if (!props.question || !version || version.version_number === baseVersion.value) return
+  const accepted = await confirmAction(
+    { title: t('bank_manage.version_delete_confirm', { ver: version.version_number }), danger: true },
+    () => true,
+  )
+  if (accepted !== true) return
+  versionDeleting.value = true
+  versionError.value = ''
+  try {
+    await deleteQuestionVersion(props.token, props.question.id, version.id)
+    versions.value = versions.value.filter(item => item.id !== version.id)
+    if (versionPreview.value?.id === version.id) versionPreview.value = null
+  } catch (err) {
+    versionError.value = err?.detail?.message || err?.detail || err?.message || t('bank_manage.version_delete_failed')
+  } finally {
+    versionDeleting.value = false
+  }
+}
+
 function buildPayload({ allowStaleBranch = false, rejectStale = true } = {}) {
   const parsedTags = tagsInput.value
-    ? tagsInput.value.split(/[,\s]+/).map(tag => tag.trim()).filter(Boolean)
+    ? tagsInput.value.split(/[,，\s]+/).map(tag => tag.trim()).filter(Boolean)
     : []
   const regrade = regradeAvailable.value && regradeHistory.value
   return {
@@ -574,19 +673,14 @@ async function submitPayload(options = {}) {
 }
 
 async function handleSave() {
-  if (props.readOnly || !props.question) return
-  if (!stem.value.trim()) return
+  if (props.readOnly || !props.question) return false
+  if (!validateBeforeSave()) return false
 
-  // Strict answer validation per question type
-  const validation = validateQuestionEdit(type.value, options.value, answer.value)
-  if (!validation.valid) {
-    errorMsg.value = t('bank_manage.invalid_answer')
-    return
-  }
   if (type.value === 'JUDGE') {
     answer.value = answer.value.trim().toUpperCase()
   }
   await submitPayload()
+  return true
 }
 
 async function saveAsBranch() {
@@ -631,16 +725,22 @@ async function saveAsBranch() {
 }
 .version-history-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .version-list { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+.version-row-group { display: flex; align-items: center; gap: 2px; }
 .version-row {
   display: flex; align-items: center; gap: 10px;
-  width: 100%; min-height: 34px; padding: 4px 6px;
+  flex: 1; min-width: 0; min-height: 34px; padding: 4px 6px;
   border: 0; background: none; color: var(--ink-2);
   font-size: 12px; text-align: left; cursor: pointer;
 }
 .version-row:hover { background: var(--surface); color: var(--ink); }
+.version-row:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
 .version-row.is-current { color: var(--ink); }
+.version-error { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.discard-prompt-error { margin-top: 10px; }
+.locked-question-note { display: flex; flex-direction: column; gap: 4px; }
 .version-meta { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; flex-wrap: wrap; }
 .version-view { color: var(--brand); font-size: 11.5px; }
+.version-delete { color: var(--bad); flex: none; }
 .version-preview { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
 .version-preview-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .version-stem { margin-top: 8px; font-family: var(--font-serif); font-size: 14px; line-height: 1.65; white-space: pre-wrap; }

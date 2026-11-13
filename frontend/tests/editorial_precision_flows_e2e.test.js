@@ -85,8 +85,11 @@ async function waitForServer(url, expectedToken, timeoutMs = 30000) {
       const res = await fetch(`${url}/api/v1/health`)
       if (res.ok) {
         const body = await res.json()
-        if (expectedToken && body.instance_token !== expectedToken) {
-          throw new Error(`Instance token mismatch: expected ${expectedToken} but got ${body.instance_token}`)
+        const expectedFingerprint = expectedToken
+          ? crypto.createHash('sha256').update(expectedToken).digest('hex').slice(0, 16)
+          : ''
+        if (expectedFingerprint && body.instance_fingerprint !== expectedFingerprint) {
+          throw new Error(`Instance fingerprint mismatch: expected ${expectedFingerprint} but got ${body.instance_fingerprint}`)
         }
         return true
       }
@@ -500,8 +503,15 @@ test('PR90 Editorial Precision independent real-browser flows', async (t) => {
         await page.waitForSelector('.result-block', { state: 'detached', timeout: 8000 })
       }
 
+      // The P5 wizard confirms *after* the duplicate step, so PDF corrections
+      // are submitted from there rather than from the mapping step.
+      const goToStrategyStep = async () => {
+        await page.locator('[data-step="check"] .import-actions .btn-primary').click()
+        await page.waitForSelector('[data-step="duplicates"]', { timeout: 10000 })
+      }
+
       const confirmPdf = async () => {
-        const confirm = page.locator('.import-actions .btn-primary:not([disabled])')
+        const confirm = page.locator('[data-step="duplicates"] .import-actions .btn-primary')
         await confirm.waitFor({ state: 'visible', timeout: 10000 })
         await confirm.click()
         await page.waitForSelector('.result-block', { timeout: 20000 })
@@ -514,7 +524,8 @@ test('PR90 Editorial Precision independent real-browser flows', async (t) => {
       // First import: clean bank, two parsed candidates, no duplicate prompt.
       await startPdfPreview()
       assert.equal(await page.locator('.pdf-card').count(), 2, 'PDF preview must expose both candidates')
-      assert.equal(await page.locator('.pdf-duplicates').count(), 0, 'clean bank must not show duplicates')
+      await goToStrategyStep()
+      assert.equal(await page.locator('[data-step="duplicates"] .dup-list').count(), 0, 'clean bank must not show duplicates')
       await confirmPdf()
       assert.match(await page.locator('.result-block .step-sub').innerText(), /2/)
       assert.equal(bankQuestionCount(), 2)
@@ -522,13 +533,14 @@ test('PR90 Editorial Precision independent real-browser flows', async (t) => {
       // Second import: duplicates are detected and a strategy is mandatory.
       await resetAfterResult()
       await startPdfPreview()
-      await page.waitForSelector('.pdf-duplicates', { timeout: 10000 })
-      assert.match(await page.locator('.pdf-duplicates .notice.warn').innerText(), /2/)
-      const strategy = page.locator('.pdf-duplicates select')
-      assert.equal(await page.locator('.import-actions .btn-primary').isDisabled(), true,
+      await goToStrategyStep()
+      await page.waitForSelector('[data-step="duplicates"] .dup-list', { timeout: 10000 })
+      assert.match(await page.locator('[data-step="duplicates"] .step-head').innerText(), /2/)
+      const strategyStep = page.locator('[data-step="duplicates"] .import-actions .btn-primary')
+      assert.equal(await strategyStep.isDisabled(), true,
         'confirm must stay disabled until a duplicate strategy is chosen')
-      await strategy.selectOption('skip')
-      assert.equal(await page.locator('.import-actions .btn-primary').isDisabled(), false)
+      await page.locator('#import-strategy').selectOption('skip')
+      assert.equal(await strategyStep.isDisabled(), false)
       await confirmPdf()
       assert.match(await page.locator('.result-block .step-sub').innerText(), /0/)
       assert.equal(bankQuestionCount(), 2, 'skip must not add questions')
@@ -536,8 +548,9 @@ test('PR90 Editorial Precision independent real-browser flows', async (t) => {
       // Third import: "new" creates a second copy of each candidate.
       await resetAfterResult()
       await startPdfPreview()
-      await page.waitForSelector('.pdf-duplicates', { timeout: 10000 })
-      await page.locator('.pdf-duplicates select').selectOption('new')
+      await goToStrategyStep()
+      await page.waitForSelector('[data-step="duplicates"] .dup-list', { timeout: 10000 })
+      await page.locator('#import-strategy').selectOption('new')
       await confirmPdf()
       assert.match(await page.locator('.result-block .step-sub').innerText(), /2/)
       assert.equal(bankQuestionCount(), 4, 'new strategy must import both candidates again')
@@ -546,8 +559,9 @@ test('PR90 Editorial Precision independent real-browser flows', async (t) => {
       const versionsBeforeMerge = bankVersionCount()
       await resetAfterResult()
       await startPdfPreview()
-      await page.waitForSelector('.pdf-duplicates', { timeout: 10000 })
-      await page.locator('.pdf-duplicates select').selectOption('merge')
+      await goToStrategyStep()
+      await page.waitForSelector('[data-step="duplicates"] .dup-list', { timeout: 10000 })
+      await page.locator('#import-strategy').selectOption('merge')
       await confirmPdf()
       assert.match(await page.locator('.result-block .step-sub').innerText(), /2/)
       assert.equal(bankQuestionCount(), 4, 'merge must not create extra questions')

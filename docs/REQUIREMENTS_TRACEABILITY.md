@@ -6,9 +6,9 @@
 
 ## 1. 审计与执行快照
 
-- **最新执行日期**：2026-11-11（四主题与批量题库维护批次，见第 9 节；第 1～8 节保留 2026-09-27 至 2026-10-26 的历史快照，不随后续批次改写）
+- **最新执行日期**：2026-11-12（题库管理补全批次，见第 10 节；第 1～9 节保留 2026-09-27 至 2026-11-11 的历史快照，不随后续批次改写）
 - **执行范围**：2026-09-27 的历史范围是 EE-001 至 EE-021 台账闭环复核 + FPK 离线安装时序修复（commit `48bfa85`）的源码、实机与本地全套复跑；2026-11-11 的范围见第 9 节。
-- **代码状态**：工作树在 HEAD `48bfa85` 上无未提交改动（仅一个未跟踪的 `NUL` 文件）。FPK `1.0.2` 已实机安装验证。
+- **代码状态**：2026-09-27 快照为 HEAD `48bfa85` 上无未提交改动（仅一个未跟踪的 `NUL` 文件）。2026-11-12 工作树包含第 10 节的题库管理补全改动，未提交、未部署；FPK `1.0.2` 的实机安装结论仍只属于 2026-09-27 快照。
 - **验证结论汇总（2026-09-27 本轮实跑）**：
   - Python 后端全量测试：`python -m unittest discover -s tests` → **205 通过、0 失败、0 错误、1 跳过** (104.8s)。唯一跳过项为 `test_remote_fnos_e2e.setUpClass`，原因"远程 fnOS 不可达 (HTTP 404)"。
   - 前端单元/契约测试：`npm --prefix frontend run test:unit` → **11 通过、0 失败、0 跳过** (197ms)。
@@ -403,3 +403,256 @@ EE-001 至 EE-021 **全部 21 项**已完成源码级修复、单元测试、前
 | 凭据是否具备 | SSH 密钥与 `sudo -n` 均可用；Docker 28.5.2 与 Compose v2.40.3 可用；`/vol4/@appdata/easy-exam/.env` 存在且权限 `600`，其中 `EASYEXAM_SECRET_KEY` 存在（只做存在性计数，未读取值）。`appcenter-cli` 需经 `sudo` 执行 |
 | 版本部署步骤（预检结论） | 1) 以被验收 revision 构建镜像并注入 `EASYEXAM_BUILD_SHA`；2) 备份 DB 与 `.env`；3) 同步 `manifest` / compose 镜像 tag / 随包镜像 tag 三处版本；4) 停止应用、载入镜像、启动；5) 核对 `/api/v1/health` 的 `commit_sha`、`schema_migrations` 与关键实体计数；6) 用 `FNOS_E2E_EXPECTED_SHA` 强约束的入口复跑。**以上均未执行**。注意：实机 `sudo appcenter-cli status easy-exam` 实际输出 `start`（exit 0），`docs/FNOS_FPK_GUIDE.md` 写的 `running` 与实机输出不一致，验收脚本不应按 `running` 字符串断言 |
 | 未满足项 | 仓库 manifest 与实机 `1.0.19` 不一致；当前工作树未提交、未构建、未注入 SHA；迁移 18 尚未在实机应用 |
+
+## 10. 2026-11-12 题库管理补全（本轮实跑）
+
+### 10.1 范围与设计依据
+
+- **目标**：补齐题库对象管理链路：单题库更新/归档/恢复、多题库批量操作、分类管理、成员角色、章节树排序、标签管理、导入历史、导出、题目分页/排序/搜索/归档、非当前版本删除、管理审计。
+- **UI 方向**：Open Design MCP 在本会话连接超时（`CONNECT_TIMEOUT`），按计划回退到本地 Open Design daemon CLI；绑定方向 `editorial-monocle`，复用 `frontend/src/style.css` 既有 token，不引入第二套视觉系统。
+- **视觉证据**：`docs/screenshots/bank-management-20261112/` 下 6 张截图（1280px 题库列表/题目/结构/设置，375px 列表/题目），由 E2E 实跑采集，不是静态稿。
+- **明确非目标**：服务端题目分页、跨库题目去重/合并 UI、整库复制、改写历史 `tags_json` 快照。
+
+### 10.2 本轮实际运行证据
+
+| 层级 / 环节 | 命令 | 实际结果 | 状态 |
+|---|---|---|---|
+| 后端题库管理专项 | `python -m unittest tests.test_bank_management_completion -v` | **15 passed, 0 failed, 0 skipped** | 通过 |
+| 后端主密钥持久化专项 | `python -m unittest tests.test_ai_secret_persistence -v` | **4 passed, 0 failed, 0 skipped** | 通过 |
+| 后端全量 | `python -m unittest discover -s tests -v`（`verify.py full` 内，隔离 `DATA_DIR`） | **440 passed, 0 failed, 0 errors, 1 skipped**（运行 441 个用例） | 通过（含 1 环境性 skip） |
+| 前端题库管理领域 | `node --test frontend/tests/bank_manage.test.js` | **28 passed, 0 failed, 0 skipped** | 通过 |
+| 前端 Node/契约合集 | `npm --prefix frontend run test:unit` 的 Node 部分 | **116 passed, 0 failed, 0 skipped** | 通过 |
+| 前端组件集成（Vitest） | `npm --prefix frontend run test:unit` 的 Vitest 部分 | **119 passed / 21 files, 0 failed, 0 skipped** | 通过 |
+| 题库管理真实浏览器 E2E | `node frontend/tests/bank_management_e2e.test.js` | **1 passed, 0 failed, 0 skipped**；真实后端 + Chromium，覆盖多题库、重命名、批量分类、分类管理、分页、id 搜索、FILL 筛选、单题归档/恢复、设置保存/审计/导出下载、章节树新增/上移、标签重命名、成员角色、导入历史、归档→回收站→恢复、1280/375 截图与 375px 无页面横向溢出 | 通过 |
+| 快速门禁 | `python scripts/verify.py fast` | 4/4 步骤通过（空白、测试篡改守卫、硬编码路径、前端单元与组件） | 通过 |
+| UI 门禁 | `python scripts/verify.py ui` | 3/3 步骤通过（前端单元与契约、Fast UI Interaction、移动端交互） | 通过 |
+| 全量门禁 | `python scripts/verify.py full` | **10/10 步骤通过，exit 0，264.64s**（后端 167.98s、前端 18.37s、完整浏览器 E2E 61.24s） | 通过 |
+
+### 10.3 需求到源码与测试的映射
+
+| 能力 | 源码 | 测试 / 证据 | 状态与边界 |
+|---|---|---|---|
+| 题库更新、软删除、恢复、回收站列表 | `backend/app/api/routes/banks.py`；`bank_repository.py`（`update` / `soft_delete` / `restore` / 删除标记过滤） | `tests/test_bank_management_completion.py` 覆盖 404/403、软删除、恢复、回收站；E2E 覆盖归档→回收站→恢复 | 通过；题库不物理删除，保留练习/模考外键历史 |
+| 多题库批量归档/恢复/删除/设置分类（原子） | `POST /api/v1/banks/batch`；`bank_repository.batch` | 后端专项断言任一条目缺失/越权时整体回滚；E2E 覆盖批量设置分类 | 通过 |
+| 分类聚合、重命名、删除回落默认分类 | `GET /banks/categories`；`POST /banks/categories/rename|delete` | 后端专项覆盖重命名与删除；E2E 覆盖分类管理对话框重命名 | 通过 |
+| 题库计数排除已归档题目 | `bank_repository` 查询；`list_banks` 语义 | 后端专项 `question_count` 断言；E2E 列表显示 `23 题` 与归档徽标 | 通过 |
+| 成员角色、退出、所有权转移 | `PATCH /members/{user_id}`；`POST /leave`；`POST /transfer` | 后端专项覆盖角色变更、成员退出、owner 不可退出；E2E 覆盖角色下拉持久化与 owner 无退出按钮 | 通过 |
+| 章节树新增/子章节/上下移动/循环防护 | `POST /chapters/reorder`；`flattenChapterTree` / `buildChapterReorderPayload` | 后端专项覆盖排序、循环 422、缺失 404；领域测试覆盖树扁平化与 payload；E2E 覆盖新增根章节与上移 | 通过；浏览器未单独驱动“父节点选择”下拉 |
+| 标签创建/重命名/删除，历史快照不变 | `knowledge_tags` + `question_tag_items`；`question_repository.list_content_for_bank` 读时解析 | 后端专项覆盖改名/删除传播与 `tags_json` 不变；`test_remediation_batch4` 守护 P2-2；E2E 断言改名后行内标签更新 | 通过；UI 未暴露“合并标签”入口（后端合并路径存在） |
+| 管理审计与导入历史 | `GET /banks/{id}/audit`；`GET /banks/{id}/imports`；`audit_logs` | 后端专项覆盖审计列表与非管理员 403、导入任务列表；E2E 断言 `BANK_UPDATED` 与 `IMPORTED` 行 | 通过 |
+| 导出（JSON/CSV/TXT/XLSX）与包含已归档 | `GET /banks/{id}/export?format=&include_archived=`；`api/banks.js#downloadBankExport` | 后端专项覆盖内容列表与 `include_archived`；E2E 触发真实下载并断言 `.json` 文件名 | 通过；CSV/TXT/XLSX 由参数分支覆盖，浏览器只下载 JSON |
+| 题目分页、排序、题型/章节/难度/标签筛选、id/短码搜索 | `domain/bankManage.js`（`filterBankQuestions` / `sortQuestionList` / `paginateList`）；`BankManageView.vue` | 领域测试 28 条覆盖 id/短码、FILL、批量 payload、树排序、分页；组件测试覆盖分页与 FILL 筛选；E2E 覆盖 25/页、第二页 7 条、页大小 25/50/75/100 可调、id 搜索、FILL 隔离 | 通过；分页为客户端实现（非目标：服务端分页） |
+| 单题归档/恢复、非当前版本删除 | `POST /questions/{id}/archive|restore`；`DELETE /questions/{id}/versions/{version_id}`；`QuestionEditModal.vue` | 后端专项覆盖版本删除保护（当前版本/作答引用/模考锁定）；E2E 覆盖行内归档/恢复 | 通过；版本删除由后端专项覆盖，E2E 未驱动 |
+| FILL 题型端到端 | 后端校验器；`bankManage.validateQuestionDraft`；`QuestionEditModal.vue` | 领域测试 FILL 必填答案；组件测试 FILL 选项清空；E2E 创建并筛选 FILL 题 | 通过 |
+| 题库列表溢出菜单、多选批量栏、回收站、分类管理、排序 | `BanksView.vue`；`api/banks.js` | 组件测试覆盖菜单、批量归档、回收站/恢复；E2E 覆盖菜单重命名、批量分类、分类重命名、回收站恢复 | 通过；行内保留 `.bank-actions-cell` 恰好 2 个按钮与无 `button button` 嵌套 |
+| 设置/结构/成员/导入四个管理页签 | `BankManageView.vue` | 组件测试覆盖设置保存+审计+导入历史、成员角色、章节排序；E2E 覆盖全部页签 | 通过 |
+| 375px 响应式 | `BanksView.vue`、`BankManageView.vue` 媒体查询 | E2E 断言页面 `scrollWidth <= innerWidth + 1`、页签高度 ≥ 24px；截图 `375-*.png` | 通过（页面级无横向溢出；题目表在 ≤640px 收起次要列，保留勾选/题干/操作，不再横向滚动） |
+| 本地化键完整 | `frontend/src/locales/ep-{zh-CN,en-US}.js` 与 JSON 快照 | `test:unit` 的字典一致性/JSON 深比较/英文无中文守卫；本轮补 `archive`/`restore`/`col_tags` 并修正设置页说明文案 | 通过 |
+
+### 10.4 未运行、未验证与环境性跳过（不得据此称为全绿或 UI accepted）
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| `test_remote_fnos_e2e` | **环境性跳过（1 项）** | `FNOS_BASE_URL` 未设置；不是断言失败。本轮已完成 fnOS FPK 部署（见 10.5），但未设置该变量复跑远程测试 |
+| 服务端题目分页 | **未实现（非目标）** | 当前为已加载内容列表的客户端分页；超大题库的内存与首屏成本未做压测 |
+| 整库复制、跨库去重/合并 UI | **未实现（非目标）** | 计划明确排除 |
+| 章节“父节点选择”浏览器路径 | **未单独驱动** | 后端 reorder/cycle 与领域 payload 已覆盖；E2E 只驱动新增根章节与上移 |
+| 标签合并 UI | **未暴露** | 后端支持合并；管理页只提供创建、重命名、删除 |
+| 版本删除浏览器路径 | **未驱动** | 后端专项覆盖保护条件；组件测试未覆盖删除按钮的下载/刷新交互 |
+| 四配色逐视口审美验收 | **未运行** | 本轮截图只覆盖默认 Editorial 配色的 1280/375 两个视口 |
+
+### 10.5 fnOS FPK 部署（2026-11-13 实机执行）
+
+| 项目 | 结果 |
+|---|---|
+| 目标设备 | `ssh nas`（`192.168.100.11`），fnOS，x86_64，`/vol4` 剩余约 321 GB |
+| 首次部署 | 1.0.20 构建并安装成功，但实测容器 `EASYEXAM_SECRET_KEY` 为空：App Center 直接拉起 docker project，未执行 `cmd/main`，Compose 将 `${EASYEXAM_SECRET_KEY}` 替换为空串。此时 AI 凭据加密会以“未配置主密钥”拒绝，故未把 1.0.20 视为可交付 |
+| 修复 | `ai_config_repository._get_fernet()` 在环境变量为空时读取 `DATA_DIR/.env`；新增 `tests/test_ai_secret_persistence.py` 4 条（env 缺失、Compose 传空、env 优先、完全缺失仍拒绝）。详见 `DECISIONS.md` |
+| 最终构建 | 镜像 `ailm32442/easy-exam:1.0.21`（linux/amd64，digest `sha256:6b5dece62b1495c8879e524677ef1847cccdbf10654a222e765cb09b51b0b444`）；`python scripts/build_fpk.py --bundle-image` 生成 `dist/easy-exam-1.0.21.fpk`（37,998.6 KB，SHA-256 `2d95af45d106e2fea1df7efc62f564c1c48257a426565b555964d1387c4fbad4`） |
+| 安装包同步 | 本机与 NAS `/tmp` 的 SHA-256 一致；归档副本 `/vol4/@appdata/easy-exam/easy-exam-1.0.21-20261113-001440.fpk` |
+| 备份 | SQLite backup API 生成 `/vol4/@appdata/easy-exam/easyexam-v1.db.backup-pre-1.0.21-20261113-001440`；`manifest.backup-pre-1.0.21-20261113-001440`、`docker-compose.yaml.backup-pre-1.0.21-20261113-001440`；1.0.20 部署前另有同名 `pre-1.0.20-20261113-000424` 备份 |
+| 升级方式 | 解包 FPK 到 `/vol4/@appdata/easy-exam/fpk-src-1.0.21-20261113-001440`，执行 `sudo appcenter-cli install-local -d <dir> -a yes`（`install-fpk` 对已注册应用会静默 no-op；`appcenter-cli` 无 `restart` 子命令） |
+| 版本核验 | `/var/apps/easy-exam/manifest` = `1.0.21`；`target/docker/docker-compose.yaml` image = `ailm32442/easy-exam:1.0.21`；容器 `easy-exam-fpk` 运行该镜像 |
+| 健康检查 | `GET http://127.0.0.1:3000/api/v1/health` → **200** `{"status":"ok",...}`；根路径 **200**；容器健康状态 `healthy` |
+| 数据核验 | `PRAGMA quick_check = ok`；迁移 `18/18`；`users=66`、`question_banks=53`、`questions=252`、`question_versions=255`、`practice_sessions=162`，与升级前完全一致 |
+| 主密钥 | `/vol4/@appdata/easy-exam/.env` MD5 `5d447b82bb1b484826c4b21a188e9f3b`，升级前后一致；容器环境值仍为空，但容器内 `encrypt_secret`/`decrypt_secret` 往返 **True**，证明文件兜底生效 |
+| 挂载 | `/vol4/@appdata/easy-exam -> /app/data` |
+| 前端产物 | 容器内 `BankManageView-*.js` 存在，且 bundle 含“题库管理”文案，确认运行的是本轮构建 |
+| 最终门禁 | `python scripts/verify.py full` → **10/10 步骤通过，exit 0，264.64s**；后端 441 个用例（440 passed / 1 environment skip） |
+| 未执行 | 未使用真实账号对生产数据执行写操作；未做远程浏览器 E2E（无生产测试账号，且不应在用户数据上写入） |
+
+## 11. 2026-11-13 题库交互细节打磨与全站小缺陷修复
+
+### 11.1 范围
+
+用户在对题库管理做验收时提出：分页缺少自定义页大小、二级页面缺少醒目的全局返回键，并要求继续排查同类小缺陷。本轮以「不改变业务语义、不重做设计语言」为边界，修复导航、分页、失败态、键盘可达性、移动端与一致性六类问题。
+
+### 11.2 实际运行证据
+
+| 门禁 | 结果 |
+|---|---|
+| 语言包一致性（`node --test frontend/tests/locale.test.js`） | 15 passed（含中英键位/占位符/JSON 快照/英文无中文） |
+| 前端 Node 契约（`npm test`） | 116 passed |
+| 前端 Vitest 组件 | 23 files / 155 tests passed |
+| 本地化源码扫描 | `check_localization_config.js`、`scan_localized_templates.js` 均通过 |
+| `verify.py fast` | 4/4 步骤通过，19.24s |
+| 题库管理 Chromium E2E | 1 passed；含 25/页、第二页 7 条、页大小 50、`?tab=settings`、375px 无溢出检查 |
+| `verify.py ui` / `verify.py full` | 见 11.4 |
+
+### 11.3 需求到源码与测试的映射
+
+| 改进项 | 源码 | 验证 |
+|---|---|---|
+| 页大小 25/50/75/100、默认 25、localStorage 持久化、切换回第 1 页 | `BankManageView.vue`（`PAGE_SIZE_OPTIONS`、`readStoredPageSize`、`changePageSize`） | 组件测试 25/20 分页 + 页大小 50 持久化；E2E 25/7 + 50/1 |
+| 管理页面包屑随当前页签变化，页签写入 `?tab=` | `BankManageView.vue`（`activeTabMeta`、`setActiveTab`） | 组件测试面包屑与 `router.replace`；E2E `?tab=settings` |
+| 全局返回键：详情→题库、管理→详情、带 `bankId` 的导入→详情；桌面 topbar + 移动顶栏 | `router/index.js`（`meta.back`）、`AppLayout.vue`、`ImportView.vue` | `app_layout.test.js` 5 条（存在性、跳转、首页不显示） |
+| 题库列表 375px 操作簇合并、长标题截断、32px 点击区 | `BanksView.vue` | `banks_view.test.js` 9 条 |
+| 加载失败不再伪装为空态/加载中（题库详情、复习、模考中心） | `BankDetailView.vue`、`ReviewView.vue`、`ExamCenterView.vue` | 组件测试覆盖失败态 + 重试重新请求 |
+| 抽屉/弹窗键盘可达性：初始焦点、Tab 陷阱、Esc、滚动锁、焦点恢复 | `AppDialog.vue` 复用；`BankDetailView.vue` 抽屉；`ChangePasswordModal.vue`、`AiDraftsModal.vue`、`HomeView.vue` 五个弹窗 | 组件套件 155 条含焦点/滚动锁/Esc；`home_view.test.js` 10 条 |
+| 筛选后残留勾选会误操作批量归档 | `BankManageView.vue`（`clearSelection` + `pruneSelectionToVisible`） | 组件测试新增 stale-selection 用例 |
+| 移动端题目表收起次要列、复选框 32px 点击区 | `BankManageView.vue` ≤640px 媒体查询 | E2E 375px 无横向溢出；截图复核 |
+| 导入状态/审计动作本地化，审计详情只显示字段名，时间统一格式化 | `BankManageView.vue`、`frontend/src/utils/datetime.js`、`ep-*.js` 的 `manage` 段 | 组件测试断言本地化标签；E2E `data-action`/`data-status` |
+| 题库列表筛选无结果态 + 清除筛选 | `BanksView.vue`（`bank-no-match`、`clearFilters`） | `banks_view.test.js` 新增 3 条 |
+| 创建/编辑题库脏表单保护；批量归档确认 | `BanksView.vue`（`useDirtyGuard`、`batch_archive_confirm`） | `banks_view.test.js` 新增 6 条 |
+| 练习/开始考试防双击；导入错误提示上移 | `BanksView.vue`、`BankDetailView.vue`、`ImportView.vue` | 组件测试断言单次调用与错误位置 |
+| 导入重复项截断显示“另有 N 项”并可展开 | `ImportView.vue`（`<details class="dup-more">`） | `import_view.test.js` 3 条 |
+| 首屏主操作在数据未就绪时误开“新建题库” | `HomeView.vue`（`actionsReady`：银行列表与进行中会话都落定后才启用主按钮） | `home_view.test.js` 新增 1 条，断言加载中禁用、就绪后启用 |
+
+### 11.4 完整门禁
+
+| 门禁 | 结果 |
+|---|---|
+| `verify.py ui` | 3/3 步骤通过，29.96s |
+| `verify.py full` | 10/10 步骤通过，exit 0，272.73s；后端 441 用例（440 passed / 1 environment skip：`FNOS_BASE_URL` 未设置），前端 Vitest 23 文件 / 155 测试，Full Browser E2E 16 项 |
+
+首次复跑 `verify.py full` 时 `Fast UI Interaction` 在 `.focus-mode` 处超时。定位为首屏主按钮在银行列表仍为空时即可点击，`startToday()` 把“尚未加载”误判为“没有题库”并打开新建对话框。修复为 `actionsReady` 就绪门控后，`verify.py ui` 与 `verify.py full` 连续通过。
+
+### 11.5 已知残余
+
+- 题库管理行内归档按钮在 ≤640px 隐藏；单题归档仍可通过勾选后批量归档完成，但行内快捷入口在移动端不可见。
+- `ReviewView` 的加载器覆盖 7 个接口，任一失败会显示整页错误态；这是为了避免“失败伪装成空态”，后续可按页签拆分错误粒度。
+- `HomeView` 中模考设置、加题、分享、导出、AI 批量五个弹窗当前没有模板内调用点，属于历史遗留入口；本轮只统一了它们的可访问性，未恢复入口。
+
+### 11.6 OpenDesign 对照（本轮 UI 校验）
+
+本轮 UI 打磨完成后，补做了 OpenDesign 对照，读取仓库关联项目 **EasyExam 全产品重设计** 中已确认的规范：
+
+| OpenDesign 来源 | 规范 | 本轮落地 |
+|---|---|---|
+| `PRODUCT_UX.md` §3.3 路由与返回 | 深链可刷新、可返回；弹窗不承担导航职责，需要停留/刷新/返回的内容用页面或抽屉 | 返回目标由路由 `meta.back` 声明并用 `router.push` 确定性跳转；管理页签写入 `?tab=`；抽屉承担题目详情 |
+| `PRODUCT_UX.md` 管理壳风险表 | 管理页需“面包屑「题库 / 某题库 / 管理」+ 返回题库按钮”，避免去掉全局侧栏后迷路 | topbar 返回控件 + 面包屑改为「题库 / 题库名 / 当前页签」，题库名可点回详情 |
+| `VISUAL_POLISH.md` 列表密度/分页 | 一屏 ≥14 行；1000+ 题通过分页 + 稳定表头保持可扫描 | 默认 25 条/页（1440 高度下 25 行），提供 25/50/75/100，表头与操作列保持稳定 |
+| `DESIGN.md` 长列表 | 1000+ 行不依赖虚拟滚动：分页 + 等宽 ID | 客户端分页 + 等宽题号列保留 |
+
+对照后新增的改动是管理页面包屑中间层（题库名）及其组件断言；其余实现与 OpenDesign 规范一致，未发现需要推翻的设计语言偏差。
+
+### 11.7 1.0.22 实机部署（2026-11-13）
+
+| 项目 | 结果 |
+|---|---|
+| 镜像 | `ailm32442/easy-exam:1.0.22`，`linux/amd64`，manifest list digest `sha256:51b092788d4f17e889f33c1a4ed8e168f88fa3045809de883f4da0f3761e61ac` |
+| FPK | `dist/easy-exam-1.0.22.fpk`，38,003.9 KB，SHA-256 `5bc40cb978bd7f0055d9ee4b4a0d4afd9b4fc93237617a96265606a7282a5a5a`；本机与 NAS `/tmp` 校验一致 |
+| 升级方式 | 解包到 `/vol4/@appdata/easy-exam/fpk-src-1.0.22-20261113-022611`，`sudo appcenter-cli install-local -d <dir> -a yes`（卸载+安装，`@appdata` 保留） |
+| 备份 | `easyexam-v1.db.backup-pre-1.0.22-20261113-022611`（SQLite backup API）、`manifest.backup-pre-1.0.22-20261113-022611`、`docker-compose.yaml.backup-pre-1.0.22-20261113-022611`、`easy-exam-1.0.22-20261113-022611.fpk` |
+| 版本核验 | `/var/apps/easy-exam/manifest` = `1.0.22`；`target/docker/docker-compose.yaml` image = `ailm32442/easy-exam:1.0.22`；容器运行该镜像且 `healthy` |
+| 健康检查 | `/api/v1/health` → 200 `{"status":"ok",...}`；根路径 200 |
+| 数据核验 | `PRAGMA quick_check = ok`；迁移 `18`；`users=66`、`question_banks=53`、`questions=252`、`question_versions=255`、`practice_sessions=162`，与升级前一致 |
+| 主密钥 | `/vol4/@appdata/easy-exam/.env` MD5 `5d447b82bb1b484826c4b21a188e9f3b` 不变；容器环境值仍为空，但 `encrypt_secret`/`decrypt_secret` 往返 **True** |
+| 前端产物 | 容器内 `BankManageView-DR7k8qIk.js` 存在且包含 `page-size`，确认运行新版分页 |
+| 访问地址 | `http://192.168.100.11:3000` |
+
+## 12. 2026-11-13 题库模块交互语义审计与统一修复
+
+### 12.1 范围
+
+用户验收 1.0.22 的题库列表时指出四处语义疑问：“所有者”标签含义不明、行尾菜单与行内按钮重复、回收站缺少返回与选中反馈、分类筛选与分类管理彼此脱节；随后要求对题库模块下所有页面做同类问题排查，并一次性修复。
+
+本轮不新增业务能力，只统一交互语义：**导航、视图状态、筛选条件、维护动作、元数据**各有固定呈现形式，不再互相借用。
+
+| 页面 | 修复项 |
+|---|---|
+| 题库列表 `/banks` | 回收站改为“全部题库 / 回收站”分段控件；行尾菜单只留维护动作；所有者标签仅成员/编辑者行显示；分类筛选 + 分类管理 + 排序合并为一组；筛选/排序/视图写入 URL 并在返回时回放；回收站行只提供内联恢复 |
+| 题库详情 `/banks/:id` | 切换 `bankId` 时重置本地状态并用单调序号丢弃过期响应；页签/搜索/章节写入 URL；失败态与“筛选无结果”/“真正为空”分开；抽屉标签与锁定提示 |
+| 题库管理 `/banks/:id/manage` | 移除与全局返回键重复的页内面包屑；批量设置章节必须先选章节，清空章节独立并二次确认；创建题库改用 `AppDialog` 并加脏表单保护；失败态可重试；导出面板聚焦；页签与筛选文案补齐 |
+| 题库导入 `/imports` | 切换题库需确认并清空上一题库的预览/映射/候选题；结果卡片快照导入时题库名；扩展名校验共用；退出预览二次确认；`from=manage` 返回管理页导入页签 |
+| 外壳返回 | `AppLayout` 返回题库时使用 sessionStorage 中保存的列表筛选状态，确定性 `router.push`，不依赖历史栈 |
+
+### 12.2 实际运行证据
+
+见 12.4。
+
+### 12.3 需求到源码与测试的映射
+
+| 改进项 | 源码 | 验证 |
+|---|---|---|
+| 回收站作为视图状态，分段控件带 `aria-pressed` 与实心选中态 | `BanksView.vue`（`bank-view-all` / `bank-recycle-toggle`、`.banks-view-switch`） | `banks_view.test.js` 断言两按钮的 `aria-pressed`、恢复后切回全部题库 |
+| 回收站行不可进入详情，仅内联恢复 | `BanksView.vue`（`.bank-static`、`row-restore`） | `banks_view.test.js` + `bank_management_e2e.test.js` 点击 `row-restore` |
+| 行尾菜单去重，仅编辑资料/导出/归档；非所有者禁用 | `BanksView.vue`（`bank-menu`） | `banks_view.test.js` 断言菜单项集合与禁用态 |
+| 角色标签只在 `role !== 'ADMIN'` 时显示 | `BanksView.vue`（两处行模板） | `banks_view.test.js` 断言管理员行无标签 |
+| 分类筛选 / 分类管理 / 排序同组，重命名跟随、删除回落 | `BanksView.vue`（`toolbar-field`、`openCategoryManager`、`renameCategory`） | `banks_view.test.js` 分类管理 6 条；E2E 重命名后列表元信息同步 |
+| 列表状态 URL + sessionStorage 回放 | `frontend/src/utils/bankListQuery.js`、`BanksView.vue`、`AppLayout.vue` | `banks_view.test.js` query 同步；`app_layout.test.js` 返回时带 query |
+| 详情页切换题库不串数据 | `BankDetailView.vue`（`watch(() => props.bankId, …, { immediate: true })` + `loadSeq`） | `bank_detail_view.test.js` 断言切换后旧请求不覆盖 |
+| 管理页移除重复面包屑 | `BankManageView.vue`（header 模板） | `bank_manage_view.test.js` 断言页内无面包屑、页签 `aria-selected` |
+| 批量设置章节需先选章节；清空章节独立确认 | `BankManageView.vue`（`batchChapter`、`batch_chapter_clear_*`） | `bank_manage_view.test.js` 断言两个按钮的禁用/确认分支 |
+| 导入切换题库清理状态 + 结果快照题库名 | `ImportView.vue`（`watch(bankId)`、`resultBank`） | `import_view.test.js` 断言确认弹窗、状态清空与结果标题 |
+| 失败态 / 空态分离 | 四张页面 `load_failed` + 重试面板 | 各组件测试失败分支 |
+| 最近更新排序使用 `updated_at` 优先 | `bank_repository.py`（`COALESCE(b.updated_at, b.created_at)`）、`bankManage.js` | `tests/test_bank_management_completion.py::test_list_orders_by_recent_update`、`bank_manage.test.js` |
+
+### 12.4 完整门禁
+
+| 门禁 | 结果 |
+|---|---|
+| 语言包一致性（`npm run check:localization`） | config 与模板扫描两道门禁通过 |
+| 语言包快照（`locale.test.js`） | 15 passed；JSON 快照与运行时字典一致 |
+| 前端 Node 契约（`npm run test`） | 117 passed（`bank_manage.test.js` 含新增的连续选项键用例） |
+| 前端 Vitest 组件 | 23 files / 238 tests passed |
+| `verify.py full` | 10/10 步骤通过，exit 0，约 275s；后端 442 用例（441 passed / 1 environment skip），Full Browser E2E 64.66s |
+
+过程中两次失败均与产品逻辑无关：一次是 `bank_manage_e2e.test.js` 的「锁定题目带模考标签」断言在表格行渲染前计数（已在计数前补 `waitForSelector('.mtable-row')`，条件未放宽）；一次是本轮用脚本改写文件时把部分文本文件的行尾符从 LF 写成了 CRLF，触发 `guard_test_tampering.py` 把整文件误判为断言删除（已将这些文件归一化为 LF，守卫复跑通过）。
+
+
+### 12.5 第二轮：审计残留缺陷与修复
+
+第一轮修复后，用两个只读审计子代理逐行复核题库模块的五个界面，确认并修复 22 处残留缺陷。修复分布在五个文件，互不重叠，由五个子代理并行完成；多选题答案格式由主代理修复。
+
+| # | 缺陷 | 修复 | 验证 |
+|---|---|---|---|
+| 1 | 多选题点选 A、B 得到 `AB`，前端校验要求分隔符，界面无法创建多选题 | `domain/bankManage.js` 新增 `splitAnswerKeys`，与后端 `normalize_answer_keys` 同构；点选拼装改为逗号 | `bank_manage.test.js` 新增 1 条；`bank_manage_view.test.js` 断言点选后答案为 `A,B` |
+| 2 | 回收站视图中「分类管理」被误判为无权限而禁用 | `BanksView.vue` 缓存最近一次成功加载的活动题库列表，权限判定取并集 | `banks_view.test.js` 2 条（管理员在回收站可用 / 从未加载活动列表时不伪造权限） |
+| 3 | 批量归档视觉权重低于非破坏性的「设置分类」 | 批量归档改用 `btn-danger` | `banks_view.test.js` 1 条 |
+| 4 | 列表错误提示不可关闭、动作失败无重试 | 提示可关闭，批量/归档/恢复失败提供重试 | `banks_view.test.js` 3 条 |
+| 5 | 搜索或筛选变化会整批清空已勾选题库 | 改为按可见行裁剪选择 | `banks_view.test.js` 1 条 |
+| 6 | 回收站中分类筛选生效但不写入 URL，刷新/返回丢失 | 两种视图都持久化 `category`，失效分类回落到「全部分类」 | `banks_view.test.js` 3 条 |
+| 7 | 详情页章节/成员/可复制题库失败被吞成空态 | 逐资源错误态 + 重试面板；空态只在成功后出现 | `bank_detail_view.test.js` 3 条 |
+| 8 | 详情页页内面包屑与全局返回键重复 | 移除页内面包屑 | `bank_detail_view.test.js` 1 条 |
+| 9 | 复制成功与失败同样式、无 live region | `role="alert"` + 失败使用危险色 | `bank_detail_view.test.js` 1 条 |
+| 10 | 版本历史加载失败无重试 | 增加重试按钮 | `bank_detail_view.test.js` 1 条 |
+| 11 | 章节筛选/版本预览的选中态只有颜色 | 补 `aria-pressed` / `aria-current` | `bank_detail_view.test.js` 1 条 |
+| 12 | 管理页章节/成员/标签/导入/题库加载失败被吞成空态 | 逐资源错误态 + 独立重试加载器 | `bank_manage_view.test.js` 5 条 |
+| 13 | 页签 `tabindex=-1` 但没有方向键处理，键盘无法切页签 | 方向键 / Home / End + roving tabindex | `bank_manage_view.test.js` 1 条 |
+| 14 | 「显示已归档」刷新失败时开关已翻转、列表未变、无重试 | 失败回滚开关，错误提示带重试 | `bank_manage_view.test.js` 1 条 |
+| 15 | 只读说明横幅随「显示已归档」消失 | 条件改为 `!canEdit`，与归档开关无关 | `bank_manage_view.test.js` 1 条 |
+| 16 | 管理页不监听 `route.params.bankId`，A→B 切换后仍显示 A 的数据 | 监听并重置全部本地状态，用请求序号丢弃过期响应 | `bank_manage_view.test.js` 1 条 |
+| 17 | 导入预览请求期间可切换目标题库，A 的映射落在 B 名下 | 请求序号 + 起始题库快照，进行中禁用题库选择器 | `import_view.test.js` 1 条 |
+| 18 | 上传期间切换题库后，「查看题库」打开错误的题库 | 上传时快照接收题库，结果卡片与「查看题库」均指向快照 | `import_view.test.js` 1 条（扩展） |
+| 19 | 导入步骤状态一律显示「处理中」 | 按真实阶段显示待选文件/待确认映射/上传中/完成 | `import_view.test.js` 2 条 |
+| 20 | 版本行 aria-label 完全相同且删除按钮嵌套在 role=button 内 | 预览与删除改为并列控件，无障碍名称含版本号 | `question_edit_modal.test.js` 1 条 |
+| 21 | 丢弃提示中的「保存」绕过必填校验，静默关闭 | 复用同一校验路径，失败时保留弹窗并显示错误 | `question_edit_modal.test.js` 2 条 |
+| 22 | 弹窗内版本历史失败无重试 | 增加重试按钮 | `question_edit_modal.test.js` 1 条 |
+
+新增文案 2 条（`ep.imports.bank_locked_busy`、`ep.imports.result_bank_changed`），同时更新 `zh-CN.json` / `en-US.json` 快照。
+
+
+### 12.6 1.0.23 实机部署（2026-11-13）
+
+| 项目 | 结果 |
+|---|---|
+| 镜像 | `ailm32442/easy-exam:1.0.23`，镜像 ID `02bc8e723b97`，166 MB；容器内 `index-OR8VAeDk.js` 含本轮新增文案，确认随包前端为最新构建 |
+| FPK | `dist/easy-exam-1.0.23.fpk`，38,925,228 字节（38,012.9 KB），SHA-256 `a2358864c610227598613cfc2639ad78653db6ac7049ebd331dc2a4065540302`；本机与 NAS `/tmp` 校验一致 |
+| 备份 | `easyexam-v1.db.backup-pre-1.0.23-20261113-041351`（SQLite backup API）、`manifest.backup-pre-1.0.23-20261113-041351`、`docker-compose.yaml.backup-pre-1.0.23-20261113-041351` |
+| 升级方式 | 解包到 `/vol4/@appdata/easy-exam/fpk-src-1.0.23-20261113-041351`，`sudo appcenter-cli install-local -d <dir> -a yes`（卸载 + 安装，`@appdata` 保留） |
+| 版本核验 | `/var/apps/easy-exam/manifest` = `1.0.23`；`target/docker/docker-compose.yaml` image = `ailm32442/easy-exam:1.0.23`；容器 `easy-exam-fpk` 运行该镜像且 `healthy` |
+| 健康检查 | `/api/v1/health` → 200；根路径 200 且引用 `assets/index-OR8VAeDk.js` |
+| 数据核验 | `PRAGMA quick_check = ok`；迁移 `18`；`users=66`、`question_banks=53`、`questions=252`、`question_versions=255`、`practice_sessions=162`，与升级前一致 |
+| 主密钥 | `/vol4/@appdata/easy-exam/.env` MD5 `5d447b82bb1b484826c4b21a188e9f3b` 不变 |
+| 访问地址 | `http://192.168.100.11:3000` |

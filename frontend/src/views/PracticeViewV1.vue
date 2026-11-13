@@ -8,7 +8,7 @@
         </button>
         <span class="focus-sep" aria-hidden="true"></span>
         <div class="focus-context">
-          <span class="focus-mode-label">{{ session?.mode === 'ELIMINATION' ? t('ep.practice.mode_elimination') : session?.mode === 'FSRS' ? t('ep.practice.mode_fsrs') : session?.mode === 'MISTAKE' ? t('ep.practice.mode_mistake') : t('ep.practice.mode_practice') }}</span>
+          <span class="focus-mode-label">{{ focusModeLabel }}</span>
           <span v-if="question" class="focus-type">{{ formatType(question.type) }}</span>
         </div>
       </div>
@@ -42,7 +42,7 @@
               <LinearIcon name="edit" :size="14" />{{ isEditingQuestion ? t('ep.practice.edit_exit') : t('ep.practice.edit_question') }}
             </button>
             <button type="button" class="focus-menu-item is-danger" @click="handleKill">
-              <LinearIcon name="x" :size="14" />{{ t('ep.practice.kill') }}
+              <LinearIcon name="trash" :size="14" />{{ t('ep.practice.kill') }}
             </button>
           </div>
         </div>
@@ -236,8 +236,8 @@
               </div>
               <div v-for="(opt, oIdx) in editOptions" :key="oIdx" class="edit-option-row">
                 <input v-model="opt.key" class="input opt-key-input mono" :aria-label="t('ep.practice.edit_option_key')" />
-                <input v-model="opt.content" class="input" :placeholder="t('ep.practice.edit_option_text')" />
-                <button type="button" class="icon-btn" :aria-label="t('ep.common.delete')" @click="removeOption(oIdx)"><LinearIcon name="x" :size="13" /></button>
+                <input v-model="opt.content" class="input" :placeholder="t('ep.practice.edit_option_text')" :aria-label="t('ep.practice.edit_option_text')" />
+                <button type="button" class="icon-btn" :aria-label="t('ep.common.delete')" @click="removeOption(oIdx)"><LinearIcon name="trash" :size="13" /></button>
               </div>
             </div>
             <label class="field">
@@ -401,7 +401,7 @@
               </div>
 
               <div class="ai-ask">
-                <input v-model="customQuery" class="input" type="text" :placeholder="t('ep.practice.ai_ask_placeholder')" @keyup.enter="askCustomQuery" />
+                <input v-model="customQuery" class="input" type="text" :placeholder="t('ep.practice.ai_ask_placeholder')" :aria-label="t('ep.practice.ai_ask_placeholder')" @keyup.enter="askCustomQuery" />
                 <button type="button" class="btn btn-sm" :disabled="!customQuery.trim() || aiLoading" @click="askCustomQuery">{{ t('ep.practice.ai_send') }}</button>
               </div>
               <p v-if="aiStatusMessage" class="hint">{{ aiStatusMessage }}</p>
@@ -443,7 +443,7 @@
                     </div>
                   </div>
                   <div v-else class="ai-version-edit">
-                    <textarea v-model="editDraft" class="textarea" rows="4"></textarea>
+                    <textarea v-model="editDraft" class="textarea" rows="4" :aria-label="t('ep.practice.ai_edit')"></textarea>
                     <div class="ai-version-actions">
                       <button type="button" class="btn btn-sm" @click="editingVersionId = null">{{ t('ep.common.cancel') }}</button>
                       <button type="button" class="btn btn-sm btn-primary" :disabled="!editDraft.trim()" @click="savePersonalExplanation">{{ t('ep.practice.ai_save') }}</button>
@@ -539,7 +539,12 @@
         </div>
       </footer>
     </template>
-    <div v-else class="focus-empty">
+    <div v-else-if="reportLoadFailed" class="focus-empty" data-testid="practice-report-load-failed" role="alert">
+      <div class="empty-title">{{ t('ep.common.load_failed') }}</div>
+      <div class="empty-desc">{{ t('ep.practice.report_unavailable') }}</div>
+      <button type="button" class="btn" data-testid="practice-report-retry" @click="retryLoadReport">{{ t('ep.common.retry') }}</button>
+    </div>
+    <div v-else-if="!practiceReport" class="focus-empty">
       <div class="empty-title">{{ t('ep.practice.no_questions') }}</div>
       <div class="empty-desc">{{ t('ep.practice.no_questions_hint') }}</div>
       <button type="button" class="btn" @click="handleBack">{{ t('ep.common.back') }}</button>
@@ -555,6 +560,7 @@ import AppDialog from '../components/AppDialog.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
 import LocaleToggle from '../components/LocaleToggle.vue'
 import { useLocale } from '../composables/useLocale.js'
+import { useKeyboardInset } from '../composables/useKeyboardInset.js'
 import { useAuthStore } from '../stores/authStore'
 import { getSession, getSessionQuestions, submitAttempt, completeSession, syncDraft, toggleFlag } from '../api/practice'
 import { getQuestion, listQuestionVersions, updateQuestion, getQuestionConflict, resolveQuestionConflict } from '../api/questions'
@@ -601,16 +607,21 @@ const emit = defineEmits(['back', 'completed'])
 const router = useRouter()
 const auth = useAuthStore()
 const { t } = useLocale()
+useKeyboardInset()
 const authToken = computed(() => props.token || auth.token?.value || (typeof localStorage !== 'undefined' ? localStorage.getItem('easyexam_token') : '') || '')
 
 const showExitConfirmModal = ref(false)
 
 function handleBack() {
-  if (practiceReport.value || session.value?.is_completed) {
+  if (practiceReport.value || reportLoadFailed.value || isSessionCompleted(session.value)) {
     doExit()
     return
   }
   showExitConfirmModal.value = true
+}
+
+function isSessionCompleted(value) {
+  return Boolean(value?.is_completed) || value?.status === 'completed'
 }
 
 async function handleConfirmExit() {
@@ -712,6 +723,9 @@ function readLocalDraft() {
 }
 
 function writeLocalDraft() {
+  // A finished session has no answer state worth keeping; writing here would
+  // recreate a draft for a session the server already closed.
+  if (isSessionCompleted(session.value)) return
   const key = localDraftStorageKey()
   if (!key) return
   writeStoredJson(key, snapshotLocalDraft(sessionAnswers.value, Date.now(), clientAttemptIds.value))
@@ -743,6 +757,16 @@ function clearDraftConflictsStorage() {
 
 const session = ref(null)
 const questions = ref([])
+// Until the session payload arrives the mode is unknown; claiming "顺序练习"
+// here would briefly mislabel every FSRS / 错题 / 斩杀 session.
+const focusModeLabel = computed(() => {
+  if (!session.value) return t('ep.common.loading')
+  const mode = session.value.mode
+  if (mode === 'ELIMINATION') return t('ep.practice.mode_elimination')
+  if (mode === 'FSRS') return t('ep.practice.mode_fsrs')
+  if (mode === 'MISTAKE') return t('ep.practice.mode_mistake')
+  return t('ep.practice.mode_practice')
+})
 const index = ref(0)
 const answer = ref([])
 const textAnswer = ref('')
@@ -941,6 +965,7 @@ function scheduleDraftFlush(delay = 600) {
 async function flushDraft() {
   saveCurrentQuestionState()
   writeLocalDraft()
+  if (isSessionCompleted(session.value)) return false
   if (!props.sessionId || !authToken.value) return false
   if (draftFlushPromise) {
     draftFlushQueued = true
@@ -1064,6 +1089,18 @@ onMounted(async () => {
     session.value = await getSession(props.token, props.sessionId)
     if (session.value?.mode === 'EXAM') {
       router.replace(`/exam/${props.sessionId}`)
+      return
+    }
+    if (isSessionCompleted(session.value)) {
+      // A finished session is a report, not a runner. Rendering the question
+      // surface here would offer answer controls with no questions behind them.
+      stopClock()
+      if (session.value?.report) {
+        practiceReport.value = session.value.report
+        clearLocalDraft()
+      } else {
+        reportLoadFailed.value = true
+      }
       return
     }
     flaggedIds.value = Array.isArray(session.value?.flags) ? [...session.value.flags] : []
@@ -2021,7 +2058,31 @@ function resolveDraftConflictUseLocal() {
 
 const showCompleteConfirmModal = ref(false)
 const practiceReport = ref(null)
+const reportLoadFailed = ref(false)
 const completing = ref(false)
+
+/**
+ * Older sessions predate the persisted report. The runner cannot be replayed
+ * for a finished session, so the only honest state is a retryable notice.
+ */
+async function retryLoadReport() {
+  if (loading.value) return
+  reportLoadFailed.value = false
+  loading.value = true
+  try {
+    const fresh = await getSession(props.token, props.sessionId)
+    session.value = fresh
+    if (fresh?.report) {
+      practiceReport.value = fresh.report
+    } else {
+      reportLoadFailed.value = true
+    }
+  } catch (_) {
+    reportLoadFailed.value = true
+  } finally {
+    loading.value = false
+  }
+}
 
 function complete() {
   const total = questions.value.length
@@ -2577,7 +2638,7 @@ kbd {
 /* ---------- action bar ---------- */
 .focus-actionbar {
   position: fixed;
-  inset: auto 0 0;
+  inset: auto 0 var(--kb-inset, 0px);
   z-index: 40;
   background: color-mix(in srgb, var(--d-gasket, var(--paper)) 96%, transparent);
   backdrop-filter: blur(10px);
@@ -2815,7 +2876,7 @@ kbd {
 @media (max-width: 1280px) {
   .focus-layout { gap: 40px; }
 }
-@media (max-width: 1100px) {
+@media (max-width: 1024px) {
   .focus-layout {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
@@ -2861,6 +2922,7 @@ kbd {
     width: 100%;
     max-width: none;
     max-height: 82vh;
+    max-height: 82dvh;
     border-radius: 8px 8px 0 0;
     border-bottom: 0;
   }
@@ -2880,5 +2942,12 @@ kbd {
   .verdict-ratio { margin-left: 0; }
   .focus-finish { padding-left: 9px; padding-right: 9px; }
   .focus-overlay:not(.practice-sheet-overlay) { padding: 10px; }
+}
+@media (pointer: coarse) {
+  /* Sheet controls carry their own heights, so the global coarse rule needs a
+     scoped companion to reach 44px. */
+  .sheet-num { min-width: 44px; min-height: 44px; }
+  .practice-sheet-grid .practice-sheet-cell { min-height: 44px; }
+  .practice-sheet-actions .btn { min-height: 44px; }
 }
 </style>

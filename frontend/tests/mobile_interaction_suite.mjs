@@ -32,8 +32,11 @@ async function waitForServer(url, expectedToken, timeoutMs = 25000) {
       const res = await fetch(`${url}/api/v1/health`)
       if (res.ok) {
         const body = await res.json()
-        if (expectedToken && body.instance_token !== expectedToken) {
-          throw new Error(`Instance token mismatch: expected ${expectedToken} but got ${body.instance_token}`)
+        const expectedFingerprint = expectedToken
+          ? crypto.createHash('sha256').update(expectedToken).digest('hex').slice(0, 16)
+          : ''
+        if (expectedFingerprint && body.instance_fingerprint !== expectedFingerprint) {
+          throw new Error(`Instance fingerprint mismatch: expected ${expectedFingerprint} but got ${body.instance_fingerprint}`)
         }
         return true
       }

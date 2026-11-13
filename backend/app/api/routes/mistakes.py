@@ -24,6 +24,11 @@ def list_due(bank_id: str | None = None, request: Request = None, user=Depends(c
     return request.app.state.services.practice.practices.list_due_reviews(user["id"], bank_id)
 
 
+@router.get("/weak")
+def list_weak(bank_id: str | None = None, request: Request = None, user=Depends(current_user)):
+    return request.app.state.services.practice.practices.list_weak_questions(user["id"], bank_id)
+
+
 class MistakeCausePayload(BaseModel):
     mistake_cause: str
 

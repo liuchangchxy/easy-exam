@@ -8,6 +8,11 @@ export const listQuestionVersions = (token, questionId) => request(`/questions/$
   headers: authHeaders(token),
 })
 
+export const deleteQuestionVersion = (token, questionId, versionId) => request(`/questions/${questionId}/versions/${versionId}`, {
+  method: 'DELETE',
+  headers: authHeaders(token),
+})
+
 export const updateQuestion = (token, questionId, payload) => request(`/questions/${questionId}`, {
   method: 'PUT',
   headers: authHeaders(token),

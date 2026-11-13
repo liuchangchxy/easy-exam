@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>EasyExam Core UX 重设计</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* ---------- Design plan ----------
+   Color: paper / ink / pine / rust / line, taken from the product's own
+          Editorial Precision tokens so the review page matches the thing it reviews.
+   Type:  Source Han Serif for display, PingFang/Noto Sans for body,
+          JetBrains Mono for metadata and diagrams.
+   Layout: one measured column, full-bleed hairline bands, before/after
+          two-column at >= 820px that stacks on phones.
+   ---------------------------------- */
+:root {
+  color-scheme: light;
+  --paper: #f5f2ea;
+  --paper-2: #efebe1;
+  --surface: #fbf9f4;
+  --ink: #191b18;
+  --ink-2: #4b5049;
+  --ink-3: #5c6359;
+  --line: #cbc3b1;
+  --line-strong: #8f8a7d;
+  --brand: #23554b;
+  --brand-soft: #e7eee9;
+  --brand-line: #b8cdc4;
+  --bad: #a03c2b;
+  --bad-soft: #f7ebe7;
+  --warn: #85610f;
+  --warn-soft: #f5eeda;
+  --serif: "Source Han Serif SC", "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif;
+  --sans: "PingFang SC", "Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "Hiragino Sans GB", "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", "SFMono-Regular", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  --measure: 68ch;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #141713;
+    --paper-2: #191d18;
+    --surface: #1b1f1a;
+    --ink: #e9e7df;
+    --ink-2: #c3c7bd;
+    --ink-3: #a4a99e;
+    --line: #343a32;
+    --line-strong: #6d7469;
+    --brand: #8dc3b1;
+    --brand-soft: #1d2b26;
+    --brand-line: #35564c;
+    --bad: #d99b89;
+    --bad-soft: #2c1d19;
+    --warn: #d2b571;
+    --warn-soft: #2a2417;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #141713;
+  --paper-2: #191d18;
+  --surface: #1b1f1a;
+  --ink: #e9e7df;
+  --ink-2: #c3c7bd;
+  --ink-3: #a4a99e;
+  --line: #343a32;
+  --line-strong: #6d7469;
+  --brand: #8dc3b1;
+  --brand-soft: #1d2b26;
+  --brand-line: #35564c;
+  --bad: #d99b89;
+  --bad-soft: #2c1d19;
+  --warn: #d2b571;
+  --warn-soft: #2a2417;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.68;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1080px; margin: 0 auto; }
+
+/* masthead */
+.masthead { padding-block: 56px 34px; border-bottom: 1px solid var(--line-strong); }
+.eyebrow {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--ink-3); display: flex; flex-wrap: wrap; gap: 6px 18px;
+}
+.eyebrow b { font-weight: 500; color: var(--brand); }
+h1 {
+  font-family: var(--serif); font-weight: 600;
+  font-size: clamp(30px, 5.2vw, 47px); line-height: 1.18;
+  letter-spacing: -.01em; margin: 18px 0 0; text-wrap: balance;
+}
+.thesis {
+  font-family: var(--serif); font-size: clamp(17px, 2.2vw, 20px); line-height: 1.62;
+  color: var(--ink-2); max-width: 46em; margin: 18px 0 0;
+}
+.thesis em { font-style: normal; color: var(--ink); border-bottom: 2px solid var(--brand-line); }
+
+/* verdict strip */
+.verdicts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border-bottom: 1px solid var(--line); }
+.verdict { background: var(--paper); padding: 24px 22px 26px; min-width: 0; }
+.verdict .n { font-family: var(--mono); font-size: 11px; color: var(--brand); letter-spacing: .1em; }
+.verdict h2 { font-family: var(--sans); font-size: 15px; font-weight: 600; margin: 8px 0 6px; line-height: 1.45; }
+.verdict p { margin: 0; font-size: 12.5px; line-height: 1.66; color: var(--ink-3); }
+
+/* sections */
+section { padding-block: 44px; border-bottom: 1px solid var(--line); }
+.sec-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
+.sec-no { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: .12em; }
+h2.sec { font-family: var(--serif); font-size: clamp(21px, 3vw, 27px); font-weight: 600; margin: 0; line-height: 1.3; text-wrap: balance; }
+.sec-note { font-size: 12.5px; color: var(--ink-3); margin: -8px 0 22px; max-width: var(--measure); }
+
+p { max-width: var(--measure); }
+p.body { margin: 0 0 14px; }
+strong { font-weight: 600; }
+code, .mono { font-family: var(--mono); font-size: .88em; }
+code { background: var(--paper-2); border: 1px solid var(--line); border-radius: 3px; padding: .08em .32em; overflow-wrap: anywhere; }
+
+/* stat grid */
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); margin: 4px 0 24px; }
+.stat { background: var(--surface); padding: 18px 16px; min-width: 0; }
+.stat .v { font-family: var(--serif); font-size: 28px; line-height: 1.1; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat .v small { font-family: var(--mono); font-size: 12px; font-weight: 400; color: var(--ink-3); }
+.stat .k { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; color: var(--ink-3); margin-top: 6px; text-transform: uppercase; }
+.stat.zero .v { color: var(--bad); }
+
+/* diagram blocks */
+.diagram { border: 1px solid var(--line); background: var(--surface); overflow-x: auto; margin: 0 0 8px; }
+.diagram pre { margin: 0; padding: 18px 20px; font-family: var(--mono); font-size: 12px; line-height: 1.75; color: var(--ink-2); min-width: 34em; }
+.diagram pre b { color: var(--ink); font-weight: 600; }
+.diagram pre i { font-style: normal; color: var(--bad); }
+.cap { font-size: 12px; color: var(--ink-3); margin: 0 0 24px; }
+
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; margin-bottom: 10px; }
+.two h3 { font-family: var(--sans); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 10px; font-weight: 500; }
+.two .diagram { margin: 0; }
+
+/* root causes */
+.causes { border-top: 1px solid var(--line); }
+.cause { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--line); }
+.cause .tag-id { font-family: var(--mono); font-size: 11px; color: var(--brand); padding-top: 2px; letter-spacing: .06em; }
+.cause h3 { font-size: 14.5px; font-weight: 600; margin: 0 0 5px; line-height: 1.45; }
+.cause p { margin: 0; font-size: 12.8px; color: var(--ink-2); line-height: 1.66; max-width: 62ch; }
+.cause p span { color: var(--ink-3); }
+
+/* decisions */
+.decisions { display: grid; gap: 12px; }
+.decision { border: 1px solid var(--line); background: var(--surface); padding: 18px 20px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 20px; align-items: start; }
+.decision h3 { font-size: 14px; margin: 0 0 4px; font-weight: 600; line-height: 1.45; }
+.decision p { margin: 0; font-size: 12.6px; color: var(--ink-3); line-height: 1.62; max-width: 58ch; }
+.pill { font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; padding: 4px 9px; border-radius: 999px; white-space: nowrap; align-self: start; }
+.pill.hi { background: var(--brand-soft); color: var(--brand); border: 1px solid var(--brand-line); }
+.pill.mid { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--line); }
+
+/* phases */
+table { width: 100%; border-collapse: collapse; font-size: 12.8px; }
+th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; }
+td:first-child { font-family: var(--mono); font-size: 12px; color: var(--brand); white-space: nowrap; }
+.table-wrap { overflow-x: auto; border-top: 1px solid var(--line-strong); }
+
+/* callout */
+.callout { border-left: 3px solid var(--brand); background: var(--brand-soft); padding: 16px 18px; margin: 0 0 22px; }
+.callout p { margin: 0; font-size: 13px; color: var(--ink-2); max-width: 66ch; }
+.callout b { color: var(--ink); }
+
+/* footer */
+footer { padding-block: 36px 64px; }
+footer p { font-size: 12px; color: var(--ink-3); max-width: 72ch; }
+footer .sig { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; color: var(--ink-3); margin-top: 18px; }
+
+@media (max-width: 820px) {
+  .verdicts { grid-template-columns: 1fr; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .two { grid-template-columns: 1fr; }
+  .decision { grid-template-columns: 1fr; }
+  .cause { grid-template-columns: 40px minmax(0, 1fr); gap: 10px; }
+  .masthead { padding-block: 38px 26px; }
+  section { padding-block: 34px; }
+}
+@media (max-width: 430px) {
+  .stat .v { font-size: 23px; }
+  .diagram pre { font-size: 11px; padding: 14px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">
+      <span>诊断与方案 · v1.1</span>
+      <span>2026-11-13</span>
+      <span>决策已确认 · P1 已实施</span>
+      <span>生产库实读</span>
+      <span>未修改任何代码</span>
+    </div>
+    <h1>EasyExam Core UX 重设计</h1>
+    <p class="thesis">这不是七个界面缺陷，是<em>六个结构机制</em>的七个症状：一个实体两条路由、返回是静态树而不是历史、状态没有唯一源、学习状态挂在错的那条边上、生命周期只被逐段实现、控件层缺失。视觉方向保留，结构重做。</p>
+  </header>
+
+  <div class="verdicts">
+    <div class="verdict">
+      <div class="n">01</div>
+      <h2>题库不该有两个页面</h2>
+      <p>只读详情页与可写管理页各自带 questions / structure / members，权限决定了页面结构。用户被迫先判断"我在哪一层"。</p>
+    </div>
+    <div class="verdict">
+      <div class="n">02</div>
+      <h2>归档不是删除，也不是没有去处</h2>
+      <p>题目归档写的是 <span class="mono">questions.is_deleted</span>，与删除同一列；而学习状态只挂题目、不挂"题目在某库中"，所以"归档后去哪了"没有答案。</p>
+    </div>
+    <div class="verdict">
+      <div class="n">03</div>
+      <h2>学习闭环没有闭环</h2>
+      <p>报告只在内存、"重新练习"实际退出、模考错题永不进复习、17 个开始按钮互不等价、完成与放弃在库里是同一个值。</p>
+    </div>
+  </div>
+
+  <section>
+    <div class="sec-head"><span class="sec-no">01 / 证据</span><h2 class="sec">先看真实使用，而不是文档假设</h2></div>
+    <p class="sec-note">只读副本取自 2026-11-13 的生产库，32 张表逐表计数。产品实际服务的不是"多用户协作题库平台"，而是"一个人 + 一个大题库 + 标签"。</p>
+
+    <div class="stats">
+      <div class="stat"><div class="v">141</div><div class="k">真实题库题量</div></div>
+      <div class="stat"><div class="v">228<small> / 255</small></div><div class="k">单选题版本</div></div>
+      <div class="stat"><div class="v">103</div><div class="k">标签（427 条关联）</div></div>
+      <div class="stat"><div class="v">162</div><div class="k">学习会话</div></div>
+      <div class="stat zero"><div class="v">0</div><div class="k">跨库题目</div></div>
+      <div class="stat zero"><div class="v">0</div><div class="k">章节</div></div>
+      <div class="stat zero"><div class="v">0</div><div class="k">解释版本</div></div>
+      <div class="stat zero"><div class="v">0</div><div class="k">个人笔记</div></div>
+    </div>
+
+    <p class="body">这四组零很关键：章节树、多解释体系、考试蓝图、个人资料——SPEC 里都有，界面上也都有入口，但真实使用从未产生一行数据。它们可以保留，但不能占据主航道。反过来，标签是唯一被真正使用的组织维度，而它现在只出现在一个筛选下拉里。</p>
+    <p class="body">另一个数字更刺眼：162 个会话的 <code>score</code> 全部是 <code>0.0</code>，216 条作答的 <code>time_spent</code> 全部是 0。成绩与用时从未落值——所以现在的"报告"本质上是完赛瞬间算出来、离开页面就消失的一张纸。</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-no">02 / 结构</span><h2 class="sec">现状：一个实体，两条路；一个任务，十七个入口</h2></div>
+
+    <div class="two">
+      <div>
+        <h3>现在</h3>
+        <div class="diagram"><pre>今天 ─────→ /practice/:id   ← 17 个按钮都到这
+题库 ─┬─→ 列表
+      │     ├─ 名称 ──→ 详情（只读 3 tab）
+      │     │            └─ 管理 ──→ /manage（6 tab）
+      │     ├─ 管理 ─────────────────┘  ← 跳过详情
+      │     └─ ⋯ ──→ 编辑/导出/归档
+      ├─→ 导入（8 个入口，2 种落点）
+      └─→ 练习
+复习 ─┬─ 到期 / 错题 / 斩杀 / 档案（4 tab）
+      └─ 点开始 = 与题库、今天互不相同的参数
+模考 ── 中心 ──→ 考试 ──→ 报告（不落库）
+资料 ── 笔记（与题目无关联）
+设置 ── 偏好 / AI / 账户 / 关于 平铺</pre></div>
+      </div>
+      <div>
+        <h3>目标</h3>
+        <div class="diagram"><pre>今天 ──→ 今日队列 ──→ 开始学习面板
+                        └─→ 会话 ──→ 报告（可回看）
+题库 ──→ 列表 ──→ 工作区 ──→ 题目页
+                     └─ 题目/结构/成员/导入/AI/设置
+复习 ──→ 队列（到期·错题·薄弱·斩杀）
+      └─→ 学习档案（趋势·掌握度·完成率）
+模考 ──→ 档案与蓝图 ──→ 考试 ──→ 报告 · 历史
+资料 ──→ 笔记与文件（可挂到题目）
+设置 ──→ 偏好 / AI / 账户</pre></div>
+      </div>
+    </div>
+    <p class="cap">左侧每一个分叉都是一次"用户要先做判断"的地方；右侧每个实体只有一个规范页面。返回一律走历史，不再声明父子。</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-no">03 / 根因</span><h2 class="sec">六个机制，解释全部七个抱怨</h2></div>
+    <div class="causes">
+      <div class="cause">
+        <div class="tag-id">R1</div>
+        <div>
+          <h3>按"编辑能力"分层，而不是按"用户任务"分层</h3>
+          <p>同一实体拆成只读页与可写页，两页三个同名 tab；同一任务复制成 17 个开始练习、8 个导入、5 个进入管理的入口。权限只该决定"有没有按钮"，不该决定"页面长什么样"。 <span>router/index.js:22-23 · BankDetailView:414 · BankManageView:865</span></p>
+        </div>
+      </div>
+      <div class="cause">
+        <div class="tag-id">R2</div>
+        <div>
+          <h3>全局没有唯一状态源</h3>
+          <p>筛选/排序写进 URL+sessionStorage，tab 写进 URL，页码与选中在内存，导入步骤由"有没有预览"推导，草稿 id 只在内存。刷新、返回、分享、换设备各丢一部分现场。 <span>BankManageView:961,990 · ImportView:703-708</span></p>
+        </div>
+      </div>
+      <div class="cause">
+        <div class="tag-id">R3</div>
+        <div>
+          <h3>导航是一棵静态声明的树，不是历史</h3>
+          <p>二级页声明 <code>meta.back</code>，返回按钮据此 push 一个未必访问过的父级。多入口页面在树里无解。全仓没有路由守卫，也没有一个 <code>&lt;router-link&gt;</code>。 <span>AppLayout:251-281 · router/index.js 无 beforeEach</span></p>
+        </div>
+      </div>
+      <div class="cause">
+        <div class="tag-id">R4</div>
+        <div>
+          <h3>学习状态挂在题目上，不挂"题目在某库中"</h3>
+          <p><code>fsrs_cards</code>、<code>mistake_records</code>、<code>kill_records</code> 主键都是 (user, question)；<code>questions.is_deleted</code> 同时是归档与删除。界面的单位是"这个库里的这道题"，系统里没有这个状态可放。 <span>question_repository.py:444-450</span></p>
+        </div>
+      </div>
+      <div class="cause">
+        <div class="tag-id">R5</div>
+        <div>
+          <h3>生命周期只被逐段实现，没有一条线</h3>
+          <p>导入不是向导、无离开守卫；会话有 4 种模式、2 个 runner、两套快捷键，报告不落库；"到期""锁定""归档"各有两三套定义。每段都说得通，连起来走不通。 <span>PracticeViewV1:2061 · practice_repository:456,761</span></p>
+        </div>
+      </div>
+      <div class="cause">
+        <div class="tag-id">R6</div>
+        <div>
+          <h3>视觉系统成熟，控件层与反馈层缺失</h3>
+          <p>6 套对话框、2 套确认（22 处原生 confirm）、4 套表格、8 套列表行、2 套成功提示；间距 token 使用次数为 0；图标按英文名而不是用户动作定义。 <span>style.css:35 · LinearIcon.vue</span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-no">04 / 方案</span><h2 class="sec">八条决策，已确认</h2></div>
+    <p class="sec-note">以下八条在 2026-11-13 已由你拍板。其中"家庭/小团队并列"把协作升为一等公民，因此多了成员管理、两种角色层级与真实的管理员面（P4）。</p>
+
+    <div class="decisions">
+      <div class="decision">
+        <div>
+          <h3>1 · 题库与题目收紧为 1:1</h3>
+          <p>联表允许一题多库，但产品语义是"复制=新题、移动=换家"，真实数据 0 跨库。收紧后，"本库归档"才有意义，跨库状态歧义消失。复制入口保留，但明确提示学习记录不会复制。</p>
+        </div>
+        <span class="pill hi">已确认</span>
+      </div>
+      <div class="decision">
+        <div>
+          <h3>2 · 归档是库内"已归档"视图，不是回收站</h3>
+          <p>新增 <code>archived_at</code>，归档与删除分离；工作区用 <code>?archived=1</code> 查看与恢复。不再回答"题目回收站在哪"——因为归档不删除，删除只发生在空库或明确确认时。</p>
+        </div>
+        <span class="pill hi">已确认</span>
+      </div>
+      <div class="decision">
+        <div>
+          <h3>3 · 模考错题默认进入复习队列</h3>
+          <p>现在交卷只写错题事实、不写 FSRS 卡，考试错题永远没有到期日。按 SPEC"由考试配置决定"补上开关，默认开启。</p>
+        </div>
+        <span class="pill hi">已确认</span>
+      </div>
+      <div class="decision">
+        <div>
+          <h3>4 · 斩杀题库是队列的一个来源，不是独立页面</h3>
+          <p>SPEC 要求"独立斩杀题库"，但独立成一级页面会再复制一套列表与筛选。方案：复习队列的 <code>?source=killed</code> 视图 + 档案里的数量，保留"查漏补缺"启动入口。</p>
+        </div>
+        <span class="pill hi">已确认</span>
+      </div>
+      <div class="decision">
+        <div>
+          <h3>5 · 删除 /banks/:id/manage，合并两页</h3>
+          <p>保留成熟的管理页 tab 骨架作为唯一题库工作区，吸收浏览能力；题目从右侧抽屉升级为 <code>/banks/:id/q/:qid</code> 页面。这是本方案最大的结构变动，也是"查看题库意义何在"的唯一答案。</p>
+        </div>
+        <span class="pill hi">已确认</span>
+      </div>
+      <div class="decision">
+        <div>
+          <h3>6 · 家庭 / 小团队并列</h3>
+          <p>协作升为一等公民：题库列表分「我的 / 共享给我」，成员管理（搜索添加、改角色、移除、自助离开、转移所有权）进入主流程，成员 tab 不再只是一串用户名。</p>
+        </div>
+        <span class="pill hi">已确认</span>
+      </div>
+      <div class="decision">
+        <div>
+          <h3>7 · 建真实的管理员面</h3>
+          <p><code>users.is_admin</code>；实例管理提供用户列表、启用/禁用、重置密码、注册开关与会话管理；界面上的「管理员 / 成员」不再是假标签。</p>
+        </div>
+        <span class="pill hi">已确认</span>
+      </div>
+      <div class="decision">
+        <div>
+          <h3>8 · 允许迁移，先本地验证</h3>
+          <p>归档 <code>archived_at</code>、会话 <code>status</code> / <code>result_json</code>、<code>is_admin</code> 与 <code>instance_settings</code> 都以 v19 迁移落地；先在本地库与 E2E 验证，生产备份后再升级。</p>
+        </div>
+        <span class="pill hi">已确认</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-no">05 / 执行</span><h2 class="sec">分期与出口条件</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>阶段</th><th>内容</th><th>出口条件</th></tr></thead>
+        <tbody>
+          <tr><td>P1 ✅</td><td>导航地基：返回=历史、URL 契约、路由守卫、403 页</td><td>深链 / 刷新 / 返回三场景真实浏览器验收（已通过）</td></tr>
+          <tr><td>P2</td><td>题库合并：删 manage，工作区吸收两页；1:1 约束；<code>archived_at</code> 与已归档视图；题目页替代抽屉</td><td>题库域 E2E 重写并全绿；归档 → 恢复闭环</td></tr>
+          <tr><td>P3</td><td>学习闭环：开始面板、报告落库、一条队列、档案页、模考错题入复习</td><td>练习 / 模考 / 复习三条主链路真实浏览器走通</td></tr>
+          <tr><td>P4</td><td>协作与实例：成员管理、两种角色、共享库分段、管理员面、注册开关、会话管理</td><td>多用户下"共享 → 编辑 → 越权 → 403"全链路走通</td></tr>
+          <tr><td>P5</td><td>导入向导化并可续做；设置按"谁配置"分层</td><td>导入中断可恢复；设置无死文案</td></tr>
+          <tr><td>P6</td><td>移动端排布、控件收敛、可访问性、E2E 补全、真机</td><td>375 / 768 / 1280 三档 + 真机 + <code>verify.py full</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout" style="margin-top:22px">
+      <p><b>验收不只看测试绿。</b>P2、P3 结束后用真实浏览器按用户任务重走一遍；最终在生产实例上用那个 141 题的软考题库走完整生命周期：建库 → 导入 → 整理 → 练习 → 错题 → 复习 → 模考 → 归档 → 恢复。</p>
+    </div>
+  </section>
+
+  <section style="border-bottom:none">
+    <div class="sec-head"><span class="sec-no">06 / 边界</span><h2 class="sec">这一版没有做什么</h2></div>
+    <p class="body">没有修改任何生产代码，没有运行构建或测试，没有对生产库执行写操作。视觉方向（Editorial Precision、四套配色、字体与 1px 排版）整体保留；只收敛"同一个东西有六种实现"的控件层，不重绘。</p>
+    <p class="body">完整诊断（含七个域的逐条证据、数据模型成本地图、移动端缺口、接口异常清单）在仓库 <code>docs/UX_CORE_REDESIGN_2026-11-13.md</code>。</p>
+  </section>
+
+  <footer>
+    <p>八条已确认，P1 已落地并通过 verify:ui。P1 + P2 的核心是把题库从"两个页面 + 一个抽屉"变成"一个工作区 + 一个题目页"，其余改动都挂在这个骨架上。协作与管理员面集中在 P4，不阻塞前三阶段。</p>
+    <div class="sig">EasyExam · Core UX diagnosis · 2026-11-13 · baseline 1.0.23</div>
+  </footer>
+
+</div>
+</body>
+</html>

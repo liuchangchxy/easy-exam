@@ -1,5 +1,8 @@
 import json
+import os
 import threading
+import urllib.error
+import urllib.request
 from typing import Any, Dict, List, Optional
 
 
@@ -43,31 +46,80 @@ class AiTutorService:
             return self.ai_configs.save_config(user_id, payload)
         return self.get_user_ai_config(user_id)
 
+    def patch_user_ai_config(self, user_id: str, fields: dict) -> dict:
+        """Write only the fields the caller sent, keeping PUT for compatibility."""
+        if self.ai_configs:
+            return self.ai_configs.patch_config(user_id, fields)
+        return self.get_user_ai_config(user_id)
+
+    @staticmethod
+    def _probe_url(url: str, method: str = "GET", headers: dict | None = None, data: bytes | None = None, timeout: float = 3.0) -> dict:
+        request = urllib.request.Request(url, data=data, headers=headers or {}, method=method)
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                status = getattr(response, "status", 200)
+            return {"ok": True, "message": f"连接成功（HTTP {status}）"}
+        except urllib.error.HTTPError as exc:
+            return {"ok": False, "message": f"服务返回 HTTP {exc.code}"}
+        except Exception as exc:
+            # Connection refused/timeout/DNS: a failed probe is still a normal
+            # 200 answer, never a server error. Never echo credentials.
+            return {"ok": False, "message": f"无法连接：{exc.__class__.__name__}"}
+
+    def test_user_ai_config(self, user_id: str, kind: str) -> dict:
+        """Probe the effective configuration: saved values win, env defaults fill gaps."""
+        normalized = (kind or "").strip().lower()
+        if normalized not in {"ai", "search"}:
+            raise ValueError("kind must be 'ai' or 'search'")
+        raw = self.ai_configs.get_raw_config(user_id) if self.ai_configs else None
+        raw = raw or {}
+
+        if normalized == "ai":
+            base = raw.get("ai_api_base") or os.environ.get("LLM_BASE_URL", "http://localhost:11434/v1")
+            api_key = raw.get("ai_api_key") or os.environ.get("LLM_API_KEY", "")
+            headers = {"Accept": "application/json"}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            return self._probe_url(base.rstrip("/") + "/models", headers=headers)
+
+        provider = raw.get("search_provider") or os.environ.get("WEB_SEARCH_PROVIDER", "open-webSearch")
+        if provider == "offline":
+            return {"ok": False, "message": "联网检索当前为离线模式"}
+        base = raw.get("search_api_base") or os.environ.get("OPEN_WEBSEARCH_URL", "http://localhost:8000/v1/search")
+        payload = json.dumps({"query": "connection test", "limit": 1}).encode("utf-8")
+        return self._probe_url(
+            base,
+            method="POST",
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+            data=payload,
+        )
+
     def _get_provider_for_user(self, user_id: str):
         if self.ai_configs:
-            cfg = self.ai_configs.get_config(user_id, mask_secrets=False)
-            if cfg.get("ai_api_key") or ("localhost" in cfg.get("ai_api_base", "")):
+            cfg = self.ai_configs.get_raw_config(user_id) or {}
+            api_base = cfg.get("ai_api_base") or ""
+            if cfg.get("ai_api_key") or "localhost" in api_base:
                 from backend.legacy.services.ai_service import AIService
                 from backend.app.infrastructure.ai.provider import CompatibleAiProvider
                 return CompatibleAiProvider(AIService(
                     api_key=cfg.get("ai_api_key"),
-                    base_url=cfg.get("ai_api_base"),
-                    model=cfg.get("ai_model"),
+                    base_url=api_base or None,
+                    model=cfg.get("ai_model") or None,
                 ))
         from backend.app.infrastructure.ai.provider import CompatibleAiProvider
         return self.provider or CompatibleAiProvider()
 
     def _get_search_for_user(self, user_id: str):
         if self.ai_configs:
-            cfg = self.ai_configs.get_config(user_id, mask_secrets=False)
-            if cfg.get("has_custom_config"):
+            cfg = self.ai_configs.get_raw_config(user_id)
+            if cfg:
                 provider = cfg.get("search_provider")
                 if provider == "offline":
                     from backend.app.infrastructure.ai.web_search import OfflineWebSearch
                     return OfflineWebSearch()
                 elif provider == "open-webSearch":
                     from backend.app.infrastructure.ai.web_search import OpenWebSearchAdapter
-                    return OpenWebSearchAdapter(endpoint_url=cfg.get("search_api_base"))
+                    return OpenWebSearchAdapter(endpoint_url=cfg.get("search_api_base") or None)
         if self.web_search:
             return self.web_search
         from backend.app.infrastructure.ai.web_search import OfflineWebSearch

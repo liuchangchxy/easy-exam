@@ -195,7 +195,7 @@ test('Bank Management E2E: Editorial Table, Filtering, Edit, Active Exam Lock an
     await page.waitForTimeout(250)
 
     const q3Row = page.locator('.mtable-row').filter({ hasText: 'Is UDP a connection-oriented protocol?' }).first()
-    await q3Row.click()
+    await q3Row.locator('[data-testid="row-edit"]').click()
     await page.waitForSelector('.question-edit-dialog', { timeout: 5000 })
     await page.locator('#edit-stem').fill('Is UDP a connectionless protocol?')
     await page.locator('.btn-submit-edit').click()
@@ -227,10 +227,11 @@ test('Bank Management E2E: Editorial Table, Filtering, Edit, Active Exam Lock an
     await page.waitForSelector('.manage-page', { timeout: 10000 })
     const lockNotice = page.locator('.notice.warn.manage-notice')
     await lockNotice.waitFor({ state: 'visible', timeout: 10000 })
+    await page.waitForSelector('.mtable-row', { timeout: 10000 })
     assert.match(await lockNotice.innerText(), /模考/)
     assert.ok(await page.locator('.mtable-row .tag.warn').count() > 0, 'Locked questions must carry an active-exam tag')
 
-    await page.locator('.mtable-row').filter({ hasText: 'Is UDP a connectionless protocol?' }).first().click()
+    await page.locator('.mtable-row').filter({ hasText: 'Is UDP a connectionless protocol?' }).first().locator('[data-testid="row-edit"]').click()
     await page.waitForSelector('.question-edit-dialog', { timeout: 5000 })
     assert.equal(await page.locator('#edit-stem').isDisabled(), true, 'Active exam must force read-only editing')
     assert.equal(await page.locator('.btn-submit-edit').count(), 0, 'Read-only modal must not expose save')

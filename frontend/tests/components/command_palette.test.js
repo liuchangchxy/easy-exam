@@ -85,3 +85,26 @@ describe('CommandPalette bank rows', () => {
     expect(wrapper.emitted('practice-bank')).toHaveLength(1)
   })
 })
+
+describe('CommandPalette semantic icons', () => {
+  it('renders each action command with its own icon glyph', async () => {
+    const semanticCommands = [
+      { id: 'import', title: 'Import', icon: 'import' },
+      { id: 'export', title: 'Export', icon: 'export' },
+      { id: 'archive', title: 'Archive', icon: 'archive' },
+      { id: 'restore', title: 'Restore', icon: 'restore' },
+      { id: 'delete', title: 'Delete', icon: 'trash' },
+    ]
+    wrapper = mount(CommandPalette, {
+      attachTo: document.body,
+      props: { banks: [], commands: semanticCommands },
+    })
+    await openPalette()
+
+    const rows = wrapper.findAll('.action-item')
+    expect(rows).toHaveLength(semanticCommands.length)
+    semanticCommands.forEach((cmd, idx) => {
+      expect(rows[idx].find(`[data-icon="${cmd.icon}"]`).exists()).toBe(true)
+    })
+  })
+})

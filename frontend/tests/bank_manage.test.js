@@ -258,6 +258,18 @@ test('validateQuestionEdit validates MULTI choice answers strictly', () => {
   assert.equal(validateQuestionEdit('MULTI', opts, '   ').valid, false)
 })
 
+test('validateQuestionEdit accepts contiguous MULTI keys the same way the backend does', () => {
+  const opts = [{ key: 'A', content: '1' }, { key: 'B', content: '2' }, { key: 'C', content: '3' }]
+  // Clicking option keys in the create form joins them without separators ("AB");
+  // the backend expands that token, so the client-side gate must not reject it.
+  assert.equal(validateQuestionEdit('MULTI', opts, 'AB').valid, true)
+  assert.equal(validateQuestionEdit('MULTI', opts, 'ABC').valid, true)
+  assert.equal(validateQuestionEdit('MULTI', opts, 'AB,D').valid, false)
+  assert.equal(validateQuestionEdit('MULTI', opts, 'A').valid, false)
+  assert.equal(sanitizeAnswerOnOptionRemove('MULTI', 'AB', 'B'), 'A')
+  assert.equal(adaptAnswerOnTypeChange('MULTI', 'AB', opts), 'A,B')
+})
+
 test('validateQuestionEdit validates JUDGE answers strictly', () => {
   const opts = [{ key: 'T', content: 'True' }, { key: 'F', content: 'False' }]
   assert.equal(validateQuestionEdit('JUDGE', opts, 'T').valid, true)
@@ -310,4 +322,94 @@ test('adaptAnswerOnTypeChange resets incompatible answers to empty string and ne
   // Switching to ESSAY:
   assert.equal(adaptAnswerOnTypeChange('ESSAY', 'A', choiceOpts), '')
   assert.equal(adaptAnswerOnTypeChange('ESSAY', '', choiceOpts), '')
+})
+
+test('question keyword search matches id and short code', async () => {
+  const { questionCode } = await import('../src/domain/bankManage.js')
+  const filters = { ...createEmptyBankFilters(), keyword: questionCode('q-1234abcd') }
+  const filtered = filterBankQuestions(sampleQuestions, filters)
+  assert.equal(filtered.length, 0, 'a code from another question must not match')
+
+  const byCode = filterBankQuestions(sampleQuestions, { ...createEmptyBankFilters(), keyword: 'q1' })
+  assert.deepEqual(byCode.map(q => q.id), ['q1'])
+  const byId = filterBankQuestions(sampleQuestions, { ...createEmptyBankFilters(), keyword: 'Q2' })
+  assert.deepEqual(byId.map(q => q.id), ['q2'])
+})
+
+test('FILL questions require an answer and ignore options', () => {
+  assert.deepEqual(validateQuestionEdit('FILL', [], '  '), { valid: false, error: 'invalid_answer' })
+  assert.deepEqual(validateQuestionEdit('FILL', [], '北京'), { valid: true })
+  assert.deepEqual(validateQuestionEdit('FILL', [{ key: 'A', content: 'x' }], '北京'), { valid: true })
+})
+
+test('bank batch requests validate ids and category payloads', async () => {
+  const { buildBankBatchRequest } = await import('../src/domain/bankManage.js')
+  assert.deepEqual(buildBankBatchRequest([], 'archive'), { error: 'no_banks' })
+  assert.deepEqual(buildBankBatchRequest(['b1'], 'nope'), { error: 'invalid_operation' })
+  assert.deepEqual(buildBankBatchRequest(['b1'], 'set_category', {}), { error: 'category_required' })
+  assert.deepEqual(buildBankBatchRequest(['b1', 'b1', ' '], 'archive'), {
+    payload: { bank_ids: ['b1'], operation: 'archive' },
+  })
+  assert.deepEqual(buildBankBatchRequest(['b1'], 'set_category', { category: ' Alpha ' }), {
+    payload: { bank_ids: ['b1'], operation: 'set_category', category: 'Alpha' },
+  })
+})
+
+test('bank list filtering and sorting are stable', async () => {
+  const { filterBankList, sortBankList } = await import('../src/domain/bankManage.js')
+  const banks = [
+    { id: 'b1', name: 'Beta', category: 'Two', question_count: 3, created_at: '2026-01-01' },
+    { id: 'b2', name: 'Alpha', category: 'One', question_count: 9, created_at: '2026-02-01' },
+  ]
+  assert.deepEqual(sortBankList(banks, 'name').map(b => b.id), ['b2', 'b1'])
+  assert.deepEqual(sortBankList(banks, 'count').map(b => b.id), ['b2', 'b1'])
+  assert.deepEqual(sortBankList(banks, 'recent').map(b => b.id), ['b2', 'b1'])
+  assert.deepEqual(filterBankList(banks, { query: 'alp' }).map(b => b.id), ['b2'])
+  assert.deepEqual(filterBankList(banks, { category: 'Two' }).map(b => b.id), ['b1'])
+})
+
+test('recent bank sorting prefers updated_at over created_at', async () => {
+  const { sortBankList } = await import('../src/domain/bankManage.js')
+  const banks = [
+    // Created first but edited most recently.
+    { id: 'old-created', name: 'A', created_at: '2026-01-01', updated_at: '2026-05-01' },
+    { id: 'new-created', name: 'B', created_at: '2026-03-01', updated_at: '2026-03-02' },
+    // No updated_at falls back to created_at.
+    { id: 'no-updated', name: 'C', created_at: '2026-02-01' },
+  ]
+  assert.deepEqual(sortBankList(banks, 'recent').map(b => b.id), ['old-created', 'new-created', 'no-updated'])
+})
+
+
+test('chapter tree flattens depth-first and reorder moves siblings only', async () => {
+  const { flattenChapterTree, buildChapterReorderPayload } = await import('../src/domain/bankManage.js')
+  const chapters = [
+    { id: 'c1', name: 'Root A', parent_id: null, sort_order: 0 },
+    { id: 'c2', name: 'Root B', parent_id: null, sort_order: 1 },
+    { id: 'c3', name: 'Child A1', parent_id: 'c1', sort_order: 0 },
+  ]
+  const tree = flattenChapterTree(chapters)
+  assert.deepEqual(tree.map(c => [c.id, c.depth]), [['c1', 0], ['c3', 1], ['c2', 0]])
+
+  const first = buildChapterReorderPayload(chapters, 'c2', 'up')
+  assert.deepEqual(first.items, [
+    { id: 'c1', parent_id: null, sort_order: 1 },
+    { id: 'c3', parent_id: 'c1', sort_order: 0 },
+    { id: 'c2', parent_id: null, sort_order: 0 },
+  ])
+  assert.deepEqual(buildChapterReorderPayload(chapters, 'c1', 'up'), { error: 'no_sibling' })
+  assert.deepEqual(buildChapterReorderPayload(chapters, 'missing', 'up'), { error: 'chapter_not_found' })
+})
+
+test('pagination clamps pages and slices deterministically', async () => {
+  const { paginateList } = await import('../src/domain/bankManage.js')
+  const rows = Array.from({ length: 45 }, (_, i) => i + 1)
+  const first = paginateList(rows, 1, 20)
+  assert.equal(first.pages, 3)
+  assert.equal(first.items.length, 20)
+  assert.equal(first.items[0], 1)
+  const last = paginateList(rows, 9, 20)
+  assert.equal(last.page, 3)
+  assert.deepEqual(last.items, [41, 42, 43, 44, 45])
+  assert.equal(paginateList([], 1, 20).pages, 1)
 })

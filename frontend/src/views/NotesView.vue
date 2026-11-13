@@ -20,7 +20,7 @@
     <div class="toolbar library-toolbar">
       <div class="search-box">
         <LinearIcon name="search" :size="15" />
-        <input v-model.trim="searchQuery" class="input" :placeholder="t('ep.library.search')" />
+        <input v-model.trim="searchQuery" class="input" :placeholder="t('ep.library.search')" :aria-label="t('ep.library.search')" />
       </div>
       <div class="tabs library-tabs">
         <button v-for="tab in tabs" :key="tab.key" type="button" class="tab" :class="{ 'is-active': filterType === tab.key }" @click="filterType = tab.key">
@@ -92,7 +92,7 @@
         </div>
 
         <div v-if="editingNote" class="reader-edit notes-reader-edit">
-          <textarea v-model="editContent" class="textarea reader-edit-input" rows="10" :placeholder="t('ep.library.note_body_placeholder')"></textarea>
+          <textarea v-model="editContent" class="textarea reader-edit-input" rows="10" :placeholder="t('ep.library.note_body_placeholder')" :aria-label="t('ep.library.note_body')"></textarea>
           <div class="reader-edit-actions">
             <button type="button" class="btn btn-sm" :disabled="savingNote" @click="cancelEdit">{{ t('ep.common.cancel') }}</button>
             <button type="button" class="btn btn-sm btn-primary" :disabled="savingNote || !editContent.trim()" @click="saveNote">
@@ -177,9 +177,12 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
 import AppDialog from '../components/AppDialog.vue'
 import { useLocale } from '../composables/useLocale.js'
+import { useKeyboardInset } from '../composables/useKeyboardInset.js'
+import { readQueryEnum, readQueryString, replaceQueryState } from '../utils/routeQuery.js'
 import { listAssets, createAsset, uploadAssetFile, updateAsset, deleteAsset, fetchAssetBlob } from '../api/assets'
 
 const props = defineProps({
@@ -187,6 +190,12 @@ const props = defineProps({
 })
 
 const { t, locale } = useLocale()
+useKeyboardInset()
+const route = useRoute()
+const router = useRouter()
+
+const LIBRARY_TYPE_KEYS = ['ALL', 'NOTE', 'MISTAKE_SUMMARY', 'KNOWLEDGE']
+const LIBRARY_QUERY_DEFAULTS = { type: 'ALL', q: '' }
 
 const assetsList = ref([])
 const loadingAssets = ref(false)
@@ -195,8 +204,8 @@ const savingAsset = ref(false)
 const uploadingAsset = ref(false)
 const newAssetType = ref('NOTE')
 const newAssetContent = ref('')
-const filterType = ref('ALL')
-const searchQuery = ref('')
+const filterType = ref(readQueryEnum(route?.query?.type, LIBRARY_TYPE_KEYS, 'ALL'))
+const searchQuery = ref(readQueryString(route?.query?.q))
 const selectedId = ref('')
 const readerOpen = ref(false)
 const notice = ref('')
@@ -217,6 +226,26 @@ const tabs = computed(() => [
   { key: 'MISTAKE_SUMMARY', label: 'ep.library.type_summary', count: countType('SUMMARY') },
   { key: 'KNOWLEDGE', label: 'ep.library.type_knowledge', count: countType('MNEMONIC') },
 ])
+
+// Search and type filter are URL state: a refreshed tab, a browser Back or a
+// link to "笔记 + keyword" must reopen the same list.
+function syncLibraryQuery(patch) {
+  replaceQueryState(router, route?.query, patch, LIBRARY_QUERY_DEFAULTS)
+}
+
+watch(filterType, value => syncLibraryQuery({ type: value }))
+
+watch(searchQuery, value => syncLibraryQuery({ q: String(value || '').trim() }))
+
+watch(() => route?.query?.type, value => {
+  const next = readQueryEnum(value, LIBRARY_TYPE_KEYS, 'ALL')
+  if (next !== filterType.value) filterType.value = next
+})
+
+watch(() => route?.query?.q, value => {
+  const next = readQueryString(value)
+  if (next !== searchQuery.value) searchQuery.value = next
+})
 
 const filteredAssets = computed(() => {
   return assetsList.value.filter(item => {
@@ -555,7 +584,7 @@ onUnmounted(() => {
 .library-row-title { font-size: 13px; line-height: 1.55; color: var(--ink); overflow-wrap: anywhere; }
 .library-row-meta { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: 12px; color: var(--ink-3); }
 .notes-reader {
-  position: fixed; top: var(--topbar-h); right: 0; bottom: 0;
+  position: fixed; top: var(--topbar-h); right: 0; bottom: var(--kb-inset, 0px);
   z-index: 45; width: min(460px, 100vw);
   display: flex; flex-direction: column; min-width: 0;
   background: var(--surface);
@@ -582,22 +611,15 @@ onUnmounted(() => {
 .reader-file-name { overflow-wrap: anywhere; }
 .reader-file-actions { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; }
 .reader-foot { display: flex; gap: 8px; border-top: 1px solid var(--line); }
-@media (min-width: 1100px) {
+@media (min-width: 1024px) {
   /* The fixed 460px reader overlays the right edge of the work surface.
      Keep the page head (upload / new note) clear of it. */
   .notes-page.is-reader-open .page-head { padding-right: 484px; }
   .notes-page.is-reader-open .notes-layout { padding-right: 460px; }
 }
-@media (max-width: 640px) {
-  .library-toolbar { flex-wrap: wrap; gap: 10px; }
-  .library-toolbar .search-box { width: 100%; }
-  .library-tabs { gap: 16px; overflow-x: auto; }
-  .library-tabs .tab { white-space: nowrap; }
-  .reader-title { font-size: 20px; }
-}
 @media (max-width: 768px) {
   .notes-reader {
-    top: 52px; width: 100%; z-index: 80;
+    top: var(--mobile-top-h, 52px); width: 100%; z-index: 80;
     border-left: 0; box-shadow: none;
   }
   .notes-reader-head { padding: 16px 16px 12px; }
@@ -607,5 +629,12 @@ onUnmounted(() => {
   .notes-reader-file { padding: 10px 16px; }
   .notes-reader-foot { padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
   .notes-reader-foot .btn { flex: 1; }
+}
+@media (max-width: 640px) {
+  .library-toolbar { flex-wrap: wrap; gap: 10px; }
+  .library-toolbar .search-box { width: 100%; }
+  .library-tabs { gap: 16px; overflow-x: auto; }
+  .library-tabs .tab { white-space: nowrap; }
+  .reader-title { font-size: 20px; }
 }
 </style>

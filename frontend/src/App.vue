@@ -16,8 +16,7 @@
       <h2 class="force-pwd-title">{{ t('ep.auth.force_title') }}</h2>
       <p class="force-pwd-desc">{{ t('ep.auth.force_lede') }}</p>
 
-      <div v-if="changePwdError" class="notice bad">{{ changePwdError }}</div>
-      <div v-if="changePwdSuccess" class="notice ok">{{ changePwdSuccess }}</div>
+      <div v-if="changePwdError" class="notice bad" role="alert">{{ changePwdError }}</div>
 
       <div class="field">
         <label class="label" for="force-old">{{ t('ep.auth.old_password') }}</label>
@@ -42,6 +41,11 @@
     </div>
   </div>
   <router-view v-else />
+
+  <!-- The two app-wide control surfaces, mounted once. ConfirmHost registers
+       the dialog presenter; ToastHost owns the single transient channel. -->
+  <ConfirmHost ref="confirmHostRef" />
+  <ToastHost />
 </template>
 
 <script setup>
@@ -49,22 +53,32 @@ import { onMounted, ref } from 'vue'
 import { t } from './composables/useLocale.js'
 import LoginView from './views/LoginView.vue'
 import ThemeToggle from './components/ThemeToggle.vue'
+import ConfirmHost from './components/ConfirmHost.vue'
+import ToastHost from './components/ToastHost.vue'
 import { useAuthStore } from './stores/authStore'
 import { useSyncLoop } from './composables/useSyncLoop'
 import { changePassword } from './api/auth'
+import { useToast } from './composables/useToast'
+import { setConfirmPresenter, setNoticePresenter } from './composables/useConfirm'
 
 const auth = useAuthStore()
 useSyncLoop(auth.token, auth.user)
+const toast = useToast()
+const confirmHostRef = ref(null)
 
 const oldPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
 const changePwdError = ref('')
-const changePwdSuccess = ref('')
 const submittingPwd = ref(false)
 
 onMounted(() => {
   auth.loadCurrentUser()
+  // From here on, confirmations render as the editorial dialog and blocking
+  // notices as error toasts. Without this registration the composable falls
+  // back to the native dialogs (as it does in single-view component tests).
+  setConfirmPresenter(options => confirmHostRef.value?.present(options) ?? false)
+  setNoticePresenter(options => toast.error(options.title))
 })
 
 function handleAuthenticated(result) {
@@ -74,7 +88,6 @@ function handleAuthenticated(result) {
 
 async function handleForceChangePassword() {
   changePwdError.value = ''
-  changePwdSuccess.value = ''
   if (!oldPassword.value) {
     changePwdError.value = t('ep.auth.error_required')
     return
@@ -91,7 +104,7 @@ async function handleForceChangePassword() {
   submittingPwd.value = true
   try {
     await changePassword(auth.token.value, oldPassword.value, newPassword.value)
-    changePwdSuccess.value = t('common.success')
+    toast.success(t('ui.k0033'))
     if (auth.user.value) auth.user.value.must_change_password = false
   } catch (err) {
     changePwdError.value = err.message || t('common.error')

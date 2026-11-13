@@ -394,8 +394,10 @@ import { listKills, killQuestion, unkillQuestion } from '../api/kills'
 import { listBanks } from '../api/banks'
 import { startSession } from '../api/practice'
 import { useLocale } from '../composables/useLocale.js'
+import { useToast } from '../composables/useToast.js'
 
 const { t } = useLocale()
+const toast = useToast()
 
 const props = defineProps({ token: { type: String, required: true } })
 const emit = defineEmits(['back', 'start-session'])
@@ -574,7 +576,7 @@ async function handleKill(questionId) {
     dueReviews.value = dueReviews.value.filter(d => d.question_id !== questionId)
     void loadData()
   } catch (err) {
-    alert(`${t('ui.k0506')}${err.detail || err.message}`)
+    toast.error(`${t('ui.k0506')}${err.detail || err.message}`)
   }
 }
 
@@ -584,7 +586,7 @@ async function handleUnkill(questionId) {
     killedList.value = killedList.value.filter(k => k.question_id !== questionId)
     void loadData()
   } catch (err) {
-    alert(`${t('ui.k0507')}${err.detail || err.message}`)
+    toast.error(`${t('ui.k0507')}${err.detail || err.message}`)
   }
 }
 

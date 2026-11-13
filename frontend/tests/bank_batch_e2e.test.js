@@ -213,6 +213,9 @@ test('Bank Batch E2E: select, batch chapter, copy, archive and restore', async (
     await page.locator('[data-testid="select-all"]').check()
     await page.waitForSelector('.batch-bar', { timeout: 5000 })
     await page.locator('[data-testid="batch-archive"]').click()
+    // P6 replaced the native confirm with the shared in-app dialog, so the
+    // batch action now needs an explicit confirmation in the page itself.
+    await page.locator('[data-testid="confirm-dialog"] [data-testid="confirm-ok"]').click()
     await page.waitForTimeout(600)
     await page.waitForFunction(
       () => document.querySelectorAll('.mtable-row').length === 0,
@@ -252,18 +255,18 @@ test('Bank Batch E2E: select, batch chapter, copy, archive and restore', async (
     assert.equal(await page.locator('.mtable-row').count(), 3)
     console.log('✓ Verified select-all, batch chapter, copy, archive and restore.')
 
-    // Bank detail: version history must be reachable and copy must not need a UUID.
+    // Question page: version history must be reachable and copy must not need a UUID.
     await page.goto(`${BASE_URL}/#/banks/${bank.id}`)
-    await page.waitForSelector('.qrow', { timeout: 10000 })
-    await page.locator('.qrow').first().click()
-    await page.waitForSelector('.drawer', { timeout: 5000 })
-    await page.waitForSelector('.version-item', { timeout: 8000 })
-    assert.ok((await page.locator('.version-item').count()) >= 1, 'Drawer must expose question version history')
+    await page.waitForSelector('.manage-page .mtable-row', { timeout: 10000 })
+    await page.locator('.mtable-row .stem-link').first().click()
+    await page.waitForSelector('.question-page', { timeout: 8000 })
+    await page.waitForSelector('.question-page .version-item', { timeout: 8000 })
+    assert.ok((await page.locator('.question-page .version-item').count()) >= 1, 'Question page must expose question version history')
 
-    await page.locator('.copy-select').selectOption(targetBank.id)
-    await page.locator('.copy-form .btn').click()
-    await page.waitForSelector('.copy-notice', { timeout: 8000 })
-    assert.match(await page.locator('.copy-notice').innerText(), /Batch Target Bank/)
+    await page.locator('.question-page .copy-select').selectOption(targetBank.id)
+    await page.locator('.question-page .copy-form .btn').click()
+    await page.waitForSelector('.question-page .copy-notice', { timeout: 8000 })
+    assert.match(await page.locator('.question-page .copy-notice').innerText(), /Batch Target Bank/)
 
     const targetAfterDetailRes = await fetch(`${BASE_URL}/api/v1/banks/${targetBank.id}/content/questions`, {
       headers: { Authorization: `Bearer ${adminToken}` },
@@ -271,9 +274,9 @@ test('Bank Batch E2E: select, batch chapter, copy, archive and restore', async (
     assert.equal(
       (await targetAfterDetailRes.json()).length,
       4,
-      'Copying from the bank detail drawer must add one question to the target bank'
+      'Copying from the question page must add one question to the target bank'
     )
-    console.log('✓ Verified drawer version history and UUID-free copy entry.')
+    console.log('✓ Verified question page version history and UUID-free copy entry.')
 
     // 375px layout with the batch bar open.
     await page.setViewportSize({ width: 375, height: 812 })
@@ -308,7 +311,7 @@ test('Bank Batch E2E: select, batch chapter, copy, archive and restore', async (
       )
     }
     await overflowAt375('/banks', '.banks-page')
-    await overflowAt375(`/banks/${bank.id}`, '.qrow')
+    await overflowAt375(`/banks/${bank.id}`, '.mtable-row')
     await overflowAt375('/import', '.import-page')
     console.log('✓ Verified 375px layout for banks, bank detail and import pages.')
 

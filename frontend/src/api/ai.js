@@ -107,10 +107,18 @@ export const getAiConfig = (token) => request('/ai/config', {
   headers: authHeaders(token),
 })
 
+// Partial write: only the keys present in `payload` change. A whole-row PUT
+// used to copy the default search endpoint into the user's override row.
 export const updateAiConfig = (token, payload) => request('/ai/config', {
-  method: 'PUT',
+  method: 'PATCH',
   headers: authHeaders(token),
   body: JSON.stringify(payload),
+})
+
+export const testAiConfig = (token, kind) => request('/ai/config/test', {
+  method: 'POST',
+  headers: authHeaders(token),
+  body: JSON.stringify({ kind }),
 })
 
 export const getAiBatchStatus = (token, bankId) => request(`/ai/banks/${bankId}/batch-status`, {

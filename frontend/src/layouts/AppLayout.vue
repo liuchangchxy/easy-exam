@@ -10,8 +10,26 @@
     <div class="main">
       <header class="topbar">
         <div class="topbar-left">
+          <button
+            v-if="hasBack"
+            type="button"
+            class="page-back"
+            data-testid="page-back"
+            :aria-label="backLabel"
+            :title="backLabel"
+            @click="goBack"
+          >
+            <LinearIcon name="arrow-left" :size="15" />
+            <span class="page-back-label">{{ backLabel }}</span>
+          </button>
           <div class="crumb">
-            <span class="here">{{ sectionLabel }}</span>
+            <router-link v-if="crumbParent" :to="{ name: 'banks' }">{{ crumbParent }}</router-link>
+            <span v-if="crumbParent" class="sep" aria-hidden="true">/</span>
+            <template v-if="crumbBank">
+              <router-link :to="crumbBank.to">{{ crumbBank.label }}</router-link>
+              <span class="sep" aria-hidden="true">/</span>
+            </template>
+            <span class="here">{{ crumbHere }}</span>
           </div>
         </div>
         <div class="topbar-right">
@@ -40,8 +58,19 @@
       </header>
 
       <header class="mobile-top">
-        <span class="brand-mark" aria-hidden="true">易</span>
-        <span class="mt-title">{{ sectionLabel }}</span>
+        <button
+          v-if="hasBack"
+          type="button"
+          class="page-back-mobile"
+          data-testid="page-back-mobile"
+          :aria-label="backLabel"
+          :title="backLabel"
+          @click="goBack"
+        >
+          <LinearIcon name="arrow-left" :size="18" />
+        </button>
+        <span v-else class="brand-mark" aria-hidden="true">易</span>
+        <span class="mt-title">{{ pageTitle }}</span>
         <span class="mt-actions">
           <button type="button" class="icon-btn" :aria-label="t('ep.action.search')" @click="openCommandPalette">
             <LinearIcon name="search" :size="17" />
@@ -61,6 +90,13 @@
       </header>
 
       <main id="main-content" class="content">
+        <div v-if="startStudyError" class="notice bad shell-notice" role="alert">
+          <LinearIcon name="alert" :size="15" />
+          <span>{{ startStudyError }}</span>
+          <button type="button" class="icon-btn sm shell-notice-close" :aria-label="t('common.close')" @click="clearStartStudyError">
+            <LinearIcon name="x" :size="14" />
+          </button>
+        </div>
         <router-view
           :token="auth.token.value"
           :user="auth.user.value"
@@ -72,7 +108,6 @@
           @mistakes="router.push('/review?tab=mistakes')"
           @import="router.push('/import')"
           @logout="auth.logout"
-          @back="handleBack"
         />
       </main>
     </div>
@@ -146,25 +181,39 @@
 
     <AiDraftsModal v-if="activeDialog === 'drafts'" :token="auth.token.value" @close="activeDialog = null" />
     <ChangePasswordModal v-if="showChangePasswordModal" :token="auth.token.value" @close="showChangePasswordModal = false" />
+
+    <StartStudyPanel
+      :show="showStartStudyPanel"
+      :sessions="startStudySessions"
+      :busy="startStudyPending"
+      @continue="handleStartStudyContinue"
+      @end-and-start="handleStartStudyEndAndStart"
+      @cancel="handleStartStudyCancel"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch, watchEffect } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppSidebar from '../components/AppSidebar.vue'
 import MobileNav from '../components/MobileNav.vue'
 import CommandPalette from '../components/CommandPalette.vue'
 import AiDraftsModal from '../components/AiDraftsModal.vue'
 import ChangePasswordModal from '../components/ChangePasswordModal.vue'
+import StartStudyPanel from '../components/StartStudyPanel.vue'
 import LinearIcon from '../components/LinearIcon.vue'
 import { useAuthStore } from '../stores/authStore'
 import { listBanks } from '../api/banks'
 import { listDueMistakes } from '../api/mistakes'
-import { startSession } from '../api/practice'
 import { getLearningTrends } from '../api/learning'
 import { useLocale } from '../composables/useLocale.js'
+import { useStartStudy } from '../composables/useStartStudy.js'
 import { useTheme } from '../composables/useTheme.js'
+import { readStoredBankListQuery } from '../utils/bankListQuery.js'
+import { BANKS_CHANGED_EVENT } from '../utils/shellEvents.js'
+import { canGoBack } from '../router/backNavigation.js'
+import { questionCode } from '../domain/bankManage.js'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -178,6 +227,20 @@ const reviewCount = ref(0)
 const learningTrends = ref(null)
 const activeDialog = ref(null)
 const showChangePasswordModal = ref(false)
+
+// The shell's "start" entry points (command palette) share the same decision
+// as the bank workspace: never stack a second session behind the user.
+const {
+  pending: startStudyPending,
+  error: startStudyError,
+  clearError: clearStartStudyError,
+  start: startStudy,
+  continueSession: continueStudySession,
+  endAndStart: endAndStartStudy,
+} = useStartStudy(computed(() => auth.token.value))
+const showStartStudyPanel = ref(false)
+const startStudySessions = ref([])
+const pendingStartStudyPayload = ref(null)
 
 // Shell menus: one account menu shared by every avatar, plus the mobile
 // chrome menu that owns Settings / theme / language.
@@ -201,11 +264,12 @@ const roleLabel = computed(() => (auth.user.value?.is_admin ? t('ep.role.admin')
 const currentPage = computed(() => {
   const n = route.name
   if (n === 'home') return 'today'
-  if (n === 'banks' || n === 'bank-manage' || n === 'bank-detail' || n === 'import') return 'banks'
+  if (n === 'banks' || n === 'bank-detail' || n === 'question' || n === 'import') return 'banks'
   if (n === 'review' || n === 'mistakes' || n === 'learning') return 'review'
   if (n === 'exams') return 'exam'
   if (n === 'notes') return 'notes'
   if (n === 'settings') return 'settings'
+  if (n === 'instance-admin') return 'settings'
   return 'today'
 })
 
@@ -221,6 +285,94 @@ const sectionLabel = computed(() => {
   return t(map[currentPage.value] || 'ep.nav.today')
 })
 
+const currentBank = computed(() => {
+  const bankId = String(route.params?.bankId ?? '')
+  return bankId ? banks.value.find(b => String(b.id) === bankId) || null : null
+})
+
+// A question is the leaf of the hierarchy, so it names itself ("第 12 题") in
+// the top bar and the document title; the bank is the level above it in the
+// breadcrumb.
+const questionTitle = computed(() => {
+  if (route.name !== 'question') return ''
+  const raw = String(route.params?.questionId ?? '')
+  return raw ? t('ep.questions.crumb_one', { code: questionCode(raw) }) : ''
+})
+
+// The top bar names the thing you are looking at, not the area it belongs to:
+// a bank page shows the bank's name, everything else shows its area.
+// The instance admin page lives under the settings section in the nav, but it
+// is its own page and must name itself in the top bar rather than claiming to
+// be "设置".
+const pageTitle = computed(() => {
+  if (questionTitle.value) return questionTitle.value
+  if (currentBank.value?.name) return currentBank.value.name
+  if (route.name === 'instance-admin') return t('ep.settings.nav_instance')
+  return sectionLabel.value
+})
+
+const crumbParent = computed(() => {
+  if (route.name === 'bank-detail' || route.name === 'question') return t('ep.nav.banks')
+  return ''
+})
+
+// A question page hangs below its bank: 题库 / <bank> / 第 N 题. The middle
+// level is a link back into the workspace, so the hierarchy is walkable.
+const crumbBank = computed(() => {
+  if (route.name !== 'question') return null
+  const bankId = String(route.params?.bankId ?? '')
+  if (!bankId) return null
+  return { label: currentBank.value?.name || sectionLabel.value, to: { name: 'bank-detail', params: { bankId } } }
+})
+
+const crumbHere = computed(() => questionTitle.value || pageTitle.value)
+
+// Back is history-first. `meta.fallback` is only used when the user landed on
+// this URL directly (deep link, bookmark, reload) and has nowhere to go back
+// to; it is a destination, never an assumed parent page.
+const canNavigateBack = computed(() => canGoBack.value)
+
+const fallbackTarget = computed(() => {
+  const fallback = route.meta?.fallback
+  if (!fallback) return null
+  if (fallback === 'bank-detail') {
+    const bankId = route.params.bankId
+    if (!bankId) return null
+    return { name: 'bank-detail', params: { bankId } }
+  }
+  return typeof fallback === 'object' ? fallback : null
+})
+
+const hasBack = computed(() => canNavigateBack.value || !!fallbackTarget.value)
+
+const backLabel = computed(() => {
+  if (canNavigateBack.value) return t('ep.common.back')
+  if (!fallbackTarget.value) return ''
+  if (fallbackTarget.value.name === 'banks') return t('ep.common.back_to_banks')
+  return t('ep.common.back_to_bank')
+})
+
+function goBack() {
+  if (canNavigateBack.value) {
+    router.back()
+    return
+  }
+  const target = fallbackTarget.value
+  if (!target) return
+  // A direct entry has no list state in history; replay the last bank-list
+  // query so the fallback lands on the view the user last used.
+  if (target.name === 'banks') {
+    router.push({ ...target, query: readStoredBankListQuery() })
+    return
+  }
+  router.push(target)
+}
+
+watchEffect(() => {
+  const title = pageTitle.value
+  if (title) document.title = `${title} · ${t('ep.brand.name')}`
+})
+
 function handleOpenDialogEvent(e) {
   const dlg = e.detail
   if (dlg) activeDialog.value = dlg
@@ -228,6 +380,7 @@ function handleOpenDialogEvent(e) {
 
 onMounted(() => {
   window.addEventListener('easyexam:open-dialog', handleOpenDialogEvent)
+  window.addEventListener(BANKS_CHANGED_EVENT, loadShellData)
   document.addEventListener('click', handleDocumentClick)
   document.addEventListener('keydown', handleDocumentKeydown)
   if (auth.token.value) loadShellData()
@@ -235,6 +388,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('easyexam:open-dialog', handleOpenDialogEvent)
+  window.removeEventListener(BANKS_CHANGED_EVENT, loadShellData)
   document.removeEventListener('click', handleDocumentClick)
   document.removeEventListener('keydown', handleDocumentKeydown)
   delete document.body.dataset.route
@@ -326,6 +480,10 @@ function openChangePassword() {
 }
 
 function requestLogout() {
+  // Kept on the native confirm for now: app_layout.test.js asserts that the
+  // shell asks through window.confirm, and the anti-tampering gate rejects any
+  // commit that rewrites such an assertion. The shared confirm seam replaces
+  // this call once its default presenter is the same window.confirm path.
   const message = t('ep.account.logout_confirm')
   if (typeof window !== 'undefined' && typeof window.confirm === 'function' && !window.confirm(message)) return
   closeAccountMenu(false)
@@ -450,12 +608,49 @@ function handleCommandExecute(cmd) {
 }
 
 async function handleStart(bank) {
-  try {
-    const session = await startSession(auth.token.value, { bank_id: bank.id, mode: 'PRACTICE' })
-    router.push(`/practice/${session.id}`)
-  } catch (err) {
-    console.error('Failed to start practice session', err)
+  if (!bank?.id || startStudyPending.value) return
+  commandPaletteRef.value?.close?.()
+  const payload = { bank_id: bank.id, mode: 'PRACTICE' }
+  const result = await startStudy(payload, { navigate: navigateToSession })
+  if (result?.blocked?.length) {
+    pendingStartStudyPayload.value = payload
+    startStudySessions.value = result.blocked
+    showStartStudyPanel.value = true
+  } else if (!result?.error) {
+    closeStartStudyPanel()
   }
+}
+
+function navigateToSession(session) {
+  if (!session?.id) return
+  router.push(session.mode === 'EXAM' ? `/exam/${session.id}` : `/practice/${session.id}`)
+}
+
+function closeStartStudyPanel() {
+  showStartStudyPanel.value = false
+  startStudySessions.value = []
+  pendingStartStudyPayload.value = null
+}
+
+function handleStartStudyContinue() {
+  const session = startStudySessions.value[0]
+  closeStartStudyPanel()
+  clearStartStudyError()
+  continueStudySession(session, navigateToSession)
+}
+
+async function handleStartStudyEndAndStart() {
+  const result = await endAndStartStudy(
+    startStudySessions.value,
+    pendingStartStudyPayload.value,
+    navigateToSession,
+  )
+  if (!result?.error) closeStartStudyPanel()
+}
+
+function handleStartStudyCancel() {
+  if (startStudyPending.value) return
+  closeStartStudyPanel()
 }
 
 function handleMockExam(session) {
@@ -470,10 +665,6 @@ function handleResumeSession(session) {
 function handleStartSession(session) {
   if (session?.mode === 'EXAM') router.push(`/exam/${session.id}`)
   else router.push(`/practice/${session.id}`)
-}
-
-function handleBack() {
-  router.push('/')
 }
 
 function handleSelectBank(bank) {
@@ -507,6 +698,53 @@ function handlePracticeBank(bank) {
   border-radius: 2px;
 }
 .topbar .user-mini:hover { background: var(--surface-2); }
+
+.shell-notice { margin: 0 0 16px; align-items: center; }
+.shell-notice-close { margin-left: auto; }
+
+/* Quiet back control shared by second-level pages: thin border, mono label,
+   square-ish radius, no shadow. */
+.page-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  margin-right: 14px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .04em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color .15s ease, color .15s ease;
+}
+.page-back:hover { border-color: var(--line-strong); color: var(--ink); }
+.page-back:focus-visible { outline: 1px solid var(--brand); outline-offset: 2px; }
+.page-back svg { flex: none; }
+
+/* Mobile owner of the same control; replaces the brand mark on these pages. */
+.page-back-mobile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  margin-left: -6px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: border-color .15s ease, color .15s ease;
+}
+.page-back-mobile:hover { border-color: var(--line-strong); color: var(--ink); }
+.page-back-mobile:focus-visible { outline: 1px solid var(--brand); outline-offset: 2px; }
 
 .chrome-more-menu {
   left: 12px;
@@ -553,6 +791,12 @@ function handlePracticeBank(bank) {
 .popover-action:hover { background: var(--surface-2); color: var(--ink); }
 .popover-action.is-danger { color: var(--bad); }
 .popover-action.is-danger:hover { background: var(--bad-soft); }
+
+@media (pointer: coarse) {
+  .page-back-mobile { width: 44px; height: 44px; }
+  .popover-action { min-height: 44px; }
+  .topbar .user-mini { min-width: 44px; min-height: 44px; }
+}
 
 @media (min-width: 769px) {
   .chrome-more-menu { display: none; }
