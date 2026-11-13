@@ -656,3 +656,35 @@ EE-001 至 EE-021 **全部 21 项**已完成源码级修复、单元测试、前
 | 数据核验 | `PRAGMA quick_check = ok`；迁移 `18`；`users=66`、`question_banks=53`、`questions=252`、`question_versions=255`、`practice_sessions=162`，与升级前一致 |
 | 主密钥 | `/vol4/@appdata/easy-exam/.env` MD5 `5d447b82bb1b484826c4b21a188e9f3b` 不变 |
 | 访问地址 | `http://192.168.100.11:3000` |
+
+### 12.7 1.0.24 实机部署（2026-11-13）
+
+| 项目 | 结果 |
+|---|---|
+| 版本 | `1.0.24`（`fpk/easy-exam/manifest`，与 compose 镜像 tag、前端包版本一致） |
+| 镜像 | `ailm32442/easy-exam:1.0.24`，镜像 ID `ad123afcb164`，166 MB，由本仓库 `Dockerfile` 在发布机上构建 |
+| FPK | `dist/easy-exam-1.0.24.fpk`，39,006,358 字节（38,092.1 KB），SHA-256 `567f84e0f6b59e959ce6bb885cbaf4a5510d06e585465e447f3b65177fa83b56`；NAS `/vol4/@appdata/easy-exam/` 校验一致 |
+| 备份 | `easyexam-v1.db.backup-pre-1.0.24-20261113-222145`（SQLite backup API，1,609,728 字节，SHA-256 `30460e50403a1515428adf8864d894c91b1b6aa3d473f45225b6bca0edf0ad52`）、`manifest.backup-pre-1.0.24-20261113-222156`、`docker-compose.yaml.backup-pre-1.0.24-20261113-222156` |
+| 升级方式 | 解包到 `/vol4/@appdata/easy-exam/fpk-src-1.0.24-20261113-222214`，`sudo appcenter-cli install-local -d <dir> -a yes`（卸载 + 安装，`@appdata` 保留） |
+| 迁移 | schema `18 → 23`（19 归档时间、20 会话生命周期、21 实例管理、22 导入草稿/任务重建、23 一题一库触发器） |
+| 数据核验 | `users=66`、`question_banks=53`、`questions=252`、`practice_sessions=162`、`answer_attempts=216`、`import_jobs=51`，与升级前逐项一致；`integrity_check=ok`；历史外键违规仍为 `284` 条（基线，不新增也不清理）；两条 1:1 触发器存在；历史孤儿 `import_jobs` 行保留 |
+| 版本核验 | `/var/apps/easy-exam/manifest` = `1.0.24`；`target/docker/docker-compose.yaml` image = `ailm32442/easy-exam:1.0.24`；容器 `easy-exam-fpk` 运行该镜像且 `healthy` |
+| 核心流程 | 用 1.0.24 镜像 + 生产库副本：注册/登录、建库建题、题库工作区、练习作答与判题、复习页、1280 与 375 无横向滚动（截图在本机 `%TEMP%/deploy-smoke/`）；生产环境登录页在 1280/375 渲染正常、无 5xx、无原生对话框 |
+| 主密钥 | 升级使用既有 `/vol4/@appdata/easy-exam/.env`，未重新生成 |
+| 访问地址 | `http://192.168.100.11:3000` |
+
+## 13. 2026-11-13 Core UX 重设计 P1–P6
+
+完整方案、逐阶段实施记录与刻意保留项见 `docs/UX_CORE_REDESIGN_2026-11-13.md`（§9–§14）与 `DECISIONS.md`（同日条目）。
+
+| 阶段 | 合并前提交 | 内容 |
+|---|---|---|
+| P1 | `d1a65af` | 历史优先返回、路由守卫、403/404、URL 作为状态源 |
+| P2 | `d1a65af`、`276c2dd`、`cd7d54f` | 单一题库工作区、题↔库 1:1、归档时间（迁移 19） |
+| P3 | `cd7d54f` | 会话状态机与报告落库（迁移 20）、复习来源合并 |
+| P4 | `5b8cf22` | 协作成员角色、实例管理员面（迁移 21） |
+| P5 | `4d6e396` | 可恢复导入向导与后台任务（迁移 22）、设置逐字段保存 |
+| P6 | `7b941ea` | 触屏/软键盘/控件收敛、1:1 触发器（迁移 23） |
+| 发布前修复 | `674ce59`、`beb710e` | 迁移 22 历史孤儿行兼容、CRLF 门禁修复、版本 1.0.24 |
+
+合并：PR #93 Squash 到 `main`，合并提交 `ae40fd1`；CI 五个必需检查全绿；部署记录见 §12.7。
