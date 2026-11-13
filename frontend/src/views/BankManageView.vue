@@ -919,6 +919,11 @@ const longTimer = ref(null)
 // Monotonic request sequence: a response is only applied when no newer
 // request (including a bank switch) has started since.
 let loadSeq = 0
+// Question-list reloads (archived toggle, retry) get their own sequence. They
+// must not borrow `loadSeq`, or a reload started while the page is still
+// loading would make `loadData`'s finally see a newer sequence and leave the
+// skeleton up forever with valid rows behind it.
+let questionsSeq = 0
 
 const tabs = computed(() => [
   { key: 'questions', label: 'ep.manage.tab_questions', count: questions.value.length },
@@ -1129,6 +1134,7 @@ watch(() => [
 function resetBankScopedState() {
   // Invalidate anything still in flight for the previous bank.
   loadSeq += 1
+  questionsSeq += 1
   activeTab.value = normalizeTab(route.query?.tab)
   showArchived.value = readArchivedQuery(route.query?.archived)
   // The address survives a bank switch; the new bank should open on the same
@@ -1225,21 +1231,21 @@ async function retryLastAction() {
 async function reloadQuestions() {
   if (!bankId.value) return 'stale'
   const targetBankId = bankId.value
-  const requestId = ++loadSeq
+  const requestId = ++questionsSeq
   questionsLoading.value = true
   error.value = ''
   try {
     const res = await listBankQuestionsContent(props.token, targetBankId, { includeArchived: showArchived.value })
-    if (requestId !== loadSeq) return 'stale'
+    if (requestId !== questionsSeq || bankId.value !== targetBankId) return 'stale'
     questions.value = Array.isArray(res) ? res : []
     return 'ok'
   } catch (err) {
-    if (requestId !== loadSeq) return 'stale'
+    if (requestId !== questionsSeq) return 'stale'
     error.value = err.detail || err.message
     retryAction.value = reloadQuestions
     return 'error'
   } finally {
-    if (requestId === loadSeq) questionsLoading.value = false
+    if (requestId === questionsSeq) questionsLoading.value = false
   }
 }
 
@@ -1969,6 +1975,11 @@ async function loadData() {
   if (!bankId.value) return
   const targetBankId = bankId.value
   const requestId = ++loadSeq
+  questionsSeq += 1
+  // The row list this request will return belongs to the archived mode it was
+  // started with. If the view changed while it was in flight (a back/forward
+  // that flips ?archived), its rows describe a view the user already left.
+  const archivedRequested = showArchived.value
   loading.value = true
   loadFailed.value = false
   error.value = ''
@@ -1981,7 +1992,11 @@ async function loadData() {
     if (requestId !== loadSeq) return
     bank.value = bankRes
     accessError.value = ''
-    questions.value = Array.isArray(questionsRes) ? questionsRes : []
+    if (showArchived.value === archivedRequested) {
+      questions.value = Array.isArray(questionsRes) ? questionsRes : []
+    } else {
+      void reloadQuestions()
+    }
     settingsForm.value = {
       name: bankRes?.name || '',
       category: bankRes?.category || '',

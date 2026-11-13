@@ -868,4 +868,43 @@ describe('BankManageView management surfaces', () => {
     expect(wrapper.find('.mtable-row .stem-text').text()).toBe('Question 26')
     wrapper.unmount()
   })
+
+  it('keeps the workspace out of the skeleton when the archived view loads mid-flight', async () => {
+    const deferred = {}
+    let archivedCalls = 0
+    listBankQuestionsContent.mockImplementation((_token, _id, options) => {
+      if (!options?.includeArchived) return new Promise(resolve => { deferred.default = resolve })
+      archivedCalls += 1
+      if (archivedCalls === 1) return new Promise(resolve => { deferred.archived = resolve })
+      return Promise.resolve([question(1, { archived: true })])
+    })
+    listBanks.mockResolvedValue([])
+    getBank.mockResolvedValue({ id: 'b1', name: 'Bank One', category: 'Alpha', description: 'desc', role: 'ADMIN' })
+    listChapters.mockResolvedValue([])
+    listBankMembers.mockResolvedValue([])
+    listTags.mockResolvedValue([])
+    listBankImports.mockResolvedValue([])
+    listBankAudit.mockResolvedValue([])
+    listDrafts.mockResolvedValue([])
+    const wrapper = mount(BankManageView, { props: { token: 't1' }, attachTo: document.body })
+    await flush()
+    expect(wrapper.find('.skeleton').exists()).toBe(true)
+
+    routeState.query = { archived: '1' }
+    await flush()
+    expect(wrapper.find('.skeleton').exists()).toBe(true)
+
+    deferred.archived([question(1, { archived: true })])
+    await flush()
+    // The first (non-archived) load answers after the view flipped: its rows
+    // must not replace the archived ones the user is already looking at.
+    deferred.default([question(2)])
+    await flush()
+
+    expect(wrapper.find('.skeleton').exists()).toBe(false)
+    expect(wrapper.findAll('.mtable-row').length).toBe(1)
+    expect(wrapper.text()).toContain('Question 1')
+    expect(wrapper.text()).not.toContain('Question 2')
+    wrapper.unmount()
+  })
 })

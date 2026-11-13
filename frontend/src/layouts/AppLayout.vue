@@ -258,9 +258,18 @@ const currentBank = computed(() => {
   return bankId ? banks.value.find(b => String(b.id) === bankId) || null : null
 })
 
+// A question is the leaf of the hierarchy, so it names itself ("第 12 题") in
+// the top bar and the document title; the bank is the level above it in the
+// breadcrumb.
+const questionTitle = computed(() => {
+  if (route.name !== 'question') return ''
+  const raw = String(route.params?.questionId ?? '')
+  return raw ? t('ep.questions.crumb_one', { code: questionCode(raw) }) : ''
+})
+
 // The top bar names the thing you are looking at, not the area it belongs to:
 // a bank page shows the bank's name, everything else shows its area.
-const pageTitle = computed(() => currentBank.value?.name || sectionLabel.value)
+const pageTitle = computed(() => questionTitle.value || currentBank.value?.name || sectionLabel.value)
 
 const crumbParent = computed(() => {
   if (route.name === 'bank-detail' || route.name === 'question') return t('ep.nav.banks')
@@ -276,11 +285,7 @@ const crumbBank = computed(() => {
   return { label: currentBank.value?.name || sectionLabel.value, to: { name: 'bank-detail', params: { bankId } } }
 })
 
-const crumbHere = computed(() => {
-  if (route.name !== 'question') return pageTitle.value
-  const raw = String(route.params?.questionId ?? '')
-  return raw ? t('ep.questions.crumb_one', { code: questionCode(raw) }) : pageTitle.value
-})
+const crumbHere = computed(() => questionTitle.value || pageTitle.value)
 
 // Back is history-first. `meta.fallback` is only used when the user landed on
 // this URL directly (deep link, bookmark, reload) and has nowhere to go back

@@ -502,6 +502,6 @@ AI 草稿       仅当有草稿时高亮计数
 |---|---|
 | 组件与契约 | `npm --prefix frontend run test:unit` → 27 文件 / 251 用例（新增 `question_page_view` 8 条、工作区 URL 用例 4 条；`bank_access_state` 改为挂载工作区） |
 | 后端 | `python -m pytest tests/test_archive_timestamp.py tests/test_question_bank_one_to_one.py -q` → 5 passed；归档/恢复、归档时间戳、1:1 复制/移动 |
-| 真实浏览器 | `node frontend/tests/navigation_contract_e2e.mjs` → 深链返回、历史返回、复习/资料 URL 存活、工作区筛选与排序刷新存活、题目页深链与返回、题目页归档→恢复、工作区归档→已归档视图→恢复闭环 |
+| 真实浏览器 | `node frontend/tests/navigation_contract_e2e.mjs` → 深链返回、历史返回、复习/资料 URL 存活、工作区筛选与排序刷新存活、题目页深链与返回、题目页归档→恢复、工作区归档→已归档视图→恢复闭环。验收抓出两个真实缺陷并已修复：①题目页顶栏与 `document.title` 仍只显示题库名，页面没有自我命名；②在工作区首屏加载未回时改变归档视图（后退/粘贴链接），题目列表重载与整页加载共用同一个请求序号，整页加载的 `finally` 会因序号被顶掉而永远不清 `loading`，页面卡在骨架屏——现拆成 `loadSeq`/`questionsSeq` 两个序号，并忽略与请求时 `showArchived` 不一致的旧行数据 |
 | 题库域 E2E | `bank_manage_e2e` / `bank_management_e2e` 不变（旧 `/manage` 走重定向）；`bank_batch_e2e` 的版本历史/复制段改为驱动题目页 |
 | 门禁 | `python scripts/verify.py fast` / `ui` / `full` |
