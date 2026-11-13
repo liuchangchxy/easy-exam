@@ -70,6 +70,58 @@ class GuardMutationTest(unittest.TestCase):
         )
         self.assertEqual(res.returncode, 0, f"Hardcoded path scan returned non-zero:\n{res.stdout}\n{res.stderr}")
 
+class TamperGuardDiffAnalysisTest(unittest.TestCase):
+    """防篡改门禁的 diff 解析必须区分"换行规范化"与"真的改断言"。"""
+
+    @staticmethod
+    def _diff(*lines: str) -> str:
+        header = chr(10).join([
+            "diff --git a/frontend/tests/sample.test.js b/frontend/tests/sample.test.js",
+            "--- a/frontend/tests/sample.test.js",
+            "+++ b/frontend/tests/sample.test.js",
+            "@@ -1,3 +1,3 @@",
+            "",
+        ])
+        return header + chr(10).join(lines) + chr(10)
+
+    def test_identical_removal_and_addition_is_not_tampering(self):
+        """CRLF 与 LF 的差异会把同一行同时放进删除与新增侧，不应报警。"""
+        from scripts.guard_test_tampering import check_tampering
+
+        diff = self._diff(
+            "-  expect(wrapper.text()).toBe('题库')",
+            "+  expect(wrapper.text()).toBe('题库')",
+        )
+        self.assertEqual(check_tampering(diff), [])
+
+    def test_removed_assertion_is_still_reported(self):
+        from scripts.guard_test_tampering import check_tampering
+
+        diff = self._diff("-  expect(wrapper.text()).toBe('题库')")
+        violations = check_tampering(diff)
+        self.assertEqual(len(violations), 1)
+        self.assertIn("expect(wrapper.text()).toBe", violations[0])
+
+    def test_rewritten_assertion_is_still_reported(self):
+        from scripts.guard_test_tampering import check_tampering
+
+        diff = self._diff(
+            "-  expect(wrapper.text()).toBe('题库')",
+            "+  expect(wrapper.text()).toBeTruthy()",
+        )
+        self.assertEqual(len(check_tampering(diff)), 1)
+
+    def test_one_of_two_removed_assertions_is_enough_to_report(self):
+        from scripts.guard_test_tampering import check_tampering
+
+        diff = self._diff(
+            "-  expect(a).toBe(1)",
+            "-  expect(b).toBe(2)",
+            "+  expect(a).toBe(1)",
+        )
+        violations = check_tampering(diff)
+        self.assertEqual(len(violations), 1)
+        self.assertIn("expect(b).toBe(2)", violations[0])
 
 if __name__ == "__main__":
     unittest.main()

@@ -513,6 +513,13 @@ def _has_sql_content(statement: str) -> bool:
     return any(line.strip() and not line.strip().startswith("--") for line in statement.splitlines())
 
 
+# Migrations that rebuild an existing table. Their INSERT ... SELECT re-inserts
+# historical rows, so they must run with foreign-key enforcement disabled; see
+# `migrate()` for why. Keep this list explicit so a new rebuild is a conscious
+# decision rather than something a future migration inherits by accident.
+MIGRATIONS_REBUILDING_TABLES = frozenset({22})
+
+
 def migrate(db_path: str) -> None:
     path = Path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -523,15 +530,31 @@ def migrate(db_path: str) -> None:
         for version in sorted(MIGRATIONS):
             if version in applied:
                 continue
-            conn.execute("BEGIN IMMEDIATE")
-            try:
-                for stmt in _split_sql_statements(MIGRATIONS[version]):
-                    conn.execute(stmt)
-                conn.execute("INSERT INTO schema_migrations(version) VALUES (?)", (version,))
+            # SQLite's documented table-rebuild procedure runs with foreign keys
+            # disabled, and this is not cosmetic: the rebuild re-inserts every
+            # existing row, and a long-lived database can already contain orphan
+            # rows whose parent was deleted before constraints were enforced
+            # (EasyExam's own production baseline has such rows). With enforcement
+            # on, the first orphan aborts the whole upgrade and the schema stops
+            # short. The migration neither creates nor repairs those legacy
+            # violations; it only stops them from blocking a schema change.
+            rebuild = version in MIGRATIONS_REBUILDING_TABLES
+            if rebuild:
                 conn.commit()
-            except Exception:
-                conn.rollback()
-                raise
+                conn.execute("PRAGMA foreign_keys = OFF")
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                try:
+                    for stmt in _split_sql_statements(MIGRATIONS[version]):
+                        conn.execute(stmt)
+                    conn.execute("INSERT INTO schema_migrations(version) VALUES (?)", (version,))
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                    raise
+            finally:
+                if rebuild:
+                    conn.execute("PRAGMA foreign_keys = ON")
     finally:
         conn.close()
 

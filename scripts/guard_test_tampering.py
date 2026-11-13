@@ -55,10 +55,18 @@ def run_git_diff() -> str:
         return ""
 
 def check_tampering(diff_text: str) -> list[str]:
-    """分析 diff 中是否有测试文件被删除了断言行"""
+    """分析 diff 中是否有测试文件被删除了断言行
+
+    行尾换行符规范化（CRLF → LF）会让整份文件同时出现在删除侧与新增侧。
+    那只是字节层面的换行变化，断言本身没有被改动；把"同一文件里被删除的
+    断言行在新增侧原样出现"视为保留，否则每一次换行规范化都会被误判为篡改。
+    真正改写或删除的断言在新增侧找不到逐字相同的行，仍然会被拦下。
+    """
     violations = []
     current_file = ""
     is_test_file = False
+    removed: dict[str, list[str]] = {}
+    added: dict[str, list[str]] = {}
 
     for line in diff_text.splitlines():
         if line.startswith("diff --git "):
@@ -74,12 +82,20 @@ def check_tampering(diff_text: str) -> list[str]:
         if not is_test_file:
             continue
 
-        # 检查被删除的行（以 - 开头，但不包含文件头 ---）
         if line.startswith("-") and not line.startswith("---"):
             removed_content = line[1:].strip()
-            # 如果被删除的行包含核心断言语句
             if any(removed_content.startswith(kw) or f" {kw}" in removed_content for kw in ASSERTION_KEYWORDS):
-                violations.append(f"文件 [{current_file}] 中检测到核心断言被修改或删除: '{removed_content}'")
+                removed.setdefault(current_file, []).append(removed_content)
+        elif line.startswith("+") and not line.startswith("+++"):
+            added.setdefault(current_file, []).append(line[1:].strip())
+
+    for file_name, removed_lines in removed.items():
+        still_available = list(added.get(file_name, []))
+        for removed_content in removed_lines:
+            if removed_content in still_available:
+                still_available.remove(removed_content)
+                continue
+            violations.append(f"文件 [{file_name}] 中检测到核心断言被修改或删除: '{removed_content}'")
 
     return violations
 

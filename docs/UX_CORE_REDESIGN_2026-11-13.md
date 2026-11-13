@@ -1,7 +1,7 @@
 # EasyExam Core UX 重设计 — 诊断与方案（v1.0）
 
 > 状态：**8 条产品决策已确认（2026-11-13）；P1 导航地基已实施并通过 verify:ui（2026-11-13）**。
-> 日期：2026-11-13。基线版本：1.0.23（fnOS http://192.168.100.11:3000）。
+> 日期：2026-11-13。基线版本：1.0.24（fnOS http://192.168.100.11:3000）。
 > 视觉方向（Direction D · Study Workspace、四套配色、编辑式排版）**冻结**，本方案只调整组织结构、流程与交互模型。
 
 ---
@@ -678,6 +678,8 @@ P2 交付后对题库域做了一次独立审计，以下是本轮落地的修�
 - **`browser_e2e` 的 `startBankPractice` 不认识开始面板**：双设备流程（页面 A 与页面 B 登录同一账号）在 P6 后会先看到"继续 / 结束并新建"。脚本若直接等答题器，会超时；若绕过面板，则悄悄开出第二个会话，跨设备冲突场景就不再真实。现改为与 `.focus-mode` 竞速等待 `start-study-panel`，出现时点击 `start-study-continue` 回到既有会话。
 - **`fast_ui_interaction` 的练习"更多"菜单计数是竞态**：菜单容器与两个 `.focus-menu-item` 同帧绘制，但满套件负载下第二项偶尔晚一帧，单次 `count()` 会读到 1。现先 `waitForFunction` 等两个菜单项都出现再计数，断言仍是"恰好 2 个"。
 - **两处批量/危险区脚本仍按原生确认等待**：`bank_batch_e2e` 的批量归档与 `bank_management_e2e` 的危险区归档原先依赖 `page.on('dialog')` 自动接受；P6 改走应用内确认后对话框不再出现，脚本改为显式点击 `[data-testid="confirm-dialog"] [data-testid="confirm-ok"]`。这不是测试放水，而是把"用户确认"这一步显式化。
+- **迁移 22 在真实生产数据上会停在 21**：上线前用生产库副本做升级演练，`import_jobs` 的 `INSERT ... SELECT` 被一条历史孤儿行（用户已删除）触发 `FOREIGN KEY constraint failed`。修复是按 SQLite 官方表重建流程，仅对重建类迁移临时关闭外键并在提交后立即恢复；孤儿行原样保留、外键基线 284 不变。详见 `DECISIONS.md` 同日条目与 `tests/test_migration_22_orphan_rows.py`。
+
 - **实例管理页顶栏喊错了名字**：`/instance` 归在设置的导航分组下，顶栏标题沿用了分区的"设置"，与页内 H1"实例管理"不一致。`AppLayout.pageTitle` 现在让 `instance-admin` 路由自己命名；导航高亮仍留在设置组内。
 
 ### 14.3 刻意没做的

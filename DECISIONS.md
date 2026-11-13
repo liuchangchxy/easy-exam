@@ -669,3 +669,24 @@
 - **已知残留**：`NotesView.handleDelete` 与 `PracticeViewV1.handleKill` 仍用原生确认；全局断点已收敛，但多个视图仍带 scoped 旧断点。验收的"禁止原生对话框"只覆盖脚本驱动的批量归档流程。
 - **对应 SPEC 章节**：§2.0.1（一题一库与复制语义）、§7.7（移动端）、§7.8（控件收敛）。
 - **影响范围**：`frontend/src/{composables/useConfirm.js(新),composables/useToast.js(新),composables/useKeyboardInset.js(新),components/ConfirmHost.vue(新),components/ToastHost.vue(新),components/StartStudyPanel.vue,App.vue,layouts/AppLayout.vue,style.css}`、`frontend/src/views/{HomeView,BanksView,BankManageView,QuestionPageView,ReviewView,SettingsView,MistakesView,NotesView,PracticeViewV1,ExamCenterView,InstanceAdminView,ImportView}.vue`、`frontend/src/features/exam/ExamView.vue`、`backend/app/infrastructure/db/{connection.py,repositories/question_repository.py}`、`backend/app/api/routes/banks.py`、`tests/test_question_bank_one_to_one.py`、`frontend/tests/{p6_acceptance_e2e.mjs(新),components/{controls_dialog,controls_review_query,responsive_contract}.test.js(新),browser_e2e.test.js,fast_ui_interaction.test.js}`、`frontend/package.json`。
+
+### [2026-11-13] 发布前修复：迁移 22 在历史孤儿 `import_jobs` 行上会中止
+
+- **触发背景**：上线前把生产库（schema 18，fnOS `/vol4/@appdata/easy-exam/easyexam-v1.db`）复制到本机，用本分支代码执行 19→23 的真实升级。迁移 22 在重建 `import_jobs` 的 `INSERT ... SELECT` 处抛 `FOREIGN KEY constraint failed`，整个迁移停在 21。原因是一条 2026 年早期产生的导入记录（`id=cde86cdc-…`，`user_id=cb2400c6-…`）的用户早已不存在；旧表允许这种孤儿行，迁移 22 原样回插时被新表的外键拦下。生产另有 283 条同类历史违规（`questions.created_by`、`user_sessions.user_id`），属于既有基线。
+- **核心决策**：
+  1. **按 SQLite 官方表重建流程，在重建期间关闭外键强制**：`MIGRATIONS_REBUILDING_TABLES = {22}` 显式列出会重插历史行的迁移；运行器在 `BEGIN IMMEDIATE` 之前执行 `PRAGMA foreign_keys = OFF`，提交后立即恢复 `ON`，并用 `finally` 保证异常路径也恢复。
+  2. **不删除、不改写孤儿行**：迁移只搬表结构，51 条 `import_jobs`（含那条孤儿）全部保留；外键基线仍是 284 条，既不新增也不擅自"修复"历史数据。清理历史数据是显式的数据操作，不属于 schema 迁移。
+  3. **用真实生产副本验证，而不是造一个干净库**：修复后在同一份生产副本上重跑，schema 到达 23、31 张表行数逐一保持、`integrity_check=ok`、`foreign_key_check` 仍为 284、两个 1:1 触发器存在、孤儿行原样保留；二次运行不重复执行任何迁移。
+  4. **新增回归测试 `tests/test_migration_22_orphan_rows.py`**：构造 v21 库 + 一条指向已删除用户的 `import_jobs` 行，断言迁移到达 23、孤儿行保留、新列取默认值，并断言迁移结束后外键重新生效（再插孤儿会被拒）。没有这个测试，下一次重建仍会重蹈覆辙。
+- **对应 SPEC 章节**：§5.3（数据迁移）；`docs/FNOS_FPK_GUIDE.md` 的升级约束。
+- **影响范围**：`backend/app/infrastructure/db/connection.py`、`tests/test_migration_22_orphan_rows.py`（新）。
+
+### [2026-11-13] 防篡改门禁：同一文件里原样重放的断言不算篡改
+
+- **触发背景**：`frontend/tests/components/import_view.test.js` 在 P1 提交时带入了 480 行 CRLF。CI 的 `git diff --check` 把行尾 `` 判为 trailing whitespace，是必需检查 `Whitespace & Guard Checks` 的红灯。把文件规范化为 LF 后，本地 `guard_test_tampering.py` 又把"整份文件同时出现在删除侧与新增侧"误判为删除断言，导致无法提交。
+- **核心决策**：
+  1. **门禁按"内容是否仍在"判断，而不是按"是否出现过 - 行"判断**：解析 diff 时收集被删除的断言行与新增行；同一文件内如果存在逐字相同的新增行，就视为原样保留。逐字改写（`toBe(1)` → `toBeTruthy()`）或真正删除仍然拦截。
+  2. **只修解析、不放开关键词、不引入 allowlist**：断言关键词、测试文件识别、退出码语义都不变；新增 `tests/test_guard_checks.py::TamperGuardDiffAnalysisTest` 四条变体（换行规范化、真删除、改写、只删两条中的一条）锁定红绿行为。
+  3. **门禁放宽有边界**：允许的是"同一行文本原样重放"，不允许"删除后补一条等价断言"——后者文本不同，仍会红。
+- **对应 SPEC 章节**：`TESTING.md` 第 7 条（门禁即证据）。
+- **影响范围**：`scripts/guard_test_tampering.py`、`tests/test_guard_checks.py`、`frontend/tests/components/import_view.test.js`（CRLF → LF）。
