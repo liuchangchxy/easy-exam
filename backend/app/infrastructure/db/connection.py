@@ -402,6 +402,18 @@ MIGRATIONS = {
     UPDATE practice_sessions SET status = 'completed', completed_at = COALESCE(completed_at, updated_at) WHERE is_completed = 1;
     CREATE INDEX idx_practice_sessions_user_status ON practice_sessions(user_id, status);
     """,
+    21: """
+    -- Instance-level administration and collaboration (P4).
+    -- users.is_admin is the instance role, while bank roles stay in question_bank_members.
+    ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0;
+    CREATE TABLE instance_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL DEFAULT ''
+    );
+    ALTER TABLE user_sessions ADD COLUMN user_agent TEXT;
+    ALTER TABLE user_sessions ADD COLUMN last_seen_at TEXT;
+    CREATE INDEX idx_question_bank_members_user ON question_bank_members(user_id);
+    """,
 }
 
 

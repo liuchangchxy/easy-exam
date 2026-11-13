@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.app.dependencies import current_user
+from backend.app.infrastructure.db.repositories.bank_repository import MemberAlreadyExistsError
 
 router = APIRouter(prefix="/banks", tags=["banks"])
 
@@ -239,6 +240,8 @@ def copy_question(bank_id: str, question_id: str, request: Request, user=Depends
 def add_member(bank_id: str, payload: MemberPayload, request: Request, user=Depends(current_user)):
     try:
         return request.app.state.services.banks.add_member(bank_id, user["id"], payload.username, payload.role)
+    except MemberAlreadyExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except LookupError as exc:

@@ -7,6 +7,10 @@ from backend.app.infrastructure.db.connection import transaction
 DEFAULT_CATEGORY = "默认分类"
 
 
+class MemberAlreadyExistsError(ValueError):
+    """Adding an existing member is a conflict, never a silent role rewrite."""
+
+
 class BankRepository:
     def __init__(self, db_path: str):
         self.db_path = db_path
@@ -343,9 +347,16 @@ class BankRepository:
             target = conn.execute("SELECT id FROM users WHERE username = ?", (username.strip().lower(),)).fetchone()
             if not target:
                 raise LookupError("user not found")
+            existing = conn.execute(
+                "SELECT role FROM question_bank_members WHERE bank_id = ? AND user_id = ?",
+                (bank_id, target[0]),
+            ).fetchone()
+            if existing:
+                raise MemberAlreadyExistsError(
+                    f"user is already a member of this bank with role {existing[0]}"
+                )
             conn.execute(
-                "INSERT INTO question_bank_members(bank_id, user_id, role) VALUES (?, ?, ?) "
-                "ON CONFLICT(bank_id, user_id) DO UPDATE SET role = excluded.role",
+                "INSERT INTO question_bank_members(bank_id, user_id, role) VALUES (?, ?, ?)",
                 (bank_id, target[0], role),
             )
             self._audit(conn, owner_id, "BANK_MEMBER_ADDED", bank_id,
@@ -357,13 +368,18 @@ class BankRepository:
             if not conn.execute("SELECT 1 FROM question_bank_members WHERE bank_id = ? AND user_id = ?", (bank_id, user_id)).fetchone():
                 raise PermissionError("access denied")
             rows = conn.execute(
-                """SELECT m.bank_id, m.user_id, u.username, m.role
+                """SELECT m.bank_id, m.user_id, u.username, m.role, m.created_at AS joined_at
                    FROM question_bank_members m
                    JOIN users u ON u.id = m.user_id
-                   WHERE m.bank_id = ? ORDER BY m.role ASC""",
+                   WHERE m.bank_id = ?
+                   ORDER BY CASE m.role WHEN 'ADMIN' THEN 0 WHEN 'EDITOR' THEN 1 WHEN 'MEMBER' THEN 2 ELSE 3 END,
+                            u.username ASC""",
                 (bank_id,),
             ).fetchall()
-            return [dict(row) for row in rows]
+            members = [dict(row) for row in rows]
+            for member in members:
+                member["is_self"] = member["user_id"] == user_id
+            return members
 
     def update_member_role(self, bank_id: str, owner_id: str, target_user_id: str, role: str) -> dict:
         role = str(role or "").strip().upper()

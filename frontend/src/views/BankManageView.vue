@@ -26,7 +26,7 @@
         <button type="button" class="btn" data-testid="manage-export" @click="focusExportPanel">
           <LinearIcon name="download" :size="14" />{{ t('ep.manage.export') }}
         </button>
-        <button type="button" class="btn" data-testid="manage-create" :disabled="!canEdit" :title="canEdit ? '' : t('ep.manage.readonly_note')" @click="openCreate">
+        <button v-if="canEdit" type="button" class="btn" data-testid="manage-create" @click="openCreate">
           <LinearIcon name="plus" :size="14" />{{ t('ep.manage.new_question') }}
         </button>
       </div>
@@ -43,6 +43,7 @@
     <div v-if="bank && !canEdit" class="notice info manage-notice">
       <LinearIcon name="info" :size="15" />
       <span>{{ t('ep.manage.readonly_note') }}</span>
+      <span v-if="isMember" class="block" data-testid="member-readonly-notice">{{ t('ep.collab.readonly_notice') }}</span>
     </div>
     <div v-if="successToast" class="notice ok manage-notice">
       <LinearIcon name="check" :size="15" /><span>{{ successToast }}</span>
@@ -414,20 +415,55 @@
         <p v-if="!isOwner" class="hint" data-testid="owner-members-note">{{ t('ep.manage.owner_members_note') }}</p>
         <div class="panel">
           <div class="list">
-            <div v-for="m in members" :key="m.user_id" class="list-row member-row">
+            <div
+              v-for="m in members"
+              :key="m.user_id"
+              class="list-row member-row"
+              :data-user-id="m.user_id"
+              :data-role="m.role"
+            >
               <span class="avatar sm">{{ (m.username || '?').charAt(0).toUpperCase() }}</span>
               <span class="list-main">
-                <span class="list-title">{{ m.username }}</span>
-                <span class="list-meta">{{ formatRole(m.role) }}</span>
+                <span class="list-title">
+                  {{ m.username }}
+                  <span v-if="m.is_self" class="tag" data-testid="member-self-badge">{{ t('ep.collab.self_badge') }}</span>
+                </span>
+                <span class="list-meta" data-testid="member-role">{{ formatRole(m.role) }}</span>
+                <span class="list-meta mono" data-testid="member-joined-at">{{ t('ep.collab.joined_at') }} · {{ formatJoinedAt(m) }}</span>
               </span>
               <span v-if="isOwner && m.role !== 'ADMIN'" class="list-side member-actions">
-                <select :value="m.role" class="select" :aria-label="t('ep.manage.role_label')" @change="changeMemberRole(m, $event.target.value)">
+                <select
+                  :value="m.role"
+                  class="select"
+                  :disabled="memberBusyId === m.user_id"
+                  :aria-label="t('ep.collab.change_role')"
+                  :data-testid="`member-role-select-${m.user_id}`"
+                  @change="changeMemberRole(m, $event.target.value)"
+                >
                   <option value="EDITOR">{{ t('ep.banks.editor') }}</option>
                   <option value="MEMBER">{{ t('ep.banks.member') }}</option>
                 </select>
-                <button type="button" class="btn btn-sm btn-quiet" @click="transferOwnership(m)">{{ t('ep.manage.transfer_ownership') }}</button>
-                <button type="button" class="btn btn-sm btn-quiet" @click="removeMember(m)">{{ t('ep.manage.remove_member') }}</button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-quiet"
+                  data-testid="member-transfer"
+                  :disabled="memberBusyId === m.user_id"
+                  @click="requestTransfer(m)"
+                >{{ t('ep.collab.transfer_action') }}</button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-quiet"
+                  data-testid="member-remove"
+                  :disabled="memberBusyId === m.user_id"
+                  @click="requestRemoveMember(m)"
+                >{{ t('ep.collab.remove_action') }}</button>
               </span>
+              <span
+                v-if="memberActionError.userId === m.user_id"
+                class="hint bad-text member-row-error"
+                role="alert"
+                data-testid="member-row-error"
+              >{{ memberActionError.message }}</span>
             </div>
             <div v-if="membersError && !members.length" class="empty" style="padding: 24px 0" data-testid="members-error" role="alert">
               <div class="empty-desc">{{ membersError }}</div>
@@ -440,20 +476,61 @@
             </div>
           </div>
           <div v-if="!isOwner && bank" class="member-leave">
-            <button type="button" class="btn btn-sm btn-quiet" @click="leaveCurrentBank">{{ t('ep.manage.leave_bank') }}</button>
+            <button type="button" class="btn btn-sm btn-quiet" data-testid="member-leave" @click="leaveCurrentBank">{{ t('ep.manage.leave_bank') }}</button>
           </div>
         </div>
 
         <div v-if="isOwner" class="member-add panel" style="margin-top: 24px">
           <div class="panel-head"><span class="panel-title">{{ t('ep.manage.add_member') }}</span></div>
           <form class="member-form" @submit.prevent="addMember">
-            <input v-model.trim="memberForm.username" class="input" :placeholder="t('ep.manage.username_placeholder')" required />
-            <select v-model="memberForm.role" class="select">
+            <div class="member-search-field">
+              <input
+                v-model.trim="memberSearch"
+                class="input"
+                role="combobox"
+                aria-autocomplete="list"
+                :aria-expanded="memberSearchOpen ? 'true' : 'false'"
+                aria-controls="member-search-listbox"
+                :aria-activedescendant="memberActiveOptionId || undefined"
+                :placeholder="t('ep.collab.search_placeholder')"
+                :aria-label="t('ep.collab.search_placeholder')"
+                autocomplete="off"
+                data-testid="member-search-input"
+                @keydown="onMemberSearchKeydown"
+              />
+              <ul
+                v-if="memberSearchOpen && memberResults.length"
+                id="member-search-listbox"
+                class="member-search-list"
+                role="listbox"
+                :aria-label="t('ep.collab.search_placeholder')"
+              >
+                <li
+                  v-for="(candidate, idx) in memberResults"
+                  :id="memberOptionId(candidate)"
+                  :key="candidate.id"
+                  class="member-search-option"
+                  role="option"
+                  :aria-selected="idx === memberActiveIndex ? 'true' : 'false'"
+                  :class="{ 'is-active': idx === memberActiveIndex }"
+                  @mouseenter="memberActiveIndex = idx"
+                  @mousedown.prevent="selectMemberCandidate(candidate)"
+                >{{ candidate.username }}</li>
+              </ul>
+              <p v-if="memberSearchBusy" class="hint member-search-hint">{{ t('ep.common.loading') }}</p>
+              <p v-else-if="memberSearchError" class="hint bad-text member-search-hint" role="alert" data-testid="member-search-error">{{ t('ep.collab.search_error', { message: memberSearchError }) }}</p>
+              <p v-else-if="memberSearchNoResults" class="hint member-search-hint" data-testid="member-search-empty">{{ t('ep.collab.no_results') }}</p>
+            </div>
+            <span v-if="memberSelected" class="member-selected" data-testid="member-selected">{{ t('ep.collab.selected_user', { name: memberSelected.username }) }}</span>
+            <select v-model="memberRole" class="select" :aria-label="t('ep.collab.change_role')" data-testid="member-add-role">
               <option value="EDITOR">{{ t('ep.banks.editor') }}</option>
               <option value="MEMBER">{{ t('ep.banks.member') }}</option>
             </select>
-            <button type="submit" class="btn" :disabled="memberSaving || !memberForm.username">{{ t('ep.manage.add') }}</button>
+            <button type="submit" class="btn" data-testid="member-add-submit" :disabled="memberSaving || !memberSelected">
+              {{ memberSaving ? t('ep.common.loading') : t('ep.manage.add') }}
+            </button>
           </form>
+          <p v-if="memberAddError" class="error" role="alert" data-testid="member-add-error">{{ memberAddError }}</p>
         </div>
       </section>
 
@@ -672,6 +749,59 @@
       </template>
     </AppDialog>
 
+    <AppDialog
+      :open="Boolean(removeTarget)"
+      :title="t('ep.collab.remove_title')"
+      panel-class="member-remove-dialog"
+      style="--app-dialog-width: 440px"
+      @close="closeRemoveDialog"
+    >
+      <p class="hint">{{ t('ep.collab.remove_desc', { name: removeTarget?.username || '' }) }}</p>
+      <p v-if="removeError" class="error" role="alert">{{ removeError }}</p>
+      <template #foot>
+        <button type="button" class="btn btn-quiet" @click="closeRemoveDialog">{{ t('ep.common.cancel') }}</button>
+        <button
+          type="button"
+          class="btn btn-danger"
+          data-testid="member-remove-confirm"
+          :disabled="Boolean(memberBusyId)"
+          @click="removeMember(removeTarget)"
+        >{{ t('ep.collab.remove_action') }}</button>
+      </template>
+    </AppDialog>
+
+    <AppDialog
+      :open="Boolean(transferTarget)"
+      :title="t('ep.collab.transfer_title')"
+      panel-class="member-transfer-dialog danger-dialog"
+      style="--app-dialog-width: 460px"
+      initial-focus=".transfer-confirm-input"
+      @close="closeTransferDialog"
+    >
+      <p class="hint">{{ t('ep.collab.transfer_desc', { name: transferTarget?.username || '' }) }}</p>
+      <label class="field">
+        <span class="label">{{ t('ep.collab.transfer_confirm_label', { name: bank?.name || '' }) }}</span>
+        <input
+          v-model="transferNameDraft"
+          class="input transfer-confirm-input"
+          data-testid="transfer-confirm-input"
+          :placeholder="t('ep.collab.transfer_placeholder')"
+          autocomplete="off"
+        />
+      </label>
+      <p v-if="transferError" class="error" role="alert">{{ transferError }}</p>
+      <template #foot>
+        <button type="button" class="btn btn-quiet" :disabled="transferBusy" @click="closeTransferDialog">{{ t('ep.common.cancel') }}</button>
+        <button
+          type="button"
+          class="btn btn-danger"
+          data-testid="transfer-confirm"
+          :disabled="!transferNameMatches || transferBusy"
+          @click="transferOwnership"
+        >{{ t('ep.collab.transfer_action_confirm') }}</button>
+      </template>
+    </AppDialog>
+
     <AiDraftsModal
       v-if="showDrafts"
       :token="token"
@@ -703,7 +833,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
 import AppDialog from '../components/AppDialog.vue'
@@ -738,6 +868,7 @@ import {
   deleteTag,
   downloadBankExport,
 } from '../api/banks'
+import { searchUsers } from '../api/users'
 import { useLocale } from '../composables/useLocale'
 import { useDirtyGuard } from '../composables/useDirtyGuard'
 import { useStartStudy } from '../composables/useStartStudy.js'
@@ -749,6 +880,8 @@ import {
   createEmptyBankFilters,
   isFilterActive,
   canEditQuestionInBank,
+  isBankMemberRole,
+  isBankOwner,
   isQuestionLocked,
   createSelection,
   toggleSelection,
@@ -896,8 +1029,28 @@ const {
   confirmDiscardCancel: cancelCreateDiscard,
 } = useDirtyGuard(() => createDirty.value, () => { showCreate.value = false })
 
-const memberForm = ref({ username: '', role: 'EDITOR' })
+// Member picker: a debounced prefix search instead of a blind username input.
+// `memberSelected` is the candidate the owner picked; typing again clears it.
+const memberSearch = ref('')
+const memberResults = ref([])
+const memberSearchOpen = ref(false)
+const memberSearchBusy = ref(false)
+const memberSearchError = ref('')
+const memberActiveIndex = ref(-1)
+const memberSelected = ref(null)
+const memberRole = ref('EDITOR')
 const memberSaving = ref(false)
+const memberAddError = ref('')
+const memberBusyId = ref('')
+const memberActionError = ref({ userId: '', message: '' })
+const removeTarget = ref(null)
+const removeError = ref('')
+const transferTarget = ref(null)
+const transferNameDraft = ref('')
+const transferError = ref('')
+const transferBusy = ref(false)
+let memberSearchTimer = null
+let memberSearchSeq = 0
 
 const newChapterName = ref('')
 const newChapterParentId = ref('')
@@ -1027,7 +1180,25 @@ const selectedLockedCount = computed(() => selectedQuestions.value.filter(q => i
 
 const batchBlocked = computed(() => selectedLockedCount.value > 0)
 
-const isOwner = computed(() => String(bank.value?.role || '').toUpperCase() === 'ADMIN')
+const isOwner = computed(() => isBankOwner(bank.value?.role))
+// The member-only notice is a role statement, so it must not reuse `canEdit`:
+// an exam lock also disables editing, and that is a different explanation.
+const isMember = computed(() => isBankMemberRole(bank.value?.role))
+
+const memberActiveOptionId = computed(() => {
+  const candidate = memberResults.value[memberActiveIndex.value]
+  return candidate ? memberOptionId(candidate) : ''
+})
+
+const memberSearchNoResults = computed(() => Boolean(memberSearch.value.trim())
+  && memberSearchOpen.value
+  && !memberSearchBusy.value
+  && !memberSearchError.value
+  && !memberSelected.value
+  && memberResults.value.length === 0)
+
+const transferNameMatches = computed(() => Boolean(transferTarget.value)
+  && transferNameDraft.value.trim() === String(bank.value?.name || ''))
 
 function rowEditable(question) {
   return canEdit.value && !isQuestionLocked(question) && !question?.archived
@@ -1214,6 +1385,20 @@ function resetBankScopedState() {
   auditRows.value = []
   hasActiveExam.value = false
   settingsForm.value = { name: '', category: '', description: '' }
+  memberSearch.value = ''
+  memberResults.value = []
+  memberSearchOpen.value = false
+  memberSearchBusy.value = false
+  memberSearchError.value = ''
+  memberSelected.value = null
+  memberAddError.value = ''
+  memberBusyId.value = ''
+  memberActionError.value = { userId: '', message: '' }
+  removeTarget.value = null
+  removeError.value = ''
+  transferTarget.value = null
+  transferNameDraft.value = ''
+  transferError.value = ''
 }
 
 // The router reuses this component between /banks/A/manage and
@@ -1413,6 +1598,10 @@ function formatRole(role) {
   return t('ep.banks.member')
 }
 
+function formatJoinedAt(member) {
+  return formatDateTime(member?.joined_at, locale.value) || '—'
+}
+
 const IMPORT_STATUS_KEYS = {
   PENDING: 'ep.manage.import_status_pending',
   PRECHECK_FAILED: 'ep.manage.import_status_precheck_failed',
@@ -1610,62 +1799,200 @@ async function saveQuestion() {
 }
 
 async function addMember() {
-  if (!memberForm.value.username) return
+  if (!memberSelected.value || memberSaving.value) return
+  const candidate = memberSelected.value
   memberSaving.value = true
-  error.value = ''
+  memberAddError.value = ''
   try {
-    await addBankMember(props.token, bankId.value, memberForm.value.username, memberForm.value.role)
-    memberForm.value = { username: '', role: 'EDITOR' }
-    members.value = await listBankMembers(props.token, bankId.value).catch(() => members.value)
+    await addBankMember(props.token, bankId.value, candidate.username, memberRole.value)
+    memberSelected.value = null
+    memberSearch.value = ''
+    await reloadMembers()
+    notifyBanksChanged()
     flashSuccess(t('ep.manage.member_added'))
   } catch (err) {
-    error.value = err.detail || err.message
+    memberAddError.value = Number(err?.status) === 409
+      ? t('ep.collab.already_member', { name: candidate.username })
+      : t('ep.collab.add_failed', { message: err?.detail || err?.message || t('ep.common.load_failed') })
   } finally {
     memberSaving.value = false
   }
 }
 
-async function removeMember(member) {
-  if (!window.confirm(t('ep.manage.remove_member_confirm', { name: member.username }))) return
-  error.value = ''
-  try {
-    await removeBankMember(props.token, bankId.value, member.user_id)
-    members.value = members.value.filter(m => m.user_id !== member.user_id)
-  } catch (err) {
-    error.value = err.detail || err.message
+function memberOptionId(candidate) {
+  return `member-option-${candidate?.id ?? ''}`
+}
+
+function selectMemberCandidate(candidate) {
+  if (!candidate) return
+  memberSelected.value = candidate
+  memberResults.value = []
+  memberSearchOpen.value = false
+  memberActiveIndex.value = -1
+  memberSearchError.value = ''
+  memberAddError.value = ''
+}
+
+function onMemberSearchKeydown(event) {
+  const { key } = event
+  if (key === 'ArrowDown' && memberResults.value.length) {
+    event.preventDefault()
+    memberSearchOpen.value = true
+    memberActiveIndex.value = Math.min(memberActiveIndex.value + 1, memberResults.value.length - 1)
+    return
   }
+  if (key === 'ArrowUp' && memberResults.value.length) {
+    event.preventDefault()
+    memberActiveIndex.value = Math.max(memberActiveIndex.value - 1, 0)
+    return
+  }
+  if (key === 'Enter' && memberResults.value.length && memberSearchOpen.value) {
+    event.preventDefault()
+    selectMemberCandidate(memberResults.value[memberActiveIndex.value] || memberResults.value[0])
+    return
+  }
+  if (key === 'Escape' && memberSearchOpen.value) {
+    event.preventDefault()
+    memberSearchOpen.value = false
+    memberActiveIndex.value = -1
+  }
+}
+
+async function runMemberSearch(term) {
+  const requestId = ++memberSearchSeq
+  try {
+    const res = await searchUsers(props.token, term)
+    if (requestId !== memberSearchSeq) return
+    memberResults.value = Array.isArray(res) ? res : []
+    memberSearchError.value = ''
+    memberSearchOpen.value = true
+    memberActiveIndex.value = memberResults.value.length ? 0 : -1
+  } catch (err) {
+    if (requestId !== memberSearchSeq) return
+    memberResults.value = []
+    memberSearchError.value = err?.detail || err?.message || t('ep.common.load_failed')
+    memberSearchOpen.value = true
+    memberActiveIndex.value = -1
+  } finally {
+    if (requestId === memberSearchSeq) memberSearchBusy.value = false
+  }
+}
+
+// Typing is the owner's intent, so it clears the previous pick and restarts
+// the 250ms debounce. An empty term closes the list without a request.
+watch(memberSearch, value => {
+  memberSelected.value = null
+  memberAddError.value = ''
+  memberSearchError.value = ''
+  memberActiveIndex.value = -1
+  memberSearchSeq += 1
+  if (memberSearchTimer) clearTimeout(memberSearchTimer)
+  const term = String(value || '').trim()
+  if (!term) {
+    memberResults.value = []
+    memberSearchOpen.value = false
+    memberSearchBusy.value = false
+    return
+  }
+  memberResults.value = []
+  memberSearchOpen.value = true
+  memberSearchBusy.value = true
+  memberSearchTimer = setTimeout(() => {
+    memberSearchTimer = null
+    void runMemberSearch(term)
+  }, 250)
+})
+
+async function removeMember(member) {
+  if (!isOwner.value || !member || memberBusyId.value) return
+  const target = member
+  memberBusyId.value = target.user_id
+  removeError.value = ''
+  memberActionError.value = { userId: '', message: '' }
+  try {
+    await removeBankMember(props.token, bankId.value, target.user_id)
+    removeTarget.value = null
+    await reloadMembers()
+    notifyBanksChanged()
+    flashSuccess(t('ep.collab.member_removed'))
+  } catch (err) {
+    removeError.value = err?.detail || err?.message
+    memberActionError.value = { userId: target.user_id, message: removeError.value }
+  } finally {
+    memberBusyId.value = ''
+  }
+}
+
+function requestRemoveMember(member) {
+  if (!isOwner.value || memberBusyId.value) return
+  removeTarget.value = member
+  removeError.value = ''
+}
+
+function closeRemoveDialog() {
+  if (memberBusyId.value) return
+  removeTarget.value = null
+  removeError.value = ''
 }
 
 async function changeMemberRole(member, role) {
-  if (!isOwner.value || member.role === role) return
-  error.value = ''
+  if (!isOwner.value || !member || member.role === role || memberBusyId.value) return
+  memberBusyId.value = member.user_id
+  memberActionError.value = { userId: '', message: '' }
   try {
     await updateBankMemberRole(props.token, bankId.value, member.user_id, role)
-    member.role = role
+    await reloadMembers()
+    notifyBanksChanged()
     flashSuccess(t('ep.manage.member_updated'))
   } catch (err) {
-    error.value = err.detail || err.message
-    await loadData()
+    // Reload so the select falls back to the role the server still holds.
+    memberActionError.value = { userId: member.user_id, message: err?.detail || err?.message }
+    await reloadMembers()
+  } finally {
+    memberBusyId.value = ''
   }
 }
 
-async function transferOwnership(member) {
-  if (!window.confirm(t('ep.manage.transfer_confirm', { name: member.username }))) return
-  error.value = ''
+function requestTransfer(member) {
+  if (!isOwner.value || memberBusyId.value) return
+  transferTarget.value = member
+  transferNameDraft.value = ''
+  transferError.value = ''
+}
+
+function closeTransferDialog() {
+  if (transferBusy.value) return
+  transferTarget.value = null
+  transferNameDraft.value = ''
+  transferError.value = ''
+}
+
+async function transferOwnership() {
+  if (!transferTarget.value || !transferNameMatches.value || transferBusy.value) return
+  const target = transferTarget.value
+  transferBusy.value = true
+  transferError.value = ''
   try {
-    await transferBankOwnership(props.token, bankId.value, member.username)
+    await transferBankOwnership(props.token, bankId.value, target.username)
+    transferTarget.value = null
+    transferNameDraft.value = ''
+    notifyBanksChanged()
     await loadData()
-    flashSuccess(t('ep.manage.transfer_done'))
+    flashSuccess(t('ep.collab.transfer_done'))
   } catch (err) {
-    error.value = err.detail || err.message
+    transferError.value = err?.detail || err?.message
+  } finally {
+    transferBusy.value = false
   }
 }
 
 async function leaveCurrentBank() {
+  if (isOwner.value) return
   if (!window.confirm(t('ep.manage.leave_confirm', { name: bank.value?.name || '' }))) return
   error.value = ''
   try {
     await leaveBank(props.token, bankId.value)
+    notifyBanksChanged()
     router.push('/banks')
   } catch (err) {
     error.value = err.detail || err.message
@@ -2151,6 +2478,14 @@ onMounted(async () => {
   await loadData()
   scrollActiveTabIntoView()
 })
+
+onBeforeUnmount(() => {
+  if (memberSearchTimer) {
+    clearTimeout(memberSearchTimer)
+    memberSearchTimer = null
+  }
+  if (longTimer.value) clearTimeout(longTimer.value)
+})
 </script>
 
 <style scoped>
@@ -2247,6 +2582,25 @@ onMounted(async () => {
 }
 .member-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .member-actions .select { height: 30px; font-size: 12px; width: 104px; }
+.member-row-error { flex-basis: 100%; }
+.member-search-field { position: relative; flex: 1 1 220px; min-width: 0; }
+.member-search-field .input { width: 100%; }
+.member-search-list {
+  position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 25;
+  margin: 0; padding: 4px 0; list-style: none;
+  max-height: 220px; overflow-y: auto;
+  border: 1px solid var(--line-strong); background: var(--surface);
+}
+.member-search-option {
+  padding: 7px 12px; font-size: 12.5px; color: var(--ink-2); cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.member-search-option.is-active { background: var(--surface-2); color: var(--ink); }
+.member-search-hint { margin: 5px 0 0; }
+.member-selected { font-size: 12px; color: var(--ink-3); align-self: center; }
+.member-remove-dialog .btn-danger,
+.member-transfer-dialog .btn-danger { border-color: var(--bad); color: var(--bad); }
+.member-transfer-dialog .field { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
 .member-leave { padding-top: 12px; border-top: 1px solid var(--line); margin-top: 8px; }
 .mtable-foot {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;

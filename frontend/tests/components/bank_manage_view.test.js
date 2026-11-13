@@ -59,6 +59,11 @@ vi.mock('../../src/api/banks', () => ({
   updateTag: vi.fn(),
   deleteTag: vi.fn(),
   downloadBankExport: vi.fn(),
+  searchUsers: vi.fn(),
+}))
+
+vi.mock('../../src/api/users', () => ({
+  searchUsers: vi.fn(),
 }))
 
 vi.mock('../../src/api/questions', () => ({
@@ -123,7 +128,7 @@ function mountView(role = 'ADMIN', options = {}) {
     { id: 'c2', name: 'Child', parent_id: 'c1', sort_order: 0 },
     { id: 'c3', name: 'Second root', parent_id: null, sort_order: 1 },
   ])
-  listBankMembers.mockResolvedValue([
+  listBankMembers.mockResolvedValue(options.members || [
     { user_id: 'u1', username: 'owner', role: 'ADMIN' },
     { user_id: 'u2', username: 'editor', role: 'EDITOR' },
   ])
@@ -944,6 +949,56 @@ describe('BankManageView management surfaces', () => {
     expect(push).toHaveBeenCalledWith('/practice/s2')
     expect(wrapper.find('[data-testid="start-study-panel"]').exists()).toBe(false)
 
+    wrapper.unmount()
+  })
+
+  it('renders the member-only read-only notice and withholds every edit affordance', async () => {
+    const wrapper = mountView('MEMBER')
+    await flush()
+
+    const notice = wrapper.find('.notice.info.manage-notice')
+    expect(notice.exists()).toBe(true)
+    expect(notice.find('[data-testid="member-readonly-notice"]').text())
+      .toBe('You are a member of this bank: you can browse and practise, but cannot edit content.')
+
+    // Creating, importing, bulk archiving and per-row editing are not rendered
+    // at all for a plain member, rather than disabled.
+    expect(wrapper.find('[data-testid="manage-create"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="manage-import"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="select-all"]').exists()).toBe(false)
+    expect(wrapper.find('.mtable-row .row-select').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="batch-archive"]').exists()).toBe(false)
+
+    await openTab(wrapper, 1)
+    expect(wrapper.find('.chapter-add').exists()).toBe(false)
+    expect(wrapper.find('.tag-add').exists()).toBe(false)
+
+    await openTab(wrapper, 5)
+    expect(wrapper.find('.settings-form button[type="submit"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('shows each member joined time and self marker from the server order', async () => {
+    routeState.query = { tab: 'members' }
+    const wrapper = mountView('ADMIN', {
+      members: [
+        { user_id: 'u1', username: 'owner', role: 'ADMIN', joined_at: '2026-11-01T10:00:00Z', is_self: true },
+        { user_id: 'u2', username: 'editor', role: 'EDITOR', joined_at: '2026-11-02T10:00:00Z', is_self: false },
+      ],
+    })
+    await flush()
+
+    const rows = wrapper.findAll('.member-row')
+    expect(rows.map(row => row.find('.list-title').text())).toEqual([
+      'owner Me',
+      'editor',
+    ])
+    expect(rows[0].find('[data-testid="member-self-badge"]').exists()).toBe(true)
+    expect(rows[1].find('[data-testid="member-self-badge"]').exists()).toBe(false)
+    expect(rows[0].find('[data-testid="member-joined-at"]').text()).toContain('2026')
+    expect(rows[0].find('[data-testid="member-joined-at"]').text()).not.toContain('2026-11-01T')
+    expect(rows[0].find('.member-actions').exists()).toBe(false)
+    expect(rows[1].find('.member-actions').exists()).toBe(true)
     wrapper.unmount()
   })
 })

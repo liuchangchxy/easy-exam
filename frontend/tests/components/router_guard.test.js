@@ -33,6 +33,14 @@ describe('adminGuard', () => {
     expect(loadCurrentUser).toHaveBeenCalledTimes(1)
   })
 
+  it('refreshes a cached user that predates the is_admin flag', async () => {
+    const loadCurrentUser = vi.fn().mockResolvedValue({ is_admin: true })
+    const auth = makeAuth({ user: { username: 'legacy' }, token: 't', loadCurrentUser })
+
+    expect(await adminGuard({ meta: { requiresAdmin: true }, fullPath: '/instance' }, auth)).toBe(true)
+    expect(loadCurrentUser).toHaveBeenCalledTimes(1)
+  })
+
   it('does not call the API when there is no token', async () => {
     const loadCurrentUser = vi.fn()
     const auth = makeAuth({ user: null, token: '', loadCurrentUser })

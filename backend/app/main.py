@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.routes import ai, assets, auth, banks, exams, imports, kills, learning, mistakes, practice, questions, sync, system
+from backend.app.api.routes import admin, users as users_route
 from backend.app.application.auth_service import AuthService
 from backend.app.application.bank_service import BankService
 from backend.app.infrastructure.db.connection import migrate
@@ -19,6 +20,7 @@ from backend.app.infrastructure.db.repositories.exam_repository import ExamRepos
 from backend.app.infrastructure.db.repositories.asset_repository import AssetRepository
 from backend.app.infrastructure.db.repositories.import_job_repository import ImportJobRepository
 from backend.app.infrastructure.db.repositories.user_repository import UserRepository, UserSessionRepository
+from backend.app.infrastructure.db.repositories.instance_settings_repository import InstanceSettingsRepository
 from backend.app.infrastructure.security.sessions import token_hash
 
 
@@ -26,7 +28,10 @@ def create_app(db_path: str | None = None, dist_dir: str | Path | None = None) -
     resolved = db_path or os.environ.get("DB_PATH") or str(Path(os.environ.get("DATA_DIR", "data")) / "easyexam-v1.db")
     migrate(resolved)
     users = UserRepository(resolved)
+    # Bootstrap exactly one instance admin when none exists (idempotent).
+    users.bootstrap_admin(os.environ.get("EASYEXAM_ADMIN_USERNAME"))
     user_sessions = UserSessionRepository(resolved)
+    instance_settings = InstanceSettingsRepository(resolved)
     bank_repo = BankRepository(resolved)
     question_repo = QuestionRepository(resolved)
     practices = PracticeRepository(resolved)
@@ -44,9 +49,10 @@ def create_app(db_path: str | None = None, dist_dir: str | Path | None = None) -
     services = type("Services", (), {})()
     services.users = users
     services.user_sessions = user_sessions
+    services.instance_settings = instance_settings
     services.banks = bank_repo
     services.questions = question_repo
-    services.auth = AuthService(users, user_sessions)
+    services.auth = AuthService(users, user_sessions, instance_settings)
     services.bank_service = BankService(bank_repo, question_repo)
     from backend.app.application.practice_service import PracticeService
     services.practice = PracticeService(practices, question_repo, bank_repo, exams_repo)
@@ -121,6 +127,8 @@ def create_app(db_path: str | None = None, dist_dir: str | Path | None = None) -
 
     app.include_router(system.router, prefix="/api/v1")
     app.include_router(auth.router, prefix="/api/v1")
+    app.include_router(admin.router, prefix="/api/v1")
+    app.include_router(users_route.router, prefix="/api/v1")
     app.include_router(banks.router, prefix="/api/v1")
     app.include_router(practice.router, prefix="/api/v1")
     app.include_router(ai.router, prefix="/api/v1")

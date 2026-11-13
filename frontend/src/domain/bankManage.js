@@ -29,6 +29,20 @@ export function canEditBankContent(role) {
   return normalized === 'ADMIN' || normalized === 'EDITOR'
 }
 
+/** Only the bank owner may manage members or transfer the bank. */
+export function isBankOwner(role) {
+  return String(role || '').trim().toUpperCase() === 'ADMIN'
+}
+
+/**
+ * A plain member may browse and practise but never edit. Keep this distinct
+ * from `!canEditBankContent`: that is also false while an exam locks an
+ * editor's bank, which is not a role statement.
+ */
+export function isBankMemberRole(role) {
+  return String(role || '').trim().toUpperCase() === 'MEMBER'
+}
+
 export function canEditQuestionInBank({ role, hasActiveExam = false, isQuestionInExam = false } = {}) {
   if (!canEditBankContent(role)) return false
   if (hasActiveExam || isQuestionInExam) return false

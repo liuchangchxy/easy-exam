@@ -617,3 +617,19 @@
   7. **页面不因次要数据失败而空白**：复习页只有题库/到期/错题/斩杀四个主源失败才整页报错；薄弱、计划、趋势失败各自降级。
 - **对应 SPEC 章节**：§4.1（模考是否进入错题由考试配置决定）、§4.3（斩杀与恢复）。
 - **影响范围**：`backend/app/infrastructure/db/{connection,practice_repository}.py`、`backend/app/application/practice_service.py`、`backend/app/api/routes/mistakes.py`、`frontend/src/{domain/reviewQueue.js,composables/useStartStudy.js,components/StartStudyPanel.vue}`、`frontend/src/views/{ReviewView,PracticeViewV1,BankManageView,HomeView}.vue`、`frontend/src/features/exam/ExamView.vue`、`frontend/src/api/mistakes.js`、`frontend/src/locales/*`、`tests/test_session_report_persistence.py`、`tests/test_review_queue_sources.py`（均新增）。
+
+### [2026-11-13] Core UX P4：两种角色层级、实例管理面、可撤销会话
+
+- **触发背景**：界面显示"管理员/成员"，但 `users` 表没有角色字段——把题库内角色误当系统角色；注册完全开放且没有任何管理面；成员只能精确盲输用户名，重复添加会静默改角色；改密不吊销其它设备；`/health` 无鉴权回吐 `instance_token`。
+- **核心决策**：
+  1. **两种角色层级分开表达**：迁移 21 增加 `users.is_admin`（实例角色）与 `instance_settings` 表；题库角色继续留在 `question_bank_members`（ADMIN/EDITOR/MEMBER）。账户菜单与设置页显示实例角色，工作区只显示"你在本题库的角色"，同一个"管理员"词不再指两件事。
+  2. **首个管理员来自迁移期，而非谁是第一个注册的人**：`is_admin=1` 只给最早创建的用户，且仅当实例尚无管理员时执行；`EASYEXAM_ADMIN_USERNAME` 可在启动时指定，同样幂等。空实例的第一位注册者仍自动成为管理员（否则新部署无人可管理）。
+  3. **禁用必须立即生效**：`PATCH /admin/users/{id}` 置 `is_active=false` 时同时删除该用户全部会话，且 `current_user` 拒绝已禁用账户的既有 token；登录本就拒绝。最后一名管理员不可被降级或禁用，管理员不可自我降级/自我禁用。
+  4. **重置密码 = 临时密码 + 强制改密 + 吊销全部会话**：`secrets.token_urlsafe` 生成，接口只回传一次，不写日志；用户下次登录只能进 `/auth/me`、改密、登出。
+  5. **注册开关是实例设置**：`instance_settings.allow_registration`，默认开；关闭后 `POST /auth/register` 返回 403，但空实例的首位用户始终放行（否则无法完成初始部署）。
+  6. **会话可见可撤销**：`GET /auth/sessions` 列出设备（UA、创建/最近活跃时间、是否本机），`DELETE /auth/sessions` 登出其它设备；改密保留当前会话、吊销其余。`user_sessions` 增加 `user_agent`/`last_seen_at`。
+  7. **成员面按数据而不是按输入**：新增 `GET /users/search?q=` 供搜索选择；重复添加同一成员返回 409 而不是静默改角色；成员列表按 所有者→编辑者→成员→用户名 排序并返回 `joined_at`/`is_self`（原 `ORDER BY role ASC` 恰好把 ADMIN 排在最前，是巧合不是契约，现改为显式 CASE）。
+  8. **实例管理是独立路由**：`/instance`（`meta.requiresAdmin`）由既有 `adminGuard` 拦截，非管理员整页 403（`ForbiddenView`），不靠前端隐藏入口兜底；数据权限仍由后端兜底。设置页的"实例管理"入口只对管理员渲染。
+  9. **`/health` 不再回吐令牌**：改为 `instance_fingerprint`（令牌的 sha256 前 16 位）；它回答"我在和哪个实例讲话"，但不发布令牌本身。所有验收脚本同步改为比对指纹。
+- **对应 SPEC 章节**：§5.3、§7.9。
+- **影响范围**：`backend/app/infrastructure/db/{connection,repositories/user_repository,repositories/bank_repository,repositories/instance_settings_repository}.py`、`backend/app/{application/auth_service,dependencies,main}.py`、`backend/app/api/routes/{admin,users,auth,banks,system}.py`、`tests/test_instance_admin.py`、`tests/test_bank_members_p4.py`、`frontend/src/{api/admin.js,api/users.js,views/InstanceAdminView.vue,views/SettingsView.vue,views/BankManageView.vue,views/BanksView.vue,router/index.js}`、`frontend/tests/*`。

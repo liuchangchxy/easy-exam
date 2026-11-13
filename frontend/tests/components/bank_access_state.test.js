@@ -55,6 +55,11 @@ vi.mock('../../src/api/banks', () => ({
   updateTag: vi.fn(),
   deleteTag: vi.fn(),
   downloadBankExport: vi.fn(),
+  searchUsers: vi.fn(),
+}))
+
+vi.mock('../../src/api/users', () => ({
+  searchUsers: vi.fn(),
 }))
 
 vi.mock('../../src/api/questions', () => ({

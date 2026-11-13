@@ -157,124 +157,135 @@
     </div>
 
     <div v-else-if="filteredBanks.length" class="bank-list">
-      <div v-for="bank in filteredBanks" :key="bank.id" class="banks-row" :class="{ 'recycle-row': showRecycle }">
-        <label v-if="!showRecycle" class="bank-select-cell">
-          <input
-            type="checkbox"
-            :checked="selectedIds.has(bank.id)"
-            :aria-label="`${t('ep.banks.select_bank')} ${bank.name}`"
-            @change="toggleBankSelection(bank.id)"
-          />
-        </label>
-        <button
-          v-if="!showRecycle"
-          type="button"
-          class="bank-open"
-          :aria-label="`${t('ep.banks.open')} ${bank.name}`"
-          @click="router.push(`/banks/${bank.id}`)"
-        >
-          <span class="od-stack" style="--od-gap:2px;text-align:left;min-width:0">
-            <span class="bank-name">
-              <span class="bank-name-text">{{ bank.name }}</span>
-              <span v-if="bank.role !== 'ADMIN'" class="tag">{{ roleLabel(bank.role) }}</span>
-              <span v-if="bank.has_active_exam" class="tag warn" :title="t('ep.manage.locked_desc')">{{ t('ep.today.active_badge') }}</span>
-              <span v-if="bank.deleted" class="tag bad">{{ t('ep.banks.deleted_badge') }}</span>
-            </span>
-            <span class="bank-meta">
-              <span>{{ bank.category || t('ep.common.none') }}</span>
-              <span v-if="bank.archived_question_count" class="mono">{{ t('ep.banks.archived_count', { count: bank.archived_question_count }) }}</span>
-              <span v-if="bank.description" class="od-truncate">{{ bank.description }}</span>
-            </span>
-          </span>
-        </button>
-        <div v-else class="bank-static">
-          <span class="od-stack" style="--od-gap:2px;text-align:left;min-width:0">
-            <span class="bank-name">
-              <span class="bank-name-text">{{ bank.name }}</span>
-              <span v-if="bank.role !== 'ADMIN'" class="tag">{{ roleLabel(bank.role) }}</span>
-              <span v-if="bank.deleted" class="tag bad">{{ t('ep.banks.deleted_badge') }}</span>
-            </span>
-            <span class="bank-meta">
-              <span>{{ bank.category || t('ep.common.none') }}</span>
-              <span v-if="bank.archived_question_count" class="mono">{{ t('ep.banks.archived_count', { count: bank.archived_question_count }) }}</span>
-              <span v-if="bank.description" class="od-truncate">{{ bank.description }}</span>
-            </span>
-          </span>
+      <section
+        v-for="group in bankGroups"
+        :key="group.key"
+        class="bank-section"
+        :data-testid="`banks-section-${group.key}`"
+      >
+        <div v-if="!showRecycle" class="bank-section-head">
+          <span class="bank-section-title">{{ t(group.labelKey) }}</span>
+          <span class="bank-section-count mono">{{ group.rows.length }}</span>
         </div>
-        <span class="bank-count">
-          <strong>{{ bank.question_count || 0 }}</strong>
-          <span>{{ t('ui.k0101') }}</span>
-        </span>
-        <span class="bank-action-cluster">
-          <template v-if="showRecycle">
-            <button
-              type="button"
-              class="btn btn-sm"
-              data-testid="row-restore"
-              :aria-label="`${t('ep.banks.action_restore')} ${bank.name}`"
-              @click.stop="restoreBankRow(bank)"
-            >{{ t('ep.banks.action_restore') }}</button>
-          </template>
-          <template v-else>
-            <span class="bank-actions-cell">
+        <div v-for="bank in group.rows" :key="bank.id" class="banks-row" :class="{ 'recycle-row': showRecycle }">
+          <label v-if="!showRecycle" class="bank-select-cell">
+            <input
+              type="checkbox"
+              :checked="selectedIds.has(bank.id)"
+              :aria-label="`${t('ep.banks.select_bank')} ${bank.name}`"
+              @change="toggleBankSelection(bank.id)"
+            />
+          </label>
+          <button
+            v-if="!showRecycle"
+            type="button"
+            class="bank-open"
+            :aria-label="`${t('ep.banks.open')} ${bank.name}`"
+            @click="router.push(`/banks/${bank.id}`)"
+          >
+            <span class="od-stack" style="--od-gap:2px;text-align:left;min-width:0">
+              <span class="bank-name">
+                <span class="bank-name-text">{{ bank.name }}</span>
+                <span v-if="bank.role !== 'ADMIN'" class="tag">{{ roleLabel(bank.role) }}</span>
+                <span v-if="bank.has_active_exam" class="tag warn" :title="t('ep.manage.locked_desc')">{{ t('ep.today.active_badge') }}</span>
+                <span v-if="bank.deleted" class="tag bad">{{ t('ep.banks.deleted_badge') }}</span>
+              </span>
+              <span class="bank-meta">
+                <span>{{ bank.category || t('ep.common.none') }}</span>
+                <span v-if="bank.archived_question_count" class="mono">{{ t('ep.banks.archived_count', { count: bank.archived_question_count }) }}</span>
+                <span v-if="bank.description" class="od-truncate">{{ bank.description }}</span>
+              </span>
+            </span>
+          </button>
+          <div v-else class="bank-static">
+            <span class="od-stack" style="--od-gap:2px;text-align:left;min-width:0">
+              <span class="bank-name">
+                <span class="bank-name-text">{{ bank.name }}</span>
+                <span v-if="bank.role !== 'ADMIN'" class="tag">{{ roleLabel(bank.role) }}</span>
+                <span v-if="bank.deleted" class="tag bad">{{ t('ep.banks.deleted_badge') }}</span>
+              </span>
+              <span class="bank-meta">
+                <span>{{ bank.category || t('ep.common.none') }}</span>
+                <span v-if="bank.archived_question_count" class="mono">{{ t('ep.banks.archived_count', { count: bank.archived_question_count }) }}</span>
+                <span v-if="bank.description" class="od-truncate">{{ bank.description }}</span>
+              </span>
+            </span>
+          </div>
+          <span class="bank-count">
+            <strong>{{ bank.question_count || 0 }}</strong>
+            <span>{{ t('ui.k0101') }}</span>
+          </span>
+          <span class="bank-action-cluster">
+            <template v-if="showRecycle">
               <button
                 type="button"
-                class="btn btn-sm bank-practice-btn"
-                :disabled="bank.deleted || Number(bank.question_count) === 0 || Boolean(startingId)"
-                :aria-busy="startingId === bank.id ? 'true' : 'false'"
-                :aria-label="`${t('ep.banks.practice')} ${bank.name}`"
-                @click.stop="startPractice(bank)"
-              >{{ startingId === bank.id ? t('ep.common.starting') : t('ep.banks.practice') }}</button>
-              <span v-if="bank.has_active_exam || bank.deleted" class="bank-manage-locked" :title="bank.deleted ? t('ep.banks.recycle_note') : t('ep.manage.locked_desc')">
+                class="btn btn-sm"
+                data-testid="row-restore"
+                :aria-label="`${t('ep.banks.action_restore')} ${bank.name}`"
+                @click.stop="restoreBankRow(bank)"
+              >{{ t('ep.banks.action_restore') }}</button>
+            </template>
+            <template v-else>
+              <span class="bank-actions-cell">
                 <button
+                  type="button"
+                  class="btn btn-sm bank-practice-btn"
+                  :disabled="bank.deleted || Number(bank.question_count) === 0 || Boolean(startingId)"
+                  :aria-busy="startingId === bank.id ? 'true' : 'false'"
+                  :aria-label="`${t('ep.banks.practice')} ${bank.name}`"
+                  @click.stop="startPractice(bank)"
+                >{{ startingId === bank.id ? t('ep.common.starting') : t('ep.banks.practice') }}</button>
+                <span v-if="bank.has_active_exam || bank.deleted" class="bank-manage-locked" :title="bank.deleted ? t('ep.banks.recycle_note') : t('ep.manage.locked_desc')">
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-quiet"
+                    disabled
+                    :aria-label="`${t('ep.banks.manage')} ${bank.name} — ${t('ep.manage.locked_desc')}`"
+                  >{{ t('ep.banks.manage') }}</button>
+                </span>
+                <button
+                  v-else
                   type="button"
                   class="btn btn-sm btn-quiet"
-                  disabled
-                  :aria-label="`${t('ep.banks.manage')} ${bank.name} — ${t('ep.manage.locked_desc')}`"
+                  :aria-label="`${t('ep.banks.manage')} ${bank.name}`"
+                  @click.stop="router.push({ name: 'bank-detail', params: { bankId: bank.id }, query: { tab: 'settings' } })"
                 >{{ t('ep.banks.manage') }}</button>
               </span>
-              <button
-                v-else
-                type="button"
-                class="btn btn-sm btn-quiet"
-                :aria-label="`${t('ep.banks.manage')} ${bank.name}`"
-                @click.stop="router.push({ name: 'bank-detail', params: { bankId: bank.id }, query: { tab: 'settings' } })"
-              >{{ t('ep.banks.manage') }}</button>
-            </span>
-            <span class="bank-menu-wrap" @keydown.escape.stop.prevent="closeMenuAndRestore">
-              <button
-                type="button"
-                class="icon-btn bank-menu-trigger"
-                :aria-label="`${t('ep.banks.menu_label')} ${bank.name}`"
-                :aria-expanded="openMenuId === bank.id"
-                :aria-controls="openMenuId === bank.id ? `bank-menu-${bank.id}` : null"
-                data-testid="bank-menu-trigger"
-                @click.stop="toggleMenu(bank.id)"
-              >
-                <LinearIcon name="more" :size="16" />
-              </button>
-              <div v-if="openMenuId === bank.id" :id="`bank-menu-${bank.id}`" class="bank-menu-pop" data-testid="bank-menu" @click.stop>
+              <span class="bank-menu-wrap" @keydown.escape.stop.prevent="closeMenuAndRestore">
                 <button
                   type="button"
-                  class="bank-menu-item"
-                  :disabled="!isAdmin(bank)"
-                  :title="isAdmin(bank) ? null : t('ep.common.owner_only_action')"
-                  @click="openEdit(bank)"
-                >{{ t('ep.banks.edit_meta') }}</button>
-                <button type="button" class="bank-menu-item" @click="exportBankFile(bank, 'json')">{{ t('ep.banks.export_json') }}</button>
-                <button type="button" class="bank-menu-item" @click="exportBankFile(bank, 'csv')">{{ t('ep.banks.export_csv') }}</button>
-                <button
-                  type="button"
-                  class="bank-menu-item danger"
-                  :disabled="!isAdmin(bank)"
-                  :title="isAdmin(bank) ? null : t('ep.common.owner_only_action')"
-                  @click="archiveBank(bank)"
-                >{{ t('ep.banks.action_archive') }}</button>
-              </div>
-            </span>
-          </template>
-        </span>
-      </div>
+                  class="icon-btn bank-menu-trigger"
+                  :aria-label="`${t('ep.banks.menu_label')} ${bank.name}`"
+                  :aria-expanded="openMenuId === bank.id"
+                  :aria-controls="openMenuId === bank.id ? `bank-menu-${bank.id}` : null"
+                  data-testid="bank-menu-trigger"
+                  @click.stop="toggleMenu(bank.id)"
+                >
+                  <LinearIcon name="more" :size="16" />
+                </button>
+                <div v-if="openMenuId === bank.id" :id="`bank-menu-${bank.id}`" class="bank-menu-pop" data-testid="bank-menu" @click.stop>
+                  <button
+                    type="button"
+                    class="bank-menu-item"
+                    :disabled="!isAdmin(bank)"
+                    :title="isAdmin(bank) ? null : t('ep.common.owner_only_action')"
+                    @click="openEdit(bank)"
+                  >{{ t('ep.banks.edit_meta') }}</button>
+                  <button type="button" class="bank-menu-item" @click="exportBankFile(bank, 'json')">{{ t('ep.banks.export_json') }}</button>
+                  <button type="button" class="bank-menu-item" @click="exportBankFile(bank, 'csv')">{{ t('ep.banks.export_csv') }}</button>
+                  <button
+                    type="button"
+                    class="bank-menu-item danger"
+                    :disabled="!isAdmin(bank)"
+                    :title="isAdmin(bank) ? null : t('ep.common.owner_only_action')"
+                    @click="archiveBank(bank)"
+                  >{{ t('ep.banks.action_archive') }}</button>
+                </div>
+              </span>
+            </template>
+          </span>
+        </div>
+      </section>
     </div>
 
     <div v-else-if="banks.length" class="empty" data-testid="bank-no-match">
@@ -409,7 +420,7 @@ import {
 } from '../api/banks'
 import { startSession } from '../api/practice'
 import { triggerSyncEvent } from '../api/sync'
-import { filterBankList, sortBankList } from '../domain/bankManage'
+import { filterBankList, isBankOwner, sortBankList } from '../domain/bankManage'
 import {
   normalizeBankListQuery,
   readStoredBankListQuery,
@@ -496,6 +507,20 @@ const filteredBanks = computed(() => sortBankList(
   sortKey.value,
 ))
 
+// The active list reads as two groups: banks this account owns and banks other
+// people shared with it. Filtering and sorting run first, so search, category,
+// sort and batch selection all keep operating across both sections. Recycle
+// keeps a single unlabelled group.
+const bankGroups = computed(() => {
+  if (showRecycle.value) return [{ key: 'recycle', labelKey: '', rows: filteredBanks.value }]
+  const owned = filteredBanks.value.filter(bank => isBankOwner(bank.role))
+  const shared = filteredBanks.value.filter(bank => !isBankOwner(bank.role))
+  const groups = []
+  if (owned.length) groups.push({ key: 'owned', labelKey: 'ep.banks.owned_section', rows: owned })
+  if (shared.length) groups.push({ key: 'shared', labelKey: 'ep.banks.shared_section', rows: shared })
+  return groups
+})
+
 const hasAdminBank = computed(() => {
   const known = activeBanks.value ? [...activeBanks.value, ...banks.value] : banks.value
   return known.some(b => b.role === 'ADMIN')
@@ -507,12 +532,12 @@ const batchAllAdmin = computed(() => selectedBanks.value.length > 0
   && selectedBanks.value.every(b => b.role === 'ADMIN'))
 
 function isAdmin(bank) {
-  return bank?.role === 'ADMIN'
+  return isBankOwner(bank?.role)
 }
 
 function roleLabel(role) {
-  if (role === 'EDITOR') return t('ep.banks.editor')
-  return t('ep.banks.member')
+  if (role === 'EDITOR') return t('ep.banks.role_badge_editor')
+  return t('ep.banks.role_badge_member')
 }
 
 function flash(text) {
@@ -955,6 +980,16 @@ onBeforeUnmount(() => {
   transition: background .12s var(--ease);
 }
 .banks-row.recycle-row { grid-template-columns: minmax(0, 1fr) 88px auto; }
+.bank-section-head {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 14px 0 8px; border-bottom: 1px solid var(--line);
+}
+.bank-section-title {
+  font-size: 12px; font-weight: 600; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.bank-section-count { font-size: 12px; color: var(--ink-3); }
+.bank-section + .bank-section { margin-top: 10px; }
 .banks-row:focus-within { background: var(--surface-2); }
 @media (hover: hover) {
   .banks-row:hover { background: var(--surface-2); }

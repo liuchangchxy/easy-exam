@@ -1,7 +1,12 @@
+import hashlib
 import os
 from fastapi import APIRouter
 
 router = APIRouter(tags=["system"])
+
+
+def _fingerprint(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()[:16] if token else ""
 
 
 @router.get("/health")
@@ -20,6 +25,10 @@ def health():
         "app": "easy-exam",
         "version": "v1",
         "commit_sha": git_sha or "unknown",
-        "instance_token": os.environ.get("INSTANCE_TOKEN", ""),
+        # The instance token identifies a deployment to its own tooling; it is
+        # not a credential but it is still not something an unauthenticated
+        # caller should be handed. A stable fingerprint answers "which instance
+        # am I talking to" without publishing the value.
+        "instance_fingerprint": _fingerprint(os.environ.get("INSTANCE_TOKEN", "")),
     }
 

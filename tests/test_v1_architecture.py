@@ -39,7 +39,8 @@ class TestV1Architecture(unittest.TestCase):
         self.assertEqual(body["app"], "easy-exam")
         self.assertEqual(body["version"], "v1")
         self.assertIn("commit_sha", body)
-        self.assertIn("instance_token", body)
+        self.assertIn("instance_fingerprint", body)
+        self.assertNotIn("instance_token", body)
 
     def test_register_login_and_current_user_are_isolated(self):
         register = self.client.post(

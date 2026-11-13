@@ -101,7 +101,6 @@
           @mistakes="router.push('/review?tab=mistakes')"
           @import="router.push('/import')"
           @logout="auth.logout"
-          @back="handleBack"
         />
       </main>
     </div>
@@ -239,6 +238,7 @@ const currentPage = computed(() => {
   if (n === 'exams') return 'exam'
   if (n === 'notes') return 'notes'
   if (n === 'settings') return 'settings'
+  if (n === 'instance-admin') return 'settings'
   return 'today'
 })
 
@@ -585,10 +585,6 @@ function handleResumeSession(session) {
 function handleStartSession(session) {
   if (session?.mode === 'EXAM') router.push(`/exam/${session.id}`)
   else router.push(`/practice/${session.id}`)
-}
-
-function handleBack() {
-  router.push('/')
 }
 
 function handleSelectBank(bank) {

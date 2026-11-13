@@ -16,7 +16,7 @@
           type="button"
           class="settings-nav-item"
           :class="{ 'is-active': activeSection === item.key }"
-          @click="selectSection(item.key)"
+          @click="onNavClick(item)"
         >
           <LinearIcon :name="item.icon" :size="14" />
           <span>{{ t(item.label) }}</span>
@@ -220,6 +220,72 @@
             </div>
           </div>
 
+          <div class="sessions-block">
+            <div class="sessions-head">
+              <div>
+                <h3 class="sessions-title">{{ t('ep.account.sessions_title') }}</h3>
+                <p class="sessions-note">{{ t('ep.account.sessions_note') }}</p>
+              </div>
+              <button
+                type="button"
+                class="btn btn-sm"
+                data-testid="logout-other-sessions"
+                :disabled="sessionsLoading || sessionsBusy || !otherSessionCount"
+                @click="requestLogoutOtherSessions"
+              >
+                <LinearIcon name="logout" :size="14" />
+                {{ t('ep.account.sessions_logout_others') }}
+              </button>
+            </div>
+
+            <div v-if="sessionsLoading" class="sessions-state" role="status">
+              <span class="spinner" aria-hidden="true"></span>
+              <span>{{ t('ep.account.sessions_loading') }}</span>
+            </div>
+
+            <div v-else-if="sessionsError" class="notice bad sessions-notice" role="alert">
+              <LinearIcon name="alert" :size="15" />
+              <span>{{ t('ep.account.sessions_load_failed') }}</span>
+              <button type="button" class="btn btn-sm" @click="loadSessions">{{ t('ep.common.retry') }}</button>
+            </div>
+
+            <div v-else-if="!sessions.length" class="empty sessions-empty">
+              <div class="empty-mark"><LinearIcon name="shield" :size="24" /></div>
+              <div class="empty-title">{{ t('ep.account.sessions_empty') }}</div>
+            </div>
+
+            <div v-else class="mtable-wrap">
+              <table class="mtable sessions-table">
+                <thead>
+                  <tr>
+                    <th class="sessions-col-device">{{ t('ep.account.sessions_col_device') }}</th>
+                    <th class="sessions-col-date">{{ t('ep.account.sessions_col_created') }}</th>
+                    <th class="sessions-col-date">{{ t('ep.account.sessions_col_last_seen') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="session in sessions" :key="session.id" class="mtable-row">
+                    <td class="sessions-col-device">
+                      <span class="session-agent">{{ sessionLabel(session) }}</span>
+                      <span v-if="session.current" class="tag brand sessions-current">{{ t('ep.account.sessions_current') }}</span>
+                    </td>
+                    <td class="sessions-col-date mono">{{ formatSessionDate(session.created_at) }}</td>
+                    <td class="sessions-col-date mono">{{ formatSessionDate(session.last_seen_at) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div v-if="sessionsNotice" class="notice ok sessions-notice" role="status">
+              <LinearIcon name="check" :size="15" />
+              <span>{{ sessionsNotice }}</span>
+            </div>
+            <div v-if="sessionsActionError" class="notice bad sessions-notice" role="alert">
+              <LinearIcon name="alert" :size="15" />
+              <span>{{ sessionsActionError }}</span>
+            </div>
+          </div>
+
           <div class="settings-actions">
             <button type="button" class="btn" @click="showPasswordModal = true">
               <LinearIcon name="key" :size="14" />{{ t('ep.settings.change_password') }}
@@ -266,6 +332,7 @@ import { useLocale } from '../composables/useLocale.js'
 import { useTheme } from '../composables/useTheme.js'
 import { DENSITY_STORAGE_KEY, normalizeDensityPreference, restoreDensityPreference } from '../composables/density.js'
 import { getAiConfig, updateAiConfig } from '../api/ai'
+import { listSessions, revokeOtherSessions } from '../api/admin'
 import pkg from '../../package.json'
 
 const props = defineProps({
@@ -309,6 +376,16 @@ function selectSection(key) {
   router.push({ path: route.path, query: { ...(route.query || {}), section: query } })
 }
 
+// Instance administration is a route of its own, not a settings section, so it
+// never enters SECTION_QUERY and never rewrites `?section=`.
+function onNavClick(item) {
+  if (item.route) {
+    router.push({ name: item.route })
+    return
+  }
+  selectSection(item.key)
+}
+
 watch(
   () => route?.query?.section,
   value => {
@@ -324,14 +401,21 @@ const showPasswordModal = ref(false)
 const appVersion = pkg.version
 const density = ref('balanced')
 
-const navItems = [
-  { key: 'appearance', label: 'ep.settings.nav_appearance', icon: 'sun' },
-  { key: 'language', label: 'ep.settings.nav_language', icon: 'globe' },
-  { key: 'ai', label: 'ep.settings.nav_ai', icon: 'cpu' },
-  { key: 'web', label: 'ep.settings.nav_web', icon: 'link' },
-  { key: 'account', label: 'ep.settings.nav_account', icon: 'user' },
-  { key: 'about', label: 'ep.settings.nav_about', icon: 'info' },
-]
+const navItems = computed(() => {
+  const items = [
+    { key: 'appearance', label: 'ep.settings.nav_appearance', icon: 'sun' },
+    { key: 'language', label: 'ep.settings.nav_language', icon: 'globe' },
+    { key: 'ai', label: 'ep.settings.nav_ai', icon: 'cpu' },
+    { key: 'web', label: 'ep.settings.nav_web', icon: 'link' },
+    { key: 'account', label: 'ep.settings.nav_account', icon: 'user' },
+    { key: 'about', label: 'ep.settings.nav_about', icon: 'info' },
+  ]
+  // Only instance admins ever see the admin console entry.
+  if (props.user?.is_admin) {
+    items.push({ key: 'instance', label: 'ep.settings.nav_instance', icon: 'users', route: 'instance-admin' })
+  }
+  return items
+})
 
 const PALETTE_SWATCHES = {
   editorial: { paper: '#f5f2ea', stops: ['#f5f2ea', '#fbf9f4', '#191b18', '#23554b'] },
@@ -382,6 +466,93 @@ const userInitial = computed(() => {
   const name = props.user?.username
   return name ? name.charAt(0).toUpperCase() : '?'
 })
+
+// Devices & sessions. Only the account section fetches them, and only when it
+// is the visible section, so other settings stay a single AI-config call.
+const sessions = ref([])
+const sessionsLoading = ref(false)
+const sessionsError = ref(false)
+const sessionsBusy = ref(false)
+const sessionsNotice = ref('')
+const sessionsActionError = ref('')
+
+const otherSessionCount = computed(() => sessions.value.filter(session => !session.current).length)
+
+function formatSessionDate(value) {
+  if (!value) return '—'
+  const text = String(value)
+  const parsed = new Date(text)
+  if (Number.isNaN(parsed.getTime())) return text
+  return parsed.toISOString().replace('T', ' ').slice(0, 16)
+}
+
+// A user agent is machine data, not prose: pick the readable product names and
+// leave the raw string as the fallback.
+function sessionLabel(session) {
+  const ua = String(session?.user_agent || '').trim()
+  if (!ua) return t('ep.account.sessions_unknown_device')
+  const browser = ua.includes('Edg/') ? 'Edge'
+    : ua.includes('OPR/') ? 'Opera'
+      : ua.includes('Firefox/') ? 'Firefox'
+        : ua.includes('Chrome/') ? 'Chrome'
+          : ua.includes('Safari/') ? 'Safari'
+            : ''
+  const system = ua.includes('Windows') ? 'Windows'
+    : ua.includes('Android') ? 'Android'
+      : ua.includes('iPhone') || ua.includes('iPad') ? 'iOS'
+        : ua.includes('Mac OS X') ? 'macOS'
+          : ua.includes('Linux') ? 'Linux'
+            : ''
+  if (browser && system) return `${browser} · ${system}`
+  if (browser) return browser
+  if (system) return system
+  return ua.length > 42 ? `${ua.slice(0, 42)}…` : ua
+}
+
+async function loadSessions() {
+  if (!props.token) return
+  sessionsLoading.value = true
+  sessionsError.value = false
+  sessionsActionError.value = ''
+  try {
+    const rows = await listSessions(props.token)
+    sessions.value = Array.isArray(rows) ? rows : []
+  } catch (_) {
+    sessionsError.value = true
+  } finally {
+    sessionsLoading.value = false
+  }
+}
+
+function requestLogoutOtherSessions() {
+  if (!otherSessionCount.value) return
+  if (typeof window !== 'undefined' && !window.confirm(t('ep.account.sessions_logout_confirm'))) return
+  logoutOtherSessions()
+}
+
+async function logoutOtherSessions() {
+  sessionsBusy.value = true
+  sessionsNotice.value = ''
+  sessionsActionError.value = ''
+  try {
+    const result = await revokeOtherSessions(props.token)
+    const count = Number(result?.revoked ?? 0)
+    sessionsNotice.value = t('ep.account.sessions_revoked', { count })
+    await loadSessions()
+  } catch (err) {
+    sessionsActionError.value = `${t('ep.account.sessions_logout_failed')}${err?.detail || err?.message || ''}`
+  } finally {
+    sessionsBusy.value = false
+  }
+}
+
+watch(
+  activeSection,
+  value => {
+    if (value === 'account') loadSessions()
+  },
+  { immediate: true }
+)
 
 const config = ref({
   ai_provider: 'openai',
@@ -554,6 +725,39 @@ onMounted(() => {
 .account-name { font-size: 15px; font-weight: 500; }
 .account-role { margin-top: 2px; font-size: 12px; color: var(--ink-3); letter-spacing: .03em; }
 .about-kv { border-top: 1px solid var(--line); }
+
+.sessions-block { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.sessions-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap; margin-bottom: 8px;
+}
+.sessions-title { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink); }
+.sessions-note { margin: 4px 0 0; font-size: 12px; line-height: 1.65; color: var(--ink-3); max-width: 46ch; }
+.sessions-state {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 0; font-size: 12px; color: var(--ink-3);
+}
+.sessions-notice { margin-top: 10px; }
+.sessions-empty { padding: 24px 0; border-top: 0; }
+.sessions-empty .empty-title { font-size: 13px; }
+
+.mtable-wrap { overflow-x: auto; }
+.mtable { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.mtable th {
+  padding: 9px 10px; text-align: left;
+  font-size: 12px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--ink-3); border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+.mtable td {
+  padding: 8px 10px; border-bottom: 1px solid var(--line);
+  font-size: 12px; color: var(--ink-2); vertical-align: middle;
+}
+.mtable-row:hover { background: var(--surface-2); }
+.sessions-table .sessions-col-device { width: auto; }
+.sessions-table .sessions-col-date { width: 140px; }
+.sessions-table td.sessions-col-date { white-space: nowrap; }
+.session-agent { color: var(--ink); }
+.sessions-current { margin-left: 6px; }
 
 @media (max-width: 880px) {
   .settings-layout { grid-template-columns: minmax(0, 1fr); gap: 14px; }

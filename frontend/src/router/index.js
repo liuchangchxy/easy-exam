@@ -10,6 +10,7 @@ import ExamCenterView from '../views/ExamCenterView.vue'
 import ImportView from '../views/ImportView.vue'
 import NotesView from '../views/NotesView.vue'
 import SettingsView from '../views/SettingsView.vue'
+import InstanceAdminView from '../views/InstanceAdminView.vue'
 import ForbiddenView from '../views/ForbiddenView.vue'
 import PracticeViewV1 from '../views/PracticeViewV1.vue'
 import ExamView from '../features/exam/ExamView.vue'
@@ -33,6 +34,7 @@ const routes = [
       { path: 'import', name: 'import', component: ImportView, meta: { title: '导入' } },
       { path: 'notes', name: 'notes', component: NotesView, meta: { title: '资料' } },
       { path: 'settings', name: 'settings', component: SettingsView, meta: { title: '设置' } },
+      { path: 'instance', name: 'instance-admin', component: InstanceAdminView, meta: { title: '实例管理', requiresAdmin: true } },
       { path: 'forbidden', name: 'forbidden', component: ForbiddenView, meta: { title: '无法访问' } },
     ],
   },

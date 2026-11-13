@@ -9,9 +9,13 @@ export async function adminGuard(to, auth) {
   if (!auth) return true
 
   // A hard refresh straight onto an admin URL may only have the cached user;
-  // refresh it once rather than judging from stale storage.
+  // refresh it once rather than judging from stale storage. A cache written by
+  // a build that predates `is_admin` also has to be refreshed, otherwise an
+  // existing admin would be locked out of the new page.
   let refreshed = null
-  if (!auth.user?.value && auth.token?.value && typeof auth.loadCurrentUser === 'function') {
+  const cached = auth.user?.value
+  const needsRefresh = !cached || typeof cached.is_admin !== 'boolean'
+  if (needsRefresh && auth.token?.value && typeof auth.loadCurrentUser === 'function') {
     refreshed = await auth.loadCurrentUser()
   }
 
