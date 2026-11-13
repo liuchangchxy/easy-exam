@@ -3,7 +3,7 @@
   <div v-else class="manage-page">
     <div class="page-head manage-head">
       <div class="page-head-main">
-        <h1 class="page-title">{{ bank?.name || t('ep.common.loading') }}</h1>
+        <h1 class="page-title">{{ bank?.name || (loadFailed ? t('ep.common.load_failed') : t('ep.common.loading')) }}</h1>
         <p class="page-sub bank-sub">
           <span v-if="bank?.category">{{ bank.category }}</span>
           <span>{{ t('ep.banks.questions', { count: questions.length }) }}</span>
@@ -14,7 +14,7 @@
           type="button"
           class="btn btn-primary"
           data-testid="bank-practice"
-          :disabled="!questions.length || startingPractice"
+          :disabled="!practicableCount || startingPractice"
           @click="startPractice"
         >
           <LinearIcon name="play" :size="14" />
@@ -284,8 +284,8 @@
 
         <div v-else class="empty">
           <div class="empty-mark"><LinearIcon name="layers" :size="24" /></div>
-          <div class="empty-title">{{ questions.length ? t('ep.manage.no_match') : t('ep.manage.empty_bank') }}</div>
-          <div class="empty-desc">{{ questions.length ? t('ep.manage.no_match_hint') : t('ep.manage.empty_bank_hint') }}</div>
+          <div class="empty-title">{{ emptyState.title }}</div>
+          <div class="empty-desc">{{ emptyState.hint }}</div>
           <div class="empty-actions">
             <button v-if="canEdit" type="button" class="btn" @click="openCreate">{{ t('ep.manage.new_question') }}</button>
             <button v-if="canEdit" type="button" class="btn" @click="router.push(`/import?bankId=${bankId}`)">{{ t('ep.common.import') }}</button>
@@ -690,6 +690,15 @@
       @reloaded="handleQuestionReloaded"
       @conflict="handleConflictDetected"
     />
+
+    <StartStudyPanel
+      :show="showStartStudyPanel"
+      :sessions="startStudySessions"
+      :busy="startingPractice"
+      @continue="handleStartStudyContinue"
+      @end-and-start="handleStartStudyEndAndStart"
+      @cancel="handleStartStudyCancel"
+    />
   </div>
 </template>
 
@@ -698,6 +707,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
 import AppDialog from '../components/AppDialog.vue'
+import StartStudyPanel from '../components/StartStudyPanel.vue'
 import AiDraftsModal from '../components/AiDraftsModal.vue'
 import QuestionEditModal from '../components/QuestionEditModal.vue'
 import AccessDeniedState from '../components/AccessDeniedState.vue'
@@ -730,10 +740,11 @@ import {
 } from '../api/banks'
 import { useLocale } from '../composables/useLocale'
 import { useDirtyGuard } from '../composables/useDirtyGuard'
+import { useStartStudy } from '../composables/useStartStudy.js'
 import { formatDateTime } from '../utils/datetime.js'
 import { readStoredBankListQuery } from '../utils/bankListQuery.js'
+import { notifyBanksChanged } from '../utils/shellEvents.js'
 import { readQueryEnum, readQueryNumber, readQueryString, replaceQueryState } from '../utils/routeQuery.js'
-import { startSession } from '../api/practice'
 import {
   createEmptyBankFilters,
   isFilterActive,
@@ -830,8 +841,17 @@ const loadFailed = ref(false)
 // 'forbidden' | 'missing' when the bank itself is unreachable (not a member,
 // bank gone). Other failures keep the retryable banner.
 const accessError = ref('')
-const startingPractice = ref(false)
-const practiceError = ref('')
+const {
+  pending: startingPractice,
+  error: practiceError,
+  clearError: clearPracticeError,
+  start: startStudy,
+  continueSession: continueStudySession,
+  endAndStart: endAndStartStudy,
+} = useStartStudy(computed(() => props.token))
+const showStartStudyPanel = ref(false)
+const startStudySessions = ref([])
+const pendingStartStudyPayload = ref(null)
 const questionsLoading = ref(false)
 const error = ref('')
 const successToast = ref('')
@@ -950,6 +970,18 @@ const allTags = computed(() => {
     }
   }
   return Array.from(set).sort()
+})
+
+// Practice draws from active rows only; an archived-only view has nothing to practise.
+const practicableCount = computed(() => questions.value.filter(q => !q.archived).length)
+
+const emptyState = computed(() => {
+  if (!questions.value.length) {
+    return showArchived.value
+      ? { title: t('ep.manage.archived_empty'), hint: t('ep.manage.archived_empty_hint') }
+      : { title: t('ep.manage.empty_bank'), hint: t('ep.manage.empty_bank_hint') }
+  }
+  return { title: t('ep.manage.no_match'), hint: t('ep.manage.no_match_hint') }
 })
 
 const filteredQuestions = computed(() => filterBankQuestions(questions.value, filters.value))
@@ -1151,6 +1183,9 @@ function resetBankScopedState() {
   accessError.value = ''
   practiceError.value = ''
   startingPractice.value = false
+  showStartStudyPanel.value = false
+  startStudySessions.value = []
+  pendingStartStudyPayload.value = null
   successToast.value = ''
   conflictAlert.value = ''
   createError.value = ''
@@ -1228,6 +1263,20 @@ async function retryLastAction() {
   else await loadData()
 }
 
+// A filter whose facet disappeared (chapter deleted, last tagged question
+// archived) would keep narrowing the list with no control left to undo it.
+// Only prune against facets that actually loaded; a failed chapter request
+// knows nothing about which chapters exist.
+function pruneStaleFacetFilters() {
+  if (filters.value.tag && !allTags.value.includes(filters.value.tag)) {
+    filters.value.tag = ''
+  }
+  if (filters.value.chapterId && !chaptersError.value
+      && !chapters.value.some(c => String(c.id) === String(filters.value.chapterId))) {
+    filters.value.chapterId = ''
+  }
+}
+
 async function reloadQuestions() {
   if (!bankId.value) return 'stale'
   const targetBankId = bankId.value
@@ -1238,6 +1287,7 @@ async function reloadQuestions() {
     const res = await listBankQuestionsContent(props.token, targetBankId, { includeArchived: showArchived.value })
     if (requestId !== questionsSeq || bankId.value !== targetBankId) return 'stale'
     questions.value = Array.isArray(res) ? res : []
+    pruneStaleFacetFilters()
     return 'ok'
   } catch (err) {
     if (requestId !== questionsSeq) return 'stale'
@@ -1279,14 +1329,23 @@ async function clearBatchChapter() {
   await sendBatch(built.payload)
 }
 
-async function archiveSelected() {  if (!canEdit.value || batchBlocked.value || !selectedQuestions.value.length) return
-  if (!window.confirm(t('ep.manage.batch_archive_confirm', { count: selectedQuestions.value.length }))) return
-  await sendBatch({ question_ids: selectedQuestions.value.map(q => q.id), operation: 'archive' })
+function selectedByArchived(archived) {
+  return selectedQuestions.value.filter(q => Boolean(q.archived) === archived)
+}
+
+async function archiveSelected() {
+  const targets = selectedByArchived(false)
+  if (!canEdit.value || batchBlocked.value || !targets.length) return
+  if (!window.confirm(t('ep.manage.batch_archive_confirm', { count: targets.length }))) return
+  await sendBatch({ question_ids: targets.map(q => q.id), operation: 'archive' })
 }
 
 async function restoreSelected() {
-  if (!canEdit.value || batchBlocked.value || !selectedQuestions.value.length) return
-  await sendBatch({ question_ids: selectedQuestions.value.map(q => q.id), operation: 'restore' })
+  // With "show archived" on the list mixes both kinds; restoring the active
+  // ones would be a silent no-op the success toast still claims to have done.
+  const targets = selectedByArchived(true)
+  if (!canEdit.value || batchBlocked.value || !targets.length) return
+  await sendBatch({ question_ids: targets.map(q => q.id), operation: 'restore' })
 }
 
 async function sendBatch(payload) {
@@ -1841,12 +1900,16 @@ async function saveBankSettings() {
   settingsSaving.value = true
   error.value = ''
   try {
-    const updated = await updateBank(props.token, bankId.value, {
+    const payload = {
       name: settingsForm.value.name,
-      category: settingsForm.value.category || t('ep.manage.default_category'),
       description: settingsForm.value.description,
-    })
+    }
+    // A blank category means "leave it alone"; writing the localized label in
+    // would stamp UI text from one language into every member's bank record.
+    if (settingsForm.value.category) payload.category = settingsForm.value.category
+    const updated = await updateBank(props.token, bankId.value, payload)
     bank.value = { ...bank.value, ...updated }
+    notifyBanksChanged()
     await loadData()
     flashSuccess(t('ep.manage.settings_saved'))
   } catch (err) {
@@ -1872,6 +1935,7 @@ async function archiveCurrentBank() {
   error.value = ''
   try {
     await deleteBank(props.token, bankId.value)
+    notifyBanksChanged()
     router.push('/banks')
   } catch (err) {
     error.value = err.detail || err.message
@@ -2007,6 +2071,7 @@ async function loadData() {
     // blank the whole page or masquerade as an empty list.
     await Promise.all([reloadChapters(), reloadMembers(), reloadTags(), reloadImports(), reloadBanks()])
     if (requestId !== loadSeq) return
+    pruneStaleFacetFilters()
     if (isOwner.value) {
       auditRows.value = await listBankAudit(props.token, targetBankId).catch(() => [])
       if (requestId !== loadSeq) return
@@ -2031,19 +2096,51 @@ async function loadData() {
 }
 
 // The workspace owns the one "start practising this bank" action; every other
-// entry point (today, review) is a different session source.
+// entry point (today, review) is a different session source. The composable
+// first asks the server whether an unfinished session exists, so a click never
+// silently starts a second one behind the user's back.
 async function startPractice() {
-  if (!questions.value.length || startingPractice.value) return
-  startingPractice.value = true
-  practiceError.value = ''
-  try {
-    const session = await startSession(props.token, { bank_id: bankId.value, mode: 'PRACTICE' })
-    router.push(`/practice/${session.id}`)
-  } catch (err) {
-    practiceError.value = err?.detail || err?.message || t('ep.common.load_failed')
-  } finally {
-    startingPractice.value = false
+  if (!practicableCount.value || startingPractice.value) return
+  const payload = { bank_id: bankId.value, mode: 'PRACTICE' }
+  const result = await startStudy(payload, { navigate: navigateToSession })
+  if (result?.blocked?.length) {
+    pendingStartStudyPayload.value = payload
+    startStudySessions.value = result.blocked
+    showStartStudyPanel.value = true
+  } else if (!result?.error) {
+    closeStartStudyPanel()
   }
+}
+
+function navigateToSession(session) {
+  if (!session?.id) return
+  router.push(session.mode === 'EXAM' ? `/exam/${session.id}` : `/practice/${session.id}`)
+}
+
+function closeStartStudyPanel() {
+  showStartStudyPanel.value = false
+  startStudySessions.value = []
+  pendingStartStudyPayload.value = null
+}
+
+function handleStartStudyContinue() {
+  const session = startStudySessions.value[0]
+  closeStartStudyPanel()
+  clearPracticeError()
+  continueStudySession(session, navigateToSession)
+}
+
+async function handleStartStudyEndAndStart() {
+  const result = await endAndStartStudy(
+    startStudySessions.value,
+    pendingStartStudyPayload.value,
+    navigateToSession,
+  )
+  if (!result?.error) closeStartStudyPanel()
+}
+
+function handleStartStudyCancel() {
+  closeStartStudyPanel()
 }
 
 function goToBankList() {

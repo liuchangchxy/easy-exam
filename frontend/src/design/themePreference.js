@@ -1,7 +1,14 @@
 export const THEME_STORAGE_KEY = 'easyexam-theme'
 export const THEME_PALETTE_STORAGE_KEY = 'easyexam-theme-palette'
 export const THEME_MODE_STORAGE_KEY = 'easyexam-theme-mode'
-export const THEME_ACCENT_STORAGE_KEY = 'easyexam-theme-accent'
+
+/**
+ * Storage key written by the retired custom-accent feature. Nothing reads it any
+ * more — `clearLegacyAccentPreference` deletes it so a stale pick cannot come
+ * back. The accent is a property of the palette family (see style.css
+ * `--brand`), not a separate user preference.
+ */
+export const LEGACY_ACCENT_STORAGE_KEY = 'easyexam-theme-accent'
 
 /**
  * Canonical palette families. A family supplies one semantic token contract;
@@ -62,6 +69,8 @@ export function normalizePalettePreference(value) {
   return DEFAULT_PALETTE
 }
 
+/* Colour maths. Pure utilities: the theme tests use them as the contrast
+   oracle for the tokens declared in style.css. */
 export function isValidHexColor(value) {
   if (typeof value !== 'string') return false
   const trimmed = value.trim()
@@ -134,51 +143,6 @@ export function mixHex(hex1, hex2, weight = 0.5) {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`.toLowerCase()
 }
 
-// Page/card/subtle surfaces for each palette family. These mirror the
-// `--paper`, `--surface` and `--surface-2` values in style.css and are used to
-// derive an accessible foreground for user-supplied accent colors.
-export const PALETTE_SURFACES = Object.freeze({
-  editorial: { lightPage: '#f5f2ea', light: '#fbf9f4', lightSubtle: '#f1ede4', darkPage: '#121512', dark: '#191d19', darkSubtle: '#1f241f' },
-  gruvbox: { lightPage: '#fbf1c7', light: '#fff9e4', lightSubtle: '#f2e5bc', darkPage: '#282828', dark: '#3c3836', darkSubtle: '#504945' },
-  everforest: { lightPage: '#fdf6e3', light: '#fffcf0', lightSubtle: '#efebd4', darkPage: '#2d353b', dark: '#343f44', darkSubtle: '#3d484d' },
-  catppuccin: { lightPage: '#eff1f5', light: '#f7f8fb', lightSubtle: '#e6e9ef', darkPage: '#1e1e2e', dark: '#252537', darkSubtle: '#313244' },
-})
-
-export function getPaletteSurface(palette, isDark = false) {
-  const norm = normalizePalettePreference(palette)
-  return PALETTE_SURFACES[norm] || PALETTE_SURFACES[DEFAULT_PALETTE]
-}
-
-export function getAccessibleForeground(hexColor, isDarkTheme = false, palette = DEFAULT_PALETTE) {
-  const norm = normalizeHexColor(hexColor)
-  if (!norm) return isDarkTheme ? '#f8fafc' : '#0f172a'
-  const normPalette = normalizePalettePreference(palette)
-  const surfaces = getPaletteSurface(normPalette, isDarkTheme)
-  const page = isDarkTheme ? surfaces.darkPage : surfaces.lightPage
-  const card = isDarkTheme ? surfaces.dark : surfaces.light
-  const subtle = isDarkTheme ? surfaces.darkSubtle : surfaces.lightSubtle
-  const alpha = isDarkTheme ? 0.16 : 0.14
-  const transCard = mixHex(card, norm, alpha)
-  const transSubtle = mixHex(subtle, norm, alpha)
-  const transPage = mixHex(page, norm, alpha)
-  const targetSurfaces = [page, card, subtle, transPage, transCard, transSubtle]
-
-  if (targetSurfaces.every(s => calculateContrastRatio(norm, s) >= 4.5)) {
-    return norm
-  }
-
-  // If contrast is insufficient (e.g. #ffffff on white surface or #000000 on dark surface),
-  // progressively adjust luminance while preserving the hue/tone as closely as possible.
-  const target = isDarkTheme ? '#ffffff' : (norm === '#ffffff' ? '#0f172a' : '#000000')
-  for (let step = 1; step <= 50; step++) {
-    const candidate = mixHex(norm, target, step * 0.02)
-    if (targetSurfaces.every(s => calculateContrastRatio(candidate, s) >= 4.5)) {
-      return candidate
-    }
-  }
-  return isDarkTheme ? '#f8fafc' : '#0f172a'
-}
-
 export function readThemePreference(storage, key = THEME_STORAGE_KEY) {
   try {
     const raw = storage?.getItem(key)
@@ -241,25 +205,16 @@ export function writeModePreference(storage, value, key = THEME_MODE_STORAGE_KEY
   return mode
 }
 
-export function readAccentPreference(storage, key = THEME_ACCENT_STORAGE_KEY) {
+/**
+ * One-time migration: drop the storage entry the retired accent picker wrote.
+ * Safe to call on every boot.
+ */
+export function clearLegacyAccentPreference(storage) {
   try {
-    const raw = storage?.getItem(key)
-    return isValidHexColor(raw) ? normalizeHexColor(raw) : ''
+    storage?.removeItem?.(LEGACY_ACCENT_STORAGE_KEY)
   } catch {
-    return ''
+    // Storage unavailable — nothing to clean.
   }
-}
-
-export function writeAccentPreference(storage, value, key = THEME_ACCENT_STORAGE_KEY) {
-  const hex = normalizeHexColor(value)
-  try {
-    if (hex) {
-      storage?.setItem(key, hex)
-    } else {
-      storage?.removeItem(key)
-    }
-  } catch {}
-  return hex || ''
 }
 
 export function resolveEffectiveTheme(mode, isSystemDark = false) {
@@ -283,105 +238,15 @@ export function applyPalettePreference(root, palette) {
 }
 
 /**
- * Shift an accent shade while keeping its foreground readable. Dark bases move
- * away from white on hover/active; light bases move away from the dark ink.
- * Pure black/white hits the clamp, so the shift reverses direction there to
- * keep the interaction state visible without dropping below AA.
+ * `mode` and `palette` are the whole appearance contract: the palette family
+ * owns its own accent, so switching family is the only way to change it.
  */
-function shiftBrandState(base, weight) {
-  const text = getContrastTextColor(base)
-  const toward = text === '#ffffff' ? '#000000' : '#ffffff'
-  const shifted = mixHex(base, toward, weight)
-  if (shifted === base) {
-    return mixHex(base, toward === '#000000' ? '#ffffff' : '#000000', weight)
-  }
-  return shifted
-}
-
-export function applyAccentPreference(root, hexColor, effectiveTheme = 'light', palette = '') {
-  const hex = normalizeHexColor(hexColor)
-  if (!root?.style) return ''
-
-  if (hex) {
-    const isDark = effectiveTheme === 'dark' || root?.getAttribute?.('data-theme') === 'dark'
-    const curPalette = normalizePalettePreference(
-      palette || root?.getAttribute?.('data-theme-palette') || DEFAULT_PALETTE
-    )
-
-    // Raw accent: legacy filled surfaces (--primary / --on-primary).
-    const onPrimary = getContrastTextColor(hex)
-    const rawHoverTarget = hex === '#000000' ? '#ffffff' : '#000000'
-    const rawHover = mixHex(hex, rawHoverTarget, 0.12)
-    const rawActive = mixHex(hex, rawHoverTarget, 0.24)
-    const onPrimaryHover = getContrastTextColor(rawHover)
-    const onPrimaryActive = getContrastTextColor(rawActive)
-
-    // Accessible accent: text and filled brand surfaces. The base is adjusted
-    // until legible on every palette surface, then every state carries the
-    // foreground computed for that exact shade. Reusing the base foreground for
-    // hover/active was the cause of dark-on-dark or light-on-light controls.
-    const brandBase = getAccessibleForeground(hex, isDark, curPalette)
-    const brandHover = shiftBrandState(brandBase, 0.12)
-    const brandActive = shiftBrandState(brandBase, 0.24)
-    const brandContrast = getContrastTextColor(brandBase)
-    const onBrandHover = getContrastTextColor(brandHover)
-    const onBrandActive = getContrastTextColor(brandActive)
-
-    root.style.setProperty('--primary', hex)
-    root.style.setProperty('--primary-fg', brandBase)
-    root.style.setProperty('--on-primary', onPrimary)
-    root.style.setProperty('--on-primary-hover', onPrimaryHover)
-    root.style.setProperty('--on-primary-active', onPrimaryActive)
-    root.style.setProperty('--primary-hover', rawHover)
-    root.style.setProperty('--primary-active', rawActive)
-    root.style.setProperty('--primary-light', `color-mix(in srgb, ${hex} 14%, transparent)`)
-    root.style.setProperty('--primary-border', `color-mix(in srgb, ${brandBase} 36%, transparent)`)
-
-    root.style.setProperty('--brand', brandBase)
-    root.style.setProperty('--brand-hover', brandHover)
-    root.style.setProperty('--brand-active', brandActive)
-    root.style.setProperty('--brand-ink', brandBase)
-    root.style.setProperty('--brand-soft', `color-mix(in srgb, ${hex} 10%, var(--surface))`)
-    root.style.setProperty('--brand-line', `color-mix(in srgb, ${brandBase} 36%, transparent)`)
-    root.style.setProperty('--brand-contrast', brandContrast)
-    root.style.setProperty('--on-brand-hover', onBrandHover)
-    root.style.setProperty('--on-brand-active', onBrandActive)
-    return hex
-  }
-
-  for (const prop of [
-    '--primary',
-    '--primary-fg',
-    '--on-primary',
-    '--on-primary-hover',
-    '--on-primary-active',
-    '--primary-hover',
-    '--primary-active',
-    '--primary-light',
-    '--primary-border',
-    '--brand',
-    '--brand-hover',
-    '--brand-active',
-    '--brand-ink',
-    '--brand-soft',
-    '--brand-line',
-    '--brand-contrast',
-    '--on-brand-hover',
-    '--on-brand-active',
-  ]) {
-    root.style.removeProperty(prop)
-  }
-  return ''
-}
-
-export function applyFullTheme({ root, mode, palette, customAccent, isSystemDark = false }) {
+export function applyFullTheme({ root, mode, palette, isSystemDark = false }) {
   const effectiveTheme = resolveEffectiveTheme(mode, isSystemDark)
   applyThemePreference(root, effectiveTheme)
   const normPalette = applyPalettePreference(root, palette)
-  applyAccentPreference(root, customAccent, effectiveTheme, normPalette)
   return {
     effectiveTheme,
     palette: normPalette,
-    customAccent: normalizeHexColor(customAccent) || '',
   }
 }

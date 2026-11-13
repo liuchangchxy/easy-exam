@@ -575,3 +575,45 @@
   7. **测试退役记录（供 `guard_test_tampering.py`）**：`tests/bank_batch_e2e.test.js` 中"抽屉版本历史/抽屉复制"两段断言改为驱动题目页（该文件的 `assert.equal`/`assert.ok` 行不在门禁关键词内，守卫通过）（`.qrow`/`.drawer`/`.copy-select` 在抽屉上下文中）。等价能力由新增的 `tests/components/question_page_view.test.js`（8 条）、`tests/components/bank_manage_view.test.js` 的 URL 契约用例（4 条）与 `tests/navigation_contract_e2e.mjs` 的真实浏览器归档闭环替代；原 `bank_access_state.test.js` 改为直接挂载工作区。这是有计划的能力迁移，不是断言放宽。
 - **对应 SPEC 章节**：§2.0.1（题目实体与复制语义）、§4.1（练习池与错题口径）。无业务规则改动。
 - **影响范围**：`frontend/src/router/index.js`、`frontend/src/layouts/AppLayout.vue`、`frontend/src/views/{BankManageView,QuestionPageView,BankDetailView(删)}.vue`、`frontend/src/utils/routeQuery.js`、`frontend/src/locales/*`、`frontend/tests/*`、`backend/app/infrastructure/db/connection.py`、`backend/app/infrastructure/db/repositories/question_repository.py`、`tests/test_archive_timestamp.py`（新增）。
+
+### [2026-11-13] Core UX P2 收尾：请求竞态、空题库、facet 与 shell 刷新
+
+- **触发背景**：P2 交付后的独立审计发现若干"状态唯一源"与"空态/权限态"漏洞：列表视图可被过期响应覆盖、空题库能生成 0 题会话、筛选值在其选项消失后仍生效、顶栏题库名不随重命名刷新、题目页把网络失败当成"题目不存在"。
+- **核心决策**：
+  1. **过期响应一律丢弃**：`BanksView.load()` 与工作区一致采用单调请求号，只有最新请求能写列表与 `loading`。
+  2. **空题库不能开始练习**：后端在"题目池为空且所属题库 `question_count = 0`"时拒绝创建会话；前端按"可练题数"（排除归档）禁用。已知边界：有题但全被斩杀时仍允许建立 0 题会话——`tests/test_v1_architecture.py` 用该行为表达"斩杀后回到空状态"，改动它需要用户对测试契约放行。
+  3. **空态表达事实，不表达失败**：工作区加载失败时标题不再停在"加载中"；已归档视图为空时说明"没有已归档题目"而非"题库为空"。
+  4. **筛选值随 facet 消失而清理**：章节/标签筛选在数据加载完成后若已无对应 facet 则清空，避免"列表被看不见的条件收窄"；章节请求失败时**不**清理（无从判断）。
+  5. **本地化文案不进业务数据**：空分类表示"保持原值"，不再把 `t('default_category')` 写进题库记录（英文界面曾把 "Default" 写进中文实例数据）。
+  6. **shell 缓存需要失效信号**：新增 `utils/shellEvents.js`（`easyexam:banks-changed`），创建/改名/归档/恢复/离开题库后广播，`AppLayout` 重新拉取题库列表；不引入全局 store。
+  7. **权限/错误态分开**：题目页只有真正的 403/404 进入权限页，网络失败可重试；题库与题目不匹配时重定向到真实题库；归档题禁用编辑但保留恢复，模考锁定期间禁用编辑与归档。
+  8. **内容列表补齐时间字段**：`list_content_for_bank` 返回 `created_at`/`updated_at`，"按更新时间"排序与导出使用同一行数据。
+- **对应 SPEC 章节**：§2.0.1、§4.1（口径不变，仅修正读取路径）。
+- **影响范围**：`backend/app/application/practice_service.py`、`backend/app/infrastructure/db/repositories/question_repository.py`、`frontend/src/views/{BanksView,BankManageView,HomeView,QuestionPageView}.vue`、`frontend/src/layouts/AppLayout.vue`、`frontend/src/utils/shellEvents.js`（新增）、`frontend/tests/*`、`tests/test_practice_empty_bank.py`（新增）。
+
+### [2026-11-13] 取消「自定义强调色」：强调色归配色方案所有
+
+- **触发背景**：用户反馈"强调色和配色方案的配合不好"。实测发现同一件事有四个名字（`palette.accent` = `--brand` = `--accent` = `--primary`），且强调色在三处各自派生：palette 的 `--brand`、运行时 `applyAccentPreference` 写入的 `--brand`/`--primary`、以及 `--d-spine-accent` 的混白公式。自定义路径会把用户选的颜色改成另一个色（`getAccessibleForeground` 向黑白拖动直到可读，`#23554b` 在深色下渲染为 `#77968f`），并且是 `--primary`/`--brand` 分裂、`--brand-line` 1.69:1、深色去饱和三类缺陷的唯一来源。`--accent*` 别名层定义后从未被消费（全仓每个 token 仅出现 1 次）。
+- **核心决策**：
+  1. **强调色是配色方案的属性，不是用户偏好**。删除自定义强调色控件（`SettingsView`）与 `applyAccentPreference` / `readAccentPreference` / `writeAccentPreference` / `getAccessibleForeground` / `PALETTE_SURFACES` / `getPaletteSurface`。`--primary*` 兼容别名保留（58 处消费者）；`--accent*` 保留为语义层，但不再有第二个写入点。纯色值工具（`calculateContrastRatio` 等）保留，测试仍用它们校验 CSS token。
+  2. **旧值不迁移**：`LEGACY_ACCENT_STORAGE_KEY` 在启动时删除；不尝试把它映射到某个 palette。
+  3. **侧栏强调色取每族深色 brand 字面值**（`#8fc2b2` / `#ffad66` / `#b2c98e` / `#cba6f7`），不再 `color-mix` 到 `#eef2e6`——该公式把强调色饱和度从 59% 压到 12%，使侧栏与内容区不是同一个颜色；侧栏 active 标记也改用该 token（此前用 `--brand` 压在深色 spine 上，浅色族仅 1.80–1.92:1）。
+  4. **浅色 `--brand-line` 统一 60% brand 混合**，四族均 ≥3:1；此前为 1.49–2.39:1，带强调色的标签边框几乎不可见。深色族仍为 36%（已 ≥3:1）。
+  5. **gruvbox 深色 hover/active 改为变亮**（`#ffb779` / `#ffc18b`），与其他深色族一致；原先变暗，状态读起来像 disabled。
+  6. **修正 `--primary-active`**：原先指向 `--brand-hover`，应为 `--brand-active`。
+- **对应 SPEC 章节**：无（视觉系统内部不变量，不改变业务规则）。
+- **影响范围**：`frontend/src/design/themePreference.js`、`frontend/src/composables/useTheme.js`、`frontend/src/views/SettingsView.vue`、`frontend/src/style.css`、`frontend/src/locales/{ep-zh-CN,ep-en-US}.js` 与 `*.json` 镜像、`frontend/tests/{theme,browser_e2e}.test.js`。
+
+### [2026-11-13] Core UX P3：会话结果落库、一条复习队列、模考错题入复习、统一开始入口
+
+- **触发背景**：报告只在内存里返回，`is_completed=1` 同时表示"完成"和"放弃"，`score`/`time_spent` 恒 0；复习页是四个互不相干的列表，同一题可同时属于"到期"和"错题"；模考答错按设计不进 FSRS，复习队列永远收不到模考错题；各处"开始练习"直接 POST，用户忘记的旧会话会静默堆积。
+- **核心决策**：
+  1. **会话状态一列到底**：迁移 20 增加 `status`(active/completed/abandoned)、`completed_at`、`result_json` 与 `(user_id,status)` 索引；`is_completed` 保留为派生列（`1 ⇔ status≠active`），所有既有可见性/活跃会话查询不动。
+  2. **报告只算一次**：`complete_session` 在 active→completed 时计算并持久化报告；再次调用返回已存报告（逐字返回），因此重试/重复交卷/题目后续被编辑都不会改写历史成绩。`GET /sessions/{id}` 暴露 `report`，前端完成会话重新打开时渲染同一份报告，不再渲染空答题器。
+  3. **模考错题在交卷时入队列**：单题提交仍然不为模考推进 FSRS（保住 SPEC 的"考试中不泄露、不调度"）；`record_mistakes` 为真时，交卷这一跃迁按最终作答给客观题排 FSRS（错/部分 1、有错题史的正确 3、其余正确 2），`record_mistakes=False` 完全不动学习记录。幂等由"只在跃迁时执行 + 报告只写一次"保证。
+  4. **复习是一条队列**：新增 `domain/reviewQueue.js` 合并到期/错题/薄弱/斩杀并按 `bank+question` 去重，行上带全部原因标签；因为 Playwright 契约按索引点前四个页签，合并视图作为**第五个页签"全部"并设为默认**，`?tab=` 语义完全保留，新增 `?source=all|due|mistakes|weak|killed` 别名。
+  5. **薄弱必须有独立来源**：`/mistakes/due` 只带"已到期且有卡"的薄弱标记，刚标记的薄弱题在卡片推到未来后就会消失；新增 `GET /mistakes/weak` 作为权威来源，队列两处取并集。
+  6. **开始入口统一**：`useStartStudy` 先查同模式活跃会话，存在则返回 `blocked` 交给 `StartStudyPanel`（继续 / 结束并新建 / 取消），否则直接开始；工作区、今天页、复习页共用。查询按 `mode` 过滤是刻意保留的（既有契约测试锁定该参数），跨模式残留仍可通过首页"进行中会话"结束。
+  7. **页面不因次要数据失败而空白**：复习页只有题库/到期/错题/斩杀四个主源失败才整页报错；薄弱、计划、趋势失败各自降级。
+- **对应 SPEC 章节**：§4.1（模考是否进入错题由考试配置决定）、§4.3（斩杀与恢复）。
+- **影响范围**：`backend/app/infrastructure/db/{connection,practice_repository}.py`、`backend/app/application/practice_service.py`、`backend/app/api/routes/mistakes.py`、`frontend/src/{domain/reviewQueue.js,composables/useStartStudy.js,components/StartStudyPanel.vue}`、`frontend/src/views/{ReviewView,PracticeViewV1,BankManageView,HomeView}.vue`、`frontend/src/features/exam/ExamView.vue`、`frontend/src/api/mistakes.js`、`frontend/src/locales/*`、`tests/test_session_report_persistence.py`、`tests/test_review_queue_sources.py`（均新增）。

@@ -61,7 +61,9 @@ dialog:not([open]) { display: none !important; }
   --brand-active: #14352f;
   --brand-ink: #173f37;
   --brand-soft: #e7eee9;
-  --brand-line: #b8cdc4;
+  /* Boundary tone. 60% brand is the minimum share that reaches 3:1 against the
+     light paper for all four families; a literal hex here failed at 1.5:1. */
+  --brand-line: color-mix(in srgb, var(--brand) 60%, var(--line));
   --brand-contrast: #faf8f2;
   --on-brand-hover: #faf8f2;
   --on-brand-active: #faf8f2;
@@ -123,7 +125,9 @@ dialog:not([open]) { display: none !important; }
   --d-spine-line: rgba(240, 243, 233, .10);
   --d-spine-hover: rgba(240, 243, 233, .07);
   --d-spine-active: rgba(240, 243, 233, .12);
-  --d-spine-accent: color-mix(in srgb, var(--brand) 38%, #eef2e6);
+  /* The spine is always dark, so its accent is the family's dark-mode brand
+     rather than a lightened mix — mixing toward white desaturated it to ~12%. */
+  --d-spine-accent: #8fc2b2;
 
   /* D · radius scale */
   --r-xs: 3px;
@@ -197,7 +201,7 @@ dialog:not([open]) { display: none !important; }
   --brand-active: #7a2802;
   --brand-ink: #7a2802;
   --brand-soft: color-mix(in srgb, var(--brand) 10%, var(--surface));
-  --brand-line: color-mix(in srgb, var(--brand) 36%, var(--line));
+  --brand-line: color-mix(in srgb, var(--brand) 60%, var(--line));
   --brand-contrast: #fbf1c7;
   --on-brand-hover: #fbf1c7;
   --on-brand-active: #fbf1c7;
@@ -216,6 +220,7 @@ dialog:not([open]) { display: none !important; }
   /* D chrome */
   --d-spine: #3c3836;
   --d-gasket: #efe1b7;
+  --d-spine-accent: #ffad66;
 }
 
 [data-theme="dark"][data-theme-palette="gruvbox"] {
@@ -231,8 +236,10 @@ dialog:not([open]) { display: none !important; }
   --line: #5a554f;
   --line-strong: #928374;
   --brand: #ffad66;
-  --brand-hover: #e56b1a;
-  --brand-active: #f5933f;
+  /* Dark families lighten on hover/active. Gruvbox was the one family that
+     darkened, which read as a disabled control. */
+  --brand-hover: #ffb779;
+  --brand-active: #ffc18b;
   --brand-ink: #ffad66;
   --brand-soft: color-mix(in srgb, var(--brand) 10%, var(--surface));
   --brand-line: color-mix(in srgb, var(--brand) 36%, var(--line));
@@ -273,7 +280,7 @@ dialog:not([open]) { display: none !important; }
   --brand-active: #33462a;
   --brand-ink: #33462a;
   --brand-soft: color-mix(in srgb, var(--brand) 10%, var(--surface));
-  --brand-line: color-mix(in srgb, var(--brand) 36%, var(--line));
+  --brand-line: color-mix(in srgb, var(--brand) 60%, var(--line));
   --brand-contrast: #fdf6e3;
   --on-brand-hover: #fdf6e3;
   --on-brand-active: #fdf6e3;
@@ -292,6 +299,7 @@ dialog:not([open]) { display: none !important; }
   /* D chrome */
   --d-spine: #343f44;
   --d-gasket: #eee9d6;
+  --d-spine-accent: #b2c98e;
 }
 
 [data-theme="dark"][data-theme-palette="everforest"] {
@@ -349,7 +357,7 @@ dialog:not([open]) { display: none !important; }
   --brand-active: #5f1fbf;
   --brand-ink: #5f1fbf;
   --brand-soft: color-mix(in srgb, var(--brand) 10%, var(--surface));
-  --brand-line: color-mix(in srgb, var(--brand) 36%, var(--line));
+  --brand-line: color-mix(in srgb, var(--brand) 60%, var(--line));
   --brand-contrast: #ffffff;
   --on-brand-hover: #ffffff;
   --on-brand-active: #ffffff;
@@ -368,6 +376,7 @@ dialog:not([open]) { display: none !important; }
   /* D chrome */
   --d-spine: #3a3d55;
   --d-gasket: #e2e5ec;
+  --d-spine-accent: #cba6f7;
 }
 
 [data-theme="dark"][data-theme-palette="catppuccin"] {
@@ -559,7 +568,7 @@ img { max-width: 100%; }
 .nav-item.is-active { color: var(--d-spine-ink); font-weight: 600; background: var(--d-spine-active); }
 .nav-item.is-active::before {
   content: ""; position: absolute; left: -10px; top: 8px; bottom: 8px;
-  width: 2px; background: var(--brand); border-radius: 1px;
+  width: 2px; background: var(--d-spine-accent); border-radius: 1px;
 }
 /* Sidebar nav labels must follow the spine's own typography and inherit its
    hover/active colors; without this the global `.label` form rule below wins. */
@@ -652,7 +661,7 @@ img { max-width: 100%; }
 .content.narrow { max-width: 860px; }
 
 /* 1320 is an upper bound. At 1440 the available surface is 1164. */
-body[data-route="bank-manage"] .content,
+body[data-route="bank-detail"] .content,
 body[data-route="import"] .content,
 body[data-route="notes"] .content { --d-max: var(--d-max-wide); }
 [data-density="dense"] .content { --d-max: var(--d-max-wide); }
@@ -1523,15 +1532,6 @@ section.panel .version-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-b
 .theme-preview i:nth-child(2) { width: 70%; }
 .theme-preview i:nth-child(3) { width: 45%; }
 .theme-name { font-size: 12px; margin-top: 7px; display: flex; justify-content: space-between; }
-.accent-swatch {
-  display: inline-flex; align-items: center; gap: 8px;
-  height: 30px; padding: 0 10px 0 7px;
-  border: 1px solid var(--line); border-radius: 2px;
-  font-size: 12px; color: var(--ink-2);
-}
-.accent-swatch:hover { border-color: var(--ink-4); color: var(--ink); }
-.accent-swatch.is-on { border-color: var(--ink); color: var(--ink); }
-.accent-dot { width: 14px; height: 14px; border-radius: 50%; flex: none; border: 1px solid rgba(0, 0, 0, .12); }
 
 /* ==========================================================================
    16. Overlays
@@ -1987,7 +1987,7 @@ dialog.dlg:focus { outline: none; }
   --border-strong: var(--line-strong);
   --primary: var(--brand);
   --primary-hover: var(--brand-hover);
-  --primary-active: var(--brand-hover);
+  --primary-active: var(--brand-active);
   --primary-light: var(--brand-soft);
   --primary-border: var(--brand-line);
   --primary-fg: var(--brand);

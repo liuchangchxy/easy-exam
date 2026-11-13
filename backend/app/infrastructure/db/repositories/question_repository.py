@@ -669,7 +669,8 @@ class QuestionRepository:
         archive_clause = "" if include_archived else "AND q.is_deleted = 0"
         with transaction(self.db_path) as conn:
             rows = conn.execute(
-                f"""SELECT q.id, q.is_deleted, q.archived_at, qv.id AS version_id, qv.version_number, qv.type,
+                f"""SELECT q.id, q.is_deleted, q.archived_at, q.created_at, q.updated_at,
+                          qv.id AS version_id, qv.version_number, qv.type,
                           qv.stem, qv.options_json, qv.answer, qv.explanation,
                           qv.difficulty, qv.tags_json, qv.chapter_id, i.bank_id
                    FROM bank_question_items i

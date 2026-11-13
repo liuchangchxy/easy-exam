@@ -102,31 +102,6 @@
             </div>
           </div>
 
-          <div class="setting-row setting-row-top">
-            <div class="setting-label">
-              <div class="setting-name">{{ t('ep.settings.accent') }}</div>
-              <div class="setting-desc">{{ t('ep.settings.accent_note') }}</div>
-            </div>
-            <div class="accent-grid">
-              <button
-                v-for="preset in accentPresets"
-                :key="preset.key"
-                type="button"
-                class="accent-option"
-                :class="{ 'is-active': preset.active }"
-                @click="setCustomAccent(preset.hex)"
-              >
-                <span class="accent-swatch" :style="{ background: preset.hex }"></span>
-                <span class="accent-name">{{ t(preset.label) }}</span>
-                <LinearIcon v-if="preset.active" name="check" :size="13" />
-              </button>
-              <label class="accent-option accent-custom">
-                <span class="accent-swatch" :style="{ background: activeAccent }"></span>
-                <span class="accent-name">{{ t('ep.settings.accent_custom') }}</span>
-                <input type="color" class="accent-input" :value="activeAccent" :aria-label="t('ep.settings.accent_custom')" @input="onAccentInput" />
-              </label>
-            </div>
-          </div>
         </section>
 
         <!-- Language -->
@@ -303,7 +278,7 @@ const route = useRoute()
 const router = useRouter()
 
 const { t, locale: currentLocale, setLocale } = useLocale()
-const { mode, setMode, palette, palettes, setPalette, customAccent, setCustomAccent } = useTheme()
+const { mode, setMode, palette, palettes, setPalette } = useTheme()
 
 const DEFAULT_SECTION = 'appearance'
 const SECTION_QUERY = {
@@ -359,28 +334,15 @@ const navItems = [
 ]
 
 const PALETTE_SWATCHES = {
-  editorial: { paper: '#f5f2ea', accent: '#23554b', stops: ['#f5f2ea', '#fbf9f4', '#191b18', '#23554b'] },
-  gruvbox: { paper: '#fbf1c7', accent: '#af3a03', stops: ['#fbf1c7', '#fff9e4', '#3c3836', '#af3a03'] },
-  everforest: { paper: '#fdf6e3', accent: '#4e6b3f', stops: ['#fdf6e3', '#fffcf0', '#3d484d', '#4e6b3f'] },
-  catppuccin: { paper: '#eff1f5', accent: '#8839ef', stops: ['#eff1f5', '#f7f8fb', '#4c4f69', '#8839ef'] },
+  editorial: { paper: '#f5f2ea', stops: ['#f5f2ea', '#fbf9f4', '#191b18', '#23554b'] },
+  gruvbox: { paper: '#fbf1c7', stops: ['#fbf1c7', '#fff9e4', '#3c3836', '#af3a03'] },
+  everforest: { paper: '#fdf6e3', stops: ['#fdf6e3', '#fffcf0', '#3d484d', '#4e6b3f'] },
+  catppuccin: { paper: '#eff1f5', stops: ['#eff1f5', '#f7f8fb', '#4c4f69', '#8432e8'] },
 }
 
 function paletteSwatch(id) {
   return PALETTE_SWATCHES[id] || PALETTE_SWATCHES.editorial
 }
-
-const accentPresets = computed(() => {
-  const pine = '#23554b'
-  const active = customAccent.value || pine
-  return [
-    { key: 'pine', label: 'ep.settings.accent_pine', hex: pine, active: active.toLowerCase() === pine },
-    { key: 'indigo', label: 'ep.settings.accent_indigo', hex: '#33456b', active: active.toLowerCase() === '#33456b' },
-    { key: 'ochre', label: 'ep.settings.accent_ochre', hex: '#8a5c24', active: active.toLowerCase() === '#8a5c24' },
-    { key: 'ink', label: 'ep.settings.accent_ink', hex: '#191b18', active: active.toLowerCase() === '#191b18' },
-  ]
-})
-
-const activeAccent = computed(() => customAccent.value || '#23554b')
 
 const densityLabel = computed(() => currentLocale.value === 'en-US' ? 'Density' : '信息密度')
 const densityNote = computed(() => currentLocale.value === 'en-US'
@@ -438,10 +400,6 @@ const webNotice = ref('')
 const aiError = ref(false)
 const webError = ref(false)
 const aiConfigured = ref(false)
-
-function onAccentInput(event) {
-  setCustomAccent(event.target.value)
-}
 
 async function loadConfig() {
   if (!props.token) return
@@ -539,7 +497,6 @@ onMounted(() => {
 .segment:hover { background: var(--surface-2); color: var(--ink); }
 .segment.is-active { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
 
-.accent-grid { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .palette-grid { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .palette-option {
   display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px;
@@ -584,16 +541,6 @@ onMounted(() => {
 }
 .settings-density-option:hover { background: var(--surface-2); color: var(--ink); }
 .settings-density-option.is-active { background: var(--brand-soft); border-color: var(--brand-line); color: var(--brand); font-weight: 600; }
-.accent-option {
-  display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px;
-  border: 1px solid var(--line); background: none; color: var(--ink-2);
-  font-size: 12px; cursor: pointer; position: relative;
-}
-.accent-option:hover { border-color: var(--ink-4); }
-.accent-option.is-active { border-color: var(--brand-line); color: var(--brand); }
-.accent-swatch { width: 14px; height: 14px; flex: none; border: 1px solid rgba(0, 0, 0, .12); }
-.accent-custom { overflow: hidden; }
-.accent-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
 .settings-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; }
 .settings-note { margin-top: 20px; }
@@ -616,7 +563,6 @@ onMounted(() => {
 }
 @media (max-width: 640px) {
   .setting-row { flex-direction: column; align-items: flex-start; gap: 12px; }
-  .accent-grid { justify-content: flex-start; }
   .settings-fields { grid-template-columns: minmax(0, 1fr); }
   .segmented { width: 100%; }
   .segment { flex: 1; justify-content: center; }

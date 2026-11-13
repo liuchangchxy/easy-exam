@@ -22,6 +22,7 @@ vi.mock('../../src/api/banks', () => ({
 vi.mock('../../src/api/mistakes', () => ({
   listDueMistakes: vi.fn().mockResolvedValue([]),
   listMistakes: vi.fn(async () => mockState.mistakes),
+  listWeakMistakes: vi.fn().mockResolvedValue([]),
   updateMistakeCause: vi.fn(),
 }))
 
@@ -33,6 +34,9 @@ vi.mock('../../src/api/kills', () => ({
 
 vi.mock('../../src/api/practice', () => ({
   startSession: vi.fn().mockResolvedValue({ id: 's1' }),
+  listActiveSessions: vi.fn().mockResolvedValue([]),
+  abandonSession: vi.fn().mockResolvedValue({}),
+  abandonAllSessions: vi.fn().mockResolvedValue({}),
 }))
 
 vi.mock('../../src/api/learning', () => ({

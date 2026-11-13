@@ -114,6 +114,10 @@ async function logout(page) {
 
 async function openBanks(page, baseUrl) {
   await page.goto(`${baseUrl}/#/banks`)
+  // Steps seed data through the API while the browser sits on this same hash
+  // URL, and a same-URL goto in Chromium is a no-op. Reload so the workspace
+  // always renders server truth exactly as a fresh visit would.
+  await page.reload()
   await page.waitForSelector('.banks-page')
 }
 
@@ -491,6 +495,7 @@ test('True Chrome Browser E2E: Editorial Precision Full Lifecycle', async (t) =>
 
     await t.test('7. Killed Questions: Scoped Review and Restoration on Wrong', async () => {
       await page.locator('.review-page .tabs .tab').nth(2).click()
+      await page.waitForTimeout(500)
       const killedRow = page.locator('.review-single .list-row').filter({ hasText: killedStem.slice(0, 8) }).first()
       await killedRow.waitFor({ state: 'visible', timeout: 8000 })
 
@@ -896,7 +901,7 @@ test('True Chrome Browser E2E: Editorial Precision Full Lifecycle', async (t) =>
             }
             return getComputedStyle(document.body).backgroundColor
           }
-          return ['.settings-nav-item.is-active', '.segment.is-active', '.accent-option.is-active .accent-name']
+          return ['.settings-nav-item.is-active', '.segment.is-active', '.settings-palette-card.is-active .palette-name']
             .map(selector => {
               const el = document.querySelector(selector)
               if (!el) return null
@@ -910,23 +915,23 @@ test('True Chrome Browser E2E: Editorial Precision Full Lifecycle', async (t) =>
           assert.ok(ratio >= 4.5, `${label}: ${style.selector} contrast ${ratio.toFixed(2)}:1 must meet AA`)
         }
       }
-      await auditActive('dark / pine')
+      await auditActive('dark / editorial')
 
-      const accentOptions = page.locator('.accent-option')
-      assert.ok(await accentOptions.count() >= 4, 'Editorial accent presets must be available')
+      const paletteCards = page.locator('.settings-palette-card')
+      assert.ok(await paletteCards.count() >= 4, 'All four palette families must be available')
       for (let i = 1; i < 4; i++) {
-        await accentOptions.nth(i).click()
+        await paletteCards.nth(i).click()
         await page.waitForTimeout(150)
-        await auditActive(`dark accent ${i}`)
+        await auditActive(`dark palette ${i}`)
       }
-      await accentOptions.first().click()
+      await paletteCards.first().click()
 
       await themeSegments.nth(0).click()
       assert.equal(await page.evaluate(() => document.documentElement.getAttribute('data-theme')), 'light')
-      await auditActive('light / pine')
+      await auditActive('light / editorial')
 
-      await page.evaluate(() => localStorage.removeItem('easyexam_custom_accent'))
-      console.log('✓ Verified editorial light/dark surfaces and accent contrast.')
+      await page.evaluate(() => localStorage.removeItem('easyexam-theme-palette'))
+      console.log('✓ Verified editorial light/dark surfaces and palette accent contrast.')
     })
 
     await t.test('15. Responsive Layout and Mobile Exam Usability', async () => {

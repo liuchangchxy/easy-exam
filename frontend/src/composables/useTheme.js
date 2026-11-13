@@ -5,12 +5,11 @@ import {
   THEME_PALETTES,
   applyFullTheme,
   applyThemePreference,
-  readAccentPreference,
+  clearLegacyAccentPreference,
   readModePreference,
   readPalettePreference,
   readThemePreference,
   resolveEffectiveTheme,
-  writeAccentPreference,
   writeModePreference,
   writePalettePreference,
   writeThemePreference,
@@ -19,7 +18,6 @@ import {
 const theme = ref('light')
 const mode = ref(DEFAULT_MODE)
 const palette = ref(DEFAULT_PALETTE)
-const customAccent = ref('')
 let initialized = false
 let mediaListenerAttached = false
 
@@ -48,7 +46,6 @@ function syncRoot() {
     root,
     mode: mode.value,
     palette: palette.value,
-    customAccent: customAccent.value,
     isSystemDark: getSystemDark(),
   })
 }
@@ -80,7 +77,7 @@ export function initializeTheme() {
   const storage = browserStorage()
   mode.value = readModePreference(storage)
   palette.value = readPalettePreference(storage)
-  customAccent.value = readAccentPreference(storage)
+  clearLegacyAccentPreference(storage)
 
   syncRoot()
   setupMediaListener()
@@ -112,18 +109,6 @@ function setPalette(value) {
   return next
 }
 
-function setCustomAccent(hex) {
-  const storage = browserStorage()
-  const next = writeAccentPreference(storage, hex)
-  customAccent.value = next
-  syncRoot()
-  return next
-}
-
-function resetCustomAccent() {
-  return setCustomAccent('')
-}
-
 function toggleTheme() {
   // If in system mode, toggle to opposite of currently resolved theme
   const current = theme.value
@@ -137,13 +122,10 @@ export function useTheme() {
     theme,
     mode,
     palette,
-    customAccent,
     palettes: THEME_PALETTES,
     setTheme,
     setMode: setTheme,
     setPalette,
-    setCustomAccent,
-    resetCustomAccent,
     toggleTheme,
   }
 }

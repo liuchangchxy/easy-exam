@@ -14,7 +14,7 @@
     </div>
 
     <div class="tabs">
-      <button v-for="tab in tabs" :key="tab.key" type="button" class="tab" :class="{ 'is-active': activeTab === tab.key }" @click="selectTab(tab.key)">
+      <button v-for="tab in tabs" :key="tab.key" type="button" class="tab" :class="{ 'is-active': activeTab === tab.key }" :data-testid="'review-tab-' + tab.key" @click="selectTab(tab.key)">
         {{ t(tab.label) }}<span class="count">{{ tab.count }}</span>
       </button>
     </div>
@@ -221,6 +221,56 @@
         </div>
       </section>
 
+      <!-- All (one queue) -->
+      <section v-else-if="activeTab === 'all'" class="review-single review-queue" data-testid="review-queue">
+        <div class="toolbar review-toolbar review-queue-toolbar">
+          <div class="chip-row review-reason-filter" role="group" :aria-label="t('ep.review.reason_filter')" data-testid="review-reason-filter">
+            <button
+              v-for="filter in reasonFilters"
+              :key="filter.key"
+              type="button"
+              class="chip review-reason-chip"
+              :class="{ 'is-on': reasonFilter === filter.key }"
+              :data-reason="filter.key"
+              :data-testid="'review-reason-' + filter.key"
+              @click="selectReason(filter.key)"
+            >
+              {{ t(filter.label) }}<span class="count">{{ reasonCount(filter.key) }}</span>
+            </button>
+          </div>
+          <div class="spacer"></div>
+          <span class="small dim">{{ t('ep.review.queue_count', { count: filteredQueue.length }) }}</span>
+        </div>
+
+        <div v-if="filteredQueue.length" class="panel">
+          <div class="list">
+            <div v-for="row in filteredQueue" :key="row.key" class="list-row review-queue-row" :data-key="row.key">
+              <span class="qtype mono">{{ typeLabel(row.type) }}</span>
+              <span class="list-main">
+                <span class="qrow-stem">{{ row.stem }}</span>
+                <span class="list-meta">
+                  <span>{{ bankName(row.bank_id) }}</span>
+                  <span v-for="reason in row.reasons" :key="reason" class="tag review-reason-tag" :class="{ brand: reason === 'due' }" :data-reason="reason">
+                    {{ t(reviewReasonLabelKey(reason)) }}
+                  </span>
+                  <span v-if="row.mistake_count">{{ row.mistake_count }}×</span>
+                </span>
+              </span>
+              <span class="list-side">
+                <button type="button" class="btn btn-sm btn-quiet review-queue-start" :disabled="starting" @click="startQueueRow(row)">
+                  {{ t('ep.review.review_one') }}
+                </button>
+              </span>
+            </div>
+          </div>
+        </div>
+        <div v-else class="empty review-queue-empty">
+          <div class="empty-mark"><LinearIcon name="check" :size="26" /></div>
+          <div class="empty-title">{{ t(emptyKeys.title) }}</div>
+          <div class="empty-desc">{{ t(emptyKeys.hint) }}</div>
+        </div>
+      </section>
+
       <!-- Diagnosis -->
       <section v-else class="review-single diagnosis">
         <template v-if="trends">
@@ -324,6 +374,15 @@
         </div>
       </section>
     </template>
+
+    <StartStudyPanel
+      :show="showStartPanel"
+      :sessions="blockedSessions"
+      :busy="starting"
+      @continue="continueBlocked"
+      @end-and-start="endBlockedAndStart"
+      @cancel="closeStartPanel"
+    />
   </div>
 </template>
 
@@ -333,10 +392,12 @@ import { useRoute, useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
 import { useLocale } from '../composables/useLocale.js'
 import { listBanks } from '../api/banks'
-import { listDueMistakes, listMistakes, updateMistakeCause as updateMistakeCauseApi } from '../api/mistakes'
+import { listDueMistakes, listMistakes, listWeakMistakes, updateMistakeCause as updateMistakeCauseApi } from '../api/mistakes'
 import { listKills, killQuestion, unkillQuestion } from '../api/kills'
-import { startSession } from '../api/practice'
+import { useStartStudy } from '../composables/useStartStudy.js'
 import { getLearningTrends, getStudyPlan, getRecommendations } from '../api/learning'
+import StartStudyPanel from '../components/StartStudyPanel.vue'
+import { mergeReviewQueue, filterReviewRows, reviewReasonLabelKey } from '../domain/reviewQueue.js'
 import { readQueryEnum, readQueryString, replaceQueryState } from '../utils/routeQuery.js'
 
 const props = defineProps({ token: { type: String, required: true } })
@@ -345,27 +406,76 @@ const route = useRoute()
 const router = useRouter()
 const { t } = useLocale()
 
-const REVIEW_TAB_KEYS = ['due', 'mistakes', 'killed', 'diagnosis']
-const activeTab = ref(normalizeTab(route.query?.tab))
+// The first four tabs are a hard contract: the Playwright suites click them by
+// index. The unified queue therefore lands as a fifth tab and as the default.
+const REVIEW_TAB_KEYS = ['due', 'mistakes', 'killed', 'diagnosis', 'all']
+const REVIEW_SOURCE_TABS = { all: 'all', due: 'due', mistakes: 'mistakes', killed: 'killed', weak: 'all' }
+const DEFAULT_TAB = 'all'
+const reasonFilters = [
+  { key: 'all', label: 'ep.review.reason_all' },
+  { key: 'due', label: 'ep.review.tab_due' },
+  { key: 'mistakes', label: 'ep.review.tab_mistakes' },
+  { key: 'weak', label: 'ep.review.weak' },
+  { key: 'killed', label: 'ep.review.tab_killed' },
+]
+const QUEUE_EMPTY = {
+  all: { title: 'ep.review.queue_empty', hint: 'ep.review.queue_empty_hint' },
+  due: { title: 'ep.review.due_empty', hint: 'ep.review.due_empty_hint' },
+  mistakes: { title: 'ep.review.mistakes_empty', hint: 'ep.review.mistakes_empty_hint' },
+  weak: { title: 'ep.review.weak_empty', hint: 'ep.review.weak_empty_hint' },
+  killed: { title: 'ep.review.killed_empty', hint: 'ep.review.killed_empty_hint' },
+}
+const activeTab = ref(resolveTab(route.query))
+const reasonFilter = ref(resolveReasonFilter(route.query))
 const banks = ref([])
 const dueReviews = ref([])
 const mistakes = ref([])
 const killed = ref([])
+const weakList = ref([])
 const trends = ref(null)
 const plan = ref(null)
 const recommendations = ref([])
 const loading = ref(true)
 const loadError = ref(false)
-const starting = ref(false)
 const notice = ref('')
 const mistakeBank = ref(readQueryString(route.query?.bank))
 const mistakeCause = ref(readQueryString(route.query?.cause))
+
+// Weak flags come from two places: the due payload tags the ones that have a
+// due card, and /mistakes/weak lists every flag (due or not). The queue needs
+// both, or a question flagged weak today but reviewed tomorrow is invisible.
+const weakReviews = computed(() => {
+  const seen = new Set()
+  const rows = []
+  const push = item => {
+    const key = `${item.bank_id || ''}::${item.question_id}`
+    if (seen.has(key)) return
+    seen.add(key)
+    rows.push({ ...item, weak: true })
+  }
+  for (const item of dueReviews.value) {
+    if (item.is_weak || item.is_weak_flagged) push(item)
+  }
+  for (const item of weakList.value) push(item)
+  return rows
+})
+
+const reviewQueue = computed(() => mergeReviewQueue({
+  due: dueReviews.value,
+  mistakes: mistakes.value,
+  weak: weakReviews.value,
+  killed: killed.value,
+}))
+
+const filteredQueue = computed(() => filterReviewRows(reviewQueue.value, reasonFilter.value))
+const emptyKeys = computed(() => QUEUE_EMPTY[reasonFilter.value] || QUEUE_EMPTY.all)
 
 const tabs = computed(() => [
   { key: 'due', label: 'ep.review.tab_due', count: dueReviews.value.length },
   { key: 'mistakes', label: 'ep.review.tab_mistakes', count: mistakes.value.length },
   { key: 'killed', label: 'ep.review.tab_killed', count: killed.value.length },
   { key: 'diagnosis', label: 'ep.review.tab_diagnosis', count: trends.value ? 2 : 0 },
+  { key: 'all', label: 'ep.review.tab_all', count: reviewQueue.value.length },
 ])
 
 const causes = computed(() => [
@@ -393,8 +503,19 @@ const dueBankGroups = computed(() => groupByBank(dueReviews.value))
 
 const recommendationGroups = computed(() => groupByBank(recommendations.value, 'question_id'))
 
-function normalizeTab(value) {
-  return readQueryEnum(value, REVIEW_TAB_KEYS, 'due')
+// ?tab= names a tab directly; ?source= is the alias used by the queue links
+// (source=weak opens the unified queue with the weak filter already on).
+// Unknown values fall through to the unified queue.
+function resolveTab(query) {
+  const tab = readQueryEnum(query?.tab, REVIEW_TAB_KEYS, '')
+  if (tab) return tab
+  const source = readQueryEnum(query?.source, Object.keys(REVIEW_SOURCE_TABS), '')
+  if (source) return REVIEW_SOURCE_TABS[source]
+  return DEFAULT_TAB
+}
+
+function resolveReasonFilter(query) {
+  return readQueryString(query?.source) === 'weak' ? 'weak' : 'all'
 }
 
 function groupByBank(items, idKey = 'question_id') {
@@ -422,7 +543,7 @@ function reasonSummary(group) {
   return reasons.slice(0, 2).join(' · ')
 }
 
-const REVIEW_QUERY_DEFAULTS = { tab: 'due' }
+const REVIEW_QUERY_DEFAULTS = { tab: DEFAULT_TAB }
 
 // Toolbar state lives in the URL so a refresh, a browser Back or a pasted link
 // lands on the same list. Defaults stay out of the address.
@@ -432,12 +553,26 @@ function syncReviewQuery(patch) {
 
 function selectTab(key) {
   activeTab.value = key
-  syncReviewQuery({ tab: key })
+  if (key !== DEFAULT_TAB) reasonFilter.value = 'all'
+  // Drop a stale ?source= alias so a reload follows the tab just clicked.
+  syncReviewQuery({ tab: key, source: '' })
 }
 
-watch(() => route.query?.tab, value => {
-  const next = normalizeTab(value)
+function selectReason(key) {
+  reasonFilter.value = key
+}
+
+function reasonCount(key) {
+  if (key === 'all') return reviewQueue.value.length
+  return reviewQueue.value.filter(row => row.reasons.includes(key)).length
+}
+
+watch(() => [route.query?.tab, route.query?.source], () => {
+  const next = resolveTab(route.query)
   if (next !== activeTab.value) activeTab.value = next
+  if (readQueryString(route.query?.source) === 'weak' && reasonFilter.value !== 'weak') {
+    reasonFilter.value = 'weak'
+  }
 })
 
 watch(() => route.query?.bank, value => {
@@ -463,40 +598,84 @@ async function load() {
     listDueMistakes(props.token),
     listMistakes(props.token),
     listKills(props.token),
+    listWeakMistakes(props.token),
     getLearningTrends(props.token, { window_days: 14 }),
     getStudyPlan(props.token, { days: 7, minutes_per_day: 30 }),
     getRecommendations(props.token, {}),
   ])
-  const [bankRes, dueRes, mistakeRes, killRes, trendRes, planRes, recRes] = results
-  loadError.value = results.some(result => result.status === 'rejected')
+  const [bankRes, dueRes, mistakeRes, killRes, weakRes, trendRes, planRes, recRes] = results
+  // Only the lists the page is about may blank it. A supplementary source
+  // (weak flags, plan, trends) failing must not hide mistakes that loaded fine.
+  loadError.value = [bankRes, dueRes, mistakeRes, killRes].some(result => result.status === 'rejected')
   banks.value = bankRes.status === 'fulfilled' ? (bankRes.value || []) : []
   dueReviews.value = dueRes.status === 'fulfilled' ? (dueRes.value || []) : []
   mistakes.value = mistakeRes.status === 'fulfilled' ? (mistakeRes.value || []) : []
   killed.value = killRes.status === 'fulfilled' ? (killRes.value || []) : []
+  weakList.value = weakRes.status === 'fulfilled' ? (weakRes.value || []) : []
   trends.value = trendRes.status === 'fulfilled' ? (trendRes.value || null) : null
   plan.value = planRes.status === 'fulfilled' ? (planRes.value || null) : null
   recommendations.value = recRes.status === 'fulfilled' ? (recRes.value || []) : []
   loading.value = false
 }
 
+// Every start button on this page goes through the shared entry: a second
+// session of the same mode is never stacked silently behind an old one.
+const {
+  start: startStudy,
+  continueSession,
+  endAndStart,
+  pending: startPending,
+} = useStartStudy(() => props.token)
+const showStartPanel = ref(false)
+const blockedSessions = ref([])
+let blockedPayload = null
+
+const starting = computed(() => startPending.value)
+
+function navigateToSession(session) {
+  emit('start-session', session)
+}
+
 async function start(mode, bankId, questionIds, bankIds = null) {
   if (!bankId || !questionIds?.length || starting.value) return
-  starting.value = true
   notice.value = ''
-  try {
-    const payload = {
-      bank_id: bankId,
-      mode,
-      question_ids: questionIds,
-    }
-    if (Array.isArray(bankIds) && bankIds.length > 1) payload.bank_ids = bankIds
-    const session = await startSession(props.token, payload)
-    emit('start-session', session)
-  } catch (err) {
-    notice.value = err.detail || err.message
-  } finally {
-    starting.value = false
+  const payload = {
+    bank_id: bankId,
+    mode,
+    question_ids: questionIds,
   }
+  if (Array.isArray(bankIds) && bankIds.length > 1) payload.bank_ids = bankIds
+  const result = await startStudy(payload, { navigate: navigateToSession })
+  if (result?.blocked?.length) {
+    blockedSessions.value = result.blocked
+    blockedPayload = payload
+    showStartPanel.value = true
+  } else if (result?.error) {
+    notice.value = result.error?.detail || result.error?.message || ''
+  }
+}
+
+function closeStartPanel() {
+  showStartPanel.value = false
+  blockedSessions.value = []
+  blockedPayload = null
+}
+
+function continueBlocked() {
+  const [session] = blockedSessions.value
+  closeStartPanel()
+  if (session) continueSession(session, navigateToSession)
+}
+
+async function endBlockedAndStart() {
+  const sessions = blockedSessions.value
+  const payload = blockedPayload
+  showStartPanel.value = false
+  blockedSessions.value = []
+  blockedPayload = null
+  if (!payload) return
+  const result = await endAndStart(sessions, payload, navigateToSession)
+  if (result?.error) notice.value = result.error?.detail || result.error?.message || ''
 }
 
 function uniqueBankIds(items) {
@@ -520,6 +699,19 @@ function startDueGroup(group) {
 
 function startFsrsOne(item) {
   start('FSRS', item.bank_id, [item.question_id])
+}
+
+// The merged row can carry several reasons; the strongest scheduling reason
+// decides which session mode the row starts in.
+function queueStartMode(row) {
+  if (row.reasons.includes('due') || row.reasons.includes('weak')) return 'FSRS'
+  if (row.reasons.includes('mistakes')) return 'MISTAKE'
+  if (row.reasons.includes('killed')) return 'ELIMINATION'
+  return 'FSRS'
+}
+
+function startQueueRow(row) {
+  start(queueStartMode(row), row.bank_id, [row.question_id])
 }
 
 function startMistakeAll() {
@@ -609,6 +801,10 @@ onMounted(load)
 .rail-title { font-size: 12px; font-weight: 600; letter-spacing: .06em; color: var(--ink-2); }
 .rail-note { margin: 7px 0 12px; font-size: 12px; line-height: 1.7; color: var(--ink-3); }
 .review-toolbar { border-top: 0; margin-top: 0; }
+.review-queue-toolbar { flex-wrap: wrap; gap: 12px; }
+.review-queue-row { align-items: flex-start; }
+.review-reason-tag { margin-left: 2px; }
+.review-reason-chip .count { margin-left: 6px; font-family: var(--font-mono); font-size: 12px; color: var(--ink-4); font-weight: 400; }
 .due-row, .mistake-row { align-items: flex-start; }
 .qtype { font-size: 12px; letter-spacing: .04em; color: var(--ink-3); width: 52px; flex: none; padding-top: 3px; }
 .qrow-stem {

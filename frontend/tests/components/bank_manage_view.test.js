@@ -22,6 +22,7 @@ import {
   downloadBankExport,
 } from '../../src/api/banks'
 import { listDrafts } from '../../src/api/ai'
+import { abandonSession, listActiveSessions, startSession } from '../../src/api/practice'
 
 const push = vi.fn()
 const replace = vi.fn()
@@ -72,6 +73,13 @@ vi.mock('../../src/api/ai', () => ({
   listDrafts: vi.fn(),
   acceptDraft: vi.fn(),
   discardDraft: vi.fn(),
+}))
+
+vi.mock('../../src/api/practice', () => ({
+  listActiveSessions: vi.fn(),
+  startSession: vi.fn(),
+  abandonSession: vi.fn(),
+  abandonAllSessions: vi.fn(),
 }))
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0))
@@ -905,6 +913,37 @@ describe('BankManageView management surfaces', () => {
     expect(wrapper.findAll('.mtable-row').length).toBe(1)
     expect(wrapper.text()).toContain('Question 1')
     expect(wrapper.text()).not.toContain('Question 2')
+    wrapper.unmount()
+  })
+
+  it('asks before replacing an unfinished practice session and ends it on request', async () => {
+    listActiveSessions.mockResolvedValue([
+      { id: 's1', mode: 'PRACTICE', bank_name: 'Bank One', answered_count: 3, total_questions: 45 },
+    ])
+    abandonSession.mockResolvedValue({})
+    startSession.mockResolvedValue({ id: 's2', mode: 'PRACTICE' })
+
+    const wrapper = mountView()
+    await flush()
+
+    await wrapper.find('[data-testid="bank-practice"]').trigger('click')
+    await flush()
+    await flush()
+
+    expect(listActiveSessions).toHaveBeenCalledWith('t1', 'PRACTICE')
+    expect(startSession).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="start-study-panel"]').exists()).toBe(true)
+    expect(wrapper.findAll('[data-testid="start-study-session"]')).toHaveLength(1)
+
+    await wrapper.find('[data-testid="start-study-end-and-start"]').trigger('click')
+    await flush()
+    await flush()
+
+    expect(abandonSession).toHaveBeenCalledWith('t1', 's1')
+    expect(startSession).toHaveBeenCalledWith('t1', { bank_id: 'b1', mode: 'PRACTICE' })
+    expect(push).toHaveBeenCalledWith('/practice/s2')
+    expect(wrapper.find('[data-testid="start-study-panel"]').exists()).toBe(false)
+
     wrapper.unmount()
   })
 })

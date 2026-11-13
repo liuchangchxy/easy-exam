@@ -65,6 +65,7 @@ vi.mock('../../src/api/mistakes', () => ({
     { question_id: 'q1', bank_id: 'b1', stem: 'One', type: 'SINGLE', mistake_count: 1 },
     { question_id: 'q2', bank_id: 'b2', stem: 'Two', type: 'SINGLE', mistake_count: 2 },
   ]),
+  listWeakMistakes: vi.fn().mockResolvedValue([]),
   updateMistakeCause: vi.fn(),
 }))
 vi.mock('../../src/api/kills', () => ({
@@ -74,7 +75,12 @@ vi.mock('../../src/api/kills', () => ({
   killQuestion: vi.fn(),
   unkillQuestion: vi.fn(),
 }))
-vi.mock('../../src/api/practice', () => ({ startSession: vi.fn().mockResolvedValue({ id: 's1' }) }))
+vi.mock('../../src/api/practice', () => ({
+  startSession: vi.fn().mockResolvedValue({ id: 's1' }),
+  listActiveSessions: vi.fn().mockResolvedValue([]),
+  abandonSession: vi.fn().mockResolvedValue({}),
+  abandonAllSessions: vi.fn().mockResolvedValue({}),
+}))
 vi.mock('../../src/api/learning', () => ({
   getLearningTrends: vi.fn().mockResolvedValue(null),
   getStudyPlan: vi.fn().mockResolvedValue(null),

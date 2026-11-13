@@ -195,6 +195,7 @@ import { getLearningTrends } from '../api/learning'
 import { useLocale } from '../composables/useLocale.js'
 import { useTheme } from '../composables/useTheme.js'
 import { readStoredBankListQuery } from '../utils/bankListQuery.js'
+import { BANKS_CHANGED_EVENT } from '../utils/shellEvents.js'
 import { canGoBack } from '../router/backNavigation.js'
 import { questionCode } from '../domain/bankManage.js'
 
@@ -340,6 +341,7 @@ function handleOpenDialogEvent(e) {
 
 onMounted(() => {
   window.addEventListener('easyexam:open-dialog', handleOpenDialogEvent)
+  window.addEventListener(BANKS_CHANGED_EVENT, loadShellData)
   document.addEventListener('click', handleDocumentClick)
   document.addEventListener('keydown', handleDocumentKeydown)
   if (auth.token.value) loadShellData()
@@ -347,6 +349,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('easyexam:open-dialog', handleOpenDialogEvent)
+  window.removeEventListener(BANKS_CHANGED_EVENT, loadShellData)
   document.removeEventListener('click', handleDocumentClick)
   document.removeEventListener('keydown', handleDocumentKeydown)
   delete document.body.dataset.route

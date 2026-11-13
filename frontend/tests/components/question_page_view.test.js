@@ -15,11 +15,12 @@ import { getQuestion, listQuestionVersions } from '../../src/api/questions'
 import { startSession } from '../../src/api/practice'
 
 const push = vi.fn()
+const replace = vi.fn()
 const routeState = reactive({ params: {}, query: {} })
 
 vi.mock('vue-router', () => ({
   useRoute: () => routeState,
-  useRouter: () => ({ push }),
+  useRouter: () => ({ push, replace }),
 }))
 
 vi.mock('../../src/api/banks', () => ({
@@ -270,5 +271,208 @@ describe('QuestionPageView archived question', () => {
     await practice.trigger('click')
     await flush()
     expect(startSession).not.toHaveBeenCalled()
+  })
+})
+
+describe('QuestionPageView load failures', () => {
+  it('shows a retryable failure instead of the not-found copy when the question cannot load', async () => {
+    getQuestion.mockRejectedValueOnce({ status: 500, detail: 'server exploded' })
+
+    await mountView()
+
+    const failure = wrapper.find('.question-missing')
+    expect(failure.exists()).toBe(true)
+    expect(wrapper.find('[data-testid="access-denied"]').exists()).toBe(false)
+    expect(failure.find('.empty-title').text()).toBe(t('ep.common.load_failed'))
+    expect(failure.text()).toContain('server exploded')
+    expect(failure.text()).not.toContain(t('ep.questions.not_found_title'))
+
+    await failure.find('.empty-actions .btn').trigger('click')
+    await flush()
+
+    expect(getQuestion).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('.qp-stem').text()).toBe('Which letter is the answer?')
+  })
+
+  it('surfaces a bank load failure without denying access to the question', async () => {
+    getBank.mockRejectedValueOnce({ status: 500, detail: 'bank down' })
+
+    await mountView()
+
+    expect(wrapper.find('[data-testid="access-denied"]').exists()).toBe(false)
+    const notice = wrapper.find('.page-head .notice.bad')
+    expect(notice.exists()).toBe(true)
+    expect(notice.text()).toContain(t('ep.common.load_failed'))
+
+    await notice.find('.btn').trigger('click')
+    await flush()
+
+    expect(getBank).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('.page-eyebrow').text()).toBe('Bank One')
+  })
+})
+
+describe('QuestionPageView access-denied exit', () => {
+  it('sends the access-denied action to the bank list instead of the forbidden bank', async () => {
+    getBank.mockRejectedValueOnce({ status: 403 })
+
+    const view = await mountView()
+
+    expect(view.find('[data-testid="access-denied"]').exists()).toBe(true)
+    await view.find('[data-testid="access-denied-back"]').trigger('click')
+
+    expect(push).toHaveBeenCalledWith({ name: 'banks' })
+  })
+})
+
+describe('QuestionPageView bank mismatch', () => {
+  it('redirects a question opened under the wrong bank to its real bank', async () => {
+    getQuestion.mockResolvedValue(makeQuestion({ bank_id: 'b9' }))
+
+    await mountView()
+
+    expect(replace).toHaveBeenCalledWith({
+      name: 'question',
+      params: { bankId: 'b9', questionId: 'q1' },
+    })
+    expect(wrapper.find('.qp-stem').exists()).toBe(false)
+    expect(listQuestionVersions).not.toHaveBeenCalled()
+  })
+})
+
+describe('QuestionPageView edit gating for archived and locked questions', () => {
+  it('disables edit on an archived question but keeps restore available', async () => {
+    getQuestion.mockResolvedValue(makeQuestion({ archived: true }))
+
+    await mountView()
+
+    const edit = wrapper.find('[data-testid="question-edit"]')
+    expect(edit.exists()).toBe(true)
+    expect(edit.element.disabled).toBe(true)
+    expect(edit.attributes('title')).toBe(t('ep.manage.archived_note'))
+
+    const archive = wrapper.find('[data-testid="question-archive"]')
+    expect(archive.text()).toContain(t('ep.manage.restore'))
+    expect(archive.element.disabled).toBe(false)
+  })
+
+  it('disables edit and archive while an active exam locks the question', async () => {
+    getQuestion.mockResolvedValue(makeQuestion({ locked_by_active_exam: true }))
+
+    await mountView()
+
+    for (const testId of ['question-edit', 'question-archive']) {
+      const button = wrapper.find(`[data-testid="${testId}"]`)
+      expect(button.exists()).toBe(true)
+      expect(button.element.disabled).toBe(true)
+      expect(button.attributes('title')).toBe(t('ep.manage.locked_desc'))
+    }
+
+    await wrapper.find('[data-testid="question-archive"]').trigger('click')
+    await flush()
+    expect(batchBankQuestions).not.toHaveBeenCalled()
+  })
+})
+
+describe('QuestionPageView copy for members', () => {
+  it('lets a member copy the question into a bank they can edit', async () => {
+    getBank.mockResolvedValue({ id: 'b1', name: 'Bank One', role: 'MEMBER' })
+    listBanks.mockResolvedValue([
+      { id: 'b1', name: 'Bank One', role: 'MEMBER' },
+      { id: 'b2', name: 'Bank Two', role: 'EDITOR' },
+      { id: 'b3', name: 'Bank Three', role: 'MEMBER' },
+    ])
+
+    await mountView()
+
+    expect(wrapper.find('[data-testid="question-edit"]').exists()).toBe(false)
+    const values = wrapper.findAll('.copy-select option').map(option => option.element.value)
+    expect(values).toEqual(['', 'b2'])
+
+    await wrapper.find('.copy-select').setValue('b2')
+    await wrapper.find('.copy-form .btn').trigger('click')
+    await flush()
+
+    expect(copyQuestionToBank).toHaveBeenCalledWith('t1', 'b1', 'q1', 'b2')
+  })
+
+  it('keeps the copy panel hidden when the member has no editable target', async () => {
+    getBank.mockResolvedValue({ id: 'b1', name: 'Bank One', role: 'MEMBER' })
+    listBanks.mockResolvedValue([{ id: 'b1', name: 'Bank One', role: 'MEMBER' }])
+
+    await mountView()
+
+    expect(wrapper.find('.copy-form').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain(t('ep.banks.copy_to'))
+  })
+})
+
+describe('QuestionPageView version preview in the URL', () => {
+  const versionList = [
+    { id: 'v1', version_number: 1, stem: 'Oldest stem' },
+    { id: 'v3', version_number: 3, stem: 'Current stem' },
+    { id: 'v2', version_number: 2, stem: 'Middle stem' },
+  ]
+
+  it('writes the selected version to ?v= and clears it when returning to the current version', async () => {
+    getQuestion.mockResolvedValue(makeQuestion({ id: 'q3', version_number: 3, stem: 'Current stem' }))
+    listQuestionVersions.mockResolvedValue(versionList)
+
+    await mountView({ questionId: 'q3' })
+
+    const items = wrapper.findAll('.version-item')
+    await items[1].trigger('click')
+
+    expect(wrapper.find('.qp-stem').text()).toBe('Middle stem')
+    expect(replace).toHaveBeenCalledWith({ query: { v: '2' } })
+
+    // The router would have written the query; mirror it before returning.
+    routeState.query = { v: '2' }
+    await wrapper.find('.qp-preview-note button').trigger('click')
+
+    expect(wrapper.find('.qp-stem').text()).toBe('Current stem')
+    expect(replace).toHaveBeenLastCalledWith({ query: {} })
+  })
+
+  it('restores a version preview from the URL on a fresh load', async () => {
+    getQuestion.mockResolvedValue(makeQuestion({ id: 'q3', version_number: 3, stem: 'Current stem' }))
+    listQuestionVersions.mockResolvedValue(versionList)
+    routeState.query = { v: '2' }
+
+    await mountView({ questionId: 'q3' })
+
+    expect(wrapper.find('.qp-stem').text()).toBe('Middle stem')
+    expect(wrapper.find('.practice-one-btn').exists()).toBe(false)
+    expect(wrapper.find('.qp-preview-note').exists()).toBe(true)
+  })
+})
+
+describe('QuestionPageView version request race', () => {
+  it('ignores versions that resolve after the reader switched questions', async () => {
+    let resolveFirst
+    listQuestionVersions
+      .mockImplementationOnce(() => new Promise(resolve => { resolveFirst = resolve }))
+      .mockImplementationOnce(() => Promise.resolve([
+        { id: 'v2', version_number: 2, stem: 'Second question' },
+      ]))
+    getQuestion
+      .mockResolvedValueOnce(makeQuestion({ id: 'q1', version_number: 1, stem: 'First question' }))
+      .mockResolvedValue(makeQuestion({ id: 'q2', version_number: 2, stem: 'Second question' }))
+
+    await mountView({ questionId: 'q1' })
+    expect(wrapper.find('.qp-stem').text()).toBe('First question')
+
+    await wrapper.setProps({ questionId: 'q2' })
+    await flush()
+    await flush()
+    expect(wrapper.find('.qp-stem').text()).toBe('Second question')
+
+    resolveFirst([{ id: 'v1', version_number: 1, stem: 'Stale first question' }])
+    await flush()
+    await flush()
+
+    const items = wrapper.findAll('.version-item')
+    expect(items.map(item => item.find('.mono').text())).toEqual(['v2'])
+    expect(wrapper.text()).not.toContain('Stale first question')
   })
 })

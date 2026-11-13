@@ -220,7 +220,7 @@
               <button
                 type="button"
                 class="btn btn-sm bank-practice-btn"
-                :disabled="bank.deleted || Boolean(startingId)"
+                :disabled="bank.deleted || Number(bank.question_count) === 0 || Boolean(startingId)"
                 :aria-busy="startingId === bank.id ? 'true' : 'false'"
                 :aria-label="`${t('ep.banks.practice')} ${bank.name}`"
                 @click.stop="startPractice(bank)"
@@ -238,7 +238,7 @@
                 type="button"
                 class="btn btn-sm btn-quiet"
                 :aria-label="`${t('ep.banks.manage')} ${bank.name}`"
-                @click.stop="router.push(`/banks/${bank.id}/manage`)"
+                @click.stop="router.push({ name: 'bank-detail', params: { bankId: bank.id }, query: { tab: 'settings' } })"
               >{{ t('ep.banks.manage') }}</button>
             </span>
             <span class="bank-menu-wrap" @keydown.escape.stop.prevent="closeMenuAndRestore">
@@ -393,6 +393,7 @@ import { useRoute, useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
 import AppDialog from '../components/AppDialog.vue'
 import { useLocale } from '../composables/useLocale.js'
+import { notifyBanksChanged } from '../utils/shellEvents.js'
 import { useDirtyGuard } from '../composables/useDirtyGuard.js'
 import {
   listBanks,
@@ -609,13 +610,20 @@ function applyRouteQuery(raw) {
   }
 }
 
+let loadSeq = 0
+
 async function load() {
+  const requestId = ++loadSeq
   loading.value = true
   clearPageError()
   try {
     const res = await listBanks(props.token, { deleted: showRecycle.value })
+    // A fast all/recycle toggle can leave two requests in flight; the later
+    // one wins, never whichever response happens to arrive last.
+    if (requestId !== loadSeq) return
     const list = Array.isArray(res) ? res : (res?.banks || [])
     banks.value = list
+    lastLoadedAt = Date.now()
     if (!showRecycle.value) activeBanks.value = list
     // A filter naming a category the loaded rows no longer carry would hide
     // everything (and, in recycle, an option that is not in the select at all).
@@ -630,10 +638,11 @@ async function load() {
       if (pruned.length !== selectedIds.value.size) selectedIds.value = new Set(pruned)
     }
   } catch (err) {
+    if (requestId !== loadSeq) return
     banks.value = []
     showPageError(err.detail || err.message)
   } finally {
-    loading.value = false
+    if (requestId === loadSeq) loading.value = false
   }
 }
 
@@ -726,6 +735,7 @@ async function createBank() {
     if (form.value.category) payload.category = form.value.category
     const created = await createBankApi(props.token, payload)
     triggerSyncEvent('BANK_CREATED', 'BANK', created.id, { name: created.name })
+    notifyBanksChanged()
     showCreate.value = false
     await load()
     router.push(`/banks/${created.id}`)
@@ -762,6 +772,7 @@ async function saveBankMeta() {
     // Blank keeps the existing category on the server.
     if (editForm.value.category) payload.category = editForm.value.category
     await updateBank(props.token, editBankId.value, payload)
+    notifyBanksChanged()
     showEdit.value = false
     await load()
     flash(t('ep.banks.saved'))
@@ -779,6 +790,7 @@ async function archiveBank(bank) {
   clearPageError()
   try {
     await deleteBank(props.token, bank.id)
+    notifyBanksChanged()
     await load()
     flash(t('ep.manage.audit_bank_deleted'))
   } catch (err) {
@@ -791,6 +803,7 @@ async function restoreBankRow(bank) {
   clearPageError()
   try {
     await restoreBank(props.token, bank.id)
+    notifyBanksChanged()
     await load()
     flash(t('ep.banks.restore_done', { name: bank.name }))
   } catch (err) {
@@ -892,14 +905,28 @@ function pruneSelectionToVisible() {
 
 watch([query, category], pruneSelectionToVisible)
 
+// Another member can add or remove questions while this tab is in the
+// background; coming back to it should show their work, not a stale count.
+const REFRESH_AFTER_HIDDEN_MS = 20000
+let lastLoadedAt = 0
+
+function onVisibilityChange() {
+  if (document.visibilityState !== 'visible') return
+  if (showCreate.value || loading.value) return
+  if (Date.now() - lastLoadedAt < REFRESH_AFTER_HIDDEN_MS) return
+  load()
+}
+
 onMounted(() => {
   writeListQuery()
   load()
   document.addEventListener('click', onDocumentClick)
+  document.addEventListener('visibilitychange', onVisibilityChange)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   if (toastTimer) clearTimeout(toastTimer)
 })
 </script>

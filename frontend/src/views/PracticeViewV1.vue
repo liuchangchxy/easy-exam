@@ -539,7 +539,12 @@
         </div>
       </footer>
     </template>
-    <div v-else class="focus-empty">
+    <div v-else-if="reportLoadFailed" class="focus-empty" data-testid="practice-report-load-failed" role="alert">
+      <div class="empty-title">{{ t('ep.common.load_failed') }}</div>
+      <div class="empty-desc">{{ t('ep.practice.report_unavailable') }}</div>
+      <button type="button" class="btn" data-testid="practice-report-retry" @click="retryLoadReport">{{ t('ep.common.retry') }}</button>
+    </div>
+    <div v-else-if="!practiceReport" class="focus-empty">
       <div class="empty-title">{{ t('ep.practice.no_questions') }}</div>
       <div class="empty-desc">{{ t('ep.practice.no_questions_hint') }}</div>
       <button type="button" class="btn" @click="handleBack">{{ t('ep.common.back') }}</button>
@@ -606,11 +611,15 @@ const authToken = computed(() => props.token || auth.token?.value || (typeof loc
 const showExitConfirmModal = ref(false)
 
 function handleBack() {
-  if (practiceReport.value || session.value?.is_completed) {
+  if (practiceReport.value || reportLoadFailed.value || isSessionCompleted(session.value)) {
     doExit()
     return
   }
   showExitConfirmModal.value = true
+}
+
+function isSessionCompleted(value) {
+  return Boolean(value?.is_completed) || value?.status === 'completed'
 }
 
 async function handleConfirmExit() {
@@ -712,6 +721,9 @@ function readLocalDraft() {
 }
 
 function writeLocalDraft() {
+  // A finished session has no answer state worth keeping; writing here would
+  // recreate a draft for a session the server already closed.
+  if (isSessionCompleted(session.value)) return
   const key = localDraftStorageKey()
   if (!key) return
   writeStoredJson(key, snapshotLocalDraft(sessionAnswers.value, Date.now(), clientAttemptIds.value))
@@ -951,6 +963,7 @@ function scheduleDraftFlush(delay = 600) {
 async function flushDraft() {
   saveCurrentQuestionState()
   writeLocalDraft()
+  if (isSessionCompleted(session.value)) return false
   if (!props.sessionId || !authToken.value) return false
   if (draftFlushPromise) {
     draftFlushQueued = true
@@ -1074,6 +1087,18 @@ onMounted(async () => {
     session.value = await getSession(props.token, props.sessionId)
     if (session.value?.mode === 'EXAM') {
       router.replace(`/exam/${props.sessionId}`)
+      return
+    }
+    if (isSessionCompleted(session.value)) {
+      // A finished session is a report, not a runner. Rendering the question
+      // surface here would offer answer controls with no questions behind them.
+      stopClock()
+      if (session.value?.report) {
+        practiceReport.value = session.value.report
+        clearLocalDraft()
+      } else {
+        reportLoadFailed.value = true
+      }
       return
     }
     flaggedIds.value = Array.isArray(session.value?.flags) ? [...session.value.flags] : []
@@ -2031,7 +2056,31 @@ function resolveDraftConflictUseLocal() {
 
 const showCompleteConfirmModal = ref(false)
 const practiceReport = ref(null)
+const reportLoadFailed = ref(false)
 const completing = ref(false)
+
+/**
+ * Older sessions predate the persisted report. The runner cannot be replayed
+ * for a finished session, so the only honest state is a retryable notice.
+ */
+async function retryLoadReport() {
+  if (loading.value) return
+  reportLoadFailed.value = false
+  loading.value = true
+  try {
+    const fresh = await getSession(props.token, props.sessionId)
+    session.value = fresh
+    if (fresh?.report) {
+      practiceReport.value = fresh.report
+    } else {
+      reportLoadFailed.value = true
+    }
+  } catch (_) {
+    reportLoadFailed.value = true
+  } finally {
+    loading.value = false
+  }
+}
 
 function complete() {
   const total = questions.value.length

@@ -499,4 +499,55 @@ describe('ExamView runner', () => {
     expect(stored.pendingSubmit).toBe(false)
     wrapper.unmount()
   })
+
+  it('reopens a completed exam as its stored report without restarting the timer', async () => {
+    api.getSession.mockResolvedValueOnce({
+      id: 's1',
+      mode: 'EXAM',
+      bank_id: 'b1',
+      current_index: 0,
+      answers: {},
+      flags: [],
+      time_limit: 120,
+      is_completed: true,
+      report: reportFixture,
+    })
+
+    const wrapper = mountExam()
+    await flushPromises()
+
+    expect(wrapper.find('.exam-report').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="exam-timer"]').exists()).toBe(false)
+    expect(wrapper.find('.exam-submit').exists()).toBe(false)
+    expect(wrapper.find('.exam-option').exists()).toBe(false)
+    expect(api.completeSession).not.toHaveBeenCalled()
+    expect(api.getSessionQuestions).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('offers a retry when a completed exam has no report', async () => {
+    api.getSession.mockResolvedValueOnce({
+      id: 's1',
+      mode: 'EXAM',
+      bank_id: 'b1',
+      current_index: 0,
+      answers: {},
+      flags: [],
+      time_limit: 120,
+      is_completed: true,
+    })
+
+    const wrapper = mountExam()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="exam-report-load-failed"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="exam-report-retry"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="exam-timer"]').exists()).toBe(false)
+    expect(wrapper.find('.exam-submit').exists()).toBe(false)
+    expect(wrapper.find('.exam-option').exists()).toBe(false)
+    expect(wrapper.find('.exam-report').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
 })

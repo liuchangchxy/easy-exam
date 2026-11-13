@@ -1,7 +1,15 @@
 <template>
-  <AccessDeniedState v-if="accessError" :kind="accessError" @back="backToBank" />
+  <AccessDeniedState v-if="accessError" :kind="accessError" @back="backToBanks" />
   <div v-else class="question-page">
     <p v-if="loading" class="hint question-loading">{{ t('ep.common.loading') }}</p>
+
+    <div v-else-if="loadFailed" class="empty question-missing" role="alert">
+      <div class="empty-title">{{ t('ep.common.load_failed') }}</div>
+      <div class="empty-desc">{{ loadError }}</div>
+      <div class="empty-actions">
+        <button type="button" class="btn" @click="load">{{ t('ep.common.retry') }}</button>
+      </div>
+    </div>
 
     <template v-else-if="question">
       <div class="page-head">
@@ -16,6 +24,11 @@
             <span v-if="isArchived" class="tag bad">{{ t('ep.manage.archived_badge') }}</span>
             <span v-if="previewVersion" class="tag">{{ t('ep.banks.version_history') }}</span>
           </p>
+          <div v-if="bankError" class="notice bad" role="alert">
+            <LinearIcon name="alert" :size="15" />
+            <span>{{ t('ep.common.load_failed') }}</span>
+            <button type="button" class="btn btn-sm" @click="loadBank">{{ t('ep.common.retry') }}</button>
+          </div>
           <div v-if="actionError" class="notice bad" role="alert">
             <LinearIcon name="alert" :size="15" /><span>{{ actionError }}</span>
           </div>
@@ -33,10 +46,26 @@
           >
             <LinearIcon name="play" :size="14" />{{ starting ? t('ep.common.starting') : t('ep.banks.practice_one') }}
           </button>
-          <button v-if="canEdit && !previewVersion" type="button" class="btn" data-testid="question-edit" @click="editing = true">
+          <button
+            v-if="canEdit && !previewVersion"
+            type="button"
+            class="btn"
+            data-testid="question-edit"
+            :disabled="Boolean(editBlockedReason)"
+            :title="editBlockedReason || undefined"
+            @click="editing = true"
+          >
             <LinearIcon name="edit" :size="14" />{{ t('ep.common.edit') }}
           </button>
-          <button v-if="canEdit && !previewVersion" type="button" class="btn" data-testid="question-archive" @click="toggleArchive">
+          <button
+            v-if="canEdit && !previewVersion"
+            type="button"
+            class="btn"
+            data-testid="question-archive"
+            :disabled="lockedByExam"
+            :title="lockedByExam ? t('ep.manage.locked_desc') : undefined"
+            @click="toggleArchive"
+          >
             <LinearIcon :name="isArchived ? 'rotate-ccw' : 'archive'" :size="14" />{{ isArchived ? t('ep.manage.restore') : t('ep.manage.archive') }}
           </button>
         </div>
@@ -105,7 +134,7 @@
                 class="qp-version-item version-item"
                 :class="{ 'is-active': previewVersion?.id === ver.id, 'is-current': ver.version_number === question.version_number }"
                 :aria-current="previewVersion?.id === ver.id ? 'true' : undefined"
-                @click="previewVersion = ver"
+                @click="setPreviewVersion(ver)"
               >
                 <span class="mono">v{{ ver.version_number }}</span>
                 <span class="od-truncate">{{ stripHtml(ver.stem) }}</span>
@@ -114,11 +143,11 @@
             </div>
             <div v-if="previewVersion" class="qp-preview-note">
               <span class="hint">{{ t('ep.banks.version_preview_note') }}</span>
-              <button type="button" class="btn btn-sm btn-quiet" @click="previewVersion = null">{{ t('ep.banks.version_back') }}</button>
+              <button type="button" class="btn btn-sm btn-quiet" @click="setPreviewVersion(null)">{{ t('ep.banks.version_back') }}</button>
             </div>
           </section>
 
-          <section v-if="canEdit && !isArchived && !previewVersion" class="panel qp-rail-panel">
+          <section v-if="(copyTargets.length || banksError) && !isArchived && !previewVersion" class="panel qp-rail-panel">
             <span class="rule-label">{{ t('ep.banks.copy_to') }}</span>
             <div v-if="banksError" class="notice bad" role="alert">
               <span>{{ t('ep.common.load_failed') }}</span>
@@ -141,7 +170,7 @@
       </div>
 
       <QuestionEditModal
-        v-if="canEdit && question"
+        v-if="canEdit && question && !editBlockedReason"
         :show="editing"
         :question="question"
         :chapters="chapters"
@@ -150,14 +179,6 @@
         @saved="handleSaved"
       />
     </template>
-
-    <div v-else class="empty question-missing">
-      <div class="empty-title">{{ t('ep.questions.not_found_title') }}</div>
-      <div class="empty-desc">{{ t('ep.questions.not_found_desc') }}</div>
-      <div class="empty-actions">
-        <button type="button" class="btn" @click="backToBank">{{ t('ep.common.back_to_banks') }}</button>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -172,6 +193,7 @@ import { canEditBankContent, questionCode } from '../domain/bankManage.js'
 import { getBank, listBanks, listChapters, copyQuestionToBank, batchBankQuestions } from '../api/banks'
 import { getQuestion, listQuestionVersions } from '../api/questions'
 import { startSession } from '../api/practice'
+import { readQueryString, replaceQueryState } from '../utils/routeQuery.js'
 
 const props = defineProps({
   token: { type: String, required: true },
@@ -192,7 +214,10 @@ const chapters = ref([])
 const banks = ref([])
 const loading = ref(true)
 const accessError = ref('')
+const loadFailed = ref(false)
+const loadError = ref('')
 const banksError = ref(false)
+const bankError = ref('')
 
 const versions = ref([])
 const versionsLoading = ref(false)
@@ -210,10 +235,20 @@ const copyNotice = ref('')
 const copyNoticeError = ref(false)
 
 let loadSeq = 0
+let versionSeq = 0
 
 const canEdit = computed(() => canEditBankContent(bank.value?.role))
 const isArchived = computed(() => Boolean(question.value?.archived))
+const lockedByExam = computed(() => Boolean(question.value?.locked_by_active_exam))
 const displayQuestion = computed(() => previewVersion.value || question.value || {})
+
+// Why edit is unavailable even though the user may edit the bank: the backend
+// answers 400 for archived questions and 403 while an exam locks them.
+const editBlockedReason = computed(() => {
+  if (isArchived.value) return t('ep.manage.archived_note')
+  if (lockedByExam.value) return t('ep.manage.locked_desc')
+  return ''
+})
 
 const lockedNote = computed(() => {
   if (previewVersion.value) return false
@@ -258,10 +293,38 @@ function accessKind(error) {
   return ''
 }
 
+function messageOf(error) {
+  return error?.detail || error?.message || t('ep.common.load_failed')
+}
+
+function applyPreviewFromQuery() {
+  const wanted = readQueryString(route.query?.v)
+  const current = String(question.value?.version_number ?? '')
+  if (!wanted || wanted === current) {
+    previewVersion.value = null
+    return
+  }
+  previewVersion.value = versions.value.find(ver => String(ver.version_number) === wanted) || null
+}
+
+function setPreviewVersion(version) {
+  if (!version || version.version_number === question.value?.version_number) {
+    previewVersion.value = null
+    replaceQueryState(router, route.query, { v: '' })
+    return
+  }
+  previewVersion.value = version
+  replaceQueryState(router, route.query, { v: version.version_number })
+}
+
 async function load() {
   const requestId = ++loadSeq
+  versionSeq += 1
   loading.value = true
   accessError.value = ''
+  loadFailed.value = false
+  loadError.value = ''
+  bankError.value = ''
   actionError.value = ''
   bank.value = null
   question.value = null
@@ -286,27 +349,68 @@ async function load() {
     return
   }
   bank.value = bankRes.status === 'fulfilled' ? bankRes.value : null
-  question.value = questionRes.status === 'fulfilled' ? questionRes.value : null
+  bankError.value = bankRes.status === 'rejected' ? messageOf(bankRes.reason) : ''
   chapters.value = chaptersRes.status === 'fulfilled' && Array.isArray(chaptersRes.value) ? chaptersRes.value : []
   banks.value = banksRes.status === 'fulfilled' && Array.isArray(banksRes.value) ? banksRes.value : []
   banksError.value = banksRes.status === 'rejected'
+  if (questionRes.status !== 'fulfilled' || !questionRes.value) {
+    loadFailed.value = true
+    loadError.value = questionRes.status === 'rejected' ? messageOf(questionRes.reason) : t('ep.common.load_failed')
+    loading.value = false
+    return
+  }
+  const resolved = questionRes.value
+  const resolvedBankId = String(resolved.bank_id || '')
   loading.value = false
-  if (question.value) loadVersions()
+  // A global question URL can point at the wrong bank; send the reader to the
+  // bank the question really belongs to instead of showing it under this one.
+  if (resolvedBankId && resolvedBankId !== bankId.value) {
+    if (String(route.params?.bankId || '') !== resolvedBankId) {
+      router.replace({
+        name: 'question',
+        params: { bankId: resolvedBankId, questionId: resolved.id || questionId.value },
+      })
+    }
+    return
+  }
+  question.value = resolved
+  loadVersions()
 }
 
 async function loadVersions() {
-  if (!question.value) return
+  const target = question.value
+  if (!target) return
+  const requestId = ++versionSeq
+  const targetId = target.id
   versionError.value = ''
   versionsLoading.value = true
   try {
-    const res = await listQuestionVersions(props.token, question.value.id)
+    const res = await listQuestionVersions(props.token, targetId)
+    if (requestId !== versionSeq || question.value?.id !== targetId) return
     versions.value = Array.isArray(res)
       ? res.slice().sort((a, b) => (b.version_number || 0) - (a.version_number || 0))
       : []
+    applyPreviewFromQuery()
   } catch (err) {
+    if (requestId !== versionSeq || question.value?.id !== targetId) return
     versionError.value = err?.detail || err?.message || t('ep.common.load_failed')
   } finally {
-    versionsLoading.value = false
+    if (requestId === versionSeq) versionsLoading.value = false
+  }
+}
+
+async function loadBank() {
+  if (!bankId.value) return
+  bankError.value = ''
+  try {
+    bank.value = await getBank(props.token, bankId.value)
+  } catch (err) {
+    const kind = accessKind(err)
+    if (kind) {
+      accessError.value = kind
+      return
+    }
+    bankError.value = messageOf(err)
   }
 }
 
@@ -340,7 +444,7 @@ async function practiceOne() {
 }
 
 async function toggleArchive() {
-  if (!question.value) return
+  if (!question.value || lockedByExam.value) return
   const nextArchived = !isArchived.value
   actionError.value = ''
   actionNotice.value = ''
@@ -379,8 +483,10 @@ function handleSaved() {
   load()
 }
 
-function backToBank() {
-  router.push({ name: 'bank-detail', params: { bankId: bankId.value } })
+function backToBanks() {
+  // The bank-detail route is denied too when the denial came from that bank,
+  // so every access state exits to the list instead of looping.
+  router.push({ name: 'banks' })
 }
 
 watch([bankId, questionId], () => load(), { immediate: true })
@@ -480,10 +586,31 @@ watch([bankId, questionId], () => load(), { immediate: true })
 
 .qp-copy-hint { margin: 0; }
 
+.copy-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.copy-select {
+  flex: 1 1 130px;
+  min-width: 0;
+  max-width: 180px;
+  height: 30px;
+  font-size: 12px;
+}
+
+.copy-notice { margin: 0; color: var(--ink-3); overflow-wrap: anywhere; }
+.copy-notice.bad-text { color: var(--bad); }
+.bad-text { color: var(--bad); }
+
 .question-missing { margin-top: 12vh; }
 
 @media (max-width: 900px) {
   .question-layout { grid-template-columns: minmax(0, 1fr); }
   .question-rail { position: static; }
+  .copy-select { max-width: none; }
 }
 </style>

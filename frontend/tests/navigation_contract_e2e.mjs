@@ -250,6 +250,48 @@ async function main() {
     assert.equal(await page.inputValue('.library-page .search-box input'), '甲', 'Search keyword must survive a reload')
     assert.ok(await page.locator('.library-tabs .tab').nth(2).evaluate(el => el.classList.contains('is-active')), 'Type filter must survive a reload')
 
+    // --- 5. A finished session is a report, not an empty runner ---
+    const session = await (await fetch(`${baseUrl}/api/v1/practice/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ bank_id: bank.id, mode: 'PRACTICE', question_ids: [question.id] }),
+    })).json()
+    assert.ok(session.id, 'Practice session must start')
+    await fetch(`${baseUrl}/api/v1/practice/sessions/${session.id}/attempts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ question_id: question.id, user_answer: 'B' }),
+    })
+    const report = await (await fetch(`${baseUrl}/api/v1/practice/sessions/${session.id}/complete`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })).json()
+    assert.ok(report && typeof report.accuracy === 'number', 'Completing a session must return its report')
+
+    const reportPage = await context.newPage()
+    await reportPage.goto(`${baseUrl}/#/practice/${session.id}`)
+    await reportPage.waitForSelector('[data-testid="practice-report-modal"]', { timeout: 10000 })
+    const reopened = await reportPage.locator('[data-testid="practice-report-modal"]').innerText()
+    assert.ok(reopened.includes(String(report.accuracy)), 'Reopening a finished session must render the stored report')
+    assert.equal(
+      await reportPage.locator('.focus-answer, .option-btn, .btn-submit').count(),
+      0,
+      'A finished session must not offer answer controls',
+    )
+    await reportPage.close()
+
+    // --- 6. Review is one queue with reasons, reachable by source ---
+    const reviewQueuePage = await context.newPage()
+    await reviewQueuePage.goto(`${baseUrl}/#/review`)
+    await reviewQueuePage.waitForSelector('[data-testid="review-queue"]', { timeout: 10000 })
+    const queueTab = await reviewQueuePage.locator('.review-page .tabs .tab.is-active').innerText()
+    assert.ok(queueTab.includes('全部'), `The merged queue must be the default review view, got ${queueTab}`)
+    await reviewQueuePage.goto(`${baseUrl}/#/review?source=killed`)
+    await reviewQueuePage.waitForSelector('.review-page .tabs .tab.is-active', { timeout: 10000 })
+    const sourceTab = await reviewQueuePage.locator('.review-page .tabs .tab.is-active').innerText()
+    assert.ok(sourceTab.includes('斩杀'), `?source=killed must open the killed source, got ${sourceTab}`)
+    await reviewQueuePage.close()
+
     await context.close()
     console.log('All navigation contract checks passed.')
   } finally {

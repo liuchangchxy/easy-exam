@@ -485,4 +485,57 @@ describe('PracticeViewV1 component integration', () => {
 
     wrapper.unmount()
   })
+
+  it('reopens a completed practice session as its stored report, not a blank runner', async () => {
+    getSession.mockResolvedValueOnce({
+      id: 's1',
+      mode: 'PRACTICE',
+      bank_id: 'b1',
+      status: 'completed',
+      is_completed: true,
+      report: {
+        score: 8,
+        accuracy: 80,
+        answered_count: 4,
+        total_questions: 5,
+        time_spent: 120,
+        correct_count: 4,
+        partial_count: 0,
+        incorrect_count: 0,
+        unanswered_count: 1,
+        type_stats: {},
+        tag_stats: {},
+        answers: {},
+      },
+    })
+
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-testid="practice-report-modal"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="practice-action-bar"]').exists()).toBe(false)
+    expect(wrapper.find('.opt').exists()).toBe(false)
+    expect(wrapper.find('.focus-empty').exists()).toBe(false)
+    expect(getSessionQuestions).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('offers a retry when a completed practice session has no report', async () => {
+    getSession.mockResolvedValueOnce({
+      id: 's1',
+      mode: 'PRACTICE',
+      bank_id: 'b1',
+      status: 'completed',
+    })
+
+    const wrapper = await mountView()
+
+    const notice = wrapper.find('[data-testid="practice-report-load-failed"]')
+    expect(notice.exists()).toBe(true)
+    expect(wrapper.find('[data-testid="practice-report-retry"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="practice-report-modal"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="practice-action-bar"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
 })

@@ -392,6 +392,16 @@ MIGRATIONS = {
     ALTER TABLE questions ADD COLUMN archived_at TEXT;
     UPDATE questions SET archived_at = updated_at WHERE is_deleted = 1 AND archived_at IS NULL;
     """,
+    20: """
+    -- Session outcomes become first-class: distinguish completed from abandoned
+    -- and persist the report once. is_completed stays the derived column so all
+    -- existing visibility queries keep working.
+    ALTER TABLE practice_sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'active';
+    ALTER TABLE practice_sessions ADD COLUMN completed_at TEXT;
+    ALTER TABLE practice_sessions ADD COLUMN result_json TEXT;
+    UPDATE practice_sessions SET status = 'completed', completed_at = COALESCE(completed_at, updated_at) WHERE is_completed = 1;
+    CREATE INDEX idx_practice_sessions_user_status ON practice_sessions(user_id, status);
+    """,
 }
 
 

@@ -6,31 +6,27 @@ import { fileURLToPath } from 'node:url'
 import {
   DEFAULT_MODE,
   DEFAULT_PALETTE,
+  LEGACY_ACCENT_STORAGE_KEY,
   LEGACY_PALETTE_ALIASES,
   PALETTE_LABELS,
-  PALETTE_SURFACES,
   THEME_PALETTES,
-  applyAccentPreference,
   applyFullTheme,
   applyPalettePreference,
   applyThemePreference,
   calculateContrastRatio,
   calculateRelativeLuminance,
-  getAccessibleForeground,
+  clearLegacyAccentPreference,
   getContrastTextColor,
-  getPaletteSurface,
   isValidHexColor,
   mixHex,
   normalizeHexColor,
   normalizeModePreference,
   normalizePalettePreference,
   normalizeThemePreference,
-  readAccentPreference,
   readModePreference,
   readPalettePreference,
   readThemePreference,
   resolveEffectiveTheme,
-  writeAccentPreference,
   writeModePreference,
   writePalettePreference,
   writeThemePreference,
@@ -126,8 +122,7 @@ test('theme preference remains usable when browser storage throws', () => {
   assert.equal(writePalettePreference(storage, 'gruvbox'), 'gruvbox')
   assert.equal(readModePreference(storage), DEFAULT_MODE)
   assert.equal(writeModePreference(storage, 'system'), 'system')
-  assert.equal(readAccentPreference(storage), '')
-  assert.equal(writeAccentPreference(storage, '#2563eb'), '#2563eb')
+  assert.doesNotThrow(() => clearLegacyAccentPreference(storage))
 })
 
 test('theme preference applies to the document root and is saved', () => {
@@ -225,7 +220,7 @@ test('mode preference supports light, dark, and system', () => {
   assert.equal(resolveEffectiveTheme('dark', false), 'dark')
 })
 
-test('custom accent color validation and normalization', () => {
+test('hex colour validation and normalization', () => {
   assert.equal(isValidHexColor('#fff'), true)
   assert.equal(isValidHexColor('#2563EB'), true)
   assert.equal(isValidHexColor('blue'), false)
@@ -238,7 +233,7 @@ test('custom accent color validation and normalization', () => {
   assert.equal(normalizeHexColor('invalid'), null)
 })
 
-test('custom accent relative luminance and WCAG text contrast calculation', () => {
+test('relative luminance and WCAG text contrast calculation', () => {
   // Pure white has high luminance -> dark text
   assert.equal(getContrastTextColor('#ffffff'), '#0f172a')
   // Pure black has low luminance -> white text
@@ -424,30 +419,6 @@ test('style.css defines a light and dark block for every palette family', () => 
   }
 })
 
-test('PALETTE_SURFACES stays in sync with the palette token blocks in style.css', () => {
-  const css = fs.readFileSync(
-    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/style.css'),
-    'utf-8'
-  )
-
-  for (const palette of THEME_PALETTES) {
-    const lightSelector = palette === 'editorial' ? ':root' : `[data-theme-palette="${palette}"]`
-    const darkSelector = palette === 'editorial'
-      ? '[data-theme="dark"]'
-      : `[data-theme="dark"][data-theme-palette="${palette}"]`
-    const light = readCssBlock(css, lightSelector)
-    const dark = readCssBlock(css, darkSelector)
-    const surfaces = getPaletteSurface(palette)
-
-    assert.equal(assertHexToken(light, 'paper'), surfaces.lightPage, `${palette}: light page mismatch`)
-    assert.equal(assertHexToken(light, 'surface'), surfaces.light, `${palette}: light card mismatch`)
-    assert.equal(assertHexToken(light, 'surface-2'), surfaces.lightSubtle, `${palette}: light subtle mismatch`)
-    assert.equal(assertHexToken(dark, 'paper'), surfaces.darkPage, `${palette}: dark page mismatch`)
-    assert.equal(assertHexToken(dark, 'surface'), surfaces.dark, `${palette}: dark card mismatch`)
-    assert.equal(assertHexToken(dark, 'surface-2'), surfaces.darkSubtle, `${palette}: dark subtle mismatch`)
-  }
-})
-
 test('style.css never declares text smaller than 10px', () => {
   const css = fs.readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/style.css'),
@@ -459,173 +430,99 @@ test('style.css never declares text smaller than 10px', () => {
   assert.ok(smallest >= 10, `style.css declares an unreadably small font-size of ${smallest}px`)
 })
 
-test('getAccessibleForeground guarantees WCAG AA contrast against surfaces across all four palettes and translucent accents', () => {
-  const testAccents = ['#ffffff', '#000000', '#fbbf24', '#0891b2', '#d97706', '#60a5fa', '#2563eb', '#ffff00', '#777777']
-  for (const pal of THEME_PALETTES) {
-    const surfaces = getPaletteSurface(pal)
-    for (const isDark of [false, true]) {
-      const page = isDark ? surfaces.darkPage : surfaces.lightPage
-      const card = isDark ? surfaces.dark : surfaces.light
-      const subtle = isDark ? surfaces.darkSubtle : surfaces.lightSubtle
-      for (const hex of testAccents) {
-        const fg = getAccessibleForeground(hex, isDark, pal)
-        const transCard = mixHex(card, hex, isDark ? 0.16 : 0.14)
-        const transSubtle = mixHex(subtle, hex, isDark ? 0.16 : 0.14)
-        const transPage = mixHex(page, hex, isDark ? 0.16 : 0.14)
-        assert.ok(
-          calculateContrastRatio(fg, card) >= 4.5,
-          `Foreground ${fg} on card ${card} (${pal} dark=${isDark}) contrast is below 4.5:1 for accent ${hex}`
-        )
-        assert.ok(
-          calculateContrastRatio(fg, subtle) >= 4.5,
-          `Foreground ${fg} on subtle ${subtle} (${pal} dark=${isDark}) contrast is below 4.5:1 for accent ${hex}`
-        )
-        assert.ok(
-          calculateContrastRatio(fg, page) >= 4.5,
-          `Foreground ${fg} on page ${page} (${pal} dark=${isDark}) contrast is below 4.5:1 for accent ${hex}`
-        )
-        assert.ok(
-          calculateContrastRatio(fg, transCard) >= 4.5,
-          `Foreground ${fg} on translucent card ${transCard} (${pal} dark=${isDark}) contrast is below 4.5:1 for accent ${hex}`
-        )
-        assert.ok(
-          calculateContrastRatio(fg, transSubtle) >= 4.5,
-          `Foreground ${fg} on translucent subtle ${transSubtle} (${pal} dark=${isDark}) contrast is below 4.5:1 for accent ${hex}`
-        )
-        assert.ok(
-          calculateContrastRatio(fg, transPage) >= 4.5,
-          `Foreground ${fg} on translucent page ${transPage} (${pal} dark=${isDark}) contrast is below 4.5:1 for accent ${hex}`
-        )
-      }
-    }
-  }
-})
-
-test('confirmed reviewer counterexamples guarantee WCAG AA >= 4.5:1 across actual surfaces and composite primary-light', () => {
-  const counterexamples = [
-    { palette: 'everforest', isDark: false, accent: '#ffff00', desc: 'Everforest light + custom #ffff00' },
-    { palette: 'catppuccin', isDark: false, accent: '#cccc66', desc: 'Catppuccin light + custom #cccc66' },
-    { palette: 'gruvbox', isDark: true, accent: '#338833', desc: 'Gruvbox dark + custom #338833' },
-    { palette: 'editorial', isDark: false, accent: '#ffffff', desc: 'Editorial light + custom #ffffff' },
-    { palette: 'editorial', isDark: true, accent: '#000000', desc: 'Editorial dark + custom #000000' },
-  ]
-
-  for (const { palette, isDark, accent, desc } of counterexamples) {
-    const fg = getAccessibleForeground(accent, isDark, palette)
-    const s = getPaletteSurface(palette)
-    const card = isDark ? s.dark : s.light
-    const subtle = isDark ? s.darkSubtle : s.lightSubtle
-    const page = isDark ? s.darkPage : s.lightPage
-    const alpha = isDark ? 0.16 : 0.14
-    const transCard = mixHex(card, accent, alpha)
-    const transSubtle = mixHex(subtle, accent, alpha)
-    const transPage = mixHex(page, accent, alpha)
-
-    const surfaces = [
-      { name: 'card', color: card },
-      { name: 'subtle', color: subtle },
-      { name: 'page', color: page },
-      { name: 'transCard', color: transCard },
-      { name: 'transSubtle', color: transSubtle },
-      { name: 'transPage', color: transPage },
-    ]
-
-    for (const surf of surfaces) {
-      const ratio = calculateContrastRatio(fg, surf.color)
-      assert.ok(
-        ratio >= 4.5,
-        `${desc}: fg ${fg} against ${surf.name} ${surf.color} is ${ratio.toFixed(2)}:1 (must be >= 4.5:1)`
-      )
-    }
-  }
-})
-
-test('custom accent applies readable brand + primary tokens for base, hover and active in every palette and mode', () => {
-  const accents = ['#ffffff', '#000000', '#fbbf24', '#0891b2', '#d97706', '#60a5fa', '#2563eb', '#ffff00', '#777777', '#1d4ed8']
-
-  for (const palette of THEME_PALETTES) {
-    const surfaces = getPaletteSurface(palette)
-    for (const isDark of [false, true]) {
-      const page = isDark ? surfaces.darkPage : surfaces.lightPage
-      const card = isDark ? surfaces.dark : surfaces.light
-      const subtle = isDark ? surfaces.darkSubtle : surfaces.lightSubtle
-
-      for (const accent of accents) {
-        const root = createMockRoot()
-        applyAccentPreference(root, accent, isDark ? 'dark' : 'light', palette)
-        const get = prop => root.style.getPropertyValue(prop)
-
-        const brand = get('--brand')
-        const brandHover = get('--brand-hover')
-        const brandActive = get('--brand-active')
-        assert.match(brand, /^#[0-9a-f]{6}$/i)
-        assert.match(brandHover, /^#[0-9a-f]{6}$/i)
-        assert.match(brandActive, /^#[0-9a-f]{6}$/i)
-
-        const brandSurfaces = [
-          page,
-          card,
-          subtle,
-          mixHex(card, accent, isDark ? 0.16 : 0.14),
-          mixHex(subtle, accent, isDark ? 0.16 : 0.14),
-          mixHex(page, accent, isDark ? 0.16 : 0.14),
-          // --brand-soft is a 10% tint of the raw accent over the card surface.
-          mixHex(card, accent, 0.10),
-        ]
-        for (const surface of brandSurfaces) {
-          assert.ok(
-            calculateContrastRatio(brand, surface) >= 4.5,
-            `${palette} ${isDark ? 'dark' : 'light'} accent ${accent}: --brand ${brand} on ${surface} must reach AA`
-          )
-        }
-
-        assert.ok(calculateContrastRatio(get('--brand-contrast'), brand) >= 4.5, 'brand base foreground')
-        assert.ok(calculateContrastRatio(get('--on-brand-hover'), brandHover) >= 4.5, 'brand hover foreground')
-        assert.ok(calculateContrastRatio(get('--on-brand-active'), brandActive) >= 4.5, 'brand active foreground')
-        assert.ok(calculateContrastRatio(get('--on-primary'), get('--primary')) >= 4.5, 'primary base foreground')
-        assert.ok(calculateContrastRatio(get('--on-primary-hover'), get('--primary-hover')) >= 4.5, 'primary hover foreground')
-        assert.ok(calculateContrastRatio(get('--on-primary-active'), get('--primary-active')) >= 4.5, 'primary active foreground')
-      }
-    }
-  }
-})
-
-test('custom accent cleanup removes every applied brand and primary token', () => {
-  const root = createMockRoot()
-  applyAccentPreference(root, '#ffffff', 'light', 'editorial')
-  assert.ok(root.style.getPropertyValue('--brand'))
-  assert.ok(root.style.getPropertyValue('--on-brand-hover'))
-  assert.ok(root.style.getPropertyValue('--brand-active'))
-
-  applyAccentPreference(root, '')
-  for (const prop of [
-    '--primary', '--primary-fg', '--on-primary', '--on-primary-hover', '--on-primary-active',
-    '--primary-hover', '--primary-active', '--primary-light', '--primary-border',
-    '--brand', '--brand-hover', '--brand-active', '--brand-ink', '--brand-soft',
-    '--brand-line', '--brand-contrast', '--on-brand-hover', '--on-brand-active',
-  ]) {
-    assert.equal(root.style.getPropertyValue(prop), '', `${prop} must be removed on reset`)
-  }
-
-  applyAccentPreference(root, 'invalid-hex')
-  assert.equal(root.style.getPropertyValue('--primary'), '')
-})
-
-test('applyFullTheme coordinates palette, mode and custom accent, including legacy palette ids', () => {
+test('applyFullTheme coordinates palette and mode, including legacy palette ids', () => {
   const root = createMockRoot()
   const result = applyFullTheme({
     root,
     mode: 'system',
     palette: 'forest',
-    customAccent: '#0891b2',
     isSystemDark: true,
   })
 
   assert.equal(result.effectiveTheme, 'dark')
   assert.equal(result.palette, 'everforest')
-  assert.equal(result.customAccent, '#0891b2')
   assert.equal(root.getAttribute('data-theme'), 'dark')
   assert.equal(root.getAttribute('data-theme-palette'), 'everforest')
-  assert.equal(root.style.getPropertyValue('--primary'), '#0891b2')
-  assert.ok(root.style.getPropertyValue('--brand'))
+})
+
+test('applyFullTheme leaves the accent to the palette stylesheet', () => {
+  const root = createMockRoot()
+  applyFullTheme({ root, mode: 'light', palette: 'gruvbox' })
+
+  // The retired custom-accent picker used to write brand tokens onto the root.
+  // Now style.css owns them, so nothing may be written inline.
+  assert.equal(root.style.getPropertyValue('--brand'), '')
+  assert.equal(root.style.getPropertyValue('--primary'), '')
+  assert.equal(root.getAttribute('data-theme-palette'), 'gruvbox')
+})
+
+test('retired custom-accent storage entry is cleared on boot', () => {
+  const storage = createStorage({ 'easyexam-theme-accent': '#2563eb' })
+  assert.equal(storage.getItem(LEGACY_ACCENT_STORAGE_KEY), '#2563eb')
+
+  clearLegacyAccentPreference(storage)
+  assert.equal(storage.getItem(LEGACY_ACCENT_STORAGE_KEY), null)
+})
+
+test('light-mode --brand-line reaches 3:1 against paper for every family', () => {
+  const css = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/style.css'),
+    'utf-8'
+  )
+
+  for (const { label, selector } of paletteBlocks()) {
+    if (selector.includes('[data-theme="dark"]')) continue
+    const block = readCssBlock(css, selector)
+    const paper = assertHexToken(block, 'paper')
+    const brand = assertHexToken(block, 'brand')
+    const line = assertHexToken(block, 'line')
+
+    // --brand-line is `color-mix(in srgb, var(--brand) 60%, var(--line))`.
+    // The accent share is the whole reason the border is visible, so pin it and
+    // verify the resulting tone rather than trusting the token alone.
+    assert.match(
+      readToken(block, 'brand-line'),
+      /60%/,
+      `${label}: --brand-line must keep a 60% brand share to clear 3:1`
+    )
+    const brandLine = mixHex(line, brand, 0.60)
+    const ratio = calculateContrastRatio(brandLine, paper)
+    assert.ok(
+      ratio >= 3,
+      `${label}: --brand-line ${brandLine} on ${paper} is ${ratio.toFixed(2)}:1 (must be >= 3:1)`
+    )
+  }
+})
+
+test('the spine accent is a saturated literal that stays legible on the spine', () => {
+  const css = fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/style.css'),
+    'utf-8'
+  )
+  const families = [
+    { family: 'editorial', light: ':root', dark: '[data-theme="dark"]' },
+    ...THEME_PALETTES.filter(p => p !== 'editorial').map(p => ({
+      family: p,
+      light: `[data-theme-palette="${p}"]`,
+      dark: `[data-theme="dark"][data-theme-palette="${p}"]`,
+    })),
+  ]
+
+  for (const { family, light, dark } of families) {
+    const lightBlock = readCssBlock(css, light)
+    const darkBlock = readCssBlock(css, dark)
+
+    // A literal hex, never a mix toward white: mixing the brand 38% into a
+    // near-white desaturated the sidebar accent to roughly 12% saturation.
+    const accent = assertHexToken(lightBlock, 'd-spine-accent')
+
+    for (const [mode, block] of [['light', lightBlock], ['dark', darkBlock]]) {
+      const spine = assertHexToken(block, 'd-spine')
+      const ratio = calculateContrastRatio(accent, spine)
+      assert.ok(
+        ratio >= 3,
+        `${family} ${mode}: --d-spine-accent ${accent} on --d-spine ${spine} is ${ratio.toFixed(2)}:1 (must be >= 3:1)`
+      )
+    }
+  }
 })

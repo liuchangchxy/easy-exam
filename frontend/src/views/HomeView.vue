@@ -106,7 +106,7 @@
                 <span class="bank-name-cell">
                   <span class="bank-name">{{ bank.name }}</span>
                   <span class="bank-meta">
-                    <span>{{ bank.category || t('ep.banks.detail') }}</span>
+                    <span>{{ bank.category || t('ep.common.none') }}</span>
                     <span>{{ t('ep.banks.questions', { count: bank.question_count || 0 }) }}</span>
                   </span>
                 </span>
@@ -457,6 +457,15 @@
         </button>
       </div>
     </AppDialog>
+
+    <StartStudyPanel
+      :show="showStartStudyPanel"
+      :sessions="startStudySessions"
+      :busy="startingStudy"
+      @continue="handleStartStudyContinue"
+      @end-and-start="handleStartStudyEndAndStart"
+      @cancel="closeStartStudyPanel"
+    />
   </div>
 </template>
 
@@ -465,14 +474,17 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
 import AppDialog from '../components/AppDialog.vue'
+import StartStudyPanel from '../components/StartStudyPanel.vue'
 import { listBanks, createBank, createQuestion, addBankMember, listBankMembers, removeBankMember, copyQuestionToBank } from '../api/banks'
 import { startExam, listProfiles, getBlueprint } from '../api/exams'
-import { startSession, listActiveSessions, getSession, abandonSession, abandonAllSessions } from '../api/practice'
+import { listActiveSessions, getSession, abandonSession, abandonAllSessions } from '../api/practice'
 import { listDueMistakes, listMistakes } from '../api/mistakes'
 import { getLearningSummary, getLearningTrends, getStudyPlan } from '../api/learning'
 import { getAiBatchStatus, startAiBatchGenerate, stopAiBatchGenerate } from '../api/ai'
 import { triggerSyncEvent } from '../api/sync'
 import { useLocale } from '../composables/useLocale.js'
+import { useStartStudy } from '../composables/useStartStudy.js'
+import { notifyBanksChanged } from '../utils/shellEvents.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -485,6 +497,17 @@ const banks = ref([])
 const activeSessions = ref([])
 const showActiveSessionsModal = ref(false)
 const abandoningSession = ref(false)
+const showStartStudyPanel = ref(false)
+const startStudySessions = ref([])
+const pendingStartStudyPayload = ref(null)
+// One start entry: it asks the server for unfinished work first and only POSTs
+// when the user has decided what to do with it.
+const {
+  pending: startingStudy,
+  start: startStudy,
+  continueSession: continueStudySession,
+  endAndStart: endAndStartStudy,
+} = useStartStudy(() => props.token)
 const loading = ref(true)
 // The masthead primary action depends on both the bank list and active
 // sessions. Keep it disabled until both have settled so an early click cannot
@@ -608,19 +631,22 @@ function todayPlanTask() {
 async function startTodayPlan() {
   const task = todayPlanTask()
   if (!task) return false
-  try {
-    const session = await startSession(props.token, {
-      bank_id: task.bankIds[0],
-      ...(task.bankIds.length > 1 ? { bank_ids: task.bankIds } : {}),
-      mode: 'PRACTICE',
-      question_ids: task.questionIds,
-    })
-    router.push(`/practice/${session.id}`)
+  const payload = {
+    bank_id: task.bankIds[0],
+    ...(task.bankIds.length > 1 ? { bank_ids: task.bankIds } : {}),
+    mode: 'PRACTICE',
+    question_ids: task.questionIds,
+  }
+  const result = await startStudy(payload, { navigate: navigateToSession })
+  if (result?.blocked?.length) {
+    openStartStudyPanel(result.blocked, payload)
     return true
-  } catch (err) {
-    error.value = err.detail || err.message
+  }
+  if (result?.error) {
+    error.value = result.error.detail || result.error.message
     return false
   }
+  return true
 }
 
 async function startSprint() {
@@ -630,16 +656,48 @@ async function startSprint() {
     openCreateBankDialog()
     return
   }
-  try {
-    const session = await startSession(props.token, {
-      bank_id: bank.id,
-      mode: 'PRACTICE',
-      total_questions: Math.min(20, bank.question_count || 1),
-    })
-    router.push(`/practice/${session.id}`)
-  } catch (err) {
-    error.value = err.detail || err.message
+  const payload = {
+    bank_id: bank.id,
+    mode: 'PRACTICE',
+    total_questions: Math.min(20, bank.question_count || 1),
   }
+  const result = await startStudy(payload, { navigate: navigateToSession })
+  if (result?.blocked?.length) openStartStudyPanel(result.blocked, payload)
+  else if (result?.error) error.value = result.error.detail || result.error.message
+}
+
+function navigateToSession(session) {
+  if (!session?.id) return
+  router.push(session.mode === 'EXAM' ? `/exam/${session.id}` : `/practice/${session.id}`)
+}
+
+function openStartStudyPanel(sessions, payload) {
+  // The list Home already loaded is the honest picture of what is unfinished.
+  startStudySessions.value = sessions?.length ? sessions : activeSessions.value
+  pendingStartStudyPayload.value = payload
+  showStartStudyPanel.value = true
+}
+
+function closeStartStudyPanel() {
+  showStartStudyPanel.value = false
+  startStudySessions.value = []
+  pendingStartStudyPayload.value = null
+}
+
+function handleStartStudyContinue() {
+  const session = startStudySessions.value[0]
+  closeStartStudyPanel()
+  continueStudySession(session, navigateToSession)
+}
+
+async function handleStartStudyEndAndStart() {
+  const result = await endAndStartStudy(
+    startStudySessions.value,
+    pendingStartStudyPayload.value,
+    navigateToSession,
+  )
+  if (result?.error) error.value = result.error.detail || result.error.message
+  else closeStartStudyPanel()
 }
 
 const examBank = ref(null)
@@ -805,12 +863,16 @@ async function handleCreateBank() {
   creatingBank.value = true
   createError.value = ''
   try {
-    const created = await createBank(props.token, {
+    const payload = {
       name: newBank.value.name,
       description: newBank.value.description,
-      category: newBank.value.category || t('ep.banks.title'),
-    })
+    }
+    // Blank category keeps the backend default; a translated label would be
+    // written into the record and shown verbatim to members on other languages.
+    if (newBank.value.category) payload.category = newBank.value.category
+    const created = await createBank(props.token, payload)
     triggerSyncEvent('BANK_CREATED', 'BANK', created.id, { name: created.name })
+    notifyBanksChanged()
     showCreateDialog.value = false
     newBank.value = { name: '', description: '', category: '' }
     banks.value = await listBanks(props.token)
