@@ -1377,7 +1377,7 @@ onMounted(async () => {
 }
 
 /* 响应式断点 */
-@media (max-width: 1080px) {
+@media (max-width: 1024px) {
   .learning-two-column-layout {
     grid-template-columns: 1fr;
   }
@@ -1388,6 +1388,9 @@ onMounted(async () => {
   .hero-play-btn {
     width: 100%;
     justify-content: center;
+  }
+  .learning-diagnostics-layout {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1671,11 +1674,5 @@ details[open] > summary .summary-chevron {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.25rem;
-}
-
-@media (max-width: 900px) {
-  .learning-diagnostics-layout {
-    grid-template-columns: 1fr;
-  }
 }
 </style>

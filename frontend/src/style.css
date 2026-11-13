@@ -100,9 +100,16 @@ dialog:not([open]) { display: none !important; }
   /* Layout */
   --sidebar-w: 236px;
   --topbar-h: 56px;
+  --mobile-top-h: 52px;
+  --bottomnav-h: 64px;
+  /* Rails shared by the workspace views; one number per layout. */
+  --rail-exam: 232px;
+  --rail-settings: 184px;
   --measure: 68ch;
   --reading-w: 744px;
   --page-w: 1120px;
+  /* Live visualViewport overlap published by useKeyboardInset on <html>. */
+  --kb-inset: 0px;
   --shadow-1: 0 1px 2px rgba(25, 27, 24, .05);
   --shadow-2: 0 24px 64px -20px rgba(25, 27, 24, .3), 0 2px 8px rgba(25, 27, 24, .08);
   --ease: cubic-bezier(.2, .6, .2, 1);
@@ -1227,17 +1234,6 @@ section.panel .version-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-b
 }
 .rail-index span { font-size: 12px; color: var(--ink-3); letter-spacing: 0; margin-left: 4px; }
 
-.practice-foot {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 45;
-  padding: 11px 0 calc(11px + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--line);
-  background: color-mix(in srgb, var(--paper) 95%, transparent);
-  backdrop-filter: blur(10px);
-}
-.practice-foot-inner {
-  width: 100%; max-width: 1040px; margin: 0 auto; padding: 0 28px;
-  display: flex; align-items: center; gap: 10px;
-}
 .hint-key { font-size: 12px; color: var(--ink-3); }
 
 /* FSRS rating — four ruled columns */
@@ -1277,12 +1273,9 @@ section.panel .version-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-b
 .timer.is-danger { color: var(--bad); animation: timer-blink 1.2s steps(2, end) infinite; }
 @keyframes timer-blink { 50% { opacity: .55; } }
 
-.exam-layout {
-  display: grid; grid-template-columns: minmax(0, 1fr) 264px; gap: 48px;
-  max-width: 1080px; margin: 0 auto; padding: 34px 28px 100px; align-items: start;
-}
+/* `.exam-layout` lives with its consumer (ExamView for the runner,
+   ExamCenterView for the catalogue); each owns its own rail and collapse. */
 .exam-main { max-width: 760px; min-width: 0; }
-.exam-aside { position: sticky; top: 82px; }
 .exam-qhead {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   font-size: 12px; color: var(--ink-3); margin-bottom: 16px;
@@ -1290,10 +1283,6 @@ section.panel .version-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-b
 }
 .exam-qno { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink); }
 .exam-count { font-size: 12px; letter-spacing: .02em; color: var(--ink-2); }
-.exam-foot {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--line);
-}
 .sheet-panel { border-top: 1px solid var(--ink); padding-top: 12px; }
 .sheet-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
 .sheet-cell {
@@ -1503,7 +1492,7 @@ section.panel .version-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-b
 /* ==========================================================================
    15. Settings
    ========================================================================== */
-.settings-layout { display: grid; grid-template-columns: 172px minmax(0, 1fr); gap: 44px; margin-top: 26px; align-items: start; }
+/* `.settings-layout` lives in SettingsView.vue, the only consumer. */
 .settings-nav { display: flex; flex-direction: column; border-top: 1px solid var(--ink); }
 .settings-nav button {
   padding: 9px 2px; border-bottom: 1px solid var(--line);
@@ -1680,15 +1669,10 @@ dialog.dlg:focus { outline: none; }
 
 /* 1280 — desktop tighten: content padding in, Today right column 272 */
 @media (max-width: 1280px) {
-  .content { padding: 32px 32px 64px; }
-  .today-grid { grid-template-columns: minmax(0, 1fr) 272px; gap: 40px; }
-}
-
-@media (max-width: 1180px) {
   .content { padding: 24px 28px 56px; }
-  .masthead-title { font-size: 34px; }
+  .today-grid { grid-template-columns: minmax(0, 1fr) 272px; }
   .today-grid, .today-top { gap: 36px; }
-  .exam-layout { gap: 32px; }
+  .masthead-title { font-size: 34px; }
 }
 
 /* 769–1024: spine keeps 236px but shows icons only; study-state block hidden */
@@ -1702,21 +1686,11 @@ dialog.dlg:focus { outline: none; }
   .nav-item .label, .nav-count { display: none; }
   .nav-item.is-active::before { left: 0; top: 10px; bottom: 10px; }
   .bank-body { grid-template-columns: 160px minmax(0, 1fr); gap: 24px; }
-}
-
-
-@media (max-width: 900px) {
   .today-grid, .today-top { grid-template-columns: minmax(0, 1fr); gap: 30px; }
   .today-rail { border-left: 0; padding-left: 0; border-top: 1px solid var(--line-strong); padding-top: 20px; }
   .masthead-row { gap: 22px; }
   .masthead-figures { width: 100%; }
   .mf { flex: 1; }
-  .exam-aside { display: none; }
-  .exam-layout { grid-template-columns: minmax(0, 1fr); }
-  .settings-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
-  .settings-nav { flex-direction: row; flex-wrap: wrap; border-top: 0; border-bottom: 1px solid var(--line); gap: 14px; }
-  .settings-nav button { border-bottom: 0; padding: 6px 0; }
-  .settings-nav .aside-item::before { display: none; }
   .split { grid-template-columns: minmax(0, 1fr); gap: 24px; }
   .exam-center-grid { grid-template-columns: minmax(0, 1fr); gap: 28px; }
   .exam-center-rail { border-left: 0; border-top: 1px solid var(--ink); padding-left: 0; padding-top: 16px; }
@@ -1742,7 +1716,7 @@ dialog.dlg:focus { outline: none; }
   .mobile-top {
     position: sticky; top: 0; z-index: 40;
     display: flex; align-items: center; gap: 10px;
-    height: 52px; padding: 0 16px;
+    height: var(--mobile-top-h); padding: 0 16px;
     background: color-mix(in srgb, var(--surface) 94%, transparent);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--line);
@@ -1791,7 +1765,7 @@ dialog.dlg:focus { outline: none; }
   .bottomnav {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
     display: grid; grid-template-columns: repeat(6, 1fr);
-    height: calc(64px + env(safe-area-inset-bottom));
+    height: calc(var(--bottomnav-h) + env(safe-area-inset-bottom));
     background: color-mix(in srgb, var(--surface) 96%, transparent);
     backdrop-filter: blur(13px);
     border-top: 1px solid var(--line);
@@ -1799,7 +1773,7 @@ dialog.dlg:focus { outline: none; }
   }
   .bn-item {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-    min-height: 64px; font-size: 12px; color: var(--ink-3); letter-spacing: .02em;
+    min-height: var(--bottomnav-h); font-size: 12px; color: var(--ink-3); letter-spacing: .02em;
     border-top: 2px solid transparent; margin-top: -1px;
   }
   .bn-item.is-active { color: var(--ink); border-top-color: var(--ink); }
@@ -1830,12 +1804,6 @@ dialog.dlg:focus { outline: none; }
   .focus-progress .progress { width: 64px !important; }
   .focus-title { font-size: 12px; }
   .focus-body { padding: 20px 16px 140px; }
-  .practice-foot {
-    padding: 10px 0 calc(10px + env(safe-area-inset-bottom));
-  }
-  .practice-foot-inner { padding: 0 16px; gap: 8px; }
-  .practice-foot .btn { flex: 1; height: 44px; }
-  .practice-foot .hint-key, .practice-foot .link-btn { display: none; }
   .rating-opts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .rating-opt:nth-child(2n) { border-right: 0; }
   .rating-opt:nth-child(n+3) { border-top: 1px solid var(--line); }
@@ -1845,12 +1813,7 @@ dialog.dlg:focus { outline: none; }
   .exam-name { font-size: 12px; max-width: 30vw; }
   .exam-bar .left > div:last-child { display: none; }
   .timer { font-size: 16px; padding: 2px 8px; border: 0; }
-  .exam-layout { padding: 20px 16px 120px; }
   .exam-qhead { margin-bottom: 12px; }
-  .exam-foot { position: fixed; left: 0; right: 0; bottom: 0; z-index: 45; margin: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--paper) 96%, transparent); backdrop-filter: blur(10px); border-top: 1px solid var(--line); }
-  .exam-foot .btn { flex: 1; height: 42px; }
-  .exam-foot .spacer { display: none; }
-  .exam-foot .hide-mobile { display: none !important; }
 
   .table-wrap { border: 0; }
   .table, .table thead, .table tbody, .table tr, .table td { display: block; }
@@ -1886,9 +1849,6 @@ dialog.dlg:focus { outline: none; }
   .precheck-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .precheck-cell:nth-child(3) { border-left: 0; padding-left: 0; }
   .precheck-cell:nth-child(n+3) { border-top: 1px solid var(--line); }
-  .settings-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; overflow: visible; border-top: 1px solid var(--ink); }
-  .settings-nav button { white-space: nowrap; border-bottom: 1px solid var(--line); padding: 11px 0; }
-  .settings-nav .aside-item.is-active { border-bottom-color: var(--ink); }
   .theme-choice { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .theme-preview { height: 58px; }
   .lib-tools { gap: 10px; }
@@ -1929,7 +1889,11 @@ dialog.dlg:focus { outline: none; }
   .mf-c { font-size: 12px; }
 }
 
-@media (max-width: 380px) {
+@media (max-width: 640px) {
+  /* Narrow-key/value rows: the fixed 108px key ate a third of a 375px screen. */
+  .kv-row { gap: 10px; }
+  .kv-key { width: 84px; }
+  .kv-val { overflow-wrap: anywhere; }
   .stat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stat { border-left: 1px solid var(--line); padding: 12px 14px; }
   .stat:nth-child(odd) { border-left: 0; padding-left: 0; }
@@ -1949,14 +1913,38 @@ dialog.dlg:focus { outline: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
 }
-/* Touch ergonomics: keep primary targets at least finger-sized on coarse input. */
+/* Touch ergonomics: every non-inline control keeps a 44px target on coarse
+   input. Containers that can grow do so; icon-only controls that cannot grow
+   (or that would break their grid) get an invisible 44px ::after hit area. */
 @media (pointer: coarse) {
-  .btn { min-height: 38px; }
-  .btn-sm { min-height: 34px; }
-  .icon-btn { width: 38px; height: 38px; }
-  .chip { min-height: 34px; }
-  .tab { min-height: 38px; }
-  .nav-item { min-height: 40px; }
+  .btn { min-height: 44px; }
+  .btn-sm { min-height: 44px; }
+  .chip { min-height: 44px; }
+  .tab { min-height: 44px; }
+  .nav-item { min-height: 44px; }
+  .page-back { min-height: 44px; }
+  .icon-btn { width: 44px; height: 44px; }
+  .sheet-num, .answer-cell { min-height: 44px; }
+  .sheet-num { min-width: 44px; }
+
+  /* Keep the dense manage-table chevron at its visual size but make it tappable. */
+  .q-table tbody td:nth-child(9) .icon-btn { width: 26px; height: 26px; }
+  .q-table tbody td:nth-child(9) .icon-btn,
+  .icon-btn.sm,
+  .focus-exit,
+  .exam-back { position: relative; }
+  .q-table tbody td:nth-child(9) .icon-btn::after,
+  .icon-btn.sm::after,
+  .focus-exit::after,
+  .exam-back::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
 }
 /* System accessibility modes: never let a themed border or focus ring vanish. */
 @media (forced-colors: active) {
@@ -1964,7 +1952,7 @@ dialog.dlg:focus { outline: none; }
   :focus-visible { outline: 2px solid Highlight; }
 }
 @media print {
-  .sidebar, .topbar, .bottomnav, .mobile-top, .page-actions, .q-actions, .practice-foot, .exam-aside, .exam-bar, .toast { display: none !important; }
+  .sidebar, .topbar, .bottomnav, .mobile-top, .page-actions, .q-actions, .exam-bar, .toast { display: none !important; }
   body { background: #fff; color: #000; }
   .content { max-width: none; padding: 0; }
 }

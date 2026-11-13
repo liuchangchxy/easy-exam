@@ -47,7 +47,11 @@ class TestFrontendArchitecture(unittest.TestCase):
         router_source = (self.root / "router/index.js").read_text(encoding="utf-8")
         self.assertTrue((self.root / "features/exam/ExamView.vue").is_file())
         self.assertTrue((self.root / "api/exams.js").is_file())
-        self.assertIn("emit('start'", home_source)
+        # P6: the home page no longer emits a bare start event; every entrance
+        # goes through the shared start decision so an active session surfaces
+        # the 继续/结束并新建 panel instead of silently opening a second one.
+        self.assertIn("useStartStudy", home_source)
+        self.assertIn("startStudy(", home_source)
         self.assertIn("ExamCenterView", router_source)
         self.assertIn("ExamView", router_source)
         self.assertIn("exams", router_source)

@@ -560,6 +560,7 @@ import AppDialog from '../components/AppDialog.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
 import LocaleToggle from '../components/LocaleToggle.vue'
 import { useLocale } from '../composables/useLocale.js'
+import { useKeyboardInset } from '../composables/useKeyboardInset.js'
 import { useAuthStore } from '../stores/authStore'
 import { getSession, getSessionQuestions, submitAttempt, completeSession, syncDraft, toggleFlag } from '../api/practice'
 import { getQuestion, listQuestionVersions, updateQuestion, getQuestionConflict, resolveQuestionConflict } from '../api/questions'
@@ -606,6 +607,7 @@ const emit = defineEmits(['back', 'completed'])
 const router = useRouter()
 const auth = useAuthStore()
 const { t } = useLocale()
+useKeyboardInset()
 const authToken = computed(() => props.token || auth.token?.value || (typeof localStorage !== 'undefined' ? localStorage.getItem('easyexam_token') : '') || '')
 
 const showExitConfirmModal = ref(false)
@@ -2636,7 +2638,7 @@ kbd {
 /* ---------- action bar ---------- */
 .focus-actionbar {
   position: fixed;
-  inset: auto 0 0;
+  inset: auto 0 var(--kb-inset, 0px);
   z-index: 40;
   background: color-mix(in srgb, var(--d-gasket, var(--paper)) 96%, transparent);
   backdrop-filter: blur(10px);
@@ -2874,7 +2876,7 @@ kbd {
 @media (max-width: 1280px) {
   .focus-layout { gap: 40px; }
 }
-@media (max-width: 1100px) {
+@media (max-width: 1024px) {
   .focus-layout {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
@@ -2920,6 +2922,7 @@ kbd {
     width: 100%;
     max-width: none;
     max-height: 82vh;
+    max-height: 82dvh;
     border-radius: 8px 8px 0 0;
     border-bottom: 0;
   }
@@ -2939,5 +2942,12 @@ kbd {
   .verdict-ratio { margin-left: 0; }
   .focus-finish { padding-left: 9px; padding-right: 9px; }
   .focus-overlay:not(.practice-sheet-overlay) { padding: 10px; }
+}
+@media (pointer: coarse) {
+  /* Sheet controls carry their own heights, so the global coarse rule needs a
+     scoped companion to reach 44px. */
+  .sheet-num { min-width: 44px; min-height: 44px; }
+  .practice-sheet-grid .practice-sheet-cell { min-height: 44px; }
+  .practice-sheet-actions .btn { min-height: 44px; }
 }
 </style>

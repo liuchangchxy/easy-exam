@@ -649,3 +649,23 @@
 - **重复项在提交前按用户映射重算**：重复检测属于（文件 + 映射 + 当前题库）三者，旧流程只在提交返回 409 时才列重复。改为后台任务后没有 409，向导会在离开"校对"步时用当前映射重新预检，第 3 步展示这份结果，避免"看不到重复、按 skip 静默丢弃"。
 - **对应 SPEC 章节**：§5.3（配置分层）、§7.5（内容生命周期入口）。
 - **影响范围**：`backend/app/infrastructure/db/{connection.py,repositories/import_job_repository.py,repositories/import_draft_repository.py(新),repositories/ai_config_repository.py}`、`backend/app/application/{import_service.py,ai_tutor_service.py}`、`backend/app/api/routes/{imports.py,ai.py}`、`backend/app/main.py`、`tests/test_import_wizard_p5.py`、`tests/test_ai_config_layering_p5.py`、`frontend/src/{api/imports.js,api/ai.js,views/ImportView.vue,views/BankManageView.vue,views/SettingsView.vue,components/LinearIcon.vue,components/CommandPalette.vue,composables/useTheme.js}`、`frontend/index.html`、`frontend/tests/p5_import_settings_e2e.mjs`（新）。
+
+### [2026-11-13] Core UX P6：触屏与软键盘补齐、控件单一入口、1:1 下沉到存储层
+
+- **触发背景**：确认仍有 `AppDialog` 与原生 `window.confirm` 两套，成功反馈有 `.notice` 与从未启用的全局 toast 两套；全局断点是 15 个互不相干的档位，641–900px 无方案；软键盘弹出会遮住练习/模考底部操作条；`pointer: coarse` 下多数控件 34–38px。另一方面，P2 确认的"一题一库"只由应用层保证（复制新建、移动换家），存储层仍接受一题两库。
+- **核心决策**：
+  1. **确认与阻塞提示走 presenter seam**：新增 `useConfirm`，模块级 presenter 默认 `window.confirm(title)` / `window.alert(title)`；`App.vue` 挂载后注册 `ConfirmHost`（AppDialog）和错误 toast。不逐个重写调用点、不删除既有原生断言，因为 `guard_test_tampering.py` 拒绝删除含 `expect(` 的测试行，且多个组件测试直接 spy `window.confirm`。seam 让"测试里的原生行为"和"生产里的 AppDialog"同时成立。
+  2. **shell 登出保留原生确认**：`AppLayout.requestLogout()` 仍调 `window.confirm`；`app_layout.test.js` 对它有独立断言，代码内注明替换条件。设置页登出与"登出其他设备"已接入 seam。
+  3. **瞬态成功反馈统一为 toast**：`ToastHost` 提供 `#toast-root`，一次一条、默认 4s 自动消失；失败与需要用户处理的状态仍留在页内 `notice`，不把持久错误做成会消失的 toast。
+  4. **全局断点收敛为 1280 / 1024 / 768 / 640**：删除 1180/900/380 三个孤立档，本次触及的 `PracticeViewV1` / `ExamView` / `NotesView` 1100 档并入 1024；布局尺寸进 token（`--rail-*`、`--mobile-top-h`、`--bottomnav-h`）。
+  5. **软键盘用 `--kb-inset` 补偿**：`useKeyboardInset` 由 `visualViewport` 计算遮挡高度并写 `<html>`；练习/模考操作条与笔记阅读器消费该变量。无 `visualViewport` 时退化为 0，不影响单测。
+  6. **开始入口只有一个决策**：所有有路由的入口（shell、首页、题库列表、题库工作区、题目页、复习页）走 `useStartStudy`；有未完成会话时由 `StartStudyPanel` 给出继续 / 结束并新建 / 取消，取消不新建会话。无路由的 `MistakesView` / `LearningView` / `BankDetailView` 仍是旧调用，不参与运行时。
+  7. **1:1 在写入层用触发器收口**：迁移 23 增加 INSERT 与 UPDATE OF question_id 两个触发器，第二次归属 `RAISE(ABORT)`；仓储把 `IntegrityError` 转成 `QuestionBankConflictError(ValueError)`，复制路由返回 400。不建唯一索引，因为线上可能已有历史重复；触发器只拦新写入，遗留行不自动删除（升级测试锁定）。
+  8. **迁移切分器改用 `sqlite3.complete_statement`**：旧 `split(";")` 会把触发器 `BEGIN ... END` 内的分号当成语句边界，迁移 23 无法落地。
+  9. **保留 `/banks/:id/manage` redirect 与 `/instance` 独立路由**：前者兼容旧链接且不增加可见页面，后者是实例级权限面，不能并入个人设置。
+  10. **保留五个复习页签**：`due` / `mistakes` / `killed` / `diagnosis` / `all` 各有来源语义，`all` 已是默认合并视图；合并会改 `?tab=` 契约而不缩小心智模型。
+  11. **不合并 `.mtable` 的跨视图重复**：去重属于大范围重构，本阶段无用户可见收益。
+- **顺带修复**：`browser_e2e.startBankPractice` 学会开始面板，双设备流程点击 `start-study-continue` 复用既有会话；`fast_ui_interaction` 先用 `waitForFunction` 等两个 `.focus-menu-item` 再计数，消除满套件负载下的偶发失败。
+- **已知残留**：`NotesView.handleDelete` 与 `PracticeViewV1.handleKill` 仍用原生确认；全局断点已收敛，但多个视图仍带 scoped 旧断点。验收的"禁止原生对话框"只覆盖脚本驱动的批量归档流程。
+- **对应 SPEC 章节**：§2.0.1（一题一库与复制语义）、§7.7（移动端）、§7.8（控件收敛）。
+- **影响范围**：`frontend/src/{composables/useConfirm.js(新),composables/useToast.js(新),composables/useKeyboardInset.js(新),components/ConfirmHost.vue(新),components/ToastHost.vue(新),components/StartStudyPanel.vue,App.vue,layouts/AppLayout.vue,style.css}`、`frontend/src/views/{HomeView,BanksView,BankManageView,QuestionPageView,ReviewView,SettingsView,MistakesView,NotesView,PracticeViewV1,ExamCenterView,InstanceAdminView,ImportView}.vue`、`frontend/src/features/exam/ExamView.vue`、`backend/app/infrastructure/db/{connection.py,repositories/question_repository.py}`、`backend/app/api/routes/banks.py`、`tests/test_question_bank_one_to_one.py`、`frontend/tests/{p6_acceptance_e2e.mjs(新),components/{controls_dialog,controls_review_query,responsive_contract}.test.js(新),browser_e2e.test.js,fast_ui_interaction.test.js}`、`frontend/package.json`。

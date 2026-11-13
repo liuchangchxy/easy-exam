@@ -32,9 +32,6 @@
           <div v-if="actionError" class="notice bad" role="alert">
             <LinearIcon name="alert" :size="15" /><span>{{ actionError }}</span>
           </div>
-          <div v-else-if="actionNotice" class="notice ok" role="status">
-            <LinearIcon name="check" :size="15" /><span>{{ actionNotice }}</span>
-          </div>
         </div>
         <div class="page-actions">
           <button
@@ -178,6 +175,15 @@
         @close="editing = false"
         @saved="handleSaved"
       />
+
+      <StartStudyPanel
+        :show="showStartStudyPanel"
+        :sessions="startStudySessions"
+        :busy="starting"
+        @continue="handleStartStudyContinue"
+        @end-and-start="handleStartStudyEndAndStart"
+        @cancel="closeStartStudyPanel"
+      />
     </template>
   </div>
 </template>
@@ -188,11 +194,13 @@ import { useRoute, useRouter } from 'vue-router'
 import AccessDeniedState from '../components/AccessDeniedState.vue'
 import LinearIcon from '../components/LinearIcon.vue'
 import QuestionEditModal from '../components/QuestionEditModal.vue'
+import StartStudyPanel from '../components/StartStudyPanel.vue'
 import { useLocale } from '../composables/useLocale.js'
+import { useToast } from '../composables/useToast.js'
+import { useStartStudy } from '../composables/useStartStudy.js'
 import { canEditBankContent, questionCode } from '../domain/bankManage.js'
 import { getBank, listBanks, listChapters, copyQuestionToBank, batchBankQuestions } from '../api/banks'
 import { getQuestion, listQuestionVersions } from '../api/questions'
-import { startSession } from '../api/practice'
 import { readQueryString, replaceQueryState } from '../utils/routeQuery.js'
 
 const props = defineProps({
@@ -204,6 +212,7 @@ const props = defineProps({
 const route = useRoute()
 const router = useRouter()
 const { t } = useLocale()
+const toast = useToast()
 
 const bankId = computed(() => String(props.bankId || route.params?.bankId || ''))
 const questionId = computed(() => String(props.questionId || route.params?.questionId || ''))
@@ -227,7 +236,15 @@ const previewVersion = ref(null)
 const starting = ref(false)
 const editing = ref(false)
 const actionError = ref('')
-const actionNotice = ref('')
+
+const {
+  start: startStudy,
+  continueSession: continueStudySession,
+  endAndStart: endAndStartStudy,
+} = useStartStudy(() => props.token)
+const showStartStudyPanel = ref(false)
+const startStudySessions = ref([])
+let pendingStartStudyPayload = null
 
 const copyTargetId = ref('')
 const copyBusy = ref(false)
@@ -428,18 +445,50 @@ async function practiceOne() {
   if (!question.value || starting.value) return
   starting.value = true
   actionError.value = ''
-  try {
-    const session = await startSession(props.token, {
-      bank_id: bankId.value,
-      mode: 'PRACTICE',
-      question_ids: [question.value.id],
-      total_questions: 1,
-    })
-    router.push(`/practice/${session.id}`)
-  } catch (err) {
-    actionError.value = err?.detail || err?.message || t('ep.common.load_failed')
-  } finally {
-    starting.value = false
+  const payload = {
+    bank_id: bankId.value,
+    mode: 'PRACTICE',
+    question_ids: [question.value.id],
+    total_questions: 1,
+  }
+  // Shared start entry: an unfinished session surfaces the 继续/结束并新建
+  // panel instead of a second session being started behind it.
+  const result = await startStudy(payload, { navigate: navigateToSession })
+  starting.value = false
+  if (result?.blocked?.length) {
+    pendingStartStudyPayload = payload
+    startStudySessions.value = result.blocked
+    showStartStudyPanel.value = true
+  } else if (result?.error) {
+    actionError.value = result.error?.detail || result.error?.message || t('ep.common.load_failed')
+  }
+}
+
+function navigateToSession(session) {
+  if (session?.id) router.push(`/practice/${session.id}`)
+}
+
+function closeStartStudyPanel() {
+  showStartStudyPanel.value = false
+  startStudySessions.value = []
+  pendingStartStudyPayload = null
+}
+
+function handleStartStudyContinue() {
+  const session = startStudySessions.value[0]
+  closeStartStudyPanel()
+  if (session) continueStudySession(session, navigateToSession)
+}
+
+async function handleStartStudyEndAndStart() {
+  const result = await endAndStartStudy(
+    startStudySessions.value,
+    pendingStartStudyPayload,
+    navigateToSession,
+  )
+  closeStartStudyPanel()
+  if (result?.error) {
+    actionError.value = result.error?.detail || result.error?.message || t('ep.common.load_failed')
   }
 }
 
@@ -447,7 +496,6 @@ async function toggleArchive() {
   if (!question.value || lockedByExam.value) return
   const nextArchived = !isArchived.value
   actionError.value = ''
-  actionNotice.value = ''
   const result = await batchBankQuestions(props.token, bankId.value, {
     operation: nextArchived ? 'archive' : 'restore',
     question_ids: [question.value.id],
@@ -457,7 +505,7 @@ async function toggleArchive() {
     return
   }
   question.value = { ...question.value, archived: nextArchived }
-  actionNotice.value = nextArchived ? t('ep.manage.archive_done') : t('ep.manage.restore_done')
+  toast.success(nextArchived ? t('ep.manage.archive_done') : t('ep.manage.restore_done'))
 }
 
 async function copyQuestion() {

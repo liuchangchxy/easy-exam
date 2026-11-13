@@ -1,9 +1,20 @@
 from datetime import datetime, timezone
 import json
+import sqlite3
 import uuid
 from typing import Any, Dict, List
 
 from backend.app.infrastructure.db.connection import transaction
+
+BANK_MEMBERSHIP_TRIGGER_MESSAGE = "question already belongs to a bank"
+
+
+class QuestionBankConflictError(ValueError):
+    """A question may belong to exactly one bank (UX redesign decision 2).
+
+    Subclasses ValueError so the existing API routes render it as a 4xx
+    instead of letting a trigger-raised sqlite3.IntegrityError become a 500.
+    """
 
 
 class VersionConflictError(Exception):
@@ -25,6 +36,26 @@ class VersionConflictError(Exception):
 class QuestionRepository:
     def __init__(self, db_path: str):
         self.db_path = db_path
+
+    @staticmethod
+    def _insert_bank_question_item(conn, bank_id: str, question_id: str) -> None:
+        """Attach a question to its single bank.
+
+        Migration 23 installs a trigger that aborts a second membership. Turn
+        that IntegrityError into a domain conflict so every caller maps it to a
+        4xx (the routes already catch ValueError) rather than a 500.
+        """
+        try:
+            conn.execute(
+                "INSERT INTO bank_question_items(bank_id, question_id) VALUES (?, ?)",
+                (bank_id, question_id),
+            )
+        except sqlite3.IntegrityError as exc:
+            if BANK_MEMBERSHIP_TRIGGER_MESSAGE in str(exc):
+                raise QuestionBankConflictError(
+                    "question already belongs to a bank; copy it to create a new question instead"
+                ) from exc
+            raise
 
     def create_versioned_question(self, user_id: str, bank_id: str, payload: Dict[str, Any], conn=None) -> dict:
         if conn is not None:
@@ -82,7 +113,7 @@ class QuestionRepository:
             else:
                 tag_id = t_row[0]
             conn.execute("INSERT OR IGNORE INTO question_tag_items(question_version_id, tag_id) VALUES (?, ?)", (version_id, tag_id))
-        conn.execute("INSERT INTO bank_question_items(bank_id, question_id) VALUES (?, ?)", (bank_id, question_id))
+        self._insert_bank_question_item(conn, bank_id, question_id)
         return self.get_for_user(question_id, user_id, conn=conn)
 
     def batch_create_or_update_questions(
@@ -195,7 +226,7 @@ class QuestionRepository:
                     else:
                         t_id = t_row[0]
                     conn.execute("INSERT OR IGNORE INTO question_tag_items(question_version_id, tag_id) VALUES (?, ?)", (new_vid, t_id))
-                conn.execute("INSERT INTO bank_question_items(bank_id, question_id) VALUES (?, ?)", (bank_id, new_qid))
+                self._insert_bank_question_item(conn, bank_id, new_qid)
                 created_ids.append(new_qid)
 
         results = []
@@ -289,10 +320,7 @@ class QuestionRepository:
             ),
         )
         self._sync_version_tags(conn, target_bank_id, new_version_id, tags)
-        conn.execute(
-            "INSERT INTO bank_question_items(bank_id, question_id) VALUES (?, ?)",
-            (target_bank_id, new_question_id),
-        )
+        self._insert_bank_question_item(conn, target_bank_id, new_question_id)
         return new_question_id
 
     def batch_mutate_questions(
@@ -424,14 +452,13 @@ class QuestionRepository:
                         "UPDATE question_versions SET chapter_id = ? WHERE id = ?",
                         (mapped_chapter, row["version_id"]),
                     )
+                    # One home per question: remove the source membership before
+                    # adding the target one, both inside this transaction.
                     conn.execute(
                         "DELETE FROM bank_question_items WHERE bank_id = ? AND question_id = ?",
                         (bank_id, row["id"]),
                     )
-                    conn.execute(
-                        "INSERT OR IGNORE INTO bank_question_items(bank_id, question_id) VALUES (?, ?)",
-                        (target_bank_id, row["id"]),
-                    )
+                    self._insert_bank_question_item(conn, target_bank_id, row["id"])
                     current = json.loads(row.get("tags_json") or "[]")
                     self._sync_version_tags(conn, target_bank_id, row["version_id"], current)
                     conn.execute(
@@ -1241,7 +1268,7 @@ class QuestionRepository:
                     t_id = t_row[0]
                 conn.execute("INSERT OR IGNORE INTO question_tag_items(question_version_id, tag_id) VALUES (?, ?)", (new_version_id, t_id))
 
-            conn.execute("INSERT INTO bank_question_items(bank_id, question_id) VALUES (?, ?)", (target_bank_id, new_question_id))
+            self._insert_bank_question_item(conn, target_bank_id, new_question_id)
         return self.get_for_user(new_question_id, user_id)
 
     def list_versions(self, question_id: str, user_id: str) -> List[dict]:

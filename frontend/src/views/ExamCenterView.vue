@@ -311,6 +311,7 @@ import AppDialog from '../components/AppDialog.vue'
 import LinearIcon from '../components/LinearIcon.vue'
 import { useLocale } from '../composables/useLocale.js'
 import { useDirtyGuard } from '../composables/useDirtyGuard.js'
+import { useConfirm } from '../composables/useConfirm.js'
 import { listBanks } from '../api/banks'
 import { listProfiles, createProfile, getBlueprint, saveBlueprint, startExam } from '../api/exams'
 import { listActiveSessions, abandonSession } from '../api/practice'
@@ -319,6 +320,7 @@ const props = defineProps({ token: { type: String, required: true } })
 const emit = defineEmits(['mock-exam', 'resume-session'])
 const router = useRouter()
 const { t } = useLocale()
+const { confirm: confirmAction } = useConfirm()
 
 const banks = ref([])
 const profiles = ref([])
@@ -505,7 +507,8 @@ async function beginExam() {
 }
 
 async function abandon(session) {
-  if (!window.confirm(t('ep.exam.abandon_confirm'))) return
+  const accepted = await confirmAction({ title: t('ep.exam.abandon_confirm'), danger: true }, () => true)
+  if (accepted !== true) return
   try {
     await abandonSession(props.token, session.id)
     activeSessions.value = activeSessions.value.filter(s => s.id !== session.id)

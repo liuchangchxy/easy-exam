@@ -213,6 +213,9 @@ test('Bank Batch E2E: select, batch chapter, copy, archive and restore', async (
     await page.locator('[data-testid="select-all"]').check()
     await page.waitForSelector('.batch-bar', { timeout: 5000 })
     await page.locator('[data-testid="batch-archive"]').click()
+    // P6 replaced the native confirm with the shared in-app dialog, so the
+    // batch action now needs an explicit confirmation in the page itself.
+    await page.locator('[data-testid="confirm-dialog"] [data-testid="confirm-ok"]').click()
     await page.waitForTimeout(600)
     await page.waitForFunction(
       () => document.querySelectorAll('.mtable-row').length === 0,

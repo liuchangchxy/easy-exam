@@ -231,6 +231,8 @@ def copy_question(bank_id: str, question_id: str, request: Request, user=Depends
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 # --------------------------------------------------------------------- members

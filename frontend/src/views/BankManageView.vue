@@ -897,6 +897,7 @@ import { searchUsers } from '../api/users'
 import { listImportDrafts, deleteImportDraft } from '../api/imports'
 import { useLocale } from '../composables/useLocale'
 import { useDirtyGuard } from '../composables/useDirtyGuard'
+import { useConfirm } from '../composables/useConfirm.js'
 import { useStartStudy } from '../composables/useStartStudy.js'
 import { formatDateTime } from '../utils/datetime.js'
 import { readStoredBankListQuery } from '../utils/bankListQuery.js'
@@ -932,6 +933,7 @@ const props = defineProps({
 const route = useRoute()
 const router = useRouter()
 const { t, locale } = useLocale()
+const { confirm: confirmAction } = useConfirm()
 
 const TAB_KEYS = ['questions', 'structure', 'members', 'imports', 'drafts', 'settings']
 const PAGE_SIZE_OPTIONS = [25, 50, 75, 100]
@@ -1537,7 +1539,11 @@ async function runBatch(operation) {
 
 async function clearBatchChapter() {
   if (!canEdit.value || batchBlocked.value || !selectedQuestions.value.length) return
-  if (!window.confirm(t('ep.manage.batch_chapter_clear_confirm', { count: selectedQuestions.value.length }))) return
+  const accepted = await confirmAction(
+    { title: t('ep.manage.batch_chapter_clear_confirm', { count: selectedQuestions.value.length }) },
+    () => true,
+  )
+  if (accepted !== true) return
   const built = buildBatchRequest('chapter', selectedQuestions.value.map(q => q.id), { chapterId: '' })
   if (built.error) {
     batchError.value = t('ep.manage.batch_failed')
@@ -1553,7 +1559,11 @@ function selectedByArchived(archived) {
 async function archiveSelected() {
   const targets = selectedByArchived(false)
   if (!canEdit.value || batchBlocked.value || !targets.length) return
-  if (!window.confirm(t('ep.manage.batch_archive_confirm', { count: targets.length }))) return
+  const accepted = await confirmAction(
+    { title: t('ep.manage.batch_archive_confirm', { count: targets.length }), danger: true },
+    () => true,
+  )
+  if (accepted !== true) return
   await sendBatch({ question_ids: targets.map(q => q.id), operation: 'archive' })
 }
 
@@ -2025,7 +2035,11 @@ async function transferOwnership() {
 
 async function leaveCurrentBank() {
   if (isOwner.value) return
-  if (!window.confirm(t('ep.manage.leave_confirm', { name: bank.value?.name || '' }))) return
+  const accepted = await confirmAction(
+    { title: t('ep.manage.leave_confirm', { name: bank.value?.name || '' }), danger: true },
+    () => true,
+  )
+  if (accepted !== true) return
   error.value = ''
   try {
     await leaveBank(props.token, bankId.value)
@@ -2172,7 +2186,11 @@ async function moveChapter(chapter, direction) {
 }
 
 async function removeChapter(chapter) {
-  if (!window.confirm(t('ep.manage.chapter_delete_confirm', { name: chapter.name }))) return
+  const accepted = await confirmAction(
+    { title: t('ep.manage.chapter_delete_confirm', { name: chapter.name }), danger: true },
+    () => true,
+  )
+  if (accepted !== true) return
   error.value = ''
   try {
     await deleteChapter(props.token, bankId.value, chapter.id)
@@ -2218,7 +2236,13 @@ async function renameTag(tag) {
   error.value = ''
   const nextName = tag.draft
   const target = tagRows.value.find(row => row.id !== tag.id && row.name === nextName)
-  if (target && !window.confirm(t('ep.manage.tag_merge_confirm', { name: nextName }))) return
+  if (target) {
+    const accepted = await confirmAction(
+      { title: t('ep.manage.tag_merge_confirm', { name: nextName }), danger: true },
+      () => true,
+    )
+    if (accepted !== true) return
+  }
   try {
     const updated = await updateTag(props.token, bankId.value, tag.id, nextName)
     if (target) {
@@ -2244,7 +2268,11 @@ async function renameTag(tag) {
 }
 
 async function removeTag(tag) {
-  if (!window.confirm(t('ep.manage.tag_delete_confirm', { name: tag.name, count: tag.question_count ?? tagCount(tag.name) }))) return
+  const accepted = await confirmAction(
+    { title: t('ep.manage.tag_delete_confirm', { name: tag.name, count: tag.question_count ?? tagCount(tag.name) }), danger: true },
+    () => true,
+  )
+  if (accepted !== true) return
   error.value = ''
   try {
     await deleteTag(props.token, bankId.value, tag.id)
@@ -2295,7 +2323,11 @@ async function exportBankFile(format) {
 
 async function archiveCurrentBank() {
   if (!isOwner.value || hasActiveExam.value) return
-  if (!window.confirm(t('ep.manage.archive_confirm', { name: bank.value?.name || '' }))) return
+  const accepted = await confirmAction(
+    { title: t('ep.manage.archive_confirm', { name: bank.value?.name || '' }), danger: true },
+    () => true,
+  )
+  if (accepted !== true) return
   error.value = ''
   try {
     await deleteBank(props.token, bankId.value)

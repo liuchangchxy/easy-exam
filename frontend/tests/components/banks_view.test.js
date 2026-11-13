@@ -40,6 +40,10 @@ vi.mock('../../src/api/banks', () => ({
 
 vi.mock('../../src/api/practice', () => ({
   startSession: vi.fn(),
+  // useStartStudy asks for unfinished sessions before it starts another one.
+  listActiveSessions: vi.fn().mockResolvedValue([]),
+  abandonSession: vi.fn(),
+  abandonAllSessions: vi.fn(),
 }))
 
 vi.mock('../../src/api/sync', () => ({

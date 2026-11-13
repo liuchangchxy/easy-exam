@@ -55,7 +55,8 @@ export default {
     "status": "状态",
     "total": "共 {count} 项",
     "none": "无",
-    "advanced_settings": "高级设置"
+    "advanced_settings": "高级设置",
+    "dismiss": "关闭提示"
   },
   "home": {
     "welcome": "欢迎回来",

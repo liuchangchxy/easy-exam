@@ -181,6 +181,7 @@ import { useRoute, useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
 import AppDialog from '../components/AppDialog.vue'
 import { useLocale } from '../composables/useLocale.js'
+import { useKeyboardInset } from '../composables/useKeyboardInset.js'
 import { readQueryEnum, readQueryString, replaceQueryState } from '../utils/routeQuery.js'
 import { listAssets, createAsset, uploadAssetFile, updateAsset, deleteAsset, fetchAssetBlob } from '../api/assets'
 
@@ -189,6 +190,7 @@ const props = defineProps({
 })
 
 const { t, locale } = useLocale()
+useKeyboardInset()
 const route = useRoute()
 const router = useRouter()
 
@@ -582,7 +584,7 @@ onUnmounted(() => {
 .library-row-title { font-size: 13px; line-height: 1.55; color: var(--ink); overflow-wrap: anywhere; }
 .library-row-meta { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; font-size: 12px; color: var(--ink-3); }
 .notes-reader {
-  position: fixed; top: var(--topbar-h); right: 0; bottom: 0;
+  position: fixed; top: var(--topbar-h); right: 0; bottom: var(--kb-inset, 0px);
   z-index: 45; width: min(460px, 100vw);
   display: flex; flex-direction: column; min-width: 0;
   background: var(--surface);
@@ -609,22 +611,15 @@ onUnmounted(() => {
 .reader-file-name { overflow-wrap: anywhere; }
 .reader-file-actions { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; }
 .reader-foot { display: flex; gap: 8px; border-top: 1px solid var(--line); }
-@media (min-width: 1100px) {
+@media (min-width: 1024px) {
   /* The fixed 460px reader overlays the right edge of the work surface.
      Keep the page head (upload / new note) clear of it. */
   .notes-page.is-reader-open .page-head { padding-right: 484px; }
   .notes-page.is-reader-open .notes-layout { padding-right: 460px; }
 }
-@media (max-width: 640px) {
-  .library-toolbar { flex-wrap: wrap; gap: 10px; }
-  .library-toolbar .search-box { width: 100%; }
-  .library-tabs { gap: 16px; overflow-x: auto; }
-  .library-tabs .tab { white-space: nowrap; }
-  .reader-title { font-size: 20px; }
-}
 @media (max-width: 768px) {
   .notes-reader {
-    top: 52px; width: 100%; z-index: 80;
+    top: var(--mobile-top-h, 52px); width: 100%; z-index: 80;
     border-left: 0; box-shadow: none;
   }
   .notes-reader-head { padding: 16px 16px 12px; }
@@ -634,5 +629,12 @@ onUnmounted(() => {
   .notes-reader-file { padding: 10px 16px; }
   .notes-reader-foot { padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
   .notes-reader-foot .btn { flex: 1; }
+}
+@media (max-width: 640px) {
+  .library-toolbar { flex-wrap: wrap; gap: 10px; }
+  .library-toolbar .search-box { width: 100%; }
+  .library-tabs { gap: 16px; overflow-x: auto; }
+  .library-tabs .tab { white-space: nowrap; }
+  .reader-title { font-size: 20px; }
 }
 </style>

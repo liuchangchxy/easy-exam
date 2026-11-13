@@ -8,15 +8,21 @@ the target one. These tests exercise the real HTTP surface and then assert the
 invariant directly against the SQLite file the app was created with, so a future
 implementation that starts to share one question id across two banks fails here
 without needing a schema migration.
+
+Migration 23 (decision 2 in docs/UX_CORE_REDESIGN_2026-11-13.md) additionally
+enforces the invariant at the write layer with triggers on
+`bank_question_items`; the cases below cover direct SQL rejection and the
+upgrade path for databases that already hold historical duplicates.
 """
 import os
+import sqlite3
 import tempfile
 import unittest
 from contextlib import closing
 
 from fastapi.testclient import TestClient
 
-from backend.app.infrastructure.db.connection import get_connection
+from backend.app.infrastructure.db.connection import get_connection, migrate
 from backend.app.main import create_app
 
 
@@ -107,6 +113,10 @@ class QuestionBankOneToOneTests(unittest.TestCase):
             "a question must never be linked to more than one bank",
         )
 
+    def _membership_count(self):
+        with closing(get_connection(self.db_path)) as conn:
+            return conn.execute("SELECT COUNT(*) FROM bank_question_items").fetchone()[0]
+
     # -------------------------------------------------------------------- tests
 
     def test_single_copy_creates_new_question_id_in_target_only(self):
@@ -185,6 +195,187 @@ class QuestionBankOneToOneTests(unittest.TestCase):
         self.assertEqual([bank_a["id"]], self._item_banks(original["id"]))
         self.assertEqual([bank_b["id"]], self._item_banks(copied_id))
         self._assert_no_shared_question()
+
+    def test_import_creates_fresh_identities_and_keeps_one_to_one(self):
+        _, headers = self._user("one_to_one_import")
+        bank = self._bank(headers, "Import Bank")
+        csv_content = (
+            "题型,题干,选项A,选项B,正确答案,解析\n"
+            "单选题,导入题一,苹果,香蕉,A,解析一\n"
+            "单选题,导入题二,苹果,香蕉,B,解析二\n"
+        )
+
+        resp = self.client.post(
+            f"/api/v1/imports/banks/{bank['id']}",
+            headers=headers,
+            json={"format": "csv", "content": csv_content, "duplicate_strategy": "skip"},
+        )
+        self.assertEqual(resp.status_code, 201, resp.text)
+        self.assertEqual(2, resp.json()["imported_count"])
+
+        imported_ids = self._content_ids(headers, bank["id"])
+        self.assertEqual(2, len(imported_ids))
+        for question_id in imported_ids:
+            self.assertEqual([bank["id"]], self._item_banks(question_id))
+        self._assert_no_shared_question()
+
+    # ------------------------------------------- write-layer trigger enforcement
+
+    def test_direct_insert_of_second_membership_is_rejected(self):
+        _, headers = self._user("one_to_one_trigger_insert")
+        bank_a = self._bank(headers, "Trigger Source")
+        bank_b = self._bank(headers, "Trigger Target")
+        question = self._question(headers, bank_a["id"], "One home only")
+        before = self._membership_count()
+
+        with closing(get_connection(self.db_path)) as conn:
+            with self.assertRaises(sqlite3.IntegrityError) as ctx:
+                conn.execute(
+                    "INSERT INTO bank_question_items(bank_id, question_id) VALUES (?, ?)",
+                    (bank_b["id"], question["id"]),
+                )
+            conn.rollback()
+
+        self.assertIn("already belongs to a bank", str(ctx.exception))
+        self.assertEqual(before, self._membership_count(), "rejected insert must not add a row")
+        self.assertEqual([bank_a["id"]], self._item_banks(question["id"]))
+        self._assert_no_shared_question()
+
+    def test_repository_maps_second_membership_to_domain_conflict(self):
+        from backend.app.infrastructure.db.repositories.question_repository import (
+            QuestionBankConflictError,
+            QuestionRepository,
+        )
+
+        _, headers = self._user("one_to_one_conflict_mapping")
+        bank_a = self._bank(headers, "Mapping Source")
+        bank_b = self._bank(headers, "Mapping Target")
+        question = self._question(headers, bank_a["id"], "Mapping home")
+
+        with closing(get_connection(self.db_path)) as conn:
+            with self.assertRaises(QuestionBankConflictError):
+                QuestionRepository._insert_bank_question_item(conn, bank_b["id"], question["id"])
+            conn.rollback()
+
+        # Routes catch ValueError (banks.py, imports.py), so this is a 4xx.
+        self.assertTrue(issubclass(QuestionBankConflictError, ValueError))
+        self.assertEqual([bank_a["id"]], self._item_banks(question["id"]))
+        self._assert_no_shared_question()
+
+    def test_update_question_id_to_existing_membership_is_rejected(self):
+        _, headers = self._user("one_to_one_trigger_update")
+        bank_a = self._bank(headers, "Update Source")
+        bank_b = self._bank(headers, "Update Target")
+        first = self._question(headers, bank_a["id"], "First home")
+        second = self._question(headers, bank_b["id"], "Second home")
+        before = self._membership_count()
+
+        with closing(get_connection(self.db_path)) as conn:
+            with self.assertRaises(sqlite3.IntegrityError) as ctx:
+                conn.execute(
+                    "UPDATE bank_question_items SET question_id = ? WHERE question_id = ?",
+                    (first["id"], second["id"]),
+                )
+            conn.rollback()
+            self.assertEqual([bank_b["id"]], [
+                row["bank_id"]
+                for row in conn.execute(
+                    "SELECT bank_id FROM bank_question_items WHERE question_id = ?",
+                    (second["id"],),
+                ).fetchall()
+            ])
+            # Writing the same value back must not trip the guard.
+            conn.execute(
+                "UPDATE bank_question_items SET question_id = question_id WHERE question_id = ?",
+                (first["id"],),
+            )
+            conn.commit()
+
+        self.assertIn("already belongs to a bank", str(ctx.exception))
+        self.assertEqual(before, self._membership_count(), "rejected update must not move a row")
+        self.assertEqual([bank_a["id"]], self._item_banks(first["id"]))
+        self._assert_no_shared_question()
+
+    def test_migration_23_upgrades_legacy_duplicates_without_touching_them(self):
+        import backend.app.infrastructure.db.connection as conn_mod
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "legacy_duplicate.db")
+
+            # Build a v22-shaped database: the pre-trigger schema allowed one
+            # question to be linked to two banks.
+            original = dict(conn_mod.MIGRATIONS)
+            try:
+                conn_mod.MIGRATIONS = {v: sql for v, sql in original.items() if v <= 22}
+                migrate(db_path)
+            finally:
+                conn_mod.MIGRATIONS = original
+
+            conn = sqlite3.connect(db_path)
+            try:
+                conn.execute(
+                    "INSERT INTO users(id, username, password_hash) VALUES ('legacy-user', 'legacy_user', 'x')"
+                )
+                conn.execute(
+                    "INSERT INTO question_banks(id, name, created_by) VALUES "
+                    "('legacy-bank-a', 'Legacy A', 'legacy-user'), "
+                    "('legacy-bank-b', 'Legacy B', 'legacy-user'), "
+                    "('legacy-bank-c', 'Legacy C', 'legacy-user')"
+                )
+                conn.execute(
+                    "INSERT INTO questions(id, created_by) VALUES ('legacy-q', 'legacy-user')"
+                )
+                conn.execute(
+                    "INSERT INTO bank_question_items(bank_id, question_id) "
+                    "VALUES ('legacy-bank-a', 'legacy-q'), ('legacy-bank-b', 'legacy-q')"
+                )
+                conn.commit()
+                self.assertEqual(
+                    2,
+                    conn.execute(
+                        "SELECT COUNT(*) FROM bank_question_items WHERE question_id = 'legacy-q'"
+                    ).fetchone()[0],
+                    "precondition: the v22 schema must accept the legacy duplicate",
+                )
+            finally:
+                conn.close()
+
+            migrate(db_path)
+            migrate(db_path)  # idempotent: schema_migrations prevents a re-run
+
+            with closing(get_connection(db_path)) as conn:
+                legacy_rows = conn.execute(
+                    "SELECT bank_id FROM bank_question_items "
+                    "WHERE question_id = 'legacy-q' ORDER BY bank_id"
+                ).fetchall()
+                self.assertEqual(
+                    ["legacy-bank-a", "legacy-bank-b"],
+                    [row["bank_id"] for row in legacy_rows],
+                    "upgrade must not delete or re-home legacy duplicate rows",
+                )
+                triggers = {
+                    row["name"]
+                    for row in conn.execute(
+                        "SELECT name FROM sqlite_master WHERE type = 'trigger'"
+                    ).fetchall()
+                }
+                self.assertIn("trg_bank_question_single_bank", triggers)
+                self.assertIn("trg_bank_question_single_bank_update", triggers)
+
+                count_before = conn.execute(
+                    "SELECT COUNT(*) FROM bank_question_items"
+                ).fetchone()[0]
+                with self.assertRaises(sqlite3.IntegrityError):
+                    conn.execute(
+                        "INSERT INTO bank_question_items(bank_id, question_id) "
+                        "VALUES ('legacy-bank-c', 'legacy-q')"
+                    )
+                conn.rollback()
+                self.assertEqual(
+                    count_before,
+                    conn.execute("SELECT COUNT(*) FROM bank_question_items").fetchone()[0],
+                    "the new trigger must guard writes after a legacy upgrade",
+                )
 
 
 if __name__ == "__main__":

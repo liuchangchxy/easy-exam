@@ -376,6 +376,8 @@ import { useRoute, useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
 import ChangePasswordModal from '../components/ChangePasswordModal.vue'
 import { useLocale } from '../composables/useLocale.js'
+import { useConfirm } from '../composables/useConfirm.js'
+import { useToast } from '../composables/useToast.js'
 import { useTheme } from '../composables/useTheme.js'
 import { DENSITY_STORAGE_KEY, normalizeDensityPreference, restoreDensityPreference } from '../composables/density.js'
 import { getAiConfig, updateAiConfig, testAiConfig } from '../api/ai'
@@ -393,6 +395,8 @@ const router = useRouter()
 
 const { t, locale: currentLocale, setLocale } = useLocale()
 const { mode, setMode, palette, palettes, setPalette } = useTheme()
+const { confirm: confirmAction } = useConfirm()
+const toast = useToast()
 
 const DEFAULT_SECTION = 'appearance'
 const SECTION_QUERY = {
@@ -441,8 +445,11 @@ watch(
 )
 
 function requestLogout() {
-  if (!window.confirm(t('ep.settings.logout_confirm'))) return
-  emit('logout')
+  return confirmAction({
+    title: t('ep.settings.logout_confirm'),
+    body: t('ep.settings.logout_body'),
+    danger: true,
+  }, () => emit('logout'))
 }
 const showPasswordModal = ref(false)
 const appVersion = pkg.version
@@ -592,8 +599,11 @@ async function loadSessions() {
 
 function requestLogoutOtherSessions() {
   if (!otherSessionCount.value) return
-  if (typeof window !== 'undefined' && !window.confirm(t('ep.account.sessions_logout_confirm'))) return
-  logoutOtherSessions()
+  return confirmAction({
+    title: t('ep.account.sessions_logout_confirm'),
+    body: t('ep.account.sessions_logout_body'),
+    danger: true,
+  }, logoutOtherSessions)
 }
 
 async function logoutOtherSessions() {
@@ -704,7 +714,8 @@ async function saveField(key) {
     const updated = await updateAiConfig(props.token, { [key]: config.value[key] })
     savedConfig.value[key] = config.value[key]
     applyServerConfig(updated, [key])
-    notice.value = t(isWeb ? 'ep.settings.web_saved' : 'ep.settings.ai_saved')
+    // A field that saved itself is a transient confirmation, not page state.
+    toast.success(t(isWeb ? 'ep.settings.web_saved' : 'ep.settings.ai_saved'))
   } catch (err) {
     error.value = true
     notice.value = err.detail || err.message
@@ -741,7 +752,7 @@ async function testConnection(kind) {
     // first. If that write fails, do not claim a test result.
     if (await flushPendingFields(kind)) {
       error.value = false
-      notice.value = t(isWeb ? 'ep.settings.web_saved' : 'ep.settings.ai_saved')
+      toast.success(t(isWeb ? 'ep.settings.web_saved' : 'ep.settings.ai_saved'))
     }
     const result = await testAiConfig(props.token, isWeb ? 'search' : 'ai')
     if (result?.ok) {

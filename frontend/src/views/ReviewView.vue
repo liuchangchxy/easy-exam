@@ -239,12 +239,30 @@
             </button>
           </div>
           <div class="spacer"></div>
-          <span class="small dim">{{ t('ep.review.queue_count', { count: filteredQueue.length }) }}</span>
+          <label class="search-box review-queue-search">
+            <LinearIcon name="search" :size="14" />
+            <input
+              v-model="queueQuery"
+              class="input"
+              type="search"
+              data-testid="review-queue-search"
+              :placeholder="t('ep.review.search_placeholder')"
+              :aria-label="t('ep.review.search_placeholder')"
+            />
+          </label>
+          <label class="review-scope">
+            <span class="small dim">{{ t('ep.review.filter_bank') }}</span>
+            <select v-model="queueScope" class="select" data-testid="review-queue-scope">
+              <option value="all">{{ t('ep.review.filter_bank') }}</option>
+              <option v-for="b in banks" :key="b.id" :value="b.id">{{ b.name }}</option>
+            </select>
+          </label>
+          <span class="small dim">{{ t('ep.review.queue_count', { count: visibleQueue.length }) }}</span>
         </div>
 
-        <div v-if="filteredQueue.length" class="panel">
+        <div v-if="visibleQueue.length" class="panel">
           <div class="list">
-            <div v-for="row in filteredQueue" :key="row.key" class="list-row review-queue-row" :data-key="row.key">
+            <div v-for="row in visibleQueue" :key="row.key" class="list-row review-queue-row" :data-key="row.key">
               <span class="qtype mono">{{ typeLabel(row.type) }}</span>
               <span class="list-main">
                 <span class="qrow-stem">{{ row.stem }}</span>
@@ -387,7 +405,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
 import { useLocale } from '../composables/useLocale.js'
@@ -440,6 +458,11 @@ const loadError = ref(false)
 const notice = ref('')
 const mistakeBank = ref(readQueryString(route.query?.bank))
 const mistakeCause = ref(readQueryString(route.query?.cause))
+// The unified queue's own URL state: ?q= is a stem filter and ?scope= narrows
+// it to one bank (`all` means every bank). Both survive a reload and a pasted
+// link, and neither pushes a history entry per keystroke.
+const queueQuery = ref(readQueryString(route.query?.q))
+const queueScope = ref(readQueryString(route.query?.scope) || 'all')
 
 // Weak flags come from two places: the due payload tags the ones that have a
 // due card, and /mistakes/weak lists every flag (due or not). The queue needs
@@ -469,6 +492,21 @@ const reviewQueue = computed(() => mergeReviewQueue({
 
 const filteredQueue = computed(() => filterReviewRows(reviewQueue.value, reasonFilter.value))
 const emptyKeys = computed(() => QUEUE_EMPTY[reasonFilter.value] || QUEUE_EMPTY.all)
+
+// ?scope= names a bank; an unknown or stale id falls back to every bank rather
+// than showing a permanently empty list.
+const resolvedScope = computed(() => {
+  if (queueScope.value === 'all') return 'all'
+  return banks.value.some(b => b.id === queueScope.value) ? queueScope.value : 'all'
+})
+
+const visibleQueue = computed(() => {
+  let list = filteredQueue.value
+  if (resolvedScope.value !== 'all') list = list.filter(row => row.bank_id === resolvedScope.value)
+  const needle = queueQuery.value.trim().toLowerCase()
+  if (needle) list = list.filter(row => String(row.stem || '').toLowerCase().includes(needle))
+  return list
+})
 
 const tabs = computed(() => [
   { key: 'due', label: 'ep.review.tab_due', count: dueReviews.value.length },
@@ -589,6 +627,43 @@ watch(mistakeBank, value => syncReviewQuery({ bank: value }))
 
 watch(mistakeCause, value => syncReviewQuery({ cause: value }))
 
+// The queue filters write with replace, never push: typing must not create one
+// history entry per keystroke, and Back must leave the page rather than undo a
+// letter. The search box is debounced; the bank select writes immediately.
+let queueQueryTimer = null
+
+function flushQueueQuery() {
+  if (queueQueryTimer) {
+    clearTimeout(queueQueryTimer)
+    queueQueryTimer = null
+  }
+  syncReviewQuery({ q: queueQuery.value.trim() })
+}
+
+watch(queueQuery, () => {
+  if (queueQueryTimer) clearTimeout(queueQueryTimer)
+  queueQueryTimer = setTimeout(flushQueueQuery, 250)
+})
+
+watch(queueScope, value => {
+  const next = value === 'all' ? '' : value
+  syncReviewQuery({ scope: next })
+})
+
+// A pasted link or Back/Forward restores both filters into the inputs.
+watch(() => [route.query?.q, route.query?.scope], () => {
+  const nextQuery = readQueryString(route.query?.q)
+  // Compare against the trimmed value so a trailing space the user is typing
+  // is not rewritten back out of the input by the echo of our own replace.
+  if (nextQuery !== queueQuery.value.trim()) queueQuery.value = nextQuery
+  const nextScope = readQueryString(route.query?.scope) || 'all'
+  if (nextScope !== queueScope.value) queueScope.value = nextScope
+})
+
+onBeforeUnmount(() => {
+  if (queueQueryTimer) clearTimeout(queueQueryTimer)
+})
+
 async function load() {
   loading.value = true
   loadError.value = false
@@ -615,6 +690,12 @@ async function load() {
   trends.value = trendRes.status === 'fulfilled' ? (trendRes.value || null) : null
   plan.value = planRes.status === 'fulfilled' ? (planRes.value || null) : null
   recommendations.value = recRes.status === 'fulfilled' ? (recRes.value || []) : []
+  // A link can name a bank this account can no longer see. Fall back to every
+  // bank and repair the address instead of leaving a dead filter in the URL.
+  if (queueScope.value !== 'all' && !banks.value.some(b => b.id === queueScope.value)) {
+    queueScope.value = 'all'
+    syncReviewQuery({ scope: '' })
+  }
   loading.value = false
 }
 
@@ -804,6 +885,9 @@ onMounted(load)
 .review-queue-toolbar { flex-wrap: wrap; gap: 12px; }
 .review-queue-row { align-items: flex-start; }
 .review-reason-tag { margin-left: 2px; }
+.review-queue-search { flex: 0 1 220px; min-width: 140px; }
+.review-scope { display: inline-flex; align-items: center; gap: 8px; flex: none; }
+.review-scope .select { height: 32px; font-size: 12px; }
 .review-reason-chip .count { margin-left: 6px; font-family: var(--font-mono); font-size: 12px; color: var(--ink-4); font-weight: 400; }
 .due-row, .mistake-row { align-items: flex-start; }
 .qtype { font-size: 12px; letter-spacing: .04em; color: var(--ink-3); width: 52px; flex: none; padding-top: 3px; }

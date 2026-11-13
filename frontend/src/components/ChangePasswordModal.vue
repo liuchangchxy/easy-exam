@@ -16,7 +16,6 @@
     </template>
 
     <div v-if="changePwdError" class="notice bad" role="alert">{{ changePwdError }}</div>
-    <div v-if="changePwdSuccess" class="notice ok">{{ changePwdSuccess }}</div>
 
     <form class="change-pwd-form" @submit.prevent="handleSubmit">
       <label class="field">
@@ -47,8 +46,10 @@ import { ref } from 'vue'
 import AppDialog from './AppDialog.vue'
 import { changePassword } from '../api/auth'
 import { useLocale } from '../composables/useLocale.js'
+import { useToast } from '../composables/useToast.js'
 
 const { t } = useLocale()
+const toast = useToast()
 
 const props = defineProps({
   token: { type: String, required: true }
@@ -60,12 +61,10 @@ const oldPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
 const changePwdError = ref('')
-const changePwdSuccess = ref('')
 const submitting = ref(false)
 
 async function handleSubmit() {
   changePwdError.value = ''
-  changePwdSuccess.value = ''
   if (!oldPassword.value) {
     changePwdError.value = t('ui.k0030')
     return
@@ -82,7 +81,9 @@ async function handleSubmit() {
   submitting.value = true
   try {
     await changePassword(props.token, oldPassword.value, newPassword.value)
-    changePwdSuccess.value = t('ui.k0033')
+    // Success is the app-wide toast, not a second copy inside the dialog that
+    // disappears with it 1.2s later.
+    toast.success(t('ui.k0033'))
     oldPassword.value = ''
     newPassword.value = ''
     confirmPassword.value = ''

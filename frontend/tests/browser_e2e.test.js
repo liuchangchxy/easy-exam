@@ -129,6 +129,17 @@ async function startBankPractice(page, baseUrl, bankName) {
   const row = page.locator('.banks-row').filter({ hasText: bankName }).first()
   await row.waitFor({ state: 'visible', timeout: 10000 })
   await row.locator('.btn-sm').first().click()
+  // P6 routes every start through the shared decision, so an account that
+  // already has an unfinished session is asked instead of silently opening a
+  // second one. These flows want to keep working in that session.
+  const panel = page.locator('[data-testid="start-study-panel"]')
+  await Promise.race([
+    page.waitForSelector('.focus-mode', { timeout: 12000 }),
+    panel.waitFor({ state: 'visible', timeout: 12000 }),
+  ])
+  if (await panel.isVisible()) {
+    await panel.locator('[data-testid="start-study-continue"]').click()
+  }
   await page.waitForSelector('.focus-mode', { timeout: 12000 })
   await page.waitForSelector('.q-stem', { timeout: 8000 })
 }

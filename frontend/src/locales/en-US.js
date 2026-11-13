@@ -55,7 +55,8 @@ export default {
     "status": "Status",
     "total": "{count} total",
     "none": "None",
-    "advanced_settings": "Advanced Settings"
+    "advanced_settings": "Advanced Settings",
+    "dismiss": "Dismiss notification"
   },
   "home": {
     "welcome": "Welcome back",

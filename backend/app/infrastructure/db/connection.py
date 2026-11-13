@@ -457,8 +457,60 @@ MIGRATIONS = {
     FROM import_jobs_legacy;
     DROP TABLE import_jobs_legacy;
     """,
+    23: """
+    -- Decision 2 (docs/UX_CORE_REDESIGN_2026-11-13.md §7.5/§7.6): a question
+    -- belongs to exactly one bank. Enforce it at the write layer with triggers
+    -- rather than a UNIQUE index so installations that already hold historical
+    -- duplicates can still upgrade. The triggers only guard new writes; legacy
+    -- rows are left untouched for explicit cleanup.
+    CREATE TRIGGER IF NOT EXISTS trg_bank_question_single_bank
+    BEFORE INSERT ON bank_question_items
+    WHEN EXISTS (SELECT 1 FROM bank_question_items WHERE question_id = NEW.question_id)
+    BEGIN
+        SELECT RAISE(ABORT, 'question already belongs to a bank');
+    END;
+
+    -- An UPDATE could otherwise attach a second membership. Excluding the row
+    -- being updated keeps no-op updates and legitimate single-home rewrites valid.
+    CREATE TRIGGER IF NOT EXISTS trg_bank_question_single_bank_update
+    BEFORE UPDATE OF question_id ON bank_question_items
+    WHEN EXISTS (
+        SELECT 1 FROM bank_question_items
+        WHERE question_id = NEW.question_id
+          AND NOT (bank_id = OLD.bank_id AND question_id = OLD.question_id)
+    )
+    BEGIN
+        SELECT RAISE(ABORT, 'question already belongs to a bank');
+    END;
+    """,
 }
 
+
+def _split_sql_statements(script: str) -> Generator[str, None, None]:
+    """Split a migration script on semicolons without cutting trigger bodies.
+
+    Migration scripts contain triggers, whose BEGIN ... END bodies hold internal
+    semicolons. `sqlite3.complete_statement` understands both nested trigger
+    bodies and quoted literals/comments, so it identifies the real boundaries
+    while the migration still runs statement-by-statement inside one transaction.
+    """
+    buffer = ""
+    for char in script:
+        buffer += char
+        if char != ";" or not sqlite3.complete_statement(buffer):
+            continue
+        statement = buffer.strip()
+        buffer = ""
+        if _has_sql_content(statement):
+            yield statement
+    tail = buffer.strip()
+    if _has_sql_content(tail):
+        yield tail
+
+
+def _has_sql_content(statement: str) -> bool:
+    """Whether a fragment is more than whitespace and `--` comment lines."""
+    return any(line.strip() and not line.strip().startswith("--") for line in statement.splitlines())
 
 
 def migrate(db_path: str) -> None:
@@ -473,10 +525,8 @@ def migrate(db_path: str) -> None:
                 continue
             conn.execute("BEGIN IMMEDIATE")
             try:
-                for stmt in MIGRATIONS[version].split(";"):
-                    stmt = stmt.strip()
-                    if stmt:
-                        conn.execute(stmt)
+                for stmt in _split_sql_statements(MIGRATIONS[version]):
+                    conn.execute(stmt)
                 conn.execute("INSERT INTO schema_migrations(version) VALUES (?)", (version,))
                 conn.commit()
             except Exception:

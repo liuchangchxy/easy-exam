@@ -371,11 +371,13 @@ import LinearIcon from '../../components/LinearIcon.vue'
 import ThemeToggle from '../../components/ThemeToggle.vue'
 import LocaleToggle from '../../components/LocaleToggle.vue'
 import { useLocale, getCurrentLocale } from '../../composables/useLocale.js'
+import { useKeyboardInset } from '../../composables/useKeyboardInset.js'
 import { useAuthStore } from '../../stores/authStore'
 import { completeSession, getSession, getSessionQuestions, submitAttempt, syncDraft, toggleFlag } from '../../api/practice'
 import { buildExamDraftBase, buildExamDraftPayload, buildExamLocalDraft, calculateAccuracy, examAnswerState, examAnswersToBase, examLocalDraftDiffers, examLocalDraftKey, examRecoveryBase, findFirstUnansweredIndex, formatQuestionTypeName, formatRemainingTime, isExamNetworkError, isExamTimeExpiredError, isExamReviewItem, isSwipeGestureValid, mergeExamLocalDraft, normalizeDraftConflicts, resolveExamUserKey, unsubmittedExamAnswers } from '../../domain/exam'
 
 const { t } = useLocale()
+useKeyboardInset()
 const router = useRouter()
 const auth = useAuthStore()
 const examUserKey = computed(() => resolveExamUserKey(auth.user?.value || auth.user))
@@ -1203,7 +1205,7 @@ onBeforeUnmount(() => {
 /* ---------- runner layout ---------- */
 .exam-mode .exam-layout {
   display: grid;
-  grid-template-columns: minmax(0, var(--reading-w)) 232px;
+  grid-template-columns: minmax(0, var(--reading-w)) var(--rail-exam, 232px);
   gap: clamp(32px, 5vw, 72px);
   justify-content: center;
   align-items: start;
@@ -1360,7 +1362,7 @@ onBeforeUnmount(() => {
 /* ---------- bottom instrument bar ---------- */
 .exam-actionbar {
   position: fixed;
-  inset: auto 0 0;
+  inset: auto 0 var(--kb-inset, 0px);
   z-index: 40;
   background: color-mix(in srgb, var(--paper) 94%, transparent);
   backdrop-filter: blur(10px);
@@ -1562,6 +1564,7 @@ onBeforeUnmount(() => {
 .exam-sheet-drawer {
   width: 100%;
   max-height: 82vh;
+  max-height: 82dvh;
   overflow-y: auto;
   padding: 18px 18px calc(18px + env(safe-area-inset-bottom, 0px));
   background: var(--surface);
@@ -1646,7 +1649,7 @@ onBeforeUnmount(() => {
 @media (max-width: 1280px) {
   .exam-mode .exam-layout { gap: 40px; }
 }
-@media (max-width: 1100px) {
+@media (max-width: 1024px) {
   .exam-mode .exam-layout {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
@@ -1692,5 +1695,9 @@ onBeforeUnmount(() => {
   .answer-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .exam-overlay { padding: 10px; }
   .report-facts { flex-wrap: wrap; }
+}
+@media (pointer: coarse) {
+  /* The answer grid pins a 30px height; min-height wins over it. */
+  .answer-cell { min-height: 44px; }
 }
 </style>

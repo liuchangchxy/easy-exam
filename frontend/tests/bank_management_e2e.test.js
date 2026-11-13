@@ -301,6 +301,8 @@ test('Bank management completion E2E: multi-bank list, settings, structure, memb
     await page.locator('.manage-tabs .tab').nth(5).click()
     await page.waitForSelector('[data-testid="bank-archive"]', { timeout: 5000 })
     await page.locator('[data-testid="bank-archive"]').click()
+    // P6 moved destructive confirmations into the shared in-app dialog.
+    await page.locator('[data-testid="confirm-dialog"] [data-testid="confirm-ok"]').click()
     await page.waitForSelector('.banks-row', { timeout: 10000 })
     assert.equal(await page.locator('.banks-row:has-text("Alpha Updated")').count(), 0, 'archived bank leaves the list')
 

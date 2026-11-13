@@ -41,6 +41,10 @@ vi.mock('../../src/api/questions', () => ({
 
 vi.mock('../../src/api/practice', () => ({
   startSession: vi.fn(),
+  // useStartStudy asks for unfinished sessions before it starts another one.
+  listActiveSessions: vi.fn().mockResolvedValue([]),
+  abandonSession: vi.fn(),
+  abandonAllSessions: vi.fn(),
 }))
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0))

@@ -87,8 +87,10 @@ import { onMounted, ref } from 'vue'
 import AppDialog from './AppDialog.vue'
 import { listDrafts, acceptDraft, discardDraft } from '../api/ai'
 import { useLocale } from '../composables/useLocale.js'
+import { useConfirm } from '../composables/useConfirm.js'
 
 const { t } = useLocale()
+const { confirm: confirmAction, notify } = useConfirm()
 
 const props = defineProps({
   token: { type: String, required: true },
@@ -137,19 +139,20 @@ async function handleAcceptDraft(draft) {
     draftsList.value = draftsList.value.filter(d => d.id !== draft.id)
     emit('accepted', result?.question || draft)
   } catch (err) {
-    alert(`${t('ui.k0285')}${err.detail || err.message}`)
+    notify({ title: `${t('ui.k0285')}${err.detail || err.message}`, danger: true })
   } finally {
     draft.processing = false
   }
 }
 
 async function handleDiscardDraft(draftId) {
-  if (!confirm(t('ui.k0286'))) return
+  const accepted = await confirmAction({ title: t('ui.k0286'), danger: true }, () => true)
+  if (accepted !== true) return
   try {
     await discardDraft(props.token, draftId)
     draftsList.value = draftsList.value.filter(d => d.id !== draftId)
   } catch (err) {
-    alert(`${t('ui.k0287')}${err.detail || err.message}`)
+    notify({ title: `${t('ui.k0287')}${err.detail || err.message}`, danger: true })
   }
 }
 </script>

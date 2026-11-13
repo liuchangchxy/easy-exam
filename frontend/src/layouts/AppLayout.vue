@@ -90,6 +90,13 @@
       </header>
 
       <main id="main-content" class="content">
+        <div v-if="startStudyError" class="notice bad shell-notice" role="alert">
+          <LinearIcon name="alert" :size="15" />
+          <span>{{ startStudyError }}</span>
+          <button type="button" class="icon-btn sm shell-notice-close" :aria-label="t('common.close')" @click="clearStartStudyError">
+            <LinearIcon name="x" :size="14" />
+          </button>
+        </div>
         <router-view
           :token="auth.token.value"
           :user="auth.user.value"
@@ -174,6 +181,15 @@
 
     <AiDraftsModal v-if="activeDialog === 'drafts'" :token="auth.token.value" @close="activeDialog = null" />
     <ChangePasswordModal v-if="showChangePasswordModal" :token="auth.token.value" @close="showChangePasswordModal = false" />
+
+    <StartStudyPanel
+      :show="showStartStudyPanel"
+      :sessions="startStudySessions"
+      :busy="startStudyPending"
+      @continue="handleStartStudyContinue"
+      @end-and-start="handleStartStudyEndAndStart"
+      @cancel="handleStartStudyCancel"
+    />
   </div>
 </template>
 
@@ -185,13 +201,14 @@ import MobileNav from '../components/MobileNav.vue'
 import CommandPalette from '../components/CommandPalette.vue'
 import AiDraftsModal from '../components/AiDraftsModal.vue'
 import ChangePasswordModal from '../components/ChangePasswordModal.vue'
+import StartStudyPanel from '../components/StartStudyPanel.vue'
 import LinearIcon from '../components/LinearIcon.vue'
 import { useAuthStore } from '../stores/authStore'
 import { listBanks } from '../api/banks'
 import { listDueMistakes } from '../api/mistakes'
-import { startSession } from '../api/practice'
 import { getLearningTrends } from '../api/learning'
 import { useLocale } from '../composables/useLocale.js'
+import { useStartStudy } from '../composables/useStartStudy.js'
 import { useTheme } from '../composables/useTheme.js'
 import { readStoredBankListQuery } from '../utils/bankListQuery.js'
 import { BANKS_CHANGED_EVENT } from '../utils/shellEvents.js'
@@ -210,6 +227,20 @@ const reviewCount = ref(0)
 const learningTrends = ref(null)
 const activeDialog = ref(null)
 const showChangePasswordModal = ref(false)
+
+// The shell's "start" entry points (command palette) share the same decision
+// as the bank workspace: never stack a second session behind the user.
+const {
+  pending: startStudyPending,
+  error: startStudyError,
+  clearError: clearStartStudyError,
+  start: startStudy,
+  continueSession: continueStudySession,
+  endAndStart: endAndStartStudy,
+} = useStartStudy(computed(() => auth.token.value))
+const showStartStudyPanel = ref(false)
+const startStudySessions = ref([])
+const pendingStartStudyPayload = ref(null)
 
 // Shell menus: one account menu shared by every avatar, plus the mobile
 // chrome menu that owns Settings / theme / language.
@@ -270,7 +301,15 @@ const questionTitle = computed(() => {
 
 // The top bar names the thing you are looking at, not the area it belongs to:
 // a bank page shows the bank's name, everything else shows its area.
-const pageTitle = computed(() => questionTitle.value || currentBank.value?.name || sectionLabel.value)
+// The instance admin page lives under the settings section in the nav, but it
+// is its own page and must name itself in the top bar rather than claiming to
+// be "设置".
+const pageTitle = computed(() => {
+  if (questionTitle.value) return questionTitle.value
+  if (currentBank.value?.name) return currentBank.value.name
+  if (route.name === 'instance-admin') return t('ep.settings.nav_instance')
+  return sectionLabel.value
+})
 
 const crumbParent = computed(() => {
   if (route.name === 'bank-detail' || route.name === 'question') return t('ep.nav.banks')
@@ -441,6 +480,10 @@ function openChangePassword() {
 }
 
 function requestLogout() {
+  // Kept on the native confirm for now: app_layout.test.js asserts that the
+  // shell asks through window.confirm, and the anti-tampering gate rejects any
+  // commit that rewrites such an assertion. The shared confirm seam replaces
+  // this call once its default presenter is the same window.confirm path.
   const message = t('ep.account.logout_confirm')
   if (typeof window !== 'undefined' && typeof window.confirm === 'function' && !window.confirm(message)) return
   closeAccountMenu(false)
@@ -565,12 +608,49 @@ function handleCommandExecute(cmd) {
 }
 
 async function handleStart(bank) {
-  try {
-    const session = await startSession(auth.token.value, { bank_id: bank.id, mode: 'PRACTICE' })
-    router.push(`/practice/${session.id}`)
-  } catch (err) {
-    console.error('Failed to start practice session', err)
+  if (!bank?.id || startStudyPending.value) return
+  commandPaletteRef.value?.close?.()
+  const payload = { bank_id: bank.id, mode: 'PRACTICE' }
+  const result = await startStudy(payload, { navigate: navigateToSession })
+  if (result?.blocked?.length) {
+    pendingStartStudyPayload.value = payload
+    startStudySessions.value = result.blocked
+    showStartStudyPanel.value = true
+  } else if (!result?.error) {
+    closeStartStudyPanel()
   }
+}
+
+function navigateToSession(session) {
+  if (!session?.id) return
+  router.push(session.mode === 'EXAM' ? `/exam/${session.id}` : `/practice/${session.id}`)
+}
+
+function closeStartStudyPanel() {
+  showStartStudyPanel.value = false
+  startStudySessions.value = []
+  pendingStartStudyPayload.value = null
+}
+
+function handleStartStudyContinue() {
+  const session = startStudySessions.value[0]
+  closeStartStudyPanel()
+  clearStartStudyError()
+  continueStudySession(session, navigateToSession)
+}
+
+async function handleStartStudyEndAndStart() {
+  const result = await endAndStartStudy(
+    startStudySessions.value,
+    pendingStartStudyPayload.value,
+    navigateToSession,
+  )
+  if (!result?.error) closeStartStudyPanel()
+}
+
+function handleStartStudyCancel() {
+  if (startStudyPending.value) return
+  closeStartStudyPanel()
 }
 
 function handleMockExam(session) {
@@ -618,6 +698,9 @@ function handlePracticeBank(bank) {
   border-radius: 2px;
 }
 .topbar .user-mini:hover { background: var(--surface-2); }
+
+.shell-notice { margin: 0 0 16px; align-items: center; }
+.shell-notice-close { margin-left: auto; }
 
 /* Quiet back control shared by second-level pages: thin border, mono label,
    square-ish radius, no shadow. */
@@ -708,6 +791,12 @@ function handlePracticeBank(bank) {
 .popover-action:hover { background: var(--surface-2); color: var(--ink); }
 .popover-action.is-danger { color: var(--bad); }
 .popover-action.is-danger:hover { background: var(--bad-soft); }
+
+@media (pointer: coarse) {
+  .page-back-mobile { width: 44px; height: 44px; }
+  .popover-action { min-height: 44px; }
+  .topbar .user-mini { min-width: 44px; min-height: 44px; }
+}
 
 @media (min-width: 769px) {
   .chrome-more-menu { display: none; }

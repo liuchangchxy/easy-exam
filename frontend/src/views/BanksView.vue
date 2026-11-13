@@ -395,6 +395,15 @@
         <p v-if="categoryError" class="error">{{ categoryError }}</p>
       </div>
     </AppDialog>
+
+    <StartStudyPanel
+      :show="showStartStudyPanel"
+      :sessions="startStudySessions"
+      :busy="startPending"
+      @continue="handleStartStudyContinue"
+      @end-and-start="handleStartStudyEndAndStart"
+      @cancel="handleStartStudyCancel"
+    />
   </div>
 </template>
 
@@ -403,9 +412,12 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
 import AppDialog from '../components/AppDialog.vue'
+import StartStudyPanel from '../components/StartStudyPanel.vue'
 import { useLocale } from '../composables/useLocale.js'
 import { notifyBanksChanged } from '../utils/shellEvents.js'
 import { useDirtyGuard } from '../composables/useDirtyGuard.js'
+import { useConfirm } from '../composables/useConfirm.js'
+import { useStartStudy } from '../composables/useStartStudy.js'
 import {
   listBanks,
   createBank as createBankApi,
@@ -418,7 +430,6 @@ import {
   deleteBankCategory,
   downloadBankExport,
 } from '../api/banks'
-import { startSession } from '../api/practice'
 import { triggerSyncEvent } from '../api/sync'
 import { filterBankList, isBankOwner, sortBankList } from '../domain/bankManage'
 import {
@@ -431,6 +442,17 @@ const props = defineProps({ token: { type: String, required: true } })
 const route = useRoute()
 const router = useRouter()
 const { t } = useLocale()
+const { confirm: confirmAction } = useConfirm()
+const {
+  start: startStudy,
+  continueSession: continueStudySession,
+  endAndStart: endAndStartStudy,
+  pending: startPending,
+  error: startError,
+} = useStartStudy(() => props.token)
+const showStartStudyPanel = ref(false)
+const startStudySessions = ref([])
+let pendingStartStudyPayload = null
 
 const banks = ref([])
 // Ownership is a property of the user's banks, not of the current view. The
@@ -709,9 +731,12 @@ function clearSelection() {
 async function runBatch(operation) {
   if (!selectedIds.value.size) return
   if (!batchAllAdmin.value) return
-  if (operation === 'archive'
-    && !window.confirm(t('ep.banks.batch_archive_confirm', { count: selectedIds.value.size }))) {
-    return
+  if (operation === 'archive') {
+    const accepted = await confirmAction(
+      { title: t('ep.banks.batch_archive_confirm', { count: selectedIds.value.size }), danger: true },
+      () => true,
+    )
+    if (accepted !== true) return
   }
   batchBusy.value = true
   clearPageError()
@@ -811,7 +836,11 @@ async function saveBankMeta() {
 async function archiveBank(bank) {
   closeMenu()
   if (!isAdmin(bank)) return
-  if (!window.confirm(t('ep.banks.archive_confirm', { name: bank.name }))) return
+  const accepted = await confirmAction(
+    { title: t('ep.banks.archive_confirm', { name: bank.name }), danger: true },
+    () => true,
+  )
+  if (accepted !== true) return
   clearPageError()
   try {
     await deleteBank(props.token, bank.id)
@@ -880,7 +909,11 @@ async function renameCategory(row) {
 }
 
 async function removeCategory(row) {
-  if (!window.confirm(t('ep.banks.category_delete_confirm', { name: row.name }))) return
+  const accepted = await confirmAction(
+    { title: t('ep.banks.category_delete_confirm', { name: row.name }), danger: true },
+    () => true,
+  )
+  if (accepted !== true) return
   categoryError.value = ''
   try {
     await deleteBankCategory(props.token, row.name)
@@ -894,17 +927,58 @@ async function removeCategory(row) {
 }
 
 async function startPractice(bank) {
-  if (startingId.value) return
+  if (startingId.value || startPending.value) return
   startingId.value = bank.id
   clearPageError()
-  try {
-    const session = await startSession(props.token, { bank_id: bank.id, mode: 'PRACTICE' })
-    router.push(`/practice/${session.id}`)
-  } catch (err) {
-    showPageError(t('ep.banks.practice_start_failed', { message: err.detail || err.message }))
-  } finally {
-    startingId.value = ''
+  const payload = { bank_id: bank.id, mode: 'PRACTICE' }
+  // The shared entry first asks the server for unfinished sessions, so this
+  // row can never silently stack a second practice session.
+  const result = await startStudy(payload, { navigate: navigateToSession })
+  startingId.value = ''
+  if (result?.blocked?.length) {
+    pendingStartStudyPayload = payload
+    startStudySessions.value = result.blocked
+    showStartStudyPanel.value = true
+  } else if (result?.error) {
+    const message = result.error?.detail || result.error?.message || startError.value
+    showPageError(t('ep.banks.practice_start_failed', { message }))
   }
+}
+
+function navigateToSession(session) {
+  if (session?.id) router.push(`/practice/${session.id}`)
+}
+
+function closeStartStudyPanel() {
+  showStartStudyPanel.value = false
+  startStudySessions.value = []
+  pendingStartStudyPayload = null
+}
+
+function handleStartStudyContinue() {
+  const session = startStudySessions.value[0]
+  closeStartStudyPanel()
+  if (session) continueStudySession(session, navigateToSession)
+}
+
+async function handleStartStudyEndAndStart() {
+  const result = await endAndStartStudy(
+    startStudySessions.value,
+    pendingStartStudyPayload,
+    navigateToSession,
+  )
+  if (result?.error) {
+    closeStartStudyPanel()
+    showPageError(t('ep.banks.practice_start_failed', {
+      message: result.error?.detail || result.error?.message || '',
+    }))
+    return
+  }
+  closeStartStudyPanel()
+}
+
+function handleStartStudyCancel() {
+  closeStartStudyPanel()
 }
 
 function onDocumentClick() {

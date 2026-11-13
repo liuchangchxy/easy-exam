@@ -274,6 +274,7 @@ import LinearIcon from './LinearIcon.vue'
 import { updateQuestion, getQuestion, getQuestionConflict, listQuestionVersions, deleteQuestionVersion } from '../api/questions'
 import { useLocale } from '../composables/useLocale'
 import { useDirtyGuard } from '../composables/useDirtyGuard'
+import { useConfirm } from '../composables/useConfirm'
 import {
   validateQuestionEdit,
   sanitizeAnswerOnOptionRemove,
@@ -307,6 +308,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'saved', 'conflict', 'reloaded'])
 
 const { t } = useLocale()
+const { confirm: confirmAction } = useConfirm()
 
 const stem = ref('')
 const type = ref('SINGLE')
@@ -601,7 +603,11 @@ function formatVersionDate(value) {
 
 async function deleteVersion(version) {
   if (!props.question || !version || version.version_number === baseVersion.value) return
-  if (!window.confirm(t('bank_manage.version_delete_confirm', { ver: version.version_number }))) return
+  const accepted = await confirmAction(
+    { title: t('bank_manage.version_delete_confirm', { ver: version.version_number }), danger: true },
+    () => true,
+  )
+  if (accepted !== true) return
   versionDeleting.value = true
   versionError.value = ''
   try {

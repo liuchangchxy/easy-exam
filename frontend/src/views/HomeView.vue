@@ -112,7 +112,7 @@
                 </span>
               </button>
               <span class="bank-row-actions">
-                <button type="button" class="btn btn-sm" @click="emit('start', bank)">{{ t('ep.today.start_practice') }}</button>
+                <button type="button" class="btn btn-sm" @click="startBankPractice(bank)">{{ t('ep.today.start_practice') }}</button>
                 <LinearIcon name="chevron-right" :size="16" />
               </span>
             </div>
@@ -484,11 +484,15 @@ import { getAiBatchStatus, startAiBatchGenerate, stopAiBatchGenerate } from '../
 import { triggerSyncEvent } from '../api/sync'
 import { useLocale } from '../composables/useLocale.js'
 import { useStartStudy } from '../composables/useStartStudy.js'
+import { useConfirm } from '../composables/useConfirm.js'
+import { useToast } from '../composables/useToast.js'
 import { notifyBanksChanged } from '../utils/shellEvents.js'
 
 const route = useRoute()
 const router = useRouter()
 const { t, locale } = useLocale()
+const toast = useToast()
+const { confirm: confirmAction } = useConfirm()
 
 const props = defineProps({ token: { type: String, required: true }, user: { type: Object, default: null } })
 const emit = defineEmits(['start', 'mock-exam', 'resume-session', 'learning', 'mistakes', 'import', 'logout'])
@@ -613,8 +617,22 @@ async function startToday() {
   }
   if (await startTodayPlan()) return
   const bank = banks.value.find(b => b.question_count > 0)
-  if (bank) emit('start', bank)
+  if (bank) await startBankPractice(bank)
   else openCreateBankDialog()
+}
+
+// The recommendation row and the masthead both start the same way: through
+// useStartStudy, so unfinished work surfaces the 继续/结束并新建 panel instead
+// of a second session. The parent's `start` event is no longer needed here.
+async function startBankPractice(bank) {
+  if (!bank || startingStudy.value) return
+  const payload = { bank_id: bank.id, mode: 'PRACTICE' }
+  const result = await startStudy(payload, { navigate: navigateToSession })
+  if (result?.blocked?.length) {
+    openStartStudyPanel(result.blocked, payload)
+  } else if (result?.error) {
+    error.value = result.error.detail || result.error.message
+  }
 }
 
 function todayPlanTask() {
@@ -815,7 +833,7 @@ async function handleStartAiBatch() {
     aiBatchStatus.value = await startAiBatchGenerate(props.token, aiBatchBank.value.id, aiBatchOverwrite.value)
     startAiBatchPolling()
   } catch (err) {
-    alert(err.detail || err.message)
+    toast.error(err.detail || err.message)
   } finally {
     aiBatchLoading.value = false
   }
@@ -826,7 +844,7 @@ async function handleStopAiBatch() {
   try {
     aiBatchStatus.value = await stopAiBatchGenerate(props.token, aiBatchBank.value.id)
   } catch (err) {
-    alert(err.detail || err.message)
+    toast.error(err.detail || err.message)
   }
 }
 
@@ -854,7 +872,7 @@ async function handleResume(sessionSummary) {
     if (fullSession?.mode === 'EXAM') router.push(`/exam/${fullSession.id}`)
     else router.push(`/practice/${fullSession.id}`)
   } catch (err) {
-    alert(`${t('ui.k0275')}${err.detail || err.message}`)
+    toast.error(`${t('ui.k0275')}${err.detail || err.message}`)
   }
 }
 
@@ -1036,12 +1054,17 @@ async function handleAddMember() {
 }
 
 async function handleRemoveMember(memberUserId) {
-  if (!targetBankForShare.value || !confirm(t('ui.k0278'))) return
+  if (!targetBankForShare.value) return
+  const accepted = await confirmAction(
+    { title: t('ui.k0278'), danger: true },
+    () => true,
+  )
+  if (accepted !== true) return
   try {
     await removeBankMember(props.token, targetBankForShare.value.id, memberUserId)
     await fetchBankMembers(targetBankForShare.value.id)
   } catch (err) {
-    alert(`${t('ui.k0279')}${err.detail || err.message}`)
+    toast.error(`${t('ui.k0279')}${err.detail || err.message}`)
   }
 }
 
@@ -1092,7 +1115,7 @@ async function handleDownloadExport() {
     URL.revokeObjectURL(url)
     showExportDialog.value = false
   } catch (err) {
-    alert(`${t('ui.k0283')}${err.message}`)
+    toast.error(`${t('ui.k0283')}${err.message}`)
   } finally {
     exporting.value = false
   }
@@ -1123,28 +1146,36 @@ async function refreshActiveSessions() {
 }
 
 async function handleAbandonSession(sessionId) {
-  if (!confirm(t('ep.today.abandon_confirm'))) return
+  const accepted = await confirmAction(
+    { title: t('ep.today.abandon_confirm'), danger: true },
+    () => true,
+  )
+  if (accepted !== true) return
   abandoningSession.value = true
   try {
     await abandonSession(props.token, sessionId)
     await refreshActiveSessions()
     if (activeSessions.value.length === 0) showActiveSessionsModal.value = false
   } catch (err) {
-    alert(`${t('ui.k0304')}${err.detail || err.message}`)
+    toast.error(`${t('ui.k0304')}${err.detail || err.message}`)
   } finally {
     abandoningSession.value = false
   }
 }
 
 async function handleAbandonAllSessions() {
-  if (!confirm(t('home.abandon_confirm_all', { count: activeSessions.value.length }))) return
+  const accepted = await confirmAction(
+    { title: t('home.abandon_confirm_all', { count: activeSessions.value.length }), danger: true },
+    () => true,
+  )
+  if (accepted !== true) return
   abandoningSession.value = true
   try {
     await abandonAllSessions(props.token)
     await refreshActiveSessions()
     showActiveSessionsModal.value = false
   } catch (err) {
-    alert(`${t('ui.k0307')}${err.detail || err.message}`)
+    toast.error(`${t('ui.k0307')}${err.detail || err.message}`)
   } finally {
     abandoningSession.value = false
   }

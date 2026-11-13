@@ -195,6 +195,14 @@ test('Fast UI Interaction: mobile nav, review page, practice tools and finish', 
     assert.equal(await desktopPage.locator('.focus-menu').count(), 0, 'Menu should initially be closed')
     await practiceMoreBtn.click()
     await desktopPage.waitForSelector('.focus-menu')
+    // The menu paints its items in the same frame as the container, but under
+    // load the second item can land a tick later; wait for the settled state
+    // instead of sampling it once.
+    await desktopPage.waitForFunction(
+      () => document.querySelectorAll('.focus-menu .focus-menu-item').length === 2,
+      null,
+      { timeout: 5000 }
+    )
     assert.equal(await desktopPage.locator('.focus-menu .focus-menu-item').count(), 2, 'Menu should expose edit and kill actions')
     await practiceMoreBtn.click()
 
