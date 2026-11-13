@@ -28,3 +28,23 @@ class ImportJobRepository:
         with transaction(self.db_path) as conn:
             row = conn.execute("SELECT * FROM import_jobs WHERE id = ? AND user_id = ?", (job_id, user_id)).fetchone()
             return dict(row) if row else None
+
+    def list_for_bank(self, bank_id: str, user_id: str, limit: int = 50) -> list[dict]:
+        with transaction(self.db_path) as conn:
+            member = conn.execute(
+                "SELECT 1 FROM question_bank_members WHERE bank_id = ? AND user_id = ?",
+                (bank_id, user_id),
+            ).fetchone()
+            if not member:
+                raise PermissionError("access denied")
+            if not conn.execute("SELECT 1 FROM question_banks WHERE id = ?", (bank_id,)).fetchone():
+                raise LookupError("bank not found")
+            safe_limit = max(1, min(int(limit or 50), 200))
+            rows = conn.execute(
+                """SELECT id, user_id, bank_id, filename, format, status, reason,
+                          imported_count, created_at, completed_at
+                   FROM import_jobs WHERE bank_id = ?
+                   ORDER BY created_at DESC, rowid DESC LIMIT ?""",
+                (bank_id, safe_limit),
+            ).fetchall()
+            return [dict(row) for row in rows]

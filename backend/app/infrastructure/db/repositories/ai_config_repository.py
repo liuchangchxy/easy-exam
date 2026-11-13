@@ -1,16 +1,54 @@
 import base64
 import hashlib
 import os
+from pathlib import Path
 from typing import Any, Dict
 from cryptography.fernet import Fernet, InvalidToken
 from backend.app.infrastructure.db.connection import transaction
 
 
+_SECRET_ENV_NAMES = ("EASYEXAM_SECRET_KEY", "SECRET_KEY")
+
+
+def _read_persisted_secret() -> str:
+    """Read the FPK-managed secret from DATA_DIR/.env.
+
+    fnOS launches the docker project directly, bypassing cmd/main, so the
+    compose-time environment can contain an empty EASYEXAM_SECRET_KEY even
+    though the persistent .env exists. The data volume is the durable source.
+    """
+    data_dir = os.environ.get("DATA_DIR")
+    if not data_dir:
+        return ""
+    try:
+        lines = (Path(data_dir) / ".env").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return ""
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, _, value = line.partition("=")
+        if name.strip() in _SECRET_ENV_NAMES:
+            value = value.strip().strip('"').strip("'")
+            if value:
+                return value
+    return ""
+
+
+def _resolve_seed() -> str:
+    for name in _SECRET_ENV_NAMES:
+        value = os.environ.get(name)
+        if value and value.strip():
+            return value.strip()
+    return _read_persisted_secret()
+
+
 def _get_fernet() -> Fernet:
-    seed = os.environ.get("EASYEXAM_SECRET_KEY") or os.environ.get("SECRET_KEY")
-    if not seed or not seed.strip():
+    seed = _resolve_seed()
+    if not seed:
         raise RuntimeError("EASYEXAM_SECRET_KEY or SECRET_KEY environment variable is not configured; refusing to encrypt or decrypt sensitive credentials.")
-    key = base64.urlsafe_b64encode(hashlib.sha256(seed.strip().encode("utf-8")).digest())
+    key = base64.urlsafe_b64encode(hashlib.sha256(seed.encode("utf-8")).digest())
     return Fernet(key)
 
 

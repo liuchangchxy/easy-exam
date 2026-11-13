@@ -443,9 +443,11 @@ class QuestionRepository:
                     self._copy_latest_on_conn(conn, user_id, target_bank_id, row)
             else:  # archive / restore
                 flag = 1 if op == "archive" else 0
+                archived_at_sql = "CURRENT_TIMESTAMP" if op == "archive" else "NULL"
                 for row in rows:
                     conn.execute(
-                        "UPDATE questions SET is_deleted = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                        f"UPDATE questions SET is_deleted = ?, archived_at = {archived_at_sql}, "
+                        "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                         (flag, row["id"]),
                     )
 
@@ -520,7 +522,7 @@ class QuestionRepository:
     def get_for_user(self, question_id: str, user_id: str, conn=None) -> dict | None:
         def _query(c):
             row = c.execute(
-                """SELECT q.id, qv.id AS version_id, qv.version_number, qv.type,
+                """SELECT q.id, q.is_deleted, q.archived_at, qv.id AS version_id, qv.version_number, qv.type,
                           qv.stem, qv.options_json, qv.answer, qv.explanation,
                           qv.difficulty, qv.tags_json, qv.chapter_id, i.bank_id
                    FROM questions q
@@ -535,6 +537,7 @@ class QuestionRepository:
             if not row:
                 return None
             result = dict(row)
+            result["archived"] = bool(result.pop("is_deleted"))
             result["options"] = json.loads(result.pop("options_json"))
             result["tags"] = json.loads(result.pop("tags_json"))
             if result["id"] in self._get_active_exam_question_ids(c, user_id):
@@ -666,7 +669,7 @@ class QuestionRepository:
         archive_clause = "" if include_archived else "AND q.is_deleted = 0"
         with transaction(self.db_path) as conn:
             rows = conn.execute(
-                f"""SELECT q.id, q.is_deleted, qv.id AS version_id, qv.version_number, qv.type,
+                f"""SELECT q.id, q.is_deleted, q.archived_at, qv.id AS version_id, qv.version_number, qv.type,
                           qv.stem, qv.options_json, qv.answer, qv.explanation,
                           qv.difficulty, qv.tags_json, qv.chapter_id, i.bank_id
                    FROM bank_question_items i
@@ -681,10 +684,32 @@ class QuestionRepository:
             result = []
             active_qids = self._get_active_exam_question_ids(conn, user_id)
             global_active_qids = self._get_active_exam_question_ids(conn)
+            # Tag entities are authoritative for current naming; tags_json on the
+            # version stays an immutable historical snapshot (P2-2).
+            tag_links: dict[str, list[str]] = {}
+            has_links = conn.execute(
+                """SELECT 1 FROM question_tag_items qti
+                   JOIN question_versions qv ON qv.id = qti.question_version_id
+                   JOIN bank_question_items i ON i.question_id = qv.question_id
+                   WHERE i.bank_id = ? LIMIT 1""",
+                (bank_id,),
+            ).fetchone() is not None
+            if has_links:
+                for link in conn.execute(
+                    """SELECT qti.question_version_id AS version_id, t.name AS name
+                       FROM question_tag_items qti
+                       JOIN question_versions qv ON qv.id = qti.question_version_id
+                       JOIN bank_question_items i ON i.question_id = qv.question_id AND i.bank_id = ?
+                       JOIN knowledge_tags t ON t.id = qti.tag_id
+                       ORDER BY t.name""",
+                    (bank_id,),
+                ).fetchall():
+                    tag_links.setdefault(link["version_id"], []).append(link["name"])
             for row in rows:
                 item = dict(row)
                 item["options"] = json.loads(item.pop("options_json"))
-                item["tags"] = json.loads(item.pop("tags_json"))
+                snapshot_tags = json.loads(item.pop("tags_json") or "[]")
+                item["tags"] = tag_links.get(item["version_id"], []) if has_links else snapshot_tags
                 item["archived"] = bool(item.pop("is_deleted"))
                 if item["id"] in active_qids:
                     item["answer"] = ""
@@ -1242,3 +1267,70 @@ class QuestionRepository:
                     value["explanation"] = ""
                 values.append(value)
             return values
+
+    def delete_version(self, user_id: str, question_id: str, version_id: str) -> dict:
+        """Delete one non-current history version.
+
+        Current versions, versions referenced by answer attempts, and versions of
+        questions locked by an active exam are protected. The whole check and the
+        delete run in one transaction.
+        """
+        with transaction(self.db_path) as conn:
+            access = conn.execute(
+                """SELECT i.bank_id FROM bank_question_items i
+                   JOIN question_bank_members m ON m.bank_id = i.bank_id AND m.user_id = ?
+                     AND m.role IN ('ADMIN', 'EDITOR')
+                   WHERE i.question_id = ? LIMIT 1""",
+                (user_id, question_id),
+            ).fetchone()
+            if not access:
+                if not conn.execute("SELECT 1 FROM questions WHERE id = ?", (question_id,)).fetchone():
+                    raise LookupError("question not found")
+                raise PermissionError("user cannot edit this question")
+
+            question_row = conn.execute(
+                "SELECT is_deleted FROM questions WHERE id = ?", (question_id,)
+            ).fetchone()
+            if question_row and question_row[0]:
+                raise ValueError("archived question must be restored before editing")
+
+            row = conn.execute(
+                "SELECT id, version_number FROM question_versions WHERE id = ? AND question_id = ?",
+                (version_id, question_id),
+            ).fetchone()
+            if not row:
+                raise LookupError("version not found")
+
+            latest = conn.execute(
+                "SELECT MAX(version_number) FROM question_versions WHERE question_id = ?",
+                (question_id,),
+            ).fetchone()
+            if latest and row["version_number"] == latest[0]:
+                raise ValueError("current version cannot be deleted")
+
+            if question_id in self._get_active_exam_question_ids(conn, user_id):
+                raise PermissionError("cannot edit question while exam is active")
+
+            if conn.execute(
+                "SELECT 1 FROM answer_attempts WHERE question_version_id = ? LIMIT 1",
+                (version_id,),
+            ).fetchone():
+                raise ValueError("version is referenced by answer attempts")
+
+            conn.execute("DELETE FROM question_versions WHERE id = ?", (version_id,))
+            conn.execute(
+                """INSERT INTO audit_logs(id, user_id, action, entity_type, entity_id, details_json)
+                   VALUES (?, ?, 'QUESTION_VERSION_DELETED', 'QUESTION', ?, ?)""",
+                (
+                    str(uuid.uuid4()),
+                    user_id,
+                    question_id,
+                    json.dumps({"version_id": version_id, "version_number": row["version_number"]}, ensure_ascii=False),
+                ),
+            )
+            return {
+                "question_id": question_id,
+                "version_id": version_id,
+                "version_number": row["version_number"],
+                "deleted": True,
+            }

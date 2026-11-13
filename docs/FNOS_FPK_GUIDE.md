@@ -2,7 +2,7 @@
 
 本文档记录 EasyExam 在飞牛私有云（fnOS）平台上的 `.fpk` 原生手动安装包设计、构建与实机部署规范。
 
-> **当前版本基线**：`manifest` 版本 `1.0.5`（2026-09-27）。版本号只有一个来源——`fpk/easy-exam/manifest` 的 `version` 字段；`app/docker/docker-compose.yaml` 的镜像 tag 必须与之逐字一致，由 `tests/test_fpk_packaging.py` 强制校验。打包产物文件名同样由该字段派生。
+> **当前版本基线**：`manifest` 版本 `1.0.23`（2026-11-13）。版本号只有一个来源——`fpk/easy-exam/manifest` 的 `version` 字段；`app/docker/docker-compose.yaml` 的镜像 tag 必须与之逐字一致，由 `tests/test_fpk_packaging.py` 强制校验。打包产物文件名同样由该字段派生。
 
 ---
 
@@ -11,7 +11,7 @@
 | 项目 | 参数 / 设定 | 说明 |
 | :--- | :--- | :--- |
 | **应用标识 (appname)** | `easy-exam` | fnOS 内部唯一标识 |
-| **版本号 (version)** | `1.0.5` | 以 `fpk/easy-exam/manifest` 为唯一来源；严禁使用 `latest`。Any 升级时必须同时推进 manifest、compose 镜像 tag 与随包镜像 tag |
+| **版本号 (version)** | `1.0.23` | 以 `fpk/easy-exam/manifest` 为唯一来源；严禁使用 `latest`。Any 升级时必须同时推进 manifest、compose 镜像 tag 与随包镜像 tag |
 | **服务端口 (port)** | `3000` | 容器映射 `3000:3000` |
 | **数据持久化 (volume)** | `${TRIM_PKGVAR:-/var/apps/easy-exam/var}:/app/data` | 自动映射到 fnOS 存储卷（如 `/vol4/@appdata/easy-exam`） |
 | **健康检查 (healthcheck)** | `http://127.0.0.1:3000/api/v1/health` | HTTP 200 返回 `{"status":"ok","app":"easy-exam","version":"v1"}` |
@@ -65,8 +65,8 @@ fpk/easy-exam/
 ```bash
 python scripts/build_fpk.py --bundle-image
 ```
-- 输出文件：`dist/easy-exam-<manifest 版本>.fpk`（当前为 `dist/easy-exam-1.0.2.fpk`，约 30MB）
-- 内置镜像：`ailm32442/easy-exam:<manifest 版本>`（当前 `ailm32442/easy-exam:1.0.2`）
+- 输出文件：`dist/easy-exam-<manifest 版本>.fpk`（当前为 `dist/easy-exam-1.0.23.fpk`，约 38MB）
+- 内置镜像：`ailm32442/easy-exam:<manifest 版本>`（当前 `ailm32442/easy-exam:1.0.23`）
 
 ### 3.2 构建轻量在线包
 仅打包配置和编排描述文件，NAS 在安装时从镜像源拉取：
@@ -124,7 +124,7 @@ fnOS 应用中心在 `install_init` / `install_callback` 之前，就已经用�
 ### 4.1 方法一：fnOS 桌面手动安装（用户常用）
 1. 登录 fnOS 桌面，打开 **应用中心 (App Center)**。
 2. 点击右上角设置菜单中的 **手动安装**。
-3. 选择构建生成的 `dist/easy-exam-1.0.2.fpk` 文件并点击下一步。
+3. 选择构建生成的 `dist/easy-exam-1.0.21.fpk` 文件并点击下一步。
 4. 安装完成后，桌面上将出现 **EasyExam 易考宝** 应用图标。
 5. 点击图标即可通过内置窗口或新标签页访问 `http://<NAS_IP>:3000`。
 
@@ -133,10 +133,10 @@ fnOS 应用中心在 `install_init` / `install_callback` 之前，就已经用�
 
 ```bash
 # 复制安装包到 NAS
-scp dist/easy-exam-1.0.2.fpk <user>@<nas_ip>:/tmp/easy-exam-1.0.2.fpk
+scp dist/easy-exam-1.0.21.fpk <user>@<nas_ip>:/tmp/easy-exam-1.0.21.fpk
 
 # 执行安装
-sudo appcenter-cli install-fpk /tmp/easy-exam-1.0.2.fpk
+sudo appcenter-cli install-fpk /tmp/easy-exam-1.0.21.fpk
 
 # 启动应用
 sudo appcenter-cli start easy-exam
@@ -145,6 +145,22 @@ sudo appcenter-cli start easy-exam
 sudo appcenter-cli status easy-exam
 # 输出: running
 ```
+
+### 4.3 升级已安装应用（2026-11-13 实机验证）
+
+`appcenter-cli install-fpk` 对已注册应用只打印 `Application [easy-exam] is installed.` 并退出 0，不会更新版本、target compose 或容器。升级必须解包 FPK 后使用 `install-local`：
+
+```bash
+# 在 NAS 上解包到带时间戳的目录
+sudo mkdir -p /vol4/@appdata/easy-exam/fpk-src-1.0.21-<ts>/app
+sudo tar xzf /vol4/@appdata/easy-exam/easy-exam-1.0.21-<ts>.fpk -C /vol4/@appdata/easy-exam/fpk-src-1.0.21-<ts>
+sudo tar xzf /vol4/@appdata/easy-exam/fpk-src-1.0.21-<ts>/app.tgz -C /vol4/@appdata/easy-exam/fpk-src-1.0.21-<ts>/app
+
+# 升级（内部为卸载 + 安装，@appdata 数据与 .env 保留）
+sudo appcenter-cli install-local -d /vol4/@appdata/easy-exam/fpk-src-1.0.21-<ts> -a yes
+```
+
+升级前必须用 SQLite backup API 备份数据库，并备份 `manifest` 与 `target/docker/docker-compose.yaml`。升级后核对 `manifest` 版本、容器镜像 tag、`PRAGMA quick_check`、迁移版本与关键表计数。
 
 ---
 
@@ -155,7 +171,7 @@ sudo appcenter-cli status easy-exam
 | **查询状态** | `sudo appcenter-cli status easy-exam` | 返回 `running` 或 `stopped` |
 | **启动服务** | `sudo appcenter-cli start easy-exam` | 启动容器并打开健康检查 |
 | **停止服务** | `sudo appcenter-cli stop easy-exam` | 优雅停止容器并释放端口 |
-| **重启服务** | `sudo appcenter-cli restart easy-exam` | 重启容器服务 |
+| **重启服务** | `sudo appcenter-cli stop easy-exam && sudo appcenter-cli start easy-exam` | CLI 0.0.1 没有 `restart` 子命令 |
 | **卸载应用** | `sudo appcenter-cli uninstall easy-exam` | 移除应用，数据保留在 `@appdata/easy-exam` |
 | **查看日志** | `sudo docker logs -f easy-exam-fpk` | 查看容器后台运行与访问日志 |
 | **健康探针** | `curl -i http://127.0.0.1:3000/api/v1/health` | 检查核心接口存活状态 |
@@ -202,7 +218,7 @@ sudo appcenter-cli status easy-exam
 #### 途径 A：原生 FPK 应用中心安装包部署
 1. **自动生成与持久化**：
    FPK 安装脚本（`cmd/install_callback`）在初次安装时，会自动检测持久化卷 `/vol*/@appdata/easy-exam/.env` 是否存在；若不存在，会自动生成高强度的唯一随机密钥并写入该文件（权限设为 600）。
-   启动脚本 `cmd/main` 在执行 `docker compose up` 前会自动加载该 `.env` 文件。
+   启动脚本 `cmd/main` 在执行 `docker compose up` 前会自动加载该 `.env` 文件。App Center 也可能绕过 `cmd/main` 直接拉起 docker project；因此后端在环境变量为空时会自行读取 `DATA_DIR/.env`（容器内 `/app/data/.env`）中的 `EASYEXAM_SECRET_KEY`，两者任一可用即可。空字符串视为未配置。
 2. **自定义或多机迁移现有密钥**：
    若已有旧密钥或需要与其它实例保持一致，可在安装后（或停止应用后），通过 SSH 登录 NAS 或在飞牛“文件管理”中定位到：
    `/vol*/@appdata/easy-exam/.env`
@@ -212,7 +228,7 @@ sudo appcenter-cli status easy-exam
    ```
    然后执行重启服务：
    ```bash
-   sudo appcenter-cli restart easy-exam
+   sudo appcenter-cli stop easy-exam && sudo appcenter-cli start easy-exam
    ```
 
 #### 途径 B：标准 Docker Compose / 脚本一键部署

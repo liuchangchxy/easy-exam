@@ -496,6 +496,9 @@ test('True Chrome Browser E2E: Editorial Precision Full Lifecycle', async (t) =>
 
       await page.locator('.review-toolbar .btn').first().click()
       await page.waitForSelector('.focus-mode', { timeout: 10000 })
+      // The session payload arrives after the shell; wait for the real mode
+      // label instead of reading the pre-load fallback.
+      await page.locator('.focus-mode-label').filter({ hasText: '斩杀' }).waitFor({ state: 'visible', timeout: 10000 })
       const modeLabel = await page.locator('.focus-mode-label').innerText()
       assert.match(modeLabel, /斩杀/)
 

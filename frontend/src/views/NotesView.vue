@@ -177,9 +177,11 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
 import AppDialog from '../components/AppDialog.vue'
 import { useLocale } from '../composables/useLocale.js'
+import { readQueryEnum, readQueryString, replaceQueryState } from '../utils/routeQuery.js'
 import { listAssets, createAsset, uploadAssetFile, updateAsset, deleteAsset, fetchAssetBlob } from '../api/assets'
 
 const props = defineProps({
@@ -187,6 +189,11 @@ const props = defineProps({
 })
 
 const { t, locale } = useLocale()
+const route = useRoute()
+const router = useRouter()
+
+const LIBRARY_TYPE_KEYS = ['ALL', 'NOTE', 'MISTAKE_SUMMARY', 'KNOWLEDGE']
+const LIBRARY_QUERY_DEFAULTS = { type: 'ALL', q: '' }
 
 const assetsList = ref([])
 const loadingAssets = ref(false)
@@ -195,8 +202,8 @@ const savingAsset = ref(false)
 const uploadingAsset = ref(false)
 const newAssetType = ref('NOTE')
 const newAssetContent = ref('')
-const filterType = ref('ALL')
-const searchQuery = ref('')
+const filterType = ref(readQueryEnum(route?.query?.type, LIBRARY_TYPE_KEYS, 'ALL'))
+const searchQuery = ref(readQueryString(route?.query?.q))
 const selectedId = ref('')
 const readerOpen = ref(false)
 const notice = ref('')
@@ -217,6 +224,26 @@ const tabs = computed(() => [
   { key: 'MISTAKE_SUMMARY', label: 'ep.library.type_summary', count: countType('SUMMARY') },
   { key: 'KNOWLEDGE', label: 'ep.library.type_knowledge', count: countType('MNEMONIC') },
 ])
+
+// Search and type filter are URL state: a refreshed tab, a browser Back or a
+// link to "笔记 + keyword" must reopen the same list.
+function syncLibraryQuery(patch) {
+  replaceQueryState(router, route?.query, patch, LIBRARY_QUERY_DEFAULTS)
+}
+
+watch(filterType, value => syncLibraryQuery({ type: value }))
+
+watch(searchQuery, value => syncLibraryQuery({ q: String(value || '').trim() }))
+
+watch(() => route?.query?.type, value => {
+  const next = readQueryEnum(value, LIBRARY_TYPE_KEYS, 'ALL')
+  if (next !== filterType.value) filterType.value = next
+})
+
+watch(() => route?.query?.q, value => {
+  const next = readQueryString(value)
+  if (next !== searchQuery.value) searchQuery.value = next
+})
 
 const filteredAssets = computed(() => {
   return assetsList.value.filter(item => {

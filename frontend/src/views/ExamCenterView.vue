@@ -53,6 +53,12 @@
       <div class="skeleton"></div><div class="skeleton"></div>
     </div>
 
+    <div v-else-if="loadError" class="notice bad exam-load-error" style="margin-top: 16px" role="alert">
+      <LinearIcon name="alert" :size="15" />
+      <span>{{ t('ep.common.load_failed') }}</span>
+      <button type="button" class="btn btn-sm" @click="load">{{ t('ep.common.retry') }}</button>
+    </div>
+
     <div v-else class="exam-layout exam-center-grid">
       <div class="exam-main">
         <section class="panel">
@@ -318,6 +324,7 @@ const banks = ref([])
 const profiles = ref([])
 const activeSessions = ref([])
 const loading = ref(true)
+const loadError = ref(false)
 const notice = ref('')
 
 const showCreate = ref(false)
@@ -401,12 +408,15 @@ function bankName(id) {
 
 async function load() {
   loading.value = true
+  loadError.value = false
   notice.value = ''
-  const [bankRes, profileRes, sessionRes] = await Promise.allSettled([
+  const results = await Promise.allSettled([
     listBanks(props.token),
     listProfiles(props.token),
     listActiveSessions(props.token, 'EXAM'),
   ])
+  const [bankRes, profileRes, sessionRes] = results
+  loadError.value = results.some(result => result.status === 'rejected')
   banks.value = bankRes.status === 'fulfilled' ? (bankRes.value || []) : []
   profiles.value = profileRes.status === 'fulfilled' ? (profileRes.value || []) : []
   activeSessions.value = sessionRes.status === 'fulfilled' ? (sessionRes.value || []) : []
@@ -690,6 +700,7 @@ onMounted(load)
 .setup-check { display: flex; flex-direction: row; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-2); }
 .action-with-reason { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .action-reason { font-size: 12px; line-height: 1.5; color: var(--ink-3); }
+.exam-load-error .btn { margin-left: auto; flex: none; }
 .exam-dialog-form { display: flex; flex-direction: column; gap: 14px; }
 .drawer-heading { flex: 1; min-width: 0; }
 .drawer-body { flex: none; overflow: visible; padding: 0; }

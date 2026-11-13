@@ -33,6 +33,13 @@ class ImportService:
             return self.jobs.finish(job["id"], user_id, status, imported_count, reason)
         return None
 
+    def list_jobs(self, user_id: str, bank_id: str, limit: int = 50) -> list[dict]:
+        if not self.banks.get_for_user(bank_id, user_id):
+            raise LookupError("bank not found")
+        if not self.jobs:
+            return []
+        return self.jobs.list_for_bank(bank_id, user_id, limit=limit)
+
     @staticmethod
     def _key(item: dict) -> tuple[str, str]:
         return (str(item.get("stem") or "").strip().casefold(), str(item.get("answer") or "").strip().upper())

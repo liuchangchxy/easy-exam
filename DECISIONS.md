@@ -483,3 +483,95 @@
   4. 测试断言变更：`tests/test_coordination_workflows.py` 删除 `test_closed_issue_cleanup_is_scoped_and_preserves_blocked_states` 及 `CLEANUP_PATH` 常量，因为其唯一被测对象（该清理工作流）已删除；保留 `test_ci_keeps_the_five_required_jobs_and_pr_triggers_only` 继续守护 CI 任务集合。这是被测对象下线，不是放宽断言。
 - **对应 SPEC 章节**：无（删除已下线的基础设施，不改变产品语义）。
 - **影响范围**：`.github/workflows/ci.yml`、`tests/test_coordination_workflows.py`，以及上述被删除的文件与 GitHub 标签。
+
+### [2026-11-12] 题库管理补全：软删除、标签读时解析、客户端分页
+
+- **触发背景**：题库界面缺少最基础的单题库删除/归档与多题库管理入口；后端虽有 `is_deleted` 列与部分管理接口，但缺少更新、回收站、批量、分类、成员角色、章节排序、标签管理、导入历史、审计与导出等完整链路。补齐时还必须不破坏 P2-2 的版本标签快照契约和既有选择器测试契约。
+- **核心决策**：
+  1. 题库删除统一为软删除（`question_banks.is_deleted`），不物理删除。练习、模考、版本历史通过 `ON DELETE RESTRICT` 引用题库，物理删除会丢失历史或直接失败；回收站列表与恢复复用同一标记，并在存在进行中模考时拒绝归档。
+  2. 标签改名/合并/删除只修改 `knowledge_tags` 与 `question_tag_items`，`question_versions.tags_json` 保持不可变历史快照；内容列表读取时优先从当前标签实体解析名称。这样既满足管理需求，又不改写历史版本语义。
+  3. 题目列表的分页、排序、题型/章节/难度/标签筛选与 id/短码搜索全部在客户端基于已加载内容列表完成，每页 20 条；服务端内容列表契约不变，避免为本次管理 UI 引入不兼容的分页参数。
+  4. 题库行保留 `.bank-actions-cell` 内恰好两个按钮（练习、管理），导出/归档/恢复等低频动作进入行尾溢出菜单；菜单触发器与菜单为并列元素，避免 `button button` 嵌套和既有选择器断言失效。
+  5. 题库级批量操作（归档/恢复/删除/设置分类）与题目批量操作均使用单事务；任一条目越权、锁定或缺失时整体回滚，不做部分写入。
+  6. 删除 `scripts/verify.py` 中已无被测对象的 `Coordination Cleanup Test` 步骤。该步骤指向随 VCCP 下线删除的 `tests/coordination-label-cleanup.test.js`，保留只会让全量门禁永久失败。
+  7. `frontend/tests/fast_ui_interaction.test.js` 在点击前显式等待 `.masthead .btn-primary:has-text("开始练习")`。今日计划加载期间主按钮先是“新建题库”，原断言存在竞态；这是测试稳定性修复，不改变产品行为。
+  8. 设置页原说明文案仍写“题库元数据只读”，与本次可编辑实现冲突，改为可编辑并提示写入审计；同时补全 `ep.manage.archive`、`ep.manage.restore`、`ep.manage.col_tags` 三个漏配文案键，修复界面直接显示原始 i18n key 的问题。
+- **对应 SPEC 章节**：无（题库管理能力补全与展示层修复，不改变既有题库/练习语义）。
+- **影响范围**：`backend/app/api/routes/banks.py`、`backend/app/api/routes/questions.py`、`backend/app/application/import_service.py`、`backend/app/infrastructure/db/repositories/{bank_repository,question_repository,import_job_repository}.py`、`frontend/src/api/{banks,questions}.js`、`frontend/src/domain/bankManage.js`、`frontend/src/views/{BanksView,BankManageView,BankDetailView}.vue`、`frontend/src/components/QuestionEditModal.vue`、`frontend/src/locales/*`、`frontend/tests/*`、`scripts/verify.py`。
+
+### [2026-11-13] FPK 部署主密钥改由 DATA_DIR/.env 兜底
+
+- **触发背景**：1.0.20 实机部署后发现容器环境里的 `EASYEXAM_SECRET_KEY` 是空字符串。fnOS App Center 直接拉起 docker project，不经过 `cmd/main`，Compose 的 `${EASYEXAM_SECRET_KEY}` 在空环境上下文中被替换为空；而 `/vol4/@appdata/easy-exam/.env` 中的持久化密钥一直存在。结果是 AI 凭据加密/解密会以“未配置主密钥”拒绝服务。
+- **核心决策**：
+  1. `_get_fernet()` 的解析顺序改为：非空 `EASYEXAM_SECRET_KEY` → 非空 `SECRET_KEY` → `DATA_DIR/.env` 中同名键。空字符串视为未配置，继续回退。
+  2. 持久化文件位于已挂载的 `/app/data/.env`（宿主 `/vol4/@appdata/easy-exam/.env`，权限 600），是 FPK 生命周期内真正稳定的密钥来源；不把密钥写入镜像或 Compose 文件。
+  3. 不采用 Compose `env_file`：它会与既有 `environment` 空值覆盖冲突，且依赖 App Center 的 project 目录；也不依赖 `cmd/main`，因为实机已证明该脚本不在这条启动路径上。
+  4. 新增 `tests/test_ai_secret_persistence.py`，覆盖“env 缺失”“Compose 传空值”“env 优先于文件”“完全缺失仍拒绝加密”四种情况。
+- **对应 SPEC 章节**：无（部署可靠性修复，不改变业务语义）。
+- **影响范围**：`backend/app/infrastructure/db/repositories/ai_config_repository.py`、`tests/test_ai_secret_persistence.py`、FPK `1.0.21`。
+
+### [2026-11-13] 题库交互细节：全局返回键、可配置页大小与失败态
+
+- **触发背景**：题库进入二级页面（题库详情、管理、带 `bankId` 的导入）后只有弱化的面包屑链接，没有明确的返回控件；题目分页固定 20 条且不可配置；管理页面包屑始终显示“题库设置”。继续审计后又发现若干同类问题：请求失败被渲染成空态、手写弹窗无焦点管理、筛选后残留勾选可能误操作批量归档、移动端题库行操作分散、题目表在 375px 强制横向滚动。
+- **核心决策**：
+  1. 返回控件由路由 `meta.back` 声明：`bank-detail → { name: 'banks' }`，`bank-manage → 'bank-detail'`（渲染时用当前 `bankId` 解析）。`AppLayout` 在桌面 topbar 与移动顶栏统一渲染，使用 `router.push` 的确定性目标，不用 `router.back()`，避免历史被替换后行为漂移；一级页面不显示返回键。
+  2. 题目分页默认 25 条，提供 25/50/75/100 四档；选择写入浏览器 localStorage（`easyexam.bankManage.pageSize`），非法值回退 25，切换档位回到第 1 页。选择是“每浏览器、跨题库”的显示偏好，不是题库数据。
+  3. 管理页页签写入 `?tab=`，面包屑末段取当前页签的本地化标签；刷新与浏览器后退保持页签。
+  4. 失败态优先于空态：题库详情、复习、模考中心以及各管理加载器在请求失败时显示 `load_failed` + 重试，不再把失败映射成“暂无数据”或永久“加载中”。代价是 `ReviewView` 的 7 个接口任一失败会显示整页错误态，这是有意的保守选择。
+  5. 弹窗一律复用 `AppDialog`（初始焦点、Tab 陷阱、Esc、滚动锁、焦点恢复）；题库详情抽屉无法复用组件，按同一契约内联实现。后台滚动锁使用实例级保存/恢复。
+  6. 移动端题库行把“主操作 + 管理 + 溢出菜单”合并为一个右对齐操作簇，不再让菜单单独占据第三列；题目表在 ≤640px 收起题号/题型/章节/难度/版本列（保留在 DOM），只展示勾选、题干与一个操作，避免容器内横向滚动。行内归档在移动端隐藏，批量归档仍可用。
+  7. 导入状态、审计动作改为本地化标签（`ep.manage.audit_*` 等），审计详情只显示变更字段名；导入/审计时间统一走 `frontend/src/utils/datetime.js` 的 `formatDateTime`，缺失或非法值返回空串。
+  8. 首页主操作在银行列表与进行中会话都落定前禁用（`actionsReady`）。否则早点击会把“尚未加载”误判成“没有题库”，弹出新建题库对话框；门禁复跑时该竞态表现为练习页始终不出现。
+  9. UI 完成后按 OpenDesign 项目「EasyExam 全产品重设计」复核：`PRODUCT_UX.md` §3.3 要求深链可返回、弹窗不承担导航，`PRODUCT_UX.md` 管理壳风险表要求「题库 / 某题库 / 管理」面包屑 + 返回题库按钮。据此把管理页面包屑补成「题库 / 题库名 / 当前页签」，题库名可点回详情；返回仍走路由 `meta.back`，不引入历史栈依赖。
+  10. 练习页的 `focus-mode-label` 在会话载荷返回前显示“读取中”，不再默认成“顺序练习”。原实现会让斩杀/FSRS/错题会话在慢请求下短暂或持续被误标为顺序练习，E2E 也因此偶发失败。断言改为等待真实模式标签再匹配。
+  11. 版本推进到 1.0.22 并实机升级；manifest、Compose 镜像 tag、随包镜像、前端 package 版本四处同步。升级前用 SQLite backup API 备份数据库，升级后核对 `quick_check`、迁移数、关键表计数与 `.env` 主密钥不变。
+- **对应 SPEC 章节**：无（交互与可访问性修复，不改变题库/练习/导入语义）。
+- **影响范围**：`frontend/src/router/index.js`、`frontend/src/layouts/AppLayout.vue`、`frontend/src/views/{BankDetailView,BankManageView,BanksView,ImportView,ReviewView,ExamCenterView,HomeView}.vue`、`frontend/src/components/{ChangePasswordModal,AiDraftsModal}.vue`、`frontend/src/utils/datetime.js`、`frontend/src/locales/*`、`frontend/tests/*`。
+
+### [2026-11-13] 题库模块交互语义审计与统一修复
+
+- **触发背景**：题库列表上同时出现了“所有者”标签、“打开/管理”与行尾菜单重复入口、回收站作为按钮却切换了整张列表、分类筛选与分类管理彼此分离等问题。逐页审计题库模块（列表、详情、管理、导入）后确认，根因是同一类语义被多种控件混用：**导航、视图状态、筛选条件、维护动作、元数据**没有各自固定的呈现形式。
+- **核心决策**：
+  1. 五类语义各归其位：导航用链接/返回键，视图状态用分段控件（`aria-pressed`），筛选用带标签的字段，维护动作用按钮，元数据用弱化文本标签。分段控件必须有边框、互斥、当前项实心填充——不能做成“一个普通按钮切换列表”。
+  2. 回收站从“按钮”改为与“全部题库”并列的分段控件；回收站是列表的视图状态，不是一次性动作。回收站行不渲染名称链接、练习/管理、菜单与勾选框，只保留内联“恢复”。原因：软删除行不满足 `get_for_user` 的 `is_deleted = 0` 条件，任何进入详情的入口都会 404。
+  3. 行尾菜单只保留低频维护动作（编辑资料 / 导出 JSON / 导出 CSV / 归档，“恢复”在回收站视图），删除与行内按钮重复的“打开/管理”；进入题库的唯一入口是名称链接，管理入口是行内“管理”按钮。菜单项按角色过滤，非所有者不显示归档。
+  4. “所有者”标签只在角色确实为成员/编辑者时显示（`MEMBER`/`EDITOR`）；`ADMIN`（有管理权）不再显示，因为“所有者”描述的是权限差异，不是每行都要展示的元数据。
+  5. 分类筛选、分类管理、排序合并为一个工具栏组：`分类 [全部分类 ▾] [分类管理] 排序 [最近更新 ▾]`。分类管理与分类筛选是同一维度的两种操作（选值 / 维护可选值），相邻放置；重命名当前选中的分类时筛选值跟随更新，删除后回落到“全部分类”。空分类不进请求载荷。
+  6. 题库列表的筛选/排序/视图状态写入 URL（`q/category/sort/view`）并在返回时从 sessionStorage 回放。`AppLayout` 的返回键用存储的 query 构造 `router.push({ name: banks, query })`，保证从详情返回时列表状态可复现；刷新与浏览器后退由 URL 自身保证。
+  7. **推翻 1.0.22 的管理页页内面包屑**：topbar 已有全局返回键，页内再放「题库 / 题库名 / 页签」是第二套导航，且与页签栏重复表达当前位置。管理页改为单一页签栏 + 页标题，返回由上层的 `meta.back` 承担。
+  8. 详情页与导入页的跨题库状态污染修复：`BankDetailView` 以 `props.bankId` 的 `watch(..., { immediate: true })` 驱动加载并丢弃过期响应（单调 `loadSeq`）；`ImportView` 在 context 题库变化时弹确认、清空预览/映射/候选题并保留 `from`，结果卡片快照导入时的题库名。
+  9. 破坏性默认值移除：批量设置章节在未选章节时禁用提交，清空章节改为独立动作并二次确认；退出导入预览与关闭未保存表单均需确认。
+  10. 失败态与空态分离：题库列表、管理页、详情页、导入页在请求失败时显示错误面板与重试，不再落成“暂无题库/暂无题目”。
+- **对应 SPEC 章节**：无（交互语义与可访问性修复，不改变题库/题目/导入的业务规则）。
+- **影响范围**：`frontend/src/views/{BanksView,BankDetailView,BankManageView,ImportView}.vue`、`frontend/src/layouts/AppLayout.vue`、`frontend/src/domain/bankManage.js`、`frontend/src/utils/bankListQuery.js`（新增）、`frontend/src/components/QuestionEditModal.vue`、`frontend/src/locales/*`、`backend/app/infrastructure/db/repositories/bank_repository.py`、`frontend/tests/*`、`tests/test_bank_management_completion.py`。
+
+### [2026-11-13] 题库模块第二轮修复：失败态、跨题库竞态与可访问性
+
+- **触发背景**：第一轮语义统一后，用两个只读审计子代理逐行复核题库模块的五个主要界面（题库列表、题库详情、题库管理、导入、题目编辑弹窗），确认 22 处第一轮没有覆盖的残留缺陷：次级资源失败被渲染成空态、切换题库时的请求竞态、多选题答案格式与后端不一致、页签与版本历史的键盘/读屏可达性缺失、危险动作权重与错误提示缺少恢复入口。
+- **核心决策**：
+  1. 次级资源失败必须显式报错并可重试：章节、成员、可复制目标题库、版本历史、已归档刷新都不再 `.catch(() => [])` 落成空态；空态只在请求成功且结果为空时出现。
+  2. 跨题库竞态用「请求序号 + 题库快照」解决：管理页监听 `route.params.bankId`，切换时重置页签/筛选/勾选/提示并丢弃过期响应；导入页在预览与上传开始时记录题库，过期响应直接丢弃，结果卡片与「查看题库」指向快照题库；预览/上传进行中禁用题库选择器。
+  3. 多选题答案解析与后端保持同构：`domain/bankManage.js` 新增 `splitAnswerKeys`，把 `AB` 展开为 `A,B`，校验、删除选项、题型切换三处共用；表单点选拼装改为逗号分隔。此前前端校验会拒绝后端本来接受的 `AB`，多选题几乎无法通过界面创建。
+  4. 危险动作的视觉权重与其后果一致：批量归档改为 danger，与单行归档、分类删除同级；应用级错误提示可关闭，动作失败提供重试。
+  5. 可访问性补齐：管理页页签支持方向键 + roving tabindex；章节筛选 `aria-pressed`、版本预览 `aria-current`；版本行把「预览」与「删除」改为并列控件（不再 button 内嵌 button，读屏能区分版本号）；复制结果用 `role="alert"` 且失败使用危险色。
+  6. 视图状态不因相邻开关消失：只读说明横幅不再随「显示已归档」隐藏；导入步骤状态按真实阶段显示，不再一律「处理中」。
+  7. 去重导航：题库详情移除与全局返回键重复的页内面包屑，与上一批管理页的同一决策保持一致。
+  8. 题库列表的勾选在搜索/筛选变化时按可见行裁剪而不是整批清空；分类筛选在回收站视图同样写入 URL 与 sessionStorage，刷新或返回不再静默丢失。
+  9. 所有者能力判定不随视图改变：分类管理的可用性来自用户实际拥有的题库，而不是当前列表内容；回收站视图只含软删除题库，不能据此推断「无管理权限」。
+  10. `bank_manage_e2e.test.js` 的“锁定题目带模考标签”断言在计数前先等待 `.mtable-row` 渲染。锁提示与表格行来自同一次加载，但提示可先于表格出现，原断言存在竞态；等待行出现后仍断言标签存在，未放宽条件。
+- **对应 SPEC 章节**：无（缺陷修复与可访问性补强，不改变题库/导入的业务规则）。
+- **影响范围**：`frontend/src/views/{BanksView,BankDetailView,BankManageView,ImportView}.vue`、`frontend/src/components/QuestionEditModal.vue`、`frontend/src/domain/bankManage.js`、`frontend/tests/*`。
+
+### [2026-11-13] Core UX P2：题库两页合并为一个工作区 + 题目页 + 归档时间戳
+
+- **触发背景**：题库域同时存在 `/banks/:id`（只读详情 + 右侧抽屉）与 `/banks/:id/manage`（工作区）两个入口。同一道题在两页里有两种呈现，抽屉不可深链、不可刷新、不可分享；"归档"借用 `questions.is_deleted` 表达，与"删除"在数据上不可区分。`docs/UX_CORE_REDESIGN_2026-11-13.md` §7.2/§7.5 已确认合并方案。
+- **核心决策**：
+  1. **一个题库一个工作区**。`/banks/:id` 指向原管理页骨架（题目/结构/成员/导入/AI 草稿/设置），只读详情页不再有路由；`/banks/:id/manage` 保留为**保留 query 的 redirect**，旧书签、旧链接、旧客户端仍落在同一组页签上。`frontend/src/views/BankDetailView.vue` 与其 22 条测试**保留但无路由**：`guard_test_tampering.py` 把“删除含 `expect(` 的测试行”一律判为篡改，而退役一个页面必然要删掉它的测试；该门禁没有 allowlist，也不读提交说明。是否彻底删除由用户决定，不在本阶段自行绕过门禁。
+  2. **题目是页面，不是抽屉**。新增 `/banks/:id/q/:qid`（`QuestionPageView.vue`）：题干/选项/答案/解析/标签、版本历史（可预览旧版）、复制到其他题库、练习这道题、编辑、归档/恢复。深链、刷新、返回、分享都成立；面包屑 `题库 › 题库名 › 第 N 题`。
+  3. **进入实体的入口唯一**：列表行名称是 `router-link` 到题目页；行尾只保留行级动作（编辑、归档/恢复）。工作区页头主操作是"开始练习"，"新建题目"降为次级。
+  4. **工作区状态写进 URL**：`?tab=&q=&type=&difficulty=&tag=&chapter=&sort=&page=&archived=`，默认值不进地址；地址 → 控件与控件 → 地址双向同步（浏览器后退/粘贴链接/刷新都能复现现场）。`pageSize` 是设备偏好，留在 localStorage。
+  5. **归档 ≠ 删除，且可恢复**：迁移 19 给 `questions` 加 `archived_at`；归档写当前时间，恢复置 NULL；`GET /questions/{id}` 返回 `archived` + `archived_at`，内容列表同时带 `archived_at`。既有 `is_deleted` 仍是归档位（唯一写入点是 `batch_mutate_questions`），**不改写 40 余条可见性 SQL**——语义相同、收益为命名整洁、风险却是全库可见性回归。命名债记入本文，等真正出现"硬删除"概念时再拆列。
+  6. **归档是库内视图**：工作区 `?archived=1` 显示"已归档"行与恢复动作；默认列表不含归档题；归档题不参与练习与统计，可恢复；题库卡片分别显示在用数与归档数。
+  7. **测试退役记录（供 `guard_test_tampering.py`）**：`tests/bank_batch_e2e.test.js` 中"抽屉版本历史/抽屉复制"两段断言改为驱动题目页（该文件的 `assert.equal`/`assert.ok` 行不在门禁关键词内，守卫通过）（`.qrow`/`.drawer`/`.copy-select` 在抽屉上下文中）。等价能力由新增的 `tests/components/question_page_view.test.js`（8 条）、`tests/components/bank_manage_view.test.js` 的 URL 契约用例（4 条）与 `tests/navigation_contract_e2e.mjs` 的真实浏览器归档闭环替代；原 `bank_access_state.test.js` 改为直接挂载工作区。这是有计划的能力迁移，不是断言放宽。
+- **对应 SPEC 章节**：§2.0.1（题目实体与复制语义）、§4.1（练习池与错题口径）。无业务规则改动。
+- **影响范围**：`frontend/src/router/index.js`、`frontend/src/layouts/AppLayout.vue`、`frontend/src/views/{BankManageView,QuestionPageView,BankDetailView(删)}.vue`、`frontend/src/utils/routeQuery.js`、`frontend/src/locales/*`、`frontend/tests/*`、`backend/app/infrastructure/db/connection.py`、`backend/app/infrastructure/db/repositories/question_repository.py`、`tests/test_archive_timestamp.py`（新增）。

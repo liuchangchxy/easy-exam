@@ -10,7 +10,7 @@
         <div>
           <h1 class="masthead-title">{{ t('ep.today.title') }}</h1>
           <div class="od-row masthead-actions">
-            <button type="button" class="btn btn-primary" @click="startToday">
+            <button type="button" class="btn btn-primary" :disabled="!actionsReady" @click="startToday">
               <LinearIcon name="play" :size="15" />{{ todayActionLabel }}
             </button>
             <button v-if="dueMistakesCount" type="button" class="btn" @click="router.push('/review')">
@@ -179,48 +179,57 @@
     </AppDialog>
 
     <!-- Active sessions -->
-    <div v-if="showActiveSessionsModal" class="exam-setup-backdrop" @click.self="showActiveSessionsModal = false" @keydown.esc="showActiveSessionsModal = false">
-      <div class="exam-setup-dialog" role="dialog" aria-modal="true">
-        <div class="dialog-header-flex">
-          <h2>{{ t('ep.today.sessions_title') }}</h2>
-          <button type="button" class="btn-close-icon" @click="showActiveSessionsModal = false">✕</button>
-        </div>
-        <p>{{ t('ep.today.sessions_desc') }}</p>
-        <div class="session-list">
-          <div v-for="sess in activeSessions" :key="sess.id" class="session-row">
-            <div class="session-info">
-              <div class="od-row" style="gap: 8px">
-                <span class="tag">{{ formatSessionMode(sess.mode) }}</span>
-                <strong>{{ sess.bank_name }}</strong>
-                <span class="tiny dim">{{ formatTimeAgo(sess.updated_at || sess.created_at) }}</span>
-              </div>
-              <div class="progress" style="margin-top: 8px"><div class="progress-fill" :style="{ width: sessionPercent(sess) + '%' }"></div></div>
-              <div class="tiny dim" style="margin-top: 4px">{{ sess.answered_count }} / {{ sess.total_questions }} {{ t('ep.exam.answered') }}</div>
+    <AppDialog
+      :open="showActiveSessionsModal"
+      :title="t('ep.today.sessions_title')"
+      panel-class="exam-setup-dialog home-dialog"
+      style="--app-dialog-width: 520px"
+      initial-focus=".session-row .primary"
+      data-testid="active-sessions-dialog"
+      @close="showActiveSessionsModal = false"
+    >
+      <p>{{ t('ep.today.sessions_desc') }}</p>
+      <div class="session-list">
+        <div v-for="sess in activeSessions" :key="sess.id" class="session-row">
+          <div class="session-info">
+            <div class="od-row" style="gap: 8px">
+              <span class="tag">{{ formatSessionMode(sess.mode) }}</span>
+              <strong>{{ sess.bank_name }}</strong>
+              <span class="tiny dim">{{ formatTimeAgo(sess.updated_at || sess.created_at) }}</span>
             </div>
-            <div class="od-row" style="gap: 6px">
-              <button type="button" class="primary" @click="handleResume(sess)">{{ t('ep.today.resume_action') }}</button>
-              <button type="button" class="secondary-btn" :disabled="abandoningSession" @click="handleAbandonSession(sess.id)">{{ t('ep.today.abandon') }}</button>
-            </div>
+            <div class="progress" style="margin-top: 8px"><div class="progress-fill" :style="{ width: sessionPercent(sess) + '%' }"></div></div>
+            <div class="tiny dim" style="margin-top: 4px">{{ sess.answered_count }} / {{ sess.total_questions }} {{ t('ep.exam.answered') }}</div>
+          </div>
+          <div class="od-row" style="gap: 6px">
+            <button type="button" class="primary" @click="handleResume(sess)">{{ t('ep.today.resume_action') }}</button>
+            <button type="button" class="secondary-btn" :disabled="abandoningSession" @click="handleAbandonSession(sess.id)">{{ t('ep.today.abandon') }}</button>
           </div>
         </div>
-        <div class="bank-actions">
-          <button type="button" class="btn btn-sm btn-danger" :disabled="abandoningSession" @click="handleAbandonAllSessions">{{ t('ep.today.session_clear_all') }}</button>
-          <span class="spacer"></span>
-          <button type="button" @click="showActiveSessionsModal = false">{{ t('ep.common.close') }}</button>
-        </div>
       </div>
-    </div>
+      <div class="bank-actions">
+        <button type="button" class="btn btn-sm btn-danger" :disabled="abandoningSession" @click="handleAbandonAllSessions">{{ t('ep.today.session_clear_all') }}</button>
+        <span class="spacer"></span>
+        <button type="button" @click="showActiveSessionsModal = false">{{ t('ep.common.close') }}</button>
+      </div>
+    </AppDialog>
 
     <!-- Exam setup -->
-    <div v-if="examBank" class="exam-setup-backdrop" @click.self="examBank = null" @keydown.esc="examBank = null">
-      <form class="exam-setup-dialog" role="dialog" aria-modal="true" @submit.prevent="beginExam">
-        <h2>{{ t('ep.exam.setup') }}</h2>
-        <p>{{ examBank.name }} · {{ t('ep.banks.questions', { count: examBank.question_count }) }}</p>
+    <AppDialog
+      :open="Boolean(examBank)"
+      :title="t('ep.exam.setup')"
+      panel-class="exam-setup-dialog home-dialog"
+      style="--app-dialog-width: 520px"
+      initial-focus="#home-exam-total"
+      data-testid="home-exam-setup-dialog"
+      @close="examBank = null"
+    >
+      <form class="home-dialog-form" @submit.prevent="beginExam">
+        <p>{{ examBank?.name }} · {{ t('ep.banks.questions', { count: examBank?.question_count ?? 0 }) }}</p>
         <label>{{ t('ep.exam.questions') }}
-          <input v-model.number="totalQuestions" type="number" min="1" :max="examBank.question_count" required />
+          <input id="home-exam-total" v-model.number="totalQuestions" type="number" min="1" :max="examBank?.question_count" required />
         </label>
         <label>{{ t('ep.exam.time') }}
-          <input v-model.number="timeLimitMinutes" type="number" min="0" max="600" required />
+          <input id="home-exam-minutes" v-model.number="timeLimitMinutes" type="number" min="0" max="600" required />
         </label>
         <details class="exam-advanced-accordion">
           <summary class="exam-advanced-summary">
@@ -256,14 +265,20 @@
           <button type="submit" class="primary" :disabled="startingExam">{{ startingExam ? t('ui.k0663') : t('ep.exam.start') }}</button>
         </div>
       </form>
-    </div>
+    </AppDialog>
 
     <!-- Add question -->
-    <div v-if="showAddQuestionDialog" class="exam-setup-backdrop" @click.self="showAddQuestionDialog = false" @keydown.esc="showAddQuestionDialog = false">
-      <form class="exam-setup-dialog" style="width: min(100%, 640px); max-height: 85vh; overflow-y: auto;" @submit.prevent="handleCreateQuestion">
-        <h2>{{ t('ep.today.add_question') }} · {{ targetBankForQuestion?.name }}</h2>
+    <AppDialog
+      :open="showAddQuestionDialog"
+      :title="`${t('ep.today.add_question')} · ${targetBankForQuestion?.name || ''}`"
+      panel-class="exam-setup-dialog home-dialog"
+      style="--app-dialog-width: 640px; max-height: min(85vh, 960px)"
+      initial-focus="#home-add-question-stem"
+      @close="showAddQuestionDialog = false"
+    >
+      <form class="home-dialog-form" @submit.prevent="handleCreateQuestion">
         <label>{{ t('ui.k0164') }}
-          <textarea v-model.trim="addQuestionForm.stem" rows="2" :placeholder="t('ui.k0165')" required></textarea>
+          <textarea id="home-add-question-stem" v-model.trim="addQuestionForm.stem" rows="2" :placeholder="t('ui.k0165')" required></textarea>
         </label>
         <div class="form-grid two">
           <label>{{ t('ep.banks.type') }}
@@ -325,114 +340,123 @@
           <button type="submit" class="primary" :disabled="savingQuestion">{{ savingQuestion ? t('ui.k0668') : t('ui.k0669') }}</button>
         </div>
       </form>
-    </div>
+    </AppDialog>
 
     <!-- Share / members -->
-    <div v-if="showShareDialog" class="exam-setup-backdrop" @click.self="showShareDialog = false" @keydown.esc="showShareDialog = false">
-      <div class="exam-setup-dialog" role="dialog" style="width: min(100%, 560px);">
-        <h2>{{ t('ep.banks.member_tab') }} · {{ targetBankForShare?.name }}</h2>
-        <p>{{ t('ep.banks.members_note') }}</p>
-        <div v-if="loadingMembers" class="tiny dim">{{ t('ep.common.loading') }}</div>
-        <div v-else class="member-list">
-          <div v-for="m in bankMembersList" :key="m.user_id" class="member-row">
-            <span>{{ m.username }}</span>
-            <div class="od-row" style="gap: 8px">
-              <span class="tag">{{ m.role === 'ADMIN' ? t('ep.banks.owner') : m.role === 'EDITOR' ? t('ep.banks.editor') : t('ep.banks.member') }}</span>
-              <button v-if="m.role !== 'ADMIN' && m.user_id !== user?.id" type="button" class="link-btn danger" @click="handleRemoveMember(m.user_id)">
-                {{ t('ep.banks.remove') }}
-              </button>
-            </div>
-          </div>
-        </div>
-        <form style="border-top: 1px solid var(--line); padding-top: 12px;" @submit.prevent="handleAddMember">
+    <AppDialog
+      :open="showShareDialog"
+      :title="`${t('ep.banks.member_tab')} · ${targetBankForShare?.name || ''}`"
+      panel-class="exam-setup-dialog home-dialog"
+      style="--app-dialog-width: 560px"
+      initial-focus="#home-member-username"
+      @close="showShareDialog = false"
+    >
+      <p>{{ t('ep.banks.members_note') }}</p>
+      <div v-if="loadingMembers" class="tiny dim">{{ t('ep.common.loading') }}</div>
+      <div v-else class="member-list">
+        <div v-for="m in bankMembersList" :key="m.user_id" class="member-row">
+          <span>{{ m.username }}</span>
           <div class="od-row" style="gap: 8px">
-            <input v-model.trim="memberUsername" style="flex: 1;" :placeholder="t('ui.k0192')" required />
-            <select v-model="memberRole" style="width: 7rem;">
-              <option value="MEMBER">{{ t('ep.banks.member') }}</option>
-              <option value="EDITOR">{{ t('ep.banks.editor') }}</option>
-            </select>
-            <button type="submit" class="primary" :disabled="submittingMember">{{ submittingMember ? t('ui.k0672') : t('ep.banks.add_member') }}</button>
-          </div>
-          <p v-if="shareMessage" :class="{ error: shareIsError, success: !shareIsError }" style="margin: 0.4rem 0 0; font-size: 0.85rem;">{{ shareMessage }}</p>
-        </form>
-        <div style="border-top: 1px solid var(--line); padding-top: 12px;">
-          <div class="small strong" style="margin-bottom: 6px">{{ t('ui.k0195') }}</div>
-          <div class="od-row" style="gap: 8px; align-items: center;">
-            <input v-model.trim="copyQuestionId" style="flex: 1;" :placeholder="t('ui.k0196')" />
-            <select v-model="copyTargetBankId" style="width: 9rem;">
-              <option value="">{{ t('ui.k0197') }}</option>
-              <option v-for="b in banks.filter(x => x.id !== targetBankForShare?.id)" :key="b.id" :value="b.id">{{ b.name }}</option>
-            </select>
-            <button type="button" class="btn btn-sm" :disabled="!copyQuestionId.trim() || !copyTargetBankId || copyingQuestion" @click="handleCopyQuestion">
-              {{ copyingQuestion ? t('ui.k0674') : t('ui.k0675') }}
+            <span class="tag">{{ m.role === 'ADMIN' ? t('ep.banks.owner') : m.role === 'EDITOR' ? t('ep.banks.editor') : t('ep.banks.member') }}</span>
+            <button v-if="m.role !== 'ADMIN' && m.user_id !== user?.id" type="button" class="link-btn danger" @click="handleRemoveMember(m.user_id)">
+              {{ t('ep.banks.remove') }}
             </button>
           </div>
-          <p v-if="copyNotice" class="small" style="color: var(--brand); margin: 6px 0 0;">{{ copyNotice }}</p>
-        </div>
-        <div class="bank-actions">
-          <button type="button" @click="showShareDialog = false">{{ t('ep.common.close') }}</button>
         </div>
       </div>
-    </div>
-
-    <!-- Export -->
-    <div v-if="showExportDialog" class="exam-setup-backdrop" @click.self="showExportDialog = false" @keydown.esc="showExportDialog = false">
-      <div class="exam-setup-dialog" role="dialog" style="width: min(100%, 420px);">
-        <h2>{{ t('ep.today.export') }}</h2>
-        <p>{{ targetBankForExport?.name }} · {{ t('ep.banks.questions', { count: targetBankForExport?.question_count || 0 }) }}</p>
-        <label>{{ t('ep.common.export') }}
-          <select v-model="exportFormat">
-            <option value="json">JSON</option>
-            <option value="csv">CSV</option>
-            <option value="txt">TXT</option>
-            <option value="xlsx">XLSX</option>
+      <form style="border-top: 1px solid var(--line); padding-top: 12px;" @submit.prevent="handleAddMember">
+        <div class="od-row" style="gap: 8px">
+          <input id="home-member-username" v-model.trim="memberUsername" style="flex: 1;" :placeholder="t('ui.k0192')" required />
+          <select v-model="memberRole" style="width: 7rem;">
+            <option value="MEMBER">{{ t('ep.banks.member') }}</option>
+            <option value="EDITOR">{{ t('ep.banks.editor') }}</option>
           </select>
-        </label>
-        <div class="bank-actions">
-          <button type="button" @click="showExportDialog = false">{{ t('common.cancel') }}</button>
-          <button type="button" class="primary" :disabled="exporting" @click="handleDownloadExport">{{ exporting ? t('ui.k0676') : t('ep.common.export') }}</button>
+          <button type="submit" class="primary" :disabled="submittingMember">{{ submittingMember ? t('ui.k0672') : t('ep.banks.add_member') }}</button>
         </div>
-      </div>
-    </div>
-
-    <!-- AI batch -->
-    <div v-if="showAiBatchModal" class="exam-setup-backdrop" @click.self="closeAiBatchModal" @keydown.esc="closeAiBatchModal">
-      <div class="exam-setup-dialog" role="dialog" style="width: min(100%, 560px);">
-        <div class="dialog-header-flex">
-          <h2>{{ t('home.batch_ai_title') }}</h2>
-          <button type="button" class="btn-close-icon" @click="closeAiBatchModal">✕</button>
-        </div>
-        <p>{{ t('home.batch_ai_desc') }}</p>
-        <div class="stat-row">
-          <div class="stat"><div class="stat-n">{{ aiBatchStatus?.total ?? aiBatchBank?.question_count ?? 0 }}</div><div class="stat-c">{{ t('home.batch_ai_total') }}</div></div>
-          <div class="stat"><div class="stat-n">{{ aiBatchStatus?.with_explanation ?? 0 }}</div><div class="stat-c">{{ t('home.batch_ai_has_expl') }}</div></div>
-          <div class="stat"><div class="stat-n">{{ aiBatchStatus?.without_explanation ?? 0 }}</div><div class="stat-c">{{ t('home.batch_ai_missing') }}</div></div>
-        </div>
-        <label class="check">
-          <input type="radio" :value="false" v-model="aiBatchOverwrite" :disabled="aiBatchStatus?.status === 'running'" />
-          <span>{{ t('home.batch_ai_incremental') }}</span>
-        </label>
-        <label class="check">
-          <input type="radio" :value="true" v-model="aiBatchOverwrite" :disabled="aiBatchStatus?.status === 'running'" />
-          <span>{{ t('home.batch_ai_overwrite') }}</span>
-        </label>
-        <div v-if="aiBatchStatus?.status === 'running' || (aiBatchStatus?.processed || 0) > 0">
-          <div class="od-row" style="justify-content: space-between; margin-bottom: 4px;">
-            <span class="small strong">{{ aiBatchStatus?.status === 'running' ? t('home.batch_ai_status_running') : (aiBatchStatus?.status === 'stopped' ? t('home.batch_ai_status_stopped') : t('home.batch_ai_status_completed')) }}</span>
-            <span class="mono tiny">{{ aiBatchPercent }}%</span>
-          </div>
-          <div class="progress"><div class="progress-fill" :style="{ width: aiBatchPercent + '%' }"></div></div>
-          <div class="tiny dim" style="margin-top: 4px">{{ aiBatchStatus?.processed || 0 }} / {{ aiBatchStatus?.total || 0 }}</div>
-        </div>
-        <div class="bank-actions">
-          <button type="button" class="secondary-btn" @click="closeAiBatchModal">{{ t('ep.common.close') }}</button>
-          <button v-if="aiBatchStatus?.status === 'running'" type="button" class="btn btn-danger" @click="handleStopAiBatch">{{ t('home.batch_ai_stop') }}</button>
-          <button v-else type="button" class="primary" :disabled="aiBatchLoading || (aiBatchStatus && aiBatchStatus.without_explanation === 0 && !aiBatchOverwrite)" @click="handleStartAiBatch">
-            {{ t('home.batch_ai_start') }}
+        <p v-if="shareMessage" :class="{ error: shareIsError, success: !shareIsError }" style="margin: 0.4rem 0 0; font-size: 0.85rem;">{{ shareMessage }}</p>
+      </form>
+      <div style="border-top: 1px solid var(--line); padding-top: 12px;">
+        <div class="small strong" style="margin-bottom: 6px">{{ t('ui.k0195') }}</div>
+        <div class="od-row" style="gap: 8px; align-items: center;">
+          <input v-model.trim="copyQuestionId" style="flex: 1;" :placeholder="t('ui.k0196')" />
+          <select v-model="copyTargetBankId" style="width: 9rem;">
+            <option value="">{{ t('ui.k0197') }}</option>
+            <option v-for="b in banks.filter(x => x.id !== targetBankForShare?.id)" :key="b.id" :value="b.id">{{ b.name }}</option>
+          </select>
+          <button type="button" class="btn btn-sm" :disabled="!copyQuestionId.trim() || !copyTargetBankId || copyingQuestion" @click="handleCopyQuestion">
+            {{ copyingQuestion ? t('ui.k0674') : t('ui.k0675') }}
           </button>
         </div>
+        <p v-if="copyNotice" class="small" style="color: var(--brand); margin: 6px 0 0;">{{ copyNotice }}</p>
       </div>
-    </div>
+      <div class="bank-actions">
+        <button type="button" @click="showShareDialog = false">{{ t('ep.common.close') }}</button>
+      </div>
+    </AppDialog>
+
+    <!-- Export -->
+    <AppDialog
+      :open="showExportDialog"
+      :title="t('ep.today.export')"
+      panel-class="exam-setup-dialog home-dialog"
+      style="--app-dialog-width: 420px"
+      initial-focus="#home-export-format"
+      @close="showExportDialog = false"
+    >
+      <p>{{ targetBankForExport?.name }} · {{ t('ep.banks.questions', { count: targetBankForExport?.question_count || 0 }) }}</p>
+      <label>{{ t('ep.common.export') }}
+        <select id="home-export-format" v-model="exportFormat">
+          <option value="json">JSON</option>
+          <option value="csv">CSV</option>
+          <option value="txt">TXT</option>
+          <option value="xlsx">XLSX</option>
+        </select>
+      </label>
+      <div class="bank-actions">
+        <button type="button" @click="showExportDialog = false">{{ t('common.cancel') }}</button>
+        <button type="button" class="primary" :disabled="exporting" @click="handleDownloadExport">{{ exporting ? t('ui.k0676') : t('ep.common.export') }}</button>
+      </div>
+    </AppDialog>
+
+    <!-- AI batch -->
+    <AppDialog
+      :open="showAiBatchModal"
+      :title="t('home.batch_ai_title')"
+      panel-class="exam-setup-dialog home-dialog"
+      style="--app-dialog-width: 560px"
+      initial-focus="#home-ai-incremental:not([disabled]), #home-ai-stop, #home-ai-start:not([disabled])"
+      @close="closeAiBatchModal"
+    >
+      <p>{{ t('home.batch_ai_desc') }}</p>
+      <div class="stat-row">
+        <div class="stat"><div class="stat-n">{{ aiBatchStatus?.total ?? aiBatchBank?.question_count ?? 0 }}</div><div class="stat-c">{{ t('home.batch_ai_total') }}</div></div>
+        <div class="stat"><div class="stat-n">{{ aiBatchStatus?.with_explanation ?? 0 }}</div><div class="stat-c">{{ t('home.batch_ai_has_expl') }}</div></div>
+        <div class="stat"><div class="stat-n">{{ aiBatchStatus?.without_explanation ?? 0 }}</div><div class="stat-c">{{ t('home.batch_ai_missing') }}</div></div>
+      </div>
+      <label class="check">
+        <input id="home-ai-incremental" type="radio" :value="false" v-model="aiBatchOverwrite" :disabled="aiBatchStatus?.status === 'running'" />
+        <span>{{ t('home.batch_ai_incremental') }}</span>
+      </label>
+      <label class="check">
+        <input id="home-ai-overwrite" type="radio" :value="true" v-model="aiBatchOverwrite" :disabled="aiBatchStatus?.status === 'running'" />
+        <span>{{ t('home.batch_ai_overwrite') }}</span>
+      </label>
+      <div v-if="aiBatchStatus?.status === 'running' || (aiBatchStatus?.processed || 0) > 0">
+        <div class="od-row" style="justify-content: space-between; margin-bottom: 4px;">
+          <span class="small strong">{{ aiBatchStatus?.status === 'running' ? t('home.batch_ai_status_running') : (aiBatchStatus?.status === 'stopped' ? t('home.batch_ai_status_stopped') : t('home.batch_ai_status_completed')) }}</span>
+          <span class="mono tiny">{{ aiBatchPercent }}%</span>
+        </div>
+        <div class="progress"><div class="progress-fill" :style="{ width: aiBatchPercent + '%' }"></div></div>
+        <div class="tiny dim" style="margin-top: 4px">{{ aiBatchStatus?.processed || 0 }} / {{ aiBatchStatus?.total || 0 }}</div>
+      </div>
+      <div class="bank-actions">
+        <button type="button" class="secondary-btn" @click="closeAiBatchModal">{{ t('ep.common.close') }}</button>
+        <button v-if="aiBatchStatus?.status === 'running'" id="home-ai-stop" type="button" class="btn btn-danger" @click="handleStopAiBatch">{{ t('home.batch_ai_stop') }}</button>
+        <button v-else id="home-ai-start" type="button" class="primary" :disabled="aiBatchLoading || (aiBatchStatus && aiBatchStatus.without_explanation === 0 && !aiBatchOverwrite)" @click="handleStartAiBatch">
+          {{ t('home.batch_ai_start') }}
+        </button>
+      </div>
+    </AppDialog>
   </div>
 </template>
 
@@ -462,6 +486,10 @@ const activeSessions = ref([])
 const showActiveSessionsModal = ref(false)
 const abandoningSession = ref(false)
 const loading = ref(true)
+// The masthead primary action depends on both the bank list and active
+// sessions. Keep it disabled until both have settled so an early click cannot
+// be misread as "no banks" and open the create dialog instead of practice.
+const actionsReady = ref(false)
 const error = ref('')
 
 const dueMistakesCount = ref(0)
@@ -555,6 +583,7 @@ function formatSessionMode(mode) {
 }
 
 async function startToday() {
+  if (!actionsReady.value) return
   if (activeSessions.value.length) {
     await handleResume(activeSessions.value[0])
     return
@@ -1132,6 +1161,7 @@ onMounted(async () => {
   } catch (_) {
     activeSessions.value = []
   }
+  actionsReady.value = true
   refreshLearningStats()
 })
 
@@ -1214,6 +1244,24 @@ defineExpose({ openCreateBankDialog, showCreateDialog, closeAllModals })
 .bank-row-actions { display: flex; align-items: center; gap: 8px; color: var(--ink-4); }
 
 .session-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+/* AppDialog owns the modal behaviour; keep the legacy border-only box metrics. */
+:global(.app-dialog-panel.exam-setup-dialog.home-dialog) {
+  width: min(100%, var(--app-dialog-width, 520px));
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+:global(.app-dialog-panel.exam-setup-dialog.home-dialog .app-dialog-head) {
+  padding: 22px 22px 0;
+  border-bottom: 0;
+}
+:global(.app-dialog-panel.exam-setup-dialog.home-dialog .app-dialog-body) {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 22px 22px;
+}
+.home-dialog-form { display: flex; flex-direction: column; gap: 14px; }
 .session-row {
   display: flex;
   align-items: center;

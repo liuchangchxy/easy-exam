@@ -8,7 +8,7 @@
         </button>
         <span class="focus-sep" aria-hidden="true"></span>
         <div class="focus-context">
-          <span class="focus-mode-label">{{ session?.mode === 'ELIMINATION' ? t('ep.practice.mode_elimination') : session?.mode === 'FSRS' ? t('ep.practice.mode_fsrs') : session?.mode === 'MISTAKE' ? t('ep.practice.mode_mistake') : t('ep.practice.mode_practice') }}</span>
+          <span class="focus-mode-label">{{ focusModeLabel }}</span>
           <span v-if="question" class="focus-type">{{ formatType(question.type) }}</span>
         </div>
       </div>
@@ -743,6 +743,16 @@ function clearDraftConflictsStorage() {
 
 const session = ref(null)
 const questions = ref([])
+// Until the session payload arrives the mode is unknown; claiming "顺序练习"
+// here would briefly mislabel every FSRS / 错题 / 斩杀 session.
+const focusModeLabel = computed(() => {
+  if (!session.value) return t('ep.common.loading')
+  const mode = session.value.mode
+  if (mode === 'ELIMINATION') return t('ep.practice.mode_elimination')
+  if (mode === 'FSRS') return t('ep.practice.mode_fsrs')
+  if (mode === 'MISTAKE') return t('ep.practice.mode_mistake')
+  return t('ep.practice.mode_practice')
+})
 const index = ref(0)
 const answer = ref([])
 const textAnswer = ref('')

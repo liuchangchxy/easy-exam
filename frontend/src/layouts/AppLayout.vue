@@ -10,8 +10,26 @@
     <div class="main">
       <header class="topbar">
         <div class="topbar-left">
+          <button
+            v-if="hasBack"
+            type="button"
+            class="page-back"
+            data-testid="page-back"
+            :aria-label="backLabel"
+            :title="backLabel"
+            @click="goBack"
+          >
+            <LinearIcon name="arrow-left" :size="15" />
+            <span class="page-back-label">{{ backLabel }}</span>
+          </button>
           <div class="crumb">
-            <span class="here">{{ sectionLabel }}</span>
+            <router-link v-if="crumbParent" :to="{ name: 'banks' }">{{ crumbParent }}</router-link>
+            <span v-if="crumbParent" class="sep" aria-hidden="true">/</span>
+            <template v-if="crumbBank">
+              <router-link :to="crumbBank.to">{{ crumbBank.label }}</router-link>
+              <span class="sep" aria-hidden="true">/</span>
+            </template>
+            <span class="here">{{ crumbHere }}</span>
           </div>
         </div>
         <div class="topbar-right">
@@ -40,8 +58,19 @@
       </header>
 
       <header class="mobile-top">
-        <span class="brand-mark" aria-hidden="true">易</span>
-        <span class="mt-title">{{ sectionLabel }}</span>
+        <button
+          v-if="hasBack"
+          type="button"
+          class="page-back-mobile"
+          data-testid="page-back-mobile"
+          :aria-label="backLabel"
+          :title="backLabel"
+          @click="goBack"
+        >
+          <LinearIcon name="arrow-left" :size="18" />
+        </button>
+        <span v-else class="brand-mark" aria-hidden="true">易</span>
+        <span class="mt-title">{{ pageTitle }}</span>
         <span class="mt-actions">
           <button type="button" class="icon-btn" :aria-label="t('ep.action.search')" @click="openCommandPalette">
             <LinearIcon name="search" :size="17" />
@@ -150,7 +179,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch, watchEffect } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppSidebar from '../components/AppSidebar.vue'
 import MobileNav from '../components/MobileNav.vue'
@@ -165,6 +194,9 @@ import { startSession } from '../api/practice'
 import { getLearningTrends } from '../api/learning'
 import { useLocale } from '../composables/useLocale.js'
 import { useTheme } from '../composables/useTheme.js'
+import { readStoredBankListQuery } from '../utils/bankListQuery.js'
+import { canGoBack } from '../router/backNavigation.js'
+import { questionCode } from '../domain/bankManage.js'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -201,7 +233,7 @@ const roleLabel = computed(() => (auth.user.value?.is_admin ? t('ep.role.admin')
 const currentPage = computed(() => {
   const n = route.name
   if (n === 'home') return 'today'
-  if (n === 'banks' || n === 'bank-manage' || n === 'bank-detail' || n === 'import') return 'banks'
+  if (n === 'banks' || n === 'bank-detail' || n === 'question' || n === 'import') return 'banks'
   if (n === 'review' || n === 'mistakes' || n === 'learning') return 'review'
   if (n === 'exams') return 'exam'
   if (n === 'notes') return 'notes'
@@ -219,6 +251,81 @@ const sectionLabel = computed(() => {
     settings: 'ep.nav.settings',
   }
   return t(map[currentPage.value] || 'ep.nav.today')
+})
+
+const currentBank = computed(() => {
+  const bankId = String(route.params?.bankId ?? '')
+  return bankId ? banks.value.find(b => String(b.id) === bankId) || null : null
+})
+
+// The top bar names the thing you are looking at, not the area it belongs to:
+// a bank page shows the bank's name, everything else shows its area.
+const pageTitle = computed(() => currentBank.value?.name || sectionLabel.value)
+
+const crumbParent = computed(() => {
+  if (route.name === 'bank-detail' || route.name === 'question') return t('ep.nav.banks')
+  return ''
+})
+
+// A question page hangs below its bank: 题库 / <bank> / 第 N 题. The middle
+// level is a link back into the workspace, so the hierarchy is walkable.
+const crumbBank = computed(() => {
+  if (route.name !== 'question') return null
+  const bankId = String(route.params?.bankId ?? '')
+  if (!bankId) return null
+  return { label: currentBank.value?.name || sectionLabel.value, to: { name: 'bank-detail', params: { bankId } } }
+})
+
+const crumbHere = computed(() => {
+  if (route.name !== 'question') return pageTitle.value
+  const raw = String(route.params?.questionId ?? '')
+  return raw ? t('ep.questions.crumb_one', { code: questionCode(raw) }) : pageTitle.value
+})
+
+// Back is history-first. `meta.fallback` is only used when the user landed on
+// this URL directly (deep link, bookmark, reload) and has nowhere to go back
+// to; it is a destination, never an assumed parent page.
+const canNavigateBack = computed(() => canGoBack.value)
+
+const fallbackTarget = computed(() => {
+  const fallback = route.meta?.fallback
+  if (!fallback) return null
+  if (fallback === 'bank-detail') {
+    const bankId = route.params.bankId
+    if (!bankId) return null
+    return { name: 'bank-detail', params: { bankId } }
+  }
+  return typeof fallback === 'object' ? fallback : null
+})
+
+const hasBack = computed(() => canNavigateBack.value || !!fallbackTarget.value)
+
+const backLabel = computed(() => {
+  if (canNavigateBack.value) return t('ep.common.back')
+  if (!fallbackTarget.value) return ''
+  if (fallbackTarget.value.name === 'banks') return t('ep.common.back_to_banks')
+  return t('ep.common.back_to_bank')
+})
+
+function goBack() {
+  if (canNavigateBack.value) {
+    router.back()
+    return
+  }
+  const target = fallbackTarget.value
+  if (!target) return
+  // A direct entry has no list state in history; replay the last bank-list
+  // query so the fallback lands on the view the user last used.
+  if (target.name === 'banks') {
+    router.push({ ...target, query: readStoredBankListQuery() })
+    return
+  }
+  router.push(target)
+}
+
+watchEffect(() => {
+  const title = pageTitle.value
+  if (title) document.title = `${title} · ${t('ep.brand.name')}`
 })
 
 function handleOpenDialogEvent(e) {
@@ -507,6 +614,50 @@ function handlePracticeBank(bank) {
   border-radius: 2px;
 }
 .topbar .user-mini:hover { background: var(--surface-2); }
+
+/* Quiet back control shared by second-level pages: thin border, mono label,
+   square-ish radius, no shadow. */
+.page-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  margin-right: 14px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .04em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color .15s ease, color .15s ease;
+}
+.page-back:hover { border-color: var(--line-strong); color: var(--ink); }
+.page-back:focus-visible { outline: 1px solid var(--brand); outline-offset: 2px; }
+.page-back svg { flex: none; }
+
+/* Mobile owner of the same control; replaces the brand mark on these pages. */
+.page-back-mobile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  margin-left: -6px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: border-color .15s ease, color .15s ease;
+}
+.page-back-mobile:hover { border-color: var(--line-strong); color: var(--ink); }
+.page-back-mobile:focus-visible { outline: 1px solid var(--brand); outline-offset: 2px; }
 
 .chrome-more-menu {
   left: 12px;

@@ -1,6 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import AiDraftsModal from '../../src/components/AiDraftsModal.vue'
+
+// AppDialog teleports to <body>; stubbing Teleport keeps the markup inside
+// the wrapper so the list selectors keep resolving.
+const mountOptions = { global: { stubs: { teleport: true } } }
+
+enableAutoUnmount(afterEach)
 
 vi.mock('../../src/api/ai', () => ({
   listDrafts: vi.fn(),
@@ -41,7 +47,7 @@ describe('AiDraftsModal', () => {
       draft({ id: 'd2', stem: '只读题库草稿', target_bank_name: '只读题库', can_manage: false }),
     ])
 
-    const wrapper = mount(AiDraftsModal, { props: { token: 't1' } })
+    const wrapper = mount(AiDraftsModal, { props: { token: 't1' }, ...mountOptions })
     await flush()
 
     expect(listDrafts).toHaveBeenCalledWith('t1', 'DRAFT', '')
@@ -60,7 +66,7 @@ describe('AiDraftsModal', () => {
     listDrafts.mockResolvedValue([draft()])
     acceptDraft.mockResolvedValue({ status: 'ACCEPTED', question: { id: 'q-new' } })
 
-    const wrapper = mount(AiDraftsModal, { props: { token: 't1', bankId: 'b1' } })
+    const wrapper = mount(AiDraftsModal, { props: { token: 't1', bankId: 'b1' }, ...mountOptions })
     await flush()
     expect(listDrafts).toHaveBeenCalledWith('t1', 'DRAFT', 'b1')
 
@@ -80,7 +86,7 @@ describe('AiDraftsModal', () => {
 
   it('renders a localized error state with retry when loading fails', async () => {
     listDrafts.mockRejectedValueOnce(new Error('network down'))
-    const wrapper = mount(AiDraftsModal, { props: { token: 't1' } })
+    const wrapper = mount(AiDraftsModal, { props: { token: 't1' }, ...mountOptions })
     await flush()
 
     expect(wrapper.find('.drafts-error').exists()).toBe(true)
@@ -90,5 +96,35 @@ describe('AiDraftsModal', () => {
     await wrapper.find('.drafts-error button').trigger('click')
     await flush()
     expect(wrapper.findAll('.draft-row')).toHaveLength(1)
+  })
+
+  it('moves focus into the dialog, locks background scroll and closes on Escape', async () => {
+    listDrafts.mockResolvedValue([draft()])
+    const trigger = document.createElement('button')
+    document.body.appendChild(trigger)
+    trigger.focus()
+
+    // Real Teleport + attachTo mirrors the app, where AppDialog lives in <body>.
+    const wrapper = mount(AiDraftsModal, {
+      props: { token: 't1' },
+      attachTo: document.body,
+    })
+    await flush()
+    await flushPromises()
+
+    const panel = document.querySelector('.app-dialog-panel')
+    expect(panel).not.toBeNull()
+    expect(panel.contains(document.activeElement)).toBe(true)
+    expect(document.body.style.overflow).toBe('hidden')
+
+    document.body.setAttribute('tabindex', '-1')
+    document.body.focus()
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    await flushPromises()
+
+    expect(wrapper.emitted('close')).toBeTruthy()
+    expect(wrapper.emitted('close').at(-1)).toEqual([])
+
+    trigger.remove()
   })
 })

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import NotesView from '../../src/views/NotesView.vue'
 
 vi.mock('../../src/api/assets', () => ({
@@ -34,6 +35,28 @@ async function flush() {
   await new Promise(resolve => setTimeout(resolve, 0))
 }
 
+// The library keeps its search/type filter in the URL, so the view needs a
+// real router to mount the way the app mounts it.
+function notesRouter() {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/notes', name: 'notes', component: { template: '<div />' } },
+      { path: '/:pathMatch(.*)*', component: { template: '<div />' } },
+    ],
+  })
+  router.push('/notes')
+  return router
+}
+
+function mountNotes(options = {}) {
+  return mount(NotesView, {
+    props: { token: 't1' },
+    global: { plugins: [notesRouter()] },
+    ...options,
+  })
+}
+
 describe('NotesView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -45,7 +68,7 @@ describe('NotesView', () => {
   it('edits and saves the selected note', async () => {
     updateAsset.mockResolvedValue({ ...noteAsset, content: '更新后的笔记内容' })
 
-    const wrapper = mount(NotesView, { props: { token: 't1' } })
+    const wrapper = mountNotes()
     await flush()
 
     expect(listAssets).toHaveBeenCalledWith('t1')
@@ -68,7 +91,7 @@ describe('NotesView', () => {
     const blob = new Blob(['%PDF-1.4'], { type: 'application/pdf' })
     fetchAssetBlob.mockResolvedValue({ blob, mimeType: 'application/pdf' })
 
-    const wrapper = mount(NotesView, { props: { token: 't1' } })
+    const wrapper = mountNotes()
     await flush()
     await wrapper.findAll('.library-row')[1].trigger('click')
 
@@ -89,7 +112,7 @@ describe('NotesView', () => {
     vi.spyOn(window, 'open').mockReturnValue(fakeWindow)
     fetchAssetBlob.mockRejectedValue(new Error('资料文件不存在'))
 
-    const wrapper = mount(NotesView, { props: { token: 't1' } })
+    const wrapper = mountNotes()
     await flush()
     await wrapper.findAll('.library-row')[1].trigger('click')
     await wrapper.find('.file-preview').trigger('click')
@@ -102,7 +125,7 @@ describe('NotesView', () => {
   })
 
   it('asks before discarding an unsaved note when the reader closes', async () => {
-    const wrapper = mount(NotesView, { props: { token: 't1' } })
+    const wrapper = mountNotes()
     await flush()
 
     await wrapper.find('.library-row').trigger('click')
@@ -122,7 +145,7 @@ describe('NotesView', () => {
   })
 
   it('keeps editing when the unsaved-change prompt is cancelled', async () => {
-    const wrapper = mount(NotesView, { props: { token: 't1' } })
+    const wrapper = mountNotes()
     await flush()
 
     await wrapper.find('.library-row').trigger('click')
@@ -138,7 +161,7 @@ describe('NotesView', () => {
   })
 
   it('opens the create-note dialog with focus inside, traps Escape and restores the trigger', async () => {
-    const wrapper = mount(NotesView, { props: { token: 't1' }, attachTo: document.body })
+    const wrapper = mountNotes({ attachTo: document.body })
     await flush()
 
     const trigger = wrapper.find('.page-actions .btn-primary').element
@@ -165,7 +188,7 @@ describe('NotesView', () => {
   })
 
   it('does not let the create dialog and the dirty reader close each other', async () => {
-    const wrapper = mount(NotesView, { props: { token: 't1' }, attachTo: document.body })
+    const wrapper = mountNotes({ attachTo: document.body })
     await flush()
 
     await wrapper.find('.library-row').trigger('click')
@@ -197,7 +220,7 @@ describe('NotesView', () => {
   it('saves before switching to another note', async () => {
     updateAsset.mockResolvedValue({ ...noteAsset, content: '切换前保存的内容' })
 
-    const wrapper = mount(NotesView, { props: { token: 't1' } })
+    const wrapper = mountNotes()
     await flush()
 
     await wrapper.findAll('.library-row')[0].trigger('click')

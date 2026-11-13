@@ -2,6 +2,8 @@ import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ReviewView from '../../src/views/ReviewView.vue'
 import { startSession } from '../../src/api/practice'
+import { listBanks } from '../../src/api/banks'
+import { t } from '../../src/composables/useLocale.js'
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: { tab: 'mistakes' } }),
@@ -88,6 +90,45 @@ describe('ReviewView all-review sessions across banks', () => {
     expect(payload.bank_id).toBe('b1')
     expect(payload.question_ids.sort()).toEqual(['q1', 'q2'])
     expect(payload.bank_ids).toBeUndefined()
+
+    wrapper.unmount()
+  })
+})
+
+describe('ReviewView load failure', () => {
+  beforeEach(() => {
+    mockState.mistakes = []
+    vi.clearAllMocks()
+    startSession.mockResolvedValue({ id: 's1' })
+  })
+
+  it('shows a retry control instead of the empty state when a request rejects', async () => {
+    listBanks.mockRejectedValueOnce(new Error('boom'))
+    const wrapper = await mountView()
+
+    const error = wrapper.find('.review-load-error')
+    expect(error.exists()).toBe(true)
+    expect(error.text()).toContain(t('ep.common.load_failed'))
+
+    const retry = error.find('.btn')
+    expect(retry.exists()).toBe(true)
+    expect(retry.text()).toBe(t('ep.common.retry'))
+
+    expect(wrapper.find('.empty-title').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('re-runs the loader when retry is clicked', async () => {
+    listBanks.mockRejectedValueOnce(new Error('boom'))
+    const wrapper = await mountView()
+    expect(listBanks).toHaveBeenCalledTimes(1)
+
+    await wrapper.find('.review-load-error .btn').trigger('click')
+    await flushPromises()
+
+    expect(listBanks).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('.review-load-error').exists()).toBe(false)
 
     wrapper.unmount()
   })

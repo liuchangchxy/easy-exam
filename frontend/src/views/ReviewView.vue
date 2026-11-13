@@ -27,6 +27,12 @@
       <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
     </div>
 
+    <div v-else-if="loadError" class="notice bad review-notice review-load-error" role="alert">
+      <LinearIcon name="alert" :size="15" />
+      <span>{{ t('ep.common.load_failed') }}</span>
+      <button type="button" class="btn btn-sm" @click="load">{{ t('ep.common.retry') }}</button>
+    </div>
+
     <template v-else>
       <!-- Due -->
       <div v-if="activeTab === 'due'" class="review-layout review-workspace">
@@ -331,6 +337,7 @@ import { listDueMistakes, listMistakes, updateMistakeCause as updateMistakeCause
 import { listKills, killQuestion, unkillQuestion } from '../api/kills'
 import { startSession } from '../api/practice'
 import { getLearningTrends, getStudyPlan, getRecommendations } from '../api/learning'
+import { readQueryEnum, readQueryString, replaceQueryState } from '../utils/routeQuery.js'
 
 const props = defineProps({ token: { type: String, required: true } })
 const emit = defineEmits(['start-session'])
@@ -338,7 +345,8 @@ const route = useRoute()
 const router = useRouter()
 const { t } = useLocale()
 
-const activeTab = ref(normalizeTab(route.query.tab))
+const REVIEW_TAB_KEYS = ['due', 'mistakes', 'killed', 'diagnosis']
+const activeTab = ref(normalizeTab(route.query?.tab))
 const banks = ref([])
 const dueReviews = ref([])
 const mistakes = ref([])
@@ -347,10 +355,11 @@ const trends = ref(null)
 const plan = ref(null)
 const recommendations = ref([])
 const loading = ref(true)
+const loadError = ref(false)
 const starting = ref(false)
 const notice = ref('')
-const mistakeBank = ref('')
-const mistakeCause = ref('')
+const mistakeBank = ref(readQueryString(route.query?.bank))
+const mistakeCause = ref(readQueryString(route.query?.cause))
 
 const tabs = computed(() => [
   { key: 'due', label: 'ep.review.tab_due', count: dueReviews.value.length },
@@ -385,7 +394,7 @@ const dueBankGroups = computed(() => groupByBank(dueReviews.value))
 const recommendationGroups = computed(() => groupByBank(recommendations.value, 'question_id'))
 
 function normalizeTab(value) {
-  return ['due', 'mistakes', 'killed', 'diagnosis'].includes(value) ? value : 'due'
+  return readQueryEnum(value, REVIEW_TAB_KEYS, 'due')
 }
 
 function groupByBank(items, idKey = 'question_id') {
@@ -413,20 +422,43 @@ function reasonSummary(group) {
   return reasons.slice(0, 2).join(' · ')
 }
 
-function selectTab(key) {
-  activeTab.value = key
-  if (key === 'mistakes') router.replace({ query: { tab: 'mistakes' } })
-  else if (route.query.tab) router.replace({ query: {} })
+const REVIEW_QUERY_DEFAULTS = { tab: 'due' }
+
+// Toolbar state lives in the URL so a refresh, a browser Back or a pasted link
+// lands on the same list. Defaults stay out of the address.
+function syncReviewQuery(patch) {
+  replaceQueryState(router, route.query, patch, REVIEW_QUERY_DEFAULTS)
 }
 
-watch(() => route.query.tab, value => {
-  activeTab.value = normalizeTab(value)
+function selectTab(key) {
+  activeTab.value = key
+  syncReviewQuery({ tab: key })
+}
+
+watch(() => route.query?.tab, value => {
+  const next = normalizeTab(value)
+  if (next !== activeTab.value) activeTab.value = next
 })
+
+watch(() => route.query?.bank, value => {
+  const next = readQueryString(value)
+  if (next !== mistakeBank.value) mistakeBank.value = next
+})
+
+watch(() => route.query?.cause, value => {
+  const next = readQueryString(value)
+  if (next !== mistakeCause.value) mistakeCause.value = next
+})
+
+watch(mistakeBank, value => syncReviewQuery({ bank: value }))
+
+watch(mistakeCause, value => syncReviewQuery({ cause: value }))
 
 async function load() {
   loading.value = true
+  loadError.value = false
   notice.value = ''
-  const [bankRes, dueRes, mistakeRes, killRes, trendRes, planRes, recRes] = await Promise.allSettled([
+  const results = await Promise.allSettled([
     listBanks(props.token),
     listDueMistakes(props.token),
     listMistakes(props.token),
@@ -435,6 +467,8 @@ async function load() {
     getStudyPlan(props.token, { days: 7, minutes_per_day: 30 }),
     getRecommendations(props.token, {}),
   ])
+  const [bankRes, dueRes, mistakeRes, killRes, trendRes, planRes, recRes] = results
+  loadError.value = results.some(result => result.status === 'rejected')
   banks.value = bankRes.status === 'fulfilled' ? (bankRes.value || []) : []
   dueReviews.value = dueRes.status === 'fulfilled' ? (dueRes.value || []) : []
   mistakes.value = mistakeRes.status === 'fulfilled' ? (mistakeRes.value || []) : []
@@ -565,6 +599,7 @@ onMounted(load)
 .review-page .list-meta,
 .review-page .section-note { font-size: 12px; }
 .review-notice { margin-top: 16px; }
+.review-load-error .btn { margin-left: auto; flex: none; }
 .review-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 56px; margin-top: 24px; align-items: start; }
 .review-main { min-width: 0; }
 .review-single { margin-top: 18px; }

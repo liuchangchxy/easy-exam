@@ -70,6 +70,18 @@ def list_versions(question_id: str, request: Request, user=Depends(current_user)
     return request.app.state.services.questions.list_versions(question_id, user["id"])
 
 
+@router.delete("/{question_id}/versions/{version_id}")
+def delete_version(question_id: str, version_id: str, request: Request, user=Depends(current_user)):
+    try:
+        return request.app.state.services.questions.delete_version(user["id"], question_id, version_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/{question_id}/conflict")
 def get_conflict(question_id: str, request: Request, user=Depends(current_user)):
     try:

@@ -386,6 +386,12 @@ MIGRATIONS = {
     ALTER TABLE personal_assets ADD COLUMN mime_type TEXT;
     ALTER TABLE personal_assets ADD COLUMN storage_key TEXT;
     """,
+    19: """
+    -- Give archiving a real timestamp so it stays distinguishable from deletion.
+    -- is_deleted remains the visibility source of truth while archived_at is the audit trail.
+    ALTER TABLE questions ADD COLUMN archived_at TEXT;
+    UPDATE questions SET archived_at = updated_at WHERE is_deleted = 1 AND archived_at IS NULL;
+    """,
 }
 
 

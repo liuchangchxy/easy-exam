@@ -132,6 +132,10 @@ export function shouldOfferRegrade(original = {}, draft = {}) {
   return normalizeAnswer(originalType, original?.answer) !== normalizeAnswer(draftType, newAnswer)
 }
 
+export function questionCode(id) {
+  return String(id || '').replace(/^q/i, '').slice(0, 8).toUpperCase()
+}
+
 export function filterBankQuestions(questions, filters) {
   if (!Array.isArray(questions)) return []
   if (!filters || !isFilterActive(filters)) return questions.slice()
@@ -146,13 +150,16 @@ export function filterBankQuestions(questions, filters) {
   return questions.filter(q => {
     if (!q) return false
 
-    // 1. Keyword filter matches stem or tags
+    // 1. Keyword filter matches id/code, stem or tags
     if (kw) {
+      const id = String(q.id || '').toLowerCase()
+      const code = questionCode(q.id).toLowerCase()
+      const idMatch = id === kw || id.startsWith(kw) || code === kw || code.startsWith(kw)
       const stemMatch = q.stem ? String(q.stem).toLowerCase().includes(kw) : false
       const tagsMatch = Array.isArray(q.tags)
         ? q.tags.some(t => t && String(t).toLowerCase().includes(kw))
         : false
-      if (!stemMatch && !tagsMatch) return false
+      if (!idMatch && !stemMatch && !tagsMatch) return false
     }
 
     // 2. Type filter
@@ -182,6 +189,22 @@ export function filterBankQuestions(questions, filters) {
   })
 }
 
+export function splitAnswerKeys(rawAnswer) {
+  const clean = String(rawAnswer || '').trim()
+  if (!clean) return []
+  const tokens = clean.split(/[,;\s]+/).map(k => k.trim()).filter(Boolean)
+  const keys = []
+  for (const token of tokens) {
+    // Mirror backend normalize_answer_keys: "AB" is the same answer as "A,B".
+    if (token.length > 1 && /^[A-Z]+$/.test(token)) {
+      keys.push(...token.split(''))
+    } else {
+      keys.push(token)
+    }
+  }
+  return [...new Set(keys)]
+}
+
 export function sanitizeAnswerOnOptionRemove(type, currentAnswer, removedKey) {
   if (!currentAnswer || !removedKey) return currentAnswer || ''
   const t = String(type || '').toUpperCase()
@@ -189,8 +212,7 @@ export function sanitizeAnswerOnOptionRemove(type, currentAnswer, removedKey) {
     return currentAnswer.trim() === removedKey.trim() ? '' : currentAnswer
   }
   if (t === 'MULTI') {
-    const parts = currentAnswer.split(/[,;\s]+/).map(k => k.trim()).filter(Boolean)
-    return parts.filter(k => k !== removedKey.trim()).join(',')
+    return splitAnswerKeys(currentAnswer).filter(k => k !== removedKey.trim()).join(',')
   }
   return currentAnswer
 }
@@ -216,7 +238,7 @@ export function validateQuestionEdit(type, options, answer) {
       return { valid: false, error: 'invalid_options' }
     }
     const validKeys = new Set(rawKeys)
-    const parts = [...new Set(trimmedAns.split(/[,;\s]+/).map(k => k.trim()).filter(Boolean))]
+    const parts = splitAnswerKeys(trimmedAns)
     if (parts.length < 2 || !parts.every(k => validKeys.has(k))) {
       return { valid: false, error: 'invalid_answer' }
     }
@@ -229,6 +251,10 @@ export function validateQuestionEdit(type, options, answer) {
       return { valid: false, error: 'invalid_answer' }
     }
     return { valid: true }
+  }
+
+  if (t === 'FILL') {
+    return trimmedAns ? { valid: true } : { valid: false, error: 'invalid_answer' }
   }
 
   return { valid: true }
@@ -258,7 +284,7 @@ export function adaptAnswerOnTypeChange(newType, currentAnswer, options = []) {
 
   if (t === 'MULTI') {
     const validKeys = new Set(Array.isArray(options) ? options.map(o => o.key?.trim()).filter(Boolean) : [])
-    const parts = [...new Set(trimmedAns.split(/[,;\s]+/).map(k => k.trim()).filter(Boolean))]
+    const parts = splitAnswerKeys(trimmedAns)
     const validParts = parts.filter(k => validKeys.has(k) && !['T', 'F'].includes(k.toUpperCase()))
     if (validParts.length > 0) {
       return validParts.join(',')
@@ -308,4 +334,137 @@ export function adaptOptionsOnTypeChange(newType, currentOptions = [], tHelper =
   }
 
   return currentOptions
+}
+
+/**
+ * Bank-list batch actions. Mirrors the backend contract: archive/restore/delete
+ * are id-only, set_category needs a non-empty category name.
+ */
+export function buildBankBatchRequest(bankIds, operation, extras = {}) {
+  const ids = [...new Set((bankIds || []).map(id => String(id || '').trim()).filter(Boolean))]
+  if (!ids.length) return { error: 'no_banks' }
+
+  const op = String(operation || '').trim().toLowerCase()
+  if (!['archive', 'restore', 'delete', 'set_category'].includes(op)) return { error: 'invalid_operation' }
+
+  const payload = { bank_ids: ids, operation: op }
+  if (op === 'set_category') {
+    const category = String(extras.category || '').trim()
+    if (!category) return { error: 'category_required' }
+    payload.category = category
+  }
+  return { payload }
+}
+
+export function filterBankList(banks, { query = '', category = '' } = {}) {
+  let list = Array.isArray(banks) ? banks.slice() : []
+  const q = String(query || '').trim().toLowerCase()
+  if (q) {
+    list = list.filter(b => `${b.name || ''} ${b.description || ''} ${b.category || ''}`.toLowerCase().includes(q))
+  }
+  if (category) list = list.filter(b => (b.category || '') === category)
+  return list
+}
+
+export function sortBankList(banks, sortKey = 'recent') {
+  const list = Array.isArray(banks) ? banks.slice() : []
+  if (sortKey === 'name') {
+    return list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+  }
+  if (sortKey === 'count') {
+    return list.sort((a, b) => Number(b.question_count || 0) - Number(a.question_count || 0))
+  }
+  // "Recent" means recently touched: an edited bank should resurface even when
+  // it was created long ago.
+  return list.sort((a, b) => {
+    const left = Date.parse(a.updated_at || a.created_at || '') || 0
+    const right = Date.parse(b.updated_at || b.created_at || '') || 0
+    return right - left
+  })
+}
+
+/**
+ * Flatten chapters into a depth-first tree so the manage page can render
+ * indentation without a recursive component. Orphans are promoted to roots.
+ */
+export function flattenChapterTree(chapters) {
+  const list = Array.isArray(chapters) ? chapters.slice() : []
+  const byParent = new Map()
+  const ids = new Set(list.map(c => c.id))
+  for (const chapter of list) {
+    const parent = chapter.parent_id && ids.has(chapter.parent_id) ? chapter.parent_id : null
+    if (!byParent.has(parent)) byParent.set(parent, [])
+    byParent.get(parent).push(chapter)
+  }
+  for (const children of byParent.values()) {
+    children.sort((a, b) => (Number(a.sort_order || 0) - Number(b.sort_order || 0))
+      || String(a.name || '').localeCompare(String(b.name || '')))
+  }
+  const result = []
+  const seen = new Set()
+  function walk(parentId, depth) {
+    for (const chapter of byParent.get(parentId) || []) {
+      if (seen.has(chapter.id)) continue
+      seen.add(chapter.id)
+      result.push({ ...chapter, depth })
+      walk(chapter.id, depth + 1)
+    }
+  }
+  walk(null, 0)
+  for (const chapter of list) {
+    if (!seen.has(chapter.id)) result.push({ ...chapter, depth: 0 })
+  }
+  return result
+}
+
+export function buildChapterReorderPayload(chapters, chapterId, direction) {
+  const ordered = flattenChapterTree(chapters)
+  const index = ordered.findIndex(c => c.id === chapterId)
+  if (index === -1) return { error: 'chapter_not_found' }
+  const target = ordered[index]
+  const siblings = ordered.filter(c => (c.parent_id || null) === (target.parent_id || null))
+  const siblingIndex = siblings.findIndex(c => c.id === chapterId)
+  const swapWith = direction === 'up' ? siblingIndex - 1 : siblingIndex + 1
+  if (swapWith < 0 || swapWith >= siblings.length) return { error: 'no_sibling' }
+
+  const nextSiblings = siblings.slice()
+  const [moved] = nextSiblings.splice(siblingIndex, 1)
+  nextSiblings.splice(swapWith, 0, moved)
+  const orderById = new Map(nextSiblings.map((chapter, idx) => [chapter.id, idx]))
+
+  const items = ordered.map(c => ({
+    id: c.id,
+    parent_id: c.parent_id || null,
+    sort_order: orderById.has(c.id) ? orderById.get(c.id) : Number(c.sort_order || 0),
+  }))
+  return { items }
+}
+
+export function paginateList(list, page = 1, pageSize = 20) {
+  const items = Array.isArray(list) ? list : []
+  const size = Math.max(1, Number(pageSize) || 20)
+  const pages = Math.max(1, Math.ceil(items.length / size))
+  const current = Math.min(Math.max(1, Number(page) || 1), pages)
+  const start = (current - 1) * size
+  return {
+    items: items.slice(start, start + size),
+    page: current,
+    pages,
+    total: items.length,
+    pageSize: size,
+  }
+}
+
+export function sortQuestionList(questions, sortKey = 'default') {
+  const list = Array.isArray(questions) ? questions.slice() : []
+  if (sortKey === 'id') {
+    return list.sort((a, b) => String(a.id || '').localeCompare(String(b.id || '')))
+  }
+  if (sortKey === 'difficulty') {
+    return list.sort((a, b) => Number(b.difficulty || 0) - Number(a.difficulty || 0))
+  }
+  if (sortKey === 'updated') {
+    return list.sort((a, b) => (Date.parse(b.updated_at || '') || 0) - (Date.parse(a.updated_at || '') || 0))
+  }
+  return list
 }

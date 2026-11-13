@@ -179,7 +179,11 @@ test('Fast UI Interaction: mobile nav, review page, practice tools and finish', 
     // -------------------------------------------------------------
     await desktopPage.locator('.sidebar .nav-item').nth(0).click()
     await desktopPage.waitForSelector('.today')
-    await desktopPage.locator('.masthead .btn-primary').click()
+    // The masthead primary control starts as "create bank" while today's plan is
+    // still loading; wait for the practice action itself before clicking.
+    const startPracticeBtn = desktopPage.locator('.masthead .btn-primary:has-text("开始练习")')
+    await startPracticeBtn.waitFor({ state: 'visible', timeout: 12000 })
+    await startPracticeBtn.click()
     await desktopPage.waitForSelector('.focus-mode', { timeout: 12000 })
 
     await desktopPage.waitForSelector('.btn-more-menu', { timeout: 12000 })

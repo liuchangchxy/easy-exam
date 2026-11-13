@@ -1,5 +1,18 @@
 <template>
   <div class="import-page">
+    <button
+      v-if="backBankId"
+      type="button"
+      class="page-back"
+      data-testid="page-back"
+      :aria-label="backLabel"
+      :title="backLabel"
+      @click="backToBank"
+    >
+      <LinearIcon name="arrow-left" :size="15" />
+      <span>{{ backLabel }}</span>
+    </button>
+
     <div class="page-head">
       <div class="page-head-main">
         <div class="page-eyebrow">
@@ -74,10 +87,23 @@
 
             <div class="field" style="margin-bottom: 18px">
               <label class="label" for="import-bank">{{ t('ep.imports.bank') }}</label>
-              <select id="import-bank" v-model="bankId" class="select" required>
+              <select
+                id="import-bank"
+                v-model="bankId"
+                class="select"
+                required
+                :disabled="requestInFlight"
+                :title="requestInFlight ? t('ep.imports.bank_locked_busy') : undefined"
+              >
                 <option value="" disabled>{{ t('ep.imports.bank_placeholder') }}</option>
                 <option v-for="bank in banks" :key="bank.id" :value="bank.id">{{ bank.name }} · {{ t('ep.banks.questions', { count: bank.question_count || 0 }) }}</option>
               </select>
+            </div>
+
+            <div v-if="bankLoadFailed" class="notice bad bank-load-error" role="alert" style="margin-bottom: 16px">
+              <LinearIcon name="alert" :size="15" />
+              <span>{{ t('ep.imports.bank_load_failed') }}</span>
+              <button type="button" class="btn btn-sm" :disabled="banksLoading" @click="loadBanks">{{ t('ep.common.retry') }}</button>
             </div>
 
             <div v-if="bankId && !canImport" class="notice warn" style="margin-bottom: 16px">
@@ -88,6 +114,7 @@
             <div
               class="file-drop"
               :class="{ 'is-dragging': isDragging, 'has-file': Boolean(file) }"
+              @click="onDropZoneClick"
               @dragenter.prevent="isDragging = true"
               @dragover.prevent="isDragging = true"
               @dragleave="onDragLeave"
@@ -103,7 +130,7 @@
                   <span class="file-name">{{ file.name }}</span>
                   <span class="file-meta">{{ t('ep.imports.size', { size: (file.size / 1024).toFixed(1) }) }}</span>
                 </span>
-                <button type="button" class="btn btn-sm" @click="triggerFileInput">{{ t('ep.imports.change') }}</button>
+                <button type="button" class="btn btn-sm" @click.stop="triggerFileInput">{{ t('ep.imports.change') }}</button>
               </template>
               <template v-else>
                 <span class="file-icon"><LinearIcon name="inbox" :size="20" /></span>
@@ -111,7 +138,7 @@
                   <span class="file-name">{{ t('ep.imports.drop') }}</span>
                   <span class="file-meta">{{ t('ep.imports.drop_hint') }}</span>
                 </span>
-                <button type="button" class="btn btn-sm" @click="triggerFileInput">{{ t('ep.imports.choose') }}</button>
+                <button type="button" class="btn btn-sm" @click.stop="triggerFileInput">{{ t('ep.imports.choose') }}</button>
               </template>
               <input
                 ref="fileInputRef"
@@ -144,10 +171,14 @@
             </div>
           </section>
 
+          <div v-if="error" ref="errorNoticeRef" class="notice bad import-error" role="alert" tabindex="-1">
+            <LinearIcon name="alert" :size="15" /><span>{{ errorText }}</span>
+          </div>
+
           <!-- Spreadsheet field mapping -->
-          <section v-if="spreadsheetPreview" class="step-block">
+          <section v-if="spreadsheetPreview" class="step-block" data-step="fields">
             <div class="step-head">
-              <span class="step-no mono">03</span>
+              <span class="step-no mono">02</span>
               <div>
                 <div class="step-title">{{ t('ep.imports.fields_title') }}</div>
                 <div class="step-sub">{{ t('ep.imports.fields_hint') }}</div>
@@ -250,7 +281,7 @@
               <button type="submit" class="btn btn-primary" :disabled="loading || !bankId || !file || !canImport">
                 {{ loading ? t('ep.imports.uploading') : t('ep.imports.submit_import') }}
               </button>
-              <button type="button" class="btn btn-quiet" @click="spreadsheetPreview = null">{{ t('ep.imports.cancel_preview') }}</button>
+              <button type="button" class="btn btn-quiet" @click="requestDiscard('spreadsheet')">{{ t('ep.imports.cancel_preview') }}</button>
             </div>
           </section>
 
@@ -340,6 +371,15 @@
                     <span class="qrow-stem">{{ dup.stem || dup.question_stem || dup.id }}</span>
                   </span>
                 </div>
+                <details v-if="pdfPreview.duplicates.length > 8" class="dup-more">
+                  <summary class="dup-more-summary">{{ t('ep.common.more_count', { count: pdfPreview.duplicates.length - 8 }) }}</summary>
+                  <div v-for="(dup, idx) in pdfPreview.duplicates.slice(8)" :key="`more-${idx}`" class="list-row">
+                    <span class="mono small dim">{{ String(idx + 9).padStart(2, '0') }}</span>
+                    <span class="list-main">
+                      <span class="qrow-stem">{{ dup.stem || dup.question_stem || dup.id }}</span>
+                    </span>
+                  </div>
+                </details>
               </div>
               <div class="field" style="margin-top: 12px; max-width: 320px">
                 <span class="label">{{ t('ep.imports.strategy') }}</span>
@@ -356,7 +396,7 @@
               <button type="button" class="btn btn-primary" :disabled="loading || !pdfCandidates.length || !canImport || pdfStrategyMissing" @click="confirmPdfImportAction">
                 {{ loading ? t('ep.imports.uploading') : t('ep.imports.confirm_pdf') }}
               </button>
-              <button type="button" class="btn btn-quiet" @click="resetPdfPreview">{{ t('ep.imports.cancel_preview') }}</button>
+              <button type="button" class="btn btn-quiet" @click="requestDiscard('pdf')">{{ t('ep.imports.cancel_preview') }}</button>
             </div>
           </section>
 
@@ -382,6 +422,15 @@
                     <span class="qrow-stem">{{ dup.stem || dup.question_stem || dup.id }}</span>
                   </span>
                 </div>
+                <details v-if="textPreview.duplicates.length > 8" class="dup-more">
+                  <summary class="dup-more-summary">{{ t('ep.common.more_count', { count: textPreview.duplicates.length - 8 }) }}</summary>
+                  <div v-for="(dup, idx) in textPreview.duplicates.slice(8)" :key="`more-${idx}`" class="list-row">
+                    <span class="mono small dim">{{ String(idx + 9).padStart(2, '0') }}</span>
+                    <span class="list-main">
+                      <span class="qrow-stem">{{ dup.stem || dup.question_stem || dup.id }}</span>
+                    </span>
+                  </div>
+                </details>
               </div>
               <div class="field" style="margin-top: 12px; max-width: 320px">
                 <span class="label">{{ t('ep.imports.strategy') }}</span>
@@ -398,7 +447,7 @@
               <button type="button" class="btn btn-primary" :disabled="loading || !canImport || textStrategyMissing" @click="submitText">
                 {{ loading ? t('ep.imports.uploading') : t('ep.imports.submit_confirm') }}
               </button>
-              <button type="button" class="btn btn-quiet" @click="resetTextPreview">{{ t('ep.imports.cancel_preview') }}</button>
+              <button type="button" class="btn btn-quiet" @click="requestDiscard('text')">{{ t('ep.imports.cancel_preview') }}</button>
             </div>
           </section>
 
@@ -419,11 +468,21 @@
                   <span class="qrow-stem">{{ dup.stem || dup.question_stem || dup.id }}</span>
                 </span>
               </div>
+              <details v-if="duplicatePreview.duplicates.length > 8" class="dup-more">
+                <summary class="dup-more-summary">{{ t('ep.common.more_count', { count: duplicatePreview.duplicates.length - 8 }) }}</summary>
+                <div v-for="(dup, idx) in duplicatePreview.duplicates.slice(8)" :key="`more-${idx}`" class="list-row">
+                  <span class="mono small dim">{{ String(idx + 9).padStart(2, '0') }}</span>
+                  <span class="list-main">
+                    <span class="qrow-stem">{{ dup.stem || dup.question_stem || dup.id }}</span>
+                  </span>
+                </div>
+              </details>
             </div>
 
             <div class="field" style="margin-top: 16px; max-width: 320px">
               <span class="label">{{ t('ep.imports.strategy') }}</span>
               <select v-model="duplicateStrategy" class="select">
+                <option value="" disabled>{{ t('ep.imports.strategy_choose') }}</option>
                 <option value="skip">{{ t('ep.imports.strategy_skip') }}</option>
                 <option value="new">{{ t('ep.imports.strategy_new') }}</option>
                 <option value="merge">{{ t('ep.imports.strategy_merge') }}</option>
@@ -431,14 +490,14 @@
             </div>
 
             <div class="import-actions">
-              <button type="submit" class="btn btn-primary" :disabled="loading || !bankId || !file || !canImport">
+              <button type="submit" class="btn btn-primary" :disabled="loading || !bankId || !file || !canImport || duplicateStrategyMissing">
                 {{ loading ? t('ep.imports.uploading') : t('ep.imports.submit_confirm') }}
               </button>
             </div>
           </section>
 
           <!-- Result -->
-          <section v-if="result" class="step-block result-block">
+          <section v-if="result" class="step-block result-block" aria-live="polite" data-testid="import-result">
             <div class="step-head">
               <span class="step-no mono">04</span>
               <div>
@@ -448,17 +507,23 @@
             </div>
             <div class="kv">
               <div class="kv-row"><span class="kv-key">{{ t('ep.imports.job') }}</span><span class="kv-val mono">{{ result.job_id }}</span></div>
-              <div class="kv-row"><span class="kv-key">{{ t('ep.imports.bank') }}</span><span class="kv-val">{{ banks.find(b => b.id === bankId)?.name || t('ep.common.none') }}</span></div>
+              <div class="kv-row"><span class="kv-key">{{ t('ep.imports.result_bank') }}</span><span class="kv-val" data-testid="result-bank">{{ resultBank || t('ep.common.none') }}</span></div>
+            </div>
+            <div
+              v-if="resultBankChanged"
+              class="notice warn result-bank-changed"
+              data-testid="result-bank-changed"
+              role="status"
+            >
+              <LinearIcon name="alert" :size="15" />
+              <span>{{ t('ep.imports.result_bank_changed', { bank: resultBank }) }}</span>
+              <span class="dim">{{ t('ep.imports.bank') }} {{ bankNameFor(bankId) }}</span>
             </div>
             <div class="import-actions">
               <button type="button" class="btn btn-primary" @click="goBank">{{ t('ep.imports.view_bank') }}</button>
               <button type="button" class="btn" @click="resetImport">{{ t('ep.imports.again') }}</button>
             </div>
           </section>
-
-          <div v-if="error" class="notice bad" style="margin-top: 16px">
-            <LinearIcon name="alert" :size="15" /><span>{{ errorText }}</span>
-          </div>
         </form>
       </div>
 
@@ -472,13 +537,42 @@
         </ul>
       </aside>
     </div>
+
+    <AppDialog
+      :open="bankConfirmOpen"
+      :title="t('ep.imports.bank')"
+      initial-focus=".bank-change-cancel"
+      data-testid="change-bank-dialog"
+      @close="cancelBankChange"
+    >
+      <p class="hint">{{ t('ep.imports.change_bank_confirm') }}</p>
+      <template #foot>
+        <button type="button" class="btn btn-quiet bank-change-cancel" @click="cancelBankChange">{{ t('ep.common.cancel') }}</button>
+        <button type="button" class="btn btn-primary bank-change-accept" @click="acceptBankChange">{{ t('ep.common.confirm') }}</button>
+      </template>
+    </AppDialog>
+
+    <AppDialog
+      :open="discardConfirmOpen"
+      :title="t('ep.imports.cancel_preview')"
+      initial-focus=".discard-preview-cancel"
+      data-testid="discard-preview-dialog"
+      @close="cancelDiscard"
+    >
+      <p class="hint">{{ t('ep.imports.discard_preview_confirm') }}</p>
+      <template #foot>
+        <button type="button" class="btn btn-quiet discard-preview-cancel" @click="cancelDiscard">{{ t('ep.common.cancel') }}</button>
+        <button type="button" class="btn btn-danger discard-preview-accept" @click="acceptDiscard">{{ t('ep.imports.cancel_preview') }}</button>
+      </template>
+    </AppDialog>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import LinearIcon from '../components/LinearIcon.vue'
+import AppDialog from '../components/AppDialog.vue'
 import { listBanks } from '../api/banks'
 import { previewImport, previewFileImport, uploadImport, previewPdfImport, confirmPdfImport } from '../api/imports'
 import { useLocale } from '../composables/useLocale.js'
@@ -491,17 +585,69 @@ const router = useRouter()
 const route = useRoute()
 const banks = ref([])
 const bankId = ref('')
+
+// Contextual import entry: ?bankId= turns the top-level page into a child of
+// the bank. The control points at a deterministic route, never history.
+const isFromManage = computed(() => String(route.query.from || '') === 'manage')
+const backBankId = computed(() => {
+  const preset = String(route.query.bankId || '')
+  if (preset) return preset
+  return isFromManage.value ? String(bankId.value || '') : ''
+})
+const backBank = computed(() => banks.value.find(b => String(b.id) === backBankId.value) || null)
+const backLabel = computed(() => {
+  if (isFromManage.value) return t('ep.imports.back_to_imports')
+  return backBank.value?.name || t('ep.common.back_to_bank')
+})
+
+function backToBank() {
+  if (!backBankId.value) return
+  if (isFromManage.value) {
+    router.push({ name: 'bank-manage', params: { bankId: backBankId.value }, query: { tab: 'imports' } })
+    return
+  }
+  router.push({ name: 'bank-detail', params: { bankId: backBankId.value } })
+}
 const file = ref(null)
 const isDragging = ref(false)
 const fileInputRef = ref(null)
 const loading = ref(false)
 const previewing = ref(false)
+// Any preview or upload request owns the bank selector while it runs: swapping
+// the target mid-request would let a stale response describe another bank.
+const requestInFlight = computed(() => previewing.value || loading.value)
 const error = ref(null)
+const errorNoticeRef = ref(null)
 const errorText = computed(() => {
   if (error.value instanceof Error) return error.value.message
   return typeof error.value === 'string' ? error.value : ''
 })
+
+// The error notice sits under the primary action row, but the correction and
+// result blocks can still push it off-screen. Bring it into view and focus it
+// so the failure is announced instead of silently appearing below the fold.
+watch(errorText, async (text) => {
+  if (!text) return
+  await nextTick()
+  const el = errorNoticeRef.value
+  if (!el) return
+  if (typeof el.scrollIntoView === 'function') {
+    el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }
+  if (typeof el.focus === 'function') el.focus({ preventScroll: true })
+})
 const result = ref(null)
+// Snapshot of the bank that actually accepted the job. The select can move on
+// (or be reset) while the upload is in flight; the receipt must not follow it.
+const resultBank = ref('')
+const resultBankId = ref('')
+// The result card must state plainly when the selector has moved away from the
+// bank that accepted the job, instead of implying the new bank received it.
+const resultBankChanged = computed(() => Boolean(
+  result.value &&
+  resultBankId.value &&
+  String(bankId.value) !== String(resultBankId.value),
+))
 const duplicatePreview = ref(null)
 const duplicateStrategy = ref('skip')
 const spreadsheetPreview = ref(null)
@@ -509,25 +655,40 @@ const textPreview = ref(null)
 const pdfPreview = ref(null)
 const pdfCandidates = ref([])
 const pdfDuplicateStrategy = ref('')
-const currentMapping = ref({
-  stem: null,
-  answer: null,
-  type: null,
-  explanation: null,
-  difficulty: null,
-  tags: null,
-  combined_options: null,
-  options_delimiter: '',
-  options: [],
-})
+
+function defaultMapping() {
+  return {
+    stem: null,
+    answer: null,
+    type: null,
+    explanation: null,
+    difficulty: null,
+    tags: null,
+    combined_options: null,
+    options_delimiter: '',
+    options: [],
+  }
+}
+const currentMapping = ref(defaultMapping())
+
+const bankLoadFailed = ref(false)
+const banksLoading = ref(false)
+const bankConfirmOpen = ref(false)
+const pendingBankId = ref('')
+const previousBankId = ref('')
+let suppressBankWatch = false
+// Monotonic token for preview requests. A response is only applied when it is
+// still the newest request and the target bank is the one it was sent for.
+let previewSeq = 0
+const discardConfirmOpen = ref(false)
+const discardKind = ref('')
 
 const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
 
-// Pending steps carry no state label; only completed and active steps do.
-const STEP_STATE_KEYS = {
-  done: 'ep.common.done',
-  active: 'ep.imports.uploading',
-}
+// Pending steps carry no state label. Completed steps say "done"; the active
+// step names what it is actually waiting for (a file, a preview, an import),
+// and only claims to be working while a request really is in flight.
+const STEP_DONE_KEY = 'ep.common.done'
 
 const steps = computed(() => [
   { key: 'source', label: t('ep.imports.step_source') },
@@ -536,10 +697,13 @@ const steps = computed(() => [
   { key: 'result', label: t('ep.imports.step_result') },
 ])
 
+// Derive the active step from the block actually rendered, not from a transient
+// loading flag: a spreadsheet preview is the field-mapping step (02), PDF/text
+// correction and duplicate resolution are 03, and only a result is 04.
 const stepNo = computed(() => {
   if (result.value) return 4
-  if (duplicatePreview.value || spreadsheetPreview.value || pdfPreview.value || textPreview.value) return 3
-  if (previewing.value) return 2
+  if (duplicatePreview.value || pdfPreview.value || textPreview.value) return 3
+  if (spreadsheetPreview.value) return 2
   return 1
 })
 
@@ -551,9 +715,24 @@ function stepState(index) {
   return 'pending'
 }
 
+function activeStepKey(index) {
+  if (index === 4) return 'ep.imports.result_title'
+  if (requestInFlight.value) return 'ep.imports.uploading'
+  if (index === 1) {
+    if (!bankId.value) return 'ep.imports.bank_placeholder'
+    if (!file.value) return 'ep.imports.choose'
+    return 'ep.imports.submit_preview'
+  }
+  if (index === 2) return 'ep.imports.submit_import'
+  if (pdfPreview.value) return 'ep.imports.confirm_pdf'
+  return 'ep.imports.submit_confirm'
+}
+
 function stepStateLabel(index) {
-  const key = STEP_STATE_KEYS[stepState(index)]
-  return key ? t(key) : ''
+  const state = stepState(index)
+  if (state === 'done') return t(STEP_DONE_KEY)
+  if (state === 'active') return t(activeStepKey(index))
+  return ''
 }
 
 const precheckPanel = computed(() => {
@@ -606,6 +785,7 @@ const canImport = computed(() => {
 
 const pdfStrategyMissing = computed(() => Boolean(pdfPreview.value?.duplicates?.length) && !pdfDuplicateStrategy.value)
 const textStrategyMissing = computed(() => Boolean(textPreview.value?.duplicates?.length) && !duplicateStrategy.value)
+const duplicateStrategyMissing = computed(() => Boolean(duplicatePreview.value) && !duplicateStrategy.value)
 
 const optionSlots = ref(Array(8).fill(''))
 
@@ -630,38 +810,74 @@ function setOptionCol(index, rawVal) {
   syncOptionsFromSlots()
 }
 
+const SUPPORTED_EXTENSIONS = ['.xlsx', '.csv', '.json', '.txt', '.md', '.markdown', '.pdf']
+
+function isSupportedFile(candidate) {
+  const lower = String(candidate?.name || '').toLowerCase()
+  return SUPPORTED_EXTENSIONS.some(ext => lower.endsWith(ext))
+}
+
 function handleSelectedFile(selected) {
+  // A new file invalidates any preview still in flight for the old one.
+  previewSeq += 1
+  if (previewing.value) {
+    previewing.value = false
+    loading.value = false
+  }
   file.value = selected || null
   result.value = null
+  resultBank.value = ''
+  resultBankId.value = ''
   duplicatePreview.value = null
+  duplicateStrategy.value = 'skip'
   spreadsheetPreview.value = null
   textPreview.value = null
   pdfPreview.value = null
   pdfCandidates.value = []
   pdfDuplicateStrategy.value = ''
+  currentMapping.value = defaultMapping()
   optionSlots.value = Array(8).fill('')
   error.value = ''
 }
 
+// The picker must enforce the same rule as drag-and-drop: an unsupported file
+// never becomes the selected file, so the primary action stays disabled and
+// the reason is announced.
+function acceptSelectedFile(selected) {
+  if (!selected) return
+  if (!isSupportedFile(selected)) {
+    handleSelectedFile(null)
+    error.value = t('ep.imports.supported')
+    return
+  }
+  handleSelectedFile(selected)
+}
+
 function selectFile(event) {
-  handleSelectedFile(event.target.files?.[0] || null)
+  const selected = event.target?.files?.[0] || null
+  if (event.target) {
+    // Allow choosing the same file again after a failed validation.
+    try { event.target.value = '' } catch { /* read-only in some environments */ }
+  }
+  acceptSelectedFile(selected)
 }
 
 function triggerFileInput() {
   fileInputRef.value?.click()
 }
 
+function onDropZoneClick(event) {
+  const target = event.target
+  if (target?.closest?.('button')) return
+  // The hidden input's synthetic click bubbles here too; ignore it or the
+  // programmatic open would recurse forever.
+  if (target === fileInputRef.value) return
+  triggerFileInput()
+}
+
 function onDropFile(event) {
   isDragging.value = false
-  const dropped = event.dataTransfer?.files?.[0]
-  if (!dropped) return
-  const validExts = ['.xlsx', '.csv', '.json', '.txt', '.md', '.markdown', '.pdf']
-  const lower = dropped.name.toLowerCase()
-  if (!validExts.some(ext => lower.endsWith(ext))) {
-    error.value = t('ep.imports.supported')
-    return
-  }
-  handleSelectedFile(dropped)
+  acceptSelectedFile(event.dataTransfer?.files?.[0] || null)
 }
 
 function onDragLeave(event) {
@@ -669,23 +885,94 @@ function onDragLeave(event) {
   isDragging.value = false
 }
 
-onMounted(async () => {
+function bankNameFor(id) {
+  return banks.value.find(b => String(b.id) === String(id))?.name || t('ep.common.none')
+}
+
+async function loadBanks() {
+  bankLoadFailed.value = false
+  banksLoading.value = true
   try {
     banks.value = await listBanks(props.token)
     const preset = String(route.query.bankId || '')
-    if (preset && banks.value.some(b => b.id === preset)) bankId.value = preset
-  } catch (err) {
-    error.value = err instanceof Error ? err : new Error(t('ep.imports.error_fallback'))
+    if (preset && banks.value.some(b => String(b.id) === preset)) {
+      suppressBankWatch = true
+      bankId.value = preset
+      await nextTick()
+      suppressBankWatch = false
+    }
+  } catch {
+    bankLoadFailed.value = true
+    banks.value = []
+  } finally {
+    banksLoading.value = false
   }
+}
+
+const hasImportState = computed(() => Boolean(
+  spreadsheetPreview.value ||
+  textPreview.value ||
+  pdfPreview.value ||
+  duplicatePreview.value ||
+  result.value,
+))
+
+function syncBankQuery(nextId) {
+  const currentQuery = route.query || {}
+  if (!nextId || String(currentQuery.bankId || '') === String(nextId)) return
+  router.replace({ query: { ...currentQuery, bankId: String(nextId) } })
+}
+
+// Changing the target bank while a preview/mapping/result exists is destructive:
+// ask first, and never let the old preview silently write to the new bank.
+watch(bankId, (next, prev) => {
+  if (suppressBankWatch) return
+  const nextId = String(next || '')
+  if (!nextId) return
+  if (!hasImportState.value) {
+    syncBankQuery(nextId)
+    return
+  }
+  previousBankId.value = String(prev || '')
+  pendingBankId.value = nextId
+  bankConfirmOpen.value = true
 })
+
+function cancelBankChange() {
+  const restore = previousBankId.value
+  bankConfirmOpen.value = false
+  pendingBankId.value = ''
+  if (restore) {
+    suppressBankWatch = true
+    bankId.value = restore
+    nextTick(() => { suppressBankWatch = false })
+  }
+}
+
+function acceptBankChange() {
+  const nextId = pendingBankId.value
+  bankConfirmOpen.value = false
+  pendingBankId.value = ''
+  resetImportState()
+  syncBankQuery(nextId)
+}
+
+onMounted(loadBanks)
+
+function isCurrentPreview(requestId, bankAtStart) {
+  return requestId === previewSeq && String(bankId.value) === bankAtStart
+}
 
 async function inspectSpreadsheet() {
   if (!file.value || !bankId.value) return
+  const bankAtStart = String(bankId.value)
+  const requestId = ++previewSeq
   previewing.value = true
   loading.value = true
   error.value = ''
   try {
-    const prev = await previewFileImport(props.token, bankId.value, file.value)
+    const prev = await previewFileImport(props.token, bankAtStart, file.value)
+    if (!isCurrentPreview(requestId, bankAtStart)) return
     spreadsheetPreview.value = prev
     if (prev.mapping) {
       currentMapping.value = { ...currentMapping.value, ...prev.mapping }
@@ -698,46 +985,62 @@ async function inspectSpreadsheet() {
       syncOptionsFromSlots()
     }
   } catch (err) {
+    if (!isCurrentPreview(requestId, bankAtStart)) return
     error.value = err
   } finally {
-    previewing.value = false
-    loading.value = false
+    if (requestId === previewSeq) {
+      previewing.value = false
+      loading.value = false
+    }
   }
 }
 
 async function inspectPdf() {
   if (!file.value || !bankId.value) return
+  const bankAtStart = String(bankId.value)
+  const requestId = ++previewSeq
   previewing.value = true
   loading.value = true
   error.value = ''
   try {
-    const prev = await previewPdfImport(props.token, bankId.value, file.value)
+    const prev = await previewPdfImport(props.token, bankAtStart, file.value)
+    if (!isCurrentPreview(requestId, bankAtStart)) return
     pdfPreview.value = prev
     pdfCandidates.value = JSON.parse(JSON.stringify(prev.candidates || []))
     pdfDuplicateStrategy.value = prev.duplicates?.length ? '' : 'skip'
   } catch (err) {
+    if (!isCurrentPreview(requestId, bankAtStart)) return
     error.value = err
   } finally {
-    previewing.value = false
-    loading.value = false
+    if (requestId === previewSeq) {
+      previewing.value = false
+      loading.value = false
+    }
   }
 }
 
 async function inspectText() {
   if (!file.value || !bankId.value || !isTextFile.value) return
+  const bankAtStart = String(bankId.value)
+  const requestId = ++previewSeq
   previewing.value = true
   loading.value = true
   error.value = ''
   try {
     const text = await file.value.text()
     const format = file.value.name.toLowerCase().endsWith('.json') ? 'json' : 'markdown'
-    textPreview.value = await previewImport(props.token, bankId.value, { format, content: text })
-    duplicateStrategy.value = textPreview.value?.duplicates?.length ? '' : 'skip'
+    const preview = await previewImport(props.token, bankAtStart, { format, content: text })
+    if (!isCurrentPreview(requestId, bankAtStart)) return
+    textPreview.value = preview
+    duplicateStrategy.value = preview?.duplicates?.length ? '' : 'skip'
   } catch (err) {
+    if (!isCurrentPreview(requestId, bankAtStart)) return
     error.value = err
   } finally {
-    previewing.value = false
-    loading.value = false
+    if (requestId === previewSeq) {
+      previewing.value = false
+      loading.value = false
+    }
   }
 }
 
@@ -748,16 +1051,21 @@ function resetTextPreview() {
 
 async function submitText() {
   if (!textPreview.value || !canImport.value || textStrategyMissing.value) return
+  const targetBankId = String(bankId.value)
+  const targetBankName = bankNameFor(targetBankId)
   loading.value = true
   error.value = ''
   try {
     const strategy = textPreview.value.duplicates?.length ? duplicateStrategy.value : 'skip'
-    result.value = await uploadImport(props.token, bankId.value, file.value, strategy, null)
+    result.value = await uploadImport(props.token, targetBankId, file.value, strategy, null)
+    resultBank.value = targetBankName
+    resultBankId.value = targetBankId
     textPreview.value = null
     duplicatePreview.value = null
   } catch (err) {
     if (err.status === 409 && err.detail && typeof err.detail === 'object') {
       duplicatePreview.value = err.detail
+      duplicateStrategy.value = ''
       textPreview.value = null
     } else {
       error.value = err
@@ -856,14 +1164,18 @@ function addCandidateOption(cand) {
 async function confirmPdfImportAction() {
   if (!pdfPreview.value || !pdfCandidates.value.length || !canImport.value) return
   if (pdfStrategyMissing.value) return
+  const targetBankId = String(bankId.value)
+  const targetBankName = bankNameFor(targetBankId)
   loading.value = true
   error.value = ''
   try {
-    result.value = await confirmPdfImport(props.token, bankId.value, {
+    result.value = await confirmPdfImport(props.token, targetBankId, {
       draft_id: pdfPreview.value.draft_id,
       questions: pdfCandidates.value,
       duplicate_strategy: pdfDuplicateStrategy.value || 'skip',
     })
+    resultBank.value = targetBankName
+    resultBankId.value = targetBankId
     resetPdfPreview()
   } catch (err) {
     if (err.status === 409 && err.detail && typeof err.detail === 'object') {
@@ -895,7 +1207,11 @@ async function submit() {
     return
   }
   if (isPdf.value && pdfPreview.value) return
+  if (!canImport.value) return
+  if (duplicatePreview.value && duplicateStrategyMissing.value) return
 
+  const targetBankId = String(bankId.value)
+  const targetBankName = bankNameFor(targetBankId)
   loading.value = true
   error.value = ''
   result.value = null
@@ -906,16 +1222,19 @@ async function submit() {
     const mappingToSend = spreadsheetPreview.value ? currentMapping.value : null
     result.value = await uploadImport(
       props.token,
-      bankId.value,
+      targetBankId,
       file.value,
       duplicatePreview.value ? duplicateStrategy.value : 'prompt',
       mappingToSend,
     )
+    resultBank.value = targetBankName
+    resultBankId.value = targetBankId
     duplicatePreview.value = null
     spreadsheetPreview.value = null
   } catch (err) {
     if (err.status === 409 && err.detail && typeof err.detail === 'object') {
       duplicatePreview.value = err.detail
+      duplicateStrategy.value = ''
     } else {
       error.value = err
     }
@@ -925,20 +1244,74 @@ async function submit() {
 }
 
 function goBank() {
-  if (bankId.value) router.push(`/banks/${bankId.value}`)
+  // Follow the bank that accepted the job, not whatever the selector shows now.
+  const targetBankId = String(resultBankId.value || '')
+  if (!targetBankId) return
+  if (isFromManage.value) {
+    router.push({ name: 'bank-manage', params: { bankId: targetBankId }, query: { tab: 'imports' } })
+    return
+  }
+  router.push(`/banks/${targetBankId}`)
 }
 
-function resetImport() {
+function resetImportState() {
   result.value = null
+  resultBank.value = ''
+  resultBankId.value = ''
   duplicatePreview.value = null
+  duplicateStrategy.value = 'skip'
   spreadsheetPreview.value = null
   textPreview.value = null
   pdfPreview.value = null
   pdfCandidates.value = []
   pdfDuplicateStrategy.value = ''
+  currentMapping.value = defaultMapping()
   optionSlots.value = Array(8).fill('')
-  file.value = null
   error.value = ''
+}
+
+function resetImport() {
+  resetImportState()
+  file.value = null
+}
+
+function performDiscard(kind) {
+  if (kind === 'spreadsheet') {
+    spreadsheetPreview.value = null
+    currentMapping.value = defaultMapping()
+    optionSlots.value = Array(8).fill('')
+    return
+  }
+  if (kind === 'pdf') {
+    resetPdfPreview()
+    return
+  }
+  if (kind === 'text') {
+    resetTextPreview()
+  }
+}
+
+// The destructive "leave the preview" action must name what it does and ask
+// before throwing away field edits, corrected PDF candidates or a preview.
+function requestDiscard(kind) {
+  discardKind.value = kind
+  if (hasImportState.value) {
+    discardConfirmOpen.value = true
+    return
+  }
+  performDiscard(kind)
+}
+
+function cancelDiscard() {
+  discardConfirmOpen.value = false
+  discardKind.value = ''
+}
+
+function acceptDiscard() {
+  const kind = discardKind.value
+  discardConfirmOpen.value = false
+  discardKind.value = ''
+  performDiscard(kind)
 }
 </script>
 
@@ -946,6 +1319,29 @@ function resetImport() {
 .import-page { padding-top: 26px; }
 .link-btn { border: 0; background: none; padding: 0; color: var(--ink-3); font: inherit; cursor: pointer; }
 .link-btn:hover { color: var(--brand); }
+
+/* Contextual back control, matching the shell's second-level back button. */
+.page-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  margin-bottom: 14px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .04em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color .15s ease, color .15s ease;
+}
+.page-back:hover { border-color: var(--line-strong); color: var(--ink); }
+.page-back:focus-visible { outline: 1px solid var(--brand); outline-offset: 2px; }
+.page-back svg { flex: none; }
 
 .import-steps { display: flex; gap: 18px; margin: 22px 0 0; padding: 12px 0; list-style: none; border-top: 1px solid var(--line); flex-wrap: wrap; }
 .import-step { display: flex; align-items: baseline; gap: 7px; flex: 1 1 150px; min-width: 0; color: var(--ink-4); }
@@ -984,7 +1380,7 @@ function resetImport() {
 .step-title { font-family: var(--font-serif); font-size: 19px; font-weight: 600; line-height: 1.3; }
 .step-sub { margin-top: 4px; font-size: 12px; line-height: 1.7; color: var(--ink-3); max-width: 62ch; }
 
-.file-drop { display: flex; align-items: center; gap: 12px; min-height: 76px; padding: 16px 18px; border: 1px dashed var(--line-strong); background: var(--surface); cursor: default; transition: border-color .15s ease, background .15s ease; }
+.file-drop { display: flex; align-items: center; gap: 12px; min-height: 76px; padding: 16px 18px; border: 1px dashed var(--line-strong); background: var(--surface); cursor: pointer; transition: border-color .15s ease, background .15s ease; }
 .file-drop:hover, .file-drop.is-dragging { border-color: var(--brand-line); background: var(--surface-2); }
 .file-drop.is-dragging { flex-direction: column; justify-content: center; color: var(--brand); }
 .file-icon { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--line); color: var(--ink-3); flex: none; }
@@ -1016,6 +1412,20 @@ function resetImport() {
 .opt-key { width: 46px; flex: none; text-align: center; }
 
 .dup-list { margin-top: 14px; }
+.dup-more { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+.dup-more-summary {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-3);
+  cursor: pointer;
+  list-style: none;
+}
+.dup-more-summary::-webkit-details-marker { display: none; }
+.dup-more-summary:hover { color: var(--ink); }
+.dup-more-summary::before { content: '+ '; }
+.dup-more[open] > .dup-more-summary::before { content: '− '; }
+.import-error { margin-top: 16px; scroll-margin-top: 16px; }
+.import-error:focus { outline: 2px solid var(--bad); outline-offset: 2px; }
 .pdf-duplicates { margin-top: 18px; }
 .qrow-stem { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-family: var(--font-serif); font-size: 13.5px; line-height: 1.65; }
 .result-block .kv { margin-top: 2px; }
@@ -1043,5 +1453,14 @@ function resetImport() {
   .pdf-card-actions { width: 100%; justify-content: flex-end; }
   .pdf-option-row { flex-wrap: wrap; }
   .import-actions .btn { flex: 1 1 auto; justify-content: center; }
+}
+
+/* Touch targets: the contextual back control is the primary exit on a phone. */
+@media (pointer: coarse) {
+  .page-back {
+    min-height: 38px;
+    height: auto;
+    padding: 0 12px;
+  }
 }
 </style>

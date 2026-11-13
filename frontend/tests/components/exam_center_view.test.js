@@ -219,4 +219,34 @@ describe('ExamCenterView dialogs', () => {
     expect(wrapper.find('.action-reason').exists()).toBe(false)
     expect(wrapper.find('.page-actions .btn-primary').attributes('disabled')).toBeUndefined()
   })
+
+  it('shows a retry control instead of the empty state when a request rejects', async () => {
+    listBanks.mockRejectedValueOnce(new Error('boom'))
+    wrapper = mountView()
+    await flushPromises()
+
+    const error = wrapper.find('.exam-load-error')
+    expect(error.exists()).toBe(true)
+    expect(error.text()).toContain(t('ep.common.load_failed'))
+
+    const retry = error.find('.btn')
+    expect(retry.exists()).toBe(true)
+    expect(retry.text()).toBe(t('ep.common.retry'))
+
+    expect(wrapper.text()).not.toContain(t('ep.exam.papers_empty'))
+    expect(wrapper.text()).not.toContain(t('ep.exam.no_banks'))
+  })
+
+  it('re-runs the loader when retry is clicked', async () => {
+    listBanks.mockRejectedValueOnce(new Error('boom'))
+    wrapper = mountView()
+    await flushPromises()
+    expect(listBanks).toHaveBeenCalledTimes(1)
+
+    await wrapper.find('.exam-load-error .btn').trigger('click')
+    await flushPromises()
+
+    expect(listBanks).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('.exam-load-error').exists()).toBe(false)
+  })
 })
