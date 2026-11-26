@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>设计令牌 · EasyExam 设计规范</title>
+<link rel="stylesheet" href="../assets/ee.css">
+<style>
+/* ==========================================================================
+   文档页布局 —— 只消费 ee.css 令牌，不重新定义令牌、不发明控件
+   容器宽 1080px = --page-w(1120) − --sp-8(40)；内距 40/24 = --sp-8 / --sp-6
+   ========================================================================== */
+.doc-page { max-width: calc(var(--page-w) - var(--sp-8)); margin: 0 auto; padding: var(--sp-8) var(--sp-6); }
+
+/* ---- 页头 ---- */
+.doc-head { margin-bottom: var(--sp-5); }
+.doc-eyebrow { font-size: var(--text-xs); color: var(--ink-3); letter-spacing: .08em; margin: 0 0 var(--sp-2); }
+.doc-title { font-family: var(--font-serif); font-size: var(--text-4xl); line-height: var(--text-4xl-lh); font-weight: 500; margin: 0; }
+.doc-sub { font-size: var(--text-sm); color: var(--ink-3); margin: var(--sp-3) 0 0; max-width: 76ch; line-height: var(--text-base-lh); }
+
+/* ---- 顶部切换条（主题 / 配色） ---- */
+.doc-bar {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-3) 0; background: var(--paper); border-bottom: 1px solid var(--line);
+}
+.db-label { font-size: var(--text-xs); color: var(--ink-3); }
+.db-now {
+  margin-left: auto; font-size: var(--text-xs); color: var(--brand-ink);
+  background: var(--brand-soft); border: 1px solid var(--brand-line); border-radius: var(--r-xs);
+  padding: var(--sp-1) var(--sp-2); font-family: var(--font-mono);
+}
+
+/* ---- 分节 ---- */
+.tsec { margin-bottom: var(--sp-8); }
+.tsec-head { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: var(--sp-3); margin-bottom: var(--sp-4); }
+.tsec-no { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink-4); }
+.tsec-head h2 { font-family: var(--font-serif); font-size: var(--text-xl); line-height: var(--text-xl-lh); font-weight: 500; margin: 0; }
+.tsec-en { font-size: var(--text-xs); color: var(--ink-4); letter-spacing: .06em; }
+.tsec-desc { font-size: var(--text-sm); color: var(--ink-2); margin: 0 0 var(--sp-5); max-width: 80ch; line-height: var(--text-base-lh); }
+.tsec-note { font-size: var(--text-xs); color: var(--ink-3); margin: var(--sp-4) 0 0; line-height: var(--text-base-lh); max-width: 84ch; }
+
+/* ---- 行内令牌代码 ---- */
+.tk {
+  display: inline-block; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-2);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-xs);
+  padding: var(--sp-1) var(--sp-2); overflow-wrap: anywhere;
+}
+.tk.on-brand { color: var(--brand-ink); background: var(--brand-soft); border-color: var(--brand-line); }
+
+/* ==========================================================================
+   01 配色
+   ========================================================================== */
+/* 色块只吃令牌：类名即令牌名，写在 [data-theme-palette] 行上下文里解析为对应家族 */
+.c-paper { background: var(--paper); }
+.c-surface { background: var(--surface); }
+.c-surface-2 { background: var(--surface-2); }
+.c-ink { background: var(--ink); }
+.c-ink-2 { background: var(--ink-2); }
+.c-line { background: var(--line); }
+.c-brand { background: var(--brand); }
+.c-ok { background: var(--ok); }
+.c-warn { background: var(--warn); }
+.c-bad { background: var(--bad); }
+
+.now-strip { background: var(--surface); border: 1px solid var(--brand-line); border-radius: var(--r-md); padding: var(--sp-4); margin-bottom: var(--sp-5); }
+.now-head { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; margin-bottom: var(--sp-4); }
+.now-title { font-family: var(--font-serif); font-size: var(--text-md); font-weight: 500; margin: 0; }
+.now-hint { font-size: var(--text-xs); color: var(--ink-3); }
+
+.fam-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); }
+.fam { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
+.fam.is-active { border-color: var(--brand); }
+.fam-head { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line); }
+.fam-name { font-family: var(--font-serif); font-size: var(--text-md); font-weight: 500; }
+.fam-key { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-3); }
+.fam-now { margin-left: auto; }
+.fam-row { padding: var(--sp-3) var(--sp-4); }
+.fam-row + .fam-row { border-top: 1px solid var(--line); }
+.fam-row.is-on { background: var(--surface-2); }
+.fam-mode { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--text-xs); color: var(--ink-3); margin-bottom: var(--sp-3); }
+.fam-mode b { font-weight: 500; color: var(--ink-2); }
+
+.sw { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--sp-3); }
+.sw-item { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+.sw-chip { height: var(--sp-7); border-radius: var(--r-xs); border: 1px solid var(--line); }
+.sw-name { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-3); overflow-wrap: anywhere; }
+.sw-hex { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-4); }
+
+/* ==========================================================================
+   02 字号 / 03 间距 / 05 布局 / 06 断点 —— 通用比例条
+   ========================================================================== */
+.bar { display: block; background: var(--brand); border-radius: var(--r-xs); height: var(--sp-2); }
+
+.sp-list, .lay-list { border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; background: var(--surface); }
+.sp-row { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) var(--sp-4); }
+.sp-row + .sp-row { border-top: 1px solid var(--line); }
+.sp-tok { flex: none; width: 6em; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-2); }
+.sp-bar { flex: none; }
+.sp-val { flex: none; width: 3em; text-align: right; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-3); }
+.sp-use { font-size: var(--text-xs); color: var(--ink-3); }
+
+.lay-row { display: grid; grid-template-columns: 10em minmax(0, 1fr) 4em; gap: var(--sp-2) var(--sp-3); align-items: center; padding: var(--sp-3) var(--sp-4); }
+.lay-row + .lay-row { border-top: 1px solid var(--line); }
+.lay-tok { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-2); overflow-wrap: anywhere; }
+.lay-bar { height: var(--sp-3); }
+.lay-val { text-align: right; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-3); }
+.lay-use { grid-column: 2 / 4; font-size: var(--text-xs); color: var(--ink-3); }
+
+.b1 { width: var(--sp-1); }  .b2 { width: var(--sp-2); }  .b3 { width: var(--sp-3); }  .b4 { width: var(--sp-4); }
+.b5 { width: var(--sp-5); }  .b6 { width: var(--sp-6); }  .b7 { width: var(--sp-7); }  .b8 { width: var(--sp-8); }
+.b9 { width: var(--sp-9); }  .b10 { width: var(--sp-10); }
+/* 布局比例：以 --d-max-wide 1320px 为满尺 */
+.lg1 { width: 17.9%; } .lg2 { width: 4.2%; } .lg3 { width: 4.8%; }
+.lg4 { width: 56.4%; } .lg5 { width: 84.8%; } .lg6 { width: 100%; }
+/* 断点比例：以 1440px 为满尺 */
+.bp1 { width: 26%; } .bp2 { width: 44.4%; } .bp3 { width: 53.3%; } .bp4 { width: 71.1%; } .bp5 { width: 100%; }
+
+/* ==========================================================================
+   02 字号示例
+   ========================================================================== */
+.tx { display: block; }
+.tx-sans { font-family: var(--font-sans); }
+.tx-serif { font-family: var(--font-serif); }
+.tx-xs { font-size: var(--text-xs); line-height: var(--text-xs-lh); }
+.tx-sm { font-size: var(--text-sm); line-height: var(--text-sm-lh); }
+.tx-base { font-size: var(--text-base); line-height: var(--text-base-lh); }
+.tx-md { font-size: var(--text-md); line-height: var(--text-md-lh); }
+.tx-lg { font-size: var(--text-lg); line-height: var(--text-lg-lh); }
+.tx-xl { font-size: var(--text-xl); line-height: var(--text-xl-lh); }
+.tx-2xl { font-size: var(--text-2xl); line-height: var(--text-2xl-lh); }
+.tx-3xl { font-size: var(--text-3xl); line-height: var(--text-3xl-lh); }
+.tx-4xl { font-size: var(--text-4xl); line-height: var(--text-4xl-lh); }
+.tx-5xl { font-size: var(--text-5xl); line-height: var(--text-5xl-lh); }
+
+/* ==========================================================================
+   04 圆角与阴影
+   ========================================================================== */
+.rs-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-4); }
+.rs-item { display: flex; flex-direction: column; gap: var(--sp-2); align-items: flex-start; }
+.rs-box { width: var(--sp-8); height: var(--sp-8); background: var(--surface-2); border: 1px solid var(--line-strong); }
+.rr-xs { border-radius: var(--r-xs); } .rr-sm { border-radius: var(--r-sm); }
+.rr-md { border-radius: var(--r-md); } .rr-lg { border-radius: var(--r-lg); }
+.rs-item.is-shadow .rs-box { background: var(--surface); border-color: var(--line); }
+.ss-1 { box-shadow: var(--shadow-1); }
+.ss-2 { box-shadow: var(--shadow-2); }
+.rs-cap { font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); }
+.rs-val { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-4); overflow-wrap: anywhere; }
+
+/* ==========================================================================
+   07 动效
+   ========================================================================== */
+.dur-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-4); }
+.dur-item { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3); }
+.dur-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); flex-wrap: wrap; }
+.dur-val { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-3); }
+.dur-track { height: var(--sp-2); background: var(--surface-3); border-radius: var(--r-xs); overflow: hidden; }
+.dur-fill { display: block; height: 100%; width: 0; background: var(--brand); transition: width var(--dur-base) var(--ease-out); }
+.dur-item.is-on .dur-fill { width: 100%; }
+.d-fast .dur-fill { transition-duration: var(--dur-fast); }
+.d-base .dur-fill { transition-duration: var(--dur-base); }
+.d-slow .dur-fill { transition-duration: var(--dur-slow); }
+.d-exit .dur-fill { transition-duration: var(--dur-exit); }
+
+.ease-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); margin-top: var(--sp-5); }
+.ease-item { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-2); }
+.ease-val { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-3); overflow-wrap: anywhere; }
+.ease-item p { margin: 0; font-size: var(--text-xs); color: var(--ink-2); line-height: var(--text-base-lh); }
+
+.motion-demo { margin-top: var(--sp-5); display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-4); }
+.mo-track { flex: 1 1 260px; min-width: 0; }
+.mo-cap { font-size: var(--text-xs); color: var(--ink-3); flex: none; font-family: var(--font-mono); }
+
+/* ==========================================================================
+   08 图标
+   ========================================================================== */
+.ic-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--sp-3); }
+.ic-cell { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); padding: var(--sp-3) var(--sp-2); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); text-align: center; min-width: 0; }
+.ic-cell .od-icon { --od-icon-size: 20px; color: var(--ink-2); }
+.ic-name { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-2); overflow-wrap: anywhere; }
+.ic-cell.is-key { border-color: var(--brand-line); background: var(--brand-soft); }
+.ic-cell.is-key .od-icon { color: var(--brand-ink); }
+.ic-cell.is-key .ic-name { color: var(--brand-ink); }
+.ic-note { font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); }
+
+/* ---- 页脚 ---- */
+.doc-foot { margin-top: var(--sp-8); padding-top: var(--sp-4); border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); font-size: var(--text-xs); color: var(--ink-3); }
+
+/* ---- 响应式（同一套 DOM，文档自身也守断点） ---- */
+@media (max-width: 768px) {
+  .fam-grid { grid-template-columns: 1fr; }
+  .dur-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ic-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .doc-page { padding: var(--sp-6) var(--sp-4); }
+  .dur-grid { grid-template-columns: 1fr; }
+  .ic-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sw { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lay-row { grid-template-columns: 7em minmax(0, 1fr) 3.5em; }
+}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">跳到主内容</a>
+
+<div class="doc-page">
+
+  <!-- ================= 页头 ================= -->
+  <header class="doc-head">
+    <p class="doc-eyebrow">EasyExam UI/UX 设计规范 · 规范 01 · Design Tokens</p>
+    <h1 class="doc-title">设计令牌</h1>
+    <p class="doc-sub">全站唯一样式来源：配色、字号、间距、圆角、阴影、布局、断点、动效、图标。本页自身即由这些令牌渲染——切换下方的主题与配色，整页 chrome 与「当前生效」色板实时响应；四套配色家族则常驻对照，便于一次看齐八种明暗组合。</p>
+  </header>
+
+  <p class="doc-sub" style="margin-top:var(--sp-4)">
+    <a class="link-btn" href="components.html">控件库</a> ·
+    <a class="link-btn" href="states.html">状态与外壳</a> ·
+    <a class="link-btn" href="palette.html">配色总览</a> ·
+    <a class="link-btn" href="../index.html">规范首页</a>
+  </p>
+
+  <!-- ================= 主题 / 配色切换 ================= -->
+  <div class="doc-bar">
+    <span class="db-label">明暗</span>
+    <div class="segmented" role="radiogroup" aria-label="明暗主题" data-seg="theme">
+      <button class="segment" role="radio" aria-checked="true" data-v="light">浅色</button>
+      <button class="segment" role="radio" aria-checked="false" data-v="dark">深色</button>
+    </div>
+    <span class="db-label">配色家族</span>
+    <div class="segmented" role="radiogroup" aria-label="配色家族" data-seg="palette">
+      <button class="segment" role="radio" aria-checked="true" data-v="editorial">editorial</button>
+      <button class="segment" role="radio" aria-checked="false" data-v="gruvbox">gruvbox</button>
+      <button class="segment" role="radio" aria-checked="false" data-v="everforest">everforest</button>
+      <button class="segment" role="radio" aria-checked="false" data-v="catppuccin">catppuccin</button>
+    </div>
+    <span class="db-label">信息密度</span>
+    <div class="segmented" role="radiogroup" aria-label="信息密度" data-seg="density">
+      <button class="segment" role="radio" aria-checked="true" data-v="cozy">宽松</button>
+      <button class="segment" role="radio" aria-checked="false" data-v="compact">紧凑</button>
+    </div>
+    <span class="db-now" id="dbNow" aria-live="polite">当前 浅色 · editorial</span>
+  </div>
+
+  <main id="main-content">
+
+    <!-- ================= 01 配色 ================= -->
+    <section class="tsec" id="tsec-color">
+      <div class="tsec-head">
+        <span class="tsec-no">01</span>
+        <h2>配色</h2>
+        <span class="tsec-en">Color &amp; Palettes</span>
+      </div>
+      <p class="tsec-desc">四个配色家族 × 明暗两套，共八种组合。语义色只有一套承载体量的 accent（brand）与三组状态色（ok / warn / bad）；所有色块由 <span class="tk">var(--paper)</span> 等令牌着色，十六进制仅作为文字标注。切换家族与明暗会改写 <span class="tk">html</span> 元素上的 <span class="tk">data-theme</span> / <span class="tk">data-theme-palette</span>，页面 chrome 与下方「当前生效」条随之实时变化。</p>
+
+      <div class="now-strip">
+        <div class="now-head">
+          <h3 class="now-title">当前生效</h3>
+          <span class="now-hint">跟随顶部切换实时变化 —— 色块取自页面继承的令牌，hex 由运行时的计算值读出</span>
+        </div>
+        <div class="sw">
+          <div class="sw-item"><span class="sw-chip c-paper"></span><span class="sw-name">--paper</span><span class="sw-hex" data-now="paper">#f5f2ea</span></div>
+          <div class="sw-item"><span class="sw-chip c-surface"></span><span class="sw-name">--surface</span><span class="sw-hex" data-now="surface">#fbf9f4</span></div>
+          <div class="sw-item"><span class="sw-chip c-surface-2"></span><span class="sw-name">--surface-2</span><span class="sw-hex" data-now="surface-2">#f1ede4</span></div>
+          <div class="sw-item"><span class="sw-chip c-ink"></span><span class="sw-name">--ink</span><span class="sw-hex" data-now="ink">#191b18</span></div>
+          <div class="sw-item"><span class="sw-chip c-ink-2"></span><span class="sw-name">--ink-2</span><span class="sw-hex" data-now="ink-2">#4b5049</span></div>
+          <div class="sw-item"><span class="sw-chip c-line"></span><span class="sw-name">--line</span><span class="sw-hex" data-now="line">#cbc3b1</span></div>
+          <div class="sw-item"><span class="sw-chip c-brand"></span><span class="sw-name">--brand</span><span class="sw-hex" data-now="brand">#23554b</span></div>
+          <div class="sw-item"><span class="sw-chip c-ok"></span><span class="sw-name">--ok</span><span class="sw-hex" data-now="ok">#2b6547</span></div>
+          <div class="sw-item"><span class="sw-chip c-warn"></span><span class="sw-name">--warn</span><span class="sw-hex" data-now="warn">#85610f</span></div>
+          <div class="sw-item"><span class="sw-chip c-bad"></span><span class="sw-name">--bad</span><span class="sw-hex" data-now="bad">#a03c2b</span></div>
+        </div>
+      </div>
+
+      <div class="fam-grid">
+        <!-- editorial -->
+        <div class="fam" data-pal="editorial">
+          <div class="fam-head">
+            <span class="fam-name">纸墨</span>
+            <span class="fam-key">editorial</span>
+            <span class="fam-now"><span class="tag brand" hidden>当前</span></span>
+          </div>
+          <div class="fam-row" data-theme-palette="editorial" data-mode="light">
+            <div class="fam-mode"><b>浅色</b><span>light</span></div>
+            <div class="sw">
+              <div class="sw-item"><span class="sw-chip c-paper"></span><span class="sw-name">--paper</span><span class="sw-hex">#f5f2ea</span></div>
+              <div class="sw-item"><span class="sw-chip c-surface"></span><span class="sw-name">--surface</span><span class="sw-hex">#fbf9f4</span></div>
+              <div class="sw-item"><span class="sw-chip c-surface-2"></span><span class="sw-name">--surface-2</span><span class="sw-hex">#f1ede4</span></div>
+              <div class="sw-item"><span class="sw-chip c-ink"></span><span class="sw-name">--ink</span><span class="sw-hex">#191b18</span></div>
+              <div class="sw-item"><span class="sw-chip c-ink-2"></span><span class="sw-name">--ink-2</span><span class="sw-hex">#4b5049</span></div>
+              <div class="sw-item"><span class="sw-chip c-line"></span><span class="sw-name">--line</span><span class="sw-hex">#cbc3b1</span></div>
+              <div class="sw-item"><span class="sw-chip c-brand"></span><span class="sw-name">--brand</span><span class="sw-hex">#23554b</span></div>
+              <div class="sw-item"><span class="sw-chip c-ok"></span><span class="sw-name">--ok</span><span class="sw-hex">#2b6547</span></div>
+              <div class="sw-item"><span class="sw-chip c-warn"></span><span class="sw-name">--warn</span><span class="sw-hex">#85610f</span></div>
+              <div class="sw-item"><span class="sw-chip c-bad"></span><span class="sw-name">--bad</span><span class="sw-hex">#a03c2b</span></div>
+            </div>
+          </div>
+          <div class="fam-row" data-theme="dark" data-theme-palette="editorial" data-mode="dark">
+            <div class="fam-mode"><b>深色</b><span>dark</span></div>
+            <div class="sw">
+              <div class="sw-item"><span class="sw-chip c-paper"></span><span class="sw-name">--paper</span><span class="sw-hex">#121512</span></div>
+              <div class="sw-item"><span class="sw-chip c-surface"></span><span class="sw-name">--surface</span><span class="sw-hex">#191d19</span></div>
+              <div class="sw-item"><span class="sw-chip c-surface-2"></span><span class="sw-name">--surface-2</span><span class="sw-hex">#1f241f</span></div>
+              <div class="sw-item"><span class="sw-chip c-ink"></span><span class="sw-name">--ink</span><span class="sw-hex">#eaece5</span></div>
+              <div class="sw-item"><span class="sw-chip c-ink-2"></span><span class="sw-name">--ink-2</span><span class="sw-hex">#b0b6ac</span></div>
+              <div class="sw-item"><span class="sw-chip c-line"></span><span class="sw-name">--line</span><span class="sw-hex">#3a4038</span></div>
+              <div class="sw-item"><span class="sw-chip c-brand"></span><span class="sw-name">--brand</span><span class="sw-hex">#8fc2b2</span></div>
+              <div class="sw-item"><span class="sw-chip c-ok"></span><span class="sw-name">--ok</span><span class="sw-hex">#8fc0a1</span></div>
+              <div class="sw-item"><span class="sw-chip c-warn"></span><span class="sw-name">--warn</span><span class="sw-hex">#d5b878</span></div>
+              <div class="sw-item"><span class="sw-chip c-bad"></span><span class="sw-name">--bad</span><span class="sw-hex">#dda192</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- gruvbox -->
+        <div class="fam" data-pal="gruvbox">
+          <div class="fam-head">
+            <span class="fam-name">暖沙</span>
+            <span class="fam-key">gruvbox</span>
+            <span class="fam-now"><span class="tag brand" hidden>当前</span></span>
+          </div>
+          <div class="fam-row" data-theme-palette="gruvbox" data-mode="light">
+            <div class="fam-mode"><b>浅色</b><span>light</span></div>
+            <div class="sw">
+              <div class="sw-item"><span class="sw-chip c-paper"></span><span class="sw-name">--paper</span><span class="sw-hex">#fbf1c7</span></div>
+              <div class="sw-item"><span class="sw-chip c-surface"></span><span class="sw-name">--surface</span><span class="sw-hex">#fff9e4</span></div>
+              <div class="sw-item"><span class="sw-chip c-surface-2"></span><span class="sw-name">--surface-2</span><span class="sw-hex">#f2e5bc</span></div>
+              <div class="sw-item"><span class="sw-chip c-ink"></span><span class="sw-name">--ink</span><span class="sw-hex">#3c3836</span></div>
+              <div class="sw-item"><span class="sw-chip c-ink-2"></span><span class="sw-name">--ink-2</span><span class="sw-hex">#504945</span></div>
+              <div class="sw-item"><span class="sw-chip c-line"></span><span class="sw-name">--line</span><span class="sw-hex">#d5c4a1</span></div>
+              <div class="sw-item"><span class="sw-chip c-brand"></span><span class="sw-name">--brand</span><span class="sw-hex">#af3a03</span></div>
+              <div class="sw-item"><span class="sw-chip c-ok"></span><span class="sw-name">--ok</span><span class="sw-hex">#3a6d4b</span></div>
+              <div class="sw-item"><span class="sw-chip c-warn"></span><span class="sw-name">--warn</span><span class="sw-hex">#855b0e</span></div>
+              <div class="sw-item"><span class="sw-chip c-bad"></span><span class="sw-name">--bad</span><span class="sw-hex">#9d0006</span></div>
+            </div>
+          </div>
+          <div class="fam-row" data-theme="dark" data-theme-palette="gruvbox" data-mode="dark">
+            <div class="fam-mode"><b>深色</b><span>dark</span></div>
+            <div class="sw">
+              <div class="sw-item"><span class="sw-chip c-paper"></span><span class="sw-name">--paper</span><span class="sw-hex">#282828</span></div>
+              <div class="sw-item"><span class="sw-chip c-surface"></span><span class="sw-name">--surface</span><span class="sw-hex">#3c3836</span></div>
+              <div class="sw-item"><span class="sw-chip c-surface-2"></span><span class="sw-name">--surface-2</span><span class="sw-hex">#504945</span></div>
+              <div class="sw-item"><span class="sw-chip c-ink"></span><span class="sw-name">--ink</span><span class="sw-hex">#ebdbb2</span></div>
+              <div class="sw-item"><span class="sw-chip c-ink-2"></span><span class="sw-name">--ink-2</span><span class="sw-hex">#d5c4a1</span></div>
+              <div class="sw-item"><span class="sw-chip c-line"></span><span class="sw-name">--line</span><span class="sw-hex">#5a554f</span></div>
+              <div class="sw-item"><span class="sw-chip c-brand"></span><span class="sw-name">--brand</span><span class="sw-hex">#ffad66</span></div>
+              <div class="sw-item"><span class="sw-chip c-ok"></span><span class="sw-name">--ok</span><span class="sw-hex">#c2c53a</span></div>
+              <div class="sw-item"><span class="sw-chip c-warn"></span><span class="sw-name">--warn</span><span class="sw-hex">#fabd2f</span></div>
+              <div class="sw-item"><span class="sw-chip c-bad"></span><span class="sw-name">--bad</span><span class="sw-hex">#ffaaa2</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- everforest -->
+        <div class="fam" data-pal="everforest">
+          <div class="fam-head">
+            <span class="fam-name">森林</span>
+            <span class="fam-key">everforest</span>
+            <span class="fam-now"><span class="tag brand" hidden>当前</span></span>
+          </div>
+          <div class="fam-row" data-theme-palette="everforest" data-mode="light">
+            <div class="fam-mode"><b>浅色</b><span>light</span></div>
+            <div class="sw">
+              <div class="sw-item"><span class="sw-chip c-paper"></span><span class="sw-name">--paper</span><span class="sw-hex">#fdf6e3</span></div>
+              <div class="sw-item"><span class="sw-chip c-surface"></span><span class="sw-name">--surface</span><span class="sw-hex">#fffcf0</span></div>
+              <div class="sw-item"><span class="sw-chip c-surface-2"></span><span class="sw-name">--surface-2</span><span class="sw-hex">#efebd4</span></div>
+              <div class="sw-item"><span class="sw-chip c-ink"></span><span class="sw-name">--ink</span><span class="sw-hex">#3d484d</span></div>
+              <div class="sw-item"><span class="sw-chip c-ink-2"></span><span class="sw-name">--ink-2</span><span class="sw-hex">#4f5b53</span></div>
+              <div class="sw-item"><span class="sw-chip c-line"></span><span class="sw-name">--line</span><span class="sw-hex">#cfc9ad</span></div>
+              <div class="sw-item"><span class="sw-chip c-brand"></span><span class="sw-name">--brand</span><span class="sw-hex">#4e6b3f</span></div>
+              <div class="sw-item"><span class="sw-chip c-ok"></span><span class="sw-name">--ok</span><span class="sw-hex">#467034</span></div>
+              <div class="sw-item"><span class="sw-chip c-warn"></span><span class="sw-name">--warn</span><span class="sw-hex">#855a00</span></div>
+              <div class="sw-item"><span class="sw-chip c-bad"></span><span class="sw-name">--bad</span><span class="sw-hex">#b83f3f</span></div>
+            </div>
+          </div>
+          <div class="fam-row" data-theme="dark" data-theme-palette="everforest" data-mode="dark">
+            <div class="fam-mode"><b>深色</b><span>dark</span></div>
+            <div class="sw">
+              <div class="sw-item"><span class="sw-chip c-paper"></span><span class="sw-name">--paper</span><span class="sw-hex">#2d353b</span></div>
+              <div class="sw-item"><span class="sw-chip c-surface"></span><span class="sw-name">--surface</span><span class="sw-hex">#343f44</span></div>
+              <div class="sw-item"><span class="sw-chip c-surface-2"></span><span class="sw-name">--surface-2</span><span class="sw-hex">#3d484d</span></div>
+              <div class="sw-item"><span class="sw-chip c-ink"></span><span class="sw-name">--ink</span><span class="sw-hex">#dfd3b8</span></div>
+              <div class="sw-item"><span class="sw-chip c-ink-2"></span><span class="sw-name">--ink-2</span><span class="sw-hex">#c4c9b4</span></div>
+              <div class="sw-item"><span class="sw-chip c-line"></span><span class="sw-name">--line</span><span class="sw-hex">#525f65</span></div>
+              <div class="sw-item"><span class="sw-chip c-brand"></span><span class="sw-name">--brand</span><span class="sw-hex">#b2c98e</span></div>
+              <div class="sw-item"><span class="sw-chip c-ok"></span><span class="sw-name">--ok</span><span class="sw-hex">#a7c080</span></div>
+              <div class="sw-item"><span class="sw-chip c-warn"></span><span class="sw-name">--warn</span><span class="sw-hex">#dbbc7f</span></div>
+              <div class="sw-item"><span class="sw-chip c-bad"></span><span class="sw-name">--bad</span><span class="sw-hex">#f2a2a4</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- catppuccin -->
+        <div class="fam" data-pal="catppuccin">
+          <div class="fam-head">
+            <span class="fam-name">淡紫</span>
+            <span class="fam-key">catppuccin</span>
+            <span class="fam-now"><span class="tag brand" hidden>当前</span></span>
+          </div>
+          <div class="fam-row" data-theme-palette="catppuccin" data-mode="light">
+            <div class="fam-mode"><b>浅色</b><span>light</span></div>
+            <div class="sw">
+              <div class="sw-item"><span class="sw-chip c-paper"></span><span class="sw-name">--paper</span><span class="sw-hex">#eff1f5</span></div>
+              <div class="sw-item"><span class="sw-chip c-surface"></span><span class="sw-name">--surface</span><span class="sw-hex">#f7f8fb</span></div>
+              <div class="sw-item"><span class="sw-chip c-surface-2"></span><span class="sw-name">--surface-2</span><span class="sw-hex">#e6e9ef</span></div>
+              <div class="sw-item"><span class="sw-chip c-ink"></span><span class="sw-name">--ink</span><span class="sw-hex">#4c4f69</span></div>
+              <div class="sw-item"><span class="sw-chip c-ink-2"></span><span class="sw-name">--ink-2</span><span class="sw-hex">#5c5f77</span></div>
+              <div class="sw-item"><span class="sw-chip c-line"></span><span class="sw-name">--line</span><span class="sw-hex">#c2c6d2</span></div>
+              <div class="sw-item"><span class="sw-chip c-brand"></span><span class="sw-name">--brand</span><span class="sw-hex">#8432e8</span></div>
+              <div class="sw-item"><span class="sw-chip c-ok"></span><span class="sw-name">--ok</span><span class="sw-hex">#2b7220</span></div>
+              <div class="sw-item"><span class="sw-chip c-warn"></span><span class="sw-name">--warn</span><span class="sw-hex">#8f5200</span></div>
+              <div class="sw-item"><span class="sw-chip c-bad"></span><span class="sw-name">--bad</span><span class="sw-hex">#c50d33</span></div>
+            </div>
+          </div>
+          <div class="fam-row" data-theme="dark" data-theme-palette="catppuccin" data-mode="dark">
+            <div class="fam-mode"><b>深色</b><span>dark</span></div>
+            <div class="sw">
+              <div class="sw-item"><span class="sw-chip c-paper"></span><span class="sw-name">--paper</span><span class="sw-hex">#1e1e2e</span></div>
+              <div class="sw-item"><span class="sw-chip c-surface"></span><span class="sw-name">--surface</span><span class="sw-hex">#252537</span></div>
+              <div class="sw-item"><span class="sw-chip c-surface-2"></span><span class="sw-name">--surface-2</span><span class="sw-hex">#313244</span></div>
+              <div class="sw-item"><span class="sw-chip c-ink"></span><span class="sw-name">--ink</span><span class="sw-hex">#cdd6f4</span></div>
+              <div class="sw-item"><span class="sw-chip c-ink-2"></span><span class="sw-name">--ink-2</span><span class="sw-hex">#bac2de</span></div>
+              <div class="sw-item"><span class="sw-chip c-line"></span><span class="sw-name">--line</span><span class="sw-hex">#3f4155</span></div>
+              <div class="sw-item"><span class="sw-chip c-brand"></span><span class="sw-name">--brand</span><span class="sw-hex">#cba6f7</span></div>
+              <div class="sw-item"><span class="sw-chip c-ok"></span><span class="sw-name">--ok</span><span class="sw-hex">#a6e3a1</span></div>
+              <div class="sw-item"><span class="sw-chip c-warn"></span><span class="sw-name">--warn</span><span class="sw-hex">#f9e2af</span></div>
+              <div class="sw-item"><span class="sw-chip c-bad"></span><span class="sw-name">--bad</span><span class="sw-hex">#f38ba8</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="tsec-note">家族卡片常驻全部八种组合，因此色板不随页面切换而改变（每张卡片把 <span class="tk">data-theme-palette</span> 写在自己的行上，让 <span class="tk">var(--paper)</span> 在该行上下文里解析为对应家族的值）；当前生效的那一套会以品牌色描边标出，对应的明暗行高亮。对比度由令牌本身保证，明暗两套均满足正文 ≥4.5:1、大字号与图标 ≥3:1。</p>
+    </section>
+
+    <!-- ================= 02 字号 ================= -->
+    <section class="tsec" id="tsec-type">
+      <div class="tsec-head">
+        <span class="tsec-no">02</span>
+        <h2>字号</h2>
+        <span class="tsec-en">Type Scale</span>
+      </div>
+      <p class="tsec-desc">从 <span class="tk">--text-xs</span> 到 <span class="tk">--text-5xl</span> 的完整十档，是全站唯一字号来源，取代原先 20 余处散落的字面量。每一档都配有行高令牌 <span class="tk">--text-*-lh</span>；标题与题干档用衬线（<span class="tk">--font-serif</span>），辅助与正文档用无衬线（<span class="tk">--font-sans</span>）。</p>
+
+      <div class="dtable-wrap">
+        <table class="dtable">
+          <thead>
+            <tr><th>档位</th><th>px / 行高</th><th>示例</th><th>用途</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td data-label="档位"><span class="tk">--text-xs</span></td>
+              <td data-label="px / 行高" class="mono">12 / 1.40</td>
+              <td data-label="示例"><span class="tx tx-sans tx-xs">辅助说明 · 图例与脚注</span></td>
+              <td data-label="用途">辅助、图例</td>
+            </tr>
+            <tr>
+              <td data-label="档位"><span class="tk">--text-sm</span></td>
+              <td data-label="px / 行高" class="mono">12.5 / 1.45</td>
+              <td data-label="示例"><span class="tx tx-sans tx-sm">元信息 · 2026-11-13 第 46 周</span></td>
+              <td data-label="用途">元信息、表格次要列</td>
+            </tr>
+            <tr>
+              <td data-label="档位"><span class="tk">--text-base</span></td>
+              <td data-label="px / 行高" class="mono">13.5 / 1.65</td>
+              <td data-label="示例"><span class="tx tx-sans tx-base">正文：桌面端默认字号，承载界面里绝大多数文案、列表与表单。</span></td>
+              <td data-label="用途">正文（桌面）</td>
+            </tr>
+            <tr>
+              <td data-label="档位"><span class="tk">--text-md</span></td>
+              <td data-label="px / 行高" class="mono">15.5 / 1.70</td>
+              <td data-label="示例"><span class="tx tx-sans tx-md">阅读性正文：题干辅助与长段落的舒适阅读区。</span></td>
+              <td data-label="用途">阅读、题干辅助</td>
+            </tr>
+            <tr>
+              <td data-label="档位"><span class="tk">--text-lg</span></td>
+              <td data-label="px / 行高" class="mono">17 / 1.50</td>
+              <td data-label="示例"><span class="tx tx-serif tx-lg">小节标题</span></td>
+              <td data-label="用途">小节</td>
+            </tr>
+            <tr>
+              <td data-label="档位"><span class="tk">--text-xl</span></td>
+              <td data-label="px / 行高" class="mono">19 / 1.45</td>
+              <td data-label="示例"><span class="tx tx-serif tx-xl">题干：关于系统分析的说法，正确的是？</span></td>
+              <td data-label="用途">题干、抽屉标题</td>
+            </tr>
+            <tr>
+              <td data-label="档位"><span class="tk">--text-2xl</span></td>
+              <td data-label="px / 行高" class="mono">22 / 1.35</td>
+              <td data-label="示例"><span class="tx tx-serif tx-2xl">区块标题</span></td>
+              <td data-label="用途">区块</td>
+            </tr>
+            <tr>
+              <td data-label="档位"><span class="tk">--text-3xl</span></td>
+              <td data-label="px / 行高" class="mono">26 / 1.25</td>
+              <td data-label="示例"><span class="tx tx-serif tx-3xl">页面标题</span></td>
+              <td data-label="用途">页面</td>
+            </tr>
+            <tr>
+              <td data-label="档位"><span class="tk">--text-4xl</span></td>
+              <td data-label="px / 行高" class="mono">32 / 1.20</td>
+              <td data-label="示例"><span class="tx tx-serif tx-4xl">今天，从一套真题开始</span></td>
+              <td data-label="用途">首页大标题</td>
+            </tr>
+            <tr>
+              <td data-label="档位"><span class="tk">--text-5xl</span></td>
+              <td data-label="px / 行高" class="mono">38 / 1.15</td>
+              <td data-label="示例"><span class="tx tx-serif tx-5xl">把错题变成下一次的把握</span></td>
+              <td data-label="用途">首页大标题（宽屏）</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="tsec-note">移动端 <span class="tk">&lt;=768px</span> 时页面标题自动降到 <span class="tk">--text-2xl</span>（ee.css §11），标题不再有第二套移动字号。</p>
+    </section>
+
+    <!-- ================= 03 间距 ================= -->
+    <section class="tsec" id="tsec-spacing">
+      <div class="tsec-head">
+        <span class="tsec-no">03</span>
+        <h2>间距</h2>
+        <span class="tsec-en">Spacing</span>
+      </div>
+      <p class="tsec-desc"><span class="tk">--sp-1</span> 至 <span class="tk">--sp-10</span> 十档，全部落在 4px 基阶上：每档 = 4 × n（n = 1…10），覆盖 4–72px。色块宽度即令牌真实宽度，所有间距可对齐到同一网格，不再出现随手写的 13px、17px。</p>
+      <p class="tsec-desc"><b>信息密度</b>：间距有两档。<code>宽松</code>（默认，不写属性）用上表原值；<code>紧凑</code>把 <span class="tk">html</span> 置为 <span class="tk">data-density="compact"</span>，间距整体收一档（<span class="tk">--sp-2</span> 8→6px、<span class="tk">--sp-6</span> 24→18px…），同时压紧列表行与表格单元格的上下内距。切到「紧凑」后本页的间距表、列表行与表格会实时变密——密度不是新令牌集，只是同一组令牌的另一个取值，屏幕不得自己定义第三档。</p>
+
+      <div class="sp-list">
+        <div class="sp-row"><span class="sp-tok">--sp-1</span><span class="sp-bar bar b1"></span><span class="sp-val">4px</span><span class="sp-use">分段与菜单内距、chip 间距</span></div>
+        <div class="sp-row"><span class="sp-tok">--sp-2</span><span class="sp-bar bar b2"></span><span class="sp-val">8px</span><span class="sp-use">按钮间距、字段间距、标题与元信息间距</span></div>
+        <div class="sp-row"><span class="sp-tok">--sp-3</span><span class="sp-bar bar b3"></span><span class="sp-val">12px</span><span class="sp-use">列表行内距、表单元格距、图标与文字间距</span></div>
+        <div class="sp-row"><span class="sp-tok">--sp-4</span><span class="sp-bar bar b4"></span><span class="sp-val">16px</span><span class="sp-use">面板头/脚内距、分区间距</span></div>
+        <div class="sp-row"><span class="sp-tok">--sp-5</span><span class="sp-bar bar b5"></span><span class="sp-val">20px</span><span class="sp-use">面板主体内距、区块间距</span></div>
+        <div class="sp-row"><span class="sp-tok">--sp-6</span><span class="sp-bar bar b6"></span><span class="sp-val">24px</span><span class="sp-use">内容区左右留白、空态内距</span></div>
+        <div class="sp-row"><span class="sp-tok">--sp-7</span><span class="sp-bar bar b7"></span><span class="sp-val">32px</span><span class="sp-use">分区间距、页头下间距</span></div>
+        <div class="sp-row"><span class="sp-tok">--sp-8</span><span class="sp-bar bar b8"></span><span class="sp-val">40px</span><span class="sp-use">空态大留白、骨架区间距</span></div>
+        <div class="sp-row"><span class="sp-tok">--sp-9</span><span class="sp-bar bar b9"></span><span class="sp-val">56px</span><span class="sp-use">页面级留白</span></div>
+        <div class="sp-row"><span class="sp-tok">--sp-10</span><span class="sp-bar bar b10"></span><span class="sp-val">72px</span><span class="sp-use">首页与空态级大留白</span></div>
+      </div>
+      <p class="tsec-note">图标尺寸不走间距阶梯：<span class="tk">--od-icon-size</span> 按上下文取 13–28px（按钮内 13/14、正文 16、导航 17/20、空态 28）。</p>
+    </section>
+
+    <!-- ================= 04 圆角与阴影 ================= -->
+    <section class="tsec" id="tsec-radius">
+      <div class="tsec-head">
+        <span class="tsec-no">04</span>
+        <h2>圆角与阴影</h2>
+        <span class="tsec-en">Radius &amp; Shadow</span>
+      </div>
+      <p class="tsec-desc">圆角四级，上限 4px——合同禁止大圆角、胶囊与「气泡感」；<span class="tk">--r-xs</span> 与 <span class="tk">--r-sm</span> 同为 2px（v3 收敛时保留的历史档位，实际取值一致）。阴影只有两级：微浮层用一级，对话框/抽屉/菜单/toast 用二级。</p>
+
+      <div class="rs-grid">
+        <div class="rs-item">
+          <span class="rs-box rr-xs"></span>
+          <span class="tk">--r-xs</span>
+          <span class="rs-val">2px · 标签、键帽、作答卡</span>
+        </div>
+        <div class="rs-item">
+          <span class="rs-box rr-sm"></span>
+          <span class="tk">--r-sm</span>
+          <span class="rs-val">2px · 按钮、输入框、菜单项</span>
+        </div>
+        <div class="rs-item">
+          <span class="rs-box rr-md"></span>
+          <span class="tk">--r-md</span>
+          <span class="rs-val">3px · 面板、表格、菜单</span>
+        </div>
+        <div class="rs-item">
+          <span class="rs-box rr-lg"></span>
+          <span class="tk">--r-lg</span>
+          <span class="rs-val">4px · 对话框、抽屉（全站最大圆角）</span>
+        </div>
+        <div class="rs-item is-shadow">
+          <span class="rs-box ss-1"></span>
+          <span class="tk">--shadow-1</span>
+          <span class="rs-val">0 1px 2px rgba(25,27,24,.05)</span>
+          <span class="rs-cap">微浮层：分段选中态等贴面元素</span>
+        </div>
+        <div class="rs-item is-shadow">
+          <span class="rs-box ss-2"></span>
+          <span class="tk">--shadow-2</span>
+          <span class="rs-val">0 24px 64px -20px rgba(25,27,24,.3)</span>
+          <span class="rs-cap">重浮层：对话框、抽屉、菜单、toast</span>
+        </div>
+      </div>
+      <p class="tsec-note">深色下两级阴影同步换为黑色系（<span class="tk">rgba(0,0,0,.3)</span> / <span class="tk">.6</span>），由 <span class="tk">[data-theme="dark"]</span> 覆盖，无需在组件里分支。</p>
+    </section>
+
+    <!-- ================= 05 布局 ================= -->
+    <section class="tsec" id="tsec-layout">
+      <div class="tsec-head">
+        <span class="tsec-no">05</span>
+        <h2>布局</h2>
+        <span class="tsec-en">Layout Scales</span>
+      </div>
+      <p class="tsec-desc">六个布局尺度令牌决定外壳与内容区的几何。比例条以 <span class="tk">--d-max-wide</span>（1320px）为满尺，条长即真实占比。</p>
+
+      <div class="lay-list">
+        <div class="lay-row">
+          <span class="lay-tok">--sidebar-w</span>
+          <span class="lay-bar lg1"></span>
+          <span class="lay-val">236px</span>
+          <span class="lay-use">侧栏宽（&gt;1024 完整形态）；≤1024 收为 --sidebar-w-icon 64px 图标轨</span>
+        </div>
+        <div class="lay-row">
+          <span class="lay-tok">--topbar-h</span>
+          <span class="lay-bar lg2"></span>
+          <span class="lay-val">56px</span>
+          <span class="lay-use">桌面顶栏高（移动顶栏 --mobile-top-h 52px）</span>
+        </div>
+        <div class="lay-row">
+          <span class="lay-tok">--bottomnav-h</span>
+          <span class="lay-bar lg3"></span>
+          <span class="lay-val">64px</span>
+          <span class="lay-use">移动底部导航高（仅 ≤768 显示，六项）</span>
+        </div>
+        <div class="lay-row">
+          <span class="lay-tok">--reading-w</span>
+          <span class="lay-bar lg4"></span>
+          <span class="lay-val">744px</span>
+          <span class="lay-use">阅读栏宽：题干与长文段的舒适度量</span>
+        </div>
+        <div class="lay-row">
+          <span class="lay-tok">--page-w</span>
+          <span class="lay-bar lg5"></span>
+          <span class="lay-val">1120px</span>
+          <span class="lay-use">页面内容最大宽（= --d-max），常规屏幕封顶值</span>
+        </div>
+        <div class="lay-row">
+          <span class="lay-tok">--d-max-wide</span>
+          <span class="lay-bar lg6"></span>
+          <span class="lay-val">1320px</span>
+          <span class="lay-use">宽页最大宽：首页、模考中心等宽幅屏幕</span>
+        </div>
+      </div>
+      <p class="tsec-note">正文行宽另有 <span class="tk">--measure: 68ch</span> 作为度量上限；左右轨宽 <span class="tk">--rail-settings: 184px</span> / <span class="tk">--rail-exam: 232px</span> 供设置页与模考 runner 使用。</p>
+    </section>
+
+    <!-- ================= 06 断点 ================= -->
+    <section class="tsec" id="tsec-breakpoints">
+      <div class="tsec-head">
+        <span class="tsec-no">06</span>
+        <h2>断点</h2>
+        <span class="tsec-en">Breakpoints</span>
+      </div>
+      <p class="tsec-desc">由 <strong>21 个断点值收敛</strong>而来：原先 style.css 使用 769 / 768 / 1024 / 1280 / 640，Vue 侧又引入 900（×7）/ 1180 / 1100 / 960 / 880 / 760 / 600 / 480 / 420 / 400，共 21 处；v3 只保留四档设备断点加一个移动内部档，全部由同一套 DOM 的 CSS 负责，JS 不再判断宽度。</p>
+
+      <div class="dtable-wrap">
+        <table class="dtable">
+          <thead>
+            <tr><th>断点</th><th>令牌</th><th>布局行为</th><th>比例</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td data-label="断点" class="mono">375</td>
+              <td data-label="令牌"><span class="tk">设备基准</span></td>
+              <td data-label="布局行为">手机基准宽度：单列布局，底部导航六项 + mobile-top 顶栏；所有表格转卡片，抽屉转底部展开</td>
+              <td data-label="比例"><span class="bar bp1"></span></td>
+            </tr>
+            <tr>
+              <td data-label="断点" class="mono">640</td>
+              <td data-label="令牌"><span class="tk">--bp-mobile</span></td>
+              <td data-label="布局行为">移动内部档：表格 ↔ 卡片（同一 DOM，列名移入 ::before）；底部抽屉改为底部展开</td>
+              <td data-label="比例"><span class="bar bp2"></span></td>
+            </tr>
+            <tr>
+              <td data-label="断点" class="mono">768</td>
+              <td data-label="令牌"><span class="tk">--bp-nav</span></td>
+              <td data-label="布局行为">底导 ↔ 侧栏：≤768 隐藏侧栏与顶栏、显示底部导航；&gt;768 显示顶栏与侧栏</td>
+              <td data-label="比例"><span class="bar bp3"></span></td>
+            </tr>
+            <tr>
+              <td data-label="断点" class="mono">1024</td>
+              <td data-label="令牌"><span class="tk">--bp-rail</span></td>
+              <td data-label="布局行为">侧栏完整 ↔ 仅图标：≤1024 侧栏收成 64px 图标轨，文字与学习状态块隐藏</td>
+              <td data-label="比例"><span class="bar bp4"></span></td>
+            </tr>
+            <tr>
+              <td data-label="断点" class="mono">1440</td>
+              <td data-label="令牌"><span class="tk">--bp-max</span></td>
+              <td data-label="布局行为">内容最大宽度：--page-w 1120 / --d-max-wide 1320 封顶，两侧留白，内容不再随窗口拉伸</td>
+              <td data-label="比例"><span class="bar bp5"></span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="tsec-note">比例条以 1440px 为满尺。三档布局互斥清晰：&gt;1024 完整侧栏；769–1024 图标侧栏（无底栏）；≤768 底导——不存在某一档同时挂两套导航规则的情况。</p>
+    </section>
+
+    <!-- ================= 07 动效 ================= -->
+    <section class="tsec" id="tsec-motion">
+      <div class="tsec-head">
+        <span class="tsec-no">07</span>
+        <h2>动效</h2>
+        <span class="tsec-en">Motion</span>
+      </div>
+      <p class="tsec-desc">四档时长加两条曲线。小交互 150–300ms，大过渡不超过 400ms，退出取入场约 65%——离开永远比到达短。点击每张卡片可按该档时长播放一次填充。</p>
+
+      <div class="dur-grid">
+        <div class="dur-item d-fast">
+          <div class="dur-head"><span class="tk">--dur-fast</span><span class="dur-val">150ms</span></div>
+          <div class="dur-track"><span class="dur-fill"></span></div>
+          <span class="rs-cap">微反馈：hover、聚焦、颜色过渡</span>
+          <button class="btn btn-sm" type="button" data-demo>播放</button>
+        </div>
+        <div class="dur-item d-base">
+          <div class="dur-head"><span class="tk">--dur-base</span><span class="dur-val">220ms</span></div>
+          <div class="dur-track"><span class="dur-fill"></span></div>
+          <span class="rs-cap">默认过渡：分段选中、进度填充、抽屉与对话框入场</span>
+          <button class="btn btn-sm" type="button" data-demo>播放</button>
+        </div>
+        <div class="dur-item d-slow">
+          <div class="dur-head"><span class="tk">--dur-slow</span><span class="dur-val">320ms</span></div>
+          <div class="dur-track"><span class="dur-fill"></span></div>
+          <span class="rs-cap">大过渡：整块面板位移（规范档位）</span>
+          <button class="btn btn-sm" type="button" data-demo>播放</button>
+        </div>
+        <div class="dur-item d-exit">
+          <div class="dur-head"><span class="tk">--dur-exit</span><span class="dur-val">145ms</span></div>
+          <div class="dur-track"><span class="dur-fill"></span></div>
+          <span class="rs-cap">退出：约 base 的 65%，离场快于入场</span>
+          <button class="btn btn-sm" type="button" data-demo>播放</button>
+        </div>
+      </div>
+
+      <div class="ease-grid">
+        <div class="ease-item">
+          <span class="tk">--ease-out</span>
+          <span class="ease-val">cubic-bezier(.2, .6, .2, 1)</span>
+          <p>入场与状态过渡的默认曲线：起步快、收尾缓，界面有「落定」感。抽屉、对话框、分段选中、进度填充都用它。</p>
+        </div>
+        <div class="ease-item">
+          <span class="tk">--ease-in</span>
+          <span class="ease-val">cubic-bezier(.4, 0, 1, 1)</span>
+          <p>退出加速曲线：元素离场时越来越快，配合 <span class="tk">--dur-exit</span> 让离开比到达更短。<span class="tk">--ease</span> 与 <span class="tk">--ease-out</span> 同值，保留为别名。</p>
+        </div>
+      </div>
+
+      <div class="motion-demo">
+        <button class="btn btn-primary" type="button" id="motionBtn">播放 220ms ease-out 过渡</button>
+        <div class="progress mo-track"><div class="progress-fill" id="moFill" style="width: 0%"></div></div>
+        <span class="mo-cap">width 220ms cubic-bezier(.2,.6,.2,1)</span>
+      </div>
+      <p class="tsec-note">演示用的是控件库里真实的 <span class="tk">.progress / .progress-fill</span>，其过渡即 <span class="tk">width var(--dur-base) var(--ease-out)</span>。<span class="tk">prefers-reduced-motion: reduce</span> 时，ee.css 全局把 animation 与 transition 降到 .001ms，本页演示一并降级，不做例外。</p>
+    </section>
+
+    <!-- ================= 08 图标 ================= -->
+    <section class="tsec" id="tsec-icons">
+      <div class="tsec-head">
+        <span class="tsec-no">08</span>
+        <h2>图标</h2>
+        <span class="tsec-en">Icons</span>
+      </div>
+      <p class="tsec-desc">全部图标来自 <span class="tk">assets/icons.js</span> 的单一符号表（63 个），用法为 <span class="tk">&lt;svg class="od-icon"&gt;&lt;use href="#i-name"/&gt;&lt;/svg&gt;</span>。命名按用户动作定义，下表 24 个关键图标中，品牌底色的五个是语义对齐后的核心动作。</p>
+
+      <div class="ic-grid">
+        <div class="ic-cell"><svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg><span class="ic-name">home</span></div>
+        <div class="ic-cell"><svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg><span class="ic-name">library</span></div>
+        <div class="ic-cell"><svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg><span class="ic-name">review</span></div>
+        <div class="ic-cell"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg><span class="ic-name">exam</span></div>
+        <div class="ic-cell"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg><span class="ic-name">note</span></div>
+        <div class="ic-cell"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg><span class="ic-name">settings</span></div>
+        <div class="ic-cell"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg><span class="ic-name">search</span></div>
+        <div class="ic-cell"><svg class="od-icon" aria-hidden="true"><use href="#i-plus"/></svg><span class="ic-name">plus</span></div>
+        <div class="ic-cell"><svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg><span class="ic-name">check</span></div>
+        <div class="ic-cell"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg><span class="ic-name">x</span></div>
+        <div class="ic-cell"><svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg><span class="ic-name">alert-triangle</span></div>
+        <div class="ic-cell"><svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg><span class="ic-name">info</span></div>
+        <div class="ic-cell is-key"><svg class="od-icon" aria-hidden="true"><use href="#i-import"/></svg><span class="ic-name">import</span><span class="ic-note">入托盘：从外部文件拿进来</span></div>
+        <div class="ic-cell is-key"><svg class="od-icon" aria-hidden="true"><use href="#i-export"/></svg><span class="ic-name">export</span><span class="ic-note">出托盘：拿出去，导出为文件</span></div>
+        <div class="ic-cell is-key"><svg class="od-icon" aria-hidden="true"><use href="#i-archive"/></svg><span class="ic-name">archive</span><span class="ic-note">归档盒：收起来，不删除</span></div>
+        <div class="ic-cell is-key"><svg class="od-icon" aria-hidden="true"><use href="#i-restore"/></svg><span class="ic-name">restore</span><span class="ic-note">撤销：从归档恢复回列表</span></div>
+        <div class="ic-cell is-key"><svg class="od-icon" aria-hidden="true"><use href="#i-trash"/></svg><span class="ic-name">trash</span><span class="ic-note">删除：不可逆，须走确认</span></div>
+        <div class="ic-cell"><svg class="od-icon" aria-hidden="true"><use href="#i-edit"/></svg><span class="ic-name">edit</span></div>
+        <div class="ic-cell"><svg class="od-icon" aria-hidden="true"><use href="#i-copy"/></svg><span class="ic-name">copy</span></div>
+        <div class="ic-cell"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg><span class="ic-name">flag</span></div>
+        <div class="ic-cell"><svg class="od-icon" aria-hidden="true"><use href="#i-clock"/></svg><span class="ic-name">clock</span></div>
+        <div class="ic-cell"><svg class="od-icon" aria-hidden="true"><use href="#i-calendar"/></svg><span class="ic-name">calendar</span></div>
+        <div class="ic-cell"><svg class="od-icon" aria-hidden="true"><use href="#i-chart"/></svg><span class="ic-name">chart</span></div>
+        <div class="ic-cell"><svg class="od-icon" aria-hidden="true"><use href="#i-filter"/></svg><span class="ic-name">filter</span></div>
+      </div>
+      <p class="tsec-note">五个语义动作的约定：<span class="tk">import</span> = 拿进来、<span class="tk">export</span> = 拿出去、<span class="tk">archive</span> = 归档、<span class="tk">restore</span> = 撤销归档、<span class="tk">trash</span> = 删除。表外没有别名，拼错的名字会静默退化成空心圆——只用表内名称。</p>
+    </section>
+
+  </main>
+
+  <footer class="doc-foot">
+    <span>EasyExam 设计规范 · 规范 01 设计令牌</span>
+    <span>令牌来源：assets/ee.css</span>
+    <span>图标来源：assets/icons.js</span>
+  </footer>
+
+</div>
+
+<script src="../assets/icons.js"></script>
+<script src="../assets/spec-boot.js"></script>
+<script>
+/* 主题 / 配色切换：改写 html 上的 data-theme / data-theme-palette，
+   页面 chrome 与「当前生效」色板实时响应（spec-boot 已按 URL 参数设好初值）。 */
+(function () {
+  var root = document.documentElement;
+  var TOKENS = ['paper', 'surface', 'surface-2', 'ink', 'ink-2', 'line', 'brand', 'ok', 'warn', 'bad'];
+
+  function hexOf(tok) {
+    var v = getComputedStyle(root).getPropertyValue('--' + tok);
+    v = (v || '').trim();
+    return v || '—';
+  }
+
+  /* 「当前生效」条：hex 标注由运行时计算值读出，随切换实时更新 */
+  function syncNow() {
+    TOKENS.forEach(function (t) {
+      var el = document.querySelector('[data-now="' + t + '"]');
+      if (el) el.textContent = hexOf(t);
+    });
+  }
+
+  /* 当前家族卡片描边 + 「当前」标签 + 当前明暗行高亮 */
+  function syncState() {
+    var theme = root.getAttribute('data-theme') || 'light';
+    var pal = root.getAttribute('data-theme-palette') || 'editorial';
+    var dens = root.getAttribute('data-density') === 'compact' ? '紧凑' : '宽松';
+    var now = document.getElementById('dbNow');
+    if (now) now.textContent = '当前 ' + (theme === 'dark' ? '深色' : '浅色') + ' · ' + pal + ' · ' + dens;
+    document.querySelectorAll('.fam').forEach(function (card) {
+      var on = card.getAttribute('data-pal') === pal;
+      card.classList.toggle('is-active', on);
+      var tag = card.querySelector('.fam-now .tag');
+      if (tag) tag.hidden = !on;
+    });
+    document.querySelectorAll('.fam-row').forEach(function (row) {
+      row.classList.toggle('is-on', row.getAttribute('data-mode') === theme);
+    });
+  }
+
+  function setSeg(kind, v) {
+    var seg = document.querySelector('.segmented[data-seg="' + kind + '"]');
+    if (!seg) return;
+    seg.querySelectorAll('.segment').forEach(function (s) {
+      s.setAttribute('aria-checked', String(s.getAttribute('data-v') === v));
+    });
+  }
+
+  document.querySelectorAll('.segmented').forEach(function (seg) {
+    seg.addEventListener('click', function (e) {
+      var s = e.target.closest ? e.target.closest('.segment') : null;
+      if (!s || !seg.contains(s)) return;
+      var kind = seg.getAttribute('data-seg');
+      var v = s.getAttribute('data-v');
+      if (kind === 'theme') root.setAttribute('data-theme', v);
+      else if (kind === 'palette') root.setAttribute('data-theme-palette', v);
+      else if (kind === 'density') {
+        /* 宽松=不写属性（回到 :root 原值）；紧凑=写 data-density（ee.css §1.5 收一档） */
+        if (v === 'compact') root.setAttribute('data-density', 'compact');
+        else root.removeAttribute('data-density');
+      }
+      seg.querySelectorAll('.segment').forEach(function (x) {
+        x.setAttribute('aria-checked', String(x === s));
+      });
+      syncState();
+      syncNow();
+    });
+  });
+
+  /* 时长演示：每张卡片按自己的 --dur-* 播放一次填充 */
+  document.querySelectorAll('[data-demo]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var item = btn.closest('.dur-item');
+      if (!item) return;
+      item.classList.remove('is-on');
+      void item.offsetWidth;
+      item.classList.add('is-on');
+    });
+  });
+
+  /* 220ms ease-out 演示：真实 .progress-fill 过渡 */
+  var motionBtn = document.getElementById('motionBtn');
+  var moFill = document.getElementById('moFill');
+  if (motionBtn && moFill) {
+    motionBtn.addEventListener('click', function () {
+      moFill.style.width = '0%';
+      void moFill.offsetWidth;
+      moFill.style.width = '72%';
+    });
+  }
+
+  /* 初始化：分段状态对齐 html 现值（URL 参数可能覆盖了标记里的初值） */
+  setSeg('theme', root.getAttribute('data-theme') || 'light');
+  setSeg('palette', root.getAttribute('data-theme-palette') || 'editorial');
+  setSeg('density', root.getAttribute('data-density') === 'compact' ? 'compact' : 'cozy');
+  syncState();
+  syncNow();
+})();
+</script>
+</body>
+</html>

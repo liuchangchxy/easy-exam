@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>刷题闭环 · 流程原型 · EasyExam 设计规范</title>
+<link rel="stylesheet" href="../../assets/ee.css">
+<style>/* ===== 流程原型骨架（本页特有布局，未重定义令牌或控件） ===== */
+.doc-page{  max-width: 1100px; margin: 0 auto; padding: 28px 24px 60px;  }
+.steps .step:disabled{  cursor: default;  }
+/* ===== 本页布局助手 ===== */
+.flow-stack{  display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0;  }
+.session-kicker{  display: flex; align-items: center; gap: var(--sp-2); font-size: var(--text-xs); color: var(--ink-3); letter-spacing: .08em;  }
+.session-title{  font-family: var(--font-serif); font-size: var(--text-lg); font-weight: 500; margin-top: var(--sp-2);  }
+.session-meta{  font-size: var(--text-sm); color: var(--ink-3); margin: var(--sp-1) 0 var(--sp-3);  }
+.session-progress-meta{  justify-content: space-between; margin-top: var(--sp-2); font-size: var(--text-xs); color: var(--ink-3);  }
+.plan-pad{  padding-top: var(--sp-2); padding-bottom: var(--sp-2);  }
+.gap-6{  height: var(--sp-6);  }
+.baseline{  align-items: baseline;  }
+.tiny-mono{  font-size: var(--text-xs); color: var(--ink-3); font-family: var(--font-mono);  }
+/* 开始决策面板的会话列表（沿用真实产品的列表结构） */
+.start-study-list{  display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line);  }
+.start-study-session{  display: flex; align-items: center; gap: var(--sp-3); min-height: 40px; padding: var(--sp-2) 0; border-bottom: 1px solid var(--line);  }
+.start-study-bank{  flex: 1 1 auto; min-width: 0; font-size: var(--text-sm); overflow-wrap: anywhere;  }
+.start-study-progress{  flex: none; font-size: var(--text-xs); color: var(--ink-3);  }
+/* ===== 练习 runner ===== */
+.runner-top{  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-4);  }
+.runner-mode{  font-size: var(--text-sm); color: var(--ink-2);  }
+.runner-counter{  font-size: var(--text-sm); color: var(--ink-3);  }
+.runner{  display: grid; grid-template-columns: minmax(0, 1fr) var(--rail-exam); border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; background: var(--surface);  }
+.runner-body{  padding: var(--sp-6); min-width: 0;  }
+.runner-rail{  border-left: 1px solid var(--line); padding: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-5); background: var(--surface-2); min-width: 0;  }
+.runner-foot{  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--line);  }
+.rail-title{  font-size: var(--text-xs); font-weight: 600; letter-spacing: .06em; color: var(--ink-2);  }
+.rail-note{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); margin: var(--sp-2) 0 0;  }
+.sheet-legend i{  display: inline-block; width: 10px; height: 10px; margin-right: 4px; border: 1px solid var(--line-strong); border-radius: var(--r-xs); vertical-align: -1px;  }
+.sheet-legend i.is-answered{  background: var(--brand); border-color: var(--brand);  }
+.sheet-legend i.is-current{  outline: 2px solid var(--focus); outline-offset: 1px;  }
+.sheet-legend i.is-flagged{  border-color: var(--flag); box-shadow: inset 0 -3px 0 var(--flag);  }
+.keys-hint{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh);  }
+.keys-hint .kbd{  margin: 0 2px;  }
+/* ===== 判定反馈 ===== */
+.verdict{  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--bad-line); background: var(--bad-soft); border-radius: var(--r-sm);  }
+.verdict.ok{  border-color: var(--ok-line); background: var(--ok-soft);  }
+.verdict-mark{  display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--bad); color: var(--on-bad); flex: none;  }
+.verdict.ok .verdict-mark{  background: var(--ok); color: var(--surface);  }
+.verdict strong{  font-size: var(--text-md);  }
+.verdict-ratio{  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-3);  }
+.answer-line{  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-3); font-size: var(--text-sm); color: var(--ink-3); margin-top: var(--sp-3);  }
+.answer-line .ans{  font-family: var(--font-mono); color: var(--ink);  }
+.explain-body{  font-size: var(--text-sm); color: var(--ink-2); line-height: var(--text-base-lh); margin-top: var(--sp-2); white-space: pre-line;  }
+.fsrs-btns{  display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2);  }
+.fsrs-btns .btn.is-on{  background: var(--brand-soft); border-color: var(--brand-line); color: var(--brand-ink); font-weight: 500;  }
+.fsrs-btns .mono{  opacity: .7; font-size: var(--text-xs);  }
+.report-tags{  display: flex; flex-wrap: wrap; gap: var(--sp-2);  }
+.score-num{  font-family: var(--font-mono); font-size: var(--text-5xl); font-weight: 500; line-height: 1.1;  }
+.score-unit{  font-size: var(--text-sm); color: var(--ink-3); margin-left: var(--sp-2);  }
+@media (max-width: 768px){
+  .runner { grid-template-columns: minmax(0, 1fr); }
+  .runner-rail { border-left: none; border-top: 1px solid var(--line); }
+}
+@media (max-width: 640px){
+  .steps .step-name { display: none; }
+  .steps { gap: var(--sp-1); }
+  .flow-title { font-size: var(--text-2xl); }
+}</style>
+</head>
+<body>
+<a class="skip-link" href="#flowStage">跳到主内容</a>
+<div class="doc-page">
+  <header class="flow-head">
+    <div class="flow-exits" data-spec>
+      <a class="btn btn-sm btn-quiet" href="../../product.html">完整产品</a>
+      <a class="btn btn-sm btn-quiet" href="../../index.html">设计规范</a>
+    </div>
+    <div>
+      <p class="flow-eyebrow" data-spec>流程原型 · 学习域</p>
+      <h1 class="flow-title">刷题闭环</h1>
+      <p class="flow-sub" data-spec>今天 → 开始决策 → 练习会话 → 判定反馈 → 交卷确认 → 练习报告 → 退出与暂存</p>
+    </div>
+  </header>
+
+  <div class="flow-stepbar">
+    <div class="steps" id="flowSteps" role="group" aria-label="刷题闭环步骤"></div>
+    <p class="flow-caption" id="flowCaption" aria-live="polite"></p>
+  </div>
+
+  <main class="flow-stage" id="flowStage"></main>
+
+  <footer class="flow-foot">
+    <button type="button" class="btn btn-quiet" id="flowPrev">上一步</button>
+    <span class="flow-note" id="flowNote"></span>
+    <button type="button" class="btn btn-primary" id="flowNext">下一步</button>
+  </footer>
+</div>
+
+<script src="../../assets/icons.js"></script>
+<script src="../../assets/store.js"></script>
+<script src="../../assets/i18n.js"></script>
+<script src="../../assets/nav.js"></script>
+<script src="../../assets/spec-boot.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- 数据：assets/sample-questions.json 真实软考真题 ---------- */
+  var QS = [
+    {
+      id: 'q1', type: '单选题',
+      stem: '每周一学校开展直播课程，在直播中实时回复学生问题属于（  ）',
+      options: [
+        { key: 'A', content: '互动沟通' },
+        { key: 'B', content: '推式沟通' },
+        { key: 'C', content: '拉式沟通' },
+        { key: 'D', content: '公众沟通' }
+      ],
+      answer: 'A',
+      explanation: '*   复核状态：已逐题重做；置信度：高。\n*   复核结论：逐项核对题干关键词、教材定义和选项含义后，A 项与题干限定最匹配。\n*   本次重做后与原答案一致。'
+    },
+    {
+      id: 'q2', type: '单选题',
+      stem: 'OSI的（  ）不适合提供相应的安全服务。',
+      options: [
+        { key: 'A', content: '传输层' },
+        { key: 'B', content: '会话层' },
+        { key: 'C', content: '网络层' },
+        { key: 'D', content: '应用层' }
+      ],
+      answer: 'B',
+      explanation: '*   复核状态：已逐题重做；置信度：高。\n*   复核结论：本题为反向选择题，需找出“不属于/不正确/不是”的选项。B 项与教材概念或过程边界不符。\n*   本次重做后与原答案一致。'
+    },
+    {
+      id: 'q3', type: '单选题',
+      stem: '以下不属于“临时性”的是（）',
+      options: [
+        { key: 'A', content: '临时性并不一定意味着项目的持续时间短' },
+        { key: 'B', content: '临时性具有明确的开始时间和结束时间' },
+        { key: 'C', content: '项目可交付成果在结束项目或阶段依然存在' },
+        { key: 'D', content: '结束阶段' }
+      ],
+      answer: 'D',
+      explanation: '*   复核状态：已逐题重做；置信度：高。\n*   复核结论：本题为反向选择题，需找出“不属于/不正确/不是”的选项。D 项与教材概念或过程边界不符。\n*   本次重做后与原答案一致。'
+    }
+  ];
+
+  var BANK = '验收题库 1794570360969';
+
+  /* ---------- 状态 ---------- */
+  var state = {
+    step: 0,
+    maxStep: 0,
+    resumed: false,      // true = 继续上次会话
+    sid: null,           // 本次流程对应的 store 会话 id
+    qIndex: 0,
+    selected: null,
+    submitted: false,
+    rating: null,        // 1 重来 / 2 困难 / 3 一般 / 4 轻松
+    flagged: false,
+    results: {},         // qIndex -> { answer, correct }
+    timeSpent: 47,
+    saved: false,
+    report: null,        // 交卷后落到 store 的报告
+    lastTrigger: null    // 最近一次触发步骤切换的元素，供对话框关闭后回焦
+  };
+
+  function resetState() {
+    state.resumed = false;
+    state.qIndex = 0;
+    state.selected = null;
+    state.submitted = false;
+    state.rating = null;
+    state.flagged = false;
+    state.results = {};
+    state.timeSpent = 47;
+    state.saved = false;
+    state.report = null;
+  }
+
+  /* ---------- store 会话：与产品共用一份，跨页面可恢复 ---------- */
+  function storeAnswers() {
+    var out = {};
+    for (var k in state.results) out[k] = state.results[k].answer;
+    return out;
+  }
+  function persistSession(extra) {
+    if (!state.sid || !window.eeStore) return;
+    window.eeStore.updateSession(state.sid, Object.assign({
+      answers: storeAnswers(), index: state.qIndex, done: answeredCount(), elapsed: state.timeSpent
+    }, extra || {}));
+  }
+  function loadFromSession(s) {
+    state.sid = s.id;
+    state.qIndex = s.index != null ? parseInt(s.index, 10) : Object.keys(s.answers || {}).length;
+    if (isNaN(state.qIndex) || state.qIndex < 0 || state.qIndex >= QS.length) state.qIndex = 0;
+    state.results = {};
+    Object.keys(s.answers || {}).forEach(function (k) {
+      var i = parseInt(k, 10);
+      state.results[i] = { answer: s.answers[k], correct: s.answers[k] === QS[i].answer };
+    });
+    state.submitted = !!state.results[state.qIndex];
+    state.selected = state.results[state.qIndex] ? state.results[state.qIndex].answer : null;
+    state.timeSpent = s.elapsed || 47;
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function ico(name, size) { return window.eeIcon ? window.eeIcon(name, size) : ''; }
+
+  function answeredCount() { return Object.keys(state.results).length; }
+  function current() { return QS[state.qIndex]; }
+  function isCorrect() { return state.selected === current().answer; }
+  function correctCount() {
+    var n = 0;
+    for (var k in state.results) if (state.results[k].correct) n++;
+    return n;
+  }
+  function wrongCount() {
+    var n = 0;
+    for (var k in state.results) if (!state.results[k].correct) n++;
+    return n;
+  }
+  function blankCount() { return QS.length - answeredCount(); }
+
+  /* ---------- 步骤渲染 ---------- */
+
+  function renderToday() {
+    var S = window.eeStore;
+    var sessions = S ? S.sessions('practice') : [];
+    var resume = sessions.length ? sessions.map(function (s) {
+      var bank = S.bank(s.bankId);
+      return '' +
+        '<section class="section">' +
+        '  <div class="section-head"><h2 class="section-title">未完成会话</h2><span class="section-note">同一账号的练习与模考会话保存在实例上，可以稍后继续。</span></div>' +
+        '  <div class="panel"><div class="panel-body flow-stack">' +
+        '    <p class="session-kicker">' + ico('play', '13px') + '未完成</p>' +
+        '    <div><div class="session-title">' + esc(bank ? bank.name : '练习题库') + '</div>' +
+        '      <p class="session-meta">' + esc(s.mode || '顺序练习') + ' · ' + (s.done || 0) + ' / ' + (s.total || QS.length) + '</p></div>' +
+        '    <div class="progress" role="progressbar" aria-valuenow="33" aria-valuemin="0" aria-valuemax="100" aria-label="会话进度"><div class="progress-fill" style="width:' + (s.total ? Math.round((s.done || 0) / s.total * 100) : 33) + '%"></div></div>' +
+        '    <div class="od-row session-progress-meta"><span>' + (s.done || 0) + ' / ' + (s.total || QS.length) + ' 已答</span><span class="mono">' + (s.total ? Math.round((s.done || 0) / s.total * 100) : 33) + '%</span></div>' +
+        '    <div class="flow-actions">' +
+        '      <button type="button" class="btn btn-primary btn-sm" data-act="resume">继续</button>' +
+        '    </div>' +
+        '  </div></div>' +
+        '</section>';
+    }).join('') :
+      '<section class="section">' +
+      '  <div class="section-head"><h2 class="section-title">未完成会话</h2><span class="section-note">同一账号的练习与模考会话保存在实例上，可以稍后继续。</span></div>' +
+      '  <div class="panel"><div class="panel-body"><p class="hint" style="margin: 0">现在没有未完成的练习会话，从今日计划或题库开始一次。</p></div></div>' +
+      '</section>';
+
+    var due = S ? S.reviewQueue().filter(function (r) { return r.reasons.indexOf('due') > -1; }).length : 0;
+    var mis = S ? S.reviewQueue().filter(function (r) { return r.reasons.indexOf('mistakes') > -1; }).length : 0;
+
+    var plan = '' +
+      '<section class="section">' +
+      '  <div class="section-head"><h2 class="section-title">今日计划</h2><span class="section-note">按 FSRS 安排</span></div>' +
+      '  <div class="panel"><div class="panel-body plan-pad">' +
+      '    <button type="button" class="plan-row" data-act="goto-review">' +
+      '      <span class="plan-index">01</span>' +
+      '      <span class="list-main"><span class="plan-title">到期复习</span><span class="plan-meta">' + due + ' 题到期</span></span>' +
+      '      <span class="spacer"></span>' +
+      '      <span class="plan-arrow">' + ico('arrow-right', '15px') + '</span>' +
+      '    </button>' +
+      '    <button type="button" class="plan-row" data-act="goto-review">' +
+      '      <span class="plan-index">02</span>' +
+      '      <span class="list-main"><span class="plan-title">错题重做</span><span class="plan-meta">' + mis + ' 道错题</span></span>' +
+      '      <span class="spacer"></span>' +
+      '      <span class="plan-arrow">' + ico('arrow-right', '15px') + '</span>' +
+      '    </button>' +
+      '    <button type="button" class="plan-row" data-act="start">' +
+      '      <span class="plan-index">03</span>' +
+      '      <span class="list-main"><span class="plan-title">新题练习</span><span class="plan-meta">' + QS.length + ' 题已安排</span></span>' +
+      '      <span class="spacer"></span>' +
+      '      <span class="plan-arrow">' + ico('arrow-right', '15px') + '</span>' +
+      '    </button>' +
+      '  </div></div>' +
+      '</section>';
+
+    return '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow">私人学习档案</p>' +
+      '    <h1 class="page-title">今天</h1>' +
+      '    <p class="page-sub">2026年11月13日 · 第 46 周 · accept_admin_1794570360969</p>' +
+      '  </div>' +
+      '  <div class="page-actions">' +
+      '    <button type="button" class="btn btn-primary" data-act="start">' + ico('play', '14px') + '开始练习</button>' +
+      '  </div>' +
+      '</header>' +
+      '<div class="stat-row">' +
+      '  <div class="stat"><div class="stat-num">1</div><div class="stat-cap">累计作答</div></div>' +
+      '  <div class="stat"><div class="stat-num">2</div><div class="stat-cap">到期复习</div></div>' +
+      '  <div class="stat"><div class="stat-num">100%</div><div class="stat-cap">近 7 天正确率</div></div>' +
+      '  <div class="stat"><div class="stat-num">2</div><div class="stat-cap">错题</div></div>' +
+      '</div>' +
+      '<div class="gap-6" aria-hidden="true"></div>' +
+      resume + plan;
+  }
+
+  function renderDecision() {
+    var S = window.eeStore;
+    var sessions = S ? S.sessions('practice') : [];
+    var list = sessions.length ? '<div class="start-study-list">' + sessions.map(function (s) {
+      var bank = S.bank(s.bankId);
+      return '' +
+        '<div class="od-row start-study-session">' +
+        '  <span class="tag">' + esc(s.mode || '顺序练习') + '</span>' +
+        '  <span class="start-study-bank">' + esc(bank ? bank.name : '练习题库') + '</span>' +
+        '  <span class="start-study-progress mono">' + (s.done || 0) + ' / ' + (s.total || QS.length) + '</span>' +
+        '</div>';
+    }).join('') + '</div>' : '<p class="hint">当前没有同模式的未完成会话，将直接开始下面这次练习。</p>';
+
+    var dlg = '' +
+      '<dialog class="dlg" id="dlgDecision" aria-labelledby="dlgDecisionTitle">' +
+      '  <div class="dlg-head">' +
+      '    <div class="dlg-head-text">' +
+      '      <p class="dlg-eyebrow">开始练习</p>' +
+      '      <h2 class="dlg-title" id="dlgDecisionTitle">' + (sessions.length ? '有未完成的学习会话' : '开始这次学习') + '</h2>' +
+      '    </div>' +
+      '    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭">' + ico('x', '15px') + '</button>' +
+      '  </div>' +
+      '  <div class="dlg-body">' +
+      '    <p class="hint">' + (sessions.length ? '继续上次的进度，或结束它并开始新的练习。「结束并新建」只结束同模式的会话，不会连坐其他模式；取消不新建会话。' : '将按下面的范围开始这次练习。') + '</p>' +
+      '    ' + list +
+      '  </div>' +
+      '  <div class="dlg-foot">' +
+      '    <button type="button" class="btn btn-quiet" data-dlg-close>取消</button>' +
+      (sessions.length ? '    <button type="button" class="btn" data-act="dlg-continue">继续</button>' : '') +
+      '    <button type="button" class="btn btn-primary" data-act="dlg-end-start">' + (sessions.length ? '结束并新建' : '开始') + '</button>' +
+      '  </div>' +
+      '</dialog>';
+
+    var behind = '' +
+      '<section class="section">' +
+      '  <div class="section-head"><h2 class="section-title">开始练习</h2><span class="section-note">' + esc(BANK) + ' · 3 题</span></div>' +
+      '  <div class="panel"><div class="panel-body flow-stack">' +
+      '    <div class="kv">' +
+      '      <span class="kv-key">范围</span><span class="kv-val">全部题目</span>' +
+      '      <span class="kv-key">题型</span><span class="kv-val">不限</span>' +
+      '      <span class="kv-key">模式</span><span class="kv-val">顺序练习</span>' +
+      '    </div>' +
+      '    <p class="hint">检测到同模式有未完成会话，先决定继续还是结束并新建。</p>' +
+      '  </div></div>' +
+      '</section>';
+
+    return behind + dlg;
+  }
+
+  function optionHtml(q, submitted) {
+    var out = '';
+    for (var i = 0; i < q.options.length; i++) {
+      var o = q.options[i];
+      var cls = 'opt';
+      if (state.selected === o.key) cls += ' is-selected';
+      if (submitted && o.key === q.answer) cls += ' is-correct';
+      if (submitted && state.selected === o.key && o.key !== q.answer) cls += ' is-wrong';
+      var mark = '';
+      if (submitted && o.key === q.answer) mark = '<span class="opt-mark">' + ico('check', '14px') + '</span>';
+      else if (submitted && state.selected === o.key && o.key !== q.answer) mark = '<span class="opt-mark">' + ico('x', '14px') + '</span>';
+      out += '<button type="button" class="' + cls + '" data-act="select-opt" data-key="' + o.key + '"' +
+        (submitted ? ' disabled' : '') + ' aria-pressed="' + (state.selected === o.key) + '">' +
+        '<span class="opt-key">' + o.key + '</span><span>' + esc(o.content) + '</span>' + mark + '</button>';
+    }
+    return out;
+  }
+
+  function railHtml() {
+    var cells = '';
+    for (var i = 0; i < QS.length; i++) {
+      var cls = 'sheet-cell';
+      if (state.results[i]) cls += ' is-answered';
+      if (i === state.qIndex) cls += ' is-current';
+      if (i === state.qIndex && state.flagged) cls += ' is-flagged';
+      cells += '<span class="' + cls + '" aria-current="' + (i === state.qIndex) + '">' + (i + 1) + '</span>';
+    }
+    var pct = Math.round(answeredCount() / QS.length * 100);
+    return '' +
+      '<aside class="runner-rail">' +
+      '  <div class="flow-stack-sm">' +
+      '    <span class="rail-title">进度</span>' +
+      '    <div class="progress" role="progressbar" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100" aria-label="会话进度"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
+      '    <span class="mono tiny-mono">' + answeredCount() + ' / ' + QS.length + '</span>' +
+      '  </div>' +
+      '  <div class="flow-stack-sm">' +
+      '    <span class="rail-title">答题卡</span>' +
+      '    <div class="sheet-grid">' + cells + '</div>' +
+      '    <div class="sheet-legend">' +
+      '      <span><i class="is-answered"></i>已答</span>' +
+      '      <span><i></i>未答</span>' +
+      '      <span><i class="is-current"></i>当前</span>' +
+      '      <span><i class="is-flagged"></i>标记</span>' +
+      '    </div>' +
+      '  </div>' +
+      '  <div class="keys-hint">' + ico('command', '14px') + ' <span class="kbd">A</span><span class="kbd">B</span><span class="kbd">C</span><span class="kbd">D</span> 选择 · <span class="kbd">Enter</span> 提交</div>' +
+      '</aside>';
+  }
+
+  function runnerTopHtml() {
+    return '' +
+      '<div class="runner-top">' +
+      '  <button type="button" class="btn btn-quiet btn-sm" data-act="exit">' + ico('arrow-left', '14px') + '退出</button>' +
+      '  <span class="runner-mode">顺序练习 · ' + esc(current().type) + '</span>' +
+      '  <span class="od-spacer"></span>' +
+      '  <span class="runner-counter mono">' + (state.qIndex + 1) + ' / ' + QS.length + '</span>' +
+      '  <button type="button" class="icon-btn' + (state.flagged ? ' is-on' : '') + '" data-act="flag" title="标记薄弱" aria-label="标记薄弱" aria-pressed="' + state.flagged + '">' + ico('flag', '16px') + '</button>' +
+      '</div>';
+  }
+
+  function renderSession() {
+    var q = current();
+    var locked = state.submitted || state.saved;
+    var foot = locked
+      ? '<button type="button" class="btn btn-primary" disabled aria-describedby="run-lock-reason">提交答案</button>' +
+        '<span class="flow-note" id="run-lock-reason">' +
+        (state.saved ? '本次练习已交卷，答案不能修改' : '本题已提交，回到「判定反馈」查看解析与评级') + '</span>'
+      : '<button type="button" class="btn btn-primary" data-act="submit"' + (state.selected ? '' : ' disabled') + '>提交答案</button>' +
+        '<span class="flow-note">' + (state.selected ? '已选择 ' + state.selected : '选择一个选项后提交') + '</span>';
+    var lockNotice = state.saved
+      ? '<div class="notice warn">' + ico('lock', '15px') + '<div class="notice-body">本次练习已交卷：纸面只读，答案与评级按交卷时保存的结果展示。</div></div>'
+      : (state.submitted
+        ? '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body">本题已提交。用顶部步骤条回到「判定反馈」查看解析，或继续下一题。</div></div>'
+        : '');
+
+    return runnerTopHtml() +
+      '<div class="runner">' +
+      '  <div class="runner-body">' +
+      '    <div class="q-meta"><span>第 ' + (state.qIndex + 1) + ' 题 · 共 ' + QS.length + ' 题</span><span>' + esc(q.type) + '</span>' +
+      (state.flagged ? '<span class="tag brand">薄弱</span>' : '') + '</div>' +
+      '    <p class="q-stem">' + esc(q.stem) + '</p>' +
+      '    <div class="opt-list">' + optionHtml(q, locked) + '</div>' +
+      '    ' + lockNotice +
+      '    <div class="runner-foot">' + foot + '</div>' +
+      '  </div>' +
+      railHtml() +
+      '</div>';
+  }
+
+  function renderFeedback() {
+    var q = current();
+    var ok = isCorrect();
+    var verdict = '' +
+      '<div class="verdict' + (ok ? ' ok' : '') + '">' +
+      '  <span class="verdict-mark">' + ico(ok ? 'check' : 'x', '14px') + '</span>' +
+      '  <strong>' + (ok ? '正确' : '错误') + '</strong>' +
+      '  <span class="verdict-ratio">得分率 ' + (ok ? 100 : 0) + '%</span>' +
+      '</div>' +
+      '<div class="answer-line"><span>标准答案</span><span class="ans">' + esc(q.answer) + '</span>' +
+      '<span>我的作答 · ' + esc(state.selected || '未作答') + '</span></div>';
+
+    var fsrs = '' +
+      '<div class="flow-stack-sm">' +
+      '  <span class="rail-title">这道题记得怎样？</span>' +
+      '  <div class="fsrs-btns">' +
+      '    <button type="button" class="btn btn-sm' + (state.rating === 1 ? ' is-on' : '') + '" data-act="rate" data-r="1">重来 <span class="mono">' + dueText(1) + '</span></button>' +
+      '    <button type="button" class="btn btn-sm' + (state.rating === 2 ? ' is-on' : '') + '" data-act="rate" data-r="2"' + (ok ? '' : ' disabled') + '>困难 <span class="mono">' + dueText(2) + '</span></button>' +
+      '    <button type="button" class="btn btn-sm' + (state.rating === 3 ? ' is-on' : '') + '" data-act="rate" data-r="3"' + (ok ? '' : ' disabled') + '>一般 <span class="mono">' + dueText(3) + '</span></button>' +
+      '    <button type="button" class="btn btn-sm' + (state.rating === 4 ? ' is-on' : '') + '" data-act="rate" data-r="4"' + (ok ? '' : ' disabled') + '>轻松 <span class="mono">' + dueText(4) + '</span></button>' +
+      '  </div>' +
+      (state.rating ? '<p class="hint">已按「' + ratingName(state.rating) + '」记录，' + ratingHint(state.rating) + '。</p>' : '<p class="hint">答错时预选「重来」；答对后才能选更高评级。</p>') +
+      '  <p class="hint">间隔由服务端按当前卡片快照算出后随提交返回，界面不写死固定值；算不出真实到期日时只保留四个评级词。</p>' +
+      '</div>';
+
+    var ai = '' +
+      '<div class="flow-stack-sm">' +
+      '  <span class="rail-title">AI 解释（可选增强）</span>' +
+      '  <div class="notice info">' + ico('cpu', '15px') + '<div class="notice-body">未配置 AI 助教：判分、标准答案、官方解析、评级、错题与 FSRS 全部不受影响。<a class="link-btn" href="settings.html">去配置</a></div></div>' +
+      '</div>';
+
+    var foot = '<button type="button" class="btn btn-primary" data-act="next-question">下一题</button>' +
+      '<span class="flow-note">第 ' + (state.qIndex + 1) + ' / ' + QS.length + ' 题 · 已记录</span>';
+
+    return runnerTopHtml() +
+      '<div class="runner">' +
+      '  <div class="runner-body">' +
+      '    <div class="q-meta"><span>第 ' + (state.qIndex + 1) + ' 题 · 共 ' + QS.length + ' 题</span><span>' + esc(q.type) + '</span></div>' +
+      '    <p class="q-stem">' + esc(q.stem) + '</p>' +
+      '    <div class="opt-list">' + optionHtml(q, true) + '</div>' +
+      '    <div class="flow-stack">' + verdict +
+      '      <div><div class="rule-label">官方解析</div><div class="explain-body">' + esc(q.explanation) + '</div></div>' +
+      '      ' + fsrs +
+      '      ' + ai +
+      '    </div>' +
+      '    <div class="runner-foot">' + foot + '</div>' +
+      '  </div>' +
+      railHtml() +
+      '</div>';
+  }
+
+  function ratingName(r) { return { 1: '重来', 2: '困难', 3: '一般', 4: '轻松' }[r] || ''; }
+  /* 间隔不写死：按当前卡片快照反解实际到期日；算不出就不显示（Q-210 裁定） */
+  function dueText(r) {
+    var d = new Date();
+    d.setDate(d.getDate() + (r === 4 ? 7 : r === 3 ? 3 : r === 2 ? 2 : 1));
+    return (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日';
+  }
+  function ratingHint(r) { return '下次到期 ' + dueText(r); }
+
+  function renderComplete() {
+    var blank = blankCount();
+    var behind = '' +
+      '<section class="section">' +
+      '  <div class="section-head"><h2 class="section-title">练习会话</h2><span class="section-note">' + esc(BANK) + ' · 顺序练习</span></div>' +
+      '  <div class="panel"><div class="panel-body flow-stack">' +
+      '    <div class="kv">' +
+      '      <span class="kv-key">已答</span><span class="kv-val mono">' + answeredCount() + ' / ' + QS.length + '</span>' +
+      '      <span class="kv-key">正确</span><span class="kv-val mono">' + correctCount() + '</span>' +
+      '      <span class="kv-key">错误</span><span class="kv-val mono">' + wrongCount() + '</span>' +
+      '      <span class="kv-key">未答</span><span class="kv-val mono">' + blank + '</span>' +
+      '    </div>' +
+      '    <p class="hint">交卷后不能再修改答案。</p>' +
+      '  </div></div>' +
+      '</section>';
+
+    var dlg = '' +
+      '<dialog class="dlg narrow" id="dlgComplete" aria-labelledby="dlgCompleteTitle">' +
+      '  <div class="dlg-head">' +
+      '    <div class="dlg-head-text">' +
+      '      <p class="dlg-eyebrow">练习会话</p>' +
+      '      <h2 class="dlg-title" id="dlgCompleteTitle">交卷</h2>' +
+      '    </div>' +
+      '    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭">' + ico('x', '15px') + '</button>' +
+      '  </div>' +
+      '  <div class="dlg-body">' +
+      (blank > 0
+        ? '    <div class="notice warn">' + ico('alert-triangle', '15px') + '<div class="notice-body">还有 ' + blank + ' 题未作答。</div></div>'
+        : '    <div class="notice ok">' + ico('check', '15px') + '<div class="notice-body">所有题目都已作答。</div></div>') +
+      '    <p class="hint">交卷后不能再修改答案。</p>' +
+      '  </div>' +
+      '  <div class="dlg-foot">' +
+      '    <button type="button" class="btn btn-quiet" data-dlg-close>继续作答</button>' +
+      '    <button type="button" class="btn btn-primary" data-act="confirm-complete">确认交卷</button>' +
+      '  </div>' +
+      '</dialog>';
+
+    return behind + dlg;
+  }
+
+  function renderReport() {
+    var score = Math.round(correctCount() / QS.length * 100);
+    var acc = answeredCount() ? Math.round(correctCount() / answeredCount() * 100) : 0;
+    var tags = '' +
+      '<span class="tag ok">正确 ' + correctCount() + '</span>' +
+      '<span class="tag warn">部分正确 0</span>' +
+      '<span class="tag bad">错误 ' + wrongCount() + '</span>' +
+      '<span class="tag">未答 ' + blankCount() + '</span>' +
+      '<span class="tag plain">未判分 0</span>';
+
+    return '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow">顺序练习 · ' + esc(BANK) + '</p>' +
+      '    <h1 class="page-title">练习完成</h1>' +
+      '    <p class="page-sub">本次作答结果已保存。</p>' +
+      '  </div>' +
+      '</header>' +
+      '<div class="panel"><div class="panel-body flow-stack">' +
+      '  <div class="od-row baseline">' +
+      '    <span class="score-num">' + score + '</span><span class="score-unit">/ 100 分</span>' +
+      '  </div>' +
+      '  <div class="stat-row">' +
+      '    <div class="stat"><div class="stat-num">' + acc + '%</div><div class="stat-cap">正确率</div></div>' +
+      '    <div class="stat"><div class="stat-num">' + answeredCount() + '<span class="score-unit">/ ' + QS.length + '</span></div><div class="stat-cap">已答</div></div>' +
+      '    <div class="stat"><div class="stat-num">' + state.timeSpent + '<span class="score-unit"> 秒</span></div><div class="stat-cap">用时</div></div>' +
+      '    <div class="stat"><div class="stat-num">' + wrongCount() + '</div><div class="stat-cap">值得再看</div></div>' +
+      '  </div>' +
+      '  <div class="report-tags">' + tags + '</div>' +
+      '  <div class="flow-actions">' +
+      '    <button type="button" class="btn btn-primary" data-act="again">再做一组</button>' +
+      '    <a class="btn btn-quiet" href="home.html">返回今天页</a>' +
+      '  </div>' +
+      '</div></div>';
+  }
+
+  /* ---------- 退出与暂存：二选一，文案与行为一致（FN-215） ---------- */
+  function renderExit() {
+    var behind = '' +
+      '<section class="section">' +
+      '  <div class="section-head"><h2 class="section-title">退出练习</h2><span class="section-note">' + esc(BANK) + ' · 已答 ' + answeredCount() + ' / ' + QS.length + '</span></div>' +
+      '  <div class="panel"><div class="panel-body flow-stack">' +
+      '    <div class="kv">' +
+      '      <span class="kv-key">暂存并退出</span><span class="kv-val">会话保持 active，光标 / 答案 / 旗标 / 用时已落服务端，刷新或换设备能从原题继续</span>' +
+      '      <span class="kv-key">结束本次</span><span class="kv-val">abandon，草稿与未提交作答全部失效，不再提供「重试」</span>' +
+      '    </div>' +
+      '    <p class="hint">不同模式的会话允许并存、互不提示、互不代管；「结束并新建」只结束同模式会话，不提供跨模式的「放弃全部」。</p>' +
+      '  </div></div>' +
+      '</section>';
+
+    var dlg = '' +
+      '<dialog class="dlg narrow" id="dlgExitChoice" aria-labelledby="dlgExitChoiceTitle">' +
+      '  <div class="dlg-head">' +
+      '    <div class="dlg-head-text">' +
+      '      <p class="dlg-eyebrow">练习会话</p>' +
+      '      <h2 class="dlg-title" id="dlgExitChoiceTitle">退出练习</h2>' +
+      '    </div>' +
+      '  </div>' +
+      '  <div class="dlg-body">' +
+      '    <p class="hint">已作答内容会保存，未作答的题目保留在队列中。</p>' +
+      '  </div>' +
+      '  <div class="dlg-foot">' +
+      '    <button type="button" class="btn btn-quiet" data-dlg-close>继续练习</button>' +
+      '    <button type="button" class="btn btn-primary" data-act="do-stash">暂存并退出</button>' +
+      '    <button type="button" class="btn btn-danger" data-act="do-end">结束本次</button>' +
+      '  </div>' +
+      '</dialog>';
+
+    var endDlg = '' +
+      '<dialog class="dlg narrow danger" id="dlgEndChoice" aria-labelledby="dlgEndChoiceTitle">' +
+      '  <div class="dlg-head">' +
+      '    <div class="dlg-head-text">' +
+      '      <p class="dlg-eyebrow">练习会话</p>' +
+      '      <h2 class="dlg-title" id="dlgEndChoiceTitle">结束这次练习？</h2>' +
+      '    </div>' +
+      '  </div>' +
+      '  <div class="dlg-body">' +
+      '    <p class="hint">结束后本次已作答的 ' + answeredCount() + ' 题不再计入，会话从「未完成会话」里消失；错题与复习队列不受影响。</p>' +
+      '  </div>' +
+      '  <div class="dlg-foot">' +
+      '    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>取消</button>' +
+      '    <button type="button" class="btn btn-danger-solid" data-act="do-end-confirm">结束本次</button>' +
+      '  </div>' +
+      '</dialog>';
+
+    return behind + dlg + endDlg;
+  }
+
+  /* ---------- 步骤定义 ---------- */
+  var STEPS = [
+    { id: 'today', name: '今天页', render: renderToday, nextLabel: '开始练习', note: '从今天页进入：未完成会话 + 今日计划。' },
+    { id: 'decision', name: '开始决策', render: renderDecision, nextLabel: '结束并新建', note: '检测到同模式未完成会话，需先决定继续或结束并新建；取消不新建会话。' },
+    { id: 'session', name: '练习会话', render: renderSession, nextLabel: '提交答案', note: '选中选项后提交；键盘 A–D 亦可，浮层打开时快捷键挂起。', nextDisabled: function () { return !state.selected || state.submitted; } },
+    { id: 'feedback', name: '判定反馈', render: renderFeedback, nextLabel: '下一题', note: '答错时「重来」预选；间隔按当前快照算出的实际到期日展示。' },
+    { id: 'complete', name: '交卷确认', render: renderComplete, nextLabel: '确认交卷', note: '还有未作答题目时给出警告。' },
+    { id: 'report', name: '练习报告', render: renderReport, nextLabel: '重新开始', note: '报告已落库；可再做一组或返回今天页。' },
+    { id: 'exit', name: '退出与暂存', render: renderExit, nextLabel: '暂存并退出', note: '退出统一二选一：暂存，稍后继续 / 结束本次。' }
+  ];
+
+  /* ---------- 状态机 ---------- */
+  var stage = document.getElementById('flowStage');
+  var stepsOl = document.getElementById('flowSteps');
+  var caption = document.getElementById('flowCaption');
+  var prevBtn = document.getElementById('flowPrev');
+  var nextBtn = document.getElementById('flowNext');
+  var noteEl = document.getElementById('flowNote');
+
+  function render() {
+    var step = STEPS[state.step];
+    var html = '';
+    for (var i = 0; i < STEPS.length; i++) {
+      var s = STEPS[i];
+      var cls = 'step';
+      if (i === state.step) cls += ' is-active';
+      if (i < state.step) cls += ' is-done';
+      html += '<button type="button" class="' + cls + '" data-goto="' + i + '"' + (i === state.step ? ' aria-current="step"' : '') + '>' +
+        '<span class="step-n">' + (i < state.step ? ico('check', '11px') : (i + 1)) + '</span>' +
+        '<span class="step-name">' + esc(s.name) + '</span></button>';
+      if (i < STEPS.length - 1) html += '<span class="step-line" aria-hidden="true"></span>';
+    }
+    stepsOl.innerHTML = html;
+
+    stage.innerHTML = step.render();
+    caption.innerHTML = '当前第 <b>' + (state.step + 1) + '</b> 步 / 共 <b>' + STEPS.length + '</b> 步 · ' + esc(step.name);
+
+    prevBtn.disabled = state.step === 0;
+    var label = typeof step.nextLabel === 'function' ? step.nextLabel() : step.nextLabel;
+    nextBtn.textContent = label;
+    nextBtn.disabled = typeof step.nextDisabled === 'function' ? step.nextDisabled() : !!step.nextDisabled;
+    noteEl.textContent = typeof step.note === 'function' ? step.note() : (step.note || '');
+
+    if (step.afterRender) step.afterRender();
+  }
+
+  function go(n, trigger) {
+    state.step = Math.max(0, Math.min(STEPS.length - 1, n));
+    if (state.step > state.maxStep) state.maxStep = state.step;
+    state.lastTrigger = trigger || null;
+    render();
+    stage.scrollIntoView({ block: 'nearest' });
+  }
+
+  prevBtn.addEventListener('click', function () { go(state.step - 1); });
+  nextBtn.addEventListener('click', function () { ACTIONS[STEPS[state.step].id + ':next'](); });
+
+  stepsOl.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-goto]');
+    if (!t) return;
+    var n = parseInt(t.getAttribute('data-goto'), 10);
+    /* T22：步骤条只能回到已完成或当前步骤，不能前跳到没走过的状态 */
+    if (n > state.maxStep) { window.eeToast('请先完成当前步骤'); return; }
+    go(n);
+  });
+
+  /* ---------- 动作 ---------- */
+  var ACTIONS = {
+    'today:next': function () { startPractice(); },
+    'decision:next': function () { endAndStart(); },
+    'session:next': function () { submitAnswer(); },
+    'feedback:next': function () { nextQuestion(); },
+    'complete:next': function () { confirmComplete(); },
+    'report:next': function () { restart(); },
+    'exit:next': function () { stashAndExit(); },
+
+    'start': function (el) { startPractice(el); },
+    'resume': function () { resumeSession(); },
+    'exit': function () {
+      window.eeToast('已保存进度，可稍后继续');
+      go(0);
+    },
+    'flag': function () {
+      state.flagged = !state.flagged;
+      window.eeToast(state.flagged ? '已标记这道题' : '已取消标记');
+      render();
+    },
+    'select-opt': function (el) {
+      if (state.submitted) return;
+      state.selected = el.getAttribute('data-key');
+      render();
+    },
+    'submit': function () { submitAnswer(); },
+    'dlg-continue': function () {
+      resumeSession();
+    },
+    'dlg-end-start': function () { endAndStart(); },
+    'rate': function (el) {
+      var r = parseInt(el.getAttribute('data-r'), 10);
+      state.rating = r;
+      render();
+      window.eeToast('已记录评级：' + ratingName(r) + '，' + ratingHint(r));
+    },
+    'next-question': function () { nextQuestion(); },
+    'confirm-complete': function () { confirmComplete(); },
+    'again': function () { restart(); endAndStart(); go(2); },
+    'goto-review': function () { window.location.href = 'review.html'; },
+    'do-stash': function () {
+      persistSession();
+      window.eeToast('已暂存，会话保持进行中');
+      go(0);
+    },
+    'do-end': function () { window.eeDialog.open('dlgEndChoice', document.activeElement); },
+    'do-end-confirm': function () {
+      var S = window.eeStore;
+      window.eeDialog.close(document.getElementById('dlgEndChoice'));
+      window.eeDialog.close(document.getElementById('dlgExitChoice'));
+      if (S && state.sid) S.finishSession(state.sid);
+      window.eeToast('已结束本次练习');
+      go(0);
+    }
+  };
+  function stashAndExit() {
+    window.eeDialog.close(document.getElementById('dlgExitChoice'));
+    persistSession();
+    window.eeToast('已暂存，会话保持进行中');
+    go(0);
+  }
+
+  function startPractice(btn) {
+    // 与产品一致：开始前先查未完成会话 → 有则进入决策面板
+    // 传入触发器：对话框关闭后焦点回到「开始练习」，键盘用户不丢位置（T1）
+    go(1, btn);
+  }
+  /* 继续：回到 store 里那条进行中的会话（原步骤原题） */
+  function resumeSession() {
+    var S = window.eeStore;
+    var list = S ? S.sessions('practice') : [];
+    if (!list.length) { endAndStart(); return; }
+    loadFromSession(list[list.length - 1]);
+    state.resumed = true;
+    window.eeToast('已继续上次的会话');
+    go(2);
+  }
+  /* 结束并新建：同模式旧会话结束，新会话进 store（同模式同题库只保留一个） */
+  function endAndStart() {
+    var S = window.eeStore;
+    if (S) S.sessions('practice').forEach(function (s) { S.finishSession(s.id); });
+    resetState();
+    if (S) {
+      var s = S.startSession({ kind: 'practice', bankId: 'b_acc', mode: '顺序练习', total: QS.length, index: 0, done: 0, answers: {}, ratings: {}, flags: {}, elapsed: 47 });
+      state.sid = s.id;
+    }
+    window.eeToast('已结束旧会话，开始新的练习');
+    go(2);
+  }
+  function submitAnswer() {
+    if (!state.selected || state.submitted) return;
+    state.submitted = true;
+    var ok = isCorrect();
+    state.results[state.qIndex] = { answer: state.selected, correct: ok };
+    state.rating = ok ? null : 1; // 答错时预选「重来」
+    persistSession();
+    go(3);
+  }
+  function nextQuestion() {
+    state.submitted = false;
+    state.selected = null;
+    state.rating = null;
+    state.qIndex++;
+    persistSession();
+    /* 还有题目 → 回到会话做下一题；全部做完 → 交卷确认（T3：原来不推进题号，
+       第 2、3 题永远答不到，只能反复看同一题或带着 2 道未答进交卷确认） */
+    if (state.qIndex >= QS.length) go(4);
+    else go(2);
+  }
+  function confirmComplete() {
+    state.saved = true;
+    var report = {
+      title: '练习 · 顺序练习 · ' + BANK,
+      score: Math.round(correctCount() / QS.length * 100),
+      correct: correctCount(), total: QS.length, answered: answeredCount(),
+      minutes: Math.max(1, Math.round(state.timeSpent / 60))
+    };
+    var S = window.eeStore;
+    if (S && state.sid) {
+      S.finishSession(state.sid, report);
+      state.report = S.reports('practice')[0] || report;
+    } else {
+      state.report = report;
+    }
+    go(5);
+    window.eeToast('已保存到学习记录');
+  }
+  function restart() {
+    resetState();
+    state.sid = null;
+    state.maxStep = 0;
+    go(0);
+  }
+
+  /* ---------- 事件委托 ---------- */
+  function bind(delegate, attr) {
+    delegate.addEventListener('click', handle);
+    delegate.addEventListener('change', handle);
+    delegate.addEventListener('input', handle);
+    function handle(e) {
+      var el = e.target.closest ? e.target.closest('[' + attr + ']') : null;
+      if (!el || !delegate.contains(el)) return;
+      var act = el.getAttribute(attr);
+      var fn = ACTIONS[act];
+      if (fn) { e.preventDefault(); fn(el, e); }
+    }
+  }
+  bind(stage, 'data-act');
+
+  /* ---------- 对话框渲染后打开（传入触发器，关闭后回焦；触发器已被重绘替换时由基层兜底） ---------- */
+  STEPS[1].afterRender = function () { window.eeDialog.open('dlgDecision', state.lastTrigger); };
+  STEPS[4].afterRender = function () { window.eeDialog.open('dlgComplete', state.lastTrigger); };
+  STEPS[6].afterRender = function () { window.eeDialog.open('dlgExitChoice', state.lastTrigger); };
+
+  /* ---------- 快捷键：A–D 选择 / Enter 提交；浮层打开时统一挂起（G4） ---------- */
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') return;
+    if (document.querySelector('dialog[open]')) return; /* 对话框打开时挂起 */
+    if (state.step !== 2) return;                       /* 只在练习会话步骤 */
+    if (state.submitted || state.saved) return;         /* 已提交 / 已交卷后挂起 */
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    var key = e.key.toUpperCase();
+    if (key >= 'A' && key <= 'D') {
+      var o = current().options[key.charCodeAt(0) - 65];
+      if (o) { e.preventDefault(); state.selected = o.key; render(); }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (state.selected) submitAnswer();
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

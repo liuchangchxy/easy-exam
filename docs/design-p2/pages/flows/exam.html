@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>模考闭环 · 流程原型 · EasyExam 设计规范</title>
+<link rel="stylesheet" href="../../assets/ee.css">
+<style>/* ===== 流程原型骨架（本页特有布局，未重定义令牌或控件） ===== */
+.doc-page{  max-width: 1100px; margin: 0 auto; padding: 28px 24px 60px;  }
+.list{  border-top: 1px solid var(--ink);  }
+.steps .step:disabled{  cursor: default;  }
+/* ===== 本页布局助手 ===== */
+.flow-stack{  display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0;  }
+.setup-grid{  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4);  }
+.rail-title{  font-size: var(--text-xs); font-weight: 600; letter-spacing: .06em; color: var(--ink-2);  }
+.rail-note{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); margin: var(--sp-2) 0 0;  }
+.baseline{  align-items: baseline;  }
+.tiny-mono{  font-size: var(--text-xs); color: var(--ink-3); font-family: var(--font-mono);  }
+.hint-flat{  margin: 0;  }
+.score-cell{  font-family: var(--font-mono); font-size: var(--text-lg);  }
+.mt-6{  margin-top: var(--sp-6);  }
+/* ===== 模考 runner ===== */
+.runner-top{  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-4);  }
+.runner-mode{  font-size: var(--text-sm); color: var(--ink-2);  }
+.runner{  display: grid; grid-template-columns: minmax(0, 1fr) var(--rail-exam); border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; background: var(--surface);  }
+.runner-body{  padding: var(--sp-6); min-width: 0;  }
+.runner-rail{  border-left: 1px solid var(--line); padding: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-5); background: var(--surface-2); min-width: 0;  }
+.runner-foot{  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--line);  }
+.sheet-legend i{  display: inline-block; width: 10px; height: 10px; margin-right: 4px; border: 1px solid var(--line-strong); border-radius: var(--r-xs); vertical-align: -1px;  }
+.sheet-legend i.is-answered{  background: var(--brand); border-color: var(--brand);  }
+.sheet-legend i.is-current{  outline: 2px solid var(--focus); outline-offset: 1px;  }
+.sheet-legend i.is-flagged{  border-color: var(--flag); box-shadow: inset 0 -3px 0 var(--flag);  }
+.keys-hint{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh);  }
+.keys-hint .kbd{  margin: 0 2px;  }
+.phase-chip{  display: inline-flex; align-items: center; gap: var(--sp-2);  }
+/* ===== 报告 ===== */
+.score-num{  font-family: var(--font-mono); font-size: var(--text-5xl); font-weight: 500; line-height: 1.1;  }
+.score-unit{  font-size: var(--text-sm); color: var(--ink-3); margin-left: var(--sp-2);  }
+.score-side{  display: flex; flex-direction: column; gap: 2px;  }
+.wrong-stem{  font-family: var(--font-serif); font-size: var(--text-sm); line-height: 1.6; min-width: 220px;  }
+.report-actions{  display: flex; flex-wrap: wrap; gap: var(--sp-2);  }
+.rate-grid{  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--sp-4); margin: 0;  }
+.rate-grid > div{  padding-left: var(--sp-3); border-left: 1px solid var(--line);  }
+.rate-grid dt{  font-size: var(--text-xs); color: var(--ink-3);  }
+.rate-grid dd{  margin: var(--sp-1) 0 0; font-family: var(--font-mono); font-size: var(--text-md);  }
+.rate-cap{  font-size: var(--text-xs); color: var(--ink-3);  }
+.count-grid{  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--sp-3);  }
+.count-cell{  display: flex; flex-direction: column; gap: 2px; padding-left: var(--sp-3); border-left: 1px solid var(--line);  }
+.count-cell b{  font-family: var(--font-mono); font-size: var(--text-md); font-weight: 500;  }
+.count-cell span{  font-size: var(--text-xs); color: var(--ink-3);  }
+/* 窄屏列表：元信息首段独占一行，标签与按钮按需换行，避免文字被 flex 压成窄列 */
+  @media (max-width: 640px){
+    .list-meta > :first-child { flex: 1 1 100%; }
+    .list-side { flex-wrap: wrap; }
+   }
+@media (max-width: 768px){
+  .runner { grid-template-columns: minmax(0, 1fr); }
+  .runner-rail { border-left: none; border-top: 1px solid var(--line); }
+  .setup-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px){
+  .steps .step-name { display: none; }
+  .steps { gap: var(--sp-1); }
+  .flow-title { font-size: var(--text-2xl); }
+  .score-num { font-size: var(--text-4xl); }
+}</style>
+</head>
+<body>
+<a class="skip-link" href="#flowStage">跳到主内容</a>
+<div class="doc-page">
+  <header class="flow-head">
+    <div class="flow-exits" data-spec>
+      <a class="btn btn-sm btn-quiet" href="../../product.html">完整产品</a>
+      <a class="btn btn-sm btn-quiet" href="../../index.html">设计规范</a>
+    </div>
+    <div>
+      <p class="flow-eyebrow" data-spec>流程原型 · 模考域</p>
+      <h1 class="flow-title">模考闭环</h1>
+      <p class="flow-sub" data-spec>模考中心 → 蓝图与模板 → 组卷确认 → 考试会话 → 宽限 60 秒 → 服务端收卷 → 成绩报告 → 历史与重考</p>
+    </div>
+  </header>
+
+  <div class="flow-stepbar">
+    <div class="steps" id="flowSteps" role="group" aria-label="模考闭环步骤"></div>
+    <p class="flow-caption" id="flowCaption" aria-live="polite"></p>
+  </div>
+
+  <main class="flow-stage" id="flowStage"></main>
+
+  <footer class="flow-foot">
+    <button type="button" class="btn btn-quiet" id="flowPrev">上一步</button>
+    <span class="flow-note" id="flowNote"></span>
+    <button type="button" class="btn btn-primary" id="flowNext">下一步</button>
+  </footer>
+</div>
+
+<script src="../../assets/icons.js"></script>
+<script src="../../assets/store.js"></script>
+<script src="../../assets/i18n.js"></script>
+<script src="../../assets/nav.js"></script>
+<script src="../../assets/spec-boot.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- 数据：assets/sample-questions.json 真实软考真题 ---------- */
+  var QS = [
+    { id: 'e1', type: '单选题', stem: '每周一学校开展直播课程，在直播中实时回复学生问题属于（  ）', options: [{ key: 'A', content: '互动沟通' }, { key: 'B', content: '推式沟通' }, { key: 'C', content: '拉式沟通' }, { key: 'D', content: '公众沟通' }], answer: 'A', explanation: '直播中实时回复学生问题，信息按需推送、学生自行获取，属于拉式沟通。', score: 2 },
+    { id: 'e2', type: '单选题', stem: 'OSI 的（  ）不适合提供相应的安全服务。', options: [{ key: 'A', content: '传输层' }, { key: 'B', content: '会话层' }, { key: 'C', content: '网络层' }, { key: 'D', content: '应用层' }], answer: 'B', explanation: '本题为反向选择题：传输层、网络层、应用层都可以提供相应安全服务，会话层不适合。', score: 2 },
+    { id: 'e3', type: '单选题', stem: '以下不属于“临时性”的是（ ）', options: [{ key: 'A', content: '临时性并不一定意味着项目的持续时间短' }, { key: 'B', content: '临时性具有明确的开始时间和结束时间' }, { key: 'C', content: '项目可交付成果在结束项目或阶段依然存在' }, { key: 'D', content: '结束阶段' }], answer: 'D', explanation: '“结束阶段”是项目阶段名称，不属于临时性这一特征。', score: 2 },
+    { id: 'e4', type: '单选题', stem: '关于范围基准，以下说法不正确的是（ ）。', options: [{ key: 'A', content: '范围基准包括项目范围说明书、WBS、WBS 字典' }, { key: 'B', content: '范围基准包含工作包、规划包与控制账户' }, { key: 'C', content: '范围基准是进度与成本估算的重要依据' }, { key: 'D', content: '范围基准是制定预算的输出' }], answer: 'D', explanation: '范围基准是创建 WBS 过程的输出，不是制定预算的输出。', score: 2 },
+    { id: 'e5', type: '单选题', stem: '（   ）按照业务功能聚合性进行应用规划，建设与应用组件对应的应用系统，满足不同业务条线的需求，实现专业化发展。', options: [{ key: 'A', content: '功能专业化原则' }, { key: 'B', content: '业务协同化原则' }, { key: 'C', content: '架构服务化原则' }, { key: 'D', content: '数据集中化原则' }], answer: 'A', explanation: '按业务功能聚合性进行应用规划，体现的是功能专业化原则。', score: 2 },
+    { id: 'e6', type: '单选题', stem: '监控各项续航参数是否保持在预期区间（   ）', options: [{ key: 'A', content: '控制图' }, { key: 'B', content: '散点图' }, { key: 'C', content: '因果图' }, { key: 'D', content: '流程图' }], answer: 'A', explanation: '控制图用于判断过程是否处于受控状态，即参数是否保持在预期区间。', score: 2 },
+    { id: 'e7', type: '单选题', stem: '当出现异常时软件需要有持续提供服务，属于（ ）。', options: [{ key: 'A', content: '韧性' }, { key: 'B', content: '弹性' }, { key: 'C', content: '架构持续演进' }, { key: 'D', content: '服务化' }], answer: 'A', explanation: '韧性指系统在出现异常时仍能持续提供服务的能力。', score: 2 },
+    { id: 'e8', type: '单选题', stem: '大型不适合用（ ）架构模型。', options: [{ key: 'A', content: '单机应用模式' }, { key: 'B', content: '客户端/服务器模式' }, { key: 'C', content: 'Web Service' }, { key: 'D', content: '模型-视图-控制器模式' }], answer: 'A', explanation: '大型系统不适合单机应用模式，需要分布式架构支撑。', score: 2 },
+    { id: 'e9', type: '多选题', stem: '通过（  ）分析风险优势，劣势，机会，威胁。', options: [{ key: 'A', content: '根本原因' }, { key: 'B', content: '概率和影响' }, { key: 'C', content: 'SWOT' }, { key: 'D', content: '文件' }], answer: 'C', explanation: 'SWOT 分析用于评估优势、劣势、机会与威胁。', score: 3 },
+    { id: 'e10', type: '多选题', stem: '以下（   ）不是定义活动的输出。', options: [{ key: 'A', content: '活动清单' }, { key: 'B', content: '活动属性' }, { key: 'C', content: '进度网络图' }, { key: 'D', content: '里程碑清单' }], answer: 'C', explanation: '进度网络图是排列活动顺序的输出，不是定义活动的输出。', score: 3 },
+    { id: 'e11', type: '判断题', stem: '项目具有临时性，因此（  ）。', options: [{ key: 'A', content: '正确' }, { key: 'B', content: '错误' }], answer: 'A', explanation: '临时性是项目的基本特征之一：有明确的开始与结束。', score: 2 },
+    { id: 'e12', type: '问答题', stem: '结合本项目，说明范围基准失控的主要原因，并给出纠正措施。', options: [], answer: '', explanation: '主观题保存作答与参考解析，不自动判分：作答状态「已作答」，判分状态「未判分」。', score: 0 }
+  ];
+  var OBJECTIVE = { '单选题': 1, '多选题': 1, '判断题': 1 };
+  var GRACE = 60;
+
+  /* 题库来自 store：与首页/模考中心同一份数据，开始模考写同一套会话 */
+  var S = window.eeStore;
+  function storeBanks() {
+    return (S ? S.banks({ archived: false }) : []).map(function (b) {
+      var n = S ? S.questions(b.id).length : 0;
+      return { id: b.id, name: b.name, count: n || b.count || 0 };
+    });
+  }
+  var BANKS = storeBanks().length ? storeBanks() : [{ id: 'b1', name: '系统集成项目管理工程师 · 真题库', count: 120 }];
+  function bankCount(id) { for (var i = 0; i < BANKS.length; i++) if (BANKS[i].id === id) return BANKS[i].count; return 0; }
+  var PROFILES = [
+    { id: 'p1', name: '系统集成项目管理工程师 · 综合卷', version: 3, negative: 0.5, floor: false, record: true,
+      sections: [{ type: '单选题', diff: '不限', n: 8, score: 2 }, { type: '多选题', diff: '进阶', n: 2, score: 3 }, { type: '判断题', diff: '不限', n: 1, score: 2 }, { type: '问答题', diff: '不限', n: 1, score: 0 }],
+      refs: { active: 1, reports: 2 } },
+    { id: 'p2', name: '系统架构设计师 · 选择题专项', version: 1, negative: 0, floor: true, record: true,
+      sections: [{ type: '单选题', diff: '不限', n: 20, score: 2 }, { type: '多选题', diff: '不限', n: 10, score: 3 }], refs: { active: 0, reports: 1 } },
+    { id: 'p3', name: '案例分析 · 冲刺卷', version: 0, negative: 0, floor: false, record: true, sections: [], refs: { active: 0, reports: 0 } }
+  ];
+  var TEMPLATES = [
+    { name: '软考 · 综合标准卷', meta: '4 个配额段 · 12 题 · 负分 0.5', rows: [['单选题', '不限', 8, 2], ['多选题', '进阶', 2, 3], ['判断题', '不限', 1, 2], ['问答题', '不限', 1, 0]] },
+    { name: '期中 · 选择题专项', meta: '2 个配额段 · 40 题 · 答错不扣分', rows: [['单选题', '不限', 30, 2], ['多选题', '基础', 10, 3]] },
+    { name: '科目一 · 判断题强化', meta: '1 个配额段 · 30 题 · 负分 1', rows: [['判断题', '不限', 30, 1]] },
+    { name: '案例分析 · 主观专项', meta: '1 个配额段 · 6 题 · 不自动判分', rows: [['问答题', '不限', 6, 0]] }
+  ];
+
+  /* 脚本化作答：前 9 题已答（4 题错），第 9、10 题未答，第 12 题文字作答；第 5、12 题待复查 */
+  var SCRIPTED = { e1: 'A', e2: 'C', e3: 'D', e4: 'A', e5: 'A', e6: 'B', e7: 'A', e8: 'B', e9: 'C' };
+
+  var DEFAULT_BANK = 'b_rk';
+  if (!bankCount(DEFAULT_BANK)) DEFAULT_BANK = BANKS.length ? BANKS[0].id : '';
+  function bankMax(id) { var n = bankCount(id) || QS.length; return Math.max(1, Math.min(n, QS.length)); }
+
+  var state = {
+    step: 0, maxStep: 0,
+    setup: { bankId: DEFAULT_BANK, profileId: 'p1', total: 12, minutes: 120, unlimited: false, recordMistakes: true },
+    qIndex: 11, answers: {}, flags: ['e5', 'e12'],
+    remaining: 58 * 60 + 12, grace: GRACE, phase: 'answer',
+    timerId: null, sid: null, justDone: false, submitted: false, via: 'manual',
+    viewing: null, lastTrigger: null, refuse: '', tplStep: 0, tplIndex: 0
+  };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function ico(name, size) { return window.eeIcon ? window.eeIcon(name, size) : ''; }
+  function bankName(id) { for (var i = 0; i < BANKS.length; i++) if (BANKS[i].id === id) return BANKS[i].name; return ''; }
+  function profile(id) { for (var i = 0; i < PROFILES.length; i++) if (PROFILES[i].id === id) return PROFILES[i]; return null; }
+  function profileName(id) { var p = profile(id); return p ? p.name : ''; }
+  function objFull(p) { var n = 0; p.sections.forEach(function (s) { if (OBJECTIVE[s.type]) n += s.n * s.score; }); return n; }
+  function bpTotal(p) { return p.sections.reduce(function (a, s) { return a + s.n; }, 0); }
+  function subjCount(p) { return p.sections.reduce(function (a, s) { return OBJECTIVE[s.type] ? a : a + s.n; }, 0); }
+  function fmtTime(sec) {
+    var s = Math.max(0, Math.floor(sec)), m = Math.floor(s / 60), r = s % 60;
+    return (m < 10 ? '0' + m : m) + ':' + (r < 10 ? '0' + r : r);
+  }
+
+  /* 本场试卷 = 按组卷设置从题库抽取的前 N 题 */
+  function paper() {
+    var n = Math.max(1, Math.min(QS.length, state.setup.total || QS.length));
+    return QS.slice(0, n);
+  }
+  function answeredCount() { var n = 0; paper().forEach(function (q) { if (state.answers[q.id]) n++; }); return n; }
+  function flaggedCount() { return state.flags.length; }
+  function unansweredObjective() {
+    var n = 0;
+    paper().forEach(function (q) { if (!state.answers[q.id] && OBJECTIVE[q.type]) n++; });
+    return n;
+  }
+  function isCorrect(q) { return String(state.answers[q.id] || '').split('').sort().join('') === String(q.answer).split('').sort().join(''); }
+  function correctCount() { var n = 0; paper().forEach(function (q) { if (state.answers[q.id] && isCorrect(q)) n++; }); return n; }
+  function wrongCount() { var n = 0; paper().forEach(function (q) { if (state.answers[q.id] && !isCorrect(q) && OBJECTIVE[q.type]) n++; }); return n; }
+  function ungradedCount() { var n = 0; paper().forEach(function (q) { if (state.answers[q.id] && !OBJECTIVE[q.type]) n++; }); return n; }
+  function objectiveScore() {
+    var n = 0;
+    paper().forEach(function (q) { if (state.answers[q.id] && OBJECTIVE[q.type] && isCorrect(q)) n += q.score; });
+    return n;
+  }
+  function objectiveFullPaper() {
+    var n = 0;
+    paper().forEach(function (q) { if (OBJECTIVE[q.type]) n += q.score; });
+    return n;
+  }
+  function firstUnanswered() { var p = paper(); for (var i = 0; i < p.length; i++) if (!state.answers[p[i].id]) return i; return -1; }
+  function wrongRows() {
+    var rows = [];
+    paper().forEach(function (q, i) {
+      var a = state.answers[q.id];
+      if (a && isCorrect(q)) return;
+      rows.push({ no: i + 1, q: q, mine: a ? a : '未答', right: q.answer, subj: !OBJECTIVE[q.type] });
+    });
+    return rows;
+  }
+
+  /* ---------- 步骤 0：模考中心 ---------- */
+  var IDLE_DAYS = 30; /* 不限时会话的闲置失效阈值：默认 30 天，可配 */
+  function isExpired(s) {
+    if (s.expired) return true;
+    if (!s.updatedAt) return false;
+    var t = new Date(String(s.updatedAt).replace(/-/g, '/'));
+    if (isNaN(t.getTime())) return false;
+    return (Date.now() - t.getTime()) > IDLE_DAYS * 86400000;
+  }
+  function storeSessionsHtml() {
+    var list = S ? S.sessions('exam') : [];
+    if (!list.length) return '';
+    var rows = list.map(function (s) {
+      var expired = isExpired(s);
+      return '' +
+        '<div class="list-row">' +
+        '  <span class="list-main">' +
+        '    <span class="list-title">' + esc(s.title || ('模考 · ' + S.bankName(s.bankId))) + '</span>' +
+        '    <span class="list-meta"><span>已答 ' + (s.done || 0) + ' / ' + (s.total || 0) + '</span>' +
+        (expired
+          ? '      <span class="tag warn">已失效</span><span>连续 ' + IDLE_DAYS + ' 天无活动 · 答案已停止收录</span><span>' + esc(s.updatedAt || '') + '</span></span>'
+          : '      <span class="tag brand">进行中</span><span>' + esc(s.updatedAt || '') + '</span></span>') +
+        '  </span>' +
+        '  <span class="list-side">' +
+        (expired
+          ? '    <button type="button" class="btn btn-sm" data-act="noop">去交卷</button>'
+          : '    <button type="button" class="btn btn-sm" data-act="resume" data-id="' + s.id + '">继续答题</button>') +
+        '    <button type="button" class="btn btn-sm btn-quiet" data-act="drop" data-id="' + s.id + '">放弃</button>' +
+        '  </span>' +
+        '</div>' +
+        (expired
+          ? '<p class="hint hint-flat">失效只是把会话标成「不能再答」并通知你：模考中心这条记录标注「已失效」，同时给一条站内通知，点通知直接进本会话。失效不判成绩、不自动交卷，仍然要你显式选交卷或放弃。</p>'
+          : '');
+    }).join('');
+    return '' +
+      '<section class="section">' +
+      '  <div class="section-head"><h2 class="section-title">未完成的模考</h2><span class="section-note">会话保存在实例上，刷新、换设备都能从当前题继续；不限时的会话不会自动收卷，连续 30 天无活动会标记为失效并通知你。</span></div>' +
+      '  <div class="list">' + rows + '</div>' +
+      '</section>';
+  }
+  function renderCenter() {
+    var profiles = PROFILES.map(function (p) {
+      var noBp = !p.sections.length;
+      return '' +
+        '<div class="list-row">' +
+        '  <span class="list-main">' +
+        '    <span class="list-title">' + esc(p.name) + '</span>' +
+        '    <span class="list-meta">' +
+        (noBp ? '<span class="tag warn">未配置蓝图</span><span>基础题库模式：按题库既有顺序抽取前 N 题</span>'
+              : '<span>蓝图 v' + p.version + ' · ' + p.sections.length + ' 个配额段 · ' + bpTotal(p) + ' 题 · 客观题满分 ' + objFull(p) + ' 分</span>') +
+        '      ' + (p.negative > 0 ? '<span class="tag warn">答错扣 ' + p.negative + ' 分</span>' : '<span class="tag plain">答错不扣分</span>') +
+        '      ' + (p.record ? '<span class="tag plain">纳入学习记录</span>' : '<span class="tag plain">不纳入学习记录</span>') +
+        '      <span>进行中 ' + p.refs.active + ' 场 · 历史报告 ' + p.refs.reports + ' 份</span>' +
+        '    </span>' +
+        '  </span>' +
+        '  <span class="list-side">' +
+        '    <a class="btn btn-sm btn-quiet" href="../screens/exams.html">蓝图编辑</a>' +
+        '    <button type="button" class="btn btn-sm" data-act="pick-paper" data-id="' + p.id + '">开始</button>' +
+        '    <button type="button" class="btn btn-sm btn-quiet" data-act="reexam" data-id="' + p.id + '">重新考试</button>' +
+        '  </span>' +
+        '</div>';
+    }).join('');
+
+    var banks = BANKS.map(function (b) {
+      var empty = !b.count;
+      return '' +
+        '<div class="list-row">' +
+        '  <span class="list-main"><span class="list-title">' + esc(b.name) + '</span>' +
+        '  <span class="list-meta"><span>' + (empty ? '0 题' : b.count + ' 题可组卷') + '</span></span></span>' +
+        '  <span class="list-side">' + (empty
+          ? '<button type="button" class="btn btn-sm" disabled>开始模考</button>'
+          : '<button type="button" class="btn btn-sm" data-act="pick-bank" data-id="' + b.id + '">开始模考</button>') + '</span>' +
+        '</div>';
+    }).join('');
+
+    return '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow">学习</p>' +
+      '    <h1 class="page-title">模考</h1>' +
+      '    <p class="page-sub">考试档案与蓝图 · 组卷开考 · 成绩报告（交卷前不显示对错）</p>' +
+      '  </div>' +
+      '  <div class="page-actions">' +
+      '    <button type="button" class="btn" data-act="to-blueprint">蓝图与模板</button>' +
+      '    <button type="button" class="btn btn-primary" data-act="to-setup">' + ico('play', '14px') + '开始模考</button>' +
+      '  </div>' +
+      '</header>' +
+      storeSessionsHtml() +
+      '<section class="section">' +
+      '  <div class="section-head"><h2 class="section-title">考试档案</h2><span class="section-note">共 ' + PROFILES.length + ' 份 · 档案是蓝图的容器，本身不承载规则</span></div>' +
+      '  <div class="list">' + profiles + '</div>' +
+      '</section>' +
+      '<section class="section">' +
+      '  <div class="section-head"><h2 class="section-title">从题库开始</h2><span class="section-note">不使用蓝图，按题库既有顺序抽取前 N 题</span></div>' +
+      '  <div class="list">' + banks + '</div>' +
+      '  <div class="notice info mt-4">' + ico('info', '15px') +
+      '    <div class="notice-body"><span class="notice-title">无蓝图时的降级：基础题库模式</span><br>' +
+      '    不使用蓝图时按题库既有顺序<strong>顺序</strong>抽取前 N 题，不承诺随机；报告仍完整，只是没有配比约束。' +
+      '      <span class="notice-actions"><button type="button" class="btn btn-sm" data-act="to-blueprint">去配置蓝图</button></span>' +
+      '    </div>' +
+      '  </div>' +
+      '</section>';
+  }
+
+  /* ---------- 步骤 1：蓝图可视化编辑与模板导入 ---------- */
+  function renderBlueprint() {
+    var p = profile('p1');
+    var sections = p.sections.map(function (s, i) {
+      return '' +
+        '<div class="list-row">' +
+        '  <span class="list-main">' +
+        '    <span class="list-title">' + esc(s.type) + ' · ' + s.n + ' 题' + (OBJECTIVE[s.type] ? ' × ' + s.score + ' 分' : '（不判分）') + '</span>' +
+        '    <span class="list-meta"><span>难度 ' + esc(s.diff) + '</span><span>章节 不限</span><span>标签 ' + (s.type === '问答题' ? '案例' : '不限') + '</span></span>' +
+        '  </span>' +
+        '  <span class="list-side"><button type="button" class="btn btn-sm btn-quiet" data-act="noop" aria-label="移除配额">' + ico('trash', '13px') + '</button></span>' +
+        '</div>';
+    }).join('');
+
+    var tplSteps = ['选择模板', '预览与校验', '导入结果'].map(function (n, i) {
+      var cls = 'step' + (i === state.tplStep ? ' is-active' : (i < state.tplStep ? ' is-done' : ''));
+      return '<button type="button" class="' + cls + '" data-act="tpl-step" data-i="' + i + '"><span class="step-n">' + (i < state.tplStep ? ico('check', '11px') : (i + 1)) + '</span><span class="step-name">' + n + '</span></button>';
+    }).join('<span class="step-line"></span>');
+
+    var tplPanel = '';
+    if (state.tplStep === 0) {
+      tplPanel = '<div class="ee-tpl-grid">' + TEMPLATES.map(function (t, i) {
+        return '<button type="button" class="ee-tpl' + (i === state.tplIndex ? ' is-on' : '') + '" data-act="tpl-pick" data-i="' + i + '">' +
+          '<span class="ee-tpl-name">' + esc(t.name) + '</span><span class="ee-tpl-meta">' + esc(t.meta) + '</span></button>';
+      }).join('') + '</div>' +
+        '<label class="field mt-4"><span class="label">或上传 JSON 模板</span>' +
+        '<input class="input" type="text" value="soft-exam-blueprint.json" aria-label="JSON 模板文件名">' +
+        '<span class="hint">只接受内置模板或用户上传的 JSON；本期不提供 AI 建议蓝图。</span></label>';
+    } else if (state.tplStep === 1) {
+      var t = TEMPLATES[state.tplIndex];
+      tplPanel =
+        '<div class="dtable-wrap"><table class="dtable">' +
+        '  <thead><tr><th>配额段</th><th>题型</th><th>难度</th><th>题数</th><th>单题分值</th></tr></thead>' +
+        '  <tbody>' + t.rows.map(function (r) {
+          return '<tr><td data-label="配额段">' + esc(t.name) + '</td><td data-label="题型">' + esc(r[0]) + '</td><td data-label="难度">' + esc(r[1]) + '</td><td data-label="题数" class="num">' + r[2] + '</td><td data-label="单题分值" class="num">' + r[3] + '</td></tr>';
+        }).join('') + '</tbody></table></div>' +
+        '<div class="notice ok mt-4">' + ico('check', '15px') + '<div class="notice-body">校验通过：将创建 v4 · ' + t.rows.length + ' 个配额段 · 总题数 ' + t.rows.reduce(function (a, r) { return a + r[2]; }, 0) + ' · 客观题满分 ' + t.rows.reduce(function (a, r) { return a + r[2] * r[3]; }, 0) + ' 分。</div></div>' +
+        '<div class="notice bad mt-3" hidden>' + ico('alert-triangle', '15px') + '<div class="notice-body"><span class="notice-title">模板校验未通过，未写入任何版本</span><br>第 2 个配额段的 count 必须是正数（当前为 0）；题型「填空」不在支持范围。</div></div>';
+    } else {
+      tplPanel = '<div class="notice ok">' + ico('check', '15px') + '<div class="notice-body"><span class="notice-title">已导入为蓝图 v4</span><br>导入不直接开考；可以继续在蓝图编辑里手工修改，或用这份档案开始模考。导入只新增一个版本，不覆盖 v3。</div></div>';
+    }
+
+    return '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow">学习 / 模考</p>' +
+      '    <h1 class="page-title">蓝图编辑与模板导入</h1>' +
+      '    <p class="page-sub">蓝图是组卷的唯一规则来源；保存生成新版本，永不覆盖旧版本。</p>' +
+      '  </div>' +
+      '  <div class="page-actions"><button type="button" class="btn btn-primary" data-act="save-bp">保存为 v4</button></div>' +
+      '</header>' +
+      '<div class="panel"><div class="panel-body flow-stack">' +
+      '  <div class="stat-row">' +
+      '    <div class="stat"><div class="stat-num">' + bpTotal(p) + '</div><div class="stat-cap">总题数</div></div>' +
+      '    <div class="stat"><div class="stat-num">' + objFull(p) + '</div><div class="stat-cap">客观题满分</div></div>' +
+      '    <div class="stat"><div class="stat-num">' + subjCount(p) + '</div><div class="stat-cap">主观题（不判分）</div></div>' +
+      '    <div class="stat"><div class="stat-num">' + p.negative + '</div><div class="stat-cap">答错扣分</div></div>' +
+      '  </div>' +
+      '  <div class="notice info">' + ico('info', '15px') + '<div class="notice-body"><span class="notice-title">版本绑定</span><br>已有 ' + p.refs.active + ' 场进行中的模考使用 v3；保存生成 v4 后，那些考试仍按 v3 判分，互不影响。</div></div>' +
+      '  <div class="setup-grid">' +
+      '    <label class="field"><span class="label">答错扣分（负分）</span><input class="input" type="number" min="0" max="5" step="0.5" value="' + p.negative + '" aria-label="答错扣分"><span class="hint">只罚答错的客观题；未答与主观题不计负分。</span></label>' +
+      '    <div class="flow-stack-sm">' +
+      '      <label class="check"><input type="checkbox"' + (p.floor ? ' checked' : '') + '><span>设 0 分下限（关闭时总分可为负）</span></label>' +
+      '      <label class="check"><input type="checkbox"' + (p.record ? ' checked' : '') + '><span>纳入学习记录（默认开；会话级可覆盖）</span></label>' +
+      '    </div>' +
+      '  </div>' +
+      '  <div>' +
+      '    <div class="rule-label">配额段 · 题型 / 难度 / 章节 / 标签 / 题数 / 单题分值</div>' +
+      '    <div class="list mt-3">' + sections + '</div>' +
+      '    <div class="flow-actions mt-3"><button type="button" class="btn btn-sm" data-act="noop">' + ico('plus', '14px') + '添加配额段</button></div>' +
+      '  </div>' +
+      '</div></div>' +
+      '<section class="section mt-6">' +
+      '  <div class="section-head"><h2 class="section-title">蓝图导入模板（低频）</h2><span class="section-note">从常见考试结构或自己上传的 JSON 开始改，不必从零配额段配起</span></div>' +
+      '  <div class="steps">' + tplSteps + '</div>' +
+      '  <div class="panel mt-4"><div class="panel-body">' + tplPanel + '</div></div>' +
+      '</section>';
+  }
+
+  /* ---------- 步骤 2：组卷与开始前确认 ---------- */
+  function renderSetup() {
+    var p = profile(state.setup.profileId);
+    var bankOpts = BANKS.map(function (b) {
+      return '<option value="' + b.id + '"' + (state.setup.bankId === b.id ? ' selected' : '') + '>' + esc(b.name) + ' · ' + b.count + ' 题</option>';
+    }).join('');
+    var profOpts = '<option value="">不使用蓝图（基础题库模式）</option>' + PROFILES.map(function (x) {
+      return '<option value="' + x.id + '"' + (state.setup.profileId === x.id ? ' selected' : '') + '>' + esc(x.name) + (x.version ? '（v' + x.version + '）' : '（未配置）') + '</option>';
+    }).join('');
+    var max = bankMax(state.setup.bankId);
+    var invalid = state.setup.total < 1 || state.setup.total > max;
+    var refuse = state.refuse === 'insufficient'
+      ? '<div class="notice bad">' + ico('alert-triangle', '15px') + '<div class="notice-body"><span class="notice-title">题库不足，无法按蓝图组卷</span><br>蓝图要 ' + bpTotal(p) + ' 题，这个题库只有 ' + max + ' 题；按降级补齐规则会从剩余候选中补入，补入题数已写在下面的「实际配额结果」里。也可以换一个题库，或把题目数量改到 1 到 ' + max + ' 之间。</div></div>'
+      : (state.refuse === 'archived'
+        ? '<div class="notice bad">' + ico('alert-triangle', '15px') + '<div class="notice-body"><span class="notice-title">有题目已被归档</span><br>「旧题库 1794570360969」里的 3 道题在开考前被归档，不参与组卷；进行中的模考仍按快照进行，不受影响。换一个题库或重新选蓝图即可开考。</div></div>'
+        : '');
+    var quota = p && p.sections.length
+      ? p.sections.map(function (s) { return s.type + ' ' + s.n + ' 题' + (s.diff !== '不限' ? '（' + s.diff + '）' : '') + (OBJECTIVE[s.type] ? ' × ' + s.score + ' 分' : '（不判分）'); }).join(' · ')
+      : '基础题库模式：按题库既有顺序顺序抽取前 ' + state.setup.total + ' 题';
+
+    return '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow">学习 / 模考</p>' +
+      '    <h1 class="page-title">组卷与开始前确认</h1>' +
+      '    <p class="page-sub">开考前把「考什么、考多久、学习记录算不算」讲清楚。</p>' +
+      '  </div>' +
+      '</header>' +
+      '<div class="panel"><div class="panel-body flow-stack">' +
+      '  <div class="setup-grid">' +
+      '    <label class="field"><span class="label">题库</span><select class="select" data-act="set-bank">' + bankOpts + '</select><span class="hint">只列题量大于 0 的可访问题库</span></label>' +
+      '    <label class="field"><span class="label">蓝图</span><select class="select" data-act="set-profile">' + profOpts + '</select><span class="hint">' + (p && p.sections.length ? '蓝图 v' + p.version + ' · ' + bpTotal(p) + ' 题 · 客观题满分 ' + objFull(p) + ' 分' : '不使用蓝图：按题库既有顺序顺序抽取前 N 题') + '</span></label>' +
+      '    <label class="field"><span class="label">题目数量</span>' +
+      '      <input class="input' + (invalid ? ' is-error' : '') + '" type="number" min="1" max="' + max + '" value="' + state.setup.total + '" data-act="set-total" aria-label="题目数量">' +
+      (invalid ? '<span class="field-err">题目数量需要在 1 到 ' + max + ' 之间。</span>' : '<span class="hint">上限为题库题量 ' + max + '</span>') + '</label>' +
+      '    <label class="field"><span class="label">时长（分钟）</span>' +
+      '      <input class="input" type="number" min="1" max="600" value="' + state.setup.minutes + '" data-act="set-minutes" aria-label="时长（分钟）">' +
+      '      <span class="hint">' + (state.setup.unlimited ? '本场不限时：没有硬截止、没有宽限、没有自动交卷；连续 30 天无活动会标记为失效并通知你。' : '正整数分钟；不接受 0') + '</span></label>' +
+      '  </div>' +
+      '  <label class="check"><input type="checkbox"' + (state.setup.unlimited ? ' checked' : '') + ' data-act="set-unlimited"><span>不限时（没有硬截止、没有宽限、没有自动交卷；连续 30 天无活动会标记为失效并通知你，之后仍需你显式交卷或放弃，不会自动判成绩）</span></label>' +
+      '  <label class="check"><input type="checkbox"' + (state.setup.recordMistakes ? ' checked' : '') + ' data-act="set-mistakes"><span>纳入学习记录（关闭时本场不写错题、不写 FSRS、不计入统计）</span></label>' +
+      refuse +
+      '  <div>' +
+      '    <div class="rule-label">开始前确认</div>' +
+      '    <div class="kv mt-3">' +
+      '      <span class="kv-key">题库与可组卷题量</span><span class="kv-val">' + esc(bankName(state.setup.bankId)) + ' · ' + max + ' 题</span>' +
+      '      <span class="kv-key">蓝图版本</span><span class="kv-val">' + (p && p.version ? 'v' + p.version + '（本场绑定该版本）' : '不使用蓝图') + '</span>' +
+      '      <span class="kv-key">实际配额结果</span><span class="kv-val">' + esc(quota) + '</span>' +
+      '      <span class="kv-key">客观题总分</span><span class="kv-val">' + (p && p.sections.length ? objFull(p) + ' 分；主观题 ' + subjCount(p) + ' 题未判分，不计入' : '按每题 1 分计') + '</span>' +
+      '      <span class="kv-key">负分规则</span><span class="kv-val">' + (p && p.negative > 0 ? '答错扣 ' + p.negative + ' 分；' + (p.floor ? '设 0 分下限' : '未设 0 分下限，总分可为负') : '答错不扣分') + '</span>' +
+      '      <span class="kv-key">时长</span><span class="kv-val">' + (state.setup.unlimited ? '不限时（没有硬截止、没有宽限、没有自动交卷）' : state.setup.minutes + ' 分钟') + '</span>' +
+      '      <span class="kv-key">闲置失效</span><span class="kv-val">' + (state.setup.unlimited
+        ? '连续 30 天无活动将标记为失效并通知你，之后仍需你显式交卷或放弃，不会自动判成绩。'
+        : '限时考试到点即走宽限与服务端收卷，不适用闲置失效。') + '</span>' +
+      '      <span class="kv-key">是否纳入学习记录</span><span class="kv-val">' + (state.setup.recordMistakes ? '纳入：错题、FSRS 与统计照常更新' : '不纳入：本场不写错题、不写 FSRS、不计入任何统计与趋势') + '</span>' +
+      '    </div>' +
+      '  </div>' +
+      '  <div class="flow-actions">' +
+      '    <button type="button" class="btn btn-primary" data-act="begin"' + (invalid ? ' disabled' : '') + '>' + ico('play', '14px') + '开始模考</button>' +
+      '    <button type="button" class="btn btn-quiet" data-act="refuse-insufficient">演示：题库不足</button>' +
+      '    <button type="button" class="btn btn-quiet" data-act="refuse-archived">演示：题目已归档</button>' +
+      '    <button type="button" class="btn btn-quiet" data-act="to-center">取消</button>' +
+      '  </div>' +
+      '</div></div>' +
+
+      '<dialog class="dlg narrow" id="dlgActive" aria-labelledby="dlgActiveTitle">' +
+      '  <div class="dlg-head"><div class="dlg-head-text">' +
+      '    <p class="dlg-eyebrow">模考</p><h2 class="dlg-title" id="dlgActiveTitle">已经有一场没交卷的模考</h2>' +
+      '  </div></div>' +
+      '  <div class="dlg-body">' +
+      '    <p class="dlg-p">「系统集成项目管理工程师 · 综合卷」还有 2 / 12 题未交卷。同一时间只保留一场进行中的模考。</p>' +
+      '    <div class="kv">' +
+      '      <span class="kv-key">考试档案</span><span class="kv-val">系统集成项目管理工程师 · 综合卷</span>' +
+      '      <span class="kv-key">进度</span><span class="kv-val mono">已答 10 / 12</span>' +
+      '      <span class="kv-key">剩余</span><span class="kv-val mono">58 分钟</span>' +
+      '    </div>' +
+      '  </div>' +
+      '  <div class="dlg-foot">' +
+      '    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>取消</button>' +
+      '    <button type="button" class="btn" data-act="resume-current">继续那场</button>' +
+      '    <button type="button" class="btn btn-primary" data-act="confirm-active">结束并新建</button>' +
+      '  </div>' +
+      '</dialog>';
+  }
+
+  /* ---------- 步骤 3：考试会话（作答窗口） ---------- */
+  function renderRunner() {
+    var p = paper();
+    var q = p[state.qIndex];
+    var locked = state.phase !== 'answer';
+    var opts = q.options.map(function (o) {
+      var sel = q.type === '多选题'
+        ? String(state.answers[q.id] || '').indexOf(o.key) > -1
+        : state.answers[q.id] === o.key;
+      return '<button type="button" class="opt' + (sel ? ' is-selected' : '') + '" data-act="pick" data-key="' + o.key + '" aria-pressed="' + sel + '"' +
+        (locked ? ' disabled' : '') + '><span class="opt-key">' + o.key + '</span><span class="opt-text">' + esc(o.content) + '</span></button>';
+    }).join('') || ('<label class="field"><span class="label">你的作答</span><textarea class="textarea" placeholder="输入文字作答；交卷后显示参考解析，不自动判分"' + (locked ? ' disabled' : '') + '>' + esc(state.answers[q.id] || '') + '</textarea><span class="hint">主观题保存作答与参考解析：作答状态「已作答」，判分状态「未判分」。</span></label>');
+
+    var cells = p.map(function (item, i) {
+      var cls = 'sheet-cell';
+      if (state.answers[item.id]) cls += ' is-answered';
+      if (i === state.qIndex) cls += ' is-current';
+      if (state.flags.indexOf(item.id) > -1) cls += ' is-flagged';
+      return '<button type="button" class="' + cls + '" data-act="goto-q" data-i="' + i + '" aria-label="第 ' + (i + 1) + ' 题" aria-current="' + (i === state.qIndex) + '"' +
+        (locked ? ' disabled' : '') + '>' + (i + 1) + '</button>';
+    }).join('');
+
+    var flagged = state.flags.indexOf(q.id) > -1;
+    var prof = profile(state.setup.profileId);
+
+    var exitDlg = '' +
+      '<dialog class="dlg" id="dlgExit" aria-labelledby="dlgExitTitle">' +
+      '  <div class="dlg-head"><div class="dlg-head-text">' +
+      '    <p class="dlg-eyebrow">模考</p><h2 class="dlg-title" id="dlgExitTitle">退出这场模考</h2>' +
+      '    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭">' + ico('x', '15px') + '</button>' +
+      '  </div></div>' +
+      '  <div class="dlg-body">' +
+      '    <p class="dlg-p">三种后果，选一个：</p>' +
+      '    <div class="list">' +
+      '      <div class="list-row static"><div class="list-main"><div class="list-title">继续作答</div><div class="list-meta">关闭对话框，回到当前题；直接关对话框等同这一项</div></div></div>' +
+      '      <div class="list-row static"><div class="list-main"><div class="list-title">退出（暂存）</div><div class="list-meta">保留草稿，会话留在「未完成的模考」，刷新或换设备都能接上</div></div></div>' +
+      '      <div class="list-row static"><div class="list-main"><div class="list-title">放弃这场考试</div><div class="list-meta">结束本场，不计成绩、不生成报告；需再确认一次</div></div>' +
+      '        <div class="list-side"><button type="button" class="btn btn-sm btn-danger" data-act="ask-abandon">放弃这场考试</button></div></div>' +
+      '    </div>' +
+      '  </div>' +
+      '  <div class="dlg-foot">' +
+      '    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>继续作答</button>' +
+      '    <button type="button" class="btn btn-primary" data-act="do-stash">退出（暂存）</button>' +
+      '  </div>' +
+      '</dialog>';
+
+    var submitDlg = '' +
+      '<dialog class="dlg" id="dlgSubmit" aria-labelledby="dlgSubmitTitle">' +
+      '  <div class="dlg-head"><div class="dlg-head-text">' +
+      '    <p class="dlg-eyebrow">模考</p><h2 class="dlg-title" id="dlgSubmitTitle">交卷</h2>' +
+      '    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭">' + ico('x', '15px') + '</button>' +
+      '  </div></div>' +
+      '  <div class="dlg-body">' +
+      '    <div class="stat-row">' +
+      '      <div class="stat"><div class="stat-num">' + answeredCount() + '</div><div class="stat-cap">已答（含 ' + ungradedCount() + ' 题未判分）</div></div>' +
+      '      <div class="stat"><div class="stat-num">' + unansweredObjective() + '</div><div class="stat-cap">未答客观题</div></div>' +
+      '      <div class="stat"><div class="stat-num">' + flaggedCount() + '</div><div class="stat-cap">待复查</div></div>' +
+      '    </div>' +
+      (unansweredObjective() > 0 || flaggedCount() > 0
+        ? '    <div class="notice warn">' + ico('alert-triangle', '15px') + '<div class="notice-body">还有 ' + unansweredObjective() + ' 道客观题未作答，将按 0 分计入得分、仍占满分；另有 ' + flaggedCount() + ' 题标记了待复查。警告不阻断交卷。</div></div>'
+        : '    <div class="notice ok">' + ico('check', '15px') + '<div class="notice-body">所有题目都已作答。</div></div>') +
+      '    <div class="kv">' +
+      '      <span class="kv-key">负分</span><span class="kv-val">' + (prof && prof.negative > 0 ? '答错扣 ' + prof.negative + ' 分；未设 0 分下限' : '答错不扣分') + '</span>' +
+      '      <span class="kv-key">纳入学习记录</span><span class="kv-val">' + (state.setup.recordMistakes ? '纳入：错题、FSRS 与统计照常更新' : '不纳入：本场不写错题、不写 FSRS、不计入统计') + '</span>' +
+      '    </div>' +
+      '    <p class="hint">交卷后不能再修改答案。关掉这个对话框可以回去继续改——打开交卷确认不冻结答案。</p>' +
+      '  </div>' +
+      '  <div class="dlg-foot">' +
+      '    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>继续作答</button>' +
+      '    <button type="button" class="btn" data-act="jump-blank">跳到第 ' + (firstUnanswered() + 1) + ' 题（首个未答）</button>' +
+      '    <button type="button" class="btn btn-primary" data-act="do-submit">仍要交卷</button>' +
+      '  </div>' +
+      '</dialog>';
+
+    return '' +
+      '<div class="runner-top">' +
+      '  <button type="button" class="btn btn-quiet btn-sm" data-act="exit-exam">' + ico('arrow-left', '14px') + '退出</button>' +
+      '  <span class="runner-mode">' + esc(profileName(state.setup.profileId) || '直接抽题') + '</span>' +
+      '  <span class="od-spacer"></span>' +
+      '  <span class="phase-chip"><span class="tag plain">作答窗口</span>' +
+      '    <span class="timer' + (state.remaining < 300 ? ' low' : '') + '" id="examTimer" aria-label="剩余时间">' + fmtTime(state.remaining) + '</span></span>' +
+      '  <button type="button" class="btn btn-primary btn-sm" data-act="to-submit"' + (locked ? ' disabled' : '') + '>交卷</button>' +
+      '</div>' +
+      '<div class="runner">' +
+      '  <div class="runner-body">' +
+      '    <div class="q-meta"><span>第 ' + (state.qIndex + 1) + ' 题 · 共 ' + p.length + ' 题</span><span>' + esc(q.type) + '</span>' +
+      (OBJECTIVE[q.type] ? '' : '<span class="tag plain">主观题 · 不判分</span>') +
+      (flagged ? '<span class="tag warn">' + ico('flag', '12px') + '待复查</span>' : '') + '</div>' +
+      '    <p class="q-stem">' + esc(q.stem) + '</p>' +
+      '    <div class="opt-list">' + opts + '</div>' +
+      '    <p class="rail-note">模考不判定对错：选项只有选中态，交卷后才会显示答案与解析。</p>' +
+      '    <div class="runner-foot">' +
+      '      <button type="button" class="btn btn-sm" data-act="prev-q"' + (state.qIndex === 0 || locked ? ' disabled' : '') + '>上一题</button>' +
+      '      <button type="button" class="btn btn-sm" data-act="next-q"' + (state.qIndex === p.length - 1 || locked ? ' disabled' : '') + '>下一题</button>' +
+      '      <span class="od-spacer"></span>' +
+      '      <button type="button" class="btn btn-sm' + (flagged ? ' btn-primary' : ' btn-quiet') + '" data-act="flag"' + (locked ? ' disabled' : '') + '>' + ico('flag', '13px') + (flagged ? '已标记待复查' : '待复查') + ' <span class="kbd">B</span></button>' +
+      '    </div>' +
+      '  </div>' +
+      '  <aside class="runner-rail">' +
+      '    <div class="flow-stack-sm">' +
+      '      <span class="rail-title">答题卡</span>' +
+      '      <span class="tiny-mono">已答 ' + answeredCount() + ' / ' + p.length + '</span>' +
+      '      <div class="sheet-grid">' + cells + '</div>' +
+      '      <div class="sheet-legend"><span><i class="is-answered"></i>已答</span><span><i></i>未答</span><span><i class="is-current"></i>当前</span><span><i class="is-flagged"></i>待复查</span></div>' +
+      '    </div>' +
+      '    <div class="flow-stack-sm">' +
+      '      <span class="rail-title">本场规则</span>' +
+      '      <p class="rail-note">时长 ' + (state.setup.unlimited ? '不限时' : state.setup.minutes + ' 分钟') + (state.setup.unlimited ? '' : ' · 宽限 ' + GRACE + ' 秒（只同步，不继续答题）') + ' · 负分 ' + (prof && prof.negative > 0 ? prof.negative + ' 分，无 0 分下限' : '不扣分') + ' · 学习记录 ' + (state.setup.recordMistakes ? '纳入' : '不纳入') + '</p>' +
+      '      <p class="rail-note">' + (state.setup.unlimited
+        ? '本场不限时：没有硬截止、没有宽限、没有自动交卷；只有连续 30 天无活动会标记为失效并通知你，之后仍需你显式交卷或放弃，不会自动判成绩。'
+        : '本场限时：到点进入 60 秒宽限，再由服务端收卷；不适用闲置失效。') + '</p>' +
+      '    </div>' +
+      '    <div class="flow-stack-sm">' +
+      '      <span class="rail-title">快捷键</span>' +
+      '      <p class="keys-hint"><span class="kbd">A</span>–<span class="kbd">H</span> 选择 · <span class="kbd">B</span> 待复查 · <span class="kbd">←</span><span class="kbd">→</span> 换题；浮层打开时挂起。</p>' +
+      '    </div>' +
+      '  </aside>' +
+      '</div>' + exitDlg + submitDlg +
+
+      '<dialog class="dlg narrow danger" id="dlgAbandon" aria-labelledby="dlgAbandonTitle">' +
+      '  <div class="dlg-head"><div class="dlg-head-text">' +
+      '    <p class="dlg-eyebrow">模考</p><h2 class="dlg-title" id="dlgAbandonTitle">放弃这场模考</h2>' +
+      '    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭">' + ico('x', '15px') + '</button>' +
+      '  </div></div>' +
+      '  <div class="dlg-body">' +
+      '    <div class="notice bad">' + ico('alert-triangle', '15px') + '<div class="notice-body"><span class="notice-title">放弃后本次作答不再可用</span><br>' +
+      '      这场考试会被结束：不计成绩、不生成报告、不进入历史报告。已经作答的题不会进错题，FSRS 也不会被这场考试更新。如果只是暂时离开，选「退出（暂存）」更稳妥。</div></div>' +
+      '    <div class="kv">' +
+      '      <span class="kv-key">考试档案</span><span class="kv-val">' + esc(profileName(state.setup.profileId)) + '</span>' +
+      '      <span class="kv-key">进度</span><span class="kv-val mono">已答 ' + answeredCount() + ' / ' + p.length + '</span>' +
+      '      <span class="kv-key">剩余</span><span class="kv-val mono">' + fmtTime(state.remaining) + '</span>' +
+      '    </div>' +
+      '  </div>' +
+      '  <div class="dlg-foot">' +
+      '    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>继续作答</button>' +
+      '    <button type="button" class="btn btn-danger" data-act="do-abandon">确认放弃</button>' +
+      '  </div>' +
+      '</dialog>';
+  }
+
+  /* ---------- 步骤 4：宽限 60 秒（CR-31 第二段） ---------- */
+  function renderGrace() {
+    var p = paper();
+    var q = p[7];
+    return '' +
+      '<div class="runner-top">' +
+      '  <button type="button" class="btn btn-quiet btn-sm" data-act="exit-exam">' + ico('arrow-left', '14px') + '退出</button>' +
+      '  <span class="runner-mode">' + esc(profileName(state.setup.profileId) || '直接抽题') + '</span>' +
+      '  <span class="od-spacer"></span>' +
+      '  <span class="phase-chip"><span class="tag brand">宽限中 · 已收卷待同步</span>' +
+      '    <span class="timer" aria-label="宽限剩余时间">' + fmtTime(state.grace) + '</span></span>' +
+      '  <button type="button" class="btn btn-primary btn-sm" data-act="to-submit">交卷</button>' +
+      '</div>' +
+      '<div class="runner">' +
+      '  <div class="runner-body">' +
+      '    <div class="notice info">' + ico('clock', '15px') +
+      '      <div class="notice-body"><span class="notice-title">已到交卷时间，答案已停止收录</span><br>' +
+      '      宽限的 60 秒<strong>只用于把截止前已经产生的答案同步上服务端，不用于继续答题</strong>；期间不能新增作答、不能改答案、不能标记。宽限结束由服务端完成交卷并生成报告，<strong>不要求你保持这个页面打开</strong>——重新打开这个会话会直接看到已生成的报告。' +
+      '        <span class="notice-actions"><button type="button" class="btn btn-sm" data-act="noop">重试同步</button></span>' +
+      '      </div>' +
+      '    </div>' +
+      '    <div class="q-meta"><span>第 ' + (state.qIndex + 1) + ' 题 · 共 ' + p.length + ' 题</span><span>' + esc(q.type) + '</span><span class="tag warn">待复查</span></div>' +
+      '    <p class="q-stem">' + esc(q.stem) + '</p>' +
+      '    <div class="opt-list">' + q.options.map(function (o) {
+        var sel = state.answers[q.id] === o.key;
+        return '<button type="button" class="opt' + (sel ? ' is-selected' : '') + '" disabled aria-pressed="' + sel + '"><span class="opt-key">' + o.key + '</span><span class="opt-text">' + esc(o.content) + '</span></button>';
+      }).join('') + '</div>' +
+      '    <p class="rail-note">作答窗口已结束：选项只读，选中态保留为截止前保存的答案。交卷与报告读取仍然放行——超时禁止的只是「继续作答」。</p>' +
+      '  </div>' +
+      '  <aside class="runner-rail">' +
+      '    <div class="flow-stack-sm">' +
+      '      <span class="rail-title">答题卡 · 已收卷只读</span>' +
+      '      <div class="sheet-grid">' + p.map(function (item, i) {
+        var cls = 'sheet-cell';
+        if (state.answers[item.id]) cls += ' is-answered';
+        if (i === state.qIndex) cls += ' is-current';
+        if (state.flags.indexOf(item.id) > -1) cls += ' is-flagged';
+        return '<button type="button" class="' + cls + '" disabled aria-label="第 ' + (i + 1) + ' 题">' + (i + 1) + '</button>';
+      }).join('') + '</div>' +
+      '      <div class="sheet-legend"><span><i class="is-answered"></i>已答</span><span><i></i>未答</span><span><i class="is-flagged"></i>待复查</span></div>' +
+      '    </div>' +
+      '    <div class="flow-stack-sm">' +
+      '      <span class="rail-title">同步状态</span>' +
+      '      <div class="kv">' +
+      '        <span class="kv-key">截止前答案</span><span class="kv-val mono">' + answeredCount() + ' 题已同步</span>' +
+      '        <span class="kv-key">本机待同步</span><span class="kv-val mono">0 题</span>' +
+      '        <span class="kv-key">宽限时长</span><span class="kv-val mono">' + GRACE + ' 秒（显式产品参数）</span>' +
+      '      </div>' +
+      '      <p class="rail-note">宽限只同步截止前已经产生的答案；本机未同步成功的答案不会悄悄补进成绩，会在报告里单独说明。</p>' +
+      '    </div>' +
+      '  </aside>' +
+      '</div>' +
+      '<div class="runner-foot">' +
+      '  <span class="runner-mode">答案已停止收录</span>' +
+      '  <span class="od-spacer"></span>' +
+      '  <button type="button" class="btn btn-sm" disabled>上一题</button>' +
+      '  <button type="button" class="btn btn-sm btn-primary" data-act="to-submit">交卷</button>' +
+      '</div>';
+  }
+
+  /* ---------- 步骤 5：服务端收卷（CR-31 第三段） ---------- */
+  function renderCollected() {
+    return '' +
+      '<div class="runner-top">' +
+      '  <span class="runner-mode">' + esc(profileName(state.setup.profileId) || '直接抽题') + '</span>' +
+      '  <span class="od-spacer"></span>' +
+      '  <span class="phase-chip"><span class="tag ok">服务端已收卷</span><span class="tiny-mono">宽限已结束 · 交卷来源：到点自动交卷</span></span>' +
+      '  <button type="button" class="btn btn-primary btn-sm" data-act="to-report">查看成绩报告</button>' +
+      '</div>' +
+      '<div class="panel"><div class="panel-body flow-stack">' +
+      '  <div class="notice ok">' + ico('check', '15px') +
+      '    <div class="notice-body"><span class="notice-title">服务端已完成交卷，成绩报告已生成</span><br>' +
+      '    收卷由服务端在宽限结束时完成，不依赖你是否保持页面打开。本场为<strong>到点自动交卷</strong>；报告落库后永久不可变、不重算、不覆盖。' +
+      '      <span class="notice-actions"><button type="button" class="btn btn-sm btn-primary" data-act="to-report">查看成绩报告</button></span>' +
+      '    </div>' +
+      '  </div>' +
+      '  <div>' +
+      '    <div class="rule-label">会话时间线（CR-31）</div>' +
+      '    <div class="kv mt-3">' +
+      '      <span class="kv-key">作答窗口</span><span class="kv-val mono">开考 → 22:14（正常作答、同步草稿、标记）</span>' +
+      '      <span class="kv-key">宽限</span><span class="kv-val mono">22:14 → 22:15（' + GRACE + ' 秒，只同步截止前已产生的答案）</span>' +
+      '      <span class="kv-key">服务端收卷</span><span class="kv-val mono">22:15（由服务端完成交卷并生成报告）</span>' +
+      '    </div>' +
+      '    <p class="rail-note">「作答窗口结束」不是会话终结：宽限期内会话仍是 active，交卷与报告读取始终放行。</p>' +
+      '  </div>' +
+      '</div></div>';
+  }
+
+  /* ---------- 步骤 6：成绩报告（CR-06 口径） ---------- */
+  function renderReport() {
+    var p = paper();
+    var score = objectiveScore(), full = objectiveFullPaper();
+    var rate = full ? Math.round(score / full * 100) : 0;
+    var answeredObj = 0, correctObj = 0;
+    p.forEach(function (q) {
+      if (!OBJECTIVE[q.type]) return;
+      if (state.answers[q.id]) { answeredObj++; if (isCorrect(q)) correctObj++; }
+    });
+    var acc = answeredObj ? Math.round(correctObj / answeredObj * 100) : null;
+    var rows = wrongRows();
+    var detail = rows.map(function (r) {
+      return '' +
+        '<tr>' +
+        '  <td data-label="题号" class="num">' + String(r.no).padStart(2, '0') + '</td>' +
+        '  <td data-label="题干"><span class="wrong-stem">' + esc(r.q.stem) + '</span></td>' +
+        '  <td data-label="你的答案"><span class="mono">' + esc(r.mine) + '</span></td>' +
+        '  <td data-label="标准答案"><span class="mono">' + (r.right || '—') + '</span></td>' +
+        '  <td data-label="状态">' + (r.subj ? '<span class="tag brand">已作答 · 未判分</span>' : (r.mine === '未答' ? '<span class="tag plain">未答</span>' : '<span class="tag bad">错误</span>')) + '</td>' +
+        '</tr>';
+    }).join('');
+
+    return '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow">模考 · ' + esc(profileName(state.setup.profileId)) + '</p>' +
+      '    <h1 class="page-title">成绩报告</h1>' +
+      '    <p class="page-sub">' + esc(bankName(state.setup.bankId)) + ' · 交卷来源 ' + (state.via === 'manual' ? '手动交卷' : '到点自动交卷') + '</p>' +
+      '  </div>' +
+      '  <div class="page-actions">' +
+      '    <button type="button" class="btn btn-primary" data-act="reexam-current">' + ico('refresh', '14px') + '重新考试</button>' +
+      '    <button type="button" class="btn btn-quiet" data-act="to-center">返回模考中心</button>' +
+      '  </div>' +
+      '</header>' +
+      '<div class="panel"><div class="panel-body flow-stack">' +
+      '  <div class="od-row baseline">' +
+      '    <span class="score-side"><span class="score-num">' + score + '</span><span class="score-unit">/ ' + full + ' 分（客观题满分，含未作答）</span></span>' +
+      '    <span class="od-spacer"></span>' +
+      '    <span class="tag plain">用时 47 分钟（服务端在线）· 52 分钟（墙钟）</span>' +
+      '  </div>' +
+      '  <dl class="rate-grid">' +
+      '    <div><dt>考试得分率</dt><dd>' + rate + '%</dd><dd class="rate-cap">客观题得分 ' + score + ' ÷ 客观题满分 ' + full + '（分母含未作答）</dd></div>' +
+      '    <div><dt>已答客观题正确率</dt><dd>' + (acc == null ? '暂无数据' : acc + '%') + '</dd><dd class="rate-cap">答对 ' + correctObj + ' ÷ 已答 ' + answeredObj + '（分母只含已作答）</dd></div>' +
+      '  </dl>' +
+      '  <div class="notice info">' + ico('info', '15px') + '<div class="notice-body"><span class="notice-title">两个率的分母不同，不得混用</span><br>' +
+      '    考试得分率的分母是本场<strong>全部</strong>客观题（未作答按 0 分计入得分，但仍占满分）；已答客观题正确率的分母只是你实际作答过的客观题。例：100 道每题 1 分的客观题只答对 1 道、其余未答 → 得分 1 / 满分 100 / 得分率 1% / 已答客观题正确率 100%。两个率不同是正确结果。</div></div>' +
+      '  <div class="count-grid">' +
+      '    <div class="count-cell"><b>' + answeredCount() + '</b><span>已答（含 ' + ungradedCount() + ' 题已作答·未判分）</span></div>' +
+      '    <div class="count-cell"><b>' + (p.length - answeredCount()) + '</b><span>未答（含未作答的主观题）</span></div>' +
+      '    <div class="count-cell"><b>' + ungradedCount() + '</b><span>未判分（主观题，不计入得分与满分）</span></div>' +
+      '    <div class="count-cell"><b>' + score + ' / ' + full + '</b><span>客观题得分 / 客观题满分</span></div>' +
+      '    <div class="count-cell"><b>' + score + ' / ' + full + '</b><span>卷面总分 / 满分（主观题部分未判分，不计入）</span></div>' +
+      '  </div>' +
+      '  <div class="kv">' +
+      '    <span class="kv-key">负分规则</span><span class="kv-val">答错扣 0.5 分；未设 0 分下限，总分可为负</span>' +
+      '    <span class="kv-key">纳入学习记录</span><span class="kv-val">纳入：答错的题已进入错题，FSRS 已调度</span>' +
+      '    <span class="kv-key">本机未同步成功</span><span class="kv-val">0 题（有未同步答案时会在此列出，且不计入本场成绩）</span>' +
+      '    <span class="kv-key">判分依据</span><span class="kv-val">交卷时保存的题目版本 v3，不随后续改题变化</span>' +
+      '  </div>' +
+      '  <div>' +
+      '    <div class="section-head"><h2 class="section-title">按题型统计</h2><span class="section-note">主观题不自动判分，单独标注</span></div>' +
+      '    <div class="dtable-wrap"><table class="dtable">' +
+      '      <thead><tr><th>题型</th><th>题数</th><th>单题分值</th><th>已答</th><th>答对</th><th>得分</th><th>占满分</th></tr></thead>' +
+      '      <tbody>' + typeRows() + '</tbody>' +
+      '    </table></div>' +
+      '  </div>' +
+      '  <div>' +
+      '    <div class="section-head"><h2 class="section-title">错题与未答</h2><span class="section-note">共 ' + rows.length + ' 题</span></div>' +
+      '    <div class="dtable-wrap"><table class="dtable">' +
+      '      <thead><tr><th>题号</th><th>题干</th><th>你的答案</th><th>标准答案</th><th>状态</th></tr></thead>' +
+      '      <tbody>' + detail + '</tbody>' +
+      '    </table></div>' +
+      '  </div>' +
+      (state.setup.recordMistakes
+        ? '  <div class="notice ok">' + ico('check', '15px') + '<div class="notice-body">答错的 ' + wrongCount() + ' 题已进入错题，FSRS 已按本场调度。</div></div>'
+        : '  <div class="notice info">' + ico('info', '15px') + '<div class="notice-body">本场不纳入学习记录：不写错题、不写 FSRS、不计入统计；报告内的错题列表是这些错题的唯一可见出口。</div></div>') +
+      '  <div class="report-actions">' +
+      '    <a class="btn" href="../screens/exam.html">整卷回看</a>' +
+      '    <a class="btn btn-quiet" href="../screens/review.html">打开复习队列</a>' +
+      '  </div>' +
+      '</div></div>';
+  }
+  function typeRows() {
+    var types = ['单选题', '多选题', '判断题', '问答题'];
+    return types.map(function (t) {
+      var qs = paper().filter(function (q) { return q.type === t; });
+      if (!qs.length) return '';
+      var answered = 0, correct = 0, sc = 0, full = 0;
+      qs.forEach(function (q) {
+        if (OBJECTIVE[t]) full += q.score;
+        if (state.answers[q.id]) { answered++; if (isCorrect(q)) { correct++; sc += q.score; } }
+      });
+      var subj = !OBJECTIVE[t];
+      return '<tr><td data-label="题型">' + t + '</td><td data-label="题数" class="num">' + qs.length + '</td>' +
+        '<td data-label="单题分值" class="num">' + (subj ? '—' : qs[0].score) + '</td>' +
+        '<td data-label="已答" class="num">' + answered + '</td>' +
+        '<td data-label="答对" class="num">' + (subj ? '未判分' : correct) + '</td>' +
+        '<td data-label="得分" class="num">' + (subj ? '不计入' : sc) + '</td>' +
+        '<td data-label="占满分" class="num">' + (subj ? '不计入' : full) + '</td></tr>';
+    }).join('') +
+      '<tr><td data-label="题型">合计</td><td data-label="题数" class="num">' + paper().length + '</td><td data-label="单题分值" class="num">—</td>' +
+      '<td data-label="已答" class="num">' + answeredCount() + '</td><td data-label="答对" class="num">' + correctCount() + '</td>' +
+      '<td data-label="得分" class="num">' + objectiveScore() + '</td><td data-label="占满分" class="num">' + objectiveFullPaper() + '</td></tr>';
+  }
+
+  /* ---------- 步骤 7：历史报告与重新考试 ---------- */
+  function storeReports() {
+    var list = S ? S.reports('exam') : [];
+    if (list.length) {
+      return list.map(function (r, i) {
+        var legacy = r.full == null;
+        return {
+          date: r.at || '', paper: r.title || '模考',
+          score: r.score == null ? '待判分' : r.score,
+          full: legacy ? null : r.full,
+          rate: legacy || r.rate == null ? null : r.rate + '%',
+          acc: legacy || r.accObj == null ? null : r.accObj + '%',
+          time: r.minutes ? r.minutes + ' 分钟' : null,
+          via: r.via === 'auto_deadline' ? '到点自动交卷' : '手动交卷',
+          legacy: legacy,
+          now: i === 0 && !!state.justDone
+        };
+      });
+    }
+    return [
+      { date: '2026年11月13日', paper: '系统集成 · 综合卷', score: 11, full: 24, rate: '46%', acc: '56%', time: '47 分钟', via: '手动交卷', now: true },
+      { date: '2026年11月09日', paper: '系统集成 · 综合卷', score: 8, full: 24, rate: '33%', acc: '50%', time: '38 分钟', via: '到点自动交卷' },
+      { date: '2026年11月02日', paper: '系统架构设计师 · 选择题专项', score: 58, full: 70, rate: '83%', acc: '88%', time: '24 分钟', via: '手动交卷' }
+    ];
+  }
+  function renderHistory() {
+    var reports = storeReports();
+    var rows = reports.map(function (r, i) {
+      var legacy = !!r.legacy;
+      return '' +
+        '<div class="list-row">' +
+        '  <span class="list-main">' +
+        '    <span class="list-title">' + esc(r.paper) + (r.now ? ' <span class="tag brand">本次</span>' : '') +
+        (legacy ? ' <span class="tag plain">早期报告</span>' : '') + '</span>' +
+        '    <span class="list-meta"><span>' + esc(r.date) + '</span>' +
+        '      <span>得分 ' + esc(r.score) + (r.full == null ? '' : ' / ' + esc(r.full)) + '</span>' +
+        (r.rate == null ? '<span>得分率 早期报告未记录</span>' : '<span>得分率 ' + esc(r.rate) + '</span>') +
+        (r.acc == null ? '<span>已答客观题正确率 早期报告未记录</span>' : '<span>已答客观题正确率 ' + esc(r.acc) + '</span>') +
+        (r.time ? '<span>用时 ' + esc(r.time) + '</span>' : '') +
+        '      <span>' + esc(r.via) + '</span></span>' +
+        '  </span>' +
+        '  <span class="list-side">' +
+        '    <button type="button" class="btn btn-sm btn-quiet" data-act="view-report" data-i="' + i + '">回看</button>' +
+        '  </span>' +
+        '</div>';
+    }).join('');
+
+    var legacyNote = reports.some(function (r) { return r.legacy; })
+      ? '<div class="notice info mt-4">' + ico('info', '15px') + '<div class="notice-body"><span class="notice-title">早期报告为什么不显示得分率</span><br>' +
+        '「客观题满分」口径是后来才落库的。早期报告只记了得分，没有记录客观题满分，因此<strong>得分率与已答客观题正确率不回溯计算</strong>——报告一经落库即永久不可变：不可修改、不可重新计算、不可覆盖。这一场的四个数字都在报告页顶部。</div></div>'
+      : '';
+
+    var dlg = state.viewing == null ? '' : (function () {
+      var r = reports[state.viewing];
+      var legacy = !!r.legacy;
+      var legacyNote = legacy
+        ? '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body"><span class="notice-title">早期报告</span><br>' +
+          '落库时未记录客观题满分，得分率与已答客观题正确率不回溯计算；得分本身仍然有效。完整报告在考试会话页的报告态。</div></div>'
+        : '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body">报告一经落库即永久不可变：不可修改、不可重新计算、不可覆盖；本期不提供历史重判。完整报告在考试会话页的报告态。</div></div>';
+      return '' +
+        '<dialog class="dlg wide" id="dlgReport" aria-labelledby="dlgReportTitle">' +
+        '  <div class="dlg-head">' +
+        '    <div class="dlg-head-text">' +
+        '      <p class="dlg-eyebrow">成绩报告 · ' + esc(r.date) + ' · ' + esc(r.via) + '</p>' +
+        '      <h2 class="dlg-title" id="dlgReportTitle">' + esc(r.paper) + '</h2>' +
+        '    </div>' +
+        '    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭">' + ico('x', '15px') + '</button>' +
+        '  </div>' +
+        '  <div class="dlg-body">' +
+        '    <div class="stat-row">' +
+        '      <div class="stat"><div class="stat-num">' + esc(r.score) + '</div><div class="stat-cap">客观题得分</div></div>' +
+        '      <div class="stat"><div class="stat-num">' + (r.full == null ? '未记录' : esc(r.full)) + '</div><div class="stat-cap">客观题满分（含未作答）</div></div>' +
+        '      <div class="stat"><div class="stat-num">' + (r.rate == null ? '未记录' : esc(r.rate)) + '</div><div class="stat-cap">考试得分率<br>得分 ÷ 客观题满分</div></div>' +
+        '      <div class="stat"><div class="stat-num">' + (r.acc == null ? '未记录' : esc(r.acc)) + '</div><div class="stat-cap">已答客观题正确率<br>答对的已答 ÷ 已答</div></div>' +
+        '    </div>' +
+        legacyNote +
+        '  </div>' +
+        '  <div class="dlg-foot"><button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>关闭</button></div>' +
+        '</dialog>';
+    })();
+
+    var reexamDlg = '' +
+      '<dialog class="dlg" id="dlgReexam" aria-labelledby="dlgReexamTitle">' +
+      '  <div class="dlg-head"><div class="dlg-head-text">' +
+      '    <p class="dlg-eyebrow">模考</p><h2 class="dlg-title" id="dlgReexamTitle">重新考试</h2>' +
+      '    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭">' + ico('x', '15px') + '</button>' +
+      '  </div></div>' +
+      '  <div class="dlg-body">' +
+      '    <p class="dlg-p">用这份档案<strong>当前最新蓝图版本</strong>开一场新考试；旧会话与旧报告原样保留。</p>' +
+      '    <div class="kv">' +
+      '      <span class="kv-key">考试档案</span><span class="kv-val">' + esc(profileName(state.setup.profileId)) + '</span>' +
+      '      <span class="kv-key">蓝图版本</span><span class="kv-val mono">当前最新 v3</span>' +
+      '      <span class="kv-key">题量</span><span class="kv-val mono">' + state.setup.total + ' 题（客观题满分 ' + objectiveFullPaper() + ' 分）</span>' +
+      '      <span class="kv-key">时长</span><span class="kv-val mono">' + (state.setup.unlimited ? '不限时' : state.setup.minutes + ' 分钟') + '</span>' +
+      '      <span class="kv-key">纳入学习记录</span><span class="kv-val">' + (state.setup.recordMistakes ? '纳入' : '不纳入') + '</span>' +
+      '    </div>' +
+      '  </div>' +
+      '  <div class="dlg-foot">' +
+      '    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>取消</button>' +
+      '    <button type="button" class="btn btn-primary" data-act="do-reexam">开始新的一场</button>' +
+      '  </div>' +
+      '</dialog>';
+
+    return '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow">学习 / 模考</p>' +
+      '    <h1 class="page-title">历史报告与重新考试</h1>' +
+      '    <p class="page-sub">成绩报告在交卷时一次性生成并保存在实例上，可随时回看。</p>' +
+      '  </div>' +
+      '  <div class="page-actions">' +
+      '    <button type="button" class="btn btn-primary" data-act="reexam-current">' + ico('play', '14px') + '开始模考</button>' +
+      '  </div>' +
+      '</header>' +
+      '<section class="section">' +
+      '  <div class="section-head"><h2 class="section-title">成绩报告</h2><span class="section-note">共 ' + reports.length + ' 次 · 得分率与已答客观题正确率分别标注分母</span></div>' +
+      '  <div class="list">' + rows + '</div>' +
+      legacyNote +
+      '</section>' + dlg + reexamDlg;
+  }
+
+  /* ---------- 步骤定义 ---------- */
+  var STEPS = [
+    { id: 'center', name: '模考中心', render: renderCenter, nextLabel: '下一步 · 蓝图与模板', note: '看有没有没考完的、有哪些档案可复用、以前考得怎么样。' },
+    { id: 'blueprint', name: '蓝图与模板', render: renderBlueprint,
+      nextLabel: function () { return state.tplStep === 2 ? '去组卷' : '下一步'; },
+      nextDisabled: function () { return state.tplStep === 0 && false; },
+      note: function () {
+        return state.tplStep === 2
+          ? '模板已导入为新的蓝图版本，不覆盖旧版本。'
+          : '模板导入第 ' + (state.tplStep + 1) + ' / 3 步：' + ['选择模板', '预览与校验', '导入结果'][state.tplStep] + '。也可以直接点模板卡片跳到某一步。';
+      } },
+    { id: 'setup', name: '组卷确认', render: renderSetup, nextLabel: '开始模考', note: '开始前确认七项；题库不足或题目已归档时给出可读的拒绝态。', nextDisabled: function () { return state.setup.total < 1 || state.setup.total > bankMax(state.setup.bankId); } },
+    { id: 'runner', name: '考试会话', render: renderRunner, nextLabel: '到点 · 宽限 60 秒', note: '倒计时常显；答题卡跳题；B 标记待复查；选项只记录选中，不判对错。点「交卷」打开交卷确认。' },
+    { id: 'grace', name: '宽限 60 秒', render: renderGrace, nextLabel: '服务端收卷', note: 'CR-31 第二段：只同步截止前已产生的答案，不用于继续答题；这是正常状态，不是失败。' },
+    { id: 'collected', name: '服务端收卷', render: renderCollected, nextLabel: '看成绩报告', note: 'CR-31 第三段：由服务端完成交卷并生成报告，不要求用户保持页面打开。' },
+    { id: 'report', name: '成绩报告', render: renderReport, nextLabel: '看历史报告', note: 'CR-06：得分 / 客观题满分 / 得分率 / 已答客观题正确率分别标注，分母不同不得混用。' },
+    { id: 'history', name: '历史与重考', render: renderHistory, nextLabel: '重新开始', note: '历史成绩可回看；重新考试用档案当前最新蓝图版本开新会话。' }
+  ];
+
+  /* ---------- 状态机 ---------- */
+  var stage = document.getElementById('flowStage');
+  var stepsOl = document.getElementById('flowSteps');
+  var caption = document.getElementById('flowCaption');
+  var prevBtn = document.getElementById('flowPrev');
+  var nextBtn = document.getElementById('flowNext');
+  var noteEl = document.getElementById('flowNote');
+
+  function render() {
+    var step = STEPS[state.step];
+    var html = '';
+    for (var i = 0; i < STEPS.length; i++) {
+      var s = STEPS[i];
+      var cls = 'step';
+      if (i === state.step) cls += ' is-active';
+      if (i < state.step) cls += ' is-done';
+      html += '<button type="button" class="' + cls + '" data-goto="' + i + '"' + (i === state.step ? ' aria-current="step"' : '') + '>' +
+        '<span class="step-n">' + (i < state.step ? ico('check', '11px') : (i + 1)) + '</span>' +
+        '<span class="step-name">' + esc(s.name) + '</span></button>';
+      if (i < STEPS.length - 1) html += '<span class="step-line" aria-hidden="true"></span>';
+    }
+    stepsOl.innerHTML = html;
+    stage.innerHTML = step.render();
+    caption.innerHTML = '当前第 <b>' + (state.step + 1) + '</b> 步 / 共 <b>' + STEPS.length + '</b> 步 · ' + esc(step.name);
+    prevBtn.disabled = state.step === 0;
+    nextBtn.textContent = typeof step.nextLabel === 'function' ? step.nextLabel() : step.nextLabel;
+    nextBtn.disabled = typeof step.nextDisabled === 'function' ? step.nextDisabled() : !!step.nextDisabled;
+    noteEl.textContent = typeof step.note === 'function' ? step.note() : (step.note || '');
+    if (step.afterRender) step.afterRender();
+  }
+
+  function go(n, trigger) {
+    stopTimer();
+    state.step = Math.max(0, Math.min(STEPS.length - 1, n));
+    if (state.step > state.maxStep) state.maxStep = state.step;
+    state.lastTrigger = trigger || null;
+    render();
+    if (state.step === 3 && state.phase === 'answer' && !state.submitted) startTimer();
+    stage.scrollIntoView({ block: 'nearest' });
+  }
+
+  prevBtn.addEventListener('click', function () { go(state.step - 1); });
+  nextBtn.addEventListener('click', function () { ACTIONS[STEPS[state.step].id + ':next'](); });
+
+  stepsOl.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-goto]');
+    if (!t) return;
+    var n = parseInt(t.getAttribute('data-goto'), 10);
+    if (n > state.maxStep) { window.eeToast('请先完成当前步骤'); return; }
+    go(n);
+  });
+
+  /* ---------- 计时器：作答窗口 → 宽限 → 收卷 ---------- */
+  function startTimer() {
+    stopTimer();
+    state.timerId = setInterval(function () {
+      if (state.submitted) { stopTimer(); return; }
+      if (state.phase === 'answer') {
+        state.remaining -= 1;
+        if (state.remaining <= 0) {
+          state.remaining = 0;
+          state.phase = 'grace';
+          state.grace = GRACE;
+          render();
+          window.eeToast('已到交卷时间，进入 60 秒宽限：答案已停止收录');
+          return;
+        }
+      } else if (state.phase === 'grace') {
+        state.grace -= 1;
+        if (state.grace <= 0) {
+          state.phase = 'collected';
+          render();
+          window.eeToast('宽限已结束，服务端已收卷，报告已生成');
+          ACTIONS['do-submit'](true);
+          return;
+        }
+      }
+      var el = document.getElementById('examTimer');
+      if (el) {
+        el.textContent = fmtTime(state.phase === 'answer' ? state.remaining : state.grace);
+        if (state.phase === 'answer' && state.remaining < 300) el.classList.add('low');
+      }
+    }, 1000);
+  }
+  function stopTimer() { if (state.timerId) { clearInterval(state.timerId); state.timerId = null; } }
+
+  /* ---------- 会话落库 ---------- */
+  function persist() {
+    if (!S || !state.sid) return;
+    var p = paper(), byId = {}, flags = {};
+    p.forEach(function (q, i) {
+      if (state.answers[q.id]) byId[i] = state.answers[q.id];
+      if (state.flags.indexOf(q.id) > -1) flags[i] = true;
+    });
+    S.updateSession(state.sid, {
+      answers: byId, flags: flags, index: state.qIndex,
+      done: answeredCount(), remaining: Math.max(0, Math.round(state.remaining)), total: p.length
+    });
+  }
+
+  var ACTIONS = {
+    'center:next': function () { go(1); },
+    'blueprint:next': function () {
+      if (state.tplStep === 1) window.eeToast('校验通过：将创建 v4');
+      if (state.tplStep < 2) { state.tplStep++; render(); return; }
+      window.eeToast('模板已导入为新的蓝图版本');
+      go(2);
+    },
+    'setup:next': function () { ACTIONS.begin(); },
+    'runner:next': function () { go(4); },
+    'grace:next': function () { go(5); },
+    'collected:next': function () { go(6); },
+    'report:next': function () { go(7); },
+    'history:next': function () { restart(); },
+
+    'to-blueprint': function () { go(1); },
+    'to-center': function () { go(0); },
+    'to-setup': function () { go(2); },
+    'to-submit': function () {
+      if (state.submitted) { go(5); return; }
+      if (state.step === 3) {
+        var d = document.getElementById('dlgSubmit');
+        if (d) window.eeDialog.open('dlgSubmit', document.activeElement);
+        else ACTIONS['do-submit']();
+        return;
+      }
+      /* 宽限期交卷仍然放行：超时禁止的只是「继续作答」 */
+      ACTIONS['do-submit']();
+    },
+    'to-report': function () { go(6); },
+    'save-bp': function () { window.eeToast('已保存为蓝图 v4，进行中的考试不受影响'); },
+    'noop': function () { window.eeToast('演示入口'); },
+    'tpl-step': function (el) { state.tplStep = parseInt(el.getAttribute('data-i'), 10); render(); },
+    'tpl-pick': function (el) { state.tplIndex = parseInt(el.getAttribute('data-i'), 10); render(); },
+    'tpl-prev': function () { if (state.tplStep > 0) { state.tplStep--; render(); } },
+    'tpl-next': function () {
+      if (state.tplStep === 1) { window.eeToast('校验通过：将创建 v4'); }
+      if (state.tplStep < 2) { state.tplStep++; render(); }
+      else { window.eeToast('模板已导入为新的蓝图版本'); }
+    },
+
+    'pick-paper': function (el) {
+      state.setup.profileId = el.getAttribute('data-id');
+      var p = profile(state.setup.profileId);
+      state.setup.total = p && p.sections.length ? bpTotal(p) : Math.min(10, bankMax(state.setup.bankId));
+      state.refuse = '';
+      go(2);
+    },
+    'pick-bank': function (el) {
+      state.setup.bankId = el.getAttribute('data-id');
+      state.setup.profileId = '';
+      state.setup.total = Math.min(10, bankMax(state.setup.bankId));
+      state.refuse = '';
+      go(2);
+    },
+    'reexam': function (el) {
+      state.setup.profileId = el.getAttribute('data-id');
+      var p = profile(state.setup.profileId);
+      state.setup.total = p && p.sections.length ? bpTotal(p) : Math.min(10, bankMax(state.setup.bankId));
+      go(2);
+    },
+    'set-bank': function (el) {
+      state.setup.bankId = el.value;
+      var max = bankMax(state.setup.bankId);
+      if (state.setup.total > max) state.setup.total = max;
+      render();
+    },
+    'set-profile': function (el) {
+      state.setup.profileId = el.value;
+      var p = profile(state.setup.profileId);
+      if (p && p.sections.length) state.setup.total = bpTotal(p);
+      render();
+    },
+    'set-total': function (el) { state.setup.total = parseInt(el.value, 10) || 0; render(); },
+    'set-minutes': function (el) { state.setup.minutes = parseInt(el.value, 10) || 0; },
+    'set-unlimited': function (el) { state.setup.unlimited = !!el.checked; render(); },
+    'set-mistakes': function (el) { state.setup.recordMistakes = !!el.checked; render(); },
+    'refuse-insufficient': function () { state.refuse = 'insufficient'; render(); },
+    'refuse-archived': function () { state.refuse = 'archived'; render(); },
+
+    'begin': function () {
+      var p = paper();
+      /* 同一时间只保留一场进行中的模考（CR-14）：先让用户决策，不悄悄收掉旧会话 */
+      if (S && S.sessions('exam').length) {
+        state.refuse = 'active';
+        render();
+        return;
+      }
+      state.refuse = '';
+      state.answers = {};
+      p.forEach(function (q, i) { if (i < 9 && SCRIPTED[q.id]) state.answers[q.id] = SCRIPTED[q.id]; });
+      if (p.length > 11) state.answers[p[11].id] = '范围基准失控主要因为需求没有基线化……';
+      state.flags = p.length > 4 ? [p[4].id, p[11].id] : [];
+      state.qIndex = Math.min(11, p.length - 1);
+      state.remaining = 58 * 60 + 12;
+      state.phase = 'answer';
+      state.submitted = false;
+      state.via = 'manual';
+      /* store 兜底：同模式 + 同题库只保留一个进行中会话 */
+      if (S) S.sessions('exam').forEach(function (x) { S.finishSession(x.id); });
+      var s = S ? S.startSession({
+        kind: 'exam', bankId: state.setup.bankId, mode: '模考',
+        title: profileName(state.setup.profileId) || ('模考 · ' + S.bankName(state.setup.bankId)),
+        total: p.length, minutes: state.setup.unlimited ? 0 : state.setup.minutes,
+        unlimited: state.setup.unlimited, record: state.setup.recordMistakes,
+        index: 0, done: answeredCount(), answers: {}, flags: {}, remaining: state.remaining
+      }) : null;
+      state.sid = s ? s.id : null;
+      persist();
+      go(3);
+      window.eeToast('模考已开始，交卷前不显示答案');
+    },
+    'resume': function (el) {
+      var id = el.getAttribute('data-id');
+      var s = null;
+      if (S) { var all = S.sessions('exam'); for (var i = 0; i < all.length; i++) if (all[i].id === id) s = all[i]; }
+      if (!s) { window.eeToast('会话已结束'); return; }
+      state.setup.bankId = s.bankId;
+      state.setup.total = Math.max(1, Math.min(s.total || QS.length, QS.length));
+      state.setup.minutes = s.minutes || 120;
+      state.answers = {}; state.flags = [];
+      var p = paper();
+      Object.keys(s.answers || {}).forEach(function (k) {
+        var i = parseInt(k, 10);
+        if (!isNaN(i) && p[i]) state.answers[p[i].id] = s.answers[k];
+      });
+      Object.keys(s.flags || {}).forEach(function (k) {
+        var i = parseInt(k, 10);
+        if (!isNaN(i) && p[i] && s.flags[k]) state.flags.push(p[i].id);
+      });
+      state.qIndex = Math.max(0, Math.min(p.length - 1, s.index || 0));
+      state.remaining = s.remaining != null ? s.remaining : 58 * 60 + 12;
+      state.phase = 'answer';
+      state.submitted = false;
+      state.sid = s.id;
+      go(3);
+      window.eeToast('已回到第 ' + (state.qIndex + 1) + ' 题');
+    },
+    'resume-current': function () {
+      var d = document.getElementById('dlgActive');
+      if (d && d.open) window.eeDialog.close(d);
+      go(3);
+      window.eeToast('已回到那场模考');
+    },
+    'confirm-active': function () {
+      var d = document.getElementById('dlgActive');
+      if (d && d.open) window.eeDialog.close(d);
+      if (S) S.sessions('exam').forEach(function (x) { S.finishSession(x.id); });
+      window.eeToast('已结束旧会话，正在新建');
+      ACTIONS.begin();
+    },
+    'drop': function (el) {
+      var id = el.getAttribute('data-id');
+      if (S) S.finishSession(id);
+      if (state.sid === id) { state.sid = null; restart(); }
+      else { render(); }
+      window.eeToast('已放弃这场模考，本次作答不计入成绩');
+    },
+    'pick': function (el) {
+      var q = paper()[state.qIndex];
+      var key = el.getAttribute('data-key');
+      if (q.type === '多选题') {
+        var cur = state.answers[q.id] ? String(state.answers[q.id]).split('') : [];
+        var at = cur.indexOf(key);
+        if (at > -1) cur.splice(at, 1); else cur.push(key);
+        cur.sort();
+        if (cur.length) state.answers[q.id] = cur.join(''); else delete state.answers[q.id];
+      } else {
+        state.answers[q.id] = key;
+      }
+      persist();
+      render();
+    },
+    'goto-q': function (el) { state.qIndex = parseInt(el.getAttribute('data-i'), 10); persist(); render(); },
+    'prev-q': function () { if (state.qIndex > 0) { state.qIndex--; persist(); render(); } },
+    'next-q': function () { if (state.qIndex < paper().length - 1) { state.qIndex++; persist(); render(); } },
+    'flag': function () {
+      var q = paper()[state.qIndex];
+      var i = state.flags.indexOf(q.id);
+      if (i > -1) { state.flags.splice(i, 1); window.eeToast('已取消待复查'); }
+      else { state.flags.push(q.id); window.eeToast('已标记这道题待复查'); }
+      persist();
+      render();
+    },
+    'exit-exam': function () {
+      var d = document.getElementById('dlgExit');
+      if (d) window.eeDialog.open('dlgExit', document.activeElement);
+      else { window.eeToast('已退出模考，进度已保存'); go(0); }
+    },
+    'do-stash': function () {
+      var d = document.getElementById('dlgExit');
+      if (d && d.open) window.eeDialog.close(d);
+      persist();
+      stopTimer();
+      window.eeToast('已退出并暂存草稿，会话留在「未完成的模考」');
+      go(0);
+    },
+    'ask-abandon': function () {
+      var d = document.getElementById('dlgAbandon');
+      if (d) window.eeDialog.open('dlgAbandon', document.activeElement);
+      else ACTIONS['do-abandon']();
+    },
+    'do-abandon': function () {
+      ['dlgAbandon', 'dlgExit'].forEach(function (id) {
+        var d = document.getElementById(id);
+        if (d && d.open) window.eeDialog.close(d);
+      });
+      stopTimer();
+      if (S && state.sid) { S.finishSession(state.sid); state.sid = null; }
+      state.submitted = false;
+      window.eeToast('已放弃这场模考，本次作答不计入成绩、不生成报告');
+      go(0);
+    },
+    'jump-blank': function () {
+      var i = firstUnanswered();
+      if (i > -1) state.qIndex = i;
+      var d = document.getElementById('dlgSubmit');
+      if (d && d.open) window.eeDialog.close(d);
+      persist();
+      render();
+      window.eeToast('已跳到第 ' + (i + 1) + ' 题');
+    },
+    'do-submit': function (auto) {
+      state.submitted = true;
+      state.via = auto ? 'auto_deadline' : 'manual';
+      stopTimer();
+      var p = paper();
+      var report = {
+        title: profileName(state.setup.profileId) || ('模考 · ' + (S ? S.bankName(state.setup.bankId) : '')),
+        score: objectiveScore(), full: objectiveFullPaper(),
+        rate: objectiveFullPaper() ? Math.round(objectiveScore() / objectiveFullPaper() * 100) : 0,
+        accObj: null, answered: answeredCount(), objTotal: p.filter(function (q) { return OBJECTIVE[q.type]; }).length,
+        correct: correctCount(), ungraded: ungradedCount(),
+        minutes: Math.max(1, Math.round((Math.max(60, state.setup.minutes * 60) - state.remaining) / 60)),
+        via: state.via
+      };
+      var ansObj = 0, corObj = 0;
+      p.forEach(function (q) {
+        if (!OBJECTIVE[q.type] || !state.answers[q.id]) return;
+        ansObj++;
+        if (isCorrect(q)) corObj++;
+      });
+      report.accObj = ansObj ? Math.round(corObj / ansObj * 100) : null;
+      if (S && state.sid) { S.finishSession(state.sid, report); state.sid = null; }
+      state.justDone = true;
+      go(6);
+      window.eeToast(auto ? '到点自动交卷，报告已由服务端生成' : '已交卷，报告已保存');
+    },
+    'reexam-current': function () {
+      var d = document.getElementById('dlgReexam');
+      if (d) window.eeDialog.open('dlgReexam', document.activeElement);
+      else { ACTIONS['do-reexam'](); }
+    },
+    'do-reexam': function () {
+      var d = document.getElementById('dlgReexam');
+      if (d && d.open) window.eeDialog.close(d);
+      restart();
+      go(2);
+      window.eeToast('已按当前最新蓝图版本准备新的一场');
+    },
+    'view-report': function (el) { state.viewing = parseInt(el.getAttribute('data-i'), 10); render(); }
+  };
+
+  function restart() {
+    stopTimer();
+    state.maxStep = 0;
+    state.viewing = null;
+    state.sid = null;
+    state.justDone = false;
+    state.answers = {};
+    state.flags = [];
+    state.qIndex = 11;
+    state.phase = 'answer';
+    state.submitted = false;
+    state.via = 'manual';
+    state.remaining = 58 * 60 + 12;
+    state.refuse = '';
+    state.tplStep = 0;
+    go(0);
+  }
+
+  /* ---------- 事件委托 ---------- */
+  function bind(delegate, attr) {
+    ['click', 'change', 'input'].forEach(function (type) {
+      delegate.addEventListener(type, function (e) {
+        var el = e.target.closest ? e.target.closest('[' + attr + ']') : null;
+        if (!el || !delegate.contains(el)) return;
+        var fn = ACTIONS[el.getAttribute(attr)];
+        if (fn) { e.preventDefault(); fn(el, e); }
+      });
+    });
+  }
+  bind(stage, 'data-act');
+
+  STEPS[2].afterRender = function () {
+    if (state.refuse === 'active') window.eeDialog.open('dlgActive', state.lastTrigger);
+  };
+  STEPS[7].afterRender = function () {
+    var d = document.getElementById('dlgReport');
+    if (!d) return;
+    if (state.viewing != null) window.eeDialog.open('dlgReport', state.lastTrigger);
+    d.addEventListener('close', function () { state.viewing = null; });
+  };
+
+  /* ---------- 快捷键：A–H 选择 / ←→ 换题 / B 待复查；浮层打开时挂起 ---------- */
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') return;
+    if (document.querySelector('dialog[open]')) return;
+    if (state.step !== 3 || state.submitted || state.phase !== 'answer') return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    var key = e.key.toUpperCase();
+    var q = paper()[state.qIndex];
+    if (key >= 'A' && key <= 'H') {
+      var o = q.options[key.charCodeAt(0) - 65];
+      if (o) { e.preventDefault(); ACTIONS.pick({ getAttribute: function () { return o.key; } }); }
+    } else if (e.key === 'ArrowRight' && state.qIndex < paper().length - 1) {
+      e.preventDefault(); state.qIndex++; persist(); render();
+    } else if (e.key === 'ArrowLeft' && state.qIndex > 0) {
+      e.preventDefault(); state.qIndex--; persist(); render();
+    } else if (key === 'B') {
+      e.preventDefault(); ACTIONS.flag();
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

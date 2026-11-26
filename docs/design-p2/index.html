@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EasyExam UI/UX 设计规范 · P2 全产品设计收敛</title>
+<link rel="stylesheet" href="assets/ee.css">
+<style>
+  /* 首页版式：ee.css 未覆盖的文档布局；不重新定义令牌与控件 */
+  .doc-page { max-width: 1080px; margin: 0 auto; padding: var(--sp-8) var(--sp-6) var(--sp-10); }
+  .doc-h2 { font-family: var(--font-serif); font-size: var(--text-2xl); line-height: var(--text-2xl-lh); font-weight: 500; margin: 0; }
+  .doc-h2 .no { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink-4); font-weight: 400; margin-right: var(--sp-3); }
+  .doc-h3 { font-family: var(--font-sans); font-size: var(--text-base); font-weight: 500; color: var(--ink-2); margin: var(--sp-6) 0 0; }
+  .doc-rule { font-size: var(--text-sm); color: var(--ink-2); margin: var(--sp-2) 0 var(--sp-5); max-width: 80ch; }
+  .doc-note { font-size: var(--text-xs); color: var(--ink-3); margin: var(--sp-4) 0 0; max-width: 84ch; line-height: var(--text-xs-lh); }
+  .doc-note + .doc-note { margin-top: var(--sp-2); }
+  .doc-note b { color: var(--ink-2); font-weight: 500; }
+  .mono { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-2); }
+
+  /* 信息架构树 */
+  .ia-tree { font-size: var(--text-sm); line-height: 1.9; }
+  .ia-tree ul { list-style: none; margin: 0; padding-left: var(--sp-5); border-left: 1px solid var(--line); }
+  .ia-tree > ul { padding-left: 0; border-left: 0; }
+  .ia-tree li { position: relative; }
+  .ia-tree ul ul li::before { content: ""; position: absolute; left: calc(var(--sp-5) * -1); top: .95em; width: var(--sp-4); height: 1px; background: var(--line); }
+  .ia-node { display: inline-flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; }
+  .ia-node a { font-weight: 500; }
+  .ia-route { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-4); }
+  .ia-fn { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-4); }
+  .ia-l1 > .ia-node > a { font-family: var(--font-serif); font-size: var(--text-md); }
+  .ia-dim { color: var(--ink-4); font-size: var(--text-xs); }
+
+  /* 屏幕索引 */
+  .idx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: var(--sp-4); }
+  .idx-card { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-4); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); text-decoration: none; color: inherit; min-width: 0; }
+  .idx-card:hover { border-color: var(--line-strong); }
+  .idx-card .idx-domain { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-4); letter-spacing: .08em; text-transform: uppercase; }
+  .idx-card .idx-name { font-family: var(--font-serif); font-size: var(--text-md); font-weight: 500; }
+  .idx-card .idx-desc { font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); }
+  .idx-card .idx-fn { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-4); }
+  .idx-card.is-doc { background: var(--surface-2); }
+
+  /* 实时预览 */
+  .preview { display: grid; gap: var(--sp-6); }
+  .preview-item { min-width: 0; }
+  .preview-cap { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-4); flex-wrap: wrap; margin-bottom: var(--sp-3); }
+  .preview-cap .t { font-size: var(--text-sm); font-weight: 500; color: var(--ink-2); }
+  .frame { position: relative; width: 100%; overflow: hidden; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper-2); }
+  .frame iframe { display: block; border: 0; transform-origin: 0 0; }
+  .frame.r1440 iframe { width: 1440px; height: 900px; }
+  .frame.r375 { max-width: 375px; }
+  .frame.r375 iframe { width: 375px; height: 720px; }
+  .preview-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-5); }
+  @media (max-width: 860px) { .preview-row { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) {
+    .doc-page { padding: var(--sp-6) var(--sp-4) var(--sp-8); }
+  }
+
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: var(--sp-2) var(--sp-4); font-size: var(--text-sm); }
+  .kv dt { color: var(--ink-3); }
+  .kv dd { margin: 0; color: var(--ink); }
+  .mt-4 { margin-top: var(--sp-4); }
+  .mt-5 { margin-top: var(--sp-5); }
+  .mt-6 { margin-top: var(--sp-6); }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">跳到主内容</a>
+
+<main class="doc-page" id="main-content">
+
+  <!-- ==================== 页头 ==================== -->
+  <header class="page-head">
+    <div>
+      <p class="page-eyebrow">EasyExam 易考宝 · UI/UX 设计规范</p>
+      <h1 class="page-title">全产品设计收敛</h1>
+      <p class="page-sub">P2 交付物：把已冻结的 P1 产品定义落成一套完整、统一、可实现的 UI/UX 设计。一份信息架构、一套设计系统、十六个产品屏、五个关键流程、四份规范页。</p>
+    </div>
+    <div class="page-actions">
+      <button class="btn btn-quiet" type="button" id="themeBtn">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-moon"/></svg><span id="themeLabel">暗色</span>
+      </button>
+      <a class="btn" href="pages/states.html">状态与外壳</a>
+    </div>
+  </header>
+
+  <div class="notice info mt-5">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+    <div class="notice-body">
+      <p class="notice-title">怎么读这套规范</p>
+      <p>产品语义的唯一权威是 <code class="mono">docs/product-spec/</code> 的<strong>第一层「产品最终应该怎样工作」</strong>；本目录只回答「它落在哪个页面、长什么样、用什么控件、有哪些状态」。若两者冲突，以规格第一层为准，并回头修设计，不是反过来。</p>
+      <p>构建合同见 <code class="mono">CONTRACT.md</code>，信息架构与 FN 归属矩阵见 <code class="mono">docs/IA-AND-OWNERSHIP.md</code>。三份文件共同构成本轮设计契约。</p>
+    </div>
+  </div>
+
+  <!-- ==================== 00 交付总览 ==================== -->
+  <section class="section" aria-labelledby="h-overview">
+    <h2 class="doc-h2" id="h-overview"><span class="no">00</span>本轮交付总览</h2>
+    <dl class="kv">
+      <dt>设计基线</dt><dd>P1 产品规格 <code class="mono">f2e25ed</code>（已合并定稿，10 册 5550 行，120 条 FN、31 条跨域裁决）</dd>
+      <dt>视觉方向</dt><dd>Direction D「Editorial Precision」——暖灰纸面、松绿主色、书脊侧栏、衬线标题、1px 编辑线</dd>
+      <dt>设计系统</dt><dd><code class="mono">assets/ee.css</code> 单一来源：令牌 + 四套配色 × 明暗 + 控件库 + 外壳三档</dd>
+      <dt>产品屏</dt><dd>16 屏（今天 / 题库列表 / 题库工作区 / 题目页 / 复习 / 学习档案 / 模考中心 / 考试会话 / 练习会话 / 资料 / 设置 / 实例管理 / 登录 / 越权 / 配色 / 状态与外壳）</dd>
+      <dt>关键流程</dt><dd>5 条（练习 / 模考 / 复习 / 导入 / 协作）</dd>
+      <dt>规范页</dt><dd>4 页（令牌 / 控件 / 状态与外壳 / 配色）</dd>
+      <dt>状态契约</dt><dd>八态齐备：空 / 加载 / 错误 / 禁用 / 无权限 / 冲突 / 未配置 / 离线</dd>
+      <dt>跨端</dt><dd>四档实测无横向滚动：1440 / 1024 / 768 / 375</dd>
+    </dl>
+  </section>
+
+  <!-- ==================== 01 信息架构 ==================== -->
+  <section class="section" aria-labelledby="h-ia">
+    <h2 class="doc-h2" id="h-ia"><span class="no">01</span>信息架构</h2>
+    <p class="doc-rule">一级导航 5+1，按<strong>用户意图</strong>划分，不按后端实体划分。「今天」回答做什么，「复习」回答欠什么，「题库」是资产侧，「模考」是正式考试，「资料」是游离材料，「设置」收全部低频管理。高频学习面与低频管理面彻底分层。</p>
+
+    <div class="ia-tree">
+      <ul>
+        <li class="ia-l1">
+          <span class="ia-node"><a href="pages/screens/home.html">今天</a><span class="ia-route">/</span><span class="ia-fn">FN-201 202 203 212 213 219</span></span>
+          <ul>
+            <li><span class="ia-node">开始学习面板（活跃会话决策 · CR-14 会话选择器）</span></li>
+            <li><span class="ia-node">今日计划 + 7 日计划</span></li>
+            <li><span class="ia-node">题库进度 · 提分推荐 · 模考接口</span></li>
+          </ul>
+        </li>
+        <li class="ia-l1">
+          <span class="ia-node"><a href="pages/screens/banks.html">题库</a><span class="ia-route">/banks</span><span class="ia-fn">FN-101…107 420</span></span>
+          <ul>
+            <li><span class="ia-node">我的 / 共享给我（分段 + 角色标注）· 分类筛选</span></li>
+            <li><span class="ia-node">题库批量操作：归档 / 恢复 / 导出 / 空库删除</span></li>
+          </ul>
+        </li>
+        <li class="ia-l1">
+          <span class="ia-node"><a href="pages/screens/workspace.html">题库工作区</a><span class="ia-route">/banks/:id</span><span class="ia-fn">FN-108 CR-17</span></span>
+          <ul>
+            <li><span class="ia-node"><a href="pages/screens/workspace.html">题目</a> FN-109 110 111 117</span></li>
+            <li><span class="ia-node">结构 FN-118 119</span></li>
+            <li><span class="ia-node">成员 FN-120 414…419 425</span></li>
+            <li><span class="ia-node">导入历史 FN-121 128</span></li>
+            <li><span class="ia-node">AI 草稿 FN-122 508</span></li>
+            <li><span class="ia-node">设置 FN-103 123</span></li>
+          </ul>
+        </li>
+        <li class="ia-l1">
+          <span class="ia-node"><a href="pages/screens/question.html">题目页</a><span class="ia-route">/banks/:id/questions/:qid</span><span class="ia-fn">FN-116 112 114 115 117 113</span></span>
+          <ul>
+            <li><span class="ia-node">题干 / 选项 / 答案 / 解析 / 知识点 / 资料引用</span></li>
+            <li><span class="ia-node">编辑与版本生成 · 版本历史 · 冲突处理（抽屉）</span></li>
+            <li><span class="ia-node ia-dim">历史作答重判 · 本期不提供（明确的不可用说明）</span></li>
+          </ul>
+        </li>
+        <li class="ia-l1">
+          <span class="ia-node"><a href="pages/screens/import.html">导入向导</a><span class="ia-route">/banks/:id/import</span><span class="ia-fn">FN-124…129</span></span>
+          <ul>
+            <li><span class="ia-node">来源与格式 → 字段映射 → PDF 预检校正 → 重复题策略 → 后台作业</span></li>
+            <li><span class="ia-node">草稿与续做</span></li>
+          </ul>
+        </li>
+        <li class="ia-l1">
+          <span class="ia-node"><a href="pages/screens/review.html">复习</a><span class="ia-route">/review</span><span class="ia-fn">FN-207 208 209 210</span></span>
+          <ul>
+            <li><span class="ia-node">待复习 <span class="ia-dim">当前可执行复习集合 CR-05 + 原因标签</span></span></li>
+            <li><span class="ia-node">错题 <span class="ia-dim">错题与错因</span></span></li>
+            <li><span class="ia-node">薄弱 <span class="ia-dim">mark_weak</span></span></li>
+            <li><span class="ia-node">斩杀 <span class="ia-dim">斩杀题库</span></span></li>
+          </ul>
+        </li>
+        <li class="ia-l1">
+          <span class="ia-node"><a href="pages/screens/practice.html">练习会话</a><span class="ia-route">/practice/s/:id</span><span class="ia-fn">FN-204 205 206 214 215 216 217</span></span>
+          <ul>
+            <li><span class="ia-node">判分反馈 / AI 解释 / FSRS 评级 / 薄弱标记</span></li>
+            <li><span class="ia-node">练习报告 · 断点恢复 · 离线队列 · 退出确认</span></li>
+            <li><span class="ia-node ia-dim">全屏 runner，一级导航不出现</span></li>
+          </ul>
+        </li>
+        <li class="ia-l1">
+          <span class="ia-node"><a href="pages/screens/diagnosis.html">学习档案</a><span class="ia-route">/review/diagnosis</span><span class="ia-fn">FN-211</span></span>
+          <ul><li><span class="ia-node ia-dim">独立路由，不是复习的第五个页签</span></li></ul>
+        </li>
+        <li class="ia-l1">
+          <span class="ia-node"><a href="pages/screens/exams.html">模考</a><span class="ia-route">/exams</span><span class="ia-fn">FN-301…305 310 311</span></span>
+          <ul>
+            <li><span class="ia-node">考试档案 · 蓝图编辑与版本绑定 · 蓝图导入模板 · 组卷确认</span></li>
+            <li><span class="ia-node ia-dim">无蓝图降级：基础题库模式</span></li>
+          </ul>
+        </li>
+        <li class="ia-l1">
+          <span class="ia-node"><a href="pages/screens/exam.html">考试会话 / 成绩报告</a><span class="ia-route">/exams/:id/session · /report</span><span class="ia-fn">FN-306…309 312</span></span>
+          <ul>
+            <li><span class="ia-node">倒计时 / 答题卡 / 待复查 / 跳题</span></li>
+            <li><span class="ia-node">交卷确认 / 自动交卷 / <strong>宽限 60 秒 CR-31</strong></span></li>
+            <li><span class="ia-node">退出暂存 · 多设备续考</span></li>
+          </ul>
+        </li>
+        <li class="ia-l1">
+          <span class="ia-node"><a href="pages/screens/notes.html">资料</a><span class="ia-route">/notes</span><span class="ia-fn">FN-501…507</span></span>
+          <ul>
+            <li><span class="ia-node">资料库四分部 · 创建编辑 · 关联与 AI 引用可追溯</span></li>
+            <li><span class="ia-node">AI 解释（含主解释选择）· 联网核查</span></li>
+          </ul>
+        </li>
+        <li class="ia-l1">
+          <span class="ia-node"><a href="pages/screens/settings.html">设置</a><span class="ia-route">/settings</span><span class="ia-fn">FN-511…517</span></span>
+          <ul>
+            <li><span class="ia-node">账户与安全 · 练习偏好 · 外观 · AI 与联网 · 关于与数据</span></li>
+            <li><span class="ia-node ia-dim">「谁配置」分层：实例级与个人级分清归属</span></li>
+          </ul>
+        </li>
+        <li class="ia-l1">
+          <span class="ia-node"><a href="pages/screens/instance.html">实例管理</a><span class="ia-route">/instance</span><span class="ia-fn">FN-405…410</span></span>
+        </li>
+        <li class="ia-l1">
+          <span class="ia-node"><a href="pages/screens/login.html">登录 / 注册</a><span class="ia-route">/login</span><span class="ia-fn">FN-401 402 403 413 410</span></span>
+        </li>
+        <li class="ia-l1">
+          <span class="ia-node"><a href="pages/screens/forbidden.html">越权</a><span class="ia-route">403</span><span class="ia-fn">FN-421</span></span>
+          <ul><li><span class="ia-node ia-dim">两种变体：看不到（整页 403）/ 看得到但不能操作（控件禁用 + 原因）</span></li></ul>
+        </li>
+      </ul>
+    </div>
+
+    <h3 class="doc-h3">载体选择规则</h3>
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <caption>同一件事该做成页面、对话框、抽屉还是菜单</caption>
+        <thead><tr><th scope="col">场景</th><th scope="col">载体</th><th scope="col">理由</th></tr></thead>
+        <tbody>
+          <tr><td data-label="场景">创建或编辑一个短实体（题库、资料、章节、标签、成员邀请）</td><td data-label="载体">对话框</td><td data-label="理由">有明确提交边界，不依赖主内容上下文</td></tr>
+          <tr><td data-label="场景">查看或编辑主内容某一侧的内容（题目编辑、版本历史、字段映射帮助）</td><td data-label="载体">抽屉</td><td data-label="理由">需要与主内容对照</td></tr>
+          <tr><td data-label="场景">对一行或多行的上下文操作（题目行「更多」、批量条操作）</td><td data-label="载体">菜单</td><td data-label="理由">操作集短，不打断浏览</td></tr>
+          <tr><td data-label="场景">同一实体下并列的子视图（工作区六页签、资料四分部）</td><td data-label="载体">页签</td><td data-label="理由">语义平级，URL 记录当前页签</td></tr>
+          <tr><td data-label="场景">改变集合定义或过滤条件（我的/共享给我、资料类型）</td><td data-label="载体">分段 + URL</td><td data-label="理由">是查询条件，不是视图</td></tr>
+          <tr><td data-label="场景">多步骤且每步需要专注的长任务（导入向导）</td><td data-label="载体">页面 + 步骤条</td><td data-label="理由">需要面包屑、可中断续做</td></tr>
+          <tr><td data-label="场景">沉浸式单任务（普通练习、考试会话）</td><td data-label="载体">全屏 runner</td><td data-label="理由">排除一切导航干扰</td></tr>
+          <tr><td data-label="场景">破坏性或不可逆确认（删除、转移所有权、交卷、退出放弃）</td><td data-label="载体">危险对话框</td><td data-label="理由">必须显式二次确认</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ==================== 02 屏幕索引 ==================== -->
+  <section class="section" aria-labelledby="h-index">
+    <h2 class="doc-h2" id="h-index"><span class="no">02</span>屏幕索引</h2>
+    <p class="doc-rule">每张卡片直接链到可渲染的设计屏。所有屏共用同一套外壳 DOM、同一套控件、同一套状态契约；差异只在内容与布局密度。</p>
+
+    <h3 class="doc-h3">产品屏</h3>
+    <div class="idx-grid">
+      <a class="idx-card" href="pages/screens/home.html"><span class="idx-domain">学习域</span><span class="idx-name">今天</span><span class="idx-desc">计划、开始学习、继续会话、提分推荐。高频核心，三击可达。</span><span class="idx-fn">FN-201 202 203 212 213 219</span></a>
+      <a class="idx-card" href="pages/screens/practice.html"><span class="idx-domain">学习域</span><span class="idx-name">普通练习</span><span class="idx-desc">判分反馈、AI 解释、FSRS 四级评级、薄弱标记、练习报告、离线队列。</span><span class="idx-fn">FN-204…207 214…218</span></a>
+      <a class="idx-card" href="pages/screens/review.html"><span class="idx-domain">学习域</span><span class="idx-name">复习四视图</span><span class="idx-desc">待复习 / 错题 / 薄弱 / 斩杀。「全部」与「到期」是同一集合，只有一个页签。</span><span class="idx-fn">FN-207 208 209 210</span></a>
+      <a class="idx-card" href="pages/screens/diagnosis.html"><span class="idx-domain">学习域</span><span class="idx-name">学习档案</span><span class="idx-desc">趋势与历史，独立路由。复习页头给入口，不做第五个页签。</span><span class="idx-fn">FN-211</span></a>
+      <a class="idx-card" href="pages/screens/banks.html"><span class="idx-domain">题库域</span><span class="idx-name">题库列表</span><span class="idx-desc">我的 / 共享给我分段 + 角色标注；批量归档恢复导出；空库删除。</span><span class="idx-fn">FN-101…107 420</span></a>
+      <a class="idx-card" href="pages/screens/workspace.html"><span class="idx-domain">题库域</span><span class="idx-name">题库工作区</span><span class="idx-desc">一页六签：题目 / 结构 / 成员 / 导入历史 / AI 草稿 / 设置。</span><span class="idx-fn">FN-108 109 110 111 117 118 119 120 121 122 123</span></a>
+      <a class="idx-card" href="pages/screens/question.html"><span class="idx-domain">题库域</span><span class="idx-name">题目页</span><span class="idx-desc">题干解析知识点资料引用；编辑与版本历史；冲突处理；单题归档。</span><span class="idx-fn">FN-112 113 114 115 116 117</span></a>
+      <a class="idx-card" href="pages/screens/import.html"><span class="idx-domain">题库域</span><span class="idx-name">导入向导</span><span class="idx-desc">五步：来源格式 / 字段映射 / PDF 预检校正 / 重复题策略 / 后台作业。</span><span class="idx-fn">FN-124…129</span></a>
+      <a class="idx-card" href="pages/screens/exams.html"><span class="idx-domain">模考域</span><span class="idx-name">模考中心</span><span class="idx-desc">考试档案、蓝图编辑与版本绑定、组卷确认、无蓝图降级模式。</span><span class="idx-fn">FN-301…305 310 311</span></a>
+      <a class="idx-card" href="pages/screens/exam.html"><span class="idx-domain">模考域</span><span class="idx-name">考试会话与报告</span><span class="idx-desc">倒计时答题卡待复查跳题；交卷与自动交卷；宽限 60 秒；成绩报告。</span><span class="idx-fn">FN-306…309 312</span></a>
+      <a class="idx-card" href="pages/screens/notes.html"><span class="idx-domain">资料域</span><span class="idx-name">资料库</span><span class="idx-desc">四分部资料、关联与 AI 引用可追溯、AI 解释、联网核查。</span><span class="idx-fn">FN-501…507</span></a>
+      <a class="idx-card" href="pages/screens/settings.html"><span class="idx-domain">设置域</span><span class="idx-name">设置</span><span class="idx-desc">账户安全、练习偏好、外观、AI 与联网、关于与数据；实例级与个人级分层。</span><span class="idx-fn">FN-511…517</span></a>
+      <a class="idx-card" href="pages/screens/instance.html"><span class="idx-domain">协作域</span><span class="idx-name">实例管理</span><span class="idx-desc">用户列表、启用禁用、重置密码、管理员授予、注册开关。</span><span class="idx-fn">FN-405 406 407 408 409 410</span></a>
+      <a class="idx-card" href="pages/screens/login.html"><span class="idx-domain">协作域</span><span class="idx-name">登录与注册</span><span class="idx-desc">登录态保持、强制改密门禁、注册开关、首个管理员引导、回跳。</span><span class="idx-fn">FN-401 402 403 405 410 413</span></a>
+      <a class="idx-card" href="pages/screens/forbidden.html"><span class="idx-domain">协作域</span><span class="idx-name">越权 403</span><span class="idx-desc">两种变体：看不到 / 看得到但不能操作。入口禁用而非隐藏。</span><span class="idx-fn">FN-421 422</span></a>
+      <a class="idx-card" href="pages/screens/palette.html"><span class="idx-domain">外壳</span><span class="idx-name">配色与主题</span><span class="idx-desc">四套配色 × 明暗：editorial / gruvbox / everforest / catppuccin。</span><span class="idx-fn">FN-512 606</span></a>
+    </div>
+
+    <h3 class="doc-h3">关键流程</h3>
+    <div class="idx-grid">
+      <a class="idx-card" href="pages/flows/practice.html"><span class="idx-domain">流程</span><span class="idx-name">练习流程</span><span class="idx-desc">从今天页开始学习到练习报告落库的完整路径。</span><span class="idx-fn">FN-203 204 206 214 215</span></a>
+      <a class="idx-card" href="pages/flows/exam.html"><span class="idx-domain">流程</span><span class="idx-name">模考流程</span><span class="idx-desc">组卷确认到收卷与成绩报告，含宽限期与多设备续考。</span><span class="idx-fn">FN-305…309</span></a>
+      <a class="idx-card" href="pages/flows/review.html"><span class="idx-domain">流程</span><span class="idx-name">复习流程</span><span class="idx-desc">复习队列的判定、执行、结果回写四视图。</span><span class="idx-fn">FN-208 209 210</span></a>
+      <a class="idx-card" href="pages/flows/import.html"><span class="idx-domain">流程</span><span class="idx-name">导入流程</span><span class="idx-desc">来源选择到后台作业与草稿续做。</span><span class="idx-fn">FN-124…129</span></a>
+      <a class="idx-card" href="pages/flows/collab.html"><span class="idx-domain">流程</span><span class="idx-name">协作流程</span><span class="idx-desc">成员邀请、角色变更、所有权转移、并发编辑冲突。</span><span class="idx-fn">FN-414…424</span></a>
+    </div>
+
+    <h3 class="doc-h3">规范页</h3>
+    <div class="idx-grid">
+      <a class="idx-card is-doc" href="pages/tokens.html"><span class="idx-domain">规范</span><span class="idx-name">令牌</span><span class="idx-desc">字体阶梯、间距、圆角、阴影、动效、断点、布局尺度。</span><span class="idx-fn">设计系统单一来源</span></a>
+      <a class="idx-card is-doc" href="pages/components.html"><span class="idx-domain">规范</span><span class="idx-name">控件库</span><span class="idx-desc">每个控件只有一种实现，含全部状态与禁用语义。</span><span class="idx-fn">FN-609 610 611</span></a>
+      <a class="idx-card is-doc" href="pages/states.html"><span class="idx-domain">规范</span><span class="idx-name">状态与外壳</span><span class="idx-desc">八态矩阵、命令面板、快捷键、同步态、URL 契约、跨端断点。</span><span class="idx-fn">FN-605 612 613 614 615 616 617</span></a>
+      <a class="idx-card is-doc" href="pages/screens/palette.html"><span class="idx-domain">规范</span><span class="idx-name">配色</span><span class="idx-desc">明暗两套 + 四套配色族的语义色与对比度。</span><span class="idx-fn">FN-512 606</span></a>
+    </div>
+  </section>
+
+  <!-- ==================== 03 实时预览 ==================== -->
+  <section class="section" aria-labelledby="h-preview">
+    <h2 class="doc-h2" id="h-preview"><span class="no">03</span>实时预览</h2>
+    <p class="doc-rule">下面是真实渲染的产品屏，不是截图。桌面比例 1440×900 缩放显示；可以点进去操作（页签、分段、菜单、对话框、抽屉、选项选中态都是真的）。</p>
+
+    <div class="preview">
+      <div class="preview-item">
+        <div class="preview-cap">
+          <span class="t">今天 · 高频学习核心</span>
+          <a class="link-btn" href="pages/screens/home.html">打开全屏 →</a>
+        </div>
+        <div class="frame r1440"><iframe src="pages/screens/home.html?theme=light" title="今天页实时预览"></iframe></div>
+      </div>
+      <div class="preview-row">
+        <div class="preview-item">
+          <div class="preview-cap">
+            <span class="t">复习 · 四视图</span>
+            <a class="link-btn" href="pages/screens/review.html">打开全屏 →</a>
+          </div>
+          <div class="frame r1440"><iframe src="pages/screens/review.html?theme=light" title="复习页实时预览"></iframe></div>
+        </div>
+        <div class="preview-item">
+          <div class="preview-cap">
+            <span class="t">手机 · 375px</span>
+            <a class="link-btn" href="pages/screens/review.html">打开全屏 →</a>
+          </div>
+          <div class="frame r375"><iframe src="pages/screens/review.html?theme=light" title="复习页移动端实时预览"></iframe></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 04 全局规则 ==================== -->
+  <section class="section" aria-labelledby="h-rules">
+    <h2 class="doc-h2" id="h-rules"><span class="no">04</span>全产品统一规则</h2>
+    <p class="doc-rule">这五条是跨域裁决的直接落地，任何一个屏违反都算设计缺陷。完整八态与外壳规则见<a class="link-btn" href="pages/states.html">状态与外壳</a>。</p>
+
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <caption>五条硬规则</caption>
+        <thead><tr><th scope="col">规则</th><th scope="col">依据</th><th scope="col">设计落地</th></tr></thead>
+        <tbody>
+          <tr>
+            <td data-label="规则">批量结果只有两项</td>
+            <td data-label="依据">CR-27</td>
+            <td data-label="设计落地">「成功 X · 无须变更 Y」，`X + Y = 已选 N`。整批拒绝则零写入 + 可读原因。<strong>不存在「跳过 Z」</strong>；「已经处于目标状态」是无须变更，不是校验失败。</td>
+          </tr>
+          <tr>
+            <td data-label="规则">考试会话三段式</td>
+            <td data-label="依据">CR-31</td>
+            <td data-label="设计落地">作答窗口 → 宽限 60 秒（仅同步）→ 服务端收卷。<strong>「作答窗口结束」不是会话终止</strong>；宽限期是 info 级正常状态，不得变红或报错。</td>
+          </tr>
+          <tr>
+            <td data-label="规则">复习只有四视图</td>
+            <td data-label="依据">CR-29</td>
+            <td data-label="设计落地">待复习 / 错题 / 薄弱 / 斩杀。「全部」与「到期」是同一集合，只有一个页签。学习档案是独立路由。</td>
+          </tr>
+          <tr>
+            <td data-label="规则">越权禁用不隐藏</td>
+            <td data-label="依据">FN-421</td>
+            <td data-label="设计落地">控件禁用 + 可读原因，入口保留。403 两变体：看不到（整页）/ 看得到不能操作（禁用）。</td>
+          </tr>
+          <tr>
+            <td data-label="规则">没有 AI 也要完整可用</td>
+            <td data-label="依据">P-8 / FN-518</td>
+            <td data-label="设计落地">每个 AI 入口都有非 AI 替代路径；未配置是 info 态不是错误态；配好之后能力增强，配不好功能不消失。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ==================== 05 跨端 ==================== -->
+  <section class="section" aria-labelledby="h-cross">
+    <h2 class="doc-h2" id="h-cross"><span class="no">05</span>跨端规则</h2>
+    <p class="doc-rule">三档共享同一套 DOM 与同一套语义，只改布局与交互方式。判断标准是「这只手现在能做什么」，不是「这块屏有多宽」。</p>
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <caption>四档断点</caption>
+        <thead><tr><th scope="col">档位</th><th scope="col">导航</th><th scope="col">布局与交互</th></tr></thead>
+        <tbody>
+          <tr><td data-label="档位">&gt;1024 桌面</td><td data-label="导航">完整侧栏 236px + 顶栏</td><td data-label="布局与交互">纸面居中 1120px（宽变体 1320px）；鼠标 + 快捷键；hover 有反馈</td></tr>
+          <tr><td data-label="档位">769–1024 平板</td><td data-label="导航">侧栏收成 64px 图标轨</td><td data-label="布局与交互">纸面通栏；触屏；hover 失效的状态必须有 active/selected 兜底</td></tr>
+          <tr><td data-label="档位">641–768 小平板</td><td data-label="导航">图标轨 + 底栏同时可用</td><td data-label="布局与交互">单列；表格转卡片；底部固定操作区</td></tr>
+          <tr><td data-label="档位">≤640 手机</td><td data-label="导航">侧栏隐藏，底部导航 6 项</td><td data-label="布局与交互">单列；单手拇指可达；触摸目标 ≥44px；答题卡改底部抽屉；长文限宽 68ch；表单不被软键盘遮</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="doc-note"><b>移动端不是桌面的缩小版。</b>答题卡从右侧常驻栏改为底部抽屉（常驻栏会把题干挤到一行三个字）；固定操作区只放当前步骤的主操作；软键盘弹出时页面滚到当前输入框，提交按钮随键盘上浮。</p>
+  </section>
+
+  <!-- ==================== 06 变更记录 ==================== -->
+  <section class="section" aria-labelledby="h-changelog">
+    <h2 class="doc-h2" id="h-changelog"><span class="no">06</span>P2 设计变更记录</h2>
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <caption>相对 v1.0.24 原型的设计修正</caption>
+        <thead><tr><th scope="col">#</th><th scope="col">修正</th><th scope="col">依据</th></tr></thead>
+        <tbody>
+          <tr><td data-label="#">1</td><td data-label="修正">复习页从五页签（全部/到期/错题/斩杀/诊断）改为四视图（待复习/错题/薄弱/斩杀）</td><td data-label="依据">CR-29</td></tr>
+          <tr><td data-label="#">2</td><td data-label="修正">补上完全缺失的「薄弱」视图</td><td data-label="依据">CR-29 / FN-207</td></tr>
+          <tr><td data-label="#">3</td><td data-label="修正">学习档案升级为独立路由 /review/diagnosis，不再是第五个页签</td><td data-label="依据">FN-211 / CR-29</td></tr>
+          <tr><td data-label="#">4</td><td data-label="修正">新增「状态与外壳」规范页：八态矩阵、命令面板、快捷键、同步态、URL 契约、跨端断点</td><td data-label="依据">FN-605 612 613 614 615 616 617</td></tr>
+          <tr><td data-label="#">5</td><td data-label="修正">批量结果统一为「成功 X · 无须变更 Y」，清除一切「跳过 Z」残留表述</td><td data-label="依据">CR-27</td></tr>
+          <tr><td data-label="#">6</td><td data-label="修正">考试会话明确三段式，宽限期不再被画成失败态</td><td data-label="依据">CR-31</td></tr>
+          <tr><td data-label="#">7</td><td data-label="修正">题库列表用「我的 / 共享给我」分段 + 角色标注，不用筛选器</td><td data-label="依据">FN-420</td></tr>
+          <tr><td data-label="#">8</td><td data-label="修正">越权统一为「禁用不隐藏」，403 两变体都设计</td><td data-label="依据">FN-421</td></tr>
+          <tr><td data-label="#">9</td><td data-label="修正">`.notice-actions` 增加换行，修掉窄宽度下按钮溢出</td><td data-label="依据">四档无横向滚动</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="doc-note"><b>关于既有成果：</b>Direction D 的视觉方向、令牌体系、控件库与三档外壳是有效资产，全部保留并继续作为唯一实现。本轮改的是信息架构与状态完整性，不是推倒重来。</p>
+  </section>
+
+  <!-- ==================== 07 给 P3 的交接 ==================== -->
+  <section class="section" aria-labelledby="h-p3">
+    <h2 class="doc-h2" id="h-p3"><span class="no">07</span>交给 P3 的边界</h2>
+    <p class="doc-rule">P2 到此为止：产品 IA、完整页面布局与视觉表达、全局设计系统与共享组件、关键交互形式、全部状态的设计表达、跨端规则，都已定稿。P3 把这些实现成可操作可验证的交互原型。</p>
+    <div class="notice info">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+      <div class="notice-body">
+        <p class="notice-title">P2 有意没做的事</p>
+        <p>没有实现完整业务交互（不模拟网络请求、不做真实数据流转）、没有写生产代码、没有为了凑数量添加页面。P2 的验证标准是「设计是否完整、统一、可实现」，不是「能不能跑通一个业务流程」。</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="assets/icons.js"></script>
+<script>
+(function () {
+  // 主题切换：与各屏一致的 URL 参数约定，并同步给页内预览 iframe
+  var btn = document.getElementById('themeBtn');
+  var label = document.getElementById('themeLabel');
+  var frames = Array.prototype.slice.call(document.querySelectorAll('.frame iframe'));
+  function apply(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    label.textContent = theme === 'dark' ? '亮色' : '暗色';
+    btn.querySelector('use').setAttribute('href', theme === 'dark' ? '#i-sun' : '#i-moon');
+    frames.forEach(function (f) {
+      var src = f.getAttribute('src').split('?')[0];
+      f.setAttribute('src', src + '?theme=' + theme);
+    });
+  }
+  btn.addEventListener('click', function () {
+    apply(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  });
+  var params = new URLSearchParams(location.search);
+  if (params.get('theme')) apply(params.get('theme'));
+
+  // 预览框自适应：按容器宽度缩放 iframe，任何视口都不溢出
+  function fitFrames() {
+    document.querySelectorAll('.frame').forEach(function (f) {
+      var ifr = f.querySelector('iframe');
+      if (!ifr) return;
+      var dw = f.classList.contains('r375') ? 375 : 1440;
+      var dh = f.classList.contains('r375') ? 720 : 900;
+      var s = Math.min(1, f.clientWidth / dw);
+      ifr.style.transform = 'scale(' + s + ')';
+      f.style.height = Math.round(dh * s) + 'px';
+    });
+  }
+  window.addEventListener('resize', fitFrames);
+  window.addEventListener('load', fitFrames);
+  fitFrames();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>协作闭环 · 流程原型 · EasyExam 设计规范</title>
+<link rel="stylesheet" href="../../assets/ee.css">
+<style>/* ===== 流程原型骨架（本页特有布局，未重定义令牌或控件） ===== */
+.doc-page{  max-width: 1100px; margin: 0 auto; padding: 28px 24px 60px;  }
+/* 编辑式列表：起点一条墨色重线（原版 .bank-list 同值），不用卡片 */
+.list{  border-top: 1px solid var(--ink);  }
+/* 步骤条与页签同一处理：窄屏时自身横滚，不撑破纸面（11 步在 768 也放不下） */
+.flow-stepbar .steps{  overflow-x: auto; scrollbar-width: none;  }
+.flow-stepbar .steps::-webkit-scrollbar{  display: none;  }
+.flow-stepbar .step{  flex: none;  }
+.steps .step:disabled{  cursor: default;  }
+/* ===== 本页布局助手 ===== */
+/* 间距助手：mt-4/mt-5/mb-4 已由 ee.css §15 统一提供，本页只补用到的 mt-3/mt-8 */
+.mt-3{  margin-top: var(--sp-3);  }
+.flow-stack{  display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0;  }
+.member-form{  display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-3);  }
+.member-form .field{  flex: 1 1 200px; min-width: 160px;  }
+.member-form .role-field{  flex: 0 0 140px;  }
+/* 面板内小节头：与 .panel-head 同结构，只去掉外边距（供流程页内嵌小节用） */
+.sub-head{  padding: 0 0 var(--sp-3); border-bottom: 1px solid var(--line);  }
+.panel-title-md{  font-size: var(--text-md);  }
+.max-46ch{  max-width: 46ch;  }
+/* 状态格（规格段，产品模式下隐藏） */
+.state-grid{  display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--sp-4); align-items: start;  }
+.qindex{  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-4);  }
+.avatar{  display: grid; place-items: center; width: 28px; height: 28px; flex: none; background: var(--brand-soft); color: var(--brand-ink); font-size: var(--text-xs); font-weight: 500; border-radius: 50%;  }
+.qrow-stem{  display: block; font-family: var(--font-serif); font-size: var(--text-sm); line-height: 1.7; color: var(--ink);  }
+.bank-sub{  display: flex; flex-wrap: wrap; gap: var(--sp-3); font-size: var(--text-sm); color: var(--ink-3); margin: var(--sp-1) 0 0;  }
+.forbidden-tag{  vertical-align: middle;  }
+/* 双设备对照（跨设备同步） */
+.device-col{  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface);  }
+.device-head{  display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line);  }
+.device-name{  font-size: var(--text-sm); font-weight: 500;  }
+.device-body{  padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3);  }
+.sync-line{  display: flex; align-items: center; gap: var(--sp-2); font-size: var(--text-xs); color: var(--ink-3);  }
+.sync-line .dot{  width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none;  }
+.sync-line.is-bad .dot{  background: var(--warn);  }
+/* 编辑中的软提示 */
+.editing-by{  display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--text-xs); color: var(--ink-2);  }
+.editing-by .dot{  width: 7px; height: 7px; border-radius: 50%; background: var(--flag); flex: none;  }
+@media (max-width: 640px){
+  .steps .step-name { display: none; }
+  .steps { gap: var(--sp-1); }
+  .flow-title { font-size: var(--text-2xl); }
+  .doc-page { padding: var(--sp-5) var(--sp-4) var(--sp-8); }
+}</style>
+</head>
+<body>
+<a class="skip-link" href="#flowStage">跳到主内容</a>
+<div class="doc-page">
+  <header class="flow-head">
+    <div class="flow-exits" data-spec>
+      <a class="btn btn-sm btn-quiet" href="../../product.html">完整产品</a>
+      <a class="btn btn-sm btn-quiet" href="../../index.html">设计规范</a>
+    </div>
+    <div>
+      <p class="flow-eyebrow" data-spec>流程原型 · 协作与实例域</p>
+      <h1 class="flow-title">协作闭环</h1>
+      <p class="flow-sub" data-spec>新建题库 → 题库列表 → 添加成员 → 成员与角色 → 并发编辑 → 跨设备冲突 → 转移所有权 → 自助退出 → 越权 403 → 失去访问权后的个人资产 → 成员后进入</p>
+    </div>
+  </header>
+
+  <div class="flow-stepbar">
+    <div class="steps" id="flowSteps" role="group" aria-label="协作闭环步骤"></div>
+    <p class="flow-caption" id="flowCaption" aria-live="polite"></p>
+  </div>
+
+  <main class="flow-stage" id="flowStage"></main>
+
+  <!-- ============ 状态格（规格段：产品模式下隐藏） ============ -->
+  <section class="mt-8" aria-labelledby="collab-states-title" data-spec>
+    <div class="section-head">
+      <h2 class="section-title" id="collab-states-title">状态规格</h2>
+      <span class="section-note">空 / 加载 / 错误 / 禁用 / 无权限 / 冲突 / 未配置 / 离线</span>
+    </div>
+    <div class="state-grid">
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title panel-title-md">空 · 题库没有其他成员</h3></div>
+        <div class="panel-body">
+          <div class="empty">
+            <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg></div>
+            <h4 class="empty-title">这个题库里还没有其他成员</h4>
+            <p class="empty-desc">转移所有权只能转给已经是本库成员的人，所以先添加成员。</p>
+            <div class="empty-actions"><button type="button" class="btn btn-primary btn-sm" onclick="document.querySelector('#flowSteps .step[data-goto=&quot;2&quot;]').click()">去添加成员</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title panel-title-md">加载 · 成员读取中</h3></div>
+        <div class="panel-body">
+          <div class="skeleton sk-line" style="width:40%"></div>
+          <div class="skeleton sk-line" style="width:70%"></div>
+          <div class="skeleton sk-line"></div>
+          <p class="state-note">题库资料未返回前只渲染骨架，不渲染空态——「没有成员」和「还没读到」是两件事。</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title panel-title-md">错误 · 读取与操作失败</h3></div>
+        <div class="panel-body">
+          <div class="notice bad" role="alert">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+            <div class="notice-body">成员列表读取失败。<div class="notice-actions"><button class="btn btn-sm" type="button">重试</button></div></div>
+          </div>
+          <div class="notice bad mt-3" role="alert">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+            <div class="notice-body">添加失败：这个名字不是实例内已注册的用户。</div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title panel-title-md">禁用 · 看不到成员管理</h3></div>
+        <div class="panel-body">
+          <div class="od-cluster">
+            <button type="button" class="btn btn-sm" disabled aria-describedby="st-member-reason">管理成员</button>
+            <button type="button" class="btn btn-sm" disabled aria-describedby="st-member-reason">添加成员</button>
+          </div>
+          <p class="hint mt-3" id="st-member-reason">编辑者与成员看不到成员管理操作，只看到一句「只有所有者可以管理成员」——入口不隐藏，只禁用并说明原因。</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title panel-title-md">无权限 · 深链 403</h3></div>
+        <div class="panel-body">
+          <div class="notice warn" role="note">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+            <div class="notice-body">你不在这个题库里。请联系题库所有者把你加进来，或返回题库列表。</div>
+          </div>
+          <p class="state-note">整页变体见流程第 9 步；前成员与陌生人同一套措辞与出口。</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title panel-title-md">冲突 · 保存撞车</h3></div>
+        <div class="panel-body">
+          <div class="notice warn" role="note">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>
+            <div class="notice-body">
+              这道题已被其他成员修改并保存。
+              <div class="notice-actions">
+                <button class="btn btn-sm" type="button">查看我的版本</button>
+                <button class="btn btn-sm btn-quiet" type="button">使用对方版本</button>
+              </div>
+            </div>
+          </div>
+          <p class="state-note">本地草稿保留，两个版本都在；批量操作遇冲突整批拒绝并提示刷新。</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title panel-title-md">未配置 · 注册开关没设过</h3></div>
+        <div class="panel-body">
+          <div class="notice info" role="note">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+            <div class="notice-body">
+              实例还没有保存过注册开关，当前按默认「开放」运行。
+              <div class="notice-actions"><a class="btn btn-sm btn-primary" href="../screens/instance.html">去实例设置</a></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title panel-title-md">离线 · 协作变更未同步</h3></div>
+        <div class="panel-body">
+          <div class="notice warn" role="status">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+            <div class="notice-body">
+              当前离线：本机有 <b>2</b> 条协作变更未同步（改角色、添加成员）。联网后自动重试。
+              <div class="notice-actions"><button class="btn btn-sm" type="button">重试</button></div>
+            </div>
+          </div>
+          <p class="state-note">离线是持久标识 + 队列计数 + 重试，不是一闪而过的 toast。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="flow-foot">
+    <button type="button" class="btn btn-quiet" id="flowPrev">上一步</button>
+    <span class="flow-note" id="flowNote"></span>
+    <button type="button" class="btn btn-primary" id="flowNext">下一步</button>
+  </footer>
+</div>
+
+<script src="../../assets/icons.js"></script>
+<script src="../../assets/store.js"></script>
+<script src="../../assets/i18n.js"></script>
+<script src="../../assets/nav.js"></script>
+<script src="../../assets/spec-boot.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var S = window.eeStore;
+  var ME = S.user();
+  var NEW_BANK = { name: '协作校对题库 1794570360969', category: '软考协作', desc: '多人协作校对与维护的题库。' };
+  var OTHER_EDITOR = 'accept_editor_1794570360969';
+
+  /* 已注册用户 = 共享状态里出现过的用户 + 实例名册（与 instance.html 的用户表一致） */
+  function registeredUsers() {
+    var set = {};
+    S.banks().forEach(function (b) {
+      S.members(b.id).forEach(function (m) { set[m.user] = 1; });
+    });
+    ['accept_editor_1794570360969', 'accept_member_1794570360969', 'accept_tester_1794570360969',
+      'accept_reviewer_1794570360969', 'accept_guest_1794570360969'].forEach(function (u) { set[u] = 1; });
+    return Object.keys(set);
+  }
+
+  var state = {
+    step: 0,
+    created: false,
+    newBankId: null,
+    form: { name: NEW_BANK.name, category: NEW_BANK.category, desc: NEW_BANK.desc },
+    createError: '',
+    userQuery: '',
+    pickedUser: '',
+    role: 'MEMBER',
+    memberMsg: '',
+    memberMsgIsError: false,
+    addedName: '',
+    tab: 'members',
+    /* 我在这个题库里的角色：随流程推进变化（所有者 → 编辑者 → 非成员 → 成员） */
+    meRole: 'ADMIN',
+    /* 用户真实做过转移/退出/被加回之后，不再按步骤覆盖角色 */
+    roleTouched: false,
+    /* 并发编辑 */
+    editDraft: 'OSI 的（ ）不适合提供相应的安全服务。',
+    editConflict: false,
+    editingBy: '',
+    /* 跨设备 */
+    devicePick: 'desktop',
+    /* 转移所有权 */
+    transferTarget: '',
+    transferInput: '',
+    transferError: '',
+    transferDone: false,
+    /* 自助退出 */
+    leftDone: false,
+    createAutoOpen: true
+  };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function ico(name, size) { return window.eeIcon ? window.eeIcon(name, size) : ''; }
+  function roleLabel(r) { return { ADMIN: '所有者', EDITOR: '编辑者', MEMBER: '成员' }[r] || r; }
+  function myBanks() { return S.banks({ archived: false }).filter(function (b) { return !b.shared; }); }
+  function sharedBanks() { return S.banks({ archived: false }).filter(function (b) { return b.shared; }); }
+  function bankMembers() { return state.newBankId ? S.members(state.newBankId) : []; }
+  function bankName() { var b = state.newBankId ? S.bank(state.newBankId) : null; return b ? b.name : NEW_BANK.name; }
+  function canEdit() { return state.meRole === 'ADMIN' || state.meRole === 'EDITOR'; }
+  function isOwner() { return state.meRole === 'ADMIN'; }
+
+  /* ---------- 步骤 0：新建题库 ---------- */
+  function renderCreate() {
+    var dlg = '' +
+      '<dialog class="dlg" id="dlgCreateBank" aria-labelledby="dlgCreateTitle">' +
+      '  <div class="dlg-head">' +
+      '    <div class="dlg-head-text">' +
+      '      <p class="dlg-eyebrow">题库</p>' +
+      '      <h2 class="dlg-title" id="dlgCreateTitle">新建题库</h2>' +
+      '    </div>' +
+      '    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭">' + ico('x', '15px') + '</button>' +
+      '  </div>' +
+      '  <div class="dlg-body">' +
+      '    <label class="field"><span class="label">题库名称<span class="req">*</span></span>' +
+      '      <input class="input' + (state.createError ? ' is-error' : '') + '" id="bankName" value="' + esc(state.form.name) + '" placeholder="例如：协作校对题库" data-act="f-name">' +
+      (state.createError ? '<span class="field-err">' + esc(state.createError) + '</span>' : '<span class="hint">成员在题库列表里看到的名字</span>') +
+      '    </label>' +
+      '    <label class="field"><span class="label">分类</span>' +
+      '      <input class="input" id="bankCategory" value="' + esc(state.form.category) + '" placeholder="例如：软考协作" data-act="f-category">' +
+      '    </label>' +
+      '    <label class="field"><span class="label">说明</span>' +
+      '      <textarea class="textarea" rows="3" id="bankDesc" placeholder="这个题库用来做什么" data-act="f-desc">' + esc(state.form.desc) + '</textarea>' +
+      '    </label>' +
+      '    <div class="notice info">' + ico('info', '15px') + '<div class="notice-body">题库内容对成员共享，学习记录各自私有。创建者自动成为这个题库的所有者。</div></div>' +
+      '  </div>' +
+      '  <div class="dlg-foot">' +
+      '    <button type="button" class="btn btn-quiet" data-dlg-close>取消</button>' +
+      '    <button type="button" class="btn btn-primary" data-act="create-bank">确认创建</button>' +
+      '  </div>' +
+      '</dialog>';
+
+    var behind = '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow">私人学习档案</p>' +
+      '    <h1 class="page-title">题库</h1>' +
+      '    <p class="page-sub">' + myBanks().length + ' 个可访问的题库</p>' +
+      '  </div>' +
+      '  <div class="page-actions">' +
+      '    <button type="button" class="btn btn-primary" data-act="open-create">' + ico('plus', '14px') + '新建题库</button>' +
+      '  </div>' +
+      '</header>' +
+      '<section class="section">' +
+      '  <div class="section-head"><h2 class="section-title">我的题库</h2><span class="section-note">你创建或管理的题库</span></div>' +
+      '  <div class="list">' + bankRows(myBanks()) + '</div>' +
+      '</section>';
+
+    return behind + dlg;
+  }
+
+  /* ---------- 步骤 1：题库列表 ---------- */
+  function renderBanks() {
+    var mine = bankRows(myBanks().map(function (b) {
+      return { b: b, just: state.created && b.id === state.newBankId };
+    }));
+
+    var shared = sharedBanks().map(function (b) {
+      /* 角色徽章只用「编辑者 / 成员」两档（Q-401：没有第四种「只读」角色） */
+      var badge = b.role === 'EDITOR' ? '编辑者' : '成员';
+      return '<div class="list-row static"><span class="list-main"><span class="list-title">' + esc(b.name) + '</span>' +
+        '  <span class="list-meta"><span>' + b.count + ' 题</span></span></span>' +
+        '  <span class="list-side"><span class="tag">' + badge + '</span></span></div>';
+    }).join('');
+
+    return '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow">私人学习档案</p>' +
+      '    <h1 class="page-title">题库</h1>' +
+      '    <p class="page-sub">' + S.banks({ archived: false }).length + ' 个可访问的题库</p>' +
+      '  </div>' +
+      '  <div class="page-actions">' +
+      '    <button type="button" class="btn btn-quiet" data-act="open-create">' + ico('plus', '14px') + '新建题库</button>' +
+      '  </div>' +
+      '</header>' +
+      '<section class="section">' +
+      '  <div class="section-head"><h2 class="section-title">我的题库</h2><span class="section-note">你创建或管理的题库</span></div>' +
+      '  <div class="list">' + mine + '</div>' +
+      '</section>' +
+      '<section class="section">' +
+      '  <div class="section-head"><h2 class="section-title">共享给我</h2><span class="section-note">其他成员创建、并把你加为成员的题库</span></div>' +
+      '  <div class="notice info">' + ico('info', '15px') +
+      '    <div class="notice-body">题库内容共享，学习记录各自私有。编辑者可以改题，成员只能浏览与练习。</div></div>' +
+      '  <div class="list">' + (shared || '<div class="dtable-empty">还没有共享给你的题库。</div>') + '</div>' +
+      '</section>';
+  }
+
+  function bankRows(list) {
+    return list.map(function (item) {
+      var b = item.b || item;
+      var just = item.just;
+      return '<div class="list-row static"><span class="list-main"><span class="list-title">' + esc(b.name) + (just ? ' <span class="tag brand">刚刚创建</span>' : '') + '</span>' +
+        '  <span class="list-meta"><span>' + esc(b.category || '默认分类') + '</span><span>' + b.count + ' 题</span></span></span>' +
+        '  <span class="list-side"><span class="tag">所有者</span></span></div>';
+    }).join('');
+  }
+
+  /* ---------- 题库工作区（按「我在这个题库里的角色」渲染） ---------- */
+  function bankQuestions() {
+    return state.newBankId ? S.questions(state.newBankId) : [];
+  }
+  function workspace(activeTab) {
+    var bankId = state.newBankId || '';
+    var qlist = bankQuestions();
+    var role = state.meRole;
+    var editable = canEdit();
+    var owner = isOwner();
+    var notice = role === 'ADMIN'
+      ? '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body">你在这个题库里是所有者：可以编辑内容，也可以管理成员。</div></div>'
+      : (role === 'EDITOR'
+        ? '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body">你在这个题库里是编辑者：可以编辑内容，不能管理成员。</div></div>'
+        : '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body">你在这个题库里是成员：可以浏览和练习，不能编辑内容。</div></div>');
+
+    var qrows = qlist.length ? qlist.map(function (q, i) {
+      var qhref = '../screens/question.html?bank=' + encodeURIComponent(bankId) + '&id=' + encodeURIComponent(q.id) + '&from=workspace';
+      return '' +
+        '<div class="list-row static">' +
+        '  <span class="qindex">' + String(i + 1).padStart(2, '0') + '</span>' +
+        '  <span class="list-main"><span class="qrow-stem">' + esc(q.stem) + '</span>' +
+        '    <span class="list-meta"><span>' + esc(q.type) + '</span><span>' + esc(q.chapter || '未分章') + '</span></span></span>' +
+        '  <span class="list-side">' +
+        (editable
+          ? '    <a class="btn btn-sm" href="' + qhref + '&edit=1">' + ico('edit', '13px') + '编辑</a>' + '\n'
+          : '    <button type="button" class="btn btn-sm" disabled aria-describedby="ws-edit-reason">' + ico('edit', '13px') + '编辑</button>' + '\n') +
+        '    <a class="btn btn-sm btn-quiet" href="' + qhref + '">查看</a>' +
+        '  </span>' +
+        '</div>';
+    }).join('') : '<div class="empty"><div class="empty-mark">' + ico('layers', '26px') + '</div>' +
+      '<h3 class="empty-title">还没有题目</h3>' +
+      '<p class="empty-desc">这个题库刚创建，先导入一批题目，或让成员协作校对。</p>' +
+      '<div class="empty-actions">' +
+      '  <a class="btn btn-primary" href="../screens/import.html?bank=' + encodeURIComponent(bankId) + '">' + ico('import', '14px') + '去导入</a>' +
+      '</div></div>';
+
+    /* 成员管理只归所有者：编辑者/成员看不到添加表单与「移除」，只看到说明 */
+    var members = bankMembers().map(function (m) {
+      var removable = owner && m.role !== 'ADMIN' && m.user !== ME;
+      return '' +
+        '<div class="list-row static">' +
+        '  <span class="avatar">' + esc(m.user.charAt(0).toUpperCase()) + '</span>' +
+        '  <span class="list-main"><span class="list-title">' + esc(m.user) + (m.user === ME ? ' <span class="tag plain">我</span>' : '') + '</span>' +
+        '    <span class="list-meta"><span>' + roleLabel(m.role) + '</span><span>2026-11-24 加入</span></span></span>' +
+        '  <span class="list-side">' + (removable ? '<button type="button" class="link-btn" data-act="remove-member" data-user="' + esc(m.user) + '">移除</button>' : '<span class="tag">' + roleLabel(m.role) + '</span>') + '</span>' +
+        '</div>';
+    }).join('');
+
+    var addForm = '' +
+      '<div class="member-form mt-4">' +
+      '  <label class="field"><span class="label">用户名</span>' +
+      '    <div class="search-box">' + ico('search', '14px') +
+      '      <input class="input" type="search" placeholder="搜索已注册用户" aria-label="搜索已注册用户" value="' + esc(state.userQuery) + '" data-act="user-search">' +
+      '    </div>' +
+      '    <span class="hint">只能添加已注册的用户；新用户需要先注册（注册关闭时请联系管理员临时开启注册）</span>' +
+      '  </label>' +
+      '  <label class="field role-field"><span class="label">权限</span>' +
+      '    <select class="select" data-act="set-role">' +
+      '      <option value="MEMBER"' + (state.role === 'MEMBER' ? ' selected' : '') + '>成员</option>' +
+      '      <option value="EDITOR"' + (state.role === 'EDITOR' ? ' selected' : '') + '>编辑者</option>' +
+      '    </select>' +
+      '  </label>' +
+      '  <button type="button" class="btn btn-primary" data-act="add-member">添加</button>' +
+      '</div>' +
+      '<div id="userResults" class="mt-4"></div>' +
+      (state.memberMsg ? '<p class="' + (state.memberMsgIsError ? 'field-err' : 'field-ok') + '">' + esc(state.memberMsg) + '</p>' : '');
+
+    var memberBody = '' +
+      '<div class="panel"><div class="panel-body flow-stack">' +
+      '  <div class="notice info">' + ico('users', '15px') + '<div class="notice-body">题库内容共享，学习记录各自私有。只有所有者可以管理成员。</div></div>' +
+      '  <div class="list">' + members + '</div>' +
+      (owner ? addForm : '<p class="hint mt-4">只有所有者可以管理成员。需要调整成员时，请联系题库所有者。</p>') +
+      '</div></div>';
+
+    return '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow"><button type="button" class="link-btn" data-act="to-banks">题库</button><span aria-hidden="true"> / </span></p>' +
+      '    <h1 class="page-title">' + esc(bankName()) + '</h1>' +
+      '    <p class="bank-sub"><span>你在这个题库里是' + roleLabel(role) + '</span><span>' + esc(NEW_BANK.category) + '</span><span>' + qlist.length + ' 题</span></p>' +
+      '  </div>' +
+      '  <div class="page-actions">' +
+      '    <a class="btn" href="../screens/workspace.html?bank=' + encodeURIComponent(bankId) + '">' + ico('columns', '14px') + '管理</a>' +
+      (editable
+        ? '    <a class="btn" href="../screens/import.html?bank=' + encodeURIComponent(bankId) + '">' + ico('import', '14px') + '导入</a>' + '\n'
+        : '    <button type="button" class="btn" disabled aria-describedby="ws-edit-reason">' + ico('import', '14px') + '导入</button>' + '\n') +
+      '    <a class="btn btn-primary" href="../screens/practice.html?bank=' + encodeURIComponent(bankId) + '">' + ico('play', '14px') + '练习</a>' +
+      '  </div>' +
+      '</header>' +
+      notice +
+      (editable ? '' : '<p class="hint" id="ws-edit-reason">编辑、导入与批量维护需要所有者或编辑者角色；题目与成员名单照常可见——权限改变能力，不改变结构。</p>') +
+      '<div class="mt-5" data-tab-scope="ws">' +
+      '  <div class="tabs" role="tablist">' +
+      '    <button type="button" class="tab" role="tab" data-panel="questions" aria-selected="' + (activeTab === 'questions') + '">题目<span class="count">' + qlist.length + '</span></button>' +
+      '    <button type="button" class="tab" role="tab" data-panel="members" aria-selected="' + (activeTab === 'members') + '">成员<span class="count">' + bankMembers().length + '</span></button>' +
+      '  </div>' +
+      '  <div class="mt-4" data-tab-panel="questions"' + (activeTab === 'questions' ? '' : ' hidden') + '>' +
+      '    <div class="list">' + qrows + '</div>' +
+      '  </div>' +
+      '  <div class="mt-4" data-tab-panel="members"' + (activeTab === 'members' ? '' : ' hidden') + '>' + memberBody + '</div>' +
+      '</div>';
+  }
+
+  /* ---------- 步骤 2：添加成员（所有者视角） ---------- */
+  function renderMembers() { return workspace('members'); }
+
+  /* ---------- 步骤 3：编辑者视角 ---------- */
+  function renderEditorView() {
+    var html = workspace('questions');
+    /* 角色变更需二次确认 + 降级自己要被拒绝（FN-416） */
+    var extra = '' +
+      '<div class="panel mt-5"><div class="panel-body flow-stack">' +
+      '  <div class="panel-head sub-head"><h3 class="panel-title panel-title-md">成员角色变更</h3><span class="panel-sub">FN-416</span></div>' +
+      '  <div class="list-row static">' +
+      '    <span class="avatar">E</span>' +
+      '    <span class="list-main"><span class="list-title">' + esc(OTHER_EDITOR) + '</span>' +
+      '      <span class="list-meta"><span>编辑者</span><span>2026-11-24 加入</span></span></span>' +
+      '    <span class="list-side">' +
+      '      <button type="button" class="btn btn-sm" data-act="role-change">改为成员</button>' +
+      '      <button type="button" class="link-btn" data-act="remove-member" data-user="' + esc(OTHER_EDITOR) + '">移除</button>' +
+      '    </span>' +
+      '  </div>' +
+      '  <div class="list-row static">' +
+      '    <span class="avatar">' + esc(ME.charAt(0).toUpperCase()) + '</span>' +
+      '    <span class="list-main"><span class="list-title">' + esc(ME) + ' <span class="tag plain">我</span></span>' +
+      '      <span class="list-meta"><span>所有者</span></span></span>' +
+      '    <span class="list-side">' +
+      '      <button type="button" class="btn btn-sm" disabled aria-describedby="self-role-reason">改为成员</button>' +
+      '    </span>' +
+      '  </div>' +
+      '  <p class="hint" id="self-role-reason">不能把自己降级：所有者的角色只能通过转移所有权变更（先转移，再离开）。</p>' +
+      '  <div class="notice info">' + ico('info', '15px') + '<div class="notice-body">改角色要二次确认，对话框说明新旧角色各能做什么；降级后对方已打开的页面在下一次数据加载时转为只读，并提示「你在这个题库的角色已变为成员」。</div></div>' +
+      '</div></div>';
+    return html + extra;
+  }
+
+  /* ---------- 步骤 4：多用户并发编辑同一题库内容（FN-424） ---------- */
+  function renderConcurrent() {
+    var bankId = state.newBankId || '';
+    var conflict = state.editConflict;
+    return '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow"><button type="button" class="link-btn" data-act="to-banks">题库</button><span aria-hidden="true"> / </span>' + esc(bankName()) + '</p>' +
+      '    <h1 class="page-title">编辑题目</h1>' +
+      '    <p class="bank-sub"><span>你在这个题库里是' + roleLabel(state.meRole) + '</span><span>第 1 题 · v2</span></p>' +
+      '  </div>' +
+      '</header>' +
+      '<div class="panel"><div class="panel-body flow-stack">' +
+      '  <div class="od-row-top">' +
+      '    <span class="editing-by"><span class="dot" aria-hidden="true"></span>这道题正在被 ' + esc(OTHER_EDITOR) + ' 编辑</span>' +
+      '    <span class="spacer"></span>' +
+      '    <span class="hint">软提示，不阻塞：你们可以同时编辑，保存时才知道谁先谁后</span>' +
+      '  </div>' +
+      '  <label class="field"><span class="label">题干</span>' +
+      '    <textarea class="textarea" rows="3" data-act="edit-draft">' + esc(state.editDraft) + '</textarea>' +
+      '  </label>' +
+      '  <label class="field"><span class="label">标准答案</span>' +
+      '    <input class="input" value="会话层" data-act="edit-answer">' +
+      '    <span class="hint">修改标准答案会生成新版本，历史作答仍绑定旧版本</span>' +
+      '  </label>' +
+      (conflict
+        ? '<div class="notice warn" role="alert">' + ico('alert-triangle', '15px') +
+          '<div class="notice-body"><div class="notice-title">保存失败：这道题已被 ' + esc(OTHER_EDITOR) + ' 修改并保存为 v3</div>' +
+          '<p>你编辑期间对方先保存了。本地草稿已保留，两个版本都在，由你选择，不静默覆盖。</p>' +
+          '<div class="notice-actions">' +
+          '  <button type="button" class="btn btn-sm" data-act="keep-mine">查看我的版本</button>' +
+          '  <button type="button" class="btn btn-sm btn-quiet" data-act="take-theirs">使用对方版本</button>' +
+          '  <button type="button" class="btn btn-sm btn-quiet" data-act="reload">刷新后重试</button>' +
+          '</div></div></div>'
+        : '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body">点「保存」体验并发保存的结果：后保存者会拿到 409 与本地草稿保留，不会被静默覆盖。</div></div>') +
+      '  <div class="flow-actions">' +
+      '    <button type="button" class="btn btn-primary" data-act="save-question">' + (conflict ? '重新保存' : '保存') + '</button>' +
+      '    <button type="button" class="btn btn-quiet" data-act="to-banks">取消</button>' +
+      '  </div>' +
+      '</div></div>' +
+
+      '<div class="panel mt-5"><div class="panel-body flow-stack">' +
+      '  <div class="panel-head sub-head"><h3 class="panel-title panel-title-md">批量维护</h3><span class="panel-sub">整批校验 · 整批生效</span></div>' +
+      '  <div class="bulkbar"><span>已选 <b>4</b> 题</span><span class="spacer"></span>' +
+      '    <button type="button" class="btn btn-sm" data-act="bulk-chapter">设置章节</button>' +
+      '    <button type="button" class="btn btn-sm" data-act="bulk-archive">归档</button>' +
+      '  </div>' +
+      '  <p class="hint">批量设置章节/标签是元数据修改，不产生新版本；遇到并发冲突时整批拒绝并提示「题库已被其他成员修改，请刷新后重试」，不静默互相覆盖。</p>' +
+      '  <div class="notice ok" role="status">' + ico('check', '15px') + '<div class="notice-body">批量结果：成功 3 · 无须变更 1（已归档题执行恢复属于无须变更；不存在「跳过」这一项）。</div></div>' +
+      '  <div class="notice bad" role="alert">' + ico('alert-triangle', '15px') + '<div class="notice-body">整批拒绝：其中 1 题不属于当前题库。零写入，可读原因已给出，请修正后重试。</div></div>' +
+      '</div></div>' +
+
+      '<div class="notice warn mt-5" role="note">' + ico('alert-triangle', '15px') +
+      '<div class="notice-body"><div class="notice-title">题库内容编辑在任何情况下都不因「有未交卷模考」被拒绝</div>' +
+      '<p>隔离靠会话快照与题目版本，不靠锁定题库：别人的模考照常进行，你照常改题。</p></div></div>';
+  }
+
+  /* ---------- 步骤 5：跨设备同步与冲突（FN-423） ---------- */
+  function renderSync() {
+    var devices = [
+      { id: 'desktop', name: '电脑 · Chrome', ok: true, note: '刚刚同步 · 事件序号 128' },
+      { id: 'phone', name: '手机 · 易考宝', ok: false, note: '有 1 条未同步的作答草稿' }
+    ];
+    var cols = devices.map(function (d) {
+      var on = state.devicePick === d.id;
+      return '' +
+        '<div class="device-col">' +
+        '  <div class="device-head">' +
+        '    <span class="device-name">' + esc(d.name) + '</span>' +
+        '    <span class="spacer"></span>' +
+        '    <button type="button" class="btn btn-sm' + (on ? '' : ' btn-quiet') + '" data-act="pick-device" data-device="' + d.id + '">' + (on ? '正在查看' : '查看') + '</button>' +
+        '  </div>' +
+        '  <div class="device-body">' +
+        '    <div class="sync-line' + (d.ok ? '' : ' is-bad') + '"><span class="dot" aria-hidden="true"></span>' + esc(d.note) + '</div>' +
+        (d.id === 'desktop'
+          ? '<div class="list"><div class="list-row static"><span class="list-main"><span class="list-title">同步游标按设备维护</span><span class="list-meta"><span>本机记住自己消费到的事件序号</span></span></span><span class="list-side"><span class="tag ok">独立消费方</span></span></div></div>'
+          : '<div class="notice warn" role="status">' + ico('alert-triangle', '15px') + '<div class="notice-body">当前离线：1 条作答未同步，联网后自动补交。</div></div>') +
+        '  </div>' +
+        '</div>';
+    }).join('');
+
+    return '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow">跨设备</p>' +
+      '    <h1 class="page-title">同步与冲突</h1>' +
+      '    <p class="page-sub">同一账号的手机、电脑、平板按服务端事件顺序合并；无法自动合并时保留两个版本并提示你选择。</p>' +
+      '  </div>' +
+      '</header>' +
+      '<div class="od-grid" style="--od-cols: 2">' + cols + '</div>' +
+
+      '<div class="panel mt-5"><div class="panel-body flow-stack">' +
+      '  <div class="panel-head sub-head"><h3 class="panel-title panel-title-md">三类数据，两种策略</h3><span class="panel-sub">CR-23 · 判据是「丢了能不能重建」</span></div>' +
+      '  <div class="dtable-wrap"><table class="dtable">' +
+      '    <thead><tr><th scope="col">类别</th><th scope="col">对象</th><th scope="col">策略</th></tr></thead>' +
+      '    <tbody>' +
+      '      <tr><td data-label="类别"><span class="tag">学习记录类</span></td><td data-label="对象">已提交/已判分的作答、错题、FSRS 卡、掌握度、成绩报告</td><td data-label="策略">按服务端事件顺序合并；无法自动合并时保留两个版本并提示选择，禁止静默覆盖</td></tr>' +
+      '      <tr><td data-label="类别"><span class="tag">用户创作类</span></td><td data-label="对象">人工编辑过的导入草稿、AI 草稿、未提交的答案内容</td><td data-label="策略">同上：保留两个版本并提示选择，禁止静默覆盖</td></tr>' +
+      '      <tr><td data-label="类别"><span class="tag">临时状态类</span></td><td data-label="对象">题目光标、旗标、展开/折叠、滚动位置、计时、尚未提交的中间输入</td><td data-label="策略">后写覆盖，但覆盖时必须明确告知「已被另一设备更新，已用较新版本替换」，不得静默</td></tr>' +
+      '    </tbody></table></div>' +
+      '  <p class="hint">同一条草稿被人工改过，就从临时状态类升格为创作类——判据是「这份内容是不是用户花力气做出来的」，不是它存在哪张表里。</p>' +
+      '</div></div>' +
+
+      '<div class="panel mt-4"><div class="panel-body flow-stack">' +
+      '  <div class="panel-head sub-head"><h3 class="panel-title panel-title-md">冲突示例：未提交的答案</h3><span class="panel-sub">用户创作类</span></div>' +
+      '  <div class="notice warn" role="alert">' + ico('refresh', '15px') +
+      '  <div class="notice-body"><div class="notice-title">这台手机上有一条没提交的答案，电脑上也有一条</div>' +
+      '  <p>两条都是你手写的，都保留。选一个继续，另一个仍可在版本记录里找到。</p>' +
+      '  <div class="notice-actions">' +
+      '    <button type="button" class="btn btn-sm" onclick="eeToast(\'已保留手机上的版本\')">查看我的版本</button>' +
+      '    <button type="button" class="btn btn-sm btn-quiet" onclick="eeToast(\'已采用电脑上的版本\')">使用对方版本</button>' +
+      '  </div></div></div>' +
+      '  <div class="notice info" role="note">' + ico('info', '15px') + '<div class="notice-body">同一浏览器的多个标签页视为多个独立消费方：一个标签页推进游标，不会让另一个标签页漏收事件。</div></div>' +
+      '</div></div>';
+  }
+
+  /* ---------- 步骤 6：转移题库所有权（FN-419） ---------- */
+  function renderTransfer() {
+    var bankId = state.newBankId || '';
+    var others = bankMembers().filter(function (m) { return m.role !== 'ADMIN'; });
+    var targets = others.map(function (m) {
+      var on = state.transferTarget === m.user;
+      return '<button type="button" class="list-row' + (on ? ' is-active' : '') + '" data-act="pick-target" data-user="' + esc(m.user) + '">' +
+        '<span class="avatar">' + esc(m.user.charAt(0).toUpperCase()) + '</span>' +
+        '<span class="list-main"><span class="list-title">' + esc(m.user) + '</span>' +
+        '  <span class="list-meta"><span>' + roleLabel(m.role) + '</span></span></span>' +
+        '<span class="list-side">' + (on ? '<span class="tag brand">已选择</span>' : '') + '</span></button>';
+    }).join('');
+    var dlg = '' +
+      '<dialog class="dlg danger" id="dlgTransfer" aria-labelledby="dlgTransferTitle">' +
+      '  <div class="dlg-head">' +
+      '    <div class="dlg-head-text">' +
+      '      <p class="dlg-eyebrow">题库 · 不可撤销</p>' +
+      '      <h2 class="dlg-title" id="dlgTransferTitle">转移题库所有权</h2>' +
+      '    </div>' +
+      '    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭">' + ico('x', '15px') + '</button>' +
+      '  </div>' +
+      '  <div class="dlg-body">' +
+      '    <p class="dlg-p">把 <b>' + esc(bankName()) + '</b> 的所有者身份交给 <b>' + esc(state.transferTarget || '（未选择）') + '</b>。</p>' +
+      '    <div class="notice warn" role="alert">' + ico('alert-triangle', '15px') +
+      '      <div class="notice-body">转移后你变成编辑者，不能再管理成员、不能改题库设置。如需转回，请联系对方或实例管理员——产品不提供自助转回。</div></div>' +
+      '    <label class="field"><span class="label">输入题库名称以确认<span class="req">*</span></span>' +
+      '      <input class="input' + (state.transferError ? ' is-error' : '') + '" id="transferName" value="' + esc(state.transferInput) + '" placeholder="' + esc(bankName()) + '" data-act="transfer-input">' +
+      (state.transferError ? '<span class="field-err">' + esc(state.transferError) + '</span>' : '<span class="hint">名称完全一致才能确认。</span>') +
+      '    </label>' +
+      '  </div>' +
+      '  <div class="dlg-foot">' +
+      '    <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>取消</button>' +
+      '    <button class="btn btn-danger-solid" type="button" data-act="transfer-go">确认转移</button>' +
+      '  </div>' +
+      '</dialog>';
+
+    return '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow"><button type="button" class="link-btn" data-act="to-banks">题库</button><span aria-hidden="true"> / </span>' + esc(bankName()) + ' / 成员</p>' +
+      '    <h1 class="page-title">转移所有权</h1>' +
+      '    <p class="page-sub">把「所有者」身份交给本库另一位成员，自己降为编辑者。这是危险动作，需要输入题库名称二次确认。</p>' +
+      '  </div>' +
+      '</header>' +
+      '<div class="panel"><div class="panel-body flow-stack">' +
+      '  <div class="notice info">' + ico('users', '15px') + '<div class="notice-body">只能转给<b>已经是本库成员</b>的人；目标必须已在这里，不能顺带把陌生人提成所有者。</div></div>' +
+      '  <div class="list">' + (targets || '<div class="dtable-empty">这个题库里还没有其他成员，先添加成员。</div>') + '</div>' +
+      '  <div class="flow-actions">' +
+      '    <button type="button" class="btn btn-danger" data-act="open-transfer"' + (state.transferTarget ? '' : ' disabled') + '>转移所有权</button>' +
+      '    <button type="button" class="btn btn-quiet" data-act="to-banks">返回工作区</button>' +
+      (targets ? '' : '<button type="button" class="btn btn-quiet" data-act="goto-add-member">去添加成员</button>') +
+      '  </div>' +
+      '  <p class="hint">实例管理员可以在实例管理面仲裁强制转移任意题库的所有权（含自己不是成员的库）；这只改变所有者归属，不给任何内容编辑权。</p>' +
+      '</div></div>' + dlg;
+  }
+
+  /* ---------- 步骤 7：自助退出题库（FN-418） ---------- */
+  function renderLeave() {
+    var owner = isOwner();
+    var dlg = '' +
+      '<dialog class="dlg" id="dlgLeave" aria-labelledby="dlgLeaveTitle">' +
+      '  <div class="dlg-head">' +
+      '    <div class="dlg-head-text">' +
+      '      <p class="dlg-eyebrow">题库</p>' +
+      '      <h2 class="dlg-title" id="dlgLeaveTitle">退出题库</h2>' +
+      '    </div>' +
+      '    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭">' + ico('x', '15px') + '</button>' +
+      '  </div>' +
+      '  <div class="dlg-body">' +
+      '    <p class="dlg-p">退出 <b>' + esc(bankName()) + '</b>？</p>' +
+      '    <div class="notice info" role="note">' + ico('info', '15px') +
+      '      <div class="notice-body">退出后你仍保留自己的作答、错题、FSRS 状态与成绩报告，并继续进你自己的统计；但你不能访问这个题库的内容。你进行中的练习/模考可以按快照答完并交卷。所有者可以随时把你加回来。</div></div>' +
+      '  </div>' +
+      '  <div class="dlg-foot">' +
+      '    <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>取消</button>' +
+      '    <button class="btn btn-primary" type="button" data-act="leave-go">退出题库</button>' +
+      '  </div>' +
+      '</dialog>';
+
+    var ownerCard = '' +
+      '<div class="panel"><div class="panel-body flow-stack">' +
+      '  <div class="od-row"><span class="rule-label">所有者</span><span class="spacer"></span>' +
+      (owner ? '<span class="tag brand">你现在的角色</span>' : '<span class="tag plain">转移所有权之前</span>') + '</div>' +
+      '  <button type="button" class="btn" disabled aria-describedby="leave-owner-reason">退出题库</button>' +
+      '  <p class="hint" id="leave-owner-reason">所有者不能自助退出：这个题库必须始终有所有者。要离开，必须先把所有权转移给本库另一位成员。</p>' +
+      '  <div class="flow-actions"><button type="button" class="btn btn-quiet btn-sm" data-act="goto-transfer">去转移所有权</button></div>' +
+      '</div></div>';
+
+    var memberCard = '' +
+      '<div class="panel"><div class="panel-body flow-stack">' +
+      '  <div class="od-row"><span class="rule-label">编辑者 / 成员</span><span class="spacer"></span>' +
+      (!owner ? '<span class="tag brand">你现在的角色</span>' : '<span class="tag plain">转移所有权之后</span>') + '</div>' +
+      (owner
+        ? '<button type="button" class="btn" disabled>退出题库</button>' +
+          '<p class="hint">你现在是所有者；完成上一步的转移所有权后，这里就可以退出。</p>'
+        : '<button type="button" class="btn" data-act="open-leave">退出题库</button>' +
+          '<p class="hint">退出后这个库从「共享给我」里消失，但你在这个库的学习记录仍保留在个人统计里，并标注来源题库与「已退出」状态。</p>') +
+      '</div></div>';
+
+    return '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow"><button type="button" class="link-btn" data-act="to-banks">题库</button><span aria-hidden="true"> / </span>' + esc(bankName()) + ' / 成员</p>' +
+      '    <h1 class="page-title">自助退出题库</h1>' +
+      '    <p class="page-sub">协作者主动离开一个共享题库，不需要所有者操作。这是「这个人与这个库的关系」的变更，不改变库对其他人的可见性。</p>' +
+      '  </div>' +
+      '</header>' +
+      '<div class="notice info" role="note">' + ico('info', '15px') +
+      '<div class="notice-body"><div class="notice-title">你在这个题库里是' + roleLabel(state.meRole) + '</div>' +
+      '<p>入口不隐藏：所有者看到的「退出题库」是禁用状态并带原因，而不是消失。</p></div></div>' +
+      '<div class="od-grid mt-5" style="--od-cols: 2">' + ownerCard + memberCard + '</div>' +
+      '<div class="notice warn mt-5" role="note">' + ico('alert-triangle', '15px') +
+      '<div class="notice-body"><div class="notice-title">退出 ≠ 题库归档</div>' +
+      '<p>归档是「库的事」，影响所有人；退出是「这个人与这个库的关系的事」，只影响你自己。两套规则不得互相套用（CR-30）。</p></div></div>' + dlg;
+  }
+
+  /* ---------- 步骤 8：越权 403 深链（FN-421 变体 A） ---------- */
+  function renderForbidden() {
+    return '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow">题库 / 深链</p>' +
+      '    <h1 class="page-title">访问被拒绝 <span class="tag warn forbidden-tag">403</span></h1>' +
+      '    <p class="page-sub">有人分享了一个题库链接，但你不在成员名单里</p>' +
+      '  </div>' +
+      '</header>' +
+      '<div class="panel"><div class="panel-body">' +
+      '  <div class="empty">' +
+      '    <div class="empty-mark">' + ico('lock', '28px') + '</div>' +
+      '    <h2 class="empty-title">你不在这个题库里</h2>' +
+      '    <p class="empty-desc">这个题库只对成员开放。请联系题库所有者把你加进来，或返回题库列表。</p>' +
+      '    <p class="hint max-46ch">你已登录为 ' + esc(ME) + '。退出或被移除后拿到的是同一套措辞与出口——能回看「我在这道题上得过几分」，不能再浏览这道题现在长什么样。</p>' +
+      '    <div class="empty-actions">' +
+      '      <button type="button" class="btn btn-primary" data-act="back-source">返回来源页</button>' +
+      '      <button type="button" class="btn btn-quiet" data-act="to-banks">返回题库列表</button>' +
+      '    </div>' +
+      '  </div>' +
+      '</div></div>';
+  }
+
+  /* ---------- 步骤 9：失去访问权后的个人资产（CR-30 / FN-422） ---------- */
+  function renderAssets() {
+    var rows = [
+      { name: 'OSI 的（ ）不适合提供相应的安全服务。', kind: '错题', state: '未清除' },
+      { name: '关于范围基准，以下说法不正确的是（）。', kind: '斩杀', state: '已斩杀' },
+      { name: '模考 · 系统集成项目管理工程师', kind: '成绩报告', state: '78 分 · 永久可回看' }
+    ];
+    var list = rows.map(function (r) {
+      return '<div class="list-row static">' +
+        '<span class="list-main"><span class="list-title">' + esc(r.name) + '</span>' +
+        '  <span class="list-meta"><span>' + esc(r.kind) + '</span><span>' + esc(r.state) + '</span></span></span>' +
+        '<span class="list-side"><span class="tag warn">已退出 · 已失去访问权</span></span></div>';
+    }).join('');
+
+    return '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow">复习 / 个人统计</p>' +
+      '    <h1 class="page-title">失去访问权之后</h1>' +
+      '    <p class="page-sub">退出题库不销毁个人学习记录：记录全部保留，并继续进你自己的统计。</p>' +
+      '  </div>' +
+      '</header>' +
+      '<div class="notice info" role="note">' + ico('info', '15px') +
+      '<div class="notice-body"><div class="notice-title">回看权始终属于你，访问权随成员关系消失</div>' +
+      '<p>你能回看「我在这道题上得过几分」，不等于可以再看这道题现在长什么样。错题队列、薄弱、斩杀、趋势与历史报告五处都会标注来源题库与「已退出 / 已失去访问权」状态。</p></div></div>' +
+
+      '<div class="panel mt-5"><div class="panel-body flow-stack">' +
+      '  <div class="panel-head sub-head"><h3 class="panel-title panel-title-md">仍在你账上的学习资产</h3><span class="panel-sub">来源：' + esc(bankName()) + '</span></div>' +
+      '  <div class="list">' + list + '</div>' +
+      '  <p class="hint">已失去访问权的题不再进入任何可执行学习队列（复习、今日、推荐、计划）；恢复成员资格后，凭原有学习状态重新入队，不重新从零开始，也不补做错题。</p>' +
+      '</div></div>' +
+
+      '<div class="panel mt-4"><div class="panel-body flow-stack">' +
+      '  <div class="panel-head sub-head"><h3 class="panel-title panel-title-md">进行中的会话按快照继续</h3><span class="panel-sub">不删除、不作废</span></div>' +
+      '  <div class="list-row static">' +
+      '    <span class="list-main"><span class="list-title">普通练习 · ' + esc(bankName()) + '</span>' +
+      '      <span class="list-meta"><span>已答 1 / 3</span><span>会话建立时持有题目与版本快照</span></span></span>' +
+      '    <span class="list-side"><button type="button" class="btn btn-sm btn-primary" onclick="eeToast(\'按快照继续答完并交卷\')">继续作答</button></span>' +
+      '  </div>' +
+      '  <p class="hint">做题不依赖持续的成员权限：可以按会话快照答完并交卷，报告正常落库、永久可回看。但交卷后这些题不再进入新的可执行学习队列。</p>' +
+      '</div></div>' +
+
+      '<div class="notice warn mt-4" role="note">' + ico('alert-triangle', '15px') +
+      '<div class="notice-body"><div class="notice-title">不得因权限撤销而删除或作废任何已存在的会话、作答或报告</div>' +
+      '<p>这不是数据缺陷，是界面清晰度问题：历史必须带来源与状态标注，否则用户会以为历史凭空消失。</p></div></div>';
+  }
+
+  /* ---------- 步骤 10：设为成员后进入（FN-421 变体 B + FN-422） ---------- */
+  function renderMemberView() {
+    var html = workspace('members');
+    var extra = '' +
+      '<div class="panel mt-5"><div class="panel-body flow-stack">' +
+      '  <div class="panel-head sub-head"><h3 class="panel-title panel-title-md">学习记录私有</h3><span class="panel-sub">FN-422</span></div>' +
+      '  <div class="notice info">' + ico('shield', '15px') +
+      '  <div class="notice-body"><div class="notice-title">题库内容共享，学习记录各自私有</div>' +
+      '  <p>共享只包含题目内容与题目版本。作答记录、错题与错因、FSRS 状态、斩杀状态、薄弱标记、复习计划与个人笔记一律私有——<b>所有者看不到编辑者/成员的作答，成员之间也互相看不到</b>。</p></div></div>' +
+      '  <div class="list-row static">' +
+      '    <span class="list-main"><span class="list-title">其他成员的学习记录</span>' +
+      '      <span class="list-meta"><span>成员名单只显示用户名、角色与加入时间</span></span></span>' +
+      '    <span class="list-side"><button type="button" class="btn btn-sm" disabled aria-describedby="privacy-reason">查看</button></span>' +
+      '  </div>' +
+      '  <p class="hint" id="privacy-reason">任何角色都看不到他人的作答、错题与斩杀：这个入口对所有成员一律不可用，而不是只对某一种角色隐藏。</p>' +
+      '  <div class="list-row static">' +
+      '    <span class="list-main"><span class="list-title">我自己的学习记录</span>' +
+      '      <span class="list-meta"><span>错题 2 · 斩杀 1 · 今日复习 3</span></span></span>' +
+      '    <span class="list-side"><a class="btn btn-sm btn-quiet" href="../screens/review.html">去复习</a></span>' +
+      '  </div>' +
+      '</div></div>';
+    return html + extra;
+  }
+
+  /* ---------- 步骤定义 ---------- */
+  var STEPS = [
+    { id: 'create', name: '新建题库', render: renderCreate, nextLabel: '确认创建', note: '对话框收集名称、分类与说明；名称必填。创建者成为这个题库的所有者。' },
+    { id: 'banks', name: '题库列表', render: renderBanks, nextLabel: '打开新题库', note: '「我的题库」出现新库；「共享给我」单独分组，段说明写清「内容共享，学习记录各自私有」。' },
+    { id: 'members', name: '添加成员', render: renderMembers, defaultTab: 'members', nextLabel: '进入工作区', note: '用户名搜索 + 角色选择；候选过滤掉已在库成员；重复添加给出可读提示，不静默改角色。' },
+    { id: 'editor', name: '成员与角色', render: renderEditorView, defaultTab: 'questions', nextLabel: '看并发编辑', note: '角色只有三种：所有者/编辑者/成员。改角色要二次确认并说明权限差；不能把自己降级；编辑者看不到成员管理，只看到说明。' },
+    { id: 'concurrent', name: '并发编辑', render: renderConcurrent, nextLabel: '看跨设备同步', note: '「正在被 X 编辑」是软提示不阻塞；保存冲突 409 保留本地草稿；批量遇冲突整批拒绝。' },
+    { id: 'sync', name: '跨设备冲突', render: renderSync, nextLabel: '去转移所有权', note: '三类数据两种策略；同步游标按设备维护，同浏览器多标签页是独立消费方。' },
+    { id: 'transfer', name: '转移所有权', render: renderTransfer, nextLabel: '去退出题库', note: '危险动作：选目标 + 输入题库名称确认；不可撤销，不提供自助转回。' },
+    { id: 'leave', name: '自助退出', render: renderLeave, nextLabel: '模拟越权深链', note: '所有者看不到可用的退出按钮（须先转移）；非所有者的退出对话框明写学习记录保留与快照续答。' },
+    { id: 'forbidden', name: '越权 403', render: renderForbidden, nextLabel: '返回来源页', note: '退出后深链进入：整页空态 + 403 语义 + 身份说明，前成员与陌生人同一套措辞。' },
+    { id: 'assets', name: '失去访问权后', render: renderAssets, nextLabel: '被加回后进入', note: '个人学习资产全部保留并标注来源与「已退出」；进行中会话按快照答完并交卷。' },
+    { id: 'member', name: '成员后进入', render: renderMemberView, defaultTab: 'members', nextLabel: '重新开始', note: function () {
+        return state.addedName
+          ? '设为成员后工作区正常渲染，成员列表含新成员 ' + state.addedName + '；学习记录私有性在这一屏明确表达。'
+          : '设为成员后工作区正常渲染；学习记录私有性在这一屏明确表达。';
+      } }
+  ];
+
+  /* ---------- 状态机 ---------- */
+  var stage = document.getElementById('flowStage');
+  var stepsOl = document.getElementById('flowSteps');
+  var caption = document.getElementById('flowCaption');
+  var prevBtn = document.getElementById('flowPrev');
+  var nextBtn = document.getElementById('flowNext');
+  var noteEl = document.getElementById('flowNote');
+
+  function render() {
+    var step = STEPS[state.step];
+    var html = '';
+    for (var i = 0; i < STEPS.length; i++) {
+      var s = STEPS[i];
+      var cls = 'step';
+      if (i === state.step) cls += ' is-active';
+      if (i < state.step) cls += ' is-done';
+      html += '<button type="button" class="' + cls + '" data-goto="' + i + '"' + (i === state.step ? ' aria-current="step"' : '') + '>' +
+        '<span class="step-n">' + (i < state.step ? ico('check', '11px') : (i + 1)) + '</span>' +
+        '<span class="step-name">' + esc(s.name) + '</span></button>';
+      if (i < STEPS.length - 1) html += '<span class="step-line" aria-hidden="true"></span>';
+    }
+    stepsOl.innerHTML = html;
+
+    stage.innerHTML = step.render();
+    caption.innerHTML = '当前第 <b>' + (state.step + 1) + '</b> 步 / 共 <b>' + STEPS.length + '</b> 步 · ' + esc(step.name);
+
+    prevBtn.disabled = state.step === 0;
+    nextBtn.textContent = typeof step.nextLabel === 'function' ? step.nextLabel() : step.nextLabel;
+    nextBtn.disabled = typeof step.nextDisabled === 'function' ? step.nextDisabled() : !!step.nextDisabled;
+    noteEl.textContent = typeof step.note === 'function' ? step.note() : (step.note || '');
+
+    if (step.afterRender) step.afterRender();
+  }
+
+  function go(n) {
+    state.step = Math.max(0, Math.min(STEPS.length - 1, n));
+    /* 每一步在叙事上对应的「我在这个题库里的角色」：从步骤条直接跳到后面几步时，
+       也要看到那一步该有的角色视图（转移后是编辑者、退出后是非成员、加回后是成员）。
+       用户真实操作过转移/退出/被加回后，以真实结果为准，不再覆盖。 */
+    if (!state.roleTouched) state.meRole = canonicalRole(state.step);
+    /* 进入某步时回到该步的默认页签；步内的页签选择由点击侦测保持 */
+    var def = STEPS[state.step].defaultTab;
+    if (def) state.tab = def;
+    render();
+    stage.scrollIntoView({ block: 'nearest' });
+  }
+  /* 叙事角色：0–6 所有者，7 编辑者（转移后），8–9 非成员（退出后），10 成员（被加回） */
+  function canonicalRole(n) {
+    if (n <= 6) return 'ADMIN';
+    if (n === 7) return 'EDITOR';
+    if (n === 8 || n === 9) return 'NONE';
+    return 'MEMBER';
+  }
+
+  prevBtn.addEventListener('click', function () { go(state.step - 1); });
+  nextBtn.addEventListener('click', function () { ACTIONS[STEPS[state.step].id + ':next'](); });
+  stepsOl.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-goto]');
+    if (t) go(parseInt(t.getAttribute('data-goto'), 10));
+  });
+  /* 工作区页签：记录选择，重渲染后不丢 */
+  document.addEventListener('click', function (e) {
+    var tab = e.target.closest ? e.target.closest('.tabs .tab[data-panel]') : null;
+    if (tab) state.tab = tab.getAttribute('data-panel');
+  }, true);
+
+  /* ---------- 用户搜索（combobox） ---------- */
+  function userOptions() {
+    var q = state.userQuery.trim().toLowerCase();
+    /* 已是成员的人不出现在候选里：不让用户做系统能推断的选择（P-6） */
+    var inBank = {};
+    bankMembers().forEach(function (m) { inBank[m.user] = 1; });
+    return registeredUsers().filter(function (u) {
+      if (inBank[u]) return false;
+      if (!q) return true;
+      return u.toLowerCase().indexOf(q) > -1;
+    });
+  }
+  function refreshUserResults() {
+    var host = document.getElementById('userResults');
+    if (!host) return;
+    var list = userOptions();
+    if (!list.length) {
+      var inBank = bankMembers().length;
+      host.innerHTML = '<div class="panel"><div class="panel-body"><p class="hint">' +
+        (inBank ? '实例内已注册的用户都已经是这个题库的成员了。' : '没有匹配的用户') + '</p></div></div>';
+      return;
+    }
+    host.innerHTML = '<div class="panel"><div class="list">' + list.map(function (u) {
+      var on = state.pickedUser === u;
+      return '<button type="button" class="list-row' + (on ? ' is-active' : '') + '" data-act="pick-user" data-user="' + esc(u) + '">' +
+        '<span class="avatar">' + esc(u.charAt(0).toUpperCase()) + '</span>' +
+        '<span class="list-main"><span class="list-title">' + esc(u) + '</span>' +
+        '<span class="list-meta"><span>已注册用户</span></span></span>' +
+        '<span class="list-side">' + (on ? '<span class="tag brand">已选择</span>' : '') + '</span>' +
+        '</button>';
+    }).join('') + '</div></div>';
+  }
+
+  /* ---------- 动作 ---------- */
+  var ACTIONS = {
+    'create:next': function () { createBank(); },
+    'banks:next': function () { go(2); },
+    'members:next': function () { go(3); },
+    'editor:next': function () { go(4); },
+    'concurrent:next': function () { go(5); },
+    'sync:next': function () { go(6); },
+    'transfer:next': function () { go(7); },
+    'leave:next': function () { go(8); },
+    'forbidden:next': function () { backToSource(); },
+    'assets:next': function () { rejoin(); },
+    'member:next': function () { restart(); },
+
+    'open-create': function () {
+      state.createError = '';
+      render();
+      window.eeDialog.open('dlgCreateBank');
+    },
+    'f-name': function (el) { state.form.name = el.value; },
+    'f-category': function (el) { state.form.category = el.value; },
+    'f-desc': function (el) { state.form.desc = el.value; },
+    'create-bank': function () {
+      var nameEl = document.getElementById('bankName');
+      var catEl = document.getElementById('bankCategory');
+      var descEl = document.getElementById('bankDesc');
+      state.form.name = nameEl ? nameEl.value.trim() : '';
+      state.form.category = catEl ? catEl.value.trim() : '';
+      state.form.desc = descEl ? descEl.value.trim() : '';
+      if (!state.form.name) {
+        state.createError = '名称为必填';
+        render();
+        window.eeDialog.open('dlgCreateBank');
+        return;
+      }
+      state.createError = '';
+      /* 落到共享状态：题库列表、资料与导入向导都能立刻看到这个新题库 */
+      var b = S.addBank({ name: state.form.name, category: state.form.category, desc: state.form.desc });
+      state.newBankId = b.id;
+      S.addMember(b.id, ME, 'ADMIN');
+      state.created = true;
+      state.meRole = 'ADMIN';
+      go(1);
+      window.eeToast('题库已创建');
+    },
+    'to-banks': function () { go(1); },
+    'goto-transfer': function () { go(6); },
+    'user-search': function (el) {
+      state.userQuery = el.value;
+      /* 搜索词变了就当作重新选择：避免拿着旧的已选用户去添加 */
+      if (state.pickedUser && state.pickedUser !== state.userQuery.trim()) state.pickedUser = '';
+      refreshUserResults();
+    },
+    'pick-user': function (el) {
+      state.pickedUser = el.getAttribute('data-user');
+      state.userQuery = state.pickedUser;
+      state.memberMsg = '';
+      render();
+      window.eeToast('已选择 ' + state.pickedUser);
+    },
+    'set-role': function (el) { state.role = el.value; },
+    'add-member': function () {
+      var name = state.pickedUser || state.userQuery.trim();
+      var users = registeredUsers();
+      /* 输入完整用户名但未点选结果时，按精确匹配补全为已选 */
+      if (!state.pickedUser && users.indexOf(name) > -1) state.pickedUser = name;
+      if (!name) {
+        state.memberMsg = '先从搜索结果里选择一个用户';
+        state.memberMsgIsError = true;
+        render();
+        return;
+      }
+      /* 前置校验：只接受已注册用户，不能随手输入一个名字就加成员 */
+      if (users.indexOf(name) === -1) {
+        state.memberMsg = '找不到用户「' + name + '」：请从搜索结果里选择已注册的用户。';
+        state.memberMsgIsError = true;
+        render();
+        window.eeToast('找不到这个用户', 'bad');
+        return;
+      }
+      var exists = bankMembers().some(function (m) { return m.user === name; });
+      if (exists) {
+        /* BR-408：重复添加返回 409，严禁静默改写现有角色 */
+        state.memberMsg = name + ' 已经是这个题库的成员。';
+        state.memberMsgIsError = true;
+        render();
+        window.eeToast(name + ' 已经是这个题库的成员。', 'bad');
+        return;
+      }
+      var r = S.addMember(state.newBankId, name, state.role);
+      if (!r || r.ok === false) {
+        state.memberMsg = name + ' 已经是这个题库的成员。';
+        state.memberMsgIsError = true;
+        render();
+        return;
+      }
+      state.addedName = name;
+      state.memberMsg = '成员已添加：' + name + '（' + roleLabel(state.role) + '）。加入后立即生效，不需要对方确认。';
+      state.memberMsgIsError = false;
+      state.pickedUser = '';
+      state.userQuery = '';
+      render();
+      window.eeToast('成员已添加');
+    },
+    'remove-member': function (el) {
+      var u = el.getAttribute('data-user');
+      S.removeMember(state.newBankId, u);
+      state.memberMsg = '成员已移除：' + u + '。对方立即无法访问这个题库，他自己的学习记录全部保留。';
+      state.memberMsgIsError = false;
+      render();
+      window.eeToast('成员已移除');
+    },
+    'role-change': function () {
+      /* 改角色需二次确认，并说明新旧角色各能做什么（FN-416 理想态） */
+      window.eeDialog.open('dlgRoleChange', this);
+    },
+    'back-source': function () { backToSource(); },
+
+    /* ---- 并发编辑 ---- */
+    'edit-draft': function (el) { state.editDraft = el.value; },
+    'edit-answer': function (el) { /* 演示用：不落库 */ },
+    'save-question': function () {
+      state.editConflict = true;
+      render();
+      window.eeToast('保存失败：已被他人修改', 'bad');
+    },
+    'keep-mine': function () {
+      state.editConflict = false;
+      render();
+      window.eeToast('已保留你的版本：可基于它新建一版');
+    },
+    'take-theirs': function () {
+      state.editConflict = false;
+      state.editDraft = 'OSI 的（ ）不适合提供相应的安全服务。（' + OTHER_EDITOR + ' 修订）';
+      render();
+      window.eeToast('已采用对方版本');
+    },
+    'reload': function () {
+      state.editConflict = false;
+      render();
+      window.eeToast('已刷新，拿到最新版本');
+    },
+    'bulk-chapter': function () { window.eeToast('元数据修改，不产生新版本'); },
+    'bulk-archive': function () { window.eeToast('整批校验通过后才会生效'); },
+
+    /* ---- 跨设备 ---- */
+    'pick-device': function (el) {
+      state.devicePick = el.getAttribute('data-device');
+      render();
+    },
+
+    /* ---- 转移所有权 ---- */
+    'pick-target': function (el) {
+      state.transferTarget = el.getAttribute('data-user');
+      state.transferError = '';
+      render();
+    },
+    'open-transfer': function () {
+      state.transferInput = '';
+      state.transferError = '';
+      render();
+      window.eeDialog.open('dlgTransfer', this);
+    },
+    'goto-add-member': function () { go(2); },
+    'transfer-input': function (el) { state.transferInput = el.value; },
+    'transfer-go': function () {
+      if (state.transferInput.trim() !== bankName()) {
+        state.transferError = '名称不一致：请输入「' + bankName() + '」';
+        render();
+        window.eeDialog.open('dlgTransfer', this);
+        return;
+      }
+      var target = state.transferTarget;
+      if (!target) return;
+      /* 同一事务内：自己降为编辑者，目标升为所有者 */
+      S.removeMember(state.newBankId, ME);
+      S.addMember(state.newBankId, ME, 'EDITOR');
+      S.removeMember(state.newBankId, target);
+      S.addMember(state.newBankId, target, 'ADMIN');
+      state.meRole = 'EDITOR';
+      state.roleTouched = true;
+      state.transferDone = true;
+      window.eeDialog.close(document.getElementById('dlgTransfer'));
+      window.eeToast('所有权已转移给 ' + target);
+      go(7);
+    },
+
+    /* ---- 自助退出 ---- */
+    'open-leave': function () { window.eeDialog.open('dlgLeave', this); },
+    'leave-go': function () {
+      S.removeMember(state.newBankId, ME);
+      state.meRole = 'NONE';
+      state.roleTouched = true;
+      state.leftDone = true;
+      window.eeDialog.close(document.getElementById('dlgLeave'));
+      window.eeToast('已退出题库');
+      go(8);
+    }
+  };
+
+  /* 改角色确认对话框（FN-416：二次确认 + 说明权限差） */
+  function ensureRoleDlg() {
+    if (document.getElementById('dlgRoleChange')) return;
+    var d = document.createElement('dialog');
+    d.className = 'dlg';
+    d.id = 'dlgRoleChange';
+    d.setAttribute('data-dlg-noguard', '');
+    d.setAttribute('aria-labelledby', 'dlgRoleChangeTitle');
+    d.innerHTML =
+      '<div class="dlg-head"><div class="dlg-head-text">' +
+      '<p class="dlg-eyebrow">成员</p>' +
+      '<h2 class="dlg-title" id="dlgRoleChangeTitle">把 ' + esc(OTHER_EDITOR) + ' 改为成员？</h2>' +
+      '<button class="icon-btn" type="button" aria-label="关闭" data-dlg-close>' + ico('x', '15px') + '</button></div>' +
+      '<div class="dlg-body">' +
+      '  <p class="dlg-p">角色立即生效。</p>' +
+      '  <div class="kv">' +
+      '    <span class="kv-key">现在（编辑者）</span><span class="kv-val">可以改题、导入、执行批量维护</span>' +
+      '    <span class="kv-key">改为（成员）</span><span class="kv-val">只能检索、浏览与练习</span>' +
+      '  </div>' +
+      '  <div class="notice info">' + ico('info', '15px') + '<div class="notice-body">降级后对方仍看得到题库与成员名单，只是编辑类控件被禁用并给出原因；对方已打开的页面在下一次数据加载时转为只读。</div></div>' +
+      '</div>' +
+      '<div class="dlg-foot">' +
+      '  <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>取消</button>' +
+      '  <button class="btn btn-primary" type="button" id="dlgRoleChangeGo">确认改为成员</button>' +
+      '</div>';
+    document.body.appendChild(d);
+    d.querySelector('#dlgRoleChangeGo').addEventListener('click', function () {
+      S.removeMember(state.newBankId, OTHER_EDITOR);
+      S.addMember(state.newBankId, OTHER_EDITOR, 'MEMBER');
+      window.eeDialog.close(d);
+      window.eeToast('已改为成员');
+      render();
+    });
+  }
+
+  function createBank() {
+    var nameEl = document.getElementById('bankName');
+    if (nameEl && !nameEl.value.trim()) {
+      state.createError = '名称为必填';
+      render();
+      window.eeDialog.open('dlgCreateBank');
+      return;
+    }
+    ACTIONS['create-bank']();
+  }
+
+  function backToSource() {
+    var added = null;
+    if (state.newBankId && bankMembers().length < 2) {
+      /* 还没有添加过成员：所有者先把对方加进来，再进入工作区 */
+      added = 'reviewer_02';
+      S.addMember(state.newBankId, added, 'MEMBER');
+      state.addedName = added;
+    }
+    window.eeToast(added
+      ? '已把 ' + added + ' 添加为成员，现在可以进入'
+      : '你已是这个题库的成员，现在可以进入');
+    go(9);
+  }
+
+  /* 被加回：恢复成员资格，凭原有学习状态恢复学习能力（CR-30） */
+  function rejoin() {
+    if (state.newBankId && !bankMembers().some(function (m) { return m.user === ME; })) {
+      S.addMember(state.newBankId, ME, 'MEMBER');
+    }
+    state.meRole = 'MEMBER';
+    state.roleTouched = true;
+    window.eeToast('你已被加回这个题库，学习状态照旧');
+    go(10);
+  }
+
+  function restart() {
+    /* 重新开始：这个流程刚建、还没有题目的题库直接撤掉，不把演示数据留在题库列表里 */
+    if (state.newBankId) {
+      var b = S.bank(state.newBankId);
+      if (b && !S.questions(state.newBankId).length) S.removeBank(state.newBankId);
+    }
+    state.created = false;
+    state.newBankId = null;
+    state.form = { name: NEW_BANK.name, category: NEW_BANK.category, desc: NEW_BANK.desc };
+    state.createError = '';
+    state.userQuery = '';
+    state.pickedUser = '';
+    state.role = 'MEMBER';
+    state.memberMsg = '';
+    state.memberMsgIsError = false;
+    state.addedName = '';
+    state.tab = 'members';
+    state.meRole = 'ADMIN';
+    state.roleTouched = false;
+    state.editDraft = 'OSI 的（ ）不适合提供相应的安全服务。';
+    state.editConflict = false;
+    state.transferTarget = '';
+    state.transferInput = '';
+    state.transferError = '';
+    state.transferDone = false;
+    state.leftDone = false;
+    state.createAutoOpen = true;   /* 重新开始才自动弹出新建对话框 */
+    go(0);
+  }
+
+  /* ---------- 事件委托 ---------- */
+  ['click', 'change', 'input'].forEach(function (type) {
+    stage.addEventListener(type, function (e) {
+      var el = e.target.closest ? e.target.closest('[data-act]') : null;
+      if (!el || !stage.contains(el)) return;
+      var fn = ACTIONS[el.getAttribute('data-act')];
+      if (fn) { e.preventDefault(); fn(el, e); }
+    });
+  });
+
+  /* 步骤 0 的对话框只在首次进入与「重新开始」时自动打开；
+     从步骤条跳回步骤 0 不弹模态，避免挡住背后的题库列表 */
+  STEPS[0].afterRender = function () {
+    ensureRoleDlg();
+    if (state.createAutoOpen) {
+      state.createAutoOpen = false;
+      window.eeDialog.open('dlgCreateBank');
+    }
+  };
+  STEPS[2].afterRender = function () { refreshUserResults(); };
+
+  /* 角色在别处被切换（实例管理 / 设置 / 其他页）时不打断本流程叙事：
+     本流程的「我在这个题库里的角色」由步骤推进决定 */
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1847 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>模考会话 · 易考宝</title>
+<link rel="stylesheet" href="../../assets/ee.css">
+<style>/* 本屏特有：规格条 / runner 外框 / exam-topbar / 三段式阶段条（ee.css §12 未覆盖的布局微调，全部走令牌） */
+  html, body{ background: var(--paper); }
+.exam-runner{  display: flex; flex-direction: column; min-height: 100dvh; background: var(--paper);  }
+.spec-bar{  display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; padding: var(--sp-3) var(--sp-6); background: var(--surface); border-bottom: 1px solid var(--line);  }
+.spec-bar-title{  display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0;  }
+.spec-bar-title strong{  font-size: var(--text-sm); font-weight: 500;  }
+.spec-bar .tabs{  border-bottom: none; flex: 1 1 auto;  }
+.exam-topbar{  position: sticky; top: 0; z-index: 60; display: flex; align-items: center; gap: var(--sp-4); min-height: var(--topbar-h); padding: var(--sp-2) var(--sp-6); background: var(--d-gasket); border-bottom: 1px solid var(--line);  }
+.exam-topbar.is-report{  background: var(--surface);  }
+.exam-left{  display: flex; align-items: center; gap: var(--sp-3); min-width: 0;  }
+.exam-sep{  width: 1px; height: var(--sp-5); background: var(--line); flex: none;  }
+.exam-identity{  display: flex; flex-direction: column; gap: 1px; min-width: 0;  }
+.exam-kicker{  font-size: var(--text-xs); color: var(--ink-3); letter-spacing: .06em;  }
+.exam-sub{  font-size: var(--text-sm); color: var(--ink);  }
+.exam-center{  flex: 1 1 auto; display: flex; align-items: center; justify-content: center; gap: var(--sp-3); min-width: 0; flex-wrap: wrap;  }
+.exam-timer{  display: flex; align-items: baseline; gap: var(--sp-2);  }
+.exam-timer .timer-cap{  font-size: var(--text-xs); color: var(--ink-3);  }
+.exam-right{  display: flex; align-items: center; gap: var(--sp-2);  }
+.exam-crumb{  font-size: var(--text-sm); color: var(--ink-3); display: flex; align-items: center; gap: var(--sp-2); min-width: 0;  }
+.exam-crumb .here{  color: var(--ink);  }
+/* runner 是一张独立的纸面阅读面：纸连续，分区只靠细线与留白 */
+  .opt-list{  margin: var(--sp-5) 0 0; border-top: 1px solid var(--line);  }
+.opt{ 
+    display: grid; grid-template-columns: 26px minmax(0, 1fr) 18px; align-items: start; gap: var(--sp-3);
+    width: 100%; min-height: 0; margin: 0; padding: var(--sp-3) var(--sp-2) var(--sp-3) 0;
+    background: transparent; border: none; border-bottom: 1px solid var(--line); border-radius: 0;
+    font: inherit; font-size: var(--text-md); line-height: 1.6; color: var(--ink); text-align: left; cursor: pointer;
+   }
+.opt:hover:not(:disabled){  background: color-mix(in srgb, var(--surface-2) 70%, transparent);  }
+.opt-key{  margin-top: 2px;  }
+.opt-mark{  margin-left: 0; padding-top: 3px;  }
+.focus-rail{  gap: 0; background: transparent;  }
+.focus-rail .rail-block{  padding: var(--sp-5) 0;  }
+.focus-rail .rail-block:first-child{  padding-top: 0;  }
+.focus-rail .rail-block:last-child{  padding-bottom: 0;  }
+.focus-rail .rail-block + .rail-block{  border-top: 1px solid var(--line);  }
+.exam-topbar, .exam-foot{  background: color-mix(in srgb, var(--paper) 94%, transparent);  }
+.exam-foot{  position: sticky; bottom: 0; display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; padding: var(--sp-3) var(--sp-6); border-top: 1px solid var(--line);  }
+.exam-foot .spacer{  flex: 1 1 auto;  }
+.exam-foot .mono{  font-size: var(--text-sm); color: var(--ink-2);  }
+/* 已答 / 未答 / 待复查：三项一行的 plain 事实行，右栏不放统计框 */
+  #ex-stats, #ex-drawer-stats{  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 var(--sp-3); border: none; border-radius: 0; background: transparent;  }
+#ex-stats .stat, #ex-drawer-stats .stat{  padding: var(--sp-1) 0; border-right: none;  }
+#ex-stats .stat + .stat, #ex-drawer-stats .stat + .stat{  border-left: 1px solid var(--line); padding-left: var(--sp-3);  }
+#ex-stats .stat-num, #ex-drawer-stats .stat-num{  font-size: var(--text-md); line-height: 1.3;  }
+#ex-stats .stat-cap, #ex-drawer-stats .stat-cap{  font-size: var(--text-xs);  }
+/* 整页报告 = 纸面上的分区：重线起头的成绩头 + 编辑式统计，不包卡片 */
+  .report-head{  display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sp-6); flex-wrap: wrap; padding-bottom: var(--sp-5); border-bottom: 1px solid var(--line-strong);  }
+.report-title{  font-family: var(--font-serif); font-size: var(--text-2xl); font-weight: 500; line-height: var(--text-2xl-lh); margin: var(--sp-1) 0 0;  }
+.report-score{  font-family: var(--font-mono); font-size: var(--text-5xl); font-weight: 500; line-height: 1;  }
+.report-score-cap{  font-size: var(--text-xs); color: var(--ink-3); margin: var(--sp-1) 0 0;  }
+.report-facts{  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-4); margin: 0;  }
+.report-facts dt{  font-size: var(--text-xs); color: var(--ink-3);  }
+.report-facts dd{  margin: var(--sp-1) 0 0; font-family: var(--font-mono); font-size: var(--text-md);  }
+.report-actions{  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-5); padding-top: var(--sp-5); border-top: 1px solid var(--line);  }
+.report-counts{  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--sp-4); margin: var(--sp-4) 0 0;  }
+.report-count{  display: flex; flex-direction: column; gap: 2px; padding-left: var(--sp-3); border-left: 1px solid var(--line);  }
+.report-count b{  font-family: var(--font-mono); font-size: var(--text-md); font-weight: 500;  }
+.report-count span{  font-size: var(--text-xs); color: var(--ink-3);  }
+.rate-cap{  font-size: var(--text-xs); color: var(--ink-3);  }
+.wrong-list{  display: flex; flex-direction: column;  }
+.wrong-row{  display: flex; gap: var(--sp-4); padding: var(--sp-4) 0; border-bottom: 1px solid var(--line);  }
+.wrong-row:last-child{  border-bottom: none;  }
+.wrong-no{  font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink-4); flex: none; width: 3.5em;  }
+.wrong-main{  flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-2);  }
+.wrong-stem{  font-family: var(--font-serif); font-size: var(--text-md); margin: 0;  }
+.wrong-answers{  display: flex; gap: var(--sp-4); flex-wrap: wrap; font-size: var(--text-sm);  }
+.wrong-answers .mono{  font-weight: 500;  }
+.banner-stack{  display: flex; flex-direction: column; gap: var(--sp-4);  }
+.expired-numbers{  display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-2);  }
+.conflict-list{  margin: var(--sp-2) 0 0; padding-left: var(--sp-5); font-size: var(--text-sm);  }
+.conflict-list li{  margin-bottom: var(--sp-1);  }
+.rail-block{  display: flex; flex-direction: column; gap: var(--sp-3);  }
+.rail-head{  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);  }
+.sheet-legend span{  display: inline-flex; align-items: center; gap: var(--sp-1);  }
+.sheet-dot{  width: 10px; height: 10px; border-radius: var(--r-xs); border: 1px solid var(--line-strong); background: var(--surface-2); flex: none;  }
+.sheet-dot.is-answered{  background: var(--brand); border-color: var(--brand);  }
+.sheet-dot.is-current{  outline: 2px solid var(--focus); outline-offset: 1px;  }
+.sheet-dot.is-flagged{  border-color: var(--flag); box-shadow: inset 0 -3px 0 var(--flag);  }
+.sheet-cell.is-wrong-cell{  background: var(--bad-soft); border-color: var(--bad-line); color: var(--bad);  }
+.sheet-dot.is-wrong-cell{  background: var(--bad-soft); border-color: var(--bad-line);  }
+.rail-note{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh);  }
+.rail-keys{  display: flex; flex-direction: column; gap: var(--sp-2); font-size: var(--text-xs); color: var(--ink-2);  }
+.rail-keys span{  display: inline-flex; align-items: center; gap: var(--sp-2);  }
+.q-note{  font-size: var(--text-xs); color: var(--ink-3); margin: var(--sp-4) 0 0;  }
+.drawer-demo-note{  font-size: var(--text-xs); color: var(--ink-3);  }
+/* 布局助手：替代散落的内联间距 */
+  .mt-4{  margin-top: var(--sp-4);  }
+.mt-6{  margin-top: var(--sp-6);  }
+.mt-7{  margin-top: var(--sp-7);  }
+.sk-30{  width: 30%;  }
+.sk-60{  width: 60%;  }
+.rail-actions{  margin: 0; padding: 0; border: 0;  }
+.q-explain{  margin: var(--sp-2) 0 var(--sp-5);  }
+.hint-flat{  margin: 0;  }
+/* 窄屏列表：元信息首段独占一行，标签与按钮按需换行，避免文字被 flex 压成窄列 */
+  @media (max-width: 640px){
+    .list-meta > :first-child { flex: 1 1 100%; }
+    .list-side { flex-wrap: wrap; }
+   }
+.is-drawer-mode .focus-rail{  display: none;  }
+.toast-host{  bottom: calc(var(--toast-inset, 0px) + var(--sp-3));  }
+@media (max-width: 768px){
+    .spec-bar { padding: var(--sp-3) var(--sp-4); }
+    .exam-topbar { padding: var(--sp-2) var(--sp-4); flex-wrap: wrap; }
+    .exam-center { order: 3; flex-basis: 100%; justify-content: flex-start; }
+    .focus-body { padding: var(--sp-5) var(--sp-4) var(--sp-6); }
+    .exam-foot { padding: var(--sp-3) var(--sp-4); }
+    .focus-rail { display: none; }
+    .focus-shell { grid-template-columns: 1fr; }
+    .sheet-trigger { display: inline-flex !important; }
+    .report-score { font-size: var(--text-4xl); }
+  }
+.sheet-trigger{  display: none;  }</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">跳到主内容</a>
+
+<div data-tab-scope>
+  <div class="spec-bar">
+    <div class="spec-bar-title">
+      <span class="rule-label">屏幕规格</span>
+      <strong>模考会话 · /exams/:id/session · 全屏 runner（不用 app-shell）</strong>
+    </div>
+    <div class="tabs" role="tablist" aria-label="状态切换">
+      <button class="tab" role="tab" aria-selected="true" data-panel="ex-run">① 作答窗口</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="ex-grace">② 宽限 60 秒</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="ex-collected">③ 服务端已收卷</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="ex-report">成绩报告</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="ex-submit">交卷确认</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="ex-exit">退出与续考</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="ex-empty">空 / 失败</button>
+      <button class="tab" role="tab" aria-selected="false" data-panel="ex-overlay">浮层清单</button>
+    </div>
+  </div>
+
+  <!-- ============ 状态 1：作答窗口（进行中） ============ -->
+  <div data-tab-panel="ex-run">
+    <div class="exam-runner" id="ex-none" hidden>
+      <header class="exam-topbar">
+        <div class="exam-left">
+          <a class="page-back" href="exams.html"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>返回模考中心</a>
+        </div>
+      </header>
+      <main class="focus-shell" id="main-content">
+        <article class="focus-body">
+          <div class="empty">
+            <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg></div>
+            <p class="empty-title">没有进行中的模考会话</p>
+            <p class="empty-desc">这个链接里的会话已经交卷或被放弃。回到模考中心重新组卷；已交卷的考试在「成绩报告」里回看。</p>
+            <div class="empty-actions">
+              <a class="btn btn-primary" href="exams.html">回到模考中心</a>
+            </div>
+          </div>
+        </article>
+      </main>
+    </div>
+
+    <div class="exam-runner" id="ex-live">
+      <header class="exam-topbar">
+        <div class="exam-left">
+          <button type="button" class="page-back" onclick="EEexam.exit()"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>退出</button>
+          <span class="exam-sep" aria-hidden="true"></span>
+          <div class="exam-crumb">
+            <button class="link" type="button">模考</button>
+            <span class="sep">/</span>
+            <button class="link" type="button" id="ex-crumb-name">考试名</button>
+            <span class="sep">/</span>
+            <span class="here">会话</span>
+          </div>
+        </div>
+        <div class="exam-center">
+          <span class="tag plain" id="ex-phase">作答窗口</span>
+          <div class="exam-timer" role="timer" aria-label="剩余时间">
+            <span class="timer-cap">剩余</span>
+            <strong class="timer" id="ex-timer">58:12</strong>
+          </div>
+          <span class="q-note" id="ex-deadline-note">服务端硬截止 22:14 · 宽限 60 秒</span>
+        </div>
+        <div class="exam-right">
+          <button type="button" class="btn btn-sm btn-primary" id="ex-submit-btn" onclick="EEexam.openSubmit(this)">交卷</button>
+        </div>
+      </header>
+
+      <main class="focus-shell">
+        <article class="focus-body">
+          <div class="q-meta" id="ex-meta"></div>
+          <h1 class="q-stem" id="ex-stem" tabindex="-1"></h1>
+
+          <div class="opt-list" id="ex-options" role="group" aria-label="选项"></div>
+          <p class="q-note">模考不判定对错：选项只有选中态，交卷后才会显示答案与解析。</p>
+
+          <div class="notice info" id="ex-content-changed">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>
+            <div class="notice-body">
+              <span class="notice-title">这场考试的题目内容在考试期间已变更</span><br>
+              本场按开考时的题目快照作答：第 12 题的题干在考试期间被改成新版本，这里仍显示开考那一版；判分也按交卷时保存的快照。题库侧不做任何锁定，编辑者可以照常改题。
+            </div>
+          </div>
+        </article>
+
+        <aside class="focus-rail" aria-label="作答卡">
+          <div class="rail-block">
+            <div class="rail-head">
+              <span class="rule-label">答题卡</span>
+              <button type="button" class="btn btn-sm" onclick="EEexam.toggleFlag()"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>待复查</button>
+            </div>
+            <div class="stat-row" id="ex-stats"></div>
+            <div class="progress"><div class="progress-fill" id="ex-progress-fill" style="width:0%"></div></div>
+          </div>
+
+          <div class="rail-block">
+            <div class="sheet-grid" id="ex-sheet"></div>
+            <div class="sheet-legend">
+              <span><i class="sheet-dot is-answered"></i>已答</span>
+              <span><i class="sheet-dot"></i>未答</span>
+              <span><i class="sheet-dot is-current"></i>当前</span>
+              <span><i class="sheet-dot is-flagged"></i>待复查</span>
+            </div>
+          </div>
+
+          <div class="rail-block">
+            <div class="rule-label">本场规则</div>
+            <div class="kv">
+              <span class="kv-key">时长</span><span class="kv-val mono">120 分钟</span>
+              <span class="kv-key">宽限</span><span class="kv-val mono">60 秒（只同步，不继续答题）</span>
+              <span class="kv-key">负分</span><span class="kv-val mono">答错扣 0.5 分，无 0 分下限</span>
+              <span class="kv-key">学习记录</span><span class="kv-val mono">纳入</span>
+            </div>
+          </div>
+
+          <div class="rail-block">
+            <div class="rule-label">快捷键</div>
+            <div class="rail-keys">
+              <span><span class="kbd">A</span>–<span class="kbd">H</span> 选择选项</span>
+              <span><span class="kbd">B</span> 标记待复查</span>
+              <span><span class="kbd">←</span><span class="kbd">→</span> 上一题 / 下一题</span>
+              <span><span class="kbd">Esc</span> 关闭浮层</span>
+            </div>
+            <p class="rail-note">浮层打开时，除 Esc 外快捷键一律挂起。</p>
+          </div>
+        </aside>
+      </main>
+
+      <footer class="exam-foot" id="ex-foot">
+        <button type="button" class="btn btn-sm sheet-trigger" onclick="EEexam.openDrawer('ex-sheet')"><svg class="od-icon" aria-hidden="true"><use href="#i-grid"/></svg>移动作答卡</button>
+        <button type="button" class="btn btn-sm btn-quiet" id="ex-flag-btn" onclick="EEexam.toggleFlag()"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>待复查 <span class="kbd">B</span></button>
+        <span class="spacer"></span>
+        <span class="mono" id="ex-count">1 / 12</span>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-sm" id="ex-prev" onclick="EEexam.prev()"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>上一题</button>
+        <button type="button" class="btn btn-primary" id="ex-next" onclick="EEexam.next()">下一题<svg class="od-icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ============ 状态 2：宽限 60 秒（CR-31 第二段 · 正常状态，不是失败） ============ -->
+  <div data-tab-panel="ex-grace" hidden>
+    <div class="exam-runner">
+      <header class="exam-topbar">
+        <div class="exam-left">
+          <button type="button" class="page-back" onclick="eeDialog.open('ex-dlg-exit', this)"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>退出</button>
+          <span class="exam-sep" aria-hidden="true"></span>
+          <div class="exam-crumb">
+            <button class="link" type="button">模考</button>
+            <span class="sep">/</span>
+            <button class="link" type="button">系统集成项目管理工程师 · 综合卷</button>
+            <span class="sep">/</span>
+            <span class="here">会话</span>
+          </div>
+        </div>
+        <div class="exam-center">
+          <span class="tag brand">宽限中 · 已收卷待同步</span>
+          <div class="exam-timer" role="timer" aria-label="宽限剩余时间">
+            <span class="timer-cap">宽限剩余</span>
+            <strong class="timer">00:47</strong>
+          </div>
+          <span class="q-note">作答窗口 22:14 结束 · 宽限 60 秒后服务端收卷</span>
+        </div>
+        <div class="exam-right">
+          <button type="button" class="btn btn-sm btn-primary" onclick="eeDialog.open('ex-dlg-submit', this)">交卷</button>
+        </div>
+      </header>
+
+      <main class="focus-shell">
+        <article class="focus-body">
+          <div class="notice info" role="status">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-clock"/></svg>
+            <div class="notice-body">
+              <span class="notice-title">已到交卷时间，答案已停止收录</span><br>
+              宽限的 60 秒<strong>只用于把截止前已经产生的答案同步上服务端，不用于继续答题</strong>；期间不能新增作答、不能改答案、不能标记。宽限结束由服务端完成交卷并生成报告，<strong>不要求你保持这个页面打开</strong>——重新打开这个会话会直接看到已生成的报告。
+              <div class="notice-actions">
+                <button type="button" class="btn btn-sm" onclick="eeToast('已重试同步，队列 0 条')">重试同步</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="q-meta"><span>第 12 题 · 共 12 题</span><span>问答题</span><span class="tag plain">主观题 · 不判分</span><span class="tag warn">待复查</span></div>
+          <h1 class="q-stem">结合本项目，说明范围基准失控的主要原因，并给出纠正措施。</h1>
+          <label class="field">
+            <span class="label">你的作答（截止前保存，只读）</span>
+            <textarea class="textarea" readonly>范围基准失控主要因为需求没有基线化……</textarea>
+            <span class="hint">主观题保存作答与参考解析：作答状态「已作答」，判分状态「未判分」；不计入得分与客观题满分。</span>
+          </label>
+          <p class="q-note">作答窗口已结束：选项只读，选中态保留为截止前保存的答案。交卷与报告读取仍然放行——超时禁止的只是「继续作答」。</p>
+        </article>
+
+        <aside class="focus-rail" aria-label="作答卡">
+          <div class="rail-block">
+            <div class="rail-head"><span class="rule-label">答题卡</span><span class="q-note">已收卷 · 只读</span></div>
+            <div class="stat-row" id="ex-grace-stats">
+              <div class="stat"><div class="stat-num">10</div><div class="stat-cap">已答</div></div>
+              <div class="stat"><div class="stat-num">2</div><div class="stat-cap">未答</div></div>
+              <div class="stat"><div class="stat-num">2</div><div class="stat-cap">待复查</div></div>
+            </div>
+            <div class="sheet-grid" id="ex-grace-sheet"></div>
+            <div class="sheet-legend">
+              <span><i class="sheet-dot is-answered"></i>已答</span>
+              <span><i class="sheet-dot"></i>未答</span>
+              <span><i class="sheet-dot is-current"></i>当前</span>
+              <span><i class="sheet-dot is-flagged"></i>待复查</span>
+            </div>
+          </div>
+          <div class="rail-block">
+            <div class="rule-label">同步状态</div>
+            <div class="kv">
+              <span class="kv-key">截止前答案</span><span class="kv-val mono">10 题已同步</span>
+              <span class="kv-key">本机待同步</span><span class="kv-val mono">0 题</span>
+              <span class="kv-key">宽限时长</span><span class="kv-val mono">60 秒（显式产品参数）</span>
+            </div>
+            <p class="rail-note">宽限只同步截止前已经产生的答案；本机未同步成功的答案不会悄悄补进成绩，会在报告里单独说明。</p>
+          </div>
+          <div class="rail-block">
+            <div class="rule-label">不限时会话没有这一段</div>
+            <div class="kv">
+              <span class="kv-key">限时考试</span><span class="kv-val mono">到点 → 宽限 → 收卷</span>
+              <span class="kv-key">不限时考试</span><span class="kv-val mono">闲置 30 天 → 失效</span>
+            </div>
+            <p class="rail-note">不限时的会话没有硬截止、没有宽限、没有自动交卷；只有连续无活动达到阈值（默认 30 天，可配）才会被标记为失效并通知你。失效后答案停止收录，但仍要你显式交卷或放弃——不静默、不自动判成绩。</p>
+          </div>
+        </aside>
+      </main>
+
+      <footer class="exam-foot">
+        <button type="button" class="btn btn-sm sheet-trigger" onclick="EEexam.openDrawer('ex-sheet')"><svg class="od-icon" aria-hidden="true"><use href="#i-grid"/></svg>移动作答卡</button>
+        <span class="mono">答案已停止收录</span>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-sm" disabled>上一题</button>
+        <button type="button" class="btn btn-sm btn-primary" onclick="eeDialog.open('ex-dlg-submit', this)">交卷</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ============ 状态 3：服务端已收卷（CR-31 第三段） ============ -->
+  <div data-tab-panel="ex-collected" hidden>
+    <div class="exam-runner">
+      <header class="exam-topbar is-report">
+        <div class="exam-left">
+          <a class="page-back" href="exams.html"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>退出</a>
+          <span class="exam-sep" aria-hidden="true"></span>
+          <div class="exam-crumb">
+            <button class="link" type="button">模考</button>
+            <span class="sep">/</span>
+            <button class="link" type="button">系统集成项目管理工程师 · 综合卷</button>
+            <span class="sep">/</span>
+            <span class="here">会话</span>
+          </div>
+        </div>
+        <div class="exam-center">
+          <span class="tag ok">服务端已收卷</span>
+          <span class="q-note">宽限已于 22:15 结束 · 交卷来源：到点自动交卷</span>
+        </div>
+        <div class="exam-right">
+          <button type="button" class="btn btn-sm btn-primary" onclick="EEexam.switchPanel('ex-report')">查看成绩报告</button>
+        </div>
+      </header>
+
+      <main class="focus-shell">
+        <article class="focus-body">
+          <div class="notice ok" role="status">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg>
+            <div class="notice-body">
+              <span class="notice-title">服务端已完成交卷，成绩报告已生成</span><br>
+              收卷由服务端在宽限结束时完成，不依赖你是否保持页面打开。本场为<strong>到点自动交卷</strong>；报告落库后永久不可变、不重算、不覆盖。
+              <div class="notice-actions">
+                <button type="button" class="btn btn-sm btn-primary" onclick="EEexam.switchPanel('ex-report')">查看成绩报告</button>
+                <a class="btn btn-sm btn-quiet" href="exams.html">回模考中心回看</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="q-meta"><span>第 12 题 · 共 12 题</span><span>问答题</span><span class="tag plain">主观题 · 不判分</span><span class="tag warn">待复查</span></div>
+          <h1 class="q-stem">结合本项目，说明范围基准失控的主要原因，并给出纠正措施。</h1>
+          <label class="field">
+            <span class="label">你的作答（截止前保存，只读）</span>
+            <textarea class="textarea" readonly>范围基准失控主要因为需求没有基线化……</textarea>
+            <span class="hint">主观题保存作答与参考解析：作答状态「已作答」，判分状态「未判分」；不计入得分与客观题满分。</span>
+          </label>
+          <p class="q-note">整张纸面只读。答案与解析在成绩报告里给出；本机未同步成功的答案会在报告里单独列出，不计入本场成绩。</p>
+        </article>
+
+        <aside class="focus-rail" aria-label="作答卡">
+          <div class="rail-block">
+            <div class="rail-head"><span class="rule-label">答题卡</span><span class="q-note">已收卷 · 只读</span></div>
+            <div class="sheet-grid" id="ex-collected-sheet"></div>
+            <div class="sheet-legend">
+              <span><i class="sheet-dot is-answered"></i>已答</span>
+              <span><i class="sheet-dot"></i>未答</span>
+            </div>
+          </div>
+          <div class="rail-block">
+            <div class="rule-label">会话时间线（CR-31）</div>
+            <div class="kv">
+              <span class="kv-key">开考</span><span class="kv-val mono">22:14 前 120 分钟</span>
+              <span class="kv-key">作答窗口</span><span class="kv-val mono">开考 → 22:14</span>
+              <span class="kv-key">宽限</span><span class="kv-val mono">22:14 → 22:15（60 秒）</span>
+              <span class="kv-key">服务端收卷</span><span class="kv-val mono">22:15</span>
+            </div>
+            <p class="rail-note">「作答窗口结束」不是会话终结：宽限期内会话仍是 active，交卷与报告读取始终放行。</p>
+          </div>
+        </aside>
+      </main>
+    </div>
+  </div>
+
+  <!-- ============ 状态 4：成绩报告（CR-06 口径） ============ -->
+  <div data-tab-panel="ex-report" hidden>
+    <div class="exam-runner">
+      <header class="exam-topbar is-report">
+        <div class="exam-left">
+          <a class="page-back" href="exams.html"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>退出</a>
+          <span class="exam-sep" aria-hidden="true"></span>
+          <div class="exam-crumb">
+            <button class="link" type="button">模考</button>
+            <span class="sep">/</span>
+            <button class="link" type="button">系统集成项目管理工程师 · 综合卷</button>
+            <span class="sep">/</span>
+            <span class="here">报告</span>
+          </div>
+        </div>
+        <div class="exam-center"></div>
+        <div class="exam-right">
+          <button type="button" class="btn btn-sm btn-primary" onclick="eeDialog.open('ex-dlg-reexam', this)"><svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>重新考试</button>
+        </div>
+      </header>
+
+      <main class="focus-shell">
+        <article class="focus-body">
+          <section class="report-block" aria-labelledby="ex-report-title">
+            <div class="report-head">
+              <div>
+                <p class="rule-label">成绩报告 · 手动交卷</p>
+                <h2 class="report-title" id="ex-report-title">系统集成项目管理工程师 · 综合卷</h2>
+                <p class="report-score-cap mt-4">客观题得分</p>
+                <div class="report-score">11</div>
+                <p class="report-score-cap">客观题满分 24 分（含未作答的 2 题）</p>
+              </div>
+              <dl class="report-facts">
+                <div><dt>交卷时间</dt><dd>2026-11-24 22:05</dd></div>
+                <div><dt>服务端截止</dt><dd>2026-11-24 22:14</dd></div>
+                <div><dt>交卷来源</dt><dd>手动交卷</dd></div>
+                <div><dt>用时 · 服务端在线</dt><dd>47 分钟</dd></div>
+                <div><dt>用时 · 墙钟</dt><dd>52 分钟</dd></div>
+                <div><dt>判分依据</dt><dd>题目版本 v3</dd></div>
+              </dl>
+            </div>
+
+            <div class="stat-row mt-5">
+              <div class="stat">
+                <div class="stat-num">46%</div>
+                <div class="stat-cap">考试得分率<br>客观题得分 11 ÷ 客观题满分 24</div>
+              </div>
+              <div class="stat">
+                <div class="stat-num">56%</div>
+                <div class="stat-cap">已答客观题正确率<br>答对 5 ÷ 已答 9</div>
+              </div>
+              <div class="stat">
+                <div class="stat-num">9 / 11</div>
+                <div class="stat-cap">已答客观题 / 客观题总数</div>
+              </div>
+              <div class="stat">
+                <div class="stat-num">2</div>
+                <div class="stat-cap">未答客观题（按 0 分计入得分，仍占满分）</div>
+              </div>
+            </div>
+
+            <div class="notice info mt-5">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+              <div class="notice-body">
+                <span class="notice-title">两个率的分母不同，不得混用</span><br>
+                考试得分率的分母是本场<strong>全部</strong>客观题——未作答按 0 分计入得分，但仍占满分；已答客观题正确率的分母只是你实际作答过的客观题。例：100 道每题 1 分的客观题只答对 1 道、其余未答 → 得分 1 / 满分 100 / 得分率 1% / 已答客观题正确率 100%。两个率不同是正确结果。
+              </div>
+            </div>
+
+            <div class="report-counts">
+              <div class="report-count"><b>10</b><span>已答（含 1 题已作答·未判分）</span></div>
+              <div class="report-count"><b>2</b><span>未答（含未作答的主观题）</span></div>
+              <div class="report-count"><b>1</b><span>未判分（主观题，不计入得分与满分）</span></div>
+              <div class="report-count"><b>11 / 24</b><span>客观题得分 / 客观题满分</span></div>
+              <div class="report-count"><b>11 / 24</b><span>卷面总分 / 满分（主观题部分未判分，不计入）</span></div>
+            </div>
+
+            <div class="kv ee-mt-4">
+              <span class="kv-key">负分规则</span><span class="kv-val">答错扣 0.5 分；未设 0 分下限，总分可为负</span>
+              <span class="kv-key">纳入学习记录</span><span class="kv-val">纳入：答错的题已进入错题，FSRS 已调度</span>
+              <span class="kv-key">本机未同步成功</span><span class="kv-val">0 题（有未同步答案时会在此列出，且不计入本场成绩）</span>
+            </div>
+          </section>
+
+          <section class="section mt-7">
+            <div class="section-head">
+              <h3 class="section-title">按题型统计</h3>
+              <span class="section-note">主观题不自动判分，单独标注</span>
+            </div>
+            <div class="dtable-wrap">
+              <table class="dtable">
+                <thead><tr><th>题型</th><th>题数</th><th>单题分值</th><th>已答</th><th>答对</th><th>得分</th><th>占满分</th></tr></thead>
+                <tbody>
+                  <tr><td data-label="题型">单选题</td><td data-label="题数" class="num">8</td><td data-label="单题分值" class="num">2</td><td data-label="已答" class="num">8</td><td data-label="答对" class="num">4</td><td data-label="得分" class="num">8</td><td data-label="占满分" class="num">16</td></tr>
+                  <tr><td data-label="题型">多选题</td><td data-label="题数" class="num">2</td><td data-label="单题分值" class="num">3</td><td data-label="已答" class="num">1</td><td data-label="答对" class="num">1</td><td data-label="得分" class="num">3</td><td data-label="占满分" class="num">6</td></tr>
+                  <tr><td data-label="题型">判断题</td><td data-label="题数" class="num">1</td><td data-label="单题分值" class="num">2</td><td data-label="已答" class="num">0</td><td data-label="答对" class="num">0</td><td data-label="得分" class="num">0</td><td data-label="占满分" class="num">2</td></tr>
+                  <tr><td data-label="题型">问答题</td><td data-label="题数" class="num">1</td><td data-label="单题分值" class="num">—</td><td data-label="已答" class="num">1</td><td data-label="答对" class="num">未判分</td><td data-label="得分" class="num">不计入</td><td data-label="占满分" class="num">不计入</td></tr>
+                  <tr><td data-label="题型">合计</td><td data-label="题数" class="num">12</td><td data-label="单题分值" class="num">—</td><td data-label="已答" class="num">10</td><td data-label="答对" class="num">5</td><td data-label="得分" class="num">11</td><td data-label="占满分" class="num">24</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="section mt-7">
+            <div class="section-head">
+              <h3 class="section-title">按知识点统计</h3>
+              <span class="section-note">章节与标签两个维度，取交卷时题目版本上的标签快照</span>
+            </div>
+            <div class="dtable-wrap">
+              <table class="dtable">
+                <thead><tr><th>维度</th><th>名称</th><th>题数</th><th>答对</th><th>得分</th><th>得分率</th></tr></thead>
+                <tbody>
+                  <tr><td data-label="维度">章节</td><td data-label="名称">项目管理基础</td><td data-label="题数" class="num">6</td><td data-label="答对" class="num">3</td><td data-label="得分" class="num">6</td><td data-label="得分率" class="num">50%</td></tr>
+                  <tr><td data-label="维度">章节</td><td data-label="名称">沟通管理</td><td data-label="题数" class="num">4</td><td data-label="答对" class="num">1</td><td data-label="得分" class="num">2</td><td data-label="得分率" class="num">25%</td></tr>
+                  <tr><td data-label="维度">标签</td><td data-label="名称">挣值</td><td data-label="题数" class="num">2</td><td data-label="答对" class="num">0</td><td data-label="得分" class="num">0</td><td data-label="得分率" class="num">0%</td></tr>
+                  <tr><td data-label="维度">标签</td><td data-label="名称">案例</td><td data-label="题数" class="num">1</td><td data-label="答对" class="num">0</td><td data-label="得分" class="num">未判分</td><td data-label="得分率" class="num">暂无数据</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="section mt-7">
+            <div class="section-head">
+              <h3 class="section-title">错题与未答</h3>
+              <span class="section-note" id="ex-wrong-count">7 题 · 含未答与未判分</span>
+            </div>
+            <div class="wrong-list">
+              <article class="wrong-row">
+                <span class="wrong-no">第 2 题</span>
+                <div class="wrong-main">
+                  <p class="wrong-stem">OSI的（  ）不适合提供相应的安全服务。</p>
+                  <div class="wrong-answers"><span class="muted">你的答案 <span class="mono">C</span></span><span>标准答案 <span class="mono">B</span></span><span class="tag bad">错误</span></div>
+                  <p class="hint">解析：本题为反向选择题：传输层、网络层、应用层都可以提供相应安全服务，会话层不适合。</p>
+                </div>
+              </article>
+              <article class="wrong-row">
+                <span class="wrong-no">第 4 题</span>
+                <div class="wrong-main">
+                  <p class="wrong-stem">关于范围基准，以下说法不正确的是（）。</p>
+                  <div class="wrong-answers"><span class="muted">你的答案 <span class="mono">A</span></span><span>标准答案 <span class="mono">D</span></span><span class="tag bad">错误</span></div>
+                  <p class="hint">解析：范围基准是创建 WBS 过程的输出，不是制定预算的输出。</p>
+                </div>
+              </article>
+              <article class="wrong-row">
+                <span class="wrong-no">第 6 题</span>
+                <div class="wrong-main">
+                  <p class="wrong-stem">监控各项续航参数是否保持在预期区间（   ）</p>
+                  <div class="wrong-answers"><span class="muted">你的答案 <span class="mono">B</span></span><span>标准答案 <span class="mono">A</span></span><span class="tag bad">错误</span></div>
+                  <p class="hint">解析：控制图用于判断过程是否处于受控状态，即参数是否保持在预期区间。</p>
+                </div>
+              </article>
+              <article class="wrong-row">
+                <span class="wrong-no">第 8 题</span>
+                <div class="wrong-main">
+                  <p class="wrong-stem">大型不适合用（）架构模型。</p>
+                  <div class="wrong-answers"><span class="muted">你的答案 <span class="mono">B</span></span><span>标准答案 <span class="mono">A</span></span><span class="tag bad">错误</span></div>
+                  <p class="hint">解析：大型系统不适合单机应用模式，需要分布式架构支撑。</p>
+                </div>
+              </article>
+              <article class="wrong-row">
+                <span class="wrong-no">第 10 题</span>
+                <div class="wrong-main">
+                  <p class="wrong-stem">以下（   ）不是定义活动的输出。</p>
+                  <div class="wrong-answers"><span class="muted">你的答案 <span class="mono">未答</span></span><span>标准答案 <span class="mono">C</span></span><span class="tag plain">未答</span></div>
+                  <p class="hint">未作答的客观题按 0 分计入得分，但仍占满分——这也是得分率低于已答正确率的原因。</p>
+                </div>
+              </article>
+              <article class="wrong-row">
+                <span class="wrong-no">第 11 题</span>
+                <div class="wrong-main">
+                  <p class="wrong-stem">项目具有临时性，因此（  ）。</p>
+                  <div class="wrong-answers"><span class="muted">你的答案 <span class="mono">未答</span></span><span>标准答案 <span class="mono">A</span></span><span class="tag plain">未答</span></div>
+                  <p class="hint">解析：临时性是项目的基本特征之一：有明确的开始与结束。</p>
+                </div>
+              </article>
+              <article class="wrong-row">
+                <span class="wrong-no">第 12 题</span>
+                <div class="wrong-main">
+                  <p class="wrong-stem">结合本项目，说明范围基准失控的主要原因，并给出纠正措施。</p>
+                  <div class="wrong-answers"><span class="muted">你的答案 <span class="mono">已提交文字作答</span></span><span class="tag brand">已作答 · 未判分</span></div>
+                  <p class="hint">主观题不自动判分：作答状态是「已作答」，判分状态恒为「未判分」，不计入客观题得分与满分，也不显示成「未作答」。</p>
+                </div>
+              </article>
+            </div>
+            <div class="report-actions">
+              <button type="button" class="btn" onclick="EEexam.openPaper()"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>整卷回看</button>
+              <a class="btn btn-quiet" href="review.html"><svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg>打开复习队列</a>
+            </div>
+          </section>
+        </article>
+
+        <aside class="focus-rail" aria-label="作答卡与判分依据">
+          <div class="rail-block">
+            <div class="rail-head"><span class="rule-label">答题卡</span><span class="q-note">交卷后只读</span></div>
+            <div class="sheet-grid" id="ex-report-sheet"></div>
+            <div class="sheet-legend">
+              <span><i class="sheet-dot is-answered"></i>已答</span>
+              <span><i class="sheet-dot"></i>未答</span>
+              <span><i class="sheet-dot is-wrong-cell"></i>错误</span>
+              <span><i class="sheet-dot is-flagged"></i>待复查</span>
+            </div>
+          </div>
+          <div class="rail-block">
+            <div class="rule-label">判分依据</div>
+            <p class="rail-note">本报告按交卷时保存的<strong>题目版本 v3</strong>判分。答案与解析不会因为重新组卷或后续改题而改变；本期不提供历史重判。</p>
+            <div class="notice info">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>
+              <div class="notice-body">
+                <span class="notice-title">第 12 题现在已是 v5</span><br>
+                这道题在考试期间被编辑过。本报告仍按 v3 判分，你可以查看当前版本自行判断差异。
+                <span class="notice-actions"><button type="button" class="btn btn-sm" onclick="eeToast('已打开该题的当前版本 v5（只读）')">查看当前版本</button></span>
+              </div>
+            </div>
+          </div>
+          <div class="rail-block">
+            <div class="report-actions rail-actions">
+              <a class="btn btn-sm" href="exams.html">模考中心回看</a>
+            </div>
+          </div>
+        </aside>
+      </main>
+    </div>
+  </div>
+
+  <!-- ============ 状态 5：交卷确认（浮层） ============ -->
+  <div data-tab-panel="ex-submit" hidden>
+    <div class="exam-runner">
+      <header class="exam-topbar">
+        <div class="exam-left">
+          <button type="button" class="page-back" onclick="eeDialog.open('ex-dlg-exit', this)"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>退出</button>
+          <span class="exam-sep" aria-hidden="true"></span>
+          <div class="exam-crumb">
+            <button class="link" type="button">模考</button>
+            <span class="sep">/</span>
+            <button class="link" type="button">系统集成项目管理工程师 · 综合卷</button>
+            <span class="sep">/</span>
+            <span class="here">会话</span>
+          </div>
+        </div>
+        <div class="exam-center">
+          <span class="tag plain">作答窗口</span>
+          <div class="exam-timer"><span class="timer-cap">剩余</span><strong class="timer low">04:38</strong></div>
+        </div>
+        <div class="exam-right">
+          <button type="button" class="btn btn-sm btn-primary" onclick="eeDialog.open('ex-dlg-submit', this)">交卷</button>
+        </div>
+      </header>
+
+      <main class="focus-shell">
+        <article class="focus-body">
+          <div class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="rule-label">浮层</p>
+                <h2 class="panel-title">交卷确认</h2>
+              </div>
+              <span class="spacer"></span>
+              <button type="button" class="btn btn-sm btn-primary" onclick="eeDialog.open('ex-dlg-submit', this)">打开对话框</button>
+            </div>
+            <div class="panel-body">
+              <p class="mb-4">交卷前汇总作答情况：未答客观题数量、待复查数量与本场规则摘要。未答或有待复查时都给警告，但<strong>不阻断交卷</strong>；「跳到首个未答」与「仍要交卷」是同级主动作。打开这个对话框不冻结答案，关掉可以回去继续改。</p>
+              <div class="stat-row">
+                <div class="stat"><div class="stat-num">10</div><div class="stat-cap">已答（含 1 题未判分）</div></div>
+                <div class="stat"><div class="stat-num">2</div><div class="stat-cap">未答客观题</div></div>
+                <div class="stat"><div class="stat-num">2</div><div class="stat-cap">待复查</div></div>
+              </div>
+            </div>
+          </div>
+        </article>
+        <aside class="focus-rail" aria-label="作答卡">
+          <div class="rail-block">
+            <div class="rail-head"><span class="rule-label">答题卡</span><span class="q-note">10 / 12</span></div>
+            <div class="sheet-grid" id="ex-submit-sheet"></div>
+          </div>
+        </aside>
+      </main>
+    </div>
+  </div>
+
+  <!-- ============ 状态 6：退出 / 暂存草稿 / 多设备续考（浮层） ============ -->
+  <div data-tab-panel="ex-exit" hidden>
+    <div class="exam-runner">
+      <header class="exam-topbar">
+        <div class="exam-left">
+          <button type="button" class="page-back" onclick="eeDialog.open('ex-dlg-exit', this)"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>退出</button>
+          <span class="exam-sep" aria-hidden="true"></span>
+          <div class="exam-crumb">
+            <button class="link" type="button">模考</button>
+            <span class="sep">/</span>
+            <button class="link" type="button">系统集成项目管理工程师 · 综合卷</button>
+            <span class="sep">/</span>
+            <span class="here">会话</span>
+          </div>
+        </div>
+        <div class="exam-center">
+          <span class="tag plain">作答窗口</span>
+          <div class="exam-timer"><span class="timer-cap">剩余</span><strong class="timer">52:07</strong></div>
+        </div>
+        <div class="exam-right">
+          <button type="button" class="btn btn-sm btn-primary" onclick="eeDialog.open('ex-dlg-submit', this)">交卷</button>
+        </div>
+      </header>
+
+      <main class="focus-shell">
+        <article class="focus-body">
+          <div class="banner-stack">
+            <div class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="rule-label">浮层</p>
+                  <h2 class="panel-title">退出确认 · 三个后果明确的动作</h2>
+                </div>
+                <span class="spacer"></span>
+                <button type="button" class="btn btn-sm" onclick="eeDialog.open('ex-dlg-exit', this)">打开对话框</button>
+              </div>
+              <div class="panel-body">
+                <div class="list">
+                  <div class="list-row static">
+                    <div class="list-main"><div class="list-title">继续</div><div class="list-meta">关闭对话框，回到当前题；直接关对话框等同这一项</div></div>
+                  </div>
+                  <div class="list-row static">
+                    <div class="list-main"><div class="list-title">退出（暂存）</div><div class="list-meta">保留草稿，会话留在「未完成的模考」，刷新或换设备都能接上</div></div>
+                  </div>
+                  <div class="list-row static">
+                    <div class="list-main"><div class="list-title">放弃这场考试</div><div class="list-meta">结束本场，不计成绩、不生成报告；需再确认一次</div></div>
+                    <div class="list-side"><button type="button" class="btn btn-sm btn-quiet" onclick="eeDialog.open('ex-dlg-abandon', this)">打开二次确认</button></div>
+                  </div>
+                </div>
+                <p class="hint mt-4">文案与行为一致：标题写「退出」的对话框不执行放弃；写「放弃」的才真的结束本场。</p>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="rule-label">会话详情 · 不限时会话</p>
+                  <h2 class="panel-title">失效 · 连续无活动达到阈值</h2>
+                </div>
+                <span class="spacer"></span>
+                <span class="tag warn">已失效</span>
+              </div>
+              <div class="panel-body">
+                <div class="notice warn" role="status">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-clock"/></svg>
+                  <div class="notice-body">
+                    <span class="notice-title">「系统集成项目管理工程师 · 综合卷」已失效</span><br>
+                    这场不限时模考连续 30 天没有活动，已标记为失效并通知你：答案停止收录，不能再作答、不能改答案。失效<strong>不判成绩、不自动交卷</strong>，仍然要你显式选一个。
+                    <div class="notice-actions">
+                      <button type="button" class="btn btn-sm btn-primary" onclick="eeDialog.open('ex-dlg-submit', this)">显式交卷</button>
+                      <button type="button" class="btn btn-sm btn-quiet" onclick="eeDialog.open('ex-dlg-abandon', this)">放弃这场考试</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="kv mt-4">
+                  <span class="kv-key">判定</span><span class="kv-val mono">连续 30 天无活动（默认 30 天，可配）</span>
+                  <span class="kv-key">通知在哪出现</span><span class="kv-val">模考中心「未完成的模考」里这条记录标注「已失效」，同时给一条站内通知，点通知直接进本会话</span>
+                  <span class="kv-key">失效后能做什么</span><span class="kv-val">只能显式交卷（按已产生的答案判分）或放弃（不计成绩、不生成报告）</span>
+                  <span class="kv-key">不会发生</span><span class="kv-val">不静默结束、不自动判成绩、不自动交卷</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="notice warn" role="status">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg>
+              <div class="notice-body">
+                <span class="notice-title">这场模考正在另一台设备上进行</span><br>
+                后打开的设备默认只读，避免两台设备互相覆盖答案。你可以「只看不动」，也可以显式选择在本机继续作答——继续后会按冲突合并流程处理。
+                <div class="notice-actions">
+                  <button type="button" class="btn btn-sm btn-primary" onclick="eeToast('已进入只读模式')">只看不动</button>
+                  <button type="button" class="btn btn-sm btn-quiet" onclick="eeToast('已在本机继续作答')">在本机继续作答</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="notice warn" id="ex-conflict" role="status">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+              <div class="notice-body">
+                <span class="notice-title">草稿冲突 · 答案属用户创作类，保留两个版本</span><br>
+                第 4 题的答案在另一台设备上被改过，本机刚才的修改没有保存上去：
+                <ul class="conflict-list">
+                  <li>第 4 题 · 服务器 <span class="mono">B</span> · 本机 <span class="mono">C</span></li>
+                </ul>
+                未提交的答案是你花力气做出来的，系统不替你选，也不静默覆盖。
+                <div class="notice-actions">
+                  <button type="button" class="btn btn-sm btn-primary" onclick="resolveConflict('server')">保留服务器</button>
+                  <button type="button" class="btn btn-sm btn-quiet" onclick="resolveConflict('local')">使用本机</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="notice bad" role="status">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+              <div class="notice-body">
+                <span class="notice-title">离线</span><br>
+                网络中断，作答暂存在本机；联网后自动同步，倒计时不暂停。
+                <div class="notice-actions"><button type="button" class="btn btn-sm" onclick="eeToast('已重试同步')">重试同步</button></div>
+              </div>
+            </div>
+          </div>
+        </article>
+        <aside class="focus-rail" aria-label="作答卡">
+          <div class="rail-block">
+            <div class="rail-head"><span class="rule-label">答题卡</span><span class="q-note">10 / 12</span></div>
+            <div class="sheet-grid" id="ex-exit-sheet"></div>
+            <div class="sheet-legend">
+              <span><i class="sheet-dot is-answered"></i>已答</span>
+              <span><i class="sheet-dot"></i>未答</span>
+              <span><i class="sheet-dot is-flagged"></i>待复查</span>
+            </div>
+          </div>
+        </aside>
+      </main>
+    </div>
+  </div>
+
+  <!-- ============ 状态 7：空 / 加载失败 / 判分中 / 已放弃 ============ -->
+  <div data-tab-panel="ex-empty" hidden>
+    <div class="exam-runner">
+      <header class="exam-topbar">
+        <div class="exam-left">
+          <a class="page-back" href="exams.html"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>退出</a>
+          <span class="exam-sep" aria-hidden="true"></span>
+          <div class="exam-crumb">
+            <button class="link" type="button">模考</button>
+            <span class="sep">/</span>
+            <button class="link" type="button">系统集成项目管理工程师 · 综合卷</button>
+            <span class="sep">/</span>
+            <span class="here">会话</span>
+          </div>
+        </div>
+        <div class="exam-center"></div>
+        <div class="exam-right">
+          <button type="button" class="btn btn-sm btn-primary" disabled>交卷</button>
+        </div>
+      </header>
+
+      <main class="focus-shell">
+        <article class="focus-body">
+          <p class="rule-label">加载中</p>
+          <div class="panel mb-6">
+            <div class="panel-body">
+              <div class="skeleton sk-line sk-30"></div>
+              <div class="skeleton sk-line sk-60"></div>
+              <div class="skeleton sk-block mt-3"></div>
+            </div>
+          </div>
+
+          <div class="notice bad" role="alert">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+            <div class="notice-body">
+              <div class="notice-title">加载失败</div>
+              <p>这次模考的试卷暂时无法读取。已保存的答案不会丢失，可以重试，或退出后从「未完成的模考」继续。</p>
+              <div class="notice-actions">
+                <button type="button" class="btn btn-sm" onclick="eeToast('已重新读取本场试卷')"><svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>重试</button>
+                <button type="button" class="btn btn-sm btn-quiet" onclick="eeDialog.open('ex-dlg-exit', this)">退出（暂存）</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="empty">
+            <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg></div>
+            <p class="empty-title">这份档案组不出题目</p>
+            <p class="empty-desc">蓝图配额在这个题库里匹配不到题目，或选题范围被筛选空。回到模考中心调整蓝图或换一个题库；基础题库模式按题库既有顺序抽取前 N 题。</p>
+            <div class="empty-actions">
+              <a class="btn btn-quiet" href="exams.html">返回模考中心</a>
+              <a class="btn btn-primary" href="exams.html"><svg class="od-icon" aria-hidden="true"><use href="#i-edit"/></svg>去编辑蓝图</a>
+            </div>
+          </div>
+
+          <div class="notice info mt-6">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-clock"/></svg>
+            <div class="notice-body">
+              <span class="notice-title">判分中</span><br>
+              交卷后报告由服务端一次性计算。主观题保存作答与参考解析，不自动判分，因此标记为「已作答 · 未判分」，不计入客观题得分与满分。
+            </div>
+          </div>
+
+          <div class="notice warn mt-4">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+            <div class="notice-body">
+              <span class="notice-title">本场已放弃，未计入成绩</span><br>
+              放弃是终态：不计成绩、不生成报告。可以再用同一配置重新开一场。
+              <div class="notice-actions">
+                <button type="button" class="btn btn-sm btn-primary" onclick="eeDialog.open('ex-dlg-reexam', this)">重新考试</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="notice warn mt-4">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+            <div class="notice-body">
+              <span class="notice-title">无权限变体</span><br>
+              当前用户不在这个题库里时，模考会话不会开始，直接进入 403 页（见 <code>forbidden.html</code>）；交卷后报告仍可回看，历史成绩属于你本人。
+            </div>
+          </div>
+        </article>
+
+        <aside class="focus-rail" aria-label="作答卡">
+          <div class="rail-block">
+            <div class="rail-head"><span class="rule-label">答题卡</span><span class="q-note">0 / 0</span></div>
+            <div class="skeleton sk-block"></div>
+          </div>
+        </aside>
+      </main>
+    </div>
+  </div>
+
+  <!-- ============ 状态 8：浮层清单 ============ -->
+  <div data-tab-panel="ex-overlay" hidden>
+    <div class="exam-runner">
+      <main class="focus-shell">
+        <article class="focus-body">
+          <div class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="rule-label">浮层</p>
+                <h2 class="panel-title">本屏全部弹窗与抽屉</h2>
+              </div>
+              <span class="spacer"></span>
+              <span class="panel-sub">Escape 可关；关闭后焦点回到触发按钮</span>
+            </div>
+            <div class="panel-body">
+              <div class="list">
+                <div class="list-row static">
+                  <div class="list-main">
+                    <div class="list-title">交卷确认</div>
+                    <div class="list-meta">已答 / 未答客观题 / 待复查 + 规则摘要；跳到首个未答与仍要交卷同级</div>
+                  </div>
+                  <div class="list-side"><button type="button" class="btn btn-sm" onclick="eeDialog.open('ex-dlg-submit', this)">打开</button></div>
+                </div>
+                <div class="list-row static">
+                  <div class="list-main">
+                    <div class="list-title">退出确认</div>
+                    <div class="list-meta">继续 / 退出（暂存）/ 放弃；放弃需再确认一次</div>
+                  </div>
+                  <div class="list-side"><button type="button" class="btn btn-sm" onclick="eeDialog.open('ex-dlg-exit', this)">打开</button></div>
+                </div>
+                <div class="list-row static">
+                  <div class="list-main">
+                    <div class="list-title">放弃这场考试（danger）</div>
+                    <div class="list-meta">不计成绩、不生成报告；与模考中心同一接口、同一确认、同一文案</div>
+                  </div>
+                  <div class="list-side"><button type="button" class="btn btn-sm btn-quiet" onclick="eeDialog.open('ex-dlg-abandon', this)">打开</button></div>
+                </div>
+                <div class="list-row static">
+                  <div class="list-main">
+                    <div class="list-title">重新考试</div>
+                    <div class="list-meta">用该档案当前最新蓝图版本开新会话；旧会话与旧报告原样保留</div>
+                  </div>
+                  <div class="list-side"><button type="button" class="btn btn-sm" onclick="eeDialog.open('ex-dlg-reexam', this)">打开</button></div>
+                </div>
+                <div class="list-row static">
+                  <div class="list-main">
+                    <div class="list-title">整卷回看</div>
+                    <div class="list-meta">只读纸面：逐题显示你的作答、标准答案、判分结果与解析</div>
+                  </div>
+                  <div class="list-side"><button type="button" class="btn btn-sm" onclick="EEexam.openPaper()">打开</button></div>
+                </div>
+                <div class="list-row static">
+                  <div class="list-main">
+                    <div class="list-title">作答卡抽屉</div>
+                    <div class="list-meta">图例 + 答题卡 + 跳到未答；桌面右滑，≤640 底部展开</div>
+                  </div>
+                  <div class="list-side"><button type="button" class="btn btn-sm" onclick="EEexam.openDrawer('ex-sheet')">打开</button></div>
+                </div>
+                <div class="list-row static">
+                  <div class="list-main">
+                    <div class="list-title">快捷键</div>
+                    <div class="list-meta">A–H 选项 · B 待复查 · ←→ 换题 · Esc 关浮层</div>
+                  </div>
+                  <div class="list-side"><button type="button" class="btn btn-sm" onclick="eeDialog.open('ex-dlg-keys', this)">打开</button></div>
+                </div>
+                <div class="list-row static">
+                  <div class="list-main">
+                    <div class="list-title">更多菜单</div>
+                    <div class="list-meta">待复查 / 跳到未答 / 退出；由会话内「更多」触发</div>
+                  </div>
+                  <div class="list-side"><span class="state-note">见「作答窗口」状态</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+      </main>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 抽屉：作答卡（桌面右滑 / ≤640 底部 sheet，同一 DOM） ============ -->
+<div class="drawer-scrim" id="ex-sheet-scrim" hidden></div>
+<aside class="drawer" id="ex-sheet-drawer" hidden role="dialog" aria-modal="true" aria-labelledby="ex-sheet-title">
+  <div class="drawer-head">
+    <h2 class="drawer-title" id="ex-sheet-title">答题卡</h2>
+    <span class="mono muted" id="ex-sheet-count">0 / 0</span>
+    <button type="button" class="icon-btn" aria-label="关闭" onclick="EEexam.closeDrawer('ex-sheet')"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="drawer-body">
+    <div class="stat-row" id="ex-drawer-stats"></div>
+    <div class="sheet-grid" id="ex-sheet-grid-live"></div>
+    <div class="sheet-legend">
+      <span><i class="sheet-dot is-answered"></i>已答</span>
+      <span><i class="sheet-dot"></i>未答</span>
+      <span><i class="sheet-dot is-current"></i>当前</span>
+      <span><i class="sheet-dot is-flagged"></i>待复查</span>
+    </div>
+    <div class="rail-block">
+      <button type="button" class="btn btn-sm btn-block" onclick="EEexam.jumpToBlank()"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-right"/></svg>跳到下一道未答题</button>
+      <button type="button" class="btn btn-sm btn-block btn-quiet" onclick="EEexam.toggleFlag()"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>标记本题待复查</button>
+    </div>
+  </div>
+  <div class="drawer-foot">
+    <button type="button" class="btn btn-quiet" onclick="EEexam.closeDrawer('ex-sheet')">关闭</button>
+    <button type="button" class="btn btn-primary" onclick="EEexam.closeDrawer('ex-sheet'); EEexam.openSubmit(this)">交卷</button>
+  </div>
+</aside>
+
+<!-- ============ 对话框：交卷确认（FN-307） ============ -->
+<dialog class="dlg" id="ex-dlg-submit" aria-labelledby="ex-dlg-submit-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">模考</p>
+      <h2 class="dlg-title" id="ex-dlg-submit-title">交卷</h2>
+    </div>
+    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="dlg-body">
+    <div class="stat-row" id="ex-submit-stats">
+      <div class="stat"><div class="stat-num">10</div><div class="stat-cap">已答（含 1 题未判分）</div></div>
+      <div class="stat"><div class="stat-num">2</div><div class="stat-cap">未答客观题</div></div>
+      <div class="stat"><div class="stat-num">2</div><div class="stat-cap">待复查</div></div>
+    </div>
+    <div class="notice warn" id="ex-submit-warn">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+      <div class="notice-body" id="ex-submit-blank">还有 2 道客观题未作答，将按 0 分计入得分、仍占满分；另有 2 题标记了待复查。</div>
+    </div>
+    <div class="kv">
+      <span class="kv-key">负分</span><span class="kv-val">答错扣 0.5 分；未设 0 分下限</span>
+      <span class="kv-key">纳入学习记录</span><span class="kv-val">纳入：错题、FSRS 与统计照常更新</span>
+    </div>
+    <p class="hint">交卷后不能再修改答案。关掉这个对话框可以回去继续改——打开交卷确认不冻结答案。</p>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>继续作答</button>
+    <button type="button" class="btn" id="ex-jump-blank" onclick="EEexam.jumpToBlank()">跳到第 10 题（首个未答）</button>
+    <button type="button" class="btn btn-primary" onclick="EEexam.confirmSubmit()">仍要交卷</button>
+  </div>
+</dialog>
+
+<!-- ============ 对话框：退出确认（FN-309） ============ -->
+<dialog class="dlg" id="ex-dlg-exit" aria-labelledby="ex-dlg-exit-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">模考</p>
+      <h2 class="dlg-title" id="ex-dlg-exit-title">退出这场模考</h2>
+    </div>
+    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="dlg-body">
+    <p class="dlg-p">三种后果，选一个：</p>
+    <div class="list">
+      <div class="list-row static">
+        <div class="list-main"><div class="list-title">继续作答</div><div class="list-meta">关闭对话框，回到当前题；直接关对话框等同这一项</div></div>
+      </div>
+      <div class="list-row static">
+        <div class="list-main"><div class="list-title">退出（暂存）</div><div class="list-meta">保留草稿，会话留在「未完成的模考」，刷新或换设备都能接上</div></div>
+      </div>
+      <div class="list-row static">
+        <div class="list-main"><div class="list-title">放弃这场考试</div><div class="list-meta">结束本场，不计成绩、不生成报告；需再确认一次</div></div>
+        <div class="list-side"><button type="button" class="btn btn-sm btn-danger" onclick="eeDialog.open('ex-dlg-abandon', this)">放弃这场考试</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>继续作答</button>
+    <a class="btn btn-primary" href="exams.html">退出（暂存）</a>
+  </div>
+</dialog>
+
+<!-- ============ 对话框：放弃这场考试（danger · 二次确认） ============ -->
+<dialog class="dlg narrow danger" id="ex-dlg-abandon" aria-labelledby="ex-dlg-abandon-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">模考</p>
+      <h2 class="dlg-title" id="ex-dlg-abandon-title">放弃这场模考？</h2>
+    </div>
+  </div>
+  <div class="dlg-body">
+    <p class="dlg-p">放弃是终态：不计成绩、不生成报告，已答内容随本场作废，且不能恢复。</p>
+    <div class="kv">
+      <span class="kv-key">考试档案</span><span class="kv-val">系统集成项目管理工程师 · 综合卷</span>
+      <span class="kv-key">进度</span><span class="kv-val mono">已答 10 / 12</span>
+      <span class="kv-key">剩余</span><span class="kv-val mono">52 分钟</span>
+    </div>
+    <p class="hint">只是想离开页面的话，用「退出（暂存）」：草稿会保留，可以稍后继续。</p>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>取消</button>
+    <button type="button" class="btn btn-danger-solid" onclick="EEexam.abandon()">放弃考试</button>
+  </div>
+</dialog>
+
+<!-- ============ 对话框：重新考试（FN-310） ============ -->
+<dialog class="dlg" id="ex-dlg-reexam" aria-labelledby="ex-dlg-reexam-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">模考</p>
+      <h2 class="dlg-title" id="ex-dlg-reexam-title">重新考试</h2>
+    </div>
+    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="dlg-body">
+    <p class="dlg-p">用这份档案<strong>当前最新蓝图版本</strong>开一场新考试；旧会话与旧报告原样保留，可随时回看。</p>
+    <div class="kv">
+      <span class="kv-key">考试档案</span><span class="kv-val">系统集成项目管理工程师 · 综合卷</span>
+      <span class="kv-key">蓝图版本</span><span class="kv-val mono">当前最新 v3</span>
+      <span class="kv-key">题量</span><span class="kv-val mono">12 题（客观题满分 24 分）</span>
+      <span class="kv-key">时长</span><span class="kv-val mono">120 分钟</span>
+      <span class="kv-key">纳入学习记录</span><span class="kv-val">纳入</span>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>取消</button>
+    <button type="button" class="btn btn-primary" onclick="EEexam.again()">开始新的一场</button>
+  </div>
+</dialog>
+
+<!-- ============ 对话框：快捷键 ============ -->
+<dialog class="dlg narrow" id="ex-dlg-keys" aria-labelledby="ex-dlg-keys-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">模考会话</p>
+      <h2 class="dlg-title" id="ex-dlg-keys-title">快捷键</h2>
+    </div>
+    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="dlg-body">
+    <div>
+      <div class="rule-label">作答与移动</div>
+      <div class="rail-keys mt-2">
+        <span><span class="kbd">A</span>–<span class="kbd">H</span> 选择选项</span>
+        <span><span class="kbd">B</span> 标记本题待复查</span>
+        <span><span class="kbd">←</span><span class="kbd">→</span> 上一题 / 下一题</span>
+        <span><span class="kbd">Esc</span> 关闭浮层</span>
+      </div>
+    </div>
+    <div class="notice info">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+      <div class="notice-body"><span class="kbd">B</span> 在模考里是「待复查」，与练习会话的「标记薄弱」明确区分。作答卡抽屉、本浮层或「更多」菜单打开时，除 <span class="kbd">Esc</span> 外快捷键一律挂起。</div>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>知道了</button>
+  </div>
+</dialog>
+
+<!-- ============ 对话框：整卷回看（只读） ============ -->
+<dialog class="dlg wide" id="ex-dlg-paper" aria-labelledby="ex-dlg-paper-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">成绩报告 · 整卷回看</p>
+      <h2 class="dlg-title" id="ex-dlg-paper-title">系统集成项目管理工程师 · 综合卷</h2>
+    </div>
+    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="dlg-body">
+    <div class="notice info">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+      <div class="notice-body">本场已交卷，题目与选项只读；答案与解析按交卷时保存的结果展示，不会因为重新组卷或后续改题而改变。本报告按题目版本 v3 判分。</div>
+    </div>
+    <div id="ex-paper-host"></div>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>关闭</button>
+  </div>
+</dialog>
+
+<script src="../../assets/icons.js"></script>
+<script src="../../assets/store.js"></script>
+<script src="../../assets/i18n.js"></script>
+<script src="../../assets/nav.js"></script>
+<script src="../../assets/spec-boot.js"></script>
+<script>
+/* ==========================================================================
+   模考会话 runner · P2
+   · 会话来自 eeStore：?sid=<id> 深链优先，否则 activeSession('exam')
+   · 三段式（CR-31）：① 作答窗口 → ② 宽限 60 秒（只同步，不继续答题）→ ③ 服务端收卷
+   · 交卷报告口径按 CR-06：客观题满分含本场全部客观题（未作答按 0 分计入得分但仍占满分）
+   ========================================================================== */
+window.EEexam = (function () {
+  var S = window.eeStore;
+
+  /* 题型口径：客观题计入得分与满分；主观题不自动判分 */
+  var OBJECTIVE = { '单选题': 1, '多选题': 1, '判断题': 1 };
+  var SCORE = { '单选题': 2, '多选题': 3, '判断题': 2, '问答题': 0 };
+  var GRACE = 60; /* 宽限时长：显式产品参数，默认 60 秒 */
+
+  /* 纸面数据：题干来自 store 的 questions，选项/答案/解析按题干匹配（真实软考真题） */
+  var QBANK = [
+    { stem: '每周一学校开展直播课程，在直播中实时回复学生问题属于（  ）', type: '单选题', options: [['A', '互动沟通'], ['B', '推式沟通'], ['C', '拉式沟通'], ['D', '公众沟通']], answer: 'A', explain: '直播中实时回复学生问题，信息按需推送、学生自行获取，属于拉式沟通。' },
+    { stem: 'OSI的（  ）不适合提供相应的安全服务。', type: '单选题', options: [['A', '传输层'], ['B', '会话层'], ['C', '网络层'], ['D', '应用层']], answer: 'B', explain: '本题为反向选择题：传输层、网络层、应用层都可以提供相应安全服务，会话层不适合。' },
+    { stem: '以下不属于“临时性”的是（）', type: '单选题', options: [['A', '临时性并不一定意味着项目的持续时间短'], ['B', '临时性具有明确的开始时间和结束时间'], ['C', '项目可交付成果在结束项目或阶段依然存在'], ['D', '结束阶段']], answer: 'D', explain: '“结束阶段”是项目阶段名称，不属于临时性这一特征。' },
+    { stem: '关于范围基准，以下说法不正确的是（）。', type: '单选题', options: [['A', '范围基准包括项目范围说明书、WBS、WBS 字典'], ['B', '范围基准包含工作包、规划包与控制账户'], ['C', '范围基准是进度与成本估算的重要依据'], ['D', '范围基准是制定预算的输出']], answer: 'D', explain: '范围基准是创建 WBS 过程的输出，不是制定预算的输出。' },
+    { stem: '（   ）按照业务功能聚合性进行应用规划，建设与应用组件对应的应用系统，满足不同业务条线的需求，实现专业化发展。', type: '单选题', options: [['A', '功能专业化原则'], ['B', '业务协同化原则'], ['C', '架构服务化原则'], ['D', '数据集中化原则']], answer: 'A', explain: '按业务功能聚合性进行应用规划，体现的是功能专业化原则。' },
+    { stem: '监控各项续航参数是否保持在预期区间（   ）', type: '单选题', options: [['A', '控制图'], ['B', '散点图'], ['C', '因果图'], ['D', '流程图']], answer: 'A', explain: '控制图用于判断过程是否处于受控状态，即参数是否保持在预期区间。' },
+    { stem: '当出现异常时软件需要有持续提供服务，属于（）。', type: '单选题', options: [['A', '韧性'], ['B', '弹性'], ['C', '架构持续演进'], ['D', '服务化']], answer: 'A', explain: '韧性指系统在出现异常时仍能持续提供服务的能力。' },
+    { stem: '大型不适合用（）架构模型。', type: '单选题', options: [['A', '单机应用模式'], ['B', '客户端/服务器模式'], ['C', 'Web Service'], ['D', '模型-视图-控制器模式']], answer: 'A', explain: '大型系统不适合单机应用模式，需要分布式架构支撑。' },
+    { stem: '通过（  ）分析风险优势，劣势，机会，威胁。', type: '多选题', options: [['A', '根本原因'], ['B', '概率和影响'], ['C', 'SWOT'], ['D', '文件']], answer: 'C', explain: 'SWOT 分析用于评估优势、劣势、机会与威胁。' },
+    { stem: '以下（   ）不是定义活动的输出。', type: '多选题', options: [['A', '活动清单'], ['B', '活动属性'], ['C', '进度网络图'], ['D', '里程碑清单']], answer: 'C', explain: '进度网络图是排列活动顺序的输出，不是定义活动的输出。' },
+    { stem: '项目具有临时性，因此（  ）。', type: '判断题', options: [['A', '正确'], ['B', '错误']], answer: 'A', explain: '临时性是项目的基本特征之一：有明确的开始与结束。' },
+    { stem: '结合本项目，说明范围基准失控的主要原因，并给出纠正措施。', type: '问答题', options: [], answer: '', explain: '主观题保存作答与参考解析，不自动判分：作答状态是「已作答」，判分状态恒为「未判分」。' }
+  ];
+  function norm(s) { return String(s == null ? '' : s).replace(/\s+/g, ''); }
+  var PAPER = {};
+  QBANK.forEach(function (q) { PAPER[norm(q.stem)] = q; });
+  function paperFor(stem) {
+    var k = norm(stem);
+    if (PAPER[k]) return PAPER[k];
+    var best = null, bestLen = 0;
+    Object.keys(PAPER).forEach(function (key) {
+      var n = Math.min(key.length, k.length), i = 0;
+      while (i < n && key.charAt(i) === k.charAt(i)) i++;
+      if (i > bestLen) { bestLen = i; best = key; }
+    });
+    if (best && bestLen >= 10) return PAPER[best];
+    return { stem: stem, type: '单选题', options: [['A', '选项 A'], ['B', '选项 B'], ['C', '选项 C'], ['D', '选项 D']], answer: 'A', explain: '这道题暂未收录选项，以下按占位选项展示。' };
+  }
+
+  /* 演示用静态报告：与模考中心历史报告同一套 CR-06 口径（12 题卷） */
+  var DEMO_REPORT = {
+    title: '系统集成项目管理工程师 · 综合卷', at: '2026-11-24 22:05', deadline: '2026-11-24 22:14',
+    via: 'manual', score: 11, full: 24, rate: 46, accObj: 56, answered: 10, objTotal: 11,
+    correct: 5, unanswered: 2, ungraded: 1, minutes: 47, wall: 52, version: 'v3', unsynced: 0
+  };
+
+  /* 演示会话的脚本化作答：前 9 题客观题已答，第 12 题文字作答；第 5、12 题待复查 */
+  var DEMO_ANSWERS = { 0: 'A', 1: 'C', 2: 'D', 3: 'A', 4: 'A', 5: 'B', 6: 'A', 7: 'B', 8: 'C', 11: '范围基准失控主要因为需求没有基线化……' };
+  var DEMO_FLAGS = { 4: true, 11: true };
+
+  /* 三段式：'answer' 作答窗口 / 'grace' 宽限 60 秒 / 'collected' 服务端已收卷 */
+  var R = { s: null, paper: [], index: 0, answers: {}, flags: {}, remaining: 120 * 60, phase: 'answer', graceLeft: GRACE, report: null, done: false, submittedVia: 'manual' };
+  var timerId = null;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function bankName(id) { return S.bankName(id); }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function fmtTime(sec) {
+    var s = Math.max(0, Math.floor(sec));
+    var m = Math.floor(s / 60), r = s % 60;
+    return (m < 10 ? '0' + m : m) + ':' + (r < 10 ? '0' + r : r);
+  }
+  function answeredCount() { return Object.keys(R.answers).length; }
+  function unansweredObjective() {
+    var n = 0;
+    R.paper.forEach(function (q, i) { if (!R.answers[i] && OBJECTIVE[q.type]) n++; });
+    return n;
+  }
+  function firstUnanswered() {
+    for (var i = 0; i < R.paper.length; i++) if (!R.answers[i]) return i;
+    return -1;
+  }
+
+  /* ---------- 取会话 ---------- */
+  function loadSession() {
+    var q = new URLSearchParams(location.search);
+    var sid = q.get('sid');
+    var all = S.sessions();
+    var s = null;
+    if (sid) { for (var i = 0; i < all.length; i++) if (all[i].id === sid) { s = all[i]; break; } }
+    if (!s) s = S.activeSession('exam');
+    return s;
+  }
+  function buildPaper(s) {
+    var qs = S.questions(s.bankId);
+    if (!qs.length) qs = QBANK.map(function (q, i) { return { id: 'qb' + i, stem: q.stem, type: q.type, chapter: '未分章', version: 'v3' }; });
+    var total = s.total || qs.length;
+    return qs.slice(0, total).map(function (q, i) {
+      var p = paperFor(q.stem);
+      return { id: q.id, stem: q.stem, type: p.type || q.type || '单选题', chapter: q.chapter || '未分章', version: q.version || 'v3', options: p.options, answer: p.answer, explain: p.explain, score: SCORE[p.type || q.type] == null ? 2 : SCORE[p.type || q.type] };
+    });
+  }
+  function persist(extra) {
+    if (!R.s) return;
+    S.updateSession(R.s.id, Object.assign({
+      answers: R.answers, flags: R.flags, index: R.index, done: answeredCount(),
+      remaining: R.s.unlimited ? null : Math.max(0, Math.round(R.remaining)), phase: R.phase
+    }, extra || {}));
+  }
+
+  /* ---------- 初始化 ---------- */
+  function init() {
+    var q = new URLSearchParams(location.search);
+    var sid = q.get('sid');
+    var s = loadSession();
+    /* 深链失效（sid 存在但会话已终结）→ 空态；直接打开本屏 → 建一场演示会话，
+       让「作答窗口」这一态以真实纸面呈现（与模考中心「未完成的模考」同一份数据） */
+    if (!s && !sid) {
+      s = S.startSession({
+        kind: 'exam', bankId: 'b_rk', mode: '模考',
+        title: '系统集成项目管理工程师 · 综合卷',
+        total: 12, minutes: 120, record: true, phase: 'answer',
+        index: 11, done: 10, answers: DEMO_ANSWERS, flags: DEMO_FLAGS, remaining: 58 * 60 + 12
+      });
+    }
+    if (!s) { showNone(); return; }
+    if (s.kind !== 'exam') { location.replace('practice.html?sid=' + encodeURIComponent(s.id)); return; }
+    R.s = s;
+    R.paper = buildPaper(s);
+    if (!R.paper.length) { showNone(); return; }
+    R.answers = {}; R.flags = {};
+    Object.keys(s.answers || {}).forEach(function (k) { R.answers[k] = s.answers[k]; });
+    Object.keys(s.flags || {}).forEach(function (k) { R.flags[k] = s.flags[k]; });
+    var idx = s.index != null ? parseInt(s.index, 10) : 0;
+    if (isNaN(idx) || idx < 0 || idx >= R.paper.length) idx = 0;
+    R.index = idx;
+    R.phase = 'answer';
+    var limit = Math.max(60, (s.minutes || 120) * 60);
+    R.remaining = s.remaining != null ? Math.min(limit, parseInt(s.remaining, 10)) : limit;
+    if (isNaN(R.remaining) || R.remaining < 0) R.remaining = limit;
+    document.getElementById('ex-none').hidden = true;
+    document.getElementById('ex-live').hidden = false;
+    document.getElementById('ex-crumb-name').textContent = s.title || ('模考 · ' + bankName(s.bankId));
+    render();
+    startTicker();
+    paintStaticSheets();
+  }
+  function showNone() {
+    document.getElementById('ex-live').hidden = true;
+    document.getElementById('ex-none').hidden = false;
+    syncToastInset();
+  }
+
+  /* ---------- 渲染（作答窗口） ---------- */
+  function render() {
+    if (!R.s || !R.paper.length) return;
+    var q = R.paper[R.index];
+    var total = R.paper.length;
+    var flagged = !!R.flags[R.index];
+    var locked = R.phase !== 'answer';
+
+    document.getElementById('ex-meta').innerHTML =
+      '<span>第 ' + (R.index + 1) + ' 题 · 共 ' + total + ' 题</span><span>' + esc(q.type) + '</span>' +
+      (OBJECTIVE[q.type] ? '<span>' + esc(q.chapter) + '</span>' : '<span class="tag plain">主观题 · 不判分</span>') +
+      (flagged ? '<span class="tag warn"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>待复查</span>' : '');
+    document.getElementById('ex-stem').textContent = q.stem;
+
+    if (!q.options.length) {
+      document.getElementById('ex-options').innerHTML =
+        '<label class="field"><span class="label">你的作答</span>' +
+        '<textarea class="textarea" placeholder="输入文字作答；交卷后显示参考解析，不自动判分"' + (locked ? ' disabled' : ' oninput="EEexam.typeAnswer(this.value)"') + '>' + esc(R.answers[R.index] || '') + '</textarea>' +
+        '<span class="hint">主观题保存作答与参考解析：作答状态「已作答」，判分状态「未判分」。</span></label>';
+    } else {
+      var opts = '';
+      q.options.forEach(function (o) {
+        var on = q.type === '多选题'
+          ? String(R.answers[R.index] || '').indexOf(o[0]) > -1
+          : R.answers[R.index] === o[0];
+        opts += '<button type="button" class="opt' + (on ? ' is-selected' : '') + '"' +
+          (locked ? ' disabled' : ' onclick="EEexam.select(\'' + o[0] + '\')') + ' aria-pressed="' + (on ? 'true' : 'false') + '">' +
+          '<span class="opt-key">' + o[0] + '</span><span class="opt-text">' + esc(o[1]) + '</span></button>';
+      });
+      document.getElementById('ex-options').innerHTML = opts;
+    }
+
+    var done = answeredCount(), flaggedN = Object.keys(R.flags).length;
+    var pct = total ? Math.round(done / total * 100) : 0;
+    document.getElementById('ex-stats').innerHTML =
+      '<div class="stat"><div class="stat-num">' + done + '</div><div class="stat-cap">已答</div></div>' +
+      '<div class="stat"><div class="stat-num">' + (total - done) + '</div><div class="stat-cap">未答</div></div>' +
+      '<div class="stat"><div class="stat-num">' + flaggedN + '</div><div class="stat-cap">待复查</div></div>';
+    document.getElementById('ex-drawer-stats').innerHTML = document.getElementById('ex-stats').innerHTML;
+    document.getElementById('ex-progress-fill').style.width = pct + '%';
+    document.getElementById('ex-count').textContent = (R.index + 1) + ' / ' + total;
+    document.getElementById('ex-sheet-count').textContent = done + ' / ' + total;
+
+    var cells = sheetCells({ locked: locked, showFlag: true });
+    document.getElementById('ex-sheet').innerHTML = cells;
+    document.getElementById('ex-sheet-grid-live').innerHTML = cells;
+
+    document.getElementById('ex-prev').disabled = R.index === 0 || locked;
+    document.getElementById('ex-next').disabled = R.index === total - 1 || locked;
+    document.getElementById('ex-flag-btn').disabled = locked;
+    document.getElementById('ex-submit-btn').disabled = false; /* 超时禁止的只是继续作答，交卷始终放行 */
+    var flagBtn = document.getElementById('ex-flag-btn');
+    flagBtn.innerHTML = '<svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>' + (flagged ? '已标记待复查' : '待复查') + ' <span class="kbd">B</span>';
+    flagBtn.classList.toggle('btn-primary', flagged);
+    flagBtn.classList.toggle('btn-quiet', !flagged);
+    paintPhase();
+    syncToastInset();
+  }
+
+  function sheetCells(o) {
+    o = o || {};
+    var cells = '';
+    for (var i = 0; i < R.paper.length; i++) {
+      var c = 'sheet-cell';
+      if (R.answers[i]) c += ' is-answered';
+      if (i === R.index && o.showCurrent !== false) c += ' is-current';
+      if (R.flags[i] && o.showFlag !== false) c += ' is-flagged';
+      cells += '<button type="button" class="' + c + '" aria-current="' + (i === R.index) + '" aria-label="第 ' + (i + 1) + ' 题"' +
+        (o.locked ? ' disabled' : ' onclick="EEexam.jumpTo(' + i + ')"') + '>' + (i + 1) + '</button>';
+    }
+    return cells;
+  }
+
+  /* ---------- 三段式阶段显示 ---------- */
+  function paintPhase() {
+    var chip = document.getElementById('ex-phase');
+    var cap = document.querySelector('#ex-timer').previousElementSibling;
+    var timer = document.getElementById('ex-timer');
+    if (R.phase === 'answer') {
+      chip.textContent = '作答窗口';
+      chip.className = 'tag plain';
+      cap.textContent = '剩余';
+      timer.textContent = fmtTime(R.remaining);
+      timer.classList.toggle('low', R.remaining < 300);
+      document.getElementById('ex-deadline-note').textContent = R.s.unlimited
+        ? '不限时：没有硬截止、没有宽限、没有自动交卷'
+        : '服务端硬截止 ' + fmtClock(R.remaining) + ' · 宽限 ' + GRACE + ' 秒';
+    } else if (R.phase === 'grace') {
+      chip.textContent = '宽限中 · 已收卷待同步';
+      chip.className = 'tag brand';
+      cap.textContent = '宽限剩余';
+      timer.textContent = fmtTime(R.graceLeft);
+      timer.classList.remove('low');
+      document.getElementById('ex-deadline-note').textContent = '答案已停止收录，只同步截止前已产生的答案';
+    } else {
+      chip.textContent = '服务端已收卷';
+      chip.className = 'tag ok';
+      cap.textContent = '已收卷';
+      timer.textContent = '00:00';
+      timer.classList.remove('low');
+      document.getElementById('ex-deadline-note').textContent = '宽限已结束，报告已生成';
+    }
+  }
+  function fmtClock(sec) {
+    var d = new Date(Date.now() + Math.max(0, sec) * 1000);
+    return pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  /* ---------- 动作 ---------- */
+  function select(key) {
+    if (R.phase !== 'answer') { eeToast('已到交卷时间，答案已停止收录'); return; }
+    var q = R.paper[R.index];
+    if (q.type === '多选题') {
+      /* 多选：再次点选同一项 = 取消，答案记为排序后的键串 */
+      var cur = R.answers[R.index] ? String(R.answers[R.index]).split('') : [];
+      var at = cur.indexOf(key);
+      if (at > -1) cur.splice(at, 1); else cur.push(key);
+      cur.sort();
+      if (cur.length) R.answers[R.index] = cur.join(''); else delete R.answers[R.index];
+    } else {
+      R.answers[R.index] = key;
+    }
+    persist();
+    render();
+  }
+  function typeAnswer(text) {
+    if (R.phase !== 'answer') return;
+    if (text && text.trim()) R.answers[R.index] = text.trim(); else delete R.answers[R.index];
+    persist();
+    render();
+  }
+  function next() { if (R.index + 1 < R.paper.length) { R.index++; persist(); render(); focusStem(); } }
+  function prev() { if (R.index > 0) { R.index--; persist(); render(); focusStem(); } }
+  function jumpTo(i) {
+    if (i < 0 || i >= R.paper.length) return;
+    closeDrawer('ex-sheet');
+    R.index = i; persist(); render(); focusStem();
+    eeToast('跳到第 ' + (i + 1) + ' 题');
+  }
+  function focusStem() {
+    var stem = document.getElementById('ex-stem');
+    if (stem) { if (!stem.hasAttribute('tabindex')) stem.setAttribute('tabindex', '-1'); stem.focus(); }
+  }
+  function toggleFlag() {
+    if (R.phase !== 'answer') { eeToast('宽限与收卷后不再接受标记'); return; }
+    var on = !R.flags[R.index];
+    if (on) R.flags[R.index] = true; else delete R.flags[R.index];
+    persist(); render();
+    eeToast(on ? '已标记这道题待复查' : '已取消待复查');
+  }
+  function exit() { eeDialog.open('ex-dlg-exit', document.activeElement); }
+  function abandon() {
+    if (R.s) S.finishSession(R.s.id);   /* 不写报告：放弃不计入成绩 */
+    stopTicker();
+    eeDialog.close(document.getElementById('ex-dlg-abandon'));
+    eeDialog.close(document.getElementById('ex-dlg-exit'));
+    eeToast('已放弃本场模考，本次作答不计入成绩');
+    location.href = 'exams.html';
+  }
+
+  /* ---------- 交卷（FN-307） ---------- */
+  function openSubmit(btn) {
+    var total = R.paper.length, done = answeredCount(), blank = unansweredObjective();
+    document.getElementById('ex-submit-stats').innerHTML =
+      '<div class="stat"><div class="stat-num">' + done + '</div><div class="stat-cap">已答（含未判分主观题）</div></div>' +
+      '<div class="stat"><div class="stat-num">' + blank + '</div><div class="stat-cap">未答客观题</div></div>' +
+      '<div class="stat"><div class="stat-num">' + Object.keys(R.flags).length + '</div><div class="stat-cap">待复查</div></div>';
+    var warn = document.getElementById('ex-submit-warn');
+    document.getElementById('ex-submit-blank').textContent = blank > 0 || Object.keys(R.flags).length
+      ? '还有 ' + blank + ' 道客观题未作答，将按 0 分计入得分、仍占满分；另有 ' + Object.keys(R.flags).length + ' 题标记了待复查。警告不阻断交卷。'
+      : '';
+    warn.hidden = !(blank > 0 || Object.keys(R.flags).length);
+    var jump = document.getElementById('ex-jump-blank');
+    if (jump) {
+      var f = firstUnanswered();
+      jump.hidden = f < 0;
+      jump.textContent = f > -1 ? '跳到第 ' + (f + 1) + ' 题（首个未答）' : '';
+    }
+    eeDialog.open('ex-dlg-submit', btn || document.activeElement);
+  }
+  function jumpToBlank() {
+    var i = firstUnanswered();
+    var d = document.getElementById('ex-dlg-submit');
+    if (d && d.open) window.eeDialog.close(d);
+    if (i > -1) { R.index = i; persist(); render(); focusStem(); eeToast('已跳到第 ' + (i + 1) + ' 题'); }
+  }
+
+  /* ---------- 报告计算（CR-06） ---------- */
+  function computeReport(via) {
+    var objFull = 0, objScore = 0, answeredObj = 0, correctObj = 0, ungraded = 0, unanswered = 0, answered = 0;
+    R.paper.forEach(function (q, i) {
+      var a = R.answers[i];
+      var isObj = !!OBJECTIVE[q.type];
+      if (isObj) objFull += q.score;
+      if (!a) { if (isObj) unanswered++; return; }
+      answered++;
+      if (!isObj) { ungraded++; return; }
+      answeredObj++;
+      var sel = String(a).split('').sort().join('');
+      var ans = String(q.answer).split('').sort().join('');
+      if (sel === ans) { correctObj++; objScore += q.score; }
+      else if (sel.length && ans.indexOf(sel[0]) > -1 && sel.length < ans.length) { objScore += q.score * 0.5; }
+    });
+    return {
+      title: R.s.title || ('模考 · ' + bankName(R.s.bankId)), bankId: R.s.bankId,
+      score: Math.round(objScore * 10) / 10, full: objFull,
+      rate: objFull ? Math.round(objScore / objFull * 100) : 0,
+      accObj: answeredObj ? Math.round(correctObj / answeredObj * 100) : null,
+      answered: answered, objTotal: R.paper.filter(function (q) { return OBJECTIVE[q.type]; }).length,
+      correct: correctObj, unanswered: unanswered, ungraded: ungraded,
+      minutes: Math.max(1, Math.round((Math.max(60, (R.s.minutes || 120) * 60) - R.remaining) / 60)),
+      wall: Math.max(1, Math.round((Math.max(60, (R.s.minutes || 120) * 60) - R.remaining) / 60) + 5),
+      via: via, at: '2026-11-26 09:20', version: 'v3', unsynced: 0
+    };
+  }
+  function confirmSubmit(via) {
+    if (!R.s || R.done) return;
+    R.done = true;
+    R.submittedVia = via || 'manual';
+    stopTicker();
+    var report = computeReport(R.submittedVia);
+    S.finishSession(R.s.id, report);
+    R.report = report;
+    var d = document.getElementById('ex-dlg-submit');
+    if (d && d.open) window.eeDialog.close(d);
+    switchPanel('ex-report');
+    renderReport(R.report);
+    eeToast(R.submittedVia === 'manual' ? '已交卷，报告已保存' : '到点自动交卷，报告已由服务端生成');
+  }
+
+  /* ---------- 报告渲染 ---------- */
+  function renderReport(rep) {
+    rep = rep || DEMO_REPORT;
+    document.getElementById('ex-report-title').textContent = rep.title;
+    var scoreEl = document.querySelector('#ex-report .report-score');
+    var capEl = document.querySelectorAll('#ex-report .report-score-cap');
+    scoreEl.textContent = rep.score == null ? '待判分' : rep.score;
+    capEl[0].textContent = '客观题得分';
+    capEl[1].textContent = '客观题满分 ' + rep.full + ' 分（含未作答的 ' + (rep.unanswered == null ? 0 : rep.unanswered) + ' 题）';
+    var stats = document.querySelectorAll('#ex-report .stat-row .stat');
+    stats[0].querySelector('.stat-num').textContent = (rep.rate == null ? '暂无数据' : rep.rate + '%');
+    stats[0].querySelector('.stat-cap').innerHTML = '考试得分率<br>客观题得分 ' + rep.score + ' ÷ 客观题满分 ' + rep.full;
+    stats[1].querySelector('.stat-num').textContent = (rep.accObj == null ? '暂无数据' : rep.accObj + '%');
+    stats[1].querySelector('.stat-cap').innerHTML = '已答客观题正确率<br>答对 ' + rep.correct + ' ÷ 已答 ' + (rep.answered - rep.ungraded);
+    stats[2].querySelector('.stat-num').textContent = (rep.answered - rep.ungraded) + ' / ' + rep.objTotal;
+    stats[2].querySelector('.stat-cap').textContent = '已答客观题 / 客观题总数';
+    stats[3].querySelector('.stat-num').textContent = rep.unanswered == null ? '—' : rep.unanswered;
+    stats[3].querySelector('.stat-cap').textContent = '未答客观题（按 0 分计入得分，仍占满分）';
+    var counts = document.querySelectorAll('#ex-report .report-count');
+    if (counts.length) {
+      counts[0].querySelector('b').textContent = rep.answered;
+      counts[0].querySelector('span').textContent = '已答（含 ' + rep.ungraded + ' 题已作答·未判分）';
+      counts[1].querySelector('b').textContent = rep.unanswered;
+      counts[2].querySelector('b').textContent = rep.ungraded;
+      counts[3].querySelector('b').textContent = rep.score + ' / ' + rep.full;
+      counts[4].querySelector('b').textContent = rep.score + ' / ' + rep.full;
+    }
+    var facts = document.querySelectorAll('#ex-report .report-facts dd');
+    facts[0].textContent = rep.at;
+    facts[1].textContent = rep.deadline || '—';
+    facts[2].textContent = rep.via === 'auto_deadline' ? '到点自动交卷' : (rep.via === 'expired_server_answers' ? '超时后以服务器答案交卷' : '手动交卷');
+    facts[3].textContent = rep.minutes + ' 分钟';
+    facts[4].textContent = rep.wall + ' 分钟';
+    facts[5].textContent = '题目版本 ' + rep.version;
+    document.querySelector('#ex-report .rule-label').textContent =
+      '成绩报告 · ' + (rep.via === 'manual' ? '手动交卷' : (rep.via === 'auto_deadline' ? '到点自动交卷' : '超时后以服务器答案交卷'));
+
+    /* 答题卡（只读）：已答 / 错误 / 待复查 */
+    var cells = '';
+    for (var i = 0; i < R.paper.length; i++) {
+      var a = R.answers[i], cls = 'sheet-cell';
+      if (a) cls += ' is-answered';
+      if (a && R.paper[i].answer && String(a).split('').sort().join('') !== String(R.paper[i].answer).split('').sort().join('')) cls += ' is-wrong-cell';
+      if (R.flags[i]) cls += ' is-flagged';
+      cells += '<button type="button" class="' + cls + '" disabled>' + (i + 1) + '</button>';
+    }
+    var host = document.getElementById('ex-report-sheet');
+    if (host) host.innerHTML = cells;
+    syncToastInset();
+  }
+  function openPaper() {
+    var host = document.getElementById('ex-paper-host');
+    if (R.paper.length) {
+      host.innerHTML = R.paper.map(function (q, i) {
+        var a = R.answers[i];
+        var opts = q.options.length ? q.options.map(function (o) {
+          var cls = 'opt';
+          if (a === o[0]) cls += ' is-selected';
+          if (o[0] === q.answer) cls += ' is-correct';
+          return '<button type="button" class="' + cls + '" disabled aria-pressed="' + (a === o[0]) + '">' +
+            '<span class="opt-key">' + o[0] + '</span><span class="opt-text">' + esc(o[1]) + '</span>' +
+            (o[0] === q.answer ? '<span class="opt-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg></span>' : '') + '</button>';
+        }).join('') : '<p class="hint hint-flat">你的作答：' + esc(a || '未答') + '（文字作答）</p>';
+        return '<div class="q-meta"><span>第 ' + (i + 1) + ' 题</span><span>' + esc(q.type) + '</span><span>' + esc(q.chapter) + '</span></div>' +
+          '<h3 class="q-stem">' + esc(q.stem) + '</h3>' +
+          '<div class="opt-list">' + opts + '</div>' +
+          '<div class="wrong-answers"><span class="muted">你的作答 <span class="mono">' + esc(a || '未答') + '</span></span>' +
+          (q.answer ? '<span>标准答案 <span class="mono">' + esc(q.answer) + '</span></span>' : '') +
+          (q.answer ? (a === q.answer ? '<span class="tag ok">正确</span>' : '<span class="tag bad">' + (a ? '错误' : '未答') + '</span>')
+            : '<span class="tag brand">已作答 · 未判分</span>') + '</div>' +
+          '<p class="hint q-explain">解析：' + esc(q.explain) + '</p>';
+      }).join('');
+    } else {
+      host.innerHTML = '<p class="hint hint-flat">本场为示例报告：整卷回看在交卷后由本场题目渲染。</p>';
+    }
+    eeDialog.open('ex-dlg-paper', document.activeElement);
+  }
+  function again() {
+    var s = R.s || {};
+    eeDialog.close(document.getElementById('ex-dlg-reexam'));
+    var ns = S.startSession({
+      kind: 'exam', bankId: s.bankId || 'b_rk', mode: '模考',
+      title: s.title || '系统集成项目管理工程师 · 综合卷',
+      total: R.paper.length || 12, minutes: s.minutes || 120,
+      index: 0, done: 0, answers: {}, flags: {}, remaining: (s.minutes || 120) * 60
+    });
+    location.href = 'exam.html?sid=' + encodeURIComponent(ns.id);
+  }
+
+  /* ---------- 倒计时与三段式 ---------- */
+  function startTicker() {
+    stopTicker();
+    if (R.done) return;
+    timerId = setInterval(function () {
+      if (R.done) { stopTicker(); return; }
+      if (R.s && R.s.unlimited) { paintPhase(); return; }
+      if (R.phase === 'answer') {
+        R.remaining -= 1;
+        if (R.remaining % 15 === 0) persist();
+        paintPhase();
+        if (R.remaining <= 0) {
+          /* CR-31：作答窗口结束 ≠ 会话终止。先进入宽限（正常状态），不是失败 */
+          R.remaining = 0;
+          R.phase = 'grace';
+          R.graceLeft = GRACE;
+          persist();
+          render();
+          eeToast('已到交卷时间，进入 60 秒宽限：答案已停止收录');
+        }
+      } else if (R.phase === 'grace') {
+        R.graceLeft -= 1;
+        paintPhase();
+        if (R.graceLeft <= 0) {
+          /* 宽限结束由服务端收卷并生成报告，不要求用户保持页面打开 */
+          R.phase = 'collected';
+          persist();
+          render();
+          eeToast('宽限已结束，服务端已收卷，报告已生成');
+          confirmSubmit('auto_deadline');
+        }
+      }
+    }, 1000);
+  }
+  function stopTicker() { if (timerId) { clearInterval(timerId); timerId = null; } }
+
+  /* ---------- 抽屉 ---------- */
+  function openDrawer(id) {
+    var scrim = document.getElementById(id + '-scrim');
+    var drawer = document.getElementById(id + '-drawer');
+    if (!drawer) return;
+    drawer._trigger = document.activeElement;
+    if (scrim) scrim.hidden = false;
+    drawer.hidden = false;
+    render();
+    var f = drawer.querySelector('[data-autofocus], button');
+    if (f) f.focus();
+    syncToastInset();
+  }
+  function closeDrawer(id) {
+    var scrim = document.getElementById(id + '-scrim');
+    var drawer = document.getElementById(id + '-drawer');
+    if (!drawer) return;
+    if (scrim) scrim.hidden = true;
+    drawer.hidden = true;
+    var t = drawer._trigger;
+    if (t && t.isConnected) t.focus();
+    syncToastInset();
+  }
+  document.addEventListener('click', function (e) {
+    if (e.target && e.target.id === 'ex-sheet-scrim') closeDrawer('ex-sheet');
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (document.querySelector('dialog[open]')) return;
+    var drawer = document.getElementById('ex-sheet-drawer');
+    if (drawer && !drawer.hidden) closeDrawer('ex-sheet');
+  });
+
+  /* ---------- 静态状态格的答题卡（规格演示，不依赖会话） ---------- */
+  function paintStaticSheets() {
+    var full = [];
+    for (var i = 1; i <= 12; i++) {
+      var cls = 'sheet-cell';
+      if (i <= 10) cls += ' is-answered';
+      if (i === 12) cls += ' is-current is-flagged';
+      if (i === 5 || i === 12) cls += ' is-flagged';
+      full.push('<button type="button" class="' + cls + '" aria-label="第 ' + i + ' 题"' + (i === 12 ? ' aria-current="true"' : '') + '>' + i + '</button>');
+    }
+    var html = full.join('');
+    ['ex-grace-sheet', 'ex-collected-sheet', 'ex-submit-sheet', 'ex-exit-sheet'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.innerHTML = html;
+    });
+  }
+
+  /* ---------- 草稿冲突：两个按钮的后果必须可分辨 ---------- */
+  window.resolveConflict = function (which) {
+    var box = document.getElementById('ex-conflict');
+    if (!box || box.getAttribute('data-resolved')) return;
+    box.setAttribute('data-resolved', which);
+    var keep = which === 'server';
+    box.classList.remove('warn');
+    box.classList.add('ok');
+    box.innerHTML =
+      '<svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg>' +
+      '<div class="notice-body">' +
+      '  <div class="notice-title">冲突已解决</div>' +
+      '  <p>第 4 题按' + (keep ? '服务器答案 B' : '本机答案 C') + '计入；' +
+      (keep ? '本机刚才的修改已放弃，不会覆盖服务器。' : '本机答案已覆盖服务器版本，其他设备下次同步时生效。') + '</p>' +
+      '</div>';
+    eeToast(keep ? '已保留服务器答案 B' : '已使用本机答案 C');
+  };
+
+  /* ---------- 快捷键：浮层打开时统一挂起 ---------- */
+  function overlayOpen() {
+    if (document.querySelector('dialog[open]')) return true;
+    var drawer = document.getElementById('ex-sheet-drawer');
+    if (drawer && !drawer.hidden) return true;
+    return false;
+  }
+  function activePanel() {
+    var panels = document.querySelectorAll('[data-tab-panel]');
+    for (var i = 0; i < panels.length; i++) if (!panels[i].hidden) return panels[i].getAttribute('data-tab-panel');
+    return null;
+  }
+  function switchPanel(panel) {
+    var tab = document.querySelector('.tab[data-panel="' + panel + '"]');
+    if (tab) tab.click();
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') return;
+    if (overlayOpen()) return;
+    if (R.phase !== 'answer' || R.done || !R.s) return;
+    if (activePanel() !== 'ex-run') return;
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    var key = e.key.toUpperCase();
+    var q = R.paper[R.index];
+    if (key >= 'A' && key <= 'H') {
+      var opt = q.options[key.charCodeAt(0) - 65];
+      if (opt) { e.preventDefault(); select(opt[0]); }
+    } else if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+    else if (key === 'B') { e.preventDefault(); toggleFlag(); }
+  });
+
+  /* ---------- toast 位置：抬到底部操作条之上 ---------- */
+  function syncToastInset() {
+    var panel = document.querySelector('[data-tab-panel]:not([hidden])');
+    var foot = panel ? panel.querySelector('.exam-foot') : null;
+    var h = foot ? foot.getBoundingClientRect().height : 0;
+    document.documentElement.style.setProperty('--toast-inset', h + 'px');
+  }
+  window.addEventListener('resize', syncToastInset);
+  document.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('.tab')) setTimeout(syncToastInset, 0);
+  });
+
+  init();
+
+  return {
+    init: init, select: select, next: next, prev: prev, jumpTo: jumpTo, toggleFlag: toggleFlag,
+    exit: exit, abandon: abandon, openSubmit: openSubmit, jumpToBlank: jumpToBlank,
+    confirmSubmit: confirmSubmit, renderReport: renderReport, openPaper: openPaper, again: again,
+    openDrawer: openDrawer, closeDrawer: closeDrawer, switchPanel: switchPanel
+  };
+})();
+</script>
+</body>
+</html>

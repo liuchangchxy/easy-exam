@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>导入闭环 · 流程原型 · EasyExam 设计规范</title>
+<link rel="stylesheet" href="../../assets/ee.css">
+<style>/* ===== 流程原型骨架（本页特有布局，未重定义令牌或控件） ===== */
+.doc-page{  max-width: 1100px; margin: 0 auto; padding: 28px 24px 60px;  }
+.steps .step:disabled{  cursor: default; opacity: .5;  }
+/* 不适用的步骤：来源格式用不到这一步时标「不适用」，与「已完成」区分 */
+.steps .step.is-skip{  color: var(--ink-4);  }
+.steps .step.is-skip .step-n{  background: var(--surface-2); border-color: var(--line); color: var(--ink-4);  }
+.steps .step.is-skip .step-name{  text-decoration: line-through;  }
+/* ===== 本页布局助手 ===== */
+.flow-stack{  display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0;  }
+/* 导入规则：编辑式条目，行间细线（不用卡片） */
+.rule-list{  display: flex; flex-direction: column;  }
+.rule-list .od-row-top{  padding: var(--sp-3) 0; border-bottom: 1px solid var(--line);  }
+.rule-list .od-row-top:last-child{  border-bottom: 0;  }
+.max-420{  max-width: 420px;  }
+.max-320{  max-width: 320px;  }
+.dup-index{  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-4);  }
+/* 向导步骤 = 编辑块：序号 + 标题 + 细线 + 底部操作条，不包卡片（与导入屏 .step-block 同值） */
+.step-block{  padding: var(--sp-5) 0 var(--sp-2);  }
+.step-block > .panel-head, .step-block > .step-head{  padding: 0 0 var(--sp-4); border-bottom: 1px solid var(--line);  }
+.step-block > .panel-body{  padding: var(--sp-5) 0 0;  }
+.step-head{  display: flex; align-items: flex-start; gap: var(--sp-3); margin-bottom: var(--sp-4);  }
+.step-no{  font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink-4); flex: none; padding-top: 2px;  }
+.step-title{  font-family: var(--font-serif); font-size: var(--text-lg); font-weight: 500;  }
+.step-sub{  font-size: var(--text-xs); color: var(--ink-3); margin-top: 2px;  }
+.mapping-grid{  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4);  }
+.format-row{  display: flex; flex-wrap: wrap; gap: var(--sp-2);  }
+/* 文件拖放区 */
+.file-drop{  position: relative; display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-6) var(--sp-5); border: 1px dashed var(--line-strong); border-radius: var(--r-md); background: var(--surface-2); cursor: pointer;  }
+.file-drop:hover{  border-color: var(--ink-3);  }
+.file-drop.is-dragging{  border-color: var(--brand); background: var(--brand-soft);  }
+.file-drop.has-file{  border-style: solid; border-color: var(--brand-line); background: var(--brand-soft);  }
+.file-drop .od-icon{  --od-icon-size: 20px; color: var(--ink-3); flex: none;  }
+.file-main{  flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px;  }
+.file-name{  font-size: var(--text-sm); color: var(--ink);  }
+.file-meta{  font-size: var(--text-xs); color: var(--ink-3);  }
+.file-input-hidden{  position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;  }
+.source-modes{  margin-bottom: var(--sp-4);  }
+/* 导入任务 */
+.job-bar{  height: 4px; background: var(--surface-3); border-radius: 2px; overflow: hidden;  }
+.job-bar i{  display: block; height: 100%; background: var(--brand); border-radius: 2px; transition: width var(--dur-base) var(--ease-out);  }
+.job-meta{  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-3); margin-top: var(--sp-2);  }
+.leave-backdrop{  position: relative;  }
+.leave-dim{  opacity: .55;  }
+.dup-stem{  font-family: var(--font-serif); font-size: var(--text-sm); line-height: 1.6;  }
+@media (max-width: 768px){ .mapping-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px){
+  .steps .step-name { display: none; }
+  .steps { gap: var(--sp-1); }
+  .flow-title { font-size: var(--text-2xl); }
+}</style>
+</head>
+<body>
+<a class="skip-link" href="#flowStage">跳到主内容</a>
+<div class="doc-page">
+  <header class="flow-head">
+    <div class="flow-exits" data-spec>
+      <a class="btn btn-sm btn-quiet" href="../../product.html">完整产品</a>
+      <a class="btn btn-sm btn-quiet" href="../../index.html">设计规范</a>
+    </div>
+    <div>
+      <p class="flow-eyebrow" data-spec>流程原型 · 题库域</p>
+      <h1 class="flow-title">导入闭环</h1>
+      <p class="flow-sub" data-spec>选择题库 → 来源与格式 → 表格字段映射 / PDF 预检与校正 → 重复题处理策略 → 后台作业 → 离开确认</p>
+    </div>
+    <div class="page-actions">
+      <button type="button" class="btn btn-quiet btn-sm" data-act="leave">离开导入</button>
+    </div>
+  </header>
+
+  <div class="flow-stepbar">
+    <div class="steps" id="flowSteps" role="group" aria-label="导入闭环步骤"></div>
+    <p class="flow-caption" id="flowCaption" aria-live="polite"></p>
+  </div>
+
+  <main class="flow-stage" id="flowStage"></main>
+
+  <footer class="flow-foot">
+    <button type="button" class="btn btn-quiet" id="flowPrev">上一步</button>
+    <span class="flow-note" id="flowNote"></span>
+    <button type="button" class="btn btn-primary" id="flowNext">下一步</button>
+  </footer>
+</div>
+
+<script src="../../assets/icons.js"></script>
+<script src="../../assets/store.js"></script>
+<script src="../../assets/i18n.js"></script>
+<script src="../../assets/nav.js"></script>
+<script src="../../assets/spec-boot.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- 数据（题库与题目来自共享状态，导入结果真实落地） ---------- */
+  var S = window.eeStore;
+  var HEADERS = ['题干', '答案', '题型', '解析', '难度', '标签', '选项合并列'];
+  var SAMPLE = [
+    ['OSI 的（ ）不适合提供相应的安全服务。', 'B', '单选题', '会话层位于 OSI 第五层，不提供安全服务。', '3', '网络,安全', 'A.传输层|B.会话层|C.网络层|D.应用层'],
+    ['关于范围基准，以下说法不正确的是（）。', 'C', '单选题', '范围基准是规划阶段输出的组件。', '2', '范围,管理', 'A.范围说明书|B.WBS|C.范围基准|D.进度基准'],
+    ['当出现异常时软件需要有持续提供服务，属于（）。', 'A', '单选题', '韧性指出现异常时仍能持续提供服务。', '2', '架构,质量', 'A.韧性|B.弹性|C.架构持续演进|D.服务化']
+  ];
+  /* 与题库逐字相同的题干才算重复（与 screens/import.html 同一套判定） */
+  function sampleItems() {
+    return SAMPLE.map(function (r) {
+      return { stem: r[0], type: r[2], difficulty: r[4] === '3' ? '进阶' : '基础', chapter: '导入' };
+    });
+  }
+  function bankList() { return S.banks({ archived: false }); }
+  function bank() { return S.bank(state.bankId) || bankList()[0]; }
+  function dupStems() {
+    var existing = S.questions(state.bankId).map(function (q) { return q.stem; });
+    return SAMPLE.map(function (r) { return r[0]; }).filter(function (stem) { return existing.indexOf(stem) > -1; });
+  }
+  var MAP_FIELDS = [
+    { key: 'stem', label: '题干', required: true },
+    { key: 'answer', label: '答案', required: true },
+    { key: 'type', label: '题型', auto: true },
+    { key: 'explanation', label: '解析' },
+    { key: 'difficulty', label: '难度' },
+    { key: 'tags', label: '标签' },
+    { key: 'options', label: '选项合并列' }
+  ];
+  var FORMATS = ['.xlsx', '.csv', '.json', '.md / .txt', '.pdf'];
+  var RULES = [
+    '支持 .xlsx、.csv、.json、.md、.txt 与 .pdf。',
+    '表格与文本类走字段映射，PDF 走预检与人工校正；用不到的一步标「不适用」。',
+    '重复题目不会静默覆盖，必须选择跳过重复、作为新题导入或合并到已有题。',
+    'PDF 识别不确定的行会停在草稿里，不会自动写入。',
+    '导入会生成新题目版本；历史作答仍绑定原版本。'
+  ];
+
+  var state = {
+    step: 0,
+    bankId: 'b_acc',
+    sourceMode: 'file',
+    file: null,
+    pasted: '',
+    dragging: false,
+    mapping: { stem: '0', answer: '1', type: '2', explanation: '3', difficulty: '', tags: '', options: '' },
+    delimiter: 'prefix',
+    strategy: '',
+    pdfReason: '',
+    job: { status: 'idle', done: 0, total: SAMPLE.length, skipped: 0, job: null },
+    leaveChoice: null,
+    leaveFrom: 4,
+    draftId: null,
+    timerId: null
+  };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function ico(name, size) { return window.eeIcon ? window.eeIcon(name, size) : ''; }
+
+  function canImport() { var b = bank(); return !!(b && !b.readonly && !b.shared) && S.can('bank.import'); }
+  function missingFields() {
+    return MAP_FIELDS.filter(function (f) { return state.mapping[f.key] === ''; }).map(function (f) { return f.label; });
+  }
+  function requiredMissing() {
+    return MAP_FIELDS.filter(function (f) { return f.required && state.mapping[f.key] === ''; }).map(function (f) { return f.label; });
+  }
+  function strategyLabel(v) {
+    return { skip: '跳过重复', new: '作为新题导入', merge: '合并到已有题' }[v] || '未选择';
+  }
+  /* 草稿来自共享状态：同一文件 + 同一题库只留一份 */
+  function storeDraft() {
+    var list = S.drafts();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].bankId === state.bankId && list[i].file === (state.file ? state.file.name : '粘贴的文本')) return list[i];
+    }
+    return null;
+  }
+  function saveDraft() {
+    var name = state.file ? state.file.name : '粘贴的文本';
+    S.drafts().forEach(function (d) {
+      if (d.bankId === state.bankId && d.file === name) S.removeDraft(d.id);
+    });
+    var d = S.addDraft({ bankId: state.bankId, file: name, step: state.leaveFrom == null ? 5 : state.leaveFrom });
+    state.draftId = d.id;
+    return d;
+  }
+  function clearDraft() {
+    var name = state.file ? state.file.name : '粘贴的文本';
+    S.drafts().forEach(function (d) {
+      if (d.bankId === state.bankId && d.file === name) S.removeDraft(d.id);
+    });
+    state.draftId = null;
+  }
+
+  /* ---------- 步骤 0：选择题库 ---------- */
+  function renderBank() {
+    var opts = bankList().map(function (b) {
+      var mark = b.readonly || b.shared ? '（只读）' : '';
+      return '<option value="' + b.id + '"' + (b.id === state.bankId ? ' selected' : '') + '>' + esc(b.name) + mark + ' · ' + b.count + ' 题</option>';
+    }).join('');
+
+    var draft = storeDraft();
+    var draftBanner = draft
+      ? '<div class="notice warn">' + ico('draft', '15px') +
+        '<div class="notice-body"><span class="notice-title">有未完成的导入草稿</span>' +
+        '停在「' + esc(STEPS[draft.step] ? STEPS[draft.step].name : '来源') + '」，可以继续，或删掉重新开始。' +
+        '<div class="notice-actions">' +
+        '<button type="button" class="btn btn-sm btn-primary" data-act="resume-draft">继续上次导入</button>' +
+        '<button type="button" class="btn btn-sm btn-quiet" data-act="delete-draft">删除草稿</button>' +
+        '</div></div></div>'
+      : '';
+
+    return '' +
+      '<div class="step-block">' +
+      '  <div class="step-head"><span class="step-no">01</span>' +
+      '    <div><div class="step-title">选择题库</div>' +
+      '    <div class="step-sub">目标题库是整张向导的上下文，每一步都可见</div></div>' +
+      '  </div>' +
+      '  <div class="flow-stack">' +
+      draftBanner +
+      '    <label class="field max-420">' +
+      '      <span class="label">目标题库</span>' +
+      '      <select class="select" data-act="set-bank">' + opts + '</select>' +
+      '      <span class="hint">只读库不能写入题目</span>' +
+      '    </label>' +
+      (canImport() ? '' :
+        '    <div class="notice warn">' + ico('lock', '15px') +
+        '      <div class="notice-body"><span class="notice-title">当前题库只读：你不是管理员或编辑者，无法导入题目。</span><br>' +
+        '      切换到你有编辑权限的题库后才能继续。</div>' +
+        '    </div>') +
+      '    <div class="notice info">' + ico('info', '15px') + '<div class="notice-body">先预览，确认字段对应后再导入。</div></div>' +
+      '  </div>' +
+      '</div>' +
+      '<section class="section">' +
+      '  <div class="section-head"><h2 class="section-title">导入规则</h2></div>' +
+      '  <div class="rule-list">' +
+      RULES.map(function (r) { return '<div class="od-row-top">' + ico('check', '14px') + '<span class="hint">' + esc(r) + '</span></div>'; }).join('') +
+      '  </div>' +
+      '</section>';
+  }
+
+  /* ---------- 步骤 1：来源 ---------- */
+  function renderSource() {
+    var modeSeg = '' +
+      '<div class="segmented source-modes" role="radiogroup" aria-label="来源方式">' +
+      '  <button type="button" class="segment" role="radio" aria-checked="' + (state.sourceMode === 'file') + '" data-act="mode-file">本地文件</button>' +
+      '  <button type="button" class="segment" role="radio" aria-checked="' + (state.sourceMode === 'paste') + '" data-act="mode-paste">粘贴文本</button>' +
+      '</div>';
+
+    var fileZone;
+    if (state.sourceMode === 'file') {
+      fileZone = '' +
+        '<div class="file-drop' + (state.dragging ? ' is-dragging' : '') + (state.file ? ' has-file' : '') + '" data-act="dz-over" role="button" tabindex="0" aria-label="拖入文件，或选择本地文件">' +
+        '  ' + ico(state.file ? 'file-text' : 'inbox', '20px') +
+        '  <span class="file-main">' +
+        '    <span class="file-name">' + (state.file ? esc(state.file.name) : '拖入文件，或选择本地文件') + '</span>' +
+        '    <span class="file-meta">' + (state.file ? '已选择 · ' + state.file.size + ' KB · 12 行' : '表格、文本与 PDF 题集') + '</span>' +
+        '  </span>' +
+        '  <button type="button" class="btn btn-sm" data-act="pick-file">' + (state.file ? '更换' : '选择文件') + '</button>' +
+        '  <input class="file-input-hidden" type="file" accept=".xlsx,.csv,.json,.md,.markdown,.txt,.pdf" data-act="file-input" aria-hidden="true" tabindex="-1">' +
+        '</div>' +
+        '<div class="format-row">' + FORMATS.map(function (f) { return '<span class="tag mono">' + f + '</span>'; }).join('') + '</div>' +
+        '<p class="hint">演示用：<button type="button" class="link-btn" data-act="demo-file">使用示例文件「软考真题整理.csv」</button>，或 <button type="button" class="link-btn" data-act="demo-pdf">「系统集成历年真题扫描版.pdf」</button>，也可以直接把文件拖到上面的区域。</p>';
+    } else {
+      fileZone = '' +
+        '<p class="hint">直接粘贴 Markdown、纯文本或 JSON 题目，预览后再导入。</p>' +
+        '<label class="field"><span class="label">粘贴文本</span>' +
+        '  <textarea class="textarea" rows="9" placeholder="在此粘贴题目…" data-act="paste">' + esc(state.pasted) + '</textarea>' +
+        '</label>' +
+        '<span id="pasteStatus">' + (state.pasted.trim() ? '<div class="notice ok">' + ico('check', '15px') + '<div class="notice-body">文本预检通过：识别到 12 行。</div></div>' : '') + '</span>';
+    }
+
+    return '' +
+      '<div class="step-block">' +
+      '  <div class="step-head"><span class="step-no">02</span>' +
+      '    <div><div class="step-title">来源</div>' +
+      '    <div class="step-sub">' + esc(bank().name) + ' · ' + bank().count + ' 题</div></div>' +
+      '    <button type="button" class="btn btn-sm btn-quiet" data-act="to-bank">更换来源</button>' +
+      '  </div>' +
+      '  <div class="flow-stack">' + modeSeg + fileZone + '</div>' +
+      '</div>';
+  }
+
+  /* ---------- 步骤 2：校对 ---------- */
+  function renderCheck() {
+    var selects = MAP_FIELDS.map(function (f) {
+      var val = state.mapping[f.key];
+      var opts = '<option value=""' + (val === '' ? ' selected' : '') + '>未对应</option>';
+      if (f.auto) opts += '<option value="auto"' + (val === 'auto' ? ' selected' : '') + '>自动判断</option>';
+      opts += HEADERS.map(function (h, i) {
+        return '<option value="' + i + '"' + (val === String(i) ? ' selected' : '') + '>' + i + ': ' + esc(h) + '</option>';
+      }).join('');
+      return '<label class="field"><span class="label">' + esc(f.label) + (f.required ? '<span class="req">*</span>' : '') + '</span>' +
+        '<select class="select" data-act="map" data-key="' + f.key + '">' + opts + '</select></label>';
+    }).join('');
+
+    var delimiter = state.mapping.options !== '' ? '' +
+      '<label class="field"><span class="label">选项分隔</span>' +
+      '  <select class="select" data-act="set-delimiter">' +
+      '    <option value="prefix"' + (state.delimiter === 'prefix' ? ' selected' : '') + '>按 A/B/C 前缀</option>' +
+      '    <option value=";"' + (state.delimiter === ';' ? ' selected' : '') + '>分号 ;</option>' +
+      '    <option value="；"' + (state.delimiter === '；' ? ' selected' : '') + '>中文分号 ；</option>' +
+      '    <option value="|"' + (state.delimiter === '|' ? ' selected' : '') + '>竖线 |</option>' +
+      '  </select></label>' : '';
+
+    var missing = missingFields();
+    var table = '' +
+      '<div class="dtable-wrap"><table class="dtable">' +
+      '  <thead><tr>' + HEADERS.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead>' +
+      '  <tbody>' + SAMPLE.map(function (row) {
+        return '<tr>' + row.map(function (cell, i) {
+          return '<td data-label="' + esc(HEADERS[i]) + '">' + esc(cell) + '</td>';
+        }).join('') + '</tr>';
+      }).join('') + '</tbody>' +
+      '</table></div>';
+
+    return '' +
+      '<div class="step-block">' +
+      '  <div class="step-head"><span class="step-no">03</span>' +
+      '    <div><div class="step-title">字段对应</div>' +
+      '    <div class="step-sub">自动识别的列可以逐项调整。题干与答案是必填。</div></div>' +
+      '  </div>' +
+      '  <div class="mapping-grid">' + selects + delimiter + '</div>' +
+      (missing.length
+        ? '  <div class="notice warn mt-4">' + ico('alert-triangle', '15px') +
+          '    <div class="notice-body">还没有对应：' + esc(missing.join('、')) + '</div></div>'
+        : '') +
+      '  <div class="flow-stack-sm mt-5">' +
+      '    <span class="rule-label">样例行 · 3 行</span>' + table +
+      '  </div>' +
+      '</div>';
+  }
+
+  /* ---------- 步骤 3：重复项 ---------- */
+  function renderDup() {
+    var dups = dupStems();
+    var list = dups.map(function (s, i) {
+      return '<div class="list-row static">' +
+        '  <span class="dup-index">' + String(i + 1).padStart(2, '0') + '</span>' +
+        '  <span class="list-main"><span class="dup-stem">' + esc(s) + '</span>' +
+        '  <span class="list-meta"><span>与题库中已有题目题干相同</span></span></span>' +
+        '</div>';
+    }).join('');
+
+    return '' +
+      '<div class="step-block">' +
+      '  <div class="step-head"><span class="step-no">05</span>' +
+      '    <div><div class="step-title">重复题处理策略</div>' +
+      '    <div class="step-sub">同一题库中已有 ' + dups.length + ' 道题干相同的题。选择处理方式后再次导入。</div></div>' +
+      '  </div>' +
+      (dups.length ? '<div class="list">' + list + '</div>' :
+        '<div class="notice ok">' + ico('check', '15px') + '<div class="notice-body">这个题库里没有与本次文件题干相同的题，可以直接导入。</div></div>') +
+      '  <div class="flow-stack mt-4">' +
+      '    <label class="field max-320">' +
+      '      <span class="label">处理方式<span class="req">*</span></span>' +
+      '      <select class="select' + (state.strategy === '' ? ' is-error' : '') + '" data-act="set-strategy">' +
+      '        <option value="" disabled' + (state.strategy === '' ? ' selected' : '') + '>先选择处理方式</option>' +
+      '        <option value="skip"' + (state.strategy === 'skip' ? ' selected' : '') + '>跳过重复</option>' +
+      '        <option value="new"' + (state.strategy === 'new' ? ' selected' : '') + '>作为新题导入</option>' +
+      '        <option value="merge"' + (state.strategy === 'merge' ? ' selected' : '') + '>合并到已有题</option>' +
+      '      </select>' +
+      (state.strategy === '' ? '<span class="field-err">先选择重复题的处理方式。</span>' : '<span class="hint">重复题目不会静默覆盖。</span>') +
+      '    </label>' +
+      '  </div>' +
+      '</div>';
+  }
+
+  /* ---------- 步骤 4：结果 ---------- */
+  function renderResult() {
+    var job = state.job;
+    var pct = job.total ? Math.round(job.done / job.total * 100) : 0;
+
+    var body;
+    if (job.status === 'running') {
+      body = '' +
+        '  <div class="flow-stack">' +
+        '    <div class="job-bar"><i style="width:' + pct + '%"></i></div>' +
+        '    <div class="job-meta">已导入 ' + job.done + ' / ' + job.total + (dupStems().length ? '（其中 ' + dupStems().length + ' 道与题库重复）' : '') + '</div>' +
+        '    <div class="notice info">' + ico('info', '15px') +
+        '      <div class="notice-body">任务进行中，可以离开本页；任务会继续，并显示在题库的导入记录里。</div></div>' +
+        '    <div class="flow-actions">' +
+        '      <button type="button" class="btn btn-danger" data-act="cancel-job">' + ico('x', '14px') + '取消导入</button>' +
+        '    </div>' +
+        '  </div>';
+    } else if (job.status === 'cancelled') {
+      body = '' +
+        '  <div class="flow-stack">' +
+        '    <div class="notice bad">' + ico('alert-triangle', '15px') +
+        '      <div class="notice-body">已取消导入。已写入的 ' + job.done + ' 道题保留在题库中。</div></div>' +
+        '    <div class="job-bar"><i style="width:' + pct + '%"></i></div>' +
+        '    <div class="job-meta">已导入 ' + job.done + ' / ' + job.total + '</div>' +
+        '    <div class="flow-actions">' +
+        '      <button type="button" class="btn btn-primary" data-act="retry-job">重试</button>' +
+        '    </div>' +
+        '  </div>';
+    } else if (job.status === 'done') {
+      /* 收据如实呈现字段映射 / 重复策略的选择：处理方式决定写入数与跳过重复 / 合并数 */
+      var r = job.job;
+      var dupLine = state.strategy === 'new'
+        ? '<span class="kv-key">重复题目</span><span class="kv-val">作为新题导入，未跳过</span>'
+        : '<span class="kv-key">' + (state.strategy === 'merge' ? '已合并' : '跳过重复') + '</span><span class="kv-val">' + (state.strategy === 'merge' ? r.merged : r.skipped) + ' 道与题库重复</span>';
+      body = '' +
+        '  <div class="flow-stack">' +
+        '    <div class="notice ok">' + ico('check', '15px') + '<div class="notice-body">已写入 ' + r.written + ' 道题。</div></div>' +
+        '    <div class="kv">' +
+        '      <span class="kv-key">任务</span><span class="kv-val mono">' + esc(r.id) + '</span>' +
+        '      <span class="kv-key">导入到</span><span class="kv-val">' + esc(bank().name) + '</span>' +
+        '      <span class="kv-key">来源</span><span class="kv-val">' + (state.file ? esc(state.file.name) : '粘贴的文本') + '</span>' +
+        '      <span class="kv-key">处理方式</span><span class="kv-val">' + esc(strategyLabel(state.strategy)) + '</span>' +
+        '      <span class="kv-key">读取</span><span class="kv-val mono">' + r.total + ' 行</span>' +
+        '      <span class="kv-key">已写入</span><span class="kv-val mono">' + r.written + ' 道题</span>' +
+        dupLine +
+        '    </div>' +
+        '    <div class="flow-actions">' +
+        '      <a class="btn btn-primary" href="../screens/workspace.html?bank=' + encodeURIComponent(state.bankId) + '">查看题库</a>' +
+        '      <button type="button" class="btn" data-act="again">再导入一批</button>' +
+        '      <span class="hint">题库现有 ' + S.questions(state.bankId).length + ' 道题。</span>' +
+        '    </div>' +
+        '  </div>';
+    } else {
+      body = '<div class="flow-stack"><div class="skeleton sk-block"></div><div class="skeleton sk-line"></div></div>';
+    }
+
+    var title = job.status === 'done' ? '导入完成' : (job.status === 'cancelled' ? '已取消导入' : '正在导入');
+    var sub = job.status === 'done' ? '已写入 ' + job.done + ' 道题。' : '已导入 ' + job.done + ' / ' + job.total;
+
+    return '' +
+      '<div class="step-block">' +
+      '  <div class="step-head"><span class="step-no">06</span>' +
+      '    <div><div class="step-title">' + title + '</div><div class="step-sub">' + sub + '</div></div>' +
+      '    <span class="tag ' + (job.status === 'done' ? 'ok' : (job.status === 'running' ? 'warn' : 'bad')) + '">' +
+      (job.status === 'done' ? '已导入' : (job.status === 'running' ? '导入中' : '已取消')) + '</span>' +
+      '  </div>' + body +
+      '</div>';
+  }
+
+  /* ---------- 步骤 5：离开确认 ---------- */
+  function renderLeave() {
+    /* 背后按用户离开时所处的步骤呈现，而不是写死「导入完成」 */
+    var fromIdx = Math.max(0, Math.min(STEPS.length - 1, state.leaveFrom == null ? 5 : state.leaveFrom));
+    var behind = '' +
+      '<div class="step-block leave-dim">' +
+      STEPS[fromIdx].render() +
+      '</div>';
+
+    var dlg = '' +
+      '<dialog class="dlg" id="dlgLeave" aria-labelledby="dlgLeaveTitle">' +
+      '  <div class="dlg-head">' +
+      '    <div class="dlg-head-text">' +
+      '      <p class="dlg-eyebrow">导入向导</p>' +
+      '      <h2 class="dlg-title" id="dlgLeaveTitle">离开导入？</h2>' +
+      '    </div>' +
+      '    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭">' + ico('x', '15px') + '</button>' +
+      '  </div>' +
+      '  <div class="dlg-body">' +
+      '    <p class="hint">当前进度会保存为草稿，可以稍后从导入记录继续。</p>' +
+      '  </div>' +
+      '  <div class="dlg-foot">' +
+      '    <button type="button" class="btn btn-quiet" data-dlg-close>继续编辑</button>' +
+      '    <button type="button" class="btn btn-danger" data-act="leave-discard">放弃并离开</button>' +
+      '    <button type="button" class="btn btn-primary" data-act="leave-later">稍后继续</button>' +
+      '  </div>' +
+      '</dialog>';
+
+    var outcome = state.leaveChoice === 'later'
+      ? '<div class="notice ok">' + ico('check', '15px') + '<div class="notice-body">草稿已保存，可稍后从导入记录继续；本页不会再写入题库。</div></div>'
+      : (state.leaveChoice === 'discard'
+        ? '<div class="notice bad">' + ico('alert-triangle', '15px') + '<div class="notice-body">已放弃本次导入，草稿已删除，题库内容不变。</div></div>'
+        : '');
+
+    return '' +
+      '<div class="flow-stack leave-backdrop">' + behind +
+      '  <div class="step-block">' +
+      '    <div class="step-head"><span class="step-no">07</span>' +
+      '      <div><div class="step-title">离开确认</div><div class="step-sub">三选：继续编辑 / 稍后继续 / 放弃并离开</div></div>' +
+      '    </div>' +
+      '    <div class="flow-stack">' + outcome +
+      '      <div class="flow-actions">' +
+      '        <button type="button" class="btn" data-act="reopen-leave">重新打开离开确认</button>' +
+      '        <button type="button" class="btn btn-quiet" data-act="back-result">返回结果</button>' +
+      '      </div>' +
+      '    </div>' +
+      '  </div>' +
+      '</div>' + dlg;
+  }
+
+  /* ---------- 步骤 3：PDF 预检与人工校正 ---------- */
+  var PDF_CANDS = [
+    { stem: '项目管理的临时性意味着项目（ ）。', opts: ['A. 持续时间一定很短', 'B. 有明确的起点与终点', 'C. 成果不具备唯一性', 'D. 不需要逐步完善'], conf: '高' },
+    { stem: '（此处为页眉残留：系统集成项目管理工程师 · 历年真题）项目的范围基准是规划阶段输出的组合，包括（ ）。', opts: ['A. 范围说明书', 'B. WBS', 'C. WBS 词典'], conf: '低' }
+  ];
+  function renderPdf() {
+    var cands = PDF_CANDS.map(function (c, i) {
+      var flagged = c.conf === '低';
+      return '<div class="list-row static' + (flagged ? ' is-active' : '') + '">' +
+        '  <span class="dup-index">候选 ' + (i + 1) + '</span>' +
+        '  <span class="list-main"><span class="dup-stem">' + esc(c.stem) + '</span>' +
+        '    <span class="list-meta"><span class="tag ' + (flagged ? 'warn' : 'plain') + '">置信度 ' + c.conf + '</span>' +
+        '      ' + c.opts.map(function (o) { return '<span>' + esc(o) + '</span>'; }).join(' · ') + '</span></span>' +
+        '  <span class="list-side">' +
+        '    <button type="button" class="btn btn-sm btn-quiet" data-act="pdf-merge">合并到上一条</button>' +
+        '    <button type="button" class="btn btn-sm btn-quiet" data-act="pdf-split">拆分</button>' +
+        '    <button type="button" class="btn btn-sm btn-danger" data-act="pdf-drop">删除</button>' +
+        '  </span>' +
+        '</div>';
+    }).join('');
+
+    return '' +
+      '<div class="step-block">' +
+      '  <div class="step-head"><span class="step-no">04</span>' +
+      '    <div><div class="step-title">PDF 预检与人工校正</div>' +
+      '    <div class="step-sub">版式常把一道题断成两段、把页眉混进选项；预检只给候选，合并、拆分、删除都由你确认</div></div>' +
+      '    <span class="tag warn">1 条待确认</span>' +
+      '  </div>' +
+      '  <div class="list">' + cands + '</div>' +
+      '  <label class="field max-320 mt-4">' +
+      '    <span class="label">待确认项的原因<span class="req">*</span></span>' +
+      '    <select class="select" data-act="pdf-reason">' +
+      '      <option value="">选择原因</option>' +
+      '      <option>版式断裂</option><option>识别置信度低</option><option>题干不完整</option>' +
+      '    </select>' +
+      '    <span class="hint">没有原因就不能进入下一步——避免把存疑内容静默写进题库。</span>' +
+      '  </label>' +
+      '</div>';
+  }
+
+  /* ---------- 步骤定义 ---------- */
+  var STEPS = [
+    { id: 'bank', name: '选择题库', render: renderBank, nextLabel: '下一步', nextDisabled: function () { return !canImport(); }, note: '只读库给出可读原因并禁用下一步。' },
+    { id: 'source', name: '来源与格式', render: renderSource, nextLabel: '下一步', nextDisabled: function () { return !hasSource(); }, note: '拖放或选择文件，也可切换到粘贴模式；格式决定下一步走字段映射还是 PDF 预检。' },
+    { id: 'check', name: '表格字段映射', render: renderCheck, nextLabel: '下一步', nextDisabled: function () { return requiredMissing().length > 0; }, note: '列映射可逐项调整；缺失字段以 warn 呈现。' },
+    { id: 'pdf', name: 'PDF 预检与校正', render: renderPdf, nextLabel: '下一步', nextDisabled: function () { return !state.pdfReason; }, note: '预检只给候选；不确定项必须给原因才能继续。' },
+    { id: 'dup', name: '重复题处理策略', render: renderDup, nextLabel: '按此处理导入', nextDisabled: function () { return state.strategy === ''; }, note: '重复题必须显式选择处理方式。' },
+    { id: 'result', name: '后台作业', render: renderResult, nextLabel: '离开导入', note: '任务运行中：上一步被锁，可离开本页。', lockBack: function () { return state.job.status === 'running'; } },
+    { id: 'leave', name: '离开确认', render: renderLeave, nextLabel: '重新开始', note: '离开前三选；稍后继续会存草稿。' }
+  ];
+  /* 来源格式决定第 3 / 4 步哪一个适用：表格与文本走字段映射，PDF 走预检校正 */
+  function isPdfFile() { return /\.pdf$/i.test(state.file ? state.file.name : ''); }
+  function stepApplies(id) {
+    if (id === 'check') return !isPdfFile();
+    if (id === 'pdf') return isPdfFile();
+    return true;
+  }
+  /* 来源步的下一步：落到本次适用的那一步 */
+  function mapStepIndex() { return isPdfFile() ? 3 : 2; }
+
+  function hasSource() {
+    return state.sourceMode === 'file' ? !!state.file : state.pasted.trim().length > 0;
+  }
+
+  /* ---------- 状态机 ---------- */
+  var stage = document.getElementById('flowStage');
+  var stepsOl = document.getElementById('flowSteps');
+  var caption = document.getElementById('flowCaption');
+  var prevBtn = document.getElementById('flowPrev');
+  var nextBtn = document.getElementById('flowNext');
+  var noteEl = document.getElementById('flowNote');
+
+  function render() {
+    var step = STEPS[state.step];
+    var lockBack = typeof step.lockBack === 'function' ? step.lockBack() : false;
+    /* 结果步的前置条件：有来源、必填列已对应、重复策略已选——
+       步骤条不能绕过这些校验直接跳进结果 */
+    var resultReady = hasSource() && requiredMissing().length === 0 && state.strategy !== '';
+    var html = '';
+    for (var i = 0; i < STEPS.length; i++) {
+      var s = STEPS[i];
+      var cls = 'step';
+      if (i === state.step) cls += ' is-active';
+      if (i < state.step) cls += ' is-done';
+      var locked = lockBack && i < state.step;
+      var blockedResult = i === 5 && !resultReady && state.step !== 5;
+      /* 本次来源格式用不到的步骤：标「不适用」并禁用，不假装走过 */
+      var notApplies = !stepApplies(s.id);
+      if (notApplies) cls += ' is-skip';
+      var disabled = locked || blockedResult || notApplies;
+      var title = locked ? '任务进行中，先取消或等待完成'
+        : (blockedResult ? '先选好来源、必填列与重复题处理方式，才能进入后台作业'
+          : (notApplies ? '本次来源格式不适用这一步' : ''));
+      html += '<button type="button" class="' + cls + '" data-goto="' + i + '"' + (i === state.step ? ' aria-current="step"' : '') + (disabled ? ' disabled title="' + esc(title) + '"' : '') + '>' +
+        '<span class="step-n">' + (i < state.step ? ico('check', '11px') : (i + 1)) + '</span>' +
+        '<span class="step-name">' + esc(s.name) + '</span></button>';
+      if (i < STEPS.length - 1) html += '<span class="step-line" aria-hidden="true"></span>';
+    }
+    stepsOl.innerHTML = html;
+
+    stage.innerHTML = step.render();
+    caption.innerHTML = '当前第 <b>' + (state.step + 1) + '</b> 步 / 共 <b>' + STEPS.length + '</b> 步 · ' + esc(step.name);
+
+    prevBtn.disabled = state.step === 0 || lockBack;
+    nextBtn.textContent = typeof step.nextLabel === 'function' ? step.nextLabel() : step.nextLabel;
+    nextBtn.disabled = typeof step.nextDisabled === 'function' ? step.nextDisabled() : !!step.nextDisabled;
+    noteEl.textContent = lockBack
+      ? '任务进行中，上一步已锁；可以离开本页，任务会继续。'
+      : (typeof step.note === 'function' ? step.note() : (step.note || ''));
+
+    if (step.afterRender) step.afterRender();
+  }
+
+  function go(n) {
+    var prev = state.step;
+    state.step = Math.max(0, Math.min(STEPS.length - 1, n));
+    if (state.step === 6) state.leaveFrom = prev;
+    /* 先启动任务再渲染：进入结果步的第一帧就是运行态，导航同步锁定 */
+    if (state.step === 5 && prev !== 5) startJob();
+    render();
+    /* 进入离开确认步就打开三选对话框：点「离开导入」应当直接看到选择，
+       而不是再让用户点一次「重新打开离开确认」 */
+    if (state.step === 6 && prev !== 6) {
+      var dlg = document.getElementById('dlgLeave');
+      if (dlg && !dlg.open) window.eeDialog.open('dlgLeave');
+    }
+    stage.scrollIntoView({ block: 'nearest' });
+  }
+
+  prevBtn.addEventListener('click', function () { go(state.step - 1); });
+  nextBtn.addEventListener('click', function () { ACTIONS[STEPS[state.step].id + ':next'](); });
+  stepsOl.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-goto]');
+    if (t && !t.disabled) go(parseInt(t.getAttribute('data-goto'), 10));
+  });
+
+  /* ---------- 导入任务：进度可见，完成时按策略真实写入 ---------- */
+  function startJob() {
+    if (state.job.status !== 'idle') return;
+    state.job.status = 'running';
+    state.job.done = 0;
+    state.job.total = sampleItems().length;
+    stopJob();
+    state.timerId = setInterval(function () {
+      state.job.done = Math.min(state.job.total, state.job.done + 1);
+      if (state.job.done >= state.job.total) {
+        /* 真实落地：按策略写入题目与题库计数，收据数字来自 store 的返回值 */
+        var r = S.applyImport({
+          bankId: state.bankId,
+          file: state.file ? state.file.name : '粘贴的文本',
+          strategy: state.strategy || 'skip',
+          items: sampleItems()
+        });
+        state.job.status = 'done';
+        state.job.job = r;
+        clearDraft();   /* 导入完成，草稿闭环 */
+        stopJob();
+      }
+      if (state.step === 5) render();
+    }, 500);
+  }
+  function stopJob() { if (state.timerId) { clearInterval(state.timerId); state.timerId = null; } }
+
+  /* ---------- 取消导入确认（一次性创建，挂 body） ---------- */
+  var cancelDlg = document.createElement('dialog');
+  cancelDlg.className = 'dlg narrow danger';
+  cancelDlg.id = 'dlgCancelJob';
+  cancelDlg.setAttribute('aria-labelledby', 'dlgCancelJobTitle');
+  cancelDlg.innerHTML =
+    '<div class="dlg-head"><div class="dlg-head-text">' +
+    '<p class="dlg-eyebrow">导入向导</p><h2 class="dlg-title" id="dlgCancelJobTitle">取消导入？</h2></div>' +
+    '<button type="button" class="icon-btn" data-dlg-close aria-label="关闭">' + ico('x', '15px') + '</button></div>' +
+    '<div class="dlg-body"><p class="hint">已写入的题目会保留在题库里，未写入的部分放弃。取消后不能恢复，任务也会从导入记录里消失。</p></div>' +
+    '<div class="dlg-foot">' +
+    '<button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>继续导入</button>' +
+    '<button type="button" class="btn btn-danger-solid" id="cancelJobGo">确认取消</button>' +
+    '</div>';
+  document.body.appendChild(cancelDlg);
+  document.getElementById('cancelJobGo').addEventListener('click', function () {
+    window.eeDialog.close(cancelDlg);
+    ACTIONS['cancel-job-confirm']();
+  });
+
+  /* ---------- 动作 ---------- */
+  var ACTIONS = {
+    'bank:next': function () { go(1); },
+    'source:next': function () { go(mapStepIndex()); },
+    'check:next': function () { go(4); },
+    'dup:next': function () { go(5); },
+    'result:next': function () { go(5); },
+    'leave:next': function () { restart(); },
+
+    'set-bank': function (el) { state.bankId = el.value; render(); },
+    'pdf-reason': function (el) { state.pdfReason = el.value; render(); },
+    'pdf-merge': function (el) {
+      var note = el.closest('.list-row').querySelector('.list-meta');
+      if (note && !note.querySelector('.pdf-mark')) {
+        var m = document.createElement('span');
+        m.className = 'tag plain pdf-mark';
+        m.textContent = '已标记合并到上一条';
+        note.appendChild(m);
+      }
+    },
+    'pdf-split': function (el) {
+      var note = el.closest('.list-row').querySelector('.list-meta');
+      if (note && !note.querySelector('.pdf-mark')) {
+        var m = document.createElement('span');
+        m.className = 'tag plain pdf-mark';
+        m.textContent = '已标记拆分';
+        note.appendChild(m);
+      }
+    },
+    'pdf-drop': function (el) {
+      var row = el.closest('.list-row');
+      if (row) row.style.display = 'none';
+    },
+    'mode-file': function () { state.sourceMode = 'file'; render(); },
+    'mode-paste': function () { state.sourceMode = 'paste'; render(); },
+    'pick-file': function (el, e) {
+      e.stopPropagation();
+      var input = el.parentElement.querySelector('input[type=file]');
+      if (input) input.click();
+    },
+    'dz-over': function (el, e) {
+      if (e.type === 'click') {
+        var input = el.querySelector('input[type=file]');
+        if (input) input.click();
+        return;
+      }
+      if (e.type === 'dragover') { e.preventDefault(); el.classList.add('is-dragging'); }
+      else if (e.type === 'drop') {
+        e.preventDefault();
+        el.classList.remove('is-dragging');
+        var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) setFile(f.name, f.size);
+        else setFile('软考真题整理.csv', 12697);
+      } else {
+        el.classList.remove('is-dragging');
+      }
+    },
+    'file-input': function (el) {
+      if (el.files && el.files[0]) setFile(el.files[0].name, el.files[0].size);
+    },
+    'demo-file': function () { setFile('软考真题整理.csv', 12697); },
+    'demo-pdf': function () { setFile('系统集成历年真题扫描版.pdf', 4194304); },
+    'paste': function (el) {
+      state.pasted = el.value;
+      if (state.pasted.trim()) clearDraft();   /* 输入新内容＝开始新导入 */
+      var host = document.getElementById('pasteStatus');
+      if (host) {
+        host.innerHTML = state.pasted.trim()
+          ? '<div class="notice ok">' + ico('check', '15px') + '<div class="notice-body">文本预检通过：识别到 ' + sampleItems().length + ' 行。</div></div>'
+          : '';
+      }
+    },
+    'to-bank': function () { go(0); },
+    'map': function (el) { state.mapping[el.getAttribute('data-key')] = el.value; render(); },
+    'set-delimiter': function (el) { state.delimiter = el.value; render(); },
+    'set-strategy': function (el) { state.strategy = el.value; render(); },
+    'cancel-job': function () {
+      window.eeDialog.open('dlgCancelJob');
+    },
+    'cancel-job-confirm': function () {
+      stopJob();
+      state.job.status = 'cancelled';
+      render();
+      window.eeToast('已取消导入', 'bad');
+    },
+    'retry-job': function () {
+      state.job = { status: 'idle', done: 0, total: sampleItems().length, skipped: 0, job: null };
+      startJob();
+      render();
+      window.eeToast('已重新开始导入');
+    },
+    'view-bank': function () {
+      window.location.href = '../screens/workspace.html?bank=' + encodeURIComponent(state.bankId);
+    },
+    'again': function () { resetImport(); window.eeToast('已重置，可再导入一批'); },
+    'leave': function () { go(6); },
+    'reopen-leave': function () {
+      state.leaveChoice = null;
+      render();
+      window.eeDialog.open('dlgLeave');
+    },
+    'back-result': function () { go(5); },
+    'leave-later': function () {
+      state.leaveChoice = 'later';
+      saveDraft();               /* 真实写进共享草稿 */
+      render();
+      window.eeToast('草稿已保存');
+    },
+    'leave-discard': function () {
+      state.leaveChoice = 'discard';
+      clearDraft();
+      render();
+      window.eeToast('已放弃本次导入', 'bad');
+    },
+    'resume-draft': function () {
+      var d = storeDraft();
+      if (!d) return;
+      go(d.step);
+      window.eeToast('已回到上次的步骤');
+    },
+    'delete-draft': function () {
+      clearDraft();
+      render();
+      window.eeToast('草稿已删除', 'bad');
+    }
+  };
+
+  function setFile(name, size) {
+    state.file = { name: name, size: (size / 1024).toFixed(1) };
+    /* 选了新文件＝开始一次新导入，旧草稿被取代 */
+    clearDraft();
+    render();
+    window.eeToast('已选择 ' + name);
+  }
+
+  function resetImport() {
+    stopJob();
+    state.file = null;
+    state.pasted = '';
+    state.strategy = '';
+    state.leaveChoice = null;
+    state.leaveFrom = 4;
+    /* 草稿不清空：回到步骤 0 时仍能看到「继续上次导入」，直到被新来源取代或显式删除 */
+    state.job = { status: 'idle', done: 0, total: sampleItems().length, skipped: 0, job: null };
+    go(0);
+  }
+
+  function restart() {
+    resetImport();
+  }
+
+  /* ---------- 事件委托 ---------- */
+  ['click', 'change', 'input', 'dragover', 'dragleave', 'drop'].forEach(function (type) {
+    stage.addEventListener(type, function (e) {
+      var el = e.target.closest ? e.target.closest('[data-act]') : null;
+      if (!el || !stage.contains(el)) return;
+      var fn = ACTIONS[el.getAttribute('data-act')];
+      if (fn) { e.preventDefault(); fn(el, e); }
+    });
+  });
+
+  /* 页头「离开导入」在舞台之外，单独绑定 */
+  var flowHead = document.querySelector('.flow-head');
+  if (flowHead) {
+    flowHead.addEventListener('click', function (e) {
+      var el = e.target.closest ? e.target.closest('[data-act]') : null;
+      if (!el) return;
+      var fn = ACTIONS[el.getAttribute('data-act')];
+      if (fn) { e.preventDefault(); fn(el, e); }
+    });
+  }
+
+  STEPS[5].afterRender = function () {
+    if (state.leaveChoice == null) window.eeDialog.open('dlgLeave');
+  };
+
+  render();
+})();
+</script>
+</body>
+</html>

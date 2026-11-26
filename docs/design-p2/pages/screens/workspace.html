@@ -1,0 +1,2708 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>题库工作区 · 易考宝</title>
+<link rel="stylesheet" href="../../assets/ee.css">
+<style>/* ============ 本屏特有微调（ee.css 未覆盖的部分）============
+     仅：纸内分区与表格的编辑式形态、工具栏控件宽度、章节树缩进与同级重排、
+         批量条控件、成员组合搜索浮层、管理日志行、草稿条目、状态格栅格、
+         间距工具、视觉隐藏文本。不重新定义令牌，不重新定义控件。            */
+
+  /* 视觉隐藏（表格复选列的无障碍名称） */
+  .vh{  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;  }
+/* ------------------------------------------------------------------
+     纸内分区：原版的 .panel 是「上沿一条细线的编辑块」（透明底、无圆角、无边框），
+     不是卡片。ee.css 的 .panel 是卡片形态，这里按原版同值覆写为编辑块，
+     使题库设置 / 导出 / 危险操作 / 管理日志等分区靠细线与留白分层，而不是卡片堆叠。
+     ------------------------------------------------------------------ */
+  .panel{  background: transparent; border: 0; border-top: 1px solid var(--line); border-radius: 0;  }
+.panel + .panel{  margin-top: var(--sp-6);  }
+.panel-head{  padding: var(--sp-4) 0 var(--sp-3); border-bottom: 0;  }
+.panel-title{  font-size: var(--text-xs); font-weight: 600; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-3); font-family: var(--font-sans);  }
+.panel-body{  padding: var(--sp-2) 0 var(--sp-3);  }
+.panel-foot{  padding: var(--sp-3) 0 0; border-top: 1px solid var(--line); margin-top: var(--sp-2);  }
+.panel-stack{  margin-top: var(--sp-6);  }
+/* ------------------------------------------------------------------
+     表格：编辑式表格（原版 .mtable 同值）——不包带边框的表格盒，表头只留一条
+     细线与小字，行间细线；≤640 仍由 ee.css 转为卡片行。
+     ------------------------------------------------------------------ */
+  @media (min-width: 641px){ 
+    .dtable-wrap { border: 0; border-radius: 0; background: transparent; }
+    .dtable th {
+      position: static; background: transparent; border-bottom: 1px solid var(--line-strong);
+      font-size: var(--text-xs); font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--ink-3); padding: var(--sp-2) var(--sp-3);
+    }
+    .dtable td { padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--line); }
+    .dtable th:first-child, .dtable td:first-child { padding-left: 0; }
+    .dtable th:last-child, .dtable td:last-child { padding-right: 0; }
+    /* 短标签列不折行：宽度不够时由 .dtable-wrap 内部横滚，章节名不从词中间断开 */
+    #q-table th, #q-table td { white-space: nowrap; }
+    #q-table td[data-label="题干"] { white-space: normal; }
+   }
+/* 间距工具（全部消费 --sp-* 令牌） */
+  .mt-1{  margin-top: var(--sp-1);  }
+.mt-6{  margin-top: var(--sp-6);  }
+.mb-6{  margin-bottom: var(--sp-6);  }
+.notice-block{  margin-bottom: var(--sp-6);  }
+.g2{  --od-cols: 2;  }
+.g3{  --od-cols: 3;  }
+.gap-2{  --od-gap: var(--sp-2);  }
+.gap-3{  --od-gap: var(--sp-3);  }
+.gap-4{  --od-gap: var(--sp-4);  }
+.name-col{  flex: 0 0 10em;  }
+.center-note{  max-width: 46ch; margin: 0 auto; text-align: center;  }
+/* 章节三步引导（FN-118 空态） */
+.guide-steps{  max-width: 46ch; margin: var(--sp-3) auto 0; padding-left: var(--sp-5); text-align: left; font-size: var(--text-xs); color: var(--ink-2); line-height: var(--text-sm-lh);  }
+.guide-steps li + li{  margin-top: var(--sp-2);  }
+.guide-steps b{  color: var(--ink); font-weight: 600;  }
+.reason-block{  display: block;  }
+.self-start{  align-self: flex-start;  }
+/* 骨架宽度档（避免内联 style） */
+  .sk-25{  width: 25%;  }
+.sk-35{  width: 35%;  }
+.sk-45{  width: 45%;  }
+.sk-55{  width: 55%;  }
+.sk-70{  width: 70%;  }
+.sk-100{  width: 100%;  }
+/* 顶部账户菜单锚点（inline-grid 会把首项顶出视口，T12；与控件库一致） */
+  .menu-anchor{  position: relative; display: inline-block;  }
+.topbar .menu-anchor .menu{  right: 0; left: auto; top: calc(100% + var(--sp-2));  }
+/* 题型/难度/版本是短标签，列宽自动分配时会被拆成两行——保持一行可读 */
+  .dtable td[data-label="题型"], .dtable td[data-label="难度"], .dtable td[data-label="版本"]{  white-space: nowrap;  }
+/* 题目工具栏：编辑式工具条——上沿一条墨色重线 + 下沿一条细线，不靠卡片 */
+  [data-tab-panel]{  padding-top: var(--sp-5);  }
+/* 选中行 / 已归档行：ee.css 的 .is-active 只覆盖 .list-row，表格行需自绘
+     （同一套令牌与同一种表达：品牌淡底 + 左侧 3px 品牌色记，不引入新控件形态） */
+  #q-table tbody tr.is-selected{  background: var(--brand-soft); box-shadow: inset 3px 0 0 var(--brand);  }
+#q-table tbody tr.is-selected td{  border-bottom-color: var(--brand-line);  }
+#q-table tbody tr[data-archived="1"] td{  color: var(--ink-3);  }
+#q-table tbody tr[data-archived="1"] .q-stem{  color: var(--ink-3);  }
+.q-toolbar{  row-gap: var(--sp-3); padding: 10px 0; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line);  }
+.q-search{  flex: 1 1 240px; min-width: 200px;  }
+.q-select{  width: auto; flex: none;  }
+.q-select.is-sort{  min-width: 104px;  }
+.q-shown{  font-size: var(--text-xs); color: var(--ink-3);  }
+.q-stem{  text-align: left; text-decoration: none;  }
+.q-stem:hover{  color: var(--brand);  }
+.q-tags{  display: inline-flex; gap: var(--sp-1); margin-left: var(--sp-2); flex-wrap: wrap; vertical-align: middle;  }
+/* 表尾：一条细线收住表格 */
+  .q-foot{  margin-top: var(--sp-4); row-gap: var(--sp-3); padding: var(--sp-3) 0; border-bottom: 1px solid var(--line);  }
+.q-pagesize{  gap: var(--sp-2);  }
+.q-pagesize .q-select{  min-width: 84px;  }
+/* 批量条控件宽度（.bulkbar 本体一律用 ee.css 原值） */
+  .bulk-select{  width: auto; flex: none; max-width: 176px;  }
+.bulk-input{  width: 184px; flex: none;  }
+/* 结构：章节树缩进 + 同级重排 */
+  .manage-list .list-row{  flex-wrap: wrap; row-gap: var(--sp-2);  }
+.edit-row .input{  flex: 1 1 160px; min-width: 140px;  }
+.edit-row .select{  width: auto; flex: none; max-width: 180px;  }
+.chapter-row.lvl-1{  padding-left: calc(var(--sp-4) + var(--sp-6));  }
+.chapter-row.lvl-2{  padding-left: calc(var(--sp-4) + var(--sp-6) * 2);  }
+.chapter-form{  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+    padding: var(--sp-2) 0 var(--sp-3); border-bottom: 1px solid var(--line);  }
+.chapter-form.lvl-1{  padding-left: calc(var(--sp-4) + var(--sp-6));  }
+.chapter-form.lvl-2{  padding-left: calc(var(--sp-4) + var(--sp-6) * 2);  }
+.chapter-form .input{  flex: 1 1 200px; min-width: 160px;  }
+.chapter-form .select, .chapter-add .select{  width: auto; flex: none; max-width: 180px;  }
+/* 追加行：上沿一条细线接住列表，左右不设内边距 */
+  .chapter-add{  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+    padding: var(--sp-3) 0 var(--sp-1); border-top: 1px solid var(--line);  }
+.chapter-add .input{  flex: 1 1 200px; min-width: 160px;  }
+.tag-add{  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+    padding: var(--sp-3) 0 var(--sp-1); border-top: 1px solid var(--line);  }
+.tag-add .input{  flex: 1 1 200px; min-width: 160px;  }
+.tag-edit-input{  flex: 1 1 160px; min-width: 120px;  }
+/* 同级重排：一对图标按钮，禁用时带可读原因 */
+  .order-pair{  display: inline-flex; gap: 2px; flex: none;  }
+/* 成员 */
+  .role-select{  width: auto; flex: none; min-width: 96px;  }
+.combo{  position: relative; flex: 1 1 280px; min-width: 0;  }
+.combo-list{  position: absolute; top: calc(100% + var(--sp-1)); left: 0; right: 0; z-index: 30;
+    margin: 0; padding: var(--sp-1); list-style: none; max-height: 184px; overflow: auto;
+    background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-sm); box-shadow: var(--shadow-2);  }
+.combo-opt{  padding: var(--sp-2) var(--sp-3); border-radius: var(--r-xs); font-size: var(--text-sm); cursor: pointer;  }
+.combo-opt.is-active{  background: var(--brand-soft); color: var(--brand-ink);  }
+.combo-hint{  margin: var(--sp-2) 0 0;  }
+/* 导入历史 */
+  .draft-name{  font-size: var(--text-sm); color: var(--ink);  }
+/* 导出 / 危险区行 */
+  .export-row{  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;  }
+.actions-start{  justify-content: flex-start;  }
+.zone-actions{  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;  }
+/* 管理日志 */
+  .audit-act{  flex: none; width: 9em;  }
+.audit-sum{  flex: 1 1 auto; min-width: 0; font-size: var(--text-xs);  }
+/* AI 草稿条目：编辑式分行，不用卡片 */
+  .draft-row{  align-items: flex-start;  }
+.draft-row .list-side{  display: flex; gap: var(--sp-2); flex-wrap: wrap;  }
+.draft-stem{  font-size: var(--text-sm); color: var(--ink);  }
+.draft-meta{  display: flex; gap: var(--sp-3); flex-wrap: wrap;  }
+.draft-opts{  display: flex; flex-direction: column; gap: var(--sp-2);  }
+.draft-opt-row{  display: flex; align-items: center; gap: var(--sp-2);  }
+.draft-opt-row .input{  flex: 1 1 auto; min-width: 0;  }
+.draft-key{  flex: none; width: 40px; text-align: center; font-family: var(--font-mono);  }
+/* 状态格 */
+  .state-grid{  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--sp-4); align-items: start;  }
+.state-cell.is-full{  grid-column: 1 / -1;  }
+@media (max-width: 640px){
+    .bulk-input, .bulk-select { width: 100%; max-width: none; flex: 1 1 180px; }
+    .audit-act, .name-col { width: auto; flex: none; }
+  }</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">跳到主内容</a>
+<div class="app-shell">
+
+  <!-- ================= 侧栏（导航由 assets/nav.js 统一转换为真实链接）================= -->
+  <aside class="sidebar">
+    <button class="side-brand" type="button">
+      <span class="brand-mark">易</span>
+      <span class="brand-text">
+        <span class="brand-name">易考宝</span>
+        <span data-i18n="shell.brand.sub" class="brand-sub">私人学习档案</span>
+      </span>
+    </button>
+    <div data-i18n="shell.group.learn" class="side-group-label">学习</div>
+    <nav class="side-nav" aria-label="学习导航">
+      <button class="nav-item" type="button">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.today">今天</span>
+      </button>
+      <button class="nav-item" type="button">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.banks">题库</span>
+        <span class="nav-count" id="nav-bank-count">2</span>
+      </button>
+      <button class="nav-item" type="button">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.review">复习</span>
+        <span class="nav-count" id="nav-review-count">5</span>
+      </button>
+      <button class="nav-item" type="button">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.exams">模考</span>
+      </button>
+      <button class="nav-item" type="button">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.notes">资料</span>
+        <span class="nav-count" id="nav-note-count">6</span>
+      </button>
+    </nav>
+    <div class="side-study">
+      <div class="side-study-label">学习状态</div>
+      <div class="side-study-row"><span>今日待复习</span><b id="side-due">0</b></div>
+      <div class="side-study-row"><span>未完成会话</span><b id="side-sessions">0</b></div>
+    </div>
+    <div class="side-foot">
+      <button class="nav-item" type="button">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.settings">设置</span>
+      </button>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <!-- ================= 桌面顶栏 ================= -->
+    <header class="topbar">
+      <nav class="crumb" aria-label="面包屑">
+        <a class="link" href="banks.html">题库</a>
+        <span class="sep" aria-hidden="true">/</span>
+        <span class="here" id="ws-crumb-here">题库工作区</span>
+      </nav>
+      <span class="spacer"></span>
+      <button class="icon-btn" type="button" id="tb-search" aria-label="搜索题目" title="搜索题目">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+      </button>
+      <button data-ee-shell="theme" class="icon-btn" type="button" id="tb-theme" aria-label="切换明暗" title="切换明暗">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-moon"/></svg>
+      </button>
+      <button class="icon-btn" type="button" id="tb-lang" aria-label="切换语言" title="切换语言" data-ee-shell="lang">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-globe"/></svg>
+      </button>
+      <div class="menu-anchor">
+        <button class="user-mini" type="button" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单">A</button>
+        <div class="menu" role="menu" hidden>
+          <a class="menu-item" role="menuitem" href="settings.html">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-user"/></svg>账户资料
+          </a>
+          <a class="menu-item" role="menuitem" href="settings.html">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>设置
+          </a>
+          <div class="menu-sep" role="separator"></div>
+          <button class="menu-item is-danger" type="button" role="menuitem" id="tb-logout">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-logout"/></svg>退出登录
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ================= 移动顶栏 ================= -->
+    <header class="mobile-top">
+      <a class="page-back" href="banks.html" aria-label="返回题库列表">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>题库
+      </a>
+      <span class="mt-title" id="ws-m-title">题库工作区</span>
+      <button class="icon-btn" type="button" id="tb-search-m" aria-label="搜索题目">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+      </button>
+      <span class="user-mini" aria-hidden="true">A</span>
+    </header>
+
+    <!-- ================= 主体 ================= -->
+    <main class="content wide has-bottomnav" id="main-content">
+
+      <!-- 没有可打开的题库时的整页空态 -->
+      <div class="empty" id="ws-empty" hidden>
+        <span class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-inbox"/></svg></span>
+        <h4 class="empty-title">还没有可打开的题库</h4>
+        <p class="empty-desc">先新建一个题库，或从文件导入题目。</p>
+        <div class="empty-actions">
+          <a class="btn btn-primary" href="banks.html">去题库列表</a>
+          <a class="btn btn-quiet" href="import.html">导入题目</a>
+        </div>
+      </div>
+
+      <!-- 题库已归档：整页状态（归档后工作区不可再进入，CR-03） -->
+      <div class="empty" id="ws-archived" hidden>
+        <span class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-archive"/></svg></span>
+        <h4 class="empty-title" id="ws-archived-title">题库已归档</h4>
+        <p class="empty-desc" id="ws-archived-desc">归档后工作区不可再进入。恢复题库即可继续编辑题目。</p>
+        <div class="empty-actions">
+          <button class="btn btn-primary" type="button" id="ws-archived-restore">恢复题库</button>
+          <a class="btn btn-quiet" href="banks.html">返回题库列表</a>
+        </div>
+      </div>
+
+      <div id="ws-body" hidden>
+      <!-- 页头：面包屑层级由顶栏表达；此处为题库名 + meta + 动作 -->
+      <div class="page-head">
+        <div>
+          <p class="page-eyebrow">题库工作区</p>
+          <h1 class="page-title" id="ws-bank-name">题库</h1>
+          <p class="page-sub" id="ws-bank-sub">—</p>
+        </div>
+        <div class="page-actions">
+          <a class="btn btn-primary" id="ws-practice" href="practice.html">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>练习
+          </a>
+          <a class="btn btn-quiet" id="ws-import" href="import.html">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-import"/></svg>导入
+          </a>
+          <button class="btn btn-quiet" type="button" id="ws-export">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-export"/></svg>导出
+          </button>
+          <button class="btn btn-quiet" type="button" id="ws-create" onclick="eeDialog.open('dlg-create', this)">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-plus"/></svg>新建题目
+          </button>
+          <span class="hint" id="ws-gate-reason" hidden></span>
+        </div>
+      </div>
+
+      <!-- 只读题库（共享给我）：结构不变，编辑类控件禁用并给可读原因（PR-102 / FN-421） -->
+      <div class="notice warn notice-block" role="status" id="ws-readonly" hidden>
+        <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+        <div class="notice-body">
+          <span class="notice-title">这个题库共享给你，你是<span id="ws-readonly-role">成员</span></span><br>
+          可以浏览、练习与导出；不能改题、归档题库或管理成员。需要编辑权限请联系所有者。
+        </div>
+      </div>
+
+      <!-- ================= 六个页签（CR-17） ================= -->
+      <div data-tab-scope>
+        <div class="tabs" role="tablist" aria-label="题库工作区" id="ws-tabs">
+          <button class="tab" type="button" role="tab" aria-selected="true" data-panel="questions">题目<span class="count" id="tab-count-questions">0</span></button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-panel="structure">结构</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-panel="members">成员<span class="count" id="tab-count-members">0</span></button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-panel="imports">导入历史</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-panel="drafts">AI 草稿</button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-panel="settings">设置</button>
+        </div>
+
+        <!-- ========== 题目 ========== -->
+        <section data-tab-panel="questions">
+          <div class="od-cluster q-toolbar">
+            <div class="search-box q-search">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+              <input class="input" type="search" placeholder="搜索题干、题号或标签" aria-label="搜索题干、题号或标签" id="q-search">
+            </div>
+            <select class="select q-select" aria-label="题型" id="q-type">
+              <option selected>全部题型</option>
+              <option>单选题</option>
+              <option>多选题</option>
+              <option>判断题</option>
+              <option>填空题</option>
+              <option>主观题</option>
+            </select>
+            <select class="select q-select" aria-label="难度" id="q-diff">
+              <option selected>全部难度</option>
+              <option>入门</option>
+              <option>基础</option>
+              <option>进阶</option>
+              <option>困难</option>
+              <option>挑战</option>
+            </select>
+            <select class="select q-select is-sort" aria-label="排序" id="q-sort">
+              <option selected>默认顺序</option>
+              <option>按编号</option>
+              <option>按难度</option>
+              <option>按更新时间</option>
+            </select>
+            <label class="check">
+              <input type="checkbox" id="q-show-archived">
+              <span>显示已归档</span>
+            </label>
+            <span class="od-spacer"></span>
+            <label class="check">
+              <input type="checkbox" id="q-select-all" aria-label="全选筛选结果">
+              <span>全选筛选结果</span>
+            </label>
+            <span class="q-shown mono" id="q-shown">0 / 0</span>
+          </div>
+
+          <!-- 批量条：只在勾选了题目时出现 -->
+          <div class="bulkbar mt-4" id="q-bulk" hidden>
+            <span id="q-bulk-count">未选择题目</span>
+            <button class="btn btn-sm btn-quiet" type="button" id="q-bulk-clear">清除选择</button>
+            <select class="select bulk-select" aria-label="章节" id="q-bulk-chapter"></select>
+            <button class="btn btn-sm" type="button" id="q-bulk-chapter-go">应用章节</button>
+            <input class="input bulk-input" type="text" placeholder="标签，用逗号或空格分隔" aria-label="标签" id="q-bulk-tags">
+            <button class="btn btn-sm" type="button" id="q-bulk-tags-go">添加标签</button>
+            <select class="select bulk-select" aria-label="目标题库" id="q-bulk-target"></select>
+            <button class="btn btn-sm" type="button" id="q-bulk-move">移动</button>
+            <button class="btn btn-sm" type="button" id="q-bulk-copy">复制</button>
+            <span class="od-spacer"></span>
+            <button class="btn btn-sm btn-quiet" type="button" id="q-bulk-archive">归档所选</button>
+          </div>
+          <p class="hint mt-2" id="q-bulk-hint" hidden></p>
+
+          <!-- 批量结果 / 拒绝原因：持久结论，必须被读到 -->
+          <div class="mt-4" id="q-bulk-result" hidden></div>
+
+          <!-- 题目表 -->
+          <div class="dtable-wrap mt-4">
+            <table class="dtable" id="q-table">
+              <thead>
+                <tr>
+                  <th class="col-check" scope="col"><span class="vh">选择</span></th>
+                  <th scope="col">题号</th>
+                  <th scope="col">题干</th>
+                  <th scope="col">题型</th>
+                  <th scope="col">章节</th>
+                  <th scope="col">难度</th>
+                  <th scope="col">版本</th>
+                  <th class="col-actions" scope="col">操作</th>
+                </tr>
+              </thead>
+              <tbody id="q-tbody"></tbody>
+            </table>
+          </div>
+
+          <!-- 分页 + 两个计数出口（CR-04） -->
+          <div class="od-cluster q-foot" id="q-foot">
+            <span class="mono muted" id="q-page-info">第 1 / 1 页 · 共 0 题</span>
+            <span class="od-cluster q-pagesize">
+              <span class="hint">每页</span>
+              <select class="select q-select" aria-label="每页题数" id="q-pagesize">
+                <option value="25" selected>25 题</option>
+                <option value="50">50 题</option>
+                <option value="100">100 题</option>
+              </select>
+            </span>
+            <span class="od-spacer"></span>
+            <span class="hint" id="q-archived-count">已归档 0 题</span>
+            <span class="hint" id="q-killed-count">已斩杀 0 题</span>
+            <button class="btn btn-sm btn-quiet" type="button" id="q-prev">上一页</button>
+            <button class="btn btn-sm btn-quiet" type="button" id="q-next">下一页</button>
+          </div>
+          <p class="hint mt-3">章节与标签的批量修改只写当前版本、不生成新版本，痕迹在管理日志里可查。</p>
+        </section>
+
+        <!-- ========== 结构 ========== -->
+        <section data-tab-panel="structure" hidden>
+          <p class="section-note mb-4">章节用于筛题与蓝图配额；重命名不影响题目内容。标签是题目的多值标注，批量增删标签走题目页签的批量条。</p>
+
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">章节</span><span class="panel-sub" id="st-chapter-count">0 章</span></div>
+            <div class="list manage-list" id="st-chapters"></div>
+            <form class="chapter-add" onsubmit="return false" id="st-chapter-add" hidden>
+              <input class="input" type="text" placeholder="章节名称" aria-label="章节名称" id="st-chapter-add-name">
+              <button class="btn btn-sm" type="submit">添加章节</button>
+            </form>
+          </div>
+
+          <div class="panel panel-stack">
+            <div class="panel-head"><span class="panel-title">标签</span><span class="panel-sub" id="st-tag-count">0 个</span></div>
+            <div class="list manage-list" id="st-tags"></div>
+            <p class="hint mt-2">重命名输入框内按 Enter 保存，按 Esc 取消；与已有标签同名会触发合并确认。</p>
+            <form class="tag-add" onsubmit="return false" id="st-tag-add">
+              <input class="input" type="text" placeholder="标签名称" aria-label="标签名称" id="st-tag-add-name">
+              <button class="btn btn-sm" type="submit">新建标签</button>
+            </form>
+          </div>
+
+          <p class="hint mt-4" id="st-gate-reason" hidden></p>
+
+          <!-- 章节为空的引导空态 -->
+          <div class="panel panel-stack" id="st-chapter-empty" hidden>
+            <div class="panel-head"><span class="panel-title">章节为空时</span></div>
+            <div class="panel-body">
+              <div class="empty">
+                <span class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-list"/></svg></span>
+                <h4 class="empty-title">还没有章节</h4>
+                <p class="empty-desc center-note">章节用来筛题与按蓝图配比。按这三步走：</p>
+                <ol class="guide-steps">
+                  <li><b>建章节</b>——在下面「章节名称」里添加，或用「添加子章节」逐层展开。</li>
+                  <li><b>把题目归入章节</b>——在题目页签勾选题目，用批量条「应用章节」。</li>
+                  <li><b>按章节配比</b>——之后建模考蓝图时，可以按章节分配题量。</li>
+                </ol>
+                <p class="hint center-note">没有章节时题目仍可正常练习，标签也能承担组织工作。</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== 成员 ========== -->
+        <section data-tab-panel="members" hidden>
+          <p class="section-note mb-4">题库内容共享；学习记录仍只属于各自账号。题库角色只有三种：所有者 / 编辑者 / 成员。</p>
+
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">成员与权限</span><span class="panel-sub" id="mb-count">0 人</span></div>
+            <div class="list manage-list" id="mb-list"></div>
+            <div class="panel-foot">
+              <span class="hint" id="mb-foot-hint">你在这个题库里是成员：可以浏览和练习，不能编辑内容。</span>
+              <span class="od-spacer"></span>
+              <button class="btn btn-sm btn-quiet" type="button" id="mb-leave" onclick="eeDialog.open('dlg-leave', this)">退出题库</button>
+            </div>
+          </div>
+
+          <!-- 添加成员 -->
+          <div class="panel panel-stack">
+            <div class="panel-head"><span class="panel-title">添加成员</span></div>
+            <div class="panel-body">
+              <div class="od-cluster">
+                <div class="combo">
+                  <input class="input" type="text" role="combobox" aria-expanded="true" aria-controls="member-listbox"
+                         aria-autocomplete="list" aria-activedescendant="member-opt-0"
+                         placeholder="搜索已注册用户" id="mb-combo" aria-label="搜索已注册用户" autocomplete="off">
+                  <ul class="combo-list" id="member-listbox" role="listbox" aria-label="搜索结果"></ul>
+                </div>
+                <span class="muted" id="mb-picked">未选择用户</span>
+                <select class="select role-select" aria-label="权限" id="mb-role">
+                  <option value="EDITOR" selected>编辑者</option>
+                  <option value="MEMBER">成员</option>
+                </select>
+                <button class="btn btn-primary" type="button" id="mb-add">添加</button>
+              </div>
+              <p class="hint combo-hint">按用户名直接加入，不需要对方确认；加入后立即生效。实例管理员不会因此获得本题库的编辑权。</p>
+            </div>
+          </div>
+
+          <!-- 非所有者提示 -->
+          <div class="notice info panel-stack" id="mb-gate" hidden>
+            <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+            <div class="notice-body" id="mb-gate-body">只有所有者可以管理成员。编辑者与成员可以浏览和练习，不能增删成员或修改题库资料。</div>
+          </div>
+        </section>
+
+        <!-- ========== 导入历史 ========== -->
+        <section data-tab-panel="imports" hidden>
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">导入历史与草稿</span></div>
+            <div class="panel-body">
+              <p class="section-note">导入会先预检字段与重复题，确认后才写入。作业记录对库内任何成员可见；草稿只有编辑者及以上可以继续或删除。</p>
+              <p class="section-note mt-1">支持 .xlsx、.csv、.json、.md、.txt、.pdf。</p>
+
+              <!-- 未完成草稿续做 -->
+              <div class="mt-5">
+                <div class="rule-label">未完成的导入</div>
+                <p class="section-note mt-2">中途离开的导入会保留在这里，继续时回到当时所在的步骤；草稿不自动清理，列表内标注保存时间。</p>
+                <div class="list manage-list mt-3" id="imp-drafts"></div>
+              </div>
+
+              <!-- 导入作业表 -->
+              <div class="dtable-wrap mt-5">
+                <table class="dtable">
+                  <thead>
+                    <tr>
+                      <th scope="col">文件</th>
+                      <th scope="col">格式</th>
+                      <th scope="col">状态</th>
+                      <th scope="col">导入题数</th>
+                      <th scope="col">完成时间</th>
+                      <th scope="col">失败原因</th>
+                    </tr>
+                  </thead>
+                  <tbody id="imp-jobs"></tbody>
+                </table>
+              </div>
+
+              <div class="empty-actions mt-5 actions-start">
+                <a class="btn btn-primary" id="imp-open" href="import.html">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-import"/></svg>去导入
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== AI 草稿 ========== -->
+        <section data-tab-panel="drafts" hidden>
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">AI 变式题草稿</span><span class="panel-sub" id="ai-draft-count">0 条</span></div>
+            <div class="panel-body">
+              <p class="section-note">AI 生成的变式题在此暂存，你确认后才进入正式题库；未经审阅不会自动写入。</p>
+
+              <!-- 未配置 AI：一等公民状态，且不影响任何非 AI 路径 -->
+              <div class="notice info mt-4" id="ai-unconfigured" role="status">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+                <div class="notice-body">
+                  <span class="notice-title">还没有配置 AI</span><br>
+                  配置后可以按错题或考点生成变式题草稿。未配置时，建题、导入、练习、复习都不受影响。
+                  <span class="notice-actions">
+                    <a class="btn btn-sm" href="settings.html">去配置 AI</a>
+                  </span>
+                </div>
+              </div>
+
+              <div class="list manage-list mt-4" id="ai-drafts"></div>
+
+              <p class="hint mt-4">草稿箱的唯一入口在题库工作区：在某个题库里打开，就是这个题库的草稿。</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== 设置 ========== -->
+        <section data-tab-panel="settings" hidden>
+          <div class="panel">
+            <div class="panel-head"><span class="panel-title">题库资料</span></div>
+            <div class="panel-body">
+              <p class="section-note">题库名称、分类与说明可修改；保存后会写入管理日志。</p>
+
+              <!-- 无编辑权限：只读说明（原因可读） -->
+              <div class="notice info mt-4" id="set-gate-note" hidden>
+                <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+                <div class="notice-body" id="set-gate-body">只有所有者可以修改题库资料。</div>
+              </div>
+
+              <form class="mt-4" onsubmit="return false">
+                <div class="od-grid g2 gap-4">
+                  <label class="field">
+                    <span class="label">题库名称</span>
+                    <input class="input" type="text" id="set-name">
+                  </label>
+                  <label class="field">
+                    <span class="label">分类</span>
+                    <input class="input" type="text" id="set-category">
+                    <span class="hint">留空则保持当前分类</span>
+                  </label>
+                </div>
+                <label class="field mt-4">
+                  <span class="label">说明</span>
+                  <textarea class="textarea" rows="3" id="set-desc"></textarea>
+                </label>
+                <div class="zone-actions mt-4">
+                  <button class="btn btn-primary" type="submit" id="set-save">保存</button>
+                  <span class="hint">资料保存后写入管理日志。</span>
+                </div>
+              </form>
+
+              <div class="kv mt-5">
+                <span class="kv-key">你的权限</span><span class="kv-val" id="set-myrole">所有者</span>
+                <span class="kv-key">题库内容量</span><span class="kv-val" id="set-content">—</span>
+                <span class="kv-key">我的可练题量</span><span class="kv-val" id="set-practice">—</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 导出 -->
+          <div class="panel panel-stack">
+            <div class="panel-head"><span class="panel-title">导出</span></div>
+            <div class="panel-body">
+              <p class="section-note">导出当前题库内容，可选择格式与是否包含已归档题目。任何成员都可导出。</p>
+              <div class="export-row mt-4">
+                <div class="segmented" role="radiogroup" aria-label="导出格式" id="qc-export-format">
+                  <button type="button" class="segment" role="radio" aria-checked="true" data-fmt="JSON">JSON</button>
+                  <button type="button" class="segment" role="radio" aria-checked="false" data-fmt="CSV">CSV</button>
+                  <button type="button" class="segment" role="radio" aria-checked="false" data-fmt="TXT">TXT</button>
+                  <button type="button" class="segment" role="radio" aria-checked="false" data-fmt="XLSX">XLSX</button>
+                </div>
+                <label class="check">
+                  <input type="checkbox" id="qc-export-archived">
+                  <span>包含已归档题目</span>
+                </label>
+              </div>
+              <div class="notice info mt-4" id="qc-export-summary" role="status">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+                <span class="notice-body">将导出 0 题（不含已归档）为 JSON。</span>
+              </div>
+              <div class="export-row mt-4 actions-start">
+                <button class="btn btn-primary" type="button" id="qc-export-go">导出</button>
+                <span class="hint" id="qc-export-deny" hidden></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 危险区 -->
+          <div class="panel panel-stack">
+            <div class="panel-head"><span class="panel-title">危险操作</span></div>
+            <div class="panel-body">
+              <p class="section-note">归档后题库会移到已归档视图，练习记录与历史数据保留，可随时恢复。</p>
+              <div class="zone-actions mt-4">
+                <button class="btn btn-danger" type="button" id="set-archive-btn" onclick="eeDialog.open('dlg-archive-bank', this)">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-archive"/></svg>归档题库
+                </button>
+                <button class="btn btn-danger" type="button" id="set-delete-btn" onclick="eeDialog.open('dlg-delete-bank', this)">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-trash"/></svg>删除题库（空库）
+                </button>
+                <span class="hint" id="set-archive-reason" role="status" hidden></span>
+              </div>
+              <p class="hint mt-3">进行中的模考不锁定题库内容：会话持有快照，编辑与归档都不被阻断（CR-26）。归档被进行中模考引用的题库时，只会提示引用场数。</p>
+            </div>
+          </div>
+
+          <!-- 管理日志 -->
+          <div class="panel panel-stack">
+            <div class="panel-head"><span class="panel-title">管理日志</span><span class="panel-sub">最近 50 条 · 仅所有者可见</span></div>
+            <div class="list">
+              <div class="list-row static dense">
+                <span class="mono muted od-nowrap">2026-11-13 09:12</span>
+                <span class="audit-act">题库已更新</span>
+                <span class="muted od-truncate audit-sum">accept_admin_1794570360969 · 名称与说明</span>
+              </div>
+              <div class="list-row static dense">
+                <span class="mono muted od-nowrap">2026-11-12 18:47</span>
+                <span class="audit-act">成员角色已变更</span>
+                <span class="muted od-truncate audit-sum">editor_lin · 成员 → 编辑者</span>
+              </div>
+              <div class="list-row static dense">
+                <span class="mono muted od-nowrap">2026-11-12 11:03</span>
+                <span class="audit-act">章节已创建</span>
+                <span class="muted od-truncate audit-sum">信息安全 · 上级：顶层章节</span>
+              </div>
+              <div class="list-row static dense">
+                <span class="mono muted od-nowrap">2026-11-11 16:29</span>
+                <span class="audit-act">批量操作</span>
+                <span class="muted od-truncate audit-sum">3 题 · 添加标签「易错」</span>
+              </div>
+              <div class="list-row static dense">
+                <span class="mono muted od-nowrap">2026-11-10 08:55</span>
+                <span class="audit-act">成员已添加</span>
+                <span class="muted od-truncate audit-sum">reviewer_02 · 成员</span>
+              </div>
+              <div class="list-row static dense">
+                <span class="mono muted od-nowrap">2026-11-09 21:18</span>
+                <span class="audit-act">标签已重命名</span>
+                <span class="muted od-truncate audit-sum">「易错题」→「易错」· 影响 2 道题</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+      </div><!-- /#ws-body -->
+
+      <!-- ================= 状态规格 ================= -->
+      <section class="section mt-8" data-spec>
+        <div class="section-head">
+          <h2 class="section-title">状态规格</h2>
+          <span class="section-note">空 / 加载 / 错误 / 禁用 / 无权限 / 冲突 / 未配置 / 离线</span>
+        </div>
+
+        <div class="state-grid">
+          <!-- 整页加载骨架 -->
+          <div class="state-cell">
+            <div class="rule-label">整页加载</div>
+            <div class="panel">
+              <div class="panel-body od-stack">
+                <div class="skeleton sk-line sk-35"></div>
+                <div class="skeleton sk-line sk-55"></div>
+                <div class="skeleton sk-line sk-25"></div>
+                <div class="skeleton sk-line sk-100"></div>
+                <div class="skeleton sk-line sk-70"></div>
+                <div class="skeleton sk-block"></div>
+              </div>
+            </div>
+            <p class="state-note">题库资料未返回前只渲染骨架，不渲染空态。</p>
+          </div>
+
+          <!-- 加载失败 -->
+          <div class="state-cell">
+            <div class="rule-label">加载失败</div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="empty">
+                  <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg></div>
+                  <div class="empty-title">加载失败</div>
+                  <div class="empty-desc">题库读取失败，可能是网络中断或实例暂时无响应。</div>
+                  <div class="empty-actions"><button class="btn" type="button" id="stt-retry">重试</button></div>
+                </div>
+              </div>
+            </div>
+            <p class="state-note">与「题库真的没有题目」分开：这里保留重试入口。</p>
+          </div>
+
+          <!-- 空题库 -->
+          <div class="state-cell">
+            <div class="rule-label">空题库</div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="empty">
+                  <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-inbox"/></svg></div>
+                  <div class="empty-title">这个题库还没有题目</div>
+                  <div class="empty-desc">手动新建，或从文件导入。</div>
+                  <div class="empty-actions">
+                    <button class="btn" type="button" onclick="eeDialog.open('dlg-create', this)">新建题目</button>
+                    <a class="btn btn-quiet" id="stt-import" href="import.html">导入</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 已归档为空 -->
+          <div class="state-cell">
+            <div class="rule-label">已归档为空</div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="empty">
+                  <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-archive"/></svg></div>
+                  <div class="empty-title">没有已归档的题目</div>
+                  <div class="empty-desc">归档会把题目移出练习，但不会删除。</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 无匹配 -->
+          <div class="state-cell">
+            <div class="rule-label">无匹配</div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="empty">
+                  <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-filter"/></svg></div>
+                  <div class="empty-title">没有符合条件的题目</div>
+                  <div class="empty-desc">调整搜索或筛选。</div>
+                  <div class="empty-actions"><button class="btn btn-quiet" type="button" id="stt-clear">清除筛选</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 禁用：成员只读 -->
+          <div class="state-cell">
+            <div class="rule-label">禁用（带原因）</div>
+            <div class="panel">
+              <div class="panel-body od-stack gap-2">
+                <span class="label">页头动作</span>
+                <div class="zone-actions">
+                  <button class="btn btn-quiet" type="button" disabled aria-describedby="stt-dis-1">
+                    <svg class="od-icon" aria-hidden="true"><use href="#i-plus"/></svg>新建题目
+                  </button>
+                  <button class="btn btn-quiet" type="button" disabled aria-describedby="stt-dis-1">
+                    <svg class="od-icon" aria-hidden="true"><use href="#i-import"/></svg>导入
+                  </button>
+                </div>
+                <p class="hint" id="stt-dis-1" role="status">你是这个题库的成员：可以浏览、练习与导出，不能改题与导入。</p>
+                <p class="state-note">禁用控件旁给可读原因，不只靠 title（触屏可见）。</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 行内操作错误（notice.bad + 重试） -->
+          <div class="state-cell">
+            <div class="rule-label">行内操作错误</div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="notice bad" role="alert">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                  <div class="notice-body">
+                    批量操作失败：目标题库已被归档。
+                    <div class="notice-actions"><button class="btn btn-sm" type="button" id="stt-retry-inline">重试</button></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="state-note">整页加载失败用空态，行内操作失败用 notice；两者都保留重试入口。</p>
+          </div>
+
+          <!-- 冲突：保存被拒绝，双方版本都在 -->
+          <div class="state-cell">
+            <div class="rule-label">冲突 · 保存被拒绝</div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="notice warn" role="alert">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                  <div class="notice-body">
+                    <span class="notice-title">保存被拒绝：这道题已被他人修改</span><br>
+                    你打开的是 v2，服务端现在已经是 v3。你的改动没有写入，也不会覆盖对方的版本。
+                    <span class="notice-actions">
+                      <button class="btn btn-sm" type="button" id="stt-conflict-mine">查看我的版本</button>
+                      <button class="btn btn-sm btn-quiet" type="button" id="stt-conflict-theirs">使用对方版本</button>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="state-note">冲突是持久结论，两个版本都保留，由用户决定用哪一个。</p>
+          </div>
+
+          <!-- 题库已归档（整页） -->
+          <div class="state-cell">
+            <div class="rule-label">题库已归档（整页）</div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="empty">
+                  <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-archive"/></svg></div>
+                  <div class="empty-title">题库已归档</div>
+                  <div class="empty-desc">归档后工作区不可再进入；恢复题库即可继续编辑题目。</div>
+                  <div class="empty-actions">
+                    <button class="btn btn-primary" type="button">恢复题库</button>
+                    <a class="btn btn-quiet" href="banks.html">返回题库列表</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="state-note">深链打开一个已归档题库时整页替换，不显示任何题目内容。</p>
+          </div>
+
+          <!-- 非成员 403（整页） -->
+          <div class="state-cell is-full">
+            <div class="rule-label">非成员 403（整页）</div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="empty">
+                  <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg></div>
+                  <div class="empty-title">你不在这个题库里</div>
+                  <div class="empty-desc">这个题库只对成员开放。请联系题库所有者把你加进来，或返回题库列表。</div>
+                  <div class="empty-actions">
+                    <a class="btn btn-primary" href="banks.html">返回题库列表</a>
+                    <a class="btn btn-quiet" href="home.html">返回首页</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="state-note">深链进入且非成员时整页替换为 403 状态，不显示任何题库内容；不提示「题库不存在」以免泄露。</p>
+          </div>
+
+          <!-- AI 未配置 -->
+          <div class="state-cell">
+            <div class="rule-label">未配置 · AI</div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="notice info">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+                  <div class="notice-body">
+                    <span class="notice-title">还没有配置 AI</span><br>
+                    配置后可以生成变式题草稿；未配置时建题、导入、练习、复习都不受影响。
+                    <div class="notice-actions"><a class="btn btn-sm" href="settings.html">去配置 AI</a></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 离线 -->
+          <div class="state-cell">
+            <div class="rule-label">离线</div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="notice warn">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                  <div class="notice-body">
+                    <span class="tag warn">离线</span> 批量操作 1 项待同步<br>
+                    当前离线，勾选与批量设置会在本机排队；恢复连接后自动提交。
+                    <div class="notice-actions"><button class="btn btn-sm" type="button">重试同步</button></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="state-note">离线是持久标识 + 队列计数 + 重试。</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- ================= 底部导航（≤768）================= -->
+<nav class="bottomnav" aria-label="底部导航">
+  <button class="bn-item" type="button">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg>今天
+  </button>
+  <button class="bn-item" type="button">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>题库
+  </button>
+  <button class="bn-item" type="button">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg>复习
+  </button>
+  <button class="bn-item" type="button">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>模考
+  </button>
+  <button class="bn-item" type="button">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>资料
+  </button>
+  <button class="bn-item" type="button">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg>更多
+  </button>
+</nav>
+
+<!-- ================= 浮层：新建题目 ================= -->
+<dialog class="dlg wide" id="dlg-create" aria-labelledby="dlg-create-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow" id="qc-eyebrow">题库工作区</p>
+      <h2 class="dlg-title" id="dlg-create-title">新建题目</h2>
+    </div>
+    <button class="icon-btn" type="button" data-create-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <p class="hint">题干与答案是必填；保存后会生成第一个版本。</p>
+    <form onsubmit="return false" id="qc-form">
+      <label class="field">
+        <span class="label">题干</span>
+        <textarea class="textarea" rows="3" placeholder="输入题干，可换行" id="qc-stem" data-autofocus></textarea>
+        <span class="field-err" id="qc-stem-err" hidden>题干不能为空。</span>
+      </label>
+      <div class="od-grid g3 gap-3 mt-4">
+        <label class="field">
+          <span class="label">题型</span>
+          <select class="select" id="qc-type">
+            <option selected>单选题</option>
+            <option>多选题</option>
+            <option>判断题</option>
+            <option>填空题</option>
+            <option>主观题</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="label">难度</span>
+          <select class="select" id="qc-difficulty">
+            <option>入门</option>
+            <option selected>基础</option>
+            <option>进阶</option>
+            <option>困难</option>
+            <option>挑战</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="label">章节</span>
+          <select class="select" id="qc-chapter"></select>
+        </label>
+      </div>
+
+      <div class="field mt-4" id="qc-options-field">
+        <span class="label">选项</span>
+        <div class="od-stack gap-2" id="qc-options">
+          <div class="od-row">
+            <button class="opt-key" type="button">A</button>
+            <input class="input" type="text" placeholder="选项文字" aria-label="选项 A 文字">
+            <button class="icon-btn sm" type="button" aria-label="删除选项 A">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+            </button>
+          </div>
+          <div class="od-row">
+            <button class="opt-key" type="button">B</button>
+            <input class="input" type="text" placeholder="选项文字" aria-label="选项 B 文字">
+            <button class="icon-btn sm" type="button" aria-label="删除选项 B">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+            </button>
+          </div>
+          <div class="od-row">
+            <button class="opt-key" type="button">C</button>
+            <input class="input" type="text" placeholder="选项文字" aria-label="选项 C 文字">
+            <button class="icon-btn sm" type="button" aria-label="删除选项 C">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+            </button>
+          </div>
+          <div class="od-row">
+            <button class="opt-key" type="button">D</button>
+            <input class="input" type="text" placeholder="选项文字" aria-label="选项 D 文字">
+            <button class="icon-btn sm" type="button" aria-label="删除选项 D">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+            </button>
+          </div>
+        </div>
+        <span class="field-err" id="qc-options-err" hidden>至少需要 2 个选项。</span>
+        <button class="btn btn-sm btn-quiet self-start" type="button" id="qc-add-opt">添加选项</button>
+      </div>
+
+      <div class="od-grid g2 gap-3 mt-4">
+        <label class="field">
+          <span class="label">答案</span>
+          <input class="input" id="qc-answer" type="text" placeholder="例如 A 或 AB">
+          <span class="hint" id="qc-answer-hint">多选题直接连写答案字母。</span>
+          <span class="field-err" id="qc-answer-err" hidden>请填写答案。</span>
+        </label>
+        <label class="field">
+          <span class="label">标签</span>
+          <input class="input" id="qc-tags" type="text" placeholder="用逗号分隔">
+        </label>
+      </div>
+
+      <label class="field mt-4">
+        <span class="label">解析</span>
+        <textarea class="textarea" rows="2" placeholder="官方解析（可选）" id="qc-explanation"></textarea>
+      </label>
+    </form>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-create-close>取消</button>
+    <button class="btn btn-primary" type="button" id="qc-save">保存题目</button>
+  </div>
+</dialog>
+
+<!-- ================= 浮层：丢弃未保存修改确认 ================= -->
+<dialog class="dlg narrow" id="dlg-create-discard" aria-labelledby="dlg-create-discard-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">未保存的修改</p>
+      <h2 class="dlg-title" id="dlg-create-discard-title">丢弃这次编辑？</h2>
+    </div>
+  </div>
+  <div class="dlg-body">
+    <p class="dlg-p">你有未保存的题目内容，关闭后将丢失。确定丢弃吗？</p>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>继续编辑</button>
+    <button type="button" class="btn btn-danger-solid" id="qc-discard-ok">丢弃并关闭</button>
+  </div>
+</dialog>
+
+<!-- ================= 浮层：转移所有权（危险，须输入库名） ================= -->
+<dialog class="dlg danger" id="dlg-transfer" aria-labelledby="dlg-transfer-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">成员与权限</p>
+      <h2 class="dlg-title" id="dlg-transfer-title">转移所有权</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <p class="hint" id="transfer-desc">把题库所有权转移给该成员。转移后你会变为编辑者，且不可撤销。</p>
+    <label class="field">
+      <span class="label" id="transfer-confirm-label">输入题库名称以确认</span>
+      <input class="input" type="text" placeholder="题库名称" autocomplete="off" id="transfer-input" data-autofocus>
+    </label>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close>取消</button>
+    <button class="btn btn-danger-solid" type="button" id="transfer-ok" disabled>确认转移</button>
+  </div>
+</dialog>
+
+<!-- ================= 浮层：移除成员 ================= -->
+<dialog class="dlg" id="dlg-remove" aria-labelledby="dlg-remove-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">成员与权限</p>
+      <h2 class="dlg-title" id="dlg-remove-title">移除成员</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <p class="hint" id="remove-desc">把该成员从这个题库移除？其学习记录不受影响。</p>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close>取消</button>
+    <button class="btn btn-danger-solid" type="button" data-autofocus id="remove-ok">移除</button>
+  </div>
+</dialog>
+
+<!-- ================= 浮层：退出题库 ================= -->
+<dialog class="dlg narrow" id="dlg-leave" aria-labelledby="dlg-leave-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">成员与权限</p>
+      <h2 class="dlg-title" id="dlg-leave-title">退出题库</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <p class="hint" id="leave-desc">退出这个题库？退出后需要所有者重新把你加进来。</p>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close>取消</button>
+    <button class="btn btn-danger-solid" type="button" data-autofocus id="leave-ok">退出题库</button>
+  </div>
+</dialog>
+
+<!-- ================= 浮层：归档题库（危险，不要求输入库名） ================= -->
+<dialog class="dlg danger" id="dlg-archive-bank" aria-labelledby="dlg-archive-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">危险操作 · 可恢复</p>
+      <h2 class="dlg-title" id="dlg-archive-title">归档题库</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <p class="hint" id="archive-bank-desc">归档后题库会移到已归档视图，可随时恢复，练习记录与历史数据保留。</p>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close>取消</button>
+    <button class="btn btn-danger-solid" type="button" data-autofocus id="archive-bank-ok">归档题库</button>
+  </div>
+</dialog>
+
+<!-- ================= 浮层：删除题库（仅空库，须输入库名） ================= -->
+<dialog class="dlg danger" id="dlg-delete-bank" aria-labelledby="dlg-delete-bank-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">危险操作 · 不可恢复</p>
+      <h2 class="dlg-title" id="dlg-delete-bank-title">删除题库</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <p class="hint" id="delete-bank-desc">只有没有任何题目的题库才能物理删除。</p>
+    <label class="field">
+      <span class="label" id="delete-bank-label">输入题库名称以确认</span>
+      <input class="input" type="text" autocomplete="off" id="delete-bank-input" data-autofocus>
+      <span class="field-err" id="delete-bank-err" hidden>名称不一致。</span>
+    </label>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close>取消</button>
+    <button class="btn btn-danger-solid" type="button" id="delete-bank-ok" disabled>删除题库</button>
+  </div>
+</dialog>
+
+<!-- ================= 浮层：标签重命名撞名确认 ================= -->
+<dialog class="dlg narrow danger" id="dlg-tag-merge" aria-labelledby="dlg-tag-merge-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">标签已存在</p>
+      <h2 class="dlg-title" id="dlg-tag-merge-title">合并同名标签？</h2>
+    </div>
+  </div>
+  <div class="dlg-body">
+    <p id="dlg-tag-merge-desc" class="dlg-p"></p>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>取消</button>
+    <button type="button" class="btn btn-danger-solid" id="dlg-tag-merge-ok">合并</button>
+  </div>
+</dialog>
+
+<!-- ================= 浮层：通用确认（批量 / 删除 / 移动共用，带数量与后果） ================= -->
+<dialog class="dlg narrow" id="dlg-confirm" aria-labelledby="dlg-confirm-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow" id="dlg-confirm-eyebrow">确认</p>
+      <h2 class="dlg-title" id="dlg-confirm-title">确认操作</h2>
+    </div>
+    <button class="icon-btn sm" type="button" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <p id="dlg-confirm-desc" class="dlg-p"></p>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>取消</button>
+    <button type="button" class="btn btn-primary" id="dlg-confirm-ok">确认</button>
+  </div>
+</dialog>
+
+<script src="../../assets/icons.js"></script>
+<script src="../../assets/store.js"></script>
+<script src="../../assets/i18n.js"></script>
+<script src="../../assets/nav.js"></script>
+<script src="../../assets/spec-boot.js"></script>
+<script>
+  /* 本屏交互：账户菜单开闭（tab / 分段 / 对话框由 spec-boot 处理） */
+  (function () {
+    document.querySelectorAll('[data-menu-trigger]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var menu = btn.parentElement.querySelector('.menu');
+        if (!menu) return;
+        var willOpen = menu.hidden;
+        document.querySelectorAll('.menu').forEach(function (m) { m.hidden = true; });
+        document.querySelectorAll('[data-menu-trigger]').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+        menu.hidden = !willOpen;
+        btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        if (willOpen) {
+          var first = menu.querySelector('.menu-item');
+          if (first) first.focus();
+        }
+      });
+    });
+    document.querySelectorAll('.menu .menu-item').forEach(function (item) {
+      item.addEventListener('click', function () {
+        var menu = item.closest('.menu');
+        if (menu) menu.hidden = true;
+        var trig = menu && menu.parentElement.querySelector('[data-menu-trigger]');
+        if (trig) trig.setAttribute('aria-expanded', 'false');
+      });
+    });
+  })();
+</script>
+<script>
+/* ==========================================================================
+   题库工作区 · P2 收敛
+   --------------------------------------------------------------------------
+   · 一个实体一个规范页面：题目 / 结构 / 成员 / 导入历史 / AI 草稿 / 设置（CR-17）
+   · 已归档题库 → 整页状态，工作区不可再进入（CR-03）
+   · 共享只读库 → 结构不变，编辑类控件禁用并给可读原因（PR-102 / FN-421）
+   · 批量：整批校验、整批生效；结果只有「成功 X · 无须变更 Y」两项（CR-27）
+   · 不因进行中模考锁定任何内容（CR-26）
+   ========================================================================== */
+(function () {
+  var S = window.eeStore;
+  if (!S) return;
+
+  function $(s, r) { return (r || document).querySelector(s); }
+  function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+  function esc(s) { return S.esc(s); }
+  function icon(n) { return '<svg class="od-icon" aria-hidden="true"><use href="#i-' + n + '"/></svg>'; }
+  function toast(m, k) { if (window.eeToast) window.eeToast(m, k); }
+  /* 题库角色只有三种：所有者 / 编辑者 / 成员（Q-401 裁定 a） */
+  var ROLE_NAMES = { OWNER: '所有者', EDITOR: '编辑者', MEMBER: '成员', VIEWER: '成员' };
+
+  /* ---------- 入口与题库 ---------- */
+  var qp = new URLSearchParams(location.search);
+  var bankId = qp.get('bank') || '';
+  var bank = S.bank(bankId);
+  if (!bank) {
+    var cand = S.banks({ archived: false }).filter(function (b) { return !b.shared; })[0]
+      || S.banks({ archived: false })[0] || S.banks()[0];
+    bank = cand || null;
+  }
+  if (!bank) {
+    $('#ws-empty').hidden = false;
+    $('#ws-body').hidden = true;
+    return;
+  }
+  bankId = bank.id;
+
+  /* 已归档题库：整页状态，不渲染任何页签与题目 */
+  if (bank.archived) {
+    $('#ws-body').hidden = true;
+    var arch = $('#ws-archived');
+    arch.hidden = false;
+    $('#ws-archived-title').textContent = '「' + bank.name + '」已归档';
+    $('#ws-archived-desc').textContent = '归档后工作区不可再进入，题目与练习记录都保留。恢复题库即可继续编辑。';
+    $('#ws-crumb-here').textContent = bank.name;
+    $('#ws-m-title').textContent = bank.name;
+    var canRestore = S.can('bank.archive') && !bank.shared;
+    $('#ws-archived-restore').hidden = !canRestore;
+    if (!canRestore) $('#ws-archived-restore').disabled = true;
+    $('#ws-archived-restore').addEventListener('click', function () {
+      S.restoreBank(bankId);
+      toast('已恢复「' + bank.name + '」');
+      location.reload();
+    });
+    return;
+  }
+  $('#ws-body').hidden = false;
+
+  /* ---------- 视图状态 ---------- */
+  var VS = 'workspace';
+  var sv = S.view.load(VS);
+  var st = {
+    tab: qp.get('tab') || sv.tab || 'questions',
+    q: sv.q || '',
+    type: sv.type || '全部题型',
+    diff: sv.diff || '全部难度',
+    sort: sv.sort || '默认顺序',
+    showArchived: !!sv.showArchived,
+    page: sv.page || 1,
+    pageSize: sv.pageSize || 25,
+    selected: sv.selected || {},      /* 题目 id → true，显式选择集，跨筛选保留 */
+    bulkChapter: '', bulkTarget: ''   /* 批量条的已选章节 / 目标题库（跨重渲染保留） */
+  };
+  var TABS = ['questions', 'structure', 'members', 'imports', 'drafts', 'settings'];
+  if (TABS.indexOf(st.tab) < 0) st.tab = 'questions';
+  function saveView() {
+    S.view.save(VS, {
+      tab: st.tab, q: st.q, type: st.type, diff: st.diff, sort: st.sort,
+      showArchived: st.showArchived, page: st.page, pageSize: st.pageSize, selected: st.selected
+    });
+  }
+
+  /* ---------- 通用确认 ---------- */
+  var cDlg = $('#dlg-confirm'), cEyebrow = $('#dlg-confirm-eyebrow'), cTitle = $('#dlg-confirm-title'),
+      cDesc = $('#dlg-confirm-desc'), cOk = $('#dlg-confirm-ok'), pendingOk = null;
+  function confirmAction(opt, trigger) {
+    cEyebrow.textContent = opt.eyebrow || '确认';
+    cTitle.textContent = opt.title;
+    cDesc.textContent = opt.desc;
+    cOk.textContent = opt.okText || '确认';
+    cOk.className = 'btn ' + (opt.danger ? 'btn-danger-solid' : 'btn-primary');
+    pendingOk = opt.onOk;
+    window.eeDialog.open('dlg-confirm', trigger);
+  }
+  cOk.addEventListener('click', function () {
+    var fn = pendingOk; pendingOk = null;
+    window.eeDialog.close(cDlg);
+    if (fn) fn();
+  });
+
+  /* ---------- 派生数据 ---------- */
+  function readonly() { return !!bank.readonly; }
+  function myRole() {
+    var list = S.members(bankId);
+    var me = list.filter(function (m) { return m.user === S.user(); })[0];
+    return me ? me.role : (bank.role || 'OWNER');
+  }
+  /* 编辑能力：题库角色 + 共享只读；不因进行中模考禁用（CR-26） */
+  function canEditContent() { return S.can('question.edit') && !readonly(); }
+  function blockReason() {
+    if (readonly()) return '这个题库共享给你（' + (ROLE_NAMES[myRole()] || '成员') + '）：可以浏览、练习与导出，不能改题。';
+    if (!S.can('question.edit')) return S.denyReason('question.edit');
+    return '';
+  }
+  function killedStems(bid) {
+    return S.reviewQueue().filter(function (r) { return r.bankId === bid && r.killed_at; })
+      .map(function (r) { return r.stem; });
+  }
+  function killedCount() {
+    var killed = killedStems(bankId), n = 0;
+    S.questions(bankId, { archived: false }).forEach(function (q) { if (killed.indexOf(q.stem) >= 0) n++; });
+    return n;
+  }
+  /* 章节顺序：overlay 顺序优先，未收录的追加在后（同级重排写入 overlay） */
+  function chapterList() {
+    var overlay = (bank.chapters || []).slice(), map = {}, out = [];
+    S.questions(bankId).forEach(function (q) {
+      var n = q.chapter || '未分章';
+      map[n] = (map[n] || 0) + 1;
+    });
+    overlay.forEach(function (n) { if (!(n in map)) map[n] = 0; });
+    overlay.forEach(function (n) { if (n in map) { out.push({ name: n, count: map[n] }); delete map[n]; } });
+    Object.keys(map).forEach(function (n) { out.push({ name: n, count: map[n] }); });
+    return out;
+  }
+  function tagList() {
+    var overlay = bank.tags || [], map = {};
+    S.questions(bankId).forEach(function (q) {
+      (q.tags || []).forEach(function (t) { map[t] = (map[t] || 0) + 1; });
+    });
+    overlay.forEach(function (t) { if (!(t in map)) map[t] = 0; });
+    return Object.keys(map).map(function (n) { return { name: n, count: map[n] }; });
+  }
+  function setOverlay(key, list) { S.updateBank(bankId, (function () { var p = {}; p[key] = list; return p; })()); }
+
+  /* ---------- 题目筛选 / 排序 / 分页 ---------- */
+  var DIFF_RANK = { '入门': 1, '基础': 2, '进阶': 3, '困难': 4, '挑战': 5 };
+  function allQuestions() { return S.questions(bankId, { archived: st.showArchived ? undefined : false }); }
+  function visibleQuestions() {
+    var q = (st.q || '').trim().toLowerCase();
+    var list = allQuestions().filter(function (x) {
+      if (st.type !== '全部题型' && x.type !== st.type) return false;
+      if (st.diff !== '全部难度' && x.difficulty !== st.diff) return false;
+      if (!q) return true;
+      return (x.stem + ' ' + x.id + ' ' + (x.tags || []).join(' ') + ' ' + (x.chapter || '')).toLowerCase().indexOf(q) >= 0;
+    });
+    if (st.sort === '按编号') list.sort(function (a, b) { return a.id.localeCompare(b.id); });
+    else if (st.sort === '按难度') list.sort(function (a, b) { return (DIFF_RANK[a.difficulty] || 0) - (DIFF_RANK[b.difficulty] || 0); });
+    else if (st.sort === '按更新时间') list.reverse();
+    return list;
+  }
+  function pageRows() {
+    var vis = visibleQuestions();
+    var pages = Math.max(1, Math.ceil(vis.length / st.pageSize));
+    if (st.page > pages) st.page = pages;
+    var start = (st.page - 1) * st.pageSize;
+    return { rows: vis.slice(start, start + st.pageSize), total: vis.length, pages: pages };
+  }
+
+  /* ---------- 页签 ---------- */
+  function setTab(name) {
+    st.tab = name;
+    $$('#ws-tabs .tab').forEach(function (t) {
+      t.setAttribute('aria-selected', String(t.getAttribute('data-panel') === name));
+    });
+    $$('[data-tab-panel]').forEach(function (p) {
+      p.hidden = p.getAttribute('data-tab-panel') !== name;
+    });
+    saveView();
+  }
+  $$('#ws-tabs .tab').forEach(function (t) {
+    t.addEventListener('click', function () { setTab(t.getAttribute('data-panel')); });
+  });
+
+  /* ---------- 渲染：页头 / 计数 ---------- */
+  function renderHead() {
+    var qs = S.questions(bankId, { archived: false });
+    var archived = S.questions(bankId, { archived: true }).length;
+    var killed = killedCount();
+    $('#ws-bank-name').textContent = bank.name;
+    $('#ws-m-title').textContent = bank.name;
+    $('#ws-crumb-here').textContent = bank.name;
+    $('#ws-bank-sub').textContent = (bank.category || '默认分类') + ' · 共 ' + qs.length + ' 题 · 我可练 ' + (qs.length - killed) + ' 题';
+    $('#ws-practice').setAttribute('href', 'practice.html?bank=' + encodeURIComponent(bankId));
+    $('#ws-import').setAttribute('href', 'import.html?bank=' + encodeURIComponent(bankId));
+    $('#stt-import').setAttribute('href', 'import.html?bank=' + encodeURIComponent(bankId));
+    $('#tab-count-questions').textContent = String(qs.length);
+    $('#tab-count-members').textContent = String(S.members(bankId).length);
+
+    /* 只读共享库：整库一条可读说明，控件照旧呈现但禁用 */
+    var ro = $('#ws-readonly');
+    ro.hidden = !readonly();
+    if (readonly()) $('#ws-readonly-role').textContent = ROLE_NAMES[myRole()] || '成员';
+
+    var live = S.banks({ archived: false });
+    var badge = $('#nav-bank-count');
+    if (badge) { badge.textContent = String(live.length); badge.hidden = live.length === 0; }
+    $('#nav-review-count').textContent = String(S.reviewQueue().length);
+    $('#nav-note-count').textContent = String(S.notes().length);
+    $('#side-due').textContent = String(S.reviewQueue().length);
+    $('#side-sessions').textContent = String(S.sessions().length);
+  }
+
+  /* ---------- 渲染：题目表 ---------- */
+  function qRow(x) {
+    var sel = !!st.selected[x.id];
+    var arch = !!x.archived;
+    return '<tr data-row-id="' + x.id + '"' + (arch ? ' data-archived="1"' : '') + (sel ? ' class="is-selected"' : '') + '>' +
+      '<td class="col-check" data-label="选择"><label class="check"><input type="checkbox" aria-label="选择题目 ' + esc(x.id) + '"' + (sel ? ' checked' : '') + '><span class="vh">选择</span></label></td>' +
+      '<td class="num" data-label="题号">' + esc(x.id) + '</td>' +
+      '<td data-label="题干"><button class="link-btn q-stem" type="button" data-q-open="' + x.id + '">' + esc(x.stem) + '</button>' +
+        '<span class="q-tags">' + (arch ? '<span class="tag plain">已归档</span>' : '') + (x.tags || []).map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join('') + '</span></td>' +
+      '<td data-label="题型">' + esc(x.type) + '</td>' +
+      '<td data-label="章节">' + esc(x.chapter || '未分章') + '</td>' +
+      '<td data-label="难度">' + esc(x.difficulty || '未分级') + '</td>' +
+      '<td class="num" data-label="版本">' + esc(x.version || 'v1') + '</td>' +
+      '<td class="col-actions" data-label="操作">' +
+        '<button class="link-btn" type="button" data-q-edit="' + x.id + '">编辑</button>' +
+        '<button class="icon-btn sm" type="button" data-q-arch="' + x.id + '" aria-label="' + (arch ? '恢复' : '归档') + '题目 ' + esc(x.id) + '" title="' + (arch ? '恢复' : '归档') + '">' +
+          icon(arch ? 'restore' : 'archive') + '</button>' +
+      '</td></tr>';
+  }
+  function renderQuestions() {
+    var pr = pageRows();
+    var tbody = $('#q-tbody');
+    if (!pr.rows.length) {
+      var hasAny = S.questions(bankId).length > 0;
+      tbody.innerHTML = '<tr class="q-empty"><td colspan="8" data-label="无结果">' +
+        (hasAny
+          ? '<p class="empty-desc">没有符合条件的题目 · 调整搜索或筛选。</p>'
+          : '<div class="empty"><span class="empty-mark">' + icon('inbox') + '</span><h4 class="empty-title">这个题库还没有题目</h4>' +
+            '<p class="empty-desc">手动新建一道题，或从文件导入。</p><div class="empty-actions">' +
+            '<button class="btn" type="button" onclick="eeDialog.open(\'dlg-create\', this)">新建题目</button>' +
+            '<a class="btn btn-quiet" href="import.html?bank=' + encodeURIComponent(bankId) + '">导入</a></div></div>') +
+        '</td></tr>';
+    } else {
+      tbody.innerHTML = pr.rows.map(qRow).join('');
+    }
+    $('#q-page-info').textContent = '第 ' + st.page + ' / ' + pr.pages + ' 页 · 共 ' + pr.total + ' 题';
+    $('#q-prev').disabled = st.page <= 1;
+    $('#q-next').disabled = st.page >= pr.pages;
+    $('#q-pagesize').value = String(st.pageSize);
+    $('#q-archived-count').textContent = '已归档 ' + S.questions(bankId, { archived: true }).length + ' 题';
+    $('#q-killed-count').textContent = '已斩杀 ' + killedCount() + ' 题';
+
+    /* 批量条的章节 / 目标题库选项（跨重渲染保留已选值） */
+    var chs = chapterList().map(function (c) { return c.name; });
+    $('#q-bulk-chapter').innerHTML = '<option value="">选择章节</option>' + chs.map(function (c) {
+      return '<option>' + esc(c) + '</option>';
+    }).join('');
+    var others = S.banks({ archived: false }).filter(function (b) { return b.id !== bankId && !b.readonly; });
+    $('#q-bulk-target').innerHTML = '<option value="">选择目标题库</option>' + others.map(function (b) {
+      return '<option value="' + b.id + '">' + esc(b.name) + '</option>';
+    }).join('');
+    $('#q-bulk-chapter').value = st.bulkChapter || '';
+    $('#q-bulk-target').value = st.bulkTarget || '';
+
+    /* 工具栏回填（搜索框不回收焦点，只在不聚焦时赋值） */
+    if (document.activeElement !== $('#q-search')) $('#q-search').value = st.q;
+    $('#q-type').value = st.type;
+    $('#q-diff').value = st.diff;
+    $('#q-sort').value = st.sort;
+    $('#q-show-archived').checked = st.showArchived;
+
+    bindQuestionRows();
+    syncSelection();
+  }
+  function bindQuestionRows() {
+    $$('#q-tbody input[type=checkbox]').forEach(function (cb) {
+      cb.onchange = function () {
+        var id = cb.closest('tr').getAttribute('data-row-id');
+        if (cb.checked) st.selected[id] = true; else delete st.selected[id];
+        saveView(); syncSelection();
+      };
+    });
+    $$('#q-tbody [data-q-open]').forEach(function (b) {
+      b.onclick = function () { location.href = 'question.html?id=' + encodeURIComponent(b.getAttribute('data-q-open')) + '&bank=' + encodeURIComponent(bankId) + '&from=workspace'; };
+    });
+    $$('#q-tbody [data-q-edit]').forEach(function (b) {
+      b.onclick = function () {
+        location.href = 'question.html?id=' + encodeURIComponent(b.getAttribute('data-q-edit')) + '&bank=' + encodeURIComponent(bankId) + '&from=workspace&edit=1';
+      };
+    });
+    $$('#q-tbody [data-q-arch]').forEach(function (b) {
+      b.onclick = function () {
+        var id = b.getAttribute('data-q-arch');
+        var q = S.question(id);
+        if (!q) return;
+        var reason = blockReason();
+        if (reason) { toast(reason, 'bad'); return; }
+        if (q.archived) {
+          /* 恢复：可逆操作不打扰，toast 告知即可 */
+          S.restoreQuestions([id]);
+          toast('已恢复这道题 · 成功 1 · 无须变更 0');
+          renderAll();
+        } else {
+          confirmAction({
+            eyebrow: '可恢复 · 移出练习', title: '归档这道题？',
+            desc: '归档后这道题不再参与练习与抽题，但不会删除。可在题目列表勾选「显示已归档」查看，并随时恢复。',
+            okText: '归档', danger: true,
+            onOk: function () {
+              S.archiveQuestions([id]);
+              toast('已归档这道题 · 成功 1 · 无须变更 0'); renderAll();
+            }
+          }, b);
+        }
+      };
+    });
+  }
+  function selectedIds() { return Object.keys(st.selected); }
+  function syncSelection() {
+    var vis = visibleQuestions();
+    var visIds = {}; vis.forEach(function (x) { visIds[x.id] = true; });
+    var selVis = vis.filter(function (x) { return st.selected[x.id]; }).length;
+    var total = selectedIds().length;
+    var outside = total - selVis;
+    $('#q-bulk-count').textContent = total === 0 ? '未选择题目'
+      : ('已选 ' + total + ' 题' + (outside > 0 ? '（跨筛选保留，含当前不可见项 ' + outside + ' 条）' : ''));
+    /* 没有勾选时收起批量条：空条会把纸面撑高一截，且与行内操作重复同一批动作 */
+    $('#q-bulk').hidden = total === 0;
+    $('#q-shown').textContent = selVis + ' / ' + vis.length;
+    var all = $('#q-select-all');
+    if (vis.length === 0) { all.checked = false; all.indeterminate = false; }
+    else { all.checked = selVis === vis.length; all.indeterminate = selVis > 0 && selVis < vis.length; }
+    $$('#q-tbody tr[data-row-id]').forEach(function (r) {
+      var on = !!st.selected[r.getAttribute('data-row-id')];
+      r.classList.toggle('is-selected', on);
+      var cb = r.querySelector('input[type=checkbox]');
+      if (cb) cb.checked = on;
+    });
+    /* 启停批量操作：空选中禁用；无权限时禁用并给原因 */
+    var reason = blockReason();
+    var allowed = total > 0 && !reason;
+    $$('.bulkbar .btn:not(#q-bulk-clear)').forEach(function (b) { b.disabled = !allowed; });
+    $('#q-bulk-chapter').disabled = !allowed;
+    $('#q-bulk-tags').disabled = !allowed;
+    $('#q-bulk-target').disabled = !allowed;
+    var hint = $('#q-bulk-hint');
+    if (total === 0) { hint.hidden = true; }
+    else if (reason) { hint.textContent = reason; hint.hidden = false; }
+    else if (outside > 0) { hint.textContent = '所选题目中有 ' + outside + ' 条当前不可见，批量操作会作用于整个选择集。'; hint.hidden = false; }
+    else { hint.hidden = true; }
+    var allArchived = total > 0 && selectedIds().every(function (id) { var q = S.question(id); return q && q.archived; });
+    $('#q-bulk-archive').textContent = allArchived ? '恢复所选' : '归档所选';
+  }
+
+  /* ---------- 批量结果：只有「成功 X · 无须变更 Y」两项（CR-27） ---------- */
+  function showBulkResult(kind, html) {
+    var host = $('#q-bulk-result');
+    host.innerHTML = '<div class="notice ' + kind + '" role="status">' +
+      icon(kind === 'bad' ? 'alert-triangle' : 'check') + '<span class="notice-body">' + html + '</span></div>';
+    host.hidden = false;
+  }
+  function hideBulkResult() { var h = $('#q-bulk-result'); h.hidden = true; h.innerHTML = ''; }
+  function receipt(ok, noop, total, verb) {
+    return verb + ' ' + ok + ' 题 · 无须变更 ' + noop + ' 项（已选 ' + total + '，' + ok + ' + ' + noop + ' 对账一致）。';
+  }
+  /* 整批校验：任一失败即整批拒绝、零写入，且必须给出可读原因（BR-104 / CR-27） */
+  function validateBatch(ids, opts) {
+    opts = opts || {};
+    if (!ids.length) { toast('请先勾选题目', 'bad'); return 'empty'; }
+    var reason = blockReason();
+    if (reason) { showBulkResult('bad', '整批拒绝，未做任何修改：' + reason); return 'denied'; }
+    var missing = ids.filter(function (id) { return !S.question(id); });
+    if (missing.length) {
+      showBulkResult('bad', '整批拒绝，未做任何修改：所选题号中有 ' + missing.length + ' 条已不存在（可能刚被移动或删除）。请清除选择后重试。');
+      return 'denied';
+    }
+    var foreign = ids.filter(function (id) { var q = S.question(id); return q && q.bankId !== bankId; });
+    if (foreign.length) {
+      showBulkResult('bad', '整批拒绝，未做任何修改：所选题号中有 ' + foreign.length + ' 条不属于本题库。');
+      return 'denied';
+    }
+    if (opts.noArchived) {
+      var arch = ids.filter(function (id) { var q = S.question(id); return q && q.archived; });
+      if (arch.length) {
+        showBulkResult('bad', '整批拒绝，未做任何修改：所选中有 ' + arch.length + ' 条已归档题目。已归档题不参与章节、标签、移动与复制，请先恢复它们。');
+        return 'denied';
+      }
+    }
+    return null;
+  }
+  function runArchive(ids, wantArchive) {
+    var ok = 0, noop = 0;
+    ids.forEach(function (id) {
+      var q = S.question(id); if (!q) return;
+      var archived = !!q.archived;
+      if (wantArchive) { if (archived) noop++; else { S.archiveQuestions([id]); ok++; } }
+      else { if (!archived) noop++; else { S.restoreQuestions([id]); ok++; } }
+    });
+    return { ok: ok, noop: noop };
+  }
+
+  /* ---------- 渲染：结构 ---------- */
+  function renderStructure() {
+    var chs = chapterList(), tags = tagList();
+    $('#st-chapter-count').textContent = chs.length + ' 章';
+    $('#st-tag-count').textContent = tags.length + ' 个';
+    /* 没有章节时，添加表单收起来，只留三步引导 —— 不并排放两个空态 */
+    $('#st-chapter-add').hidden = chs.length === 0;
+    $('#st-chapter-empty').hidden = chs.length > 0;
+    var canEdit = canEditContent();
+    var reason = blockReason();
+    $('#st-chapters').innerHTML = chs.length ? chs.map(function (c, i) {
+      var up = i > 0, down = i < chs.length - 1;
+      return '<div class="list-row static chapter-row" data-chapter="' + esc(c.name) + '">' +
+        '<span class="list-main"><span class="list-title">' + esc(c.name) + '</span><span class="list-meta">' + c.count + ' 题</span></span>' +
+        '<span class="list-side">' +
+        '<span class="order-pair">' +
+        '<button class="icon-btn sm" type="button" data-ch-up="' + esc(c.name) + '" aria-label="上移「' + esc(c.name) + '」" title="同级上移"' + (canEdit && up ? '' : ' disabled title="' + esc(up ? reason : '已经在第一位') + '"') + '>' + icon('chevron-up') + '</button>' +
+        '<button class="icon-btn sm" type="button" data-ch-down="' + esc(c.name) + '" aria-label="下移「' + esc(c.name) + '」" title="同级下移"' + (canEdit && down ? '' : ' disabled title="' + esc(down ? reason : '已经在最后一位') + '"') + '>' + icon('chevron-down') + '</button>' +
+        '</span>' +
+        '<button class="btn btn-sm btn-quiet" type="button" data-ch-add="' + esc(c.name) + '"' + (canEdit ? '' : ' disabled title="' + esc(reason) + '"') + '>添加子章节</button>' +
+        '<button class="btn btn-sm btn-quiet" type="button" data-ch-rename="' + esc(c.name) + '"' + (canEdit ? '' : ' disabled title="' + esc(reason) + '"') + '>重命名</button>' +
+        '<button class="btn btn-sm btn-danger" type="button" data-ch-del="' + esc(c.name) + '"' + (canEdit ? '' : ' disabled title="' + esc(reason) + '"') + '>删除章节</button>' +
+        '</span></div>';
+    }).join('') : '';
+    $('#st-tags').innerHTML = tags.length ? tags.map(function (t) {
+      return '<div class="list-row static dense" data-tag="' + esc(t.name) + '">' +
+        '<span class="list-title name-col">' + esc(t.name) + '</span>' +
+        '<span class="mono muted">' + t.count + '</span>' +
+        '<span class="list-side">' +
+        '<button class="btn btn-sm btn-quiet" type="button" data-tag-rename="' + esc(t.name) + '"' + (canEdit ? '' : ' disabled title="' + esc(reason) + '"') + '>重命名</button>' +
+        '<button class="btn btn-sm btn-quiet" type="button" data-tag-merge="' + esc(t.name) + '"' + (canEdit ? '' : ' disabled title="' + esc(reason) + '"') + '>合并到…</button>' +
+        '<button class="btn btn-sm btn-danger" type="button" data-tag-del="' + esc(t.name) + '"' + (canEdit ? '' : ' disabled title="' + esc(reason) + '"') + '>删除标签</button>' +
+        '</span></div>';
+    }).join('') : '';
+    var gr = $('#st-gate-reason');
+    if (canEdit) gr.hidden = true;
+    else { gr.textContent = reason; gr.hidden = false; }
+    bindStructure();
+  }
+  function bindStructure() {
+    /* 同级重排：把完整顺序写进 overlay，两个方向都可逆 */
+    $$('[data-ch-up], [data-ch-down]').forEach(function (b) {
+      b.onclick = function () {
+        var name = b.getAttribute('data-ch-up') || b.getAttribute('data-ch-down');
+        var dir = b.hasAttribute('data-ch-up') ? -1 : 1;
+        var order = chapterList().map(function (c) { return c.name; });
+        var i = order.indexOf(name);
+        var j = i + dir;
+        if (i < 0 || j < 0 || j >= order.length) return;
+        var tmp = order[i]; order[i] = order[j]; order[j] = tmp;
+        setOverlay('chapters', order);
+        toast(dir < 0 ? '已上移「' + name + '」' : '已下移「' + name + '」');
+        renderAll();
+      };
+    });
+    $$('[data-ch-rename]').forEach(function (b) {
+      b.onclick = function () {
+        var row = b.closest('.list-row');
+        var old = b.getAttribute('data-ch-rename');
+        if (row.classList.contains('is-editing')) return;
+        row.classList.add('is-editing');
+        var nameCol = row.querySelector('.list-title');
+        if (nameCol) nameCol.style.display = 'none';
+        var input = document.createElement('input');
+        input.className = 'input'; input.type = 'text'; input.value = old;
+        input.setAttribute('aria-label', '章节名称');
+        if (nameCol) nameCol.parentNode.insertBefore(input, nameCol);
+        var save = document.createElement('button');
+        save.className = 'btn btn-sm'; save.type = 'button'; save.textContent = '保存';
+        var cancel = document.createElement('button');
+        cancel.className = 'btn btn-sm btn-quiet'; cancel.type = 'button'; cancel.textContent = '取消';
+        b.parentNode.insertBefore(cancel, b);
+        b.parentNode.insertBefore(save, b);
+        b.style.display = 'none';
+        input.focus(); input.select();
+        function exit() {
+          input.remove(); save.remove(); cancel.remove();
+          if (nameCol) nameCol.style.display = '';
+          b.style.display = '';
+          row.classList.remove('is-editing');
+        }
+        cancel.onclick = exit;
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); commit(); }
+          else if (e.key === 'Escape') { e.preventDefault(); exit(); }
+        });
+        function commit() {
+          var val = (input.value || '').trim();
+          if (!val) { toast('章节名不能为空', 'bad'); return; }
+          if (val === old) { exit(); return; }
+          if (chapterList().some(function (c) { return c.name === val; })) { toast('已存在同名章节', 'bad'); return; }
+          var affected = S.questions(bankId).filter(function (q) { return (q.chapter || '未分章') === old; });
+          confirmAction({
+            eyebrow: '章节重命名', title: '把「' + old + '」重命名为「' + val + '」？',
+            desc: '会影响 ' + affected.length + ' 道题的章节归属，题目内容不变。',
+            okText: '重命名', danger: false,
+            onOk: function () {
+              if (affected.length) S.bulkSetChapter(affected.map(function (q) { return q.id; }), val);
+              var overlay = chapterList().map(function (c) { return c.name === old ? val : c.name; });
+              setOverlay('chapters', overlay);
+              toast('章节已重命名'); renderAll();
+            }
+          }, save);
+          exit();
+        }
+        save.onclick = commit;
+      };
+    });
+    $$('[data-ch-del]').forEach(function (b) {
+      b.onclick = function () {
+        var name = b.getAttribute('data-ch-del');
+        var affected = S.questions(bankId).filter(function (q) { return (q.chapter || '未分章') === name; });
+        confirmAction({
+          eyebrow: '删除章节', title: '删除章节「' + name + '」？',
+          desc: affected.length + ' 道题的章节会改为「未分章」，题目本身不会删除。',
+          okText: '删除章节', danger: true,
+          onOk: function () {
+            if (affected.length) S.bulkSetChapter(affected.map(function (q) { return q.id; }), '未分章');
+            setOverlay('chapters', chapterList().map(function (c) { return c.name; }).filter(function (n) { return n !== name; }));
+            toast('章节已删除'); renderAll();
+          }
+        }, b);
+      };
+    });
+    $$('[data-ch-add]').forEach(function (b) {
+      b.onclick = function () {
+        var parent = b.getAttribute('data-ch-add');
+        var row = b.closest('.list-row');
+        if (row.nextElementSibling && row.nextElementSibling.classList.contains('chapter-form')) return;
+        var form = document.createElement('form');
+        form.className = 'chapter-form lvl-1';
+        form.onsubmit = function () { return false; };
+        form.innerHTML = '<input class="input" type="text" placeholder="子章节名称" aria-label="子章节名称">' +
+          '<button class="btn btn-sm" type="submit">添加</button>' +
+          '<button class="btn btn-sm btn-quiet" type="button">取消</button>' +
+          '<span class="hint">Enter 添加，Esc 取消</span>';
+        row.parentNode.insertBefore(form, row.nextSibling);
+        var inp = form.querySelector('input');
+        inp.focus();
+        function close() { form.remove(); }
+        form.querySelectorAll('.btn')[1].onclick = close;
+        inp.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); close(); } });
+        form.onsubmit = function (e) {
+          if (e) e.preventDefault();
+          var val = (inp.value || '').trim();
+          if (!val) { toast('章节名不能为空', 'bad'); return; }
+          if (chapterList().some(function (c) { return c.name === val; })) { toast('已存在同名章节', 'bad'); return; }
+          setOverlay('chapters', chapterList().map(function (c) { return c.name; }).concat([val]));
+          toast('已添加子章节「' + val + '」· 上级：' + parent);
+          close(); renderAll();
+          return false;
+        };
+      };
+    });
+    /* 标签：重命名（含撞名合并确认）/ 删除（解除关联，资料解绑不删除） */
+    /* 显式合并标签（FN-119：不靠重命名撞名才能触发，目标由用户选） */
+    $$('[data-tag-merge]').forEach(function (b) {
+      b.onclick = function () {
+        if (!canEditContent()) { toast(blockReason(), 'bad'); return; }
+        var row = b.closest('.list-row');
+        var from = b.getAttribute('data-tag-merge');
+        if (row.classList.contains('is-editing')) return;
+        var others = tagList().filter(function (t) { return t.name !== from; });
+        if (!others.length) { toast('没有可合并的其他标签', 'bad'); return; }
+        row.classList.add('is-editing');
+        var nameCol = row.querySelector('.name-col');
+        if (nameCol) nameCol.style.display = 'none';
+        var form = document.createElement('span');
+        form.className = 'od-cluster';
+        form.innerHTML = '<span class="hint">合并到</span>';
+        var sel = document.createElement('select');
+        sel.className = 'select';
+        sel.setAttribute('aria-label', '合并目标标签');
+        sel.innerHTML = others.map(function (t) { return '<option>' + esc(t.name) + '</option>'; }).join('');
+        form.appendChild(sel);
+        var ok = document.createElement('button');
+        ok.className = 'btn btn-sm'; ok.type = 'button'; ok.textContent = '合并';
+        var cancel = document.createElement('button');
+        cancel.className = 'btn btn-sm btn-quiet'; cancel.type = 'button'; cancel.textContent = '取消';
+        form.appendChild(ok); form.appendChild(cancel);
+        if (nameCol) nameCol.parentNode.insertBefore(form, nameCol);
+        b.style.display = 'none';
+        sel.focus();
+        function exit() {
+          form.remove();
+          if (nameCol) nameCol.style.display = '';
+          b.style.display = '';
+          row.classList.remove('is-editing');
+        }
+        cancel.onclick = exit;
+        ok.onclick = function () {
+          var to = sel.value;
+          confirmAction({
+            eyebrow: '合并标签', title: '把「' + from + '」合并到「' + to + '」？',
+            desc: '合并后两个标签并为一个：引用「' + from + '」的题目会改挂到「' + to + '」，题目本身不删除；历史版本里的标签快照不改写。',
+            okText: '合并', danger: false,
+            onOk: function () {
+              var affected = S.questions(bankId).filter(function (q) { return (q.tags || []).indexOf(from) >= 0; });
+              affected.forEach(function (q) {
+                var merged = q.tags.filter(function (t) { return t !== from; });
+                if (merged.indexOf(to) < 0) merged.push(to);
+                S.updateQuestion(q.id, { tags: merged });
+              });
+              setOverlay('tags', tagList().map(function (t) { return t.name; }).filter(function (t) { return t !== from; }));
+              exit();
+              toast('已把「' + from + '」合并到「' + to + '」· 影响 ' + affected.length + ' 道题');
+              renderAll();
+            }
+          }, ok);
+        };
+      };
+    });
+    $$('[data-tag-rename]').forEach(function (b) {
+      b.onclick = function () {
+        var row = b.closest('.list-row');
+        var old = b.getAttribute('data-tag-rename');
+        if (row.classList.contains('is-editing')) return;
+        row.classList.add('is-editing');
+        var nameCol = row.querySelector('.name-col');
+        if (nameCol) nameCol.style.display = 'none';
+        var input = document.createElement('input');
+        input.className = 'input tag-edit-input'; input.type = 'text'; input.value = old;
+        input.setAttribute('aria-label', '标签名称');
+        if (nameCol) nameCol.parentNode.insertBefore(input, nameCol);
+        var cancel = document.createElement('button');
+        cancel.className = 'btn btn-sm btn-quiet'; cancel.type = 'button'; cancel.textContent = '取消';
+        b.parentNode.insertBefore(cancel, b.nextSibling);
+        b.textContent = '保存';
+        input.focus(); input.select();
+        function exit() {
+          input.remove(); cancel.remove();
+          if (nameCol) nameCol.style.display = '';
+          b.textContent = '重命名';
+          row.classList.remove('is-editing');
+        }
+        cancel.onclick = exit;
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); commit(); }
+          else if (e.key === 'Escape') { e.preventDefault(); exit(); }
+        });
+        function commit() {
+          var val = (input.value || '').trim();
+          if (!val) { toast('标签名不能为空', 'bad'); return; }
+          if (val === old) { exit(); return; }
+          var dup = tagList().some(function (t) { return t.name === val; });
+          function doRename() {
+            var affected = S.questions(bankId).filter(function (q) { return (q.tags || []).indexOf(old) >= 0; });
+            affected.forEach(function (q) {
+              S.updateQuestion(q.id, { tags: q.tags.map(function (t) { return t === old ? val : t; }) });
+            });
+            setOverlay('tags', tagList().map(function (t) { return t.name; }).map(function (t) { return t === old ? val : t; }).concat(affected.length ? [] : [val]));
+            toast(dup ? ('已合并到「' + val + '」') : ('标签已保存 · 影响 ' + affected.length + ' 道题'));
+            renderAll();
+          }
+          if (dup) {
+            $('#dlg-tag-merge-desc').textContent = '已存在同名标签「' + val + '」。合并后两个标签会并为一个，引用它的题目都会归到该标签下；历史版本里的标签快照不改写。';
+            $('#dlg-tag-merge-ok').onclick = function () {
+              window.eeDialog.close($('#dlg-tag-merge'));
+              doRename();
+            };
+            window.eeDialog.open('dlg-tag-merge', b);
+          } else {
+            doRename();
+          }
+          exit();
+        }
+        b.onclick = commit;
+      };
+    });
+    $$('[data-tag-del]').forEach(function (b) {
+      b.onclick = function () {
+        var name = b.getAttribute('data-tag-del');
+        var affected = S.questions(bankId).filter(function (q) { return (q.tags || []).indexOf(name) >= 0; });
+        var assets = S.notes(bankId).filter(function (n) { return (n.tags || []).indexOf(name) >= 0; }).length;
+        confirmAction({
+          eyebrow: '删除标签', title: '删除标签「' + name + '」？',
+          desc: affected.length + ' 道题不再带这个标签，题目本身不会删除；' + assets + ' 条关联资料会解除关联但保留内容，不会被删除。',
+          okText: '删除标签', danger: true,
+          onOk: function () {
+            affected.forEach(function (q) {
+              S.updateQuestion(q.id, { tags: q.tags.filter(function (t) { return t !== name; }) });
+            });
+            setOverlay('tags', tagList().map(function (t) { return t.name; }).filter(function (t) { return t !== name; }));
+            toast('标签已删除 · 关联资料已解绑并保留'); renderAll();
+          }
+        }, b);
+      };
+    });
+  }
+  $('#st-chapter-add').onsubmit = function (e) {
+    if (e) e.preventDefault();
+    var val = ($('#st-chapter-add-name').value || '').trim();
+    if (!val) { toast('章节名不能为空', 'bad'); return false; }
+    if (chapterList().some(function (c) { return c.name === val; })) { toast('已存在同名章节', 'bad'); return false; }
+    setOverlay('chapters', chapterList().map(function (c) { return c.name; }).concat([val]));
+    $('#st-chapter-add-name').value = '';
+    toast('已添加章节「' + val + '」');
+    renderAll();
+    return false;
+  };
+  $('#st-tag-add').onsubmit = function (e) {
+    if (e) e.preventDefault();
+    var val = ($('#st-tag-add-name').value || '').trim();
+    if (!val) { toast('标签名不能为空', 'bad'); return false; }
+    if (tagList().some(function (t) { return t.name === val; })) { toast('已存在同名标签', 'bad'); return false; }
+    setOverlay('tags', tagList().map(function (t) { return t.name; }).concat([val]));
+    $('#st-tag-add-name').value = '';
+    toast('已新建标签「' + val + '」');
+    renderAll();
+    return false;
+  };
+
+  /* ---------- 渲染：成员 ---------- */
+  function renderMembers() {
+    var list = S.members(bankId);
+    var me = S.user();
+    var canManage = S.can('member.manage') && !readonly();
+    $('#mb-count').textContent = list.length + ' 人';
+    $('#mb-list').innerHTML = list.map(function (m) {
+      var isMe = m.user === me;
+      var initial = (m.user || '?').charAt(0).toUpperCase();
+      return '<div class="list-row static" data-member="' + esc(m.user) + '">' +
+        '<span class="user-mini" aria-hidden="true">' + esc(initial) + '</span>' +
+        '<span class="list-main">' +
+        '<span class="list-title">' + esc(m.user) + (isMe ? ' <span class="tag brand">我</span>' : '') + '</span>' +
+        '<span class="list-meta"><span class="tag' + (m.role === 'OWNER' ? ' brand' : '') + '">' + esc(ROLE_NAMES[m.role] || '成员') + '</span></span>' +
+        '</span>' +
+        '<span class="list-side">' +
+        (isMe
+          ? '<span class="hint">' + (m.role === 'OWNER' ? '所有权可转移给编辑者' : '你可以浏览和练习这个题库') + '</span>'
+          : '<select class="select role-select" aria-label="更改权限" data-role-for="' + esc(m.user) + '"' + (canManage ? '' : ' disabled title="' + esc(S.denyReason('member.manage')) + '"') + '>' +
+            ['EDITOR', 'MEMBER'].map(function (r) {
+              return '<option value="' + r + '"' + (r === m.role ? ' selected' : '') + '>' + ROLE_NAMES[r] + '</option>';
+            }).join('') + '</select>' +
+            '<button class="btn btn-sm btn-quiet" type="button" data-mb-transfer="' + esc(m.user) + '"' + (canManage ? '' : ' disabled title="' + esc(S.denyReason('member.manage')) + '"') + '>转移所有权</button>' +
+            '<button class="btn btn-sm btn-quiet" type="button" data-mb-remove="' + esc(m.user) + '"' + (canManage ? '' : ' disabled title="' + esc(S.denyReason('member.manage')) + '"') + '>移除</button>') +
+        '</span></div>';
+    }).join('');
+
+    /* 页脚：我的角色决定可见动作 */
+    var role = myRole();
+    var foot = $('#mb-foot-hint'), leave = $('#mb-leave');
+    if (role === 'OWNER') {
+      foot.textContent = '你在这个题库里是所有者：可以管理成员、改题与修改题库资料。';
+      leave.hidden = true;
+    } else {
+      foot.textContent = '你在这个题库里是' + (ROLE_NAMES[role] || role) + '：可以浏览和练习，' +
+        (canEditContent() ? '可以改题，' : '不能编辑内容，') + (canManage ? '可以管理成员。' : '不能增删成员或修改题库资料。');
+      leave.hidden = false;
+    }
+    $('#mb-gate').hidden = canManage;
+    if (!canManage) $('#mb-gate-body').textContent = (readonly() ? '这个题库共享给你，' : '') + S.denyReason('member.manage') + '。编辑者与成员可以浏览和练习，不能增删成员或修改题库资料。';
+    $('#mb-combo').disabled = !canManage;
+    $('#mb-role').disabled = !canManage;
+    if (!canManage) { $('#mb-add').title = S.denyReason('member.manage'); $('#mb-picked').textContent = S.denyReason('member.manage'); }
+    if (canManage) fillCombo('');
+    else syncAddState();
+    bindMembers();
+  }
+  var comboPicked = '';
+  function candidates() {
+    var out = [];
+    S.get().members.forEach(function (entry) {
+      (entry.list || []).forEach(function (m) {
+        if (out.indexOf(m.user) < 0 && m.user !== S.user()) out.push(m.user);
+      });
+    });
+    return out.filter(function (u) { return S.members(bankId).every(function (m) { return m.user !== u; }); });
+  }
+  /* 组合框：有候选时列出候选；没有候选也允许直接输入用户名加入（与提示文案一致） */
+  function syncAddState() {
+    var v = (comboPicked || $('#mb-combo').value || '').trim();
+    $('#mb-add').disabled = !(S.can('member.manage') && !readonly()) || !v;
+  }
+  function fillCombo(q) {
+    var box = $('#member-listbox');
+    var list = candidates().filter(function (u) { return !q || u.toLowerCase().indexOf(q.toLowerCase()) >= 0; });
+    if (!list.length) {
+      box.innerHTML = '<li class="combo-opt is-active" id="member-opt-0" role="option" aria-selected="true">没有匹配的已注册用户 · 可直接输入用户名</li>';
+      comboPicked = '';
+      $('#mb-picked').textContent = '直接输入用户名加入';
+    } else {
+      box.innerHTML = list.map(function (u, i) {
+        return '<li class="combo-opt' + (i === 0 ? ' is-active' : '') + '" id="member-opt-' + i + '" role="option" aria-selected="' + (i === 0) + '">' + esc(u) + '</li>';
+      }).join('');
+      comboPicked = list[0];
+      $('#mb-picked').textContent = '已选择 ' + comboPicked;
+      $$('#member-listbox .combo-opt').forEach(function (li) {
+        li.onclick = function () {
+          $$('#member-listbox .combo-opt').forEach(function (x) { x.classList.remove('is-active'); x.setAttribute('aria-selected', 'false'); });
+          li.classList.add('is-active'); li.setAttribute('aria-selected', 'true');
+          comboPicked = li.textContent.trim();
+          $('#mb-picked').textContent = '已选择 ' + comboPicked;
+          $('#mb-combo').value = comboPicked;
+          syncAddState();
+        };
+      });
+    }
+    syncAddState();
+  }
+  function bindMembers() {
+    $$('[data-role-for]').forEach(function (sel) {
+      sel.onchange = function () {
+        if (!S.can('member.manage')) { toast(S.denyReason('member.manage'), 'bad'); renderMembers(); return; }
+        var user = sel.getAttribute('data-role-for');
+        var role = sel.value;
+        confirmAction({
+          eyebrow: '成员与权限', title: '把 ' + user + ' 改为' + (ROLE_NAMES[role] || role) + '？',
+          desc: '角色立即生效：' + (role === 'EDITOR' ? '编辑者可以改题与导入。' : '成员可以浏览和练习。'),
+          okText: '更改角色', danger: false,
+          onOk: function () {
+            S.removeMember(bankId, user);
+            S.addMember(bankId, user, role);
+            toast('已将 ' + user + ' 设为' + (ROLE_NAMES[role] || '')); renderAll();
+          }
+        }, sel);
+      };
+    });
+    $$('[data-mb-remove]').forEach(function (b) {
+      b.onclick = function () {
+        if (!S.can('member.manage')) { toast(S.denyReason('member.manage'), 'bad'); return; }
+        var user = b.getAttribute('data-mb-remove');
+        $('#remove-desc').textContent = '把 ' + user + ' 从这个题库移除？其作答、错题与成绩报告全部保留，仍进个人统计。';
+        $('#remove-ok').onclick = function () {
+          window.eeDialog.close($('#dlg-remove'));
+          S.removeMember(bankId, user);
+          toast('成员已移除'); renderAll();
+        };
+        window.eeDialog.open('dlg-remove', b);
+      };
+    });
+    $$('[data-mb-transfer]').forEach(function (b) {
+      b.onclick = function () {
+        if (!S.can('member.manage')) { toast(S.denyReason('member.manage'), 'bad'); return; }
+        var user = b.getAttribute('data-mb-transfer');
+        $('#transfer-desc').textContent = '把题库所有权转移给 ' + user + '。转移后你会变为编辑者，且不可撤销。';
+        $('#transfer-confirm-label').textContent = '输入题库名称「' + bank.name + '」以确认';
+        $('#transfer-input').value = '';
+        $('#transfer-ok').disabled = true;
+        $('#transfer-ok').onclick = function () {
+          window.eeDialog.close($('#dlg-transfer'));
+          S.removeMember(bankId, user); S.addMember(bankId, user, 'OWNER');
+          S.removeMember(bankId, S.user()); S.addMember(bankId, S.user(), 'EDITOR');
+          toast('所有权已转移给 ' + user); renderAll();
+        };
+        window.eeDialog.open('dlg-transfer', b);
+      };
+    });
+  }
+  $('#transfer-input').addEventListener('input', function () {
+    $('#transfer-ok').disabled = this.value.trim() !== bank.name;
+  });
+  $('#mb-combo').addEventListener('input', function () { fillCombo(this.value); });
+  $('#mb-add').addEventListener('click', function () {
+    var user = (comboPicked || $('#mb-combo').value || '').trim();
+    if (!user) { toast('请先输入或选择用户', 'bad'); return; }
+    if (!S.can('member.manage') || readonly()) { toast(S.denyReason('member.manage'), 'bad'); return; }
+    if (S.members(bankId).some(function (m) { return m.user === user; })) { toast('该用户已在这个题库里', 'bad'); return; }
+    var r = S.addMember(bankId, user, $('#mb-role').value);
+    if (r && r.ok === false) { toast('该用户已在这个题库里', 'bad'); return; }
+    toast('已添加 ' + user + ' 为' + (ROLE_NAMES[$('#mb-role').value] || ''));
+    $('#mb-combo').value = '';
+    comboPicked = '';
+    renderAll();
+  });
+  $('#leave-desc').textContent = '退出题库「' + bank.name + '」？退出后需要所有者重新把你加进来；你的学习记录保留。';
+  $('#leave-ok').onclick = function () {
+    window.eeDialog.close($('#dlg-leave'));
+    S.removeMember(bankId, S.user());
+    toast('已退出题库');
+    location.href = 'banks.html';
+  };
+
+  /* ---------- 渲染：导入历史 ---------- */
+  function extOf(name) { var m = String(name || '').match(/\.([a-z0-9]+)$/i); return m ? m[1].toLowerCase() : '—'; }
+  function renderImports() {
+    var drafts = S.drafts().filter(function (d) { return d.bankId === bankId; });
+    $('#imp-drafts').innerHTML = drafts.length ? drafts.map(function (d) {
+      return '<div class="list-row static" data-draft="' + d.id + '">' +
+        '<span class="list-main"><span class="draft-name">' + esc(d.file) + '</span>' +
+        '<span class="list-meta">' + esc(extOf(d.file)) + ' · 第 ' + (d.step || 1) + ' 步 · ' + esc(d.at) + '</span></span>' +
+        '<span class="list-side">' +
+        '<a class="btn btn-sm" href="import.html?bank=' + encodeURIComponent(bankId) + '&step=' + (d.step || 1) + '">继续</a>' +
+        '<button class="btn btn-sm btn-quiet" type="button" data-draft-del="' + d.id + '" data-draft-name="' + esc(d.file) + '"' +
+          (canEditContent() ? '' : ' disabled title="' + esc(blockReason()) + '"') + '>删除</button>' +
+        '</span></div>';
+    }).join('') : '<p class="hint mt-3">没有未完成的导入。中途离开的导入会以草稿形式留在这里。</p>';
+
+    var jobs = S.importJobs(bankId);
+    $('#imp-jobs').innerHTML = jobs.length ? jobs.map(function (j) {
+      var ok = j.status === 'done';
+      return '<tr><td data-label="文件">' + esc(j.file) + '</td>' +
+        '<td class="num" data-label="格式">' + esc(extOf(j.file)) + '</td>' +
+        '<td data-label="状态"><span class="tag ' + (ok ? 'ok">已导入' : 'bad">失败') + '</span></td>' +
+        '<td class="num" data-label="导入题数">' + (j.written || 0) + '</td>' +
+        '<td class="num" data-label="完成时间">' + esc(j.at) + '</td>' +
+        '<td data-label="失败原因">' + (ok ? '—' : '字段映射缺少题干列，预检未通过') + '</td></tr>';
+    }).join('') : '<tr><td colspan="6" data-label="无结果"><p class="empty-desc">这个题库还没有导入记录。</p></td></tr>';
+
+    $('#imp-open').setAttribute('href', 'import.html?bank=' + encodeURIComponent(bankId));
+    $$('[data-draft-del]').forEach(function (b) {
+      b.onclick = function () {
+        var id = b.getAttribute('data-draft-del'), name = b.getAttribute('data-draft-name');
+        confirmAction({
+          eyebrow: '删除草稿', title: '删除导入草稿「' + name + '」？',
+          desc: '删除后这次导入的字段映射与预检结果会丢失，需要重新选择文件。',
+          okText: '删除草稿', danger: true,
+          onOk: function () { S.removeDraft(id); toast('草稿已删除'); renderAll(); }
+        }, b);
+      };
+    });
+  }
+
+  /* ---------- 渲染：AI 草稿 ---------- */
+  var AI_DRAFTS = [
+    { id: 'ad1', kind: '单选题 · 难度 3', at: '2026-11-13 08:41', stem: '某项目每周召开远程站会，会议中项目经理实时回答团队成员提出的问题，这属于（ ）', answer: 'A', explain: '直播中实时回应提问是双向、即时的信息交换，属于互动沟通。', opts: [['A', '互动沟通'], ['B', '推式沟通'], ['C', '拉式沟通'], ['D', '公众沟通']] },
+    { id: 'ad2', kind: '判断题 · 难度 2', at: '2026-11-12 22:07', stem: '项目的临时性意味着项目的持续时间一定很短。（ ）', answer: '错误', explain: '临时性强调有明确的起点与终点，不代表工期短。', opts: [['T', '正确'], ['F', '错误']] }
+  ];
+  function renderDrafts() {
+    $('#ai-draft-count').textContent = AI_DRAFTS.length + ' 条';
+    $('#ai-drafts').innerHTML = AI_DRAFTS.length ? AI_DRAFTS.map(function (d) {
+      return '<div class="list-row static draft-row" data-draft-card="' + d.id + '">' +
+        '<span class="list-main">' +
+        '<span class="draft-stem">' + esc(d.stem) + '</span>' +
+        '<span class="list-meta draft-meta"><span class="tag">' + esc(d.kind) + '</span><span>答案 ' + esc(d.answer) + '</span><span>' + esc(d.at) + '</span></span>' +
+        '<span class="hint">' + esc(d.explain) + '</span>' +
+        '</span>' +
+        '<span class="list-side">' +
+        '<button class="btn btn-sm btn-quiet" type="button" data-draft-drop="' + d.id + '"' + (canEditContent() ? '' : ' disabled title="' + esc(blockReason()) + '"') + '>丢弃</button>' +
+        '<button class="btn btn-sm btn-primary" type="button" data-draft-accept="' + d.id + '"' + (canEditContent() ? '' : ' disabled title="' + esc(blockReason()) + '"') + '>采纳为题目</button>' +
+        '</span></div>';
+    }).join('') : '<div class="empty"><span class="empty-mark">' + icon('sparkles') + '</span>' +
+      '<h4 class="empty-title">这个题库还没有 AI 草稿</h4>' +
+      '<p class="empty-desc">配置 AI 后，可以在练习或错题里生成变式题草稿；草稿经你确认才进入正式题库。</p>' +
+      '<div class="empty-actions"><a class="btn" href="settings.html">去配置 AI</a></div></div>';
+    $$('[data-draft-drop]').forEach(function (b) {
+      b.onclick = function () {
+        var id = b.getAttribute('data-draft-drop');
+        confirmAction({
+          eyebrow: '丢弃草稿', title: '丢弃这条 AI 草稿？',
+          desc: '丢弃后这条变式题草稿会从草稿箱移除，不会进入正式题库。',
+          okText: '丢弃草稿', danger: true,
+          onOk: function () {
+            for (var i = 0; i < AI_DRAFTS.length; i++) if (AI_DRAFTS[i].id === id) AI_DRAFTS.splice(i, 1);
+            renderDrafts(); toast('草稿已丢弃');
+          }
+        }, b);
+      };
+    });
+    $$('[data-draft-accept]').forEach(function (b) {
+      b.onclick = function () {
+        var id = b.getAttribute('data-draft-accept');
+        var d = null;
+        for (var i = 0; i < AI_DRAFTS.length; i++) if (AI_DRAFTS[i].id === id) d = AI_DRAFTS[i];
+        if (!d) return;
+        if (!canEditContent()) { toast(blockReason(), 'bad'); return; }
+        confirmAction({
+          eyebrow: '草稿转正', title: '把这条草稿转为正式题目？',
+          desc: '会在「' + bank.name + '」生成一道新题并参与练习抽题；草稿箱中的原件保留。',
+          okText: '确认转正', danger: false,
+          onOk: function () {
+            S.addQuestion({ bankId: bankId, stem: d.stem, type: d.kind.indexOf('判断') === 0 ? '判断题' : '单选题', difficulty: '基础', chapter: '未分章', tags: ['AI 草稿'] });
+            renderAll(); toast('草稿已入库');
+          }
+        }, b);
+      };
+    });
+  }
+
+  /* ---------- 渲染：题库设置 ---------- */
+  function renderSettings() {
+    var canEdit = S.can('bank.edit') && !readonly();
+    $('#set-name').value = bank.name;
+    $('#set-category').value = bank.category || '';
+    $('#set-desc').value = bank.desc || '';
+    $('#set-name').disabled = !canEdit;
+    $('#set-category').disabled = !canEdit;
+    $('#set-desc').disabled = !canEdit;
+    $('#set-save').disabled = !canEdit;
+    if (!canEdit) $('#set-save').title = blockReason() || S.denyReason('bank.edit');
+    $('#set-gate-note').hidden = canEdit;
+    if (!canEdit) $('#set-gate-body').textContent = (blockReason() || S.denyReason('bank.edit')) + '你当前是' + (ROLE_NAMES[myRole()] || myRole()) + '，可以浏览和练习，但不能改题库资料。';
+    $('#set-myrole').textContent = ROLE_NAMES[myRole()] || myRole();
+    var qs = S.questions(bankId, { archived: false });
+    $('#set-content').textContent = qs.length + ' 题';
+    $('#set-practice').textContent = (qs.length - killedCount()) + ' 题';
+
+    var archBtn = $('#set-archive-btn'), delBtn = $('#set-delete-btn'), reason = $('#set-archive-reason');
+    var why = !S.can('bank.archive') ? S.denyReason('bank.archive') : (readonly() ? '共享题库只能由所有者归档' : '');
+    archBtn.disabled = !!why;
+    if (why) { archBtn.title = why; } else { archBtn.removeAttribute('title'); }
+    var delWhy = why || (bank.count > 0 ? '题库还有 ' + bank.count + ' 题，不能物理删除；请改用「归档」' : '');
+    delBtn.disabled = !!delWhy;
+    if (delWhy) { delBtn.title = delWhy; } else { delBtn.removeAttribute('title'); }
+    if (why || delWhy) { reason.textContent = why || delWhy; reason.hidden = false; }
+    else { reason.hidden = true; }
+    $('#archive-bank-desc').textContent = '归档题库「' + bank.name + '」？可随时在已归档视图恢复，练习记录与历史数据保留。';
+    $('#delete-bank-desc').textContent = bank.count > 0
+      ? '这个题库还有 ' + bank.count + ' 题，不能物理删除；只有没有任何题目的题库才能删除。'
+      : '这个题库没有任何题目，删除后题库本身不复存在，也不能恢复。只想暂时移出视野，请改用「归档」。';
+    $('#delete-bank-label').textContent = '输入题库名称「' + bank.name + '」以确认';
+    $('#delete-bank-input').value = '';
+    $('#delete-bank-err').hidden = true;
+    $('#delete-bank-ok').disabled = true;
+    updateExportSummary();
+  }
+  function exportFmt(override) {
+    if (override) return override;
+    var seg = $('#qc-export-format .segment[aria-checked="true"]');
+    return seg ? seg.getAttribute('data-fmt') : 'JSON';
+  }
+  function updateExportSummary(fmtOverride) {
+    var withArch = $('#qc-export-archived').checked;
+    var n = S.questions(bankId, { archived: withArch ? undefined : false }).length;
+    $('#qc-export-summary .notice-body').textContent = '将导出 ' + n + ' 题（' +
+      (withArch ? '包含' : '不含') + '已归档）为 ' + exportFmt(fmtOverride) + '。';
+    var deny = $('#qc-export-deny');
+    if (n === 0) { deny.textContent = '题库还没有可导出的题目。'; deny.hidden = false; $('#qc-export-go').disabled = true; }
+    else { deny.hidden = true; $('#qc-export-go').disabled = false; }
+  }
+  /* 注意：本监听挂在容器上，冒泡时早于 spec-boot 的 document 级分段处理，
+     所以直接用被点分段的 data-fmt，不读尚未更新的 aria-checked（T11 回归） */
+  $('#qc-export-format').addEventListener('click', function (e) {
+    var seg = e.target.closest ? e.target.closest('.segment') : null;
+    if (seg) updateExportSummary(seg.getAttribute('data-fmt'));
+  });
+  $('#qc-export-archived').addEventListener('change', function () { updateExportSummary(); });
+  $('#qc-export-go').addEventListener('click', function () {
+    var withArch = $('#qc-export-archived').checked;
+    var qs = S.questions(bankId, { archived: withArch ? undefined : false });
+    if (!qs.length) { toast('题库还没有可导出的题目', 'bad'); return; }
+    var rows = [['题号', '题干', '题型', '章节', '难度', '版本', '标签']];
+    qs.forEach(function (q) { rows.push([q.id, q.stem, q.type, q.chapter, q.difficulty, q.version, (q.tags || []).join(' ')]); });
+    var text = rows.map(function (r) {
+      return r.map(function (c) { return '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"'; }).join(',');
+    }).join('\r\n');
+    try {
+      var blob = new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = bank.name + '.' + exportFmt().toLowerCase();
+      document.body.appendChild(a); a.click(); a.remove();
+      toast('正在导出 ' + exportFmt() + (withArch ? '（含已归档）' : ''));
+    } catch (e) { toast('正在导出 ' + exportFmt() + (withArch ? '（含已归档）' : '')); }
+  });
+  $('#set-save').addEventListener('click', function () {
+    if (!S.can('bank.edit') || readonly()) { toast(blockReason() || S.denyReason('bank.edit'), 'bad'); return; }
+    var name = ($('#set-name').value || '').trim();
+    if (!name) { toast('题库名称不能为空', 'bad'); return; }
+    S.updateBank(bankId, {
+      name: name,
+      category: ($('#set-category').value || '').trim() || undefined,
+      desc: ($('#set-desc').value || '').trim()
+    });
+    toast('题库资料已保存'); renderAll();
+  });
+  $('#archive-bank-ok').addEventListener('click', function () {
+    if (!S.can('bank.archive')) { toast(S.denyReason('bank.archive'), 'bad'); return; }
+    window.eeDialog.close($('#dlg-archive-bank'));
+    S.archiveBank(bankId);
+    toast('题库已归档 · 可在题库列表的「显示已归档」中恢复');
+    location.href = 'banks.html';
+  });
+  $('#delete-bank-input').addEventListener('input', function () {
+    $('#delete-bank-ok').disabled = this.value.trim() !== bank.name;
+  });
+  $('#delete-bank-ok').addEventListener('click', function () {
+    if (this.value !== undefined && $('#delete-bank-input').value.trim() !== bank.name) {
+      $('#delete-bank-err').hidden = false; return;
+    }
+    if (bank.count > 0) {
+      window.eeDialog.close($('#dlg-delete-bank'));
+      showBulkResult('bad', '删除被拒绝：题库还有 ' + bank.count + ' 题，只有空库可以物理删除。');
+      setTab('questions');
+      return;
+    }
+    window.eeDialog.close($('#dlg-delete-bank'));
+    S.removeBank(bankId);
+    toast('空库已删除');
+    location.href = 'banks.html';
+  });
+
+  /* ---------- 权限门槛（页头） ---------- */
+  function guardLink(a, action) {
+    if (!a) return;
+    if (!S.can(action) || readonly()) {
+      a.setAttribute('aria-disabled', 'true');
+      a.title = blockReason() || S.denyReason(action);
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        toast(blockReason() || S.denyReason(action), 'bad');
+      });
+    }
+  }
+  function gateHead() {
+    var ro = readonly();
+    var reasons = [];
+    if (ro) reasons.push('这个题库共享给你，只读：不能新建题目，也不能导入');
+    else {
+      if (!S.can('question.create')) reasons.push(S.denyReason('question.create'));
+      if (!S.can('bank.import')) reasons.push(S.denyReason('bank.import'));
+    }
+    $('#ws-create').disabled = !S.can('question.create') || ro;
+    if ($('#ws-create').disabled) $('#ws-create').title = blockReason() || S.denyReason('question.create');
+    guardLink($('#ws-import'), 'bank.import');
+    guardLink($('#stt-import'), 'bank.import');
+    var el = $('#ws-gate-reason');
+    el.textContent = reasons.join('；');
+    el.hidden = reasons.length === 0;
+  }
+
+  /* ---------- 工具栏 / 分页 ---------- */
+  $('#q-search').addEventListener('input', function () { st.q = this.value; st.page = 1; saveView(); renderQuestions(); });
+  $('#q-type').addEventListener('change', function () { st.type = this.value; st.page = 1; saveView(); renderQuestions(); });
+  $('#q-diff').addEventListener('change', function () { st.diff = this.value; st.page = 1; saveView(); renderQuestions(); });
+  $('#q-sort').addEventListener('change', function () { st.sort = this.value; saveView(); renderQuestions(); });
+  $('#q-show-archived').addEventListener('change', function () { st.showArchived = this.checked; st.page = 1; saveView(); renderQuestions(); });
+  $('#q-pagesize').addEventListener('change', function () { st.pageSize = parseInt(this.value, 10) || 25; st.page = 1; saveView(); renderQuestions(); });
+  $('#q-bulk-chapter').addEventListener('change', function () { st.bulkChapter = this.value; });
+  $('#q-bulk-target').addEventListener('change', function () { st.bulkTarget = this.value; });
+  $('#q-prev').addEventListener('click', function () { if (st.page > 1) { st.page--; saveView(); renderQuestions(); } });
+  $('#q-next').addEventListener('click', function () { st.page++; saveView(); renderQuestions(); });
+  $('#q-select-all').addEventListener('change', function () {
+    var on = this.checked;
+    visibleQuestions().forEach(function (x) { if (on) st.selected[x.id] = true; else delete st.selected[x.id]; });
+    saveView(); syncSelection();
+  });
+  $('#q-bulk-clear').addEventListener('click', function () { st.selected = {}; saveView(); syncSelection(); hideBulkResult(); toast('已清除选择'); });
+  $('#stt-clear').addEventListener('click', function () {
+    st.q = ''; st.type = '全部题型'; st.diff = '全部难度'; st.page = 1;
+    saveView(); renderQuestions(); toast('已清除筛选');
+  });
+
+  /* ---------- 批量操作 ---------- */
+  function bulkGuard() {
+    var ids = selectedIds();
+    if (!ids.length) { toast('请先勾选题目', 'bad'); return null; }
+    var reason = blockReason();
+    if (reason) { showBulkResult('bad', '整批拒绝，未做任何修改：' + reason); return null; }
+    return ids;
+  }
+  $('#q-bulk-chapter-go').addEventListener('click', function () {
+    var ids = bulkGuard(); if (!ids) return;
+    if (validateBatch(ids, { noArchived: true })) return;
+    var ch = $('#q-bulk-chapter').value;
+    if (!ch) { toast('请先选择章节', 'bad'); return; }
+    confirmAction({
+      eyebrow: '批量设置章节', title: '把 ' + ids.length + ' 道题移到「' + ch + '」？',
+      desc: '这 ' + ids.length + ' 道题的章节会改为「' + ch + '」，题干与答案不变。这是元数据修改，不产生新版本，痕迹记入管理日志。',
+      okText: '应用章节', danger: false,
+      onOk: function () {
+        S.bulkSetChapter(ids, ch);
+        showBulkResult('ok', receipt(ids.length, 0, ids.length, '已应用章节'));
+        renderAll();
+      }
+    }, this);
+  });
+  $('#q-bulk-tags-go').addEventListener('click', function () {
+    var ids = bulkGuard(); if (!ids) return;
+    if (validateBatch(ids, { noArchived: true })) return;
+    var raw = ($('#q-bulk-tags').value || '').trim();
+    var tags = raw.split(/[,，\s]+/).filter(Boolean);
+    if (!tags.length) { toast('请先填写标签', 'bad'); return; }
+    confirmAction({
+      eyebrow: '批量添加标签', title: '给 ' + ids.length + ' 道题添加「' + tags.join('、') + '」？',
+      desc: '这 ' + ids.length + ' 道题会带上这些标签，已有标签保留。这是元数据修改，不产生新版本，痕迹记入管理日志。',
+      okText: '添加标签', danger: false,
+      onOk: function () {
+        ids.forEach(function (id) {
+          var q = S.question(id); if (!q) return;
+          var merged = (q.tags || []).slice();
+          tags.forEach(function (t) { if (merged.indexOf(t) < 0) merged.push(t); });
+          S.updateQuestion(id, { tags: merged });
+        });
+        showBulkResult('ok', receipt(ids.length, 0, ids.length, '已添加标签'));
+        renderAll();
+      }
+    }, this);
+  });
+  $('#q-bulk-copy').addEventListener('click', function () {
+    var ids = bulkGuard(); if (!ids) return;
+    if (validateBatch(ids, { noArchived: true })) return;
+    var target = $('#q-bulk-target').value;
+    if (!target) { toast('请先选择目标题库', 'bad'); return; }
+    confirmAction({
+      eyebrow: '批量复制', title: '复制 ' + ids.length + ' 道题到「' + S.bankName(target) + '」？',
+      desc: '会在「' + S.bankName(target) + '」生成 ' + ids.length + ' 道新题，原题与他人的学习记录不受影响；学习记录不会一起复制。',
+      okText: '复制', danger: false,
+      onOk: function () {
+        ids.forEach(function (id) {
+          var q = S.question(id); if (!q) return;
+          S.addQuestion({ bankId: target, stem: q.stem, type: q.type, difficulty: q.difficulty, chapter: q.chapter, tags: (q.tags || []).slice() });
+        });
+        showBulkResult('ok', receipt(ids.length, 0, ids.length, '已复制'));
+        renderAll();
+      }
+    }, this);
+  });
+  $('#q-bulk-move').addEventListener('click', function () {
+    var ids = bulkGuard(); if (!ids) return;
+    if (validateBatch(ids, { noArchived: true })) return;
+    var target = $('#q-bulk-target').value;
+    if (!target) { toast('请先选择目标题库', 'bad'); return; }
+    confirmAction({
+      eyebrow: '批量移动', title: '移动 ' + ids.length + ' 道题到「' + S.bankName(target) + '」？',
+      desc: '这 ' + ids.length + ' 道题会从当前题库移出，进入「' + S.bankName(target) + '」；原题库的题量会相应减少。移动保留题目身份，不生成新题。',
+      okText: '移动', danger: true,
+      onOk: function () {
+        ids.forEach(function (id) {
+          var q = S.question(id); if (!q) return;
+          S.addQuestion({ bankId: target, stem: q.stem, type: q.type, difficulty: q.difficulty, chapter: q.chapter, tags: (q.tags || []).slice() });
+        });
+        S.removeQuestions(ids);
+        S.updateBank(bankId, { count: Math.max(0, bank.count - ids.length) });
+        st.selected = {}; saveView();
+        showBulkResult('ok', receipt(ids.length, 0, ids.length, '已移动'));
+        renderAll();
+      }
+    }, this);
+  });
+  $('#q-bulk-archive').addEventListener('click', function () {
+    var ids = bulkGuard(); if (!ids) return;
+    if (validateBatch(ids)) return;
+    var wantArchive = !ids.every(function (id) { var q = S.question(id); return q && q.archived; });
+    var willNoop = ids.filter(function (id) {
+      var q = S.question(id); return q && (wantArchive ? !!q.archived : !q.archived);
+    }).length;
+    confirmAction({
+      eyebrow: wantArchive ? '批量归档 · 可恢复' : '批量恢复',
+      title: (wantArchive ? '归档 ' : '恢复 ') + ids.length + ' 道题？',
+      desc: (wantArchive
+        ? '这 ' + ids.length + ' 道题会移出练习与抽题，但不会删除；可在题目列表勾选「显示已归档」查看并随时恢复。'
+        : '这 ' + ids.length + ' 道题会重新参与练习与抽题。') +
+        (willNoop ? '其中 ' + willNoop + ' 条已处于目标状态，会记为「无须变更」，不影响其余条目生效。' : ''),
+      okText: wantArchive ? '归档' : '恢复', danger: wantArchive,
+      onOk: function () {
+        var r = runArchive(ids, wantArchive);
+        st.selected = {}; saveView();
+        showBulkResult('ok', receipt(r.ok, r.noop, ids.length, wantArchive ? '已归档' : '已恢复'));
+        renderAll();
+      }
+    }, this);
+  });
+
+  /* ---------- 页头动作 ---------- */
+  $('#ws-export').addEventListener('click', function () {
+    setTab('settings');
+    var go = $('#qc-export-go');
+    if (go) { go.focus(); go.scrollIntoView({ block: 'center' }); }
+  });
+  function focusSearch() {
+    setTab('questions');
+    var box = $('#q-search');
+    if (box) { box.focus(); box.select(); }
+  }
+  $('#tb-search').addEventListener('click', focusSearch);
+  $('#tb-search-m').addEventListener('click', focusSearch);
+  $('#tb-logout').addEventListener('click', function () { S.logout(); location.href = 'login.html'; });
+  /* 主题 / 语言由 spec-boot 外壳统一接线（data-ee-shell），本页只保留页内搜索聚焦 */
+  $('#stt-retry').addEventListener('click', function () { renderAll(); toast('已重新读取题库'); });
+  $('#stt-retry-inline').addEventListener('click', function () { renderAll(); toast('已重试这次批量操作'); });
+  $('#stt-conflict-mine').addEventListener('click', function () { toast('已打开你的版本（v2）副本，可另存为新题'); });
+  $('#stt-conflict-theirs').addEventListener('click', function () { toast('已载入对方版本（v3），你的改动另存为草稿'); });
+
+  /* ---------- 总渲染 ---------- */
+  function renderAll() {
+    renderHead();
+    renderQuestions();
+    renderStructure();
+    renderMembers();
+    renderImports();
+    renderDrafts();
+    renderSettings();
+    gateHead();
+    setTab(st.tab);
+  }
+
+  /* ---------- 新建题目：题型联动 / 删选项联动 / 前置校验 / 丢弃保护 ---------- */
+  (function () {
+    var dlg = document.getElementById('dlg-create');
+    if (!dlg) return;
+    var form = document.getElementById('qc-form');
+    var stem = document.getElementById('qc-stem');
+    var typeSel = document.getElementById('qc-type');
+    var chapterSel = document.getElementById('qc-chapter');
+    var optField = document.getElementById('qc-options-field');
+    var optBox = document.getElementById('qc-options');
+    var addBtn = document.getElementById('qc-add-opt');
+    var answer = document.getElementById('qc-answer');
+    var answerHint = document.getElementById('qc-answer-hint');
+    var stemErr = document.getElementById('qc-stem-err');
+    var optErr = document.getElementById('qc-options-err');
+    var ansErr = document.getElementById('qc-answer-err');
+    var saveBtn = document.getElementById('qc-save');
+    var discard = document.getElementById('dlg-create-discard');
+    var discardOk = document.getElementById('qc-discard-ok');
+    var optBoxHTML = optBox.innerHTML;
+    var dirty = false;
+
+    function fillChapters() {
+      var chs = chapterList().map(function (c) { return c.name; });
+      chapterSel.innerHTML = '<option value="">未设置</option>' + chs.map(function (c) {
+        return '<option>' + esc(c) + '</option>';
+      }).join('');
+    }
+    function needsOptions() { return ['单选题', '多选题', '判断题'].indexOf(typeSel.value) >= 0; }
+    function optRows() { return Array.prototype.slice.call(optBox.querySelectorAll('.od-row')); }
+    function refreshDeleteState() {
+      var rows = optRows();
+      rows.forEach(function (row) {
+        var del = row.querySelector('.icon-btn');
+        if (del) del.disabled = rows.length <= 2;
+      });
+    }
+    function reletter() {
+      optRows().forEach(function (row, i) {
+        var key = String.fromCharCode(65 + i);
+        var kb = row.querySelector('.opt-key'); if (kb) kb.textContent = key;
+        var inp = row.querySelector('input'); if (inp) inp.setAttribute('aria-label', '选项 ' + key + ' 文字');
+        var del = row.querySelector('.icon-btn'); if (del) del.setAttribute('aria-label', '删除选项 ' + key);
+      });
+      refreshDeleteState();
+    }
+    function applyType() {
+      var t = typeSel.value;
+      answer.value = '';
+      stemErr.hidden = optErr.hidden = ansErr.hidden = true;
+      if (t === '填空题' || t === '主观题') {
+        optField.hidden = true;
+        answer.placeholder = '填写标准答案';
+        answerHint.textContent = '此题型没有选项，答案为文本。';
+      } else if (t === '判断题') {
+        optField.hidden = false;
+        optRows().forEach(function (row, i) { row.hidden = i >= 2; });
+        var shown = optRows().filter(function (r) { return !r.hidden; }).map(function (r) { return r.querySelector('input'); });
+        if (shown[0]) shown[0].value = '正确';
+        if (shown[1]) shown[1].value = '错误';
+        answer.placeholder = '对 或 错';
+        answerHint.textContent = '判断题填「对」或「错」。';
+        refreshDeleteState();
+      } else {
+        optField.hidden = false;
+        optRows().forEach(function (row) { row.hidden = false; });
+        answer.placeholder = '例如 A 或 AB';
+        answerHint.textContent = t === '多选题' ? '多选题直接连写答案字母。' : '单选题填一个答案字母。';
+        refreshDeleteState();
+      }
+      validate();
+    }
+    optBox.addEventListener('click', function (e) {
+      var del = e.target.closest ? e.target.closest('button[aria-label^="删除选项"]') : null;
+      if (!del || del.disabled) return;
+      var rows = optRows();
+      if (rows.length <= 2) { toast('至少保留 2 个选项', 'bad'); return; }
+      var row = del.closest('.od-row');
+      var delIndex = rows.indexOf(row);
+      row.remove();
+      reletter();
+      /* 答案联动：丢弃被删选项的字母，其后字母随重排上移 */
+      var cur = (answer.value || '').toUpperCase().replace(/[^A-Z]/g, '');
+      var remapped = cur.split('').map(function (ch) {
+        var code = ch.charCodeAt(0) - 65;
+        if (code === delIndex) return '';
+        if (code > delIndex) return String.fromCharCode(65 + code - 1);
+        return ch;
+      }).join('');
+      if (remapped !== cur) { answer.value = remapped; if (dirty) toast('答案已同步：移除已删除的选项'); }
+      markDirty(); validate();
+    });
+    if (addBtn) addBtn.addEventListener('click', function () {
+      var n = optRows().length;
+      if (n >= 8) { toast('最多 8 个选项', 'bad'); return; }
+      var row = document.createElement('div');
+      row.className = 'od-row';
+      row.innerHTML = '<button class="opt-key" type="button">' + String.fromCharCode(65 + n) + '</button>' +
+        '<input class="input" type="text" placeholder="选项文字">' +
+        '<button class="icon-btn sm" type="button" aria-label="删除选项"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>';
+      optBox.appendChild(row);
+      if (typeSel.value === '判断题') optRows().forEach(function (r, i) { r.hidden = i >= 2; });
+      reletter(); markDirty(); validate();
+    });
+    function validate() {
+      var ok = true;
+      var stemOk = stem.value.trim().length > 0;
+      stemErr.hidden = stemOk; if (!stemOk) ok = false;
+      if (needsOptions()) {
+        var filled = optRows().filter(function (r) { return !r.hidden && r.querySelector('input').value.trim(); }).length;
+        var optOk = filled >= 2;
+        optErr.hidden = optOk; if (!optOk) ok = false;
+      } else { optErr.hidden = true; }
+      var ansOk = answer.value.trim().length > 0;
+      ansErr.hidden = ansOk; if (!ansOk) ok = false;
+      saveBtn.disabled = !ok;
+      return ok;
+    }
+    [stem, answer].forEach(function (n) { n.addEventListener('input', function () { markDirty(); validate(); }); });
+    optBox.addEventListener('input', function () { markDirty(); validate(); });
+    typeSel.addEventListener('change', function () { markDirty(); applyType(); });
+    saveBtn.addEventListener('click', function () {
+      if (!validate()) { toast('请补全必填项', 'bad'); return; }
+      if (!window.eeStore.can('question.create') || readonly()) { toast(blockReason(), 'bad'); return; }
+      var tags = (document.getElementById('qc-tags').value || '').split(/[,，]/).map(function (t) { return t.trim(); }).filter(Boolean);
+      window.eeStore.addQuestion({
+        bankId: bankId,
+        stem: stem.value.trim(),
+        type: typeSel.value,
+        difficulty: document.getElementById('qc-difficulty').value,
+        chapter: chapterSel.value || '未分章',
+        tags: tags
+      });
+      dirty = false;
+      window.eeDialog.close(dlg);
+      toast('题目已创建');
+      resetForm();
+      renderAll();
+    });
+    function markDirty() { dirty = true; }
+    function requestClose() { if (dirty) window.eeDialog.open('dlg-create-discard', dlg); else hardClose(); }
+    function hardClose() { dirty = false; window.eeDialog.close(dlg); resetForm(); }
+    function resetForm() {
+      optBox.innerHTML = optBoxHTML;
+      form.reset();
+      typeSel.value = '单选题';
+      document.getElementById('qc-difficulty').value = '基础';
+      stemErr.hidden = optErr.hidden = ansErr.hidden = true;
+      optField.hidden = false;
+      answer.placeholder = '例如 A 或 AB';
+      answerHint.textContent = '多选题直接连写答案字母。';
+      dirty = false;
+      fillChapters();
+      reletter(); validate();
+    }
+    Array.prototype.forEach.call(dlg.querySelectorAll('[data-create-close]'), function (b) {
+      b.addEventListener('click', function (e) { e.preventDefault(); requestClose(); });
+    });
+    dlg.addEventListener('cancel', function (e) { e.preventDefault(); requestClose(); });
+    if (discardOk) discardOk.addEventListener('click', function () { window.eeDialog.close(discard); hardClose(); });
+    Array.prototype.forEach.call(document.querySelectorAll('button[onclick*="dlg-create"]'), function (b) {
+      b.addEventListener('click', function () { resetForm(); });
+    });
+    document.getElementById('qc-eyebrow').textContent = bank.name;
+    resetForm();
+  })();
+
+  /* ---------- 跨页同步 + 首次渲染 ---------- */
+  S.subscribe(function () { renderAll(); });
+  renderAll();
+})();
+</script>
+</body>
+</html>

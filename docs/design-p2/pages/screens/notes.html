@@ -1,0 +1,1572 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>资料 · 易考宝</title>
+<link rel="stylesheet" href="../../assets/ee.css">
+<style>/* ============ 本屏特有微调（ee.css 未覆盖的部分）============
+     仅：长文限宽（.measure / .reading-w 令牌已有类名，本屏先落地，建议提升）、
+         状态格栅格、阅读器纸面排版、引用高亮、AI 抽屉版本行、移动端抽屉几何。
+     不重新定义令牌，不新建控件形态。                                */
+
+  /* ---- 长文限宽：纸面阅读的度量上限（对应 --measure / --reading-w）---- */
+  .measure{  max-width: var(--measure);  }
+.reading-w{  max-width: var(--reading-w);  }
+/* ---- 状态格 ---- */
+  .state-grid{  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--sp-4); align-items: start;  }
+.ee-state-panel .panel-body{  padding: var(--sp-4);  }
+.ee-subhead{  margin-top: var(--sp-6);  }
+/* ---- 工具条与列表 ---- */
+  .ee-toolbar{  flex-wrap: wrap; gap: var(--sp-4); align-items: center;  }
+.ee-toolbar .search-box{  flex: 0 1 260px;  }
+/* 类型筛选是分段控件（IA §三：segmented + URL），不是视图页签 */
+  .ee-filter .segment .count{  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-4); margin-left: var(--sp-1);  }
+.ee-filter .segment[aria-checked="true"] .count{  color: var(--brand-ink);  }
+.ee-list{  margin-top: var(--sp-5); border-top: 1px solid var(--ink);  }
+.ee-row-top{  align-items: flex-start;  }
+.ee-asset-title{  font-size: var(--text-base); line-height: 1.6;  }
+.ee-grow{  flex: 1 1 auto; min-width: 0;  }
+.ee-mt-3{  margin-top: var(--sp-3);  }
+.ee-mt-4{  margin-top: var(--sp-4);  }
+.ee-mt-5{  margin-top: var(--sp-5);  }
+.ee-sk-cap{  width: 40%;  }
+/* ---- 阅读器：纸面长文 ---- */
+  .ee-reader-body{  font-family: var(--font-serif); font-size: var(--text-md); line-height: 1.95; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere;  }
+.ee-reader-area{  min-height: 220px; font-family: var(--font-serif); line-height: 1.8;  }
+.ee-reader-file{  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; font-size: var(--text-sm); color: var(--ink-2);  }
+.ee-reader-file .mono{  overflow-wrap: anywhere;  }
+.ee-reader-file-actions{  margin-left: auto; display: flex; gap: var(--sp-1); flex-wrap: wrap;  }
+/* 引用回跳：原文片段高亮（不引入新控件，只做一处底色 + 下边线） */
+  .cite-hit{  background: var(--warn-soft); box-shadow: inset 0 -2px 0 var(--warn);  }
+/* ---- 菜单锚点（与 components.html 同款；absolute 菜单以触发按钮下方为静态位）---- */
+  .menu-anchor{  position: relative; display: inline-block;  }
+.menu-anchor .menu{  top: calc(100% + var(--sp-2)); left: auto; right: 0;  }
+.menu-hint{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); padding: var(--sp-1) var(--sp-3) var(--sp-2);  }
+/* ---- AI 抽屉 ---- */
+  .ee-ai-stem{  font-family: var(--font-serif); font-size: var(--text-md); line-height: 1.7; margin: 0;  }
+.ee-ai-primary{  border: 1px solid var(--brand-line); background: var(--brand-soft); border-radius: var(--r-sm); padding: var(--sp-4);  }
+.ee-ai-primary-text{  font-family: var(--font-serif); font-size: var(--text-base); line-height: 1.85; margin: var(--sp-3) 0 0; white-space: pre-wrap; overflow-wrap: anywhere;  }
+.ee-ver-text{  font-size: var(--text-sm); line-height: var(--text-base-lh); color: var(--ink-2); margin-top: var(--sp-2); white-space: pre-wrap; overflow-wrap: anywhere;  }
+.ee-evidence{  border-left: 2px solid var(--line); padding-left: var(--sp-4); margin-top: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-3);  }
+.ee-ev-title{  font-size: var(--text-sm); color: var(--ink);  }
+.ee-ev-sum{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); margin-top: 2px;  }
+.ee-ev-link{  font-size: var(--text-xs); color: var(--brand-ink); overflow-wrap: anywhere;  }
+.ee-followup{  display: flex; flex-direction: column; gap: var(--sp-3);  }
+.ee-fu-row{  display: flex; gap: var(--sp-3);  }
+.ee-fu-bubble{  flex: 1 1 auto; min-width: 0; font-size: var(--text-sm); line-height: var(--text-base-lh); padding: var(--sp-3); border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2);  }
+.ee-fu-row.is-user .ee-fu-bubble{  background: var(--brand-soft); border-color: var(--brand-line);  }
+.ee-fu-who{  font-size: var(--text-xs); color: var(--ink-4); flex: none; width: 3.5em; padding-top: 2px;  }
+/* 字段错误：默认收起，校验失败时展示 */
+  .field-err.is-off{  display: none;  }
+/* 行内开区（与题库屏同一约定：list-main 变真按钮，不造新控件形态） */
+  .list-row{  cursor: default;  }
+.list-open{  background: none; border: 0; padding: 0; cursor: pointer; text-align: left; font: inherit; color: inherit; min-width: 0;  }
+.list-open:hover .list-title{  color: var(--brand-ink);  }
+.note-star{  color: var(--ink-4);  }
+.note-star.is-on{  color: var(--warn);  }
+/* 元信息行里的文字链不折行（「看引用」「展开证据」等短动作） */
+  .list-meta .link-btn{  white-space: nowrap;  }
+@media (min-width: 769px){
+    /* 阅读器为常开抽屉：桌面让出右侧 460px，列表不被遮盖 */
+    .content.ee-reader-open { padding-right: 476px; }
+    /* 常开抽屉自顶栏下缘起步，与产品阅读器几何一致 */
+    #reader, #ai-drawer { top: var(--topbar-h); }
+  }
+@media (max-width: 640px){
+    .ee-toolbar .search-box { flex: 1 1 100%; }
+    .ee-row-top { flex-wrap: wrap; row-gap: var(--sp-2); }
+    .list-open { flex: 1 1 100%; }
+    .ee-reader-file-actions { margin-left: 0; }
+    /* 窄屏分段允许横向滚动，不让四个类型挤出纸面 */
+    .ee-filter { max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
+  }</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">跳到主内容</a>
+<div class="app-shell">
+  <aside class="sidebar">
+    <button class="side-brand" type="button">
+      <span class="brand-mark">易</span>
+      <span class="brand-text"><span class="brand-name">易考宝</span><span class="brand-sub">私人学习档案</span></span>
+    </button>
+    <div class="side-group-label">学习</div>
+    <nav class="side-nav" aria-label="主导航">
+      <button class="nav-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg><span class="nav-label">今天</span></button>
+      <button class="nav-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg><span class="nav-label">题库</span></button>
+      <button class="nav-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg><span class="nav-label">复习</span><span class="nav-count">5</span></button>
+      <button class="nav-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg><span class="nav-label">模考</span></button>
+      <button class="nav-item is-active" type="button" aria-current="page"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg><span class="nav-label">资料</span><span class="nav-count" id="nav-note-count">6</span></button>
+    </nav>
+    <div class="side-study">
+      <div class="side-study-label">第 46 周 · 2026-11-24</div>
+      <div class="side-study-row"><span>到期复习</span><b>12</b></div>
+      <div class="side-study-row"><span>错题重做</span><b>8</b></div>
+      <div class="side-study-row"><span>本周新增</span><b>46</b></div>
+    </div>
+    <div class="side-foot">
+      <button class="nav-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg><span class="nav-label">设置</span></button>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <header class="topbar">
+      <nav class="crumb" aria-label="面包屑">
+        <button class="link" type="button" id="crumb-parent">资料</button>
+        <span class="sep" aria-hidden="true">/</span>
+        <span class="here" id="crumb-here">全部资料</span>
+      </nav>
+      <span class="spacer"></span>
+      <button class="icon-btn" type="button" title="搜索与跳转" data-ee-shell="search" aria-label="搜索与跳转"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></button>
+      <button data-ee-shell="theme" class="icon-btn" type="button" title="切换明暗" aria-label="切换明暗"><svg class="od-icon" aria-hidden="true"><use href="#i-sun"/></svg></button>
+      <button class="icon-btn" type="button" title="切换语言" data-ee-shell="lang" aria-label="切换语言"><svg class="od-icon" aria-hidden="true"><use href="#i-globe"/></svg></button>
+      <button class="user-mini" type="button" title="账户菜单" aria-label="账户菜单">A</button>
+    </header>
+
+    <header class="mobile-top">
+      <button class="page-back" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>返回</button>
+      <span class="mt-title">资料</span>
+      <button class="icon-btn" type="button" title="搜索与跳转" data-ee-shell="search" aria-label="搜索与跳转"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></button>
+      <button class="user-mini" type="button" title="账户菜单" aria-label="账户菜单">A</button>
+    </header>
+
+    <main class="content wide has-bottomnav" id="main-content">
+      <div class="page-head">
+        <div>
+          <p class="page-eyebrow">学习</p>
+          <h1 class="page-title">资料</h1>
+          <p class="page-sub">笔记、错题小结、知识口诀与上传文件；可以关联到题目与知识点，刷题时按关键词找回来。</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary" type="button" onclick="eeDialog.open('dlg-upload', this)">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-import"/></svg>上传文件
+          </button>
+          <button class="btn" type="button" onclick="eeNotes.newNote(this)">新建笔记</button>
+        </div>
+      </div>
+
+      <!-- 资料类型是过滤条件（IA §三：segmented + URL），不是视图页签 -->
+      <div data-filter-scope>
+        <div class="od-row ee-toolbar">
+          <label class="search-box">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+            <input class="input" type="search" placeholder="搜索标题与正文" aria-label="搜索资料" id="note-search">
+          </label>
+          <div class="segmented ee-filter" role="radiogroup" aria-label="资料类型" id="type-seg">
+            <button class="segment" type="button" role="radio" aria-checked="true" data-panel="all">全部<span class="count" id="cnt-all">0</span></button>
+            <button class="segment" type="button" role="radio" aria-checked="false" data-panel="note">笔记<span class="count" id="cnt-note">0</span></button>
+            <button class="segment" type="button" role="radio" aria-checked="false" data-panel="summary">错题小结<span class="count" id="cnt-summary">0</span></button>
+            <button class="segment" type="button" role="radio" aria-checked="false" data-panel="knowledge">知识口诀<span class="count" id="cnt-knowledge">0</span></button>
+          </div>
+          <span class="spacer"></span>
+          <span class="hint">上传的文件按所选类型归入筛选，行内带「文件」标记。</span>
+        </div>
+
+        <!-- 四个筛选项共用同一份资料数据（eeStore.notes()），由脚本按类型过滤后渲染 -->
+        <section class="ee-list" data-filter-panel="all">
+          <div class="list" id="list-all"></div>
+        </section>
+        <section class="ee-list" data-filter-panel="note" hidden>
+          <div class="list" id="list-note"></div>
+        </section>
+        <section class="ee-list" data-filter-panel="summary" hidden>
+          <div class="list" id="list-summary"></div>
+        </section>
+        <section class="ee-list" data-filter-panel="knowledge" hidden>
+          <div class="list" id="list-knowledge"></div>
+        </section>
+      </div>
+
+      <!-- ============ AI 建议标签与蓝图 · 本期不做（FN-509，入口不隐藏，只说明） ============ -->
+      <section class="section ee-mt-5" aria-labelledby="fn509-title">
+        <div class="section-head">
+          <h2 class="section-title" id="fn509-title">AI 建议标签与蓝图</h2>
+          <span class="section-note" data-spec>本期不做（FN-509 · Q-506 裁定 A / R13）</span>
+        </div>
+        <div class="notice info">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+          <div class="notice-body">
+            <div class="notice-title">本期不提供「AI 建议知识点标签」与「AI 建议考试蓝图」</div>
+            <div>知识点标签由你自己在题库工作区整理，考试蓝图在模考中心手动配置；两件事都不需要 AI。</div>
+            <div class="notice-actions">
+              <a class="btn btn-sm" href="workspace.html?tab=structure">去看结构页签</a>
+              <a class="btn btn-sm btn-quiet" href="settings.html?section=ai">AI 与联网检索配置</a>
+            </div>
+            <div data-spec>
+              <p class="hint ee-mt-3">裁定理由：真实使用中蓝图为 0、标签是人工组织决策，AI 建议需逐条人工确认，成本高于收益。本条只登记边界，不宣称已实现，也不把入口藏起来。</p>
+              <p class="hint">若未来纳入：入口在题库工作区「结构」页签（标签建议）与考试档案蓝图编辑器（蓝图建议）；建议必须带依据、永不自动生效、批量确认整批校验整批生效。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 状态格（规格演示：成品模式隐藏，与首页同约定） ============ -->
+      <section class="section ee-subhead" data-spec>
+        <div class="section-head">
+          <h2 class="section-title">状态</h2>
+          <span class="section-note">列表、阅读器与 AI 面板各自独立的状态；八态在同一屏内并列呈现</span>
+        </div>
+
+        <div class="rule-label">列表与阅读器</div>
+        <div class="state-grid ee-mt-3">
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">空 · 还没有资料</span></div>
+            <div class="panel-body">
+              <div class="empty">
+                <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg></div>
+                <p class="empty-title">还没有资料</p>
+                <p class="empty-desc">资料是可选的辅助材料：不上传、不记笔记，题库导入、刷题、模考、错题与复习都不受影响。</p>
+                <div class="empty-actions">
+                  <button class="btn btn-sm btn-primary" type="button" onclick="eeNotes.newNote(this)">新建第一条笔记</button>
+                  <button class="btn btn-sm" type="button" onclick="eeDialog.open('dlg-upload', this)">上传文件</button>
+                </div>
+              </div>
+              <p class="state-note">空态说明为什么空，并给两个不需要任何配置的下一步。</p>
+            </div>
+          </div>
+
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">空 · 没有匹配的资料</span></div>
+            <div class="panel-body">
+              <div class="empty">
+                <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></div>
+                <p class="empty-title">没有匹配的资料</p>
+                <p class="empty-desc">搜索只命中标题与正文。换个关键词，或清除当前搜索条件。</p>
+                <div class="empty-actions"><button class="btn btn-sm" type="button" data-search-clear>清除搜索</button></div>
+              </div>
+              <p class="state-note">搜索无结果给「清除搜索」，不是空白页。</p>
+            </div>
+          </div>
+
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">加载 · 列表读取中</span><span class="panel-sub">骨架与真实列表同构</span></div>
+            <div class="panel-body">
+              <div class="skeleton sk-line ee-sk-cap"></div>
+              <div class="skeleton sk-block"></div>
+              <div class="skeleton sk-block"></div>
+              <p class="state-note">资料未返回前不显示「0 条」，也不虚构条目。</p>
+            </div>
+          </div>
+
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">错误 · 阅读器读取失败</span></div>
+            <div class="panel-body">
+              <div class="notice bad" role="alert">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">这条资料读取失败</div>
+                  <div>文件可能已被移动或删除。左侧列表仍可选择；重试只重新读取这一条。</div>
+                  <div class="notice-actions"><button class="btn btn-sm" type="button" data-act="retry-reader"><svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>重试</button></div>
+                </div>
+              </div>
+              <p class="state-note">错误是持久结论，留在屏中并给重试入口。</p>
+            </div>
+          </div>
+
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">禁用 · 上传中</span></div>
+            <div class="panel-body">
+              <button class="btn btn-primary" type="button" disabled>上传文件</button>
+              <p class="hint ee-mt-3">正在上传，处理完成后可继续。支持 .txt / .md / .pdf，单个文件。</p>
+              <p class="state-note">入口不隐藏：禁用 + 可读原因。</p>
+            </div>
+          </div>
+
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">无权限 · 资料私有</span></div>
+            <div class="panel-body">
+              <div class="notice warn" role="note">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">你的资料只属于你</div>
+                  <div>题库所有者与实例管理员都读不到、改不到你的笔记与文件；你在共享题库里是成员，也不影响维护自己的资料。</div>
+                </div>
+              </div>
+              <p class="state-note">资料不随题库权限开放，也不因权限变化被删除。</p>
+            </div>
+          </div>
+
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">冲突 · 另一台设备改过</span></div>
+            <div class="panel-body">
+              <div class="notice warn" role="alert">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">「OSI 安全服务归类」在另一台设备上被更新</div>
+                  <div>本机草稿与 2026-11-24 21:14 的版本不一致。选一个版本继续，另一个会留在历史里。</div>
+                  <div class="notice-actions">
+                    <button class="btn btn-sm" type="button" onclick="eeToast('已保留本机版本，另一版本仍在历史中')">查看我的版本</button>
+                    <button class="btn btn-sm btn-quiet" type="button" onclick="eeToast('已改用对方版本')">使用对方版本</button>
+                  </div>
+                </div>
+              </div>
+              <p class="state-note">用户创作类数据不静默覆盖，保留两个版本让用户选。</p>
+            </div>
+          </div>
+
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">离线 · 操作排队</span></div>
+            <div class="panel-body">
+              <div class="notice warn" role="status">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-inbox"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">当前离线 · 2 项操作排队</div>
+                  <div>新建与上传已在本地保存，恢复网络后按顺序提交。阅读与编辑不受影响。</div>
+                  <div class="notice-actions"><button class="btn btn-sm" type="button" onclick="eeToast('已重新提交 2 项排队操作')">重试</button></div>
+                </div>
+              </div>
+              <p class="state-note">离线有持久标识 + 队列计数 + 重试，不假装成功。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="rule-label ee-subhead">AI 解释 · 联网核查 · 主解释</div>
+        <div class="state-grid ee-mt-3">
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">未配置 · AI 尚未配置</span></div>
+            <div class="panel-body">
+              <div class="notice info" role="status">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">AI 尚未配置</div>
+                  <div>点击「AI 解释」只会看到这条提示，不会写入任何解释版本。练习、模考、错题与复习不受影响。</div>
+                  <div class="notice-actions"><a class="btn btn-sm" href="settings.html?section=ai">去设置配置</a></div>
+                </div>
+              </div>
+              <p class="state-note">未配置是一等公民：notice.info + 去配置链接，不产生垃圾数据。</p>
+            </div>
+          </div>
+
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">错误 · AI 生成失败</span></div>
+            <div class="panel-body">
+              <div class="notice bad" role="alert">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">解释生成失败</div>
+                  <div>模型返回不可用（HTTP 503）。这一版没有写入版本列表，重试只重新发起本次请求。</div>
+                  <div class="notice-actions"><button class="btn btn-sm" type="button" onclick="eeToast('已重新发起本次生成请求')">重试</button></div>
+                </div>
+              </div>
+              <p class="state-note">失败在面板内给出原因与重试，不弹原生对话框、不插入空条目。</p>
+            </div>
+          </div>
+
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">降级 · 没有 AI 也能继续</span></div>
+            <div class="panel-body">
+              <div class="notice info" role="status">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-book"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">不依赖 AI 的三条路径</div>
+                  <div>读官方解析、读你自己写的笔记与上传文件、复制题干到浏览器检索。三条都不需要任何配置。</div>
+                </div>
+              </div>
+              <div class="od-cluster ee-mt-3">
+                <button class="btn btn-sm" type="button" onclick="eeNotes.openReader('n1')">读官方解析</button>
+                <button class="btn btn-sm" type="button" onclick="eeNotes.openReader('n3')">读我的笔记</button>
+                <button class="btn btn-sm btn-quiet" type="button" onclick="eeToast('题干已复制，可粘贴到浏览器检索')">复制题干去检索</button>
+              </div>
+              <p class="state-note">AI 是增强，不是门槛：每个 AI 入口旁都有非 AI 替代路径。</p>
+            </div>
+          </div>
+
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">联网核查 · 无结果</span></div>
+            <div class="panel-body">
+              <div class="notice info" role="status">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">未取得外部证据</div>
+                  <div>未配置联网核查服务。这一版联网解释明确写「未取得外部证据」，不会出现看起来像来源的占位文本。</div>
+                </div>
+              </div>
+              <div class="notice bad ee-mt-3" role="alert">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">检索失败</div>
+                  <div>连接超时（2 秒，已自动重试一次）。证据区不渲染，版本上打「未取得外部证据」。</div>
+                  <div class="notice-actions"><button class="btn btn-sm" type="button" onclick="eeToast('已重新发起联网核查')">重试</button></div>
+                </div>
+              </div>
+              <p class="state-note">「没查到」与「查到了」必须可区分，不得伪装成来源。</p>
+            </div>
+          </div>
+
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">主解释 · 单一解释时不可选</span></div>
+            <div class="panel-body">
+              <div class="menu-anchor">
+                <button class="btn btn-sm" type="button" data-menu-trigger aria-haspopup="menu" aria-expanded="false">版本操作</button>
+                <div class="menu" role="menu" hidden>
+                  <button class="menu-item" type="button" role="menuitem" disabled>采纳为主解释</button>
+                  <p class="menu-hint">这道题只有一版解释，无需选择。</p>
+                </div>
+              </div>
+              <p class="state-note ee-mt-3">入口禁用而非隐藏，禁用控件旁给出可读原因。</p>
+            </div>
+          </div>
+
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">本期不做 · FN-509</span></div>
+            <div class="panel-body">
+              <p class="hint">AI 建议知识点标签与 AI 建议考试蓝图本期不做（Q-506 裁定 A / R13）。规格页保留说明块，不隐藏入口、不宣称已实现。</p>
+              <p class="state-note">说明块即本屏 AI 建议分区；未来纳入时入口在题库工作区结构页签与蓝图编辑器。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="rule-label ee-subhead">浮层</div>
+        <div class="state-grid ee-mt-3">
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">本屏全部对话框与抽屉</span></div>
+            <div class="panel-body">
+              <div class="od-cluster">
+                <button class="btn btn-sm" type="button" onclick="eeNotes.newNote(this)">新建笔记</button>
+                <button class="btn btn-sm" type="button" onclick="eeDialog.open('dlg-upload', this)">上传文件</button>
+                <button class="btn btn-sm" type="button" onclick="eeDialog.open('dlg-unsaved', this)">未保存的修改</button>
+                <button class="btn btn-sm" type="button" onclick="eeDialog.open('dlg-delete', this)">删除确认</button>
+                <button class="btn btn-sm" type="button" onclick="eeDialog.open('dlg-followup', this)">追问记录</button>
+                <button class="btn btn-sm" type="button" onclick="eeNotes.openReader('n1')">打开阅读器</button>
+                <button class="btn btn-sm btn-quiet" type="button" onclick="eeNotes.openAI('n1')">打开 AI 解释</button>
+              </div>
+              <p class="state-note">两个抽屉同一时刻只开一个；Escape 与遮罩走同一条关闭路径。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<nav class="bottomnav" aria-label="底部导航">
+  <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg>今天</button>
+  <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>题库</button>
+  <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg>复习</button>
+  <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>模考</button>
+  <button class="bn-item is-active" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>资料</button>
+  <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg>更多</button>
+</nav>
+
+<!-- ============ 资料阅读器抽屉（桌面常开右侧；移动全屏 + 遮罩） ============ -->
+<div class="drawer-scrim" id="reader-scrim" hidden></div>
+<aside class="drawer" id="reader" hidden aria-label="资料阅读器">
+  <div class="drawer-head">
+    <div class="ee-grow">
+      <h2 class="drawer-title" id="reader-title">资料</h2>
+      <p class="panel-sub" id="reader-meta">还没有选择资料</p>
+    </div>
+    <button class="icon-btn sm note-star" id="reader-star" type="button" aria-pressed="false" aria-label="收藏" title="收藏"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg></button>
+    <button class="icon-btn" id="reader-close" type="button" aria-label="关闭阅读器" onclick="eeNotes.requestClose()"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="drawer-body">
+    <div class="ee-reader-body measure" id="reader-body"></div>
+    <div id="reader-edit" hidden>
+      <textarea class="textarea ee-reader-area" id="reader-area" aria-label="正文"></textarea>
+      <p class="hint">编辑态下「编辑」变为「取消」；有未保存修改时关闭或切换资料会先询问。</p>
+    </div>
+    <div id="reader-rel"></div>
+    <div class="ee-reader-file" id="reader-file-row" hidden>
+      <svg class="od-icon" aria-hidden="true"><use href="#i-file-text"/></svg>
+      <span class="mono" id="reader-file-name">—</span>
+      <span class="ee-reader-file-actions">
+        <button class="btn btn-sm btn-quiet" type="button" id="reader-preview">预览文件</button>
+        <button class="btn btn-sm btn-quiet" type="button" id="reader-download">下载文件</button>
+      </span>
+    </div>
+  </div>
+  <div class="drawer-foot">
+    <button class="btn btn-sm" id="reader-edit-btn" type="button">编辑</button>
+    <button class="btn btn-sm btn-primary" id="reader-save" type="button" onclick="eeNotes.save()" disabled>保存</button>
+    <span class="od-spacer"></span>
+    <button class="btn btn-sm" id="reader-ai" type="button" onclick="eeNotes.openAI()">AI 解释</button>
+    <button class="btn btn-sm btn-danger" type="button" id="reader-delete" onclick="eeDialog.open('dlg-delete', this)">删除</button>
+  </div>
+</aside>
+
+<!-- ============ AI 解释抽屉（FN-505 / FN-506 / FN-507 / FN-504） ============ -->
+<div class="drawer-scrim" id="ai-scrim" hidden></div>
+<aside class="drawer" id="ai-drawer" hidden aria-label="AI 解释">
+  <div class="drawer-head">
+    <div class="ee-grow">
+      <h2 class="drawer-title" id="ai-title">AI 解释</h2>
+      <p class="panel-sub" id="ai-sub">—</p>
+    </div>
+    <button class="icon-btn" id="ai-close" type="button" aria-label="关闭 AI 解释" onclick="eeNotes.closeAI()"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="drawer-body" id="ai-body"></div>
+  <div class="drawer-foot">
+    <button class="btn btn-sm" type="button" onclick="eeDialog.open('dlg-followup', this)">追问记录</button>
+    <span class="od-spacer"></span>
+    <button class="btn btn-sm btn-quiet" type="button" onclick="eeNotes.closeAI()">关闭</button>
+  </div>
+</aside>
+
+<!-- ============ 对话框 ============ -->
+<dialog class="dlg" id="dlg-note" aria-labelledby="dlg-note-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">资料</p>
+      <h2 class="dlg-title" id="dlg-note-title">新建笔记</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="dlg-body">
+    <p class="hint">记下要点、例子或易错处。标题与正文都必填；关联是可选的，不关联不影响任何主流程。</p>
+    <label class="field">
+      <span class="label">标题<span class="req">*</span></span>
+      <input class="input" id="note-title" type="text" placeholder="例如：挣值分析的计算顺序" data-autofocus>
+      <span class="field-err is-off" id="note-title-err">标题不能为空。</span>
+    </label>
+    <div class="od-grid g2">
+      <label class="field">
+        <span class="label">类型</span>
+        <select class="select" id="note-type">
+          <option selected>笔记</option>
+          <option>错题小结</option>
+          <option>知识口诀</option>
+        </select>
+        <span class="hint">类型决定它归入哪个筛选。</span>
+      </label>
+      <label class="field">
+        <span class="label">所属题库</span>
+        <select class="select" id="note-bank"></select>
+        <span class="hint">可选。资料属于你本人，与题库权限无关。</span>
+      </label>
+    </div>
+    <label class="field">
+      <span class="label">正文<span class="req">*</span></span>
+      <textarea class="textarea" id="note-body" rows="6" placeholder="写下要点、例子或易错处。"></textarea>
+      <span class="field-err is-off" id="note-body-err">正文不能为空。</span>
+    </label>
+    <div class="od-grid g2">
+      <label class="field">
+        <span class="label">关联题目</span>
+        <select class="select" id="note-q">
+          <option value="">不关联</option>
+        </select>
+        <span class="hint">关联后，AI 检索会优先取用这条资料。</span>
+      </label>
+      <label class="field">
+        <span class="label">关联知识点</span>
+        <input class="input" id="note-tag" type="text" placeholder="例如：信息安全、挣值分析">
+        <span class="hint">多个知识点用逗号分隔。</span>
+      </label>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close>取消</button>
+    <button class="btn btn-primary" type="button" id="note-save">保存</button>
+  </div>
+</dialog>
+
+<dialog class="dlg" id="dlg-upload" aria-labelledby="dlg-upload-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">资料</p>
+      <h2 class="dlg-title" id="dlg-upload-title">上传文件</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="dlg-body">
+    <p class="hint">上传只收 .txt / .md / .pdf。原文件保留在资料里，可预览与下载；抽取出的文本才会被 AI 检索引用。</p>
+    <label class="field">
+      <span class="label">类型</span>
+      <select class="select" id="upload-type" data-autofocus>
+        <option>笔记</option>
+        <option selected>错题小结</option>
+        <option>知识口诀</option>
+      </select>
+      <span class="hint">先选类型再选文件：上传时的类型即筛选归属，「文件」不是独立类型。</span>
+    </label>
+    <label class="field">
+      <span class="label">文件</span>
+      <input class="input" id="upload-file" type="text" placeholder="例如：OSI-安全服务-错题小结.pdf">
+      <span class="hint">单个文件。纯图片、扫描版与损坏文件会被拒绝并说明原因，不自动 OCR。</span>
+      <span class="field-err is-off" id="upload-file-err">先填写文件名。</span>
+    </label>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close>取消</button>
+    <button class="btn btn-primary" type="button" id="upload-go">上传</button>
+  </div>
+</dialog>
+
+<dialog class="dlg danger" id="dlg-unsaved" aria-labelledby="dlg-unsaved-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">资料</p>
+      <h2 class="dlg-title" id="dlg-unsaved-title">有未保存的修改</h2>
+    </div>
+  </div>
+  <div class="dlg-body">
+    <p class="hint">这条资料还有未保存的修改。离开前要保存吗？</p>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close>取消</button>
+    <button class="btn btn-danger-solid" type="button" data-dlg-close onclick="eeNotes.cancelEdit(); eeNotes.closeNow();">放弃</button>
+    <button class="btn btn-primary" type="button" onclick="eeNotes.save(); eeNotes.closeNow(); eeDialog.close(this.closest('dialog'));">保存并继续</button>
+  </div>
+</dialog>
+
+<dialog class="dlg danger" id="dlg-delete" aria-labelledby="dlg-delete-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">资料</p>
+      <h2 class="dlg-title" id="dlg-delete-title">删除资料</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="dlg-body">
+    <p class="hint">删除是硬删除，同步删除落盘的原文件；不影响题目、作答、错题与学习记录。</p>
+    <div class="kv">
+      <span class="kv-key">资料</span><span class="kv-val" id="dlg-delete-name">—</span>
+      <span class="kv-key">类型</span><span class="kv-val" id="dlg-delete-type">—</span>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>取消</button>
+    <button class="btn btn-danger-solid" type="button" id="dlg-delete-go">删除</button>
+  </div>
+</dialog>
+
+<dialog class="dlg" id="dlg-followup" aria-labelledby="dlg-followup-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">AI 解释</p>
+      <h2 class="dlg-title" id="dlg-followup-title">追问记录</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="dlg-body">
+    <p class="hint">追问跟着这道题和它当前的版本走；关掉再进来，记录还在。</p>
+    <div class="ee-followup">
+      <div class="ee-fu-row is-user"><span class="ee-fu-who">我</span><div class="ee-fu-bubble">会话层为什么不适合？和表示层的加密有什么区别？</div></div>
+      <div class="ee-fu-row"><span class="ee-fu-who">AI</span><div class="ee-fu-bubble">会话层管的是对话控制与同步（谁可以说、说到哪一段），不定义安全机制；表示层处理的是数据表示与加密转换。安全服务定义在网络层、传输层与应用层。</div></div>
+      <div class="ee-fu-row is-user"><span class="ee-fu-who">我</span><div class="ee-fu-bubble">那传输层的 TLS 算应用层还是传输层？</div></div>
+      <div class="ee-fu-row"><span class="ee-fu-who">AI</span><div class="ee-fu-bubble">TLS 记录层在传输层之上、通常归到应用层安全服务；考试里问「传输层可提供安全服务」时，答「可以」即可。</div></div>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>关闭</button>
+  </div>
+</dialog>
+
+<script src="../../assets/icons.js"></script>
+<script src="../../assets/store.js"></script>
+<script src="../../assets/i18n.js"></script>
+<script src="../../assets/nav.js"></script>
+<script src="../../assets/spec-boot.js"></script>
+<script>
+  /* ======================================================================
+     资料屏
+     · 列表 / 搜索 / 筛选 / 收藏 / 新建 / 编辑 / 删除走 eeStore；
+     · 阅读器抽屉承载正文、关联与原始文件；AI 解释抽屉承载 FN-505~FN-507；
+     · 两个抽屉同一时刻只开一个；引用可点回原文并高亮命中片段。
+     ====================================================================== */
+  (function () {
+    var S = window.eeStore;
+
+    /* ---------- 类型归属：新建时把类型写进 tags；种子资料按既有标签归类 ---------- */
+    var TYPE_TAGS = { '笔记': 'note', '错题小结': 'summary', '知识口诀': 'knowledge' };
+    var TAG_KIND = { '口诀': 'knowledge', '安全': 'summary', '范围': 'summary' };
+    var KIND_META = {
+      note: { label: '笔记', cls: 'brand' },
+      summary: { label: '错题小结', cls: 'bad' },
+      knowledge: { label: '知识口诀', cls: 'warn' }
+    };
+    var PANELS = ['all', 'note', 'summary', 'knowledge'];
+
+    /* ---------- 本屏演示内容：正文 / 关联 / AI 解释版本（不与 assets 数据重复） ---------- */
+    var BODY = {
+      n1: 'OSI 安全服务的归类是常考的反向选择题。先把七层分开记：\n物理层：不提供安全服务，只保证比特流在介质上正确传输。\n数据链路层：可以处理帧级校验，但通常不纳入安全服务体系。\n网络层：可提供。IPSec 的 AH 提供源鉴别与完整性，ESP 额外提供保密性。\n传输层：可提供。TLS 提供保密性、完整性与端点鉴别。\n会话层：不适合提供相应的安全服务——这是本题的答案。会话层负责对话控制与同步，安全机制不在这一层定义。\n表示层：可提供，主要处理数据格式转换与加密表示。\n应用层：可提供，面向具体应用的安全服务都在这一层实现。\n\n做题时先看问的是「不适合」还是「适合」，再逐层排除。题干出现「安全服务」+「OSI」时，优先回忆：网络层、传输层、应用层三处可提供，会话层不适合。',
+      n2: '借一位翻一倍，/25 起可用 1 / 2 / 4 / 8 递增。\n/24 → 1 个 C，256 个地址，可用 254。\n/25 → 2 个 C，各 128，可用 126。\n/26 → 4 个 C，各 64，可用 62。\n/27 → 8 个 C，各 32，可用 30。\n\n判断归属时先算网络地址：把 IP 与掩码做按位与，再和选项里的网络地址逐个比。考试里给的往往是「以下哪个属于该子网」，只要有一个选项的网络位与计算结果不同，就可直接排除。',
+      n3: '记忆顺序：先 PV → EV → AC，再算 SV / CV / SPI / CPI。\nPV 是计划价值，EV 是挣值，AC 是实际成本。三个数摆好后：\nSV = EV − PV，CV = EV − AC，SPI = EV ÷ PV，CPI = EV ÷ AC。\nSV / CV 小于 0 表示超支或落后；SPI / CPI 小于 1 同理。\n\n题干问「项目状态」时先看两个比值；问「偏差金额」时看两个差值。别把 SPI 与 CPI 的分母记反——进度永远除以计划，成本永远除以实际。',
+      n4: '范围基准是规划的输出，不是制定预算的输出。\n范围基准 = 范围说明书 + WBS + WBS 词典。制定预算的输出是成本基准；成本基准 = 按时间段分配的预算，不含管理储备。\n\n两者容易混，是因为都叫「基准」。区分办法：范围基准管「做什么」，成本基准管「花多少、什么时候花」。\n考试里如果选项同时出现范围基准与成本基准，先判断题干的主语是范围还是成本。',
+      n5: '整合先行，范围跟进，进度管工期，成本看挣值。\n后面四句接：质量把标准，资源派人手，沟通促协同，风险留余量，采购走合同，干系人在外围。\n\n十大管理域：整合、范围、进度、成本、质量、资源、沟通、风险、采购、干系人。\n案例题先定位考的是哪个域，再套 ITTO。定位错了，后面写得再整齐也不得分。',
+      n6: '先找问题，再给措施，最后写依据。\n第一步读问题问的是什么，把题干里的异常现象圈出来；第二步针对每个现象给一条可执行措施，一句一条；第三步补一句依据（来自哪个管理域或哪个过程）。\n\n阅卷按点给分，所以措施宁可多写一条短的，不要写成一段话。计算题把公式和代入数字都写出来，中间结果错也能拿步骤分。'
+    };
+    var REL = {
+      n1: { qid: '7B21E4D9', tags: ['信息安全', '安全服务'] },
+      n3: { qid: '', tags: ['成本管理', '挣值分析'] },
+      n5: { qid: 'A05C8F31', tags: ['项目管理基础'] },
+      n6: { qid: '', tags: ['案例分析'] }
+    };
+    var AI = {
+      '7B21E4D9': {
+        stem: 'OSI 的（ ）不适合提供相应的安全服务。',
+        official: 'OSI 七层中，网络层（IPSec）、传输层（TLS）与应用层可提供相应安全服务；会话层负责对话控制与同步，不定义安全机制，因而不适合提供安全服务。',
+        versions: [
+          { id: 'a1', source: 'AI', at: '2026-11-24 21:14', provider: '兼容 OpenAI 接口 · gpt-4o-mini', adopted: true, text: '选会话层。安全服务定义在网络层、传输层与应用层：网络层靠 IPSec（AH 管鉴别与完整性，ESP 额外管保密性），传输层靠 TLS，应用层面向具体业务。会话层只管对话控制与同步，没有安全机制的定义位置。', refs: [{ note: 'n1', seg: '第 6 段', frag: '会话层：不适合提供相应的安全服务' }] },
+          { id: 'w1', source: 'WEB', at: '2026-11-24 21:19', status: 'VERIFIED', text: '按外部证据补充：会话层在 OSI 体系中的职责是建立、管理与终止会话连接，安全服务由网络层与传输层的协议族承担。', evidence: [
+            { title: 'IPsec 体系结构：AH 与 ESP', summary: 'AH 提供数据源鉴别与完整性；ESP 额外提供保密性，两者都工作在网络层。', url: 'https://datatracker.ietf.org/rfc/4301', at: '2026-11-24 21:19' },
+            { title: 'TLS 1.3：传输层安全协议', summary: 'TLS 在传输层之上提供握手与记录保护，属应用层安全服务的常用实现。', url: 'https://datatracker.ietf.org/rfc/8446', at: '2026-11-24 21:19' }
+          ] },
+          { id: 'o1', source: 'OFFICIAL', at: '2026-11-18 10:02', text: 'OSI 七层中，网络层（IPSec）、传输层（TLS）与应用层可提供相应安全服务；会话层负责对话控制与同步，不定义安全机制，因而不适合提供安全服务。' },
+          { id: 'w2', source: 'WEB', at: '2026-11-23 09:12', status: 'UNAVAILABLE', text: '未配置联网核查服务，未取得外部证据。', evidence: [] },
+          { id: 'p1', source: 'PERSONAL', at: '2026-11-25 08:40', text: '我自己的记法：网络、传输、应用三层能提供；会话层不适合。考前只背这三加一。' }
+        ]
+      },
+      'A05C8F31': {
+        stem: '以下不属于「临时性」的是（ ）',
+        official: '临时性指项目有明确的起点与终点。选项中「持续运营一套既有系统」不具备临时性，属运营而非项目。',
+        versions: [
+          { id: 'o9', source: 'OFFICIAL', at: '2026-11-18 10:02', text: '临时性指项目有明确的起点与终点。选项中「持续运营一套既有系统」不具备临时性，属运营而非项目。' }
+        ]
+      }
+    };
+    var SOURCE_META = {
+      OFFICIAL: { label: '官方', cls: 'brand' },
+      AI: { label: 'AI', cls: 'warn' },
+      WEB: { label: '联网', cls: 'ok' },
+      PERSONAL: { label: '个人', cls: 'plain' }
+    };
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+    function bankName(id) { return S.bankName(id); }
+    function questionStem(qid) { var q = S.question(qid); return q ? q.stem : ''; }
+    function bodyOf(n) { return BODY[n.id] || (n.body && n.body.trim() ? n.body : n.title); }
+
+    /* ---------- 视图状态（搜索词 / 页签 / 选中笔记） ---------- */
+    var saved = S.view.load('notes');
+    var urlq = new URLSearchParams(location.search);
+    var st = {
+      q: urlq.get('q') != null ? urlq.get('q') : (saved.q || ''),
+      tab: saved.tab || 'all',
+      selected: saved.selected || null
+    };
+    /* ?type= 的取值是四个 UI 键（OP-502）：ALL / NOTE / MISTAKE_SUMMARY / KNOWLEDGE */
+    var URL_TYPE = { all: 'ALL', note: 'NOTE', summary: 'MISTAKE_SUMMARY', knowledge: 'KNOWLEDGE' };
+    var URL_PANEL = { ALL: 'all', NOTE: 'note', MISTAKE_SUMMARY: 'summary', KNOWLEDGE: 'knowledge' };
+    var urlType = urlq.get('type');
+    if (urlType && URL_PANEL[urlType]) st.tab = URL_PANEL[urlType];
+    else if (urlType) { try { urlq.delete('type'); } catch (e) {} }
+    function saveView() { S.view.save('notes', { q: st.q, tab: st.tab, selected: st.selected }); }
+    /* 筛选与搜索词进 URL：刷新 / 后退 / 分享链接恢复同一列表（CR-16 / OP-502） */
+    function syncUrl() {
+      var params = new URLSearchParams(location.search);
+      if (st.tab && st.tab !== 'all') params.set('type', URL_TYPE[st.tab]); else params.delete('type');
+      if (st.q.trim()) params.set('q', st.q.trim()); else params.delete('q');
+      try { history.replaceState(null, '', '?' + params.toString()); } catch (e) {}
+    }
+
+    /* ---------- DOM ---------- */
+    var lists = {};
+    PANELS.forEach(function (p) { lists[p] = document.getElementById('list-' + p); });
+    var searchInput = document.getElementById('note-search');
+    var counts = {
+      all: document.getElementById('cnt-all'), note: document.getElementById('cnt-note'),
+      summary: document.getElementById('cnt-summary'), knowledge: document.getElementById('cnt-knowledge')
+    };
+    var crumbHere = document.getElementById('crumb-here');
+    var crumbParent = document.getElementById('crumb-parent');
+
+    /* ---------- 抽屉 ---------- */
+    var reader = document.getElementById('reader');
+    var readerScrim = document.getElementById('reader-scrim');
+    var aiDrawer = document.getElementById('ai-drawer');
+    var aiScrim = document.getElementById('ai-scrim');
+    var content = document.getElementById('main-content');
+    var body = document.getElementById('reader-body');
+    var edit = document.getElementById('reader-edit');
+    var area = document.getElementById('reader-area');
+    var saveBtn = document.getElementById('reader-save');
+    var editBtn = document.getElementById('reader-edit-btn');
+    var delBtn = document.getElementById('reader-delete');
+    var starBtn = document.getElementById('reader-star');
+    var aiBtn = document.getElementById('reader-ai');
+    var titleEl = document.getElementById('reader-title');
+    var metaEl = document.getElementById('reader-meta');
+    var relEl = document.getElementById('reader-rel');
+    var fileRow = document.getElementById('reader-file-row');
+    var fileName = document.getElementById('reader-file-name');
+    var aiBody = document.getElementById('ai-body');
+    var aiSub = document.getElementById('ai-sub');
+    var aiTitle = document.getElementById('ai-title');
+    var original = '';
+    var currentId = null;
+    var aiQid = null;
+
+    function isDesktop() { return window.matchMedia('(min-width: 769px)').matches; }
+    function syncChrome() {
+      if (reader.hidden) {
+        content.classList.remove('ee-reader-open');
+        readerScrim.hidden = true;
+        reader.removeAttribute('aria-modal');
+      } else if (isDesktop()) {
+        content.classList.add('ee-reader-open');
+        readerScrim.hidden = true;
+        reader.removeAttribute('aria-modal');
+      } else {
+        content.classList.remove('ee-reader-open');
+        readerScrim.hidden = false;
+        reader.setAttribute('aria-modal', 'true');
+      }
+      if (aiDrawer.hidden) {
+        aiScrim.hidden = true;
+        aiDrawer.removeAttribute('aria-modal');
+      } else if (isDesktop()) {
+        aiScrim.hidden = true;
+        aiDrawer.removeAttribute('aria-modal');
+      } else {
+        aiScrim.hidden = false;
+        aiDrawer.setAttribute('aria-modal', 'true');
+      }
+    }
+    function editing() { return !edit.hidden; }
+    function dirty() { return editing() && area.value !== original; }
+    function syncSave() { saveBtn.disabled = !area.value.trim(); }
+
+    function startEdit() {
+      if (!currentId) return;
+      original = bodyOf(S.note(currentId));
+      area.value = original;
+      body.hidden = true;
+      edit.hidden = false;
+      editBtn.textContent = '取消';
+      editBtn.onclick = cancelEdit;
+      syncSave();
+      area.focus();
+    }
+    function cancelEdit() {
+      edit.hidden = true;
+      body.hidden = false;
+      editBtn.textContent = '编辑';
+      editBtn.onclick = startEdit;
+      saveBtn.disabled = true;
+    }
+    function save() {
+      if (!currentId || !area.value.trim()) return;
+      S.updateNote(currentId, { body: area.value.trim() });
+      BODY[currentId] = area.value.trim();
+      cancelEdit();
+      window.eeToast('已保存');
+      render();
+      renderReader();
+    }
+    function requestClose() {
+      if (dirty()) { window.eeDialog.open('dlg-unsaved', document.getElementById('reader-close')); return; }
+      closeNow();
+    }
+    function closeNow() {
+      cancelEdit();
+      /* 列表每次重绘都会换掉行元素，按资料 id 找回当前那一行再回焦（OP-503） */
+      var backId = reader._triggerId;
+      reader.hidden = true;
+      syncChrome();
+      if (backId) {
+        var row = document.querySelector('[data-note-open="' + backId + '"]');
+        if (row && typeof row.focus === 'function') row.focus();
+      }
+    }
+    function openReader(trigger, id) {
+      if (!aiDrawer.hidden) { aiDrawer.hidden = true; }
+      reader._trigger = trigger || null;
+      reader._triggerId = id || (trigger ? trigger.getAttribute('data-note-open') : null) || null;
+      reader.hidden = false;
+      syncChrome();
+      /* 展开后焦点移到关闭按钮（OP-503） */
+      var close = document.getElementById('reader-close');
+      if (close) close.focus();
+    }
+
+    function renderReader() {
+      var n = currentId ? S.note(currentId) : null;
+      if (!n) {
+        titleEl.textContent = '资料';
+        metaEl.textContent = S.notes().length ? '从列表选一条资料' : '还没有资料，先新建一条';
+        body.textContent = '';
+        relEl.innerHTML = '';
+        fileRow.hidden = true;
+        editBtn.disabled = true;
+        saveBtn.disabled = true;
+        delBtn.disabled = true;
+        starBtn.disabled = true;
+        aiBtn.disabled = true;
+        return;
+      }
+      var km = KIND_META[kindOf(n)];
+      var rel = REL[n.id] || { qid: '', tags: [] };
+      titleEl.textContent = n.title;
+      metaEl.textContent = km.label + ' · ' + (n.updatedAt || '') + ' · ' + bankName(n.bankId) + (n.starred ? ' · 已收藏' : '');
+      body.textContent = bodyOf(n);
+      body.hidden = false;
+      /* 关联：题目与知识点（FN-504） */
+      var relHtml = '<div class="rule-label">关联</div>';
+      if (rel.qid) {
+        relHtml += '<p class="hint ee-mt-3">关联题目 · <a href="question.html?q=' + esc(rel.qid) + '">' + esc(questionStem(rel.qid)) + '</a></p>';
+      } else {
+        relHtml += '<p class="hint ee-mt-3">未关联题目。关联后，AI 检索会优先取用这条资料；不关联也不影响阅读与编辑。</p>';
+      }
+      relHtml += '<p class="hint">关联知识点 · ' + (rel.tags && rel.tags.length ? esc(rel.tags.join('、')) : '无') + '</p>';
+      relEl.innerHTML = relHtml;
+      /* 原始文件 */
+      if (n.file) {
+        fileRow.hidden = false;
+        fileName.textContent = n.file;
+      } else {
+        fileRow.hidden = true;
+      }
+      editBtn.disabled = false;
+      delBtn.disabled = false;
+      starBtn.disabled = false;
+      aiBtn.disabled = false;
+      starBtn.classList.toggle('is-on', !!n.starred);
+      starBtn.setAttribute('aria-pressed', n.starred ? 'true' : 'false');
+      starBtn.setAttribute('aria-label', (n.starred ? '取消收藏 ' : '收藏 ') + n.title);
+      starBtn.title = n.starred ? '取消收藏' : '收藏';
+      if (crumbHere) crumbHere.textContent = n.title;
+    }
+
+    function selectNote(id, keepOpen, trigger) {
+      st.selected = id || null;
+      currentId = id || null;
+      saveView();
+      cancelEdit();
+      renderReader();
+      if (id && !keepOpen) openReader(trigger, id);
+      render();
+    }
+
+    /* ---------- AI 解释抽屉（FN-505 / 506 / 507 + FN-504 引用） ---------- */
+    function openAI(id) {
+      var nid = id || currentId;
+      if (!nid) { window.eeToast('先选一条资料', 'bad'); return; }
+      if (!reader.hidden) { reader.hidden = true; }
+      var n = S.note(nid);
+      var rel = REL[nid] || { qid: '', tags: [] };
+      currentId = nid;
+      st.selected = nid;
+      saveView();
+      renderReader();
+      aiQid = rel.qid || null;
+      aiTitle.textContent = 'AI 解释';
+      aiSub.textContent = n ? n.title : '';
+      aiDrawer.hidden = false;
+      renderAI();
+      syncChrome();
+    }
+    function closeAI() { aiDrawer.hidden = true; syncChrome(); }
+
+    function aiVersionRow(v, single) {
+      var sm = SOURCE_META[v.source] || SOURCE_META.PERSONAL;
+      var statusTag = '';
+      if (v.source === 'WEB') {
+        statusTag = v.status === 'VERIFIED'
+          ? '<span class="tag ok">已取得 ' + (v.evidence || []).length + ' 条证据</span>'
+          : '<span class="tag warn">未取得外部证据</span>';
+      }
+      var adoptedTag = v.adopted ? '<span class="tag brand">已采纳</span>' : '';
+      var evBtn = (v.source === 'WEB' && v.status === 'VERIFIED')
+        ? '<button class="link-btn" type="button" data-ev-toggle="' + v.id + '" aria-expanded="false">展开证据</button>' : '';
+      var citeBtn = (v.refs && v.refs.length)
+        ? '<button class="link-btn" type="button" data-cite-jump="' + v.id + '">看引用</button>' : '';
+      var adoptItem = v.adopted
+        ? '<button class="menu-item" type="button" role="menuitem" disabled>当前主解释</button>'
+        : (single
+          ? '<button class="menu-item" type="button" role="menuitem" disabled>采纳为主解释</button><p class="menu-hint">这道题只有一版解释，无需选择。</p>'
+          : '<button class="menu-item" type="button" role="menuitem" data-adopt="' + v.id + '">采纳为主解释</button>');
+      return '<div class="list-row ee-row-top static" data-ver="' + v.id + '">' +
+        '<button type="button" class="list-main list-open" data-ver-toggle="' + v.id + '" aria-expanded="false">' +
+          '<span class="list-title"><span class="tag ' + sm.cls + '">' + sm.label + '</span> ' + esc(v.at) + '</span>' +
+          '<span class="list-meta">' + esc(v.provider || '题库内容') + adoptedTag + statusTag + citeBtn + evBtn + '<span>展开全文</span></span>' +
+        '</button>' +
+        '<span class="list-side">' +
+          '<span class="menu-anchor">' +
+            '<button class="icon-btn sm" type="button" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="解释版本操作"><svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg></button>' +
+            '<div class="menu" role="menu" hidden>' + adoptItem +
+              '<button class="menu-item" type="button" role="menuitem" data-save-personal="' + v.id + '">另存为我的解释</button>' +
+            '</div>' +
+          '</span>' +
+        '</span>' +
+        '<span class="ee-ver-text od-clamp-2" id="ver-text-' + v.id + '" hidden>' + esc(v.text) + '</span>' +
+        (v.source === 'WEB' && v.status === 'VERIFIED'
+          ? '<span class="ee-evidence" id="ver-ev-' + v.id + '" hidden>' + (v.evidence || []).map(function (e) {
+              return '<span><span class="ee-ev-title">' + esc(e.title) + '</span>' +
+                '<span class="ee-ev-sum">' + esc(e.summary) + '</span>' +
+                '<a class="ee-ev-link" href="' + esc(e.url) + '" target="_blank" rel="noopener">' + esc(e.url) + '</a>' +
+                '<span class="ee-ev-sum">检索时间 ' + esc(e.at) + '</span></span>';
+            }).join('') + '</span>'
+          : '') +
+      '</div>';
+    }
+
+    function renderAI() {
+      var n = currentId ? S.note(currentId) : null;
+      if (!n) { aiBody.innerHTML = '<div class="notice warn"><svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg><div class="notice-body">先选一条资料。</div></div>'; return; }
+      var rel = REL[n.id] || { qid: '', tags: [] };
+      var html = '';
+
+      /* 非 AI 替代路径（P-8 / FN-518）：常驻，不依赖配置 */
+      html += '<div class="notice info" role="status">' +
+        '<svg class="od-icon" aria-hidden="true"><use href="#i-book"/></svg>' +
+        '<div class="notice-body"><div class="notice-title">没有 AI 也能继续</div>' +
+        '<div>官方解析、你自己的笔记与上传文件、复制题干到浏览器检索，三条路径都不需要任何配置。</div>' +
+        '<div class="notice-actions"><button class="btn btn-sm" type="button" onclick="eeNotes.openReader()">读这条资料</button>' +
+        '<button class="btn btn-sm btn-quiet" type="button" onclick="eeToast(\'题干已复制，可粘贴到浏览器检索\')">复制题干去检索</button></div>' +
+        '</div></div>';
+
+      if (!rel.qid) {
+        html += '<div class="notice warn" role="status">' +
+          '<svg class="od-icon" aria-hidden="true"><use href="#i-link"/></svg>' +
+          '<div class="notice-body"><div class="notice-title">这条资料还没有关联题目</div>' +
+          '<div>AI 解释以「当前题目 + 当前题目版本」为上下文。先在新建或编辑时关联一道题，这里才会出现解释版本。</div>' +
+          '<div class="notice-actions"><button class="btn btn-sm" type="button" onclick="eeNotes.editCurrent()">去关联题目</button></div>' +
+          '</div></div>';
+        html += '<p class="hint">关联知识点：' + (rel.tags && rel.tags.length ? esc(rel.tags.join('、')) : '无') + '</p>';
+        aiBody.innerHTML = html;
+        return;
+      }
+
+      var ctx = AI[rel.qid];
+      if (!ctx) {
+        html += '<div class="notice warn" role="status"><svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg><div class="notice-body"><div class="notice-title">这道题还没有解释版本</div><div>生成第一版，或先读官方解析。</div></div></div>';
+        aiBody.innerHTML = html;
+        return;
+      }
+
+      var adopted = null;
+      ctx.versions.forEach(function (v) { if (v.adopted) adopted = v; });
+      html += '<div><div class="rule-label">上下文题目</div>' +
+        '<p class="ee-ai-stem ee-mt-3">' + esc(ctx.stem) + '</p>' +
+        '<p class="hint"><a href="question.html?q=' + esc(rel.qid) + '">打开题目页</a> · ' + esc(rel.qid) + ' · 解释跟着题目版本走，改标准答案不会改写已经生成的解释。</p></div>';
+
+      /* 当前主解释（BR-530：反馈区顶部渲染，官方解析降为一行参考） */
+      if (adopted) {
+        var am = SOURCE_META[adopted.source] || SOURCE_META.PERSONAL;
+        html += '<div class="ee-ai-primary">' +
+          '<div class="od-cluster"><span class="rule-label">当前主解释</span>' +
+          '<span class="tag ' + am.cls + '">' + am.label + '</span>' +
+          '<span class="hint">' + esc(adopted.at) + (adopted.provider ? ' · ' + esc(adopted.provider) : '') + '</span></div>' +
+          '<p class="ee-ai-primary-text">' + esc(adopted.text) + '</p>' +
+          '<p class="hint ee-mt-3">官方解析作为一行参考：' + esc(ctx.official) + '</p>' +
+          '</div>';
+      }
+
+      /* 版本列表：四类来源同列，永久保留，不可删除 */
+      html += '<div class="rule-label ee-mt-5">解释版本 · ' + ctx.versions.length + ' 版</div>' +
+        '<div class="list ee-mt-3">' + ctx.versions.map(function (v) { return aiVersionRow(v, ctx.versions.length < 2); }).join('') + '</div>';
+
+      /* 本次引用的资料（FN-504：哪条资料、哪个片段，可点回原文） */
+      var refs = [];
+      ctx.versions.forEach(function (v) { (v.refs || []).forEach(function (r) { refs.push(r); }); });
+      html += '<div id="ai-cites"><div class="rule-label ee-mt-5">本次引用的资料</div>';
+      if (refs.length) {
+        html += '<div class="list ee-mt-3">' + refs.map(function (r) {
+          var rn = S.note(r.note);
+          return '<div class="list-row ee-row-top static">' +
+            '<button type="button" class="list-main list-open" data-cite-open="' + esc(r.note) + '" data-cite-frag="' + esc(r.frag) + '">' +
+              '<span class="list-title">' + esc(rn ? rn.title : r.note) + '</span>' +
+              '<span class="list-meta"><span class="tag plain">' + esc(r.seg) + '</span><span>命中「' + esc(r.frag) + '」</span></span>' +
+            '</button>' +
+            '<span class="list-side"><span class="hint">点回原文</span></span>' +
+          '</div>';
+        }).join('') + '</div>';
+      } else {
+        html += '<p class="hint ee-mt-3">未使用个人资料。</p>';
+      }
+      html += '</div>';
+
+      /* 生成区：可选提问 + 两个入口（结果都写进版本列表，可见即可回看） */
+      html += '<div class="rule-label ee-mt-5">生成</div>' +
+        '<label class="field ee-mt-3">' +
+        '<span class="label">提问（可选）</span>' +
+        '<textarea class="textarea" id="ai-ask" rows="2" placeholder="例如：会话层和表示层的区别是什么？"></textarea>' +
+        '<span class="hint">每次生成都新起一版，历史版本一字不改。</span>' +
+        '</label>' +
+        '<div class="od-cluster ee-mt-3">' +
+        '<button class="btn btn-sm btn-primary" type="button" id="ai-gen-btn">生成解释</button>' +
+        '<button class="btn btn-sm" type="button" id="ai-web-btn">联网核查</button>' +
+        '<a class="btn btn-sm btn-quiet" href="settings.html?section=ai">去配置 AI</a>' +
+        '</div>';
+
+      aiBody.innerHTML = html;
+    }
+
+    /* ---------- AI 抽屉内交互（抽屉体每次重绘，统一用事件委托） ---------- */
+    document.addEventListener('click', function (e) {
+      var gen = e.target.closest ? e.target.closest('#ai-gen-btn') : null;
+      if (gen) {
+        if (!aiQid || !AI[aiQid]) { window.eeToast('先关联一道题目', 'bad'); return; }
+        var ask = document.getElementById('ai-ask');
+        var q = ask && ask.value.trim() ? ask.value.trim() : '';
+        var ctx = AI[aiQid];
+        ctx.versions.unshift({
+          id: 'a' + Date.now(), source: 'AI', at: '2026-11-25 09:58', provider: '兼容 OpenAI 接口 · gpt-4o-mini',
+          adopted: false, text: q ? ('针对提问「' + q + '」：会话层管对话控制与同步，不定义安全机制；安全服务定义在网络层、传输层与应用层。本题选会话层。') : '重新生成：选会话层。网络层（IPSec）、传输层（TLS）与应用层可提供安全服务，会话层只负责对话控制与同步。',
+          refs: [{ note: currentId, seg: '正文', frag: '会话层：不适合提供相应的安全服务' }]
+        });
+        if (ask) ask.value = '';
+        renderAI();
+        window.eeToast('已生成新解释，历史版本未覆盖');
+        return;
+      }
+      var web = e.target.closest ? e.target.closest('#ai-web-btn') : null;
+      if (web) {
+        if (!aiQid || !AI[aiQid]) { window.eeToast('先关联一道题目', 'bad'); return; }
+        AI[aiQid].versions.unshift({
+          id: 'w' + Date.now(), source: 'WEB', at: '2026-11-25 10:02', status: 'VERIFIED',
+          text: '外部证据补充：会话层职责为会话建立、管理与终止，不承担安全服务；安全机制见于网络层与传输层协议族。',
+          evidence: [
+            { title: 'OSI 会话层的功能界定', summary: '会话层提供对话控制与同步，不属于安全服务的定义层。', url: 'https://datatracker.ietf.org/rfc/1006', at: '2026-11-25 10:02' },
+            { title: '传输层安全协议综述', summary: 'TLS 提供保密性、完整性与端点鉴别，是传输层安全服务的代表实现。', url: 'https://datatracker.ietf.org/rfc/8446', at: '2026-11-25 10:02' }
+          ]
+        });
+        renderAI();
+        window.eeToast('联网核查完成 · 2 条证据');
+        return;
+      }
+    });
+
+    /* 版本行：展开全文 / 展开证据 / 采纳 / 另存 / 看引用 */
+    document.addEventListener('click', function (e) {
+      var t;
+      if ((t = e.target.closest('[data-ver-toggle]'))) {
+        var vt = document.getElementById('ver-text-' + t.getAttribute('data-ver-toggle'));
+        if (vt) {
+          var show = vt.hidden;
+          vt.hidden = !show;
+          vt.classList.toggle('od-clamp-2', !show);
+          t.setAttribute('aria-expanded', show ? 'true' : 'false');
+          var meta = t.querySelector('.list-meta span:last-child');
+          if (meta) meta.textContent = show ? '收起全文' : '展开全文';
+        }
+        return;
+      }
+      if ((t = e.target.closest('[data-ev-toggle]'))) {
+        var ev = document.getElementById('ver-ev-' + t.getAttribute('data-ev-toggle'));
+        if (ev) {
+          var open = ev.hidden;
+          ev.hidden = !open;
+          t.setAttribute('aria-expanded', open ? 'true' : 'false');
+          t.textContent = open ? '收起证据' : '展开证据';
+        }
+        return;
+      }
+      if ((t = e.target.closest('[data-cite-jump]'))) {
+        var cites = document.getElementById('ai-cites');
+        if (cites) cites.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        return;
+      }
+      if ((t = e.target.closest('[data-adopt]'))) {
+        var id = t.getAttribute('data-adopt');
+        if (AI[aiQid]) {
+          AI[aiQid].versions.forEach(function (v) { v.adopted = (v.id === id); });
+          renderAI();
+          window.eeToast('已设为主解释，立即生效');
+        }
+        return;
+      }
+      if ((t = e.target.closest('[data-save-personal]'))) {
+        var src = null;
+        AI[aiQid].versions.forEach(function (v) { if (v.id === t.getAttribute('data-save-personal')) src = v; });
+        if (src) {
+          AI[aiQid].versions.unshift({
+            id: 'p' + Date.now(), source: 'PERSONAL', at: '2026-11-25 10:06',
+            text: src.text + '（由' + (SOURCE_META[src.source] || SOURCE_META.PERSONAL).label + '版本另存，原版本一字未改）'
+          });
+          renderAI();
+          window.eeToast('已另存为我的解释，原版本保留');
+        }
+        return;
+      }
+      if ((t = e.target.closest('[data-cite-open]'))) {
+        var nid = t.getAttribute('data-cite-open');
+        var frag = t.getAttribute('data-cite-frag');
+        aiDrawer.hidden = true;
+        selectNote(nid, true);
+        openReader();
+        renderReaderWithHit(frag);
+        window.eeToast('已跳到资料原文');
+        return;
+      }
+    });
+
+    /* 引用回跳：原文片段高亮并滚入视野 */
+    function renderReaderWithHit(frag) {
+      var n = currentId ? S.note(currentId) : null;
+      if (!n) return;
+      var text = bodyOf(n);
+      var idx = frag ? text.indexOf(frag) : -1;
+      if (idx < 0) { body.textContent = text; return; }
+      body.innerHTML = esc(text.slice(0, idx)) + '<span class="cite-hit">' + esc(frag) + '</span>' + esc(text.slice(idx + frag.length));
+      var hit = body.querySelector('.cite-hit');
+      if (hit) hit.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+
+    /* ---------- 列表渲染 ---------- */
+    function kindOf(n) {
+      var tags = n.tags || [];
+      for (var i = 0; i < tags.length; i++) {
+        if (TYPE_TAGS[tags[i]]) return TYPE_TAGS[tags[i]];
+        if (TAG_KIND[tags[i]]) return TAG_KIND[tags[i]];
+      }
+      return 'note';
+    }
+    function rowOf(n) {
+      var km = KIND_META[kindOf(n)];
+      var on = st.selected === n.id;
+      return '<div class="list-row ee-row-top' + (on ? ' is-active' : '') + '" data-note-id="' + esc(n.id) + '">' +
+        '<button type="button" class="list-main list-open" data-note-open="' + esc(n.id) + '">' +
+          '<span class="list-title ee-asset-title">' + esc(n.title) + '</span>' +
+          '<span class="list-meta"><span class="tag ' + km.cls + '">' + km.label + '</span>' +
+          (n.file ? '<span class="tag plain">文件</span>' : '') +
+          '<span>' + esc(n.updatedAt || '') + '</span>' +
+          '<span>' + esc(bankName(n.bankId)) + '</span>' +
+          (n.starred ? '<span class="tag warn">已收藏</span>' : '') + '</span>' +
+        '</button>' +
+        '<span class="list-side">' +
+          '<button type="button" class="icon-btn sm note-star' + (n.starred ? ' is-on' : '') + '" data-note-star="' + esc(n.id) + '" aria-pressed="' + (n.starred ? 'true' : 'false') + '" aria-label="' + (n.starred ? '取消收藏' : '收藏') + ' ' + esc(n.title) + '" title="' + (n.starred ? '取消收藏' : '收藏') + '">' +
+            '<svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>' +
+          '</button>' +
+          '<svg class="od-icon" aria-hidden="true"><use href="#i-chevron-right"/></svg>' +
+        '</span>' +
+      '</div>';
+    }
+    function emptyNode(title, desc, withClear) {
+      var el = document.createElement('div');
+      el.className = 'empty';
+      el.setAttribute('data-search-empty', '');
+      el.innerHTML =
+        '<div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-' + (withClear ? 'search' : 'note') + '"/></svg></div>' +
+        '<p class="empty-title">' + esc(title) + '</p>' +
+        '<p class="empty-desc">' + esc(desc) + '</p>' +
+        (withClear ? '<div class="empty-actions"><button class="btn btn-sm" type="button" data-search-clear>清除搜索</button></div>' : '');
+      return el;
+    }
+
+    function render() {
+      var all = S.notes();
+      var q = st.q.trim().toLowerCase();
+      var hit = {};
+      PANELS.forEach(function (p) { hit[p] = 0; });
+
+      var navNote = document.getElementById('nav-note-count');
+      if (navNote) { navNote.textContent = String(all.length); navNote.hidden = all.length === 0; }
+
+      all.forEach(function (n) {
+        var k = kindOf(n);
+        var match = !q || n.title.toLowerCase().indexOf(q) > -1 || bodyOf(n).toLowerCase().indexOf(q) > -1;
+        if (!match) return;
+        hit.all++;
+        hit[k]++;
+      });
+
+      counts.all.textContent = String(hit.all);
+      counts.note.textContent = String(hit.note);
+      counts.summary.textContent = String(hit.summary);
+      counts.knowledge.textContent = String(hit.knowledge);
+
+      PANELS.forEach(function (p) {
+        var host = lists[p];
+        if (!host) return;
+        var rows = all.filter(function (n) {
+          var k = kindOf(n);
+          if (p !== 'all' && k !== p) return false;
+          if (!q) return true;
+          return n.title.toLowerCase().indexOf(q) > -1 || bodyOf(n).toLowerCase().indexOf(q) > -1;
+        });
+        host.innerHTML = rows.map(rowOf).join('');
+        var section = host.closest('[data-filter-panel]');
+        var stale = section ? section.querySelector('[data-search-empty]') : null;
+        if (stale) stale.remove();
+        if (rows.length === 0 && section) {
+          if (q) section.appendChild(emptyNode('没有匹配的资料', '搜索只命中标题与正文。换个关键词，或清除当前搜索条件。', true));
+          else if (p === 'all') section.appendChild(emptyNode('还没有资料', '资料是可选的辅助材料。新建第一条笔记，或上传一个文件；不配置 AI 也完全可用。'));
+          else section.appendChild(emptyNode('这个分类下还没有资料', '切换到「全部」看看其他资料。'));
+        }
+      });
+
+      if (st.selected && !S.note(st.selected)) { st.selected = null; currentId = null; saveView(); }
+      if (!currentId && crumbHere) crumbHere.textContent = '全部资料';
+      else if (currentId && crumbHere) { var cn = S.note(currentId); if (cn) crumbHere.textContent = cn.title; }
+    }
+
+    /* ---------- 搜索 ---------- */
+    if (searchInput) {
+      searchInput.value = st.q;
+      searchInput.addEventListener('input', function () { st.q = searchInput.value; saveView(); syncUrl(); render(); });
+    }
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('[data-search-clear]') : null;
+      if (!b) return;
+      st.q = '';
+      if (searchInput) { searchInput.value = ''; searchInput.focus(); }
+      saveView();
+      syncUrl();
+      render();
+    });
+
+    /* ---------- 行内交互：打开 / 收藏 ---------- */
+    document.addEventListener('click', function (e) {
+      var star = e.target.closest ? e.target.closest('[data-note-star]') : null;
+      if (star) {
+        e.preventDefault();
+        var n = S.note(star.getAttribute('data-note-star'));
+        if (!n) return;
+        S.updateNote(n.id, { starred: !n.starred });
+        window.eeToast(n.starred ? '已取消收藏' : '已收藏');
+        render();
+        renderReader();
+        return;
+      }
+      var open = e.target.closest ? e.target.closest('[data-note-open]') : null;
+      if (open) {
+        e.preventDefault();
+        if (!aiDrawer.hidden) aiDrawer.hidden = true;
+        selectNote(open.getAttribute('data-note-open'), false, open);
+      }
+    });
+
+    /* ---------- 类型筛选：分段控件切换集合（aria 由 spec-boot 置位，这里管面板） ---------- */
+    var typeSeg = document.getElementById('type-seg');
+    function showPanel(p) {
+      if (typeSeg) {
+        typeSeg.querySelectorAll('.segment[data-panel]').forEach(function (s) {
+          s.setAttribute('aria-checked', s.getAttribute('data-panel') === p ? 'true' : 'false');
+        });
+      }
+      PANELS.forEach(function (k) {
+        var sec = document.querySelector('[data-filter-panel="' + k + '"]');
+        if (sec) sec.hidden = (k !== p);
+      });
+    }
+    document.addEventListener('click', function (e) {
+      var seg = e.target.closest ? e.target.closest('.segmented .segment[data-panel]') : null;
+      if (!seg) return;
+      st.tab = seg.getAttribute('data-panel');
+      saveView();
+      syncUrl();
+      showPanel(st.tab);
+    });
+
+    /* ---------- 面包屑父级 ---------- */
+    if (crumbParent) {
+      crumbParent.addEventListener('click', function () {
+        closeNow();
+        if (!aiDrawer.hidden) closeAI();
+        st.selected = null; currentId = null; saveView();
+        renderReader();
+        render();
+        if (crumbHere) crumbHere.textContent = '全部资料';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    }
+
+    /* ---------- 新建笔记 ---------- */
+    var bankSel = document.getElementById('note-bank');
+    var qSel = document.getElementById('note-q');
+    function fillBanks() {
+      if (!bankSel) return;
+      var live = S.banks({ archived: false });
+      bankSel.innerHTML = live.map(function (b) {
+        return '<option value="' + esc(b.id) + '"' + (b.id === 'b_acc' ? ' selected' : '') + '>' + esc(b.name) + ' · ' + b.count + ' 题</option>';
+      }).join('');
+    }
+    function fillQuestions() {
+      if (!qSel) return;
+      qSel.innerHTML = '<option value="">不关联</option>' + S.questions(undefined, { archived: false }).map(function (q) {
+        return '<option value="' + esc(q.id) + '">' + esc(q.stem) + '</option>';
+      }).join('');
+    }
+    var noteTitle = document.getElementById('note-title');
+    var noteType = document.getElementById('note-type');
+    var noteBody = document.getElementById('note-body');
+    var noteTitleErr = document.getElementById('note-title-err');
+    var noteBodyErr = document.getElementById('note-body-err');
+    var noteDlgTitle = document.getElementById('dlg-note-title');
+    var noteSaveBtn = document.getElementById('note-save');
+    var editingId = null;
+    if (noteTitle) noteTitle.addEventListener('input', function () { noteTitleErr.classList.add('is-off'); });
+    if (noteBody) noteBody.addEventListener('input', function () { noteBodyErr.classList.add('is-off'); });
+    function resetNoteDialog() {
+      editingId = null;
+      noteDlgTitle.textContent = '新建笔记';
+      noteSaveBtn.textContent = '保存';
+      noteTitle.value = ''; noteBody.value = ''; document.getElementById('note-tag').value = '';
+      qSel.value = '';
+      noteTitleErr.classList.add('is-off');
+      noteBodyErr.classList.add('is-off');
+    }
+    document.getElementById('note-save').addEventListener('click', function () {
+      var title = noteTitle.value.trim();
+      var text = noteBody.value.trim();
+      var badTitle = !title, badBody = !text;
+      noteTitleErr.classList.toggle('is-off', !badTitle);
+      noteBodyErr.classList.toggle('is-off', !badBody);
+      if (badTitle || badBody) { (badTitle ? noteTitle : noteBody).focus(); return; }
+      var type = noteType.value;
+      var n = editingId ? S.note(editingId) : null;
+      if (n) {
+        S.updateNote(n.id, { title: title, tags: [type], body: text });
+        BODY[n.id] = text;
+      } else {
+        n = S.addNote({ title: title, bankId: bankSel.value, tags: [type], starred: false });
+        S.updateNote(n.id, { body: text });
+        BODY[n.id] = text;
+      }
+      var qid = qSel.value;
+      var tagText = document.getElementById('note-tag').value.trim();
+      REL[n.id] = {
+        qid: qid,
+        tags: tagText ? tagText.split(/[,，]/).map(function (s) { return s.trim(); }).filter(Boolean) : []
+      };
+      resetNoteDialog();
+      window.eeDialog.close(document.getElementById('dlg-note'));
+      window.eeToast(editingId ? '资料已保存' : '笔记已保存');
+      editingId = null;
+      var kind = TYPE_TAGS[type] || 'note';
+      var segBtn = document.querySelector('.segmented .segment[data-panel="' + kind + '"]');
+      if (segBtn) segBtn.click();
+      st.tab = kind;
+      saveView();
+      selectNote(n.id);
+    });
+
+    /* ---------- 上传文件 ---------- */
+    var uploadType = document.getElementById('upload-type');
+    var uploadFile = document.getElementById('upload-file');
+    var uploadErr = document.getElementById('upload-file-err');
+    uploadFile.addEventListener('input', function () { uploadErr.classList.add('is-off'); });
+    document.getElementById('upload-go').addEventListener('click', function () {
+      var name = uploadFile.value.trim();
+      if (!name) { uploadErr.classList.remove('is-off'); uploadFile.focus(); return; }
+      var type = uploadType.value;
+      var n = S.addNote({ title: name, bankId: (bankSel && bankSel.value) || 'b_acc', tags: [type], starred: false });
+      S.updateNote(n.id, { file: name, body: '已上传 ' + name + '。原文件保留在资料里，可预览与下载；抽取出的文本才会被 AI 检索引用。' });
+      BODY[n.id] = '已上传 ' + name + '。原文件保留在资料里，可预览与下载；抽取出的文本才会被 AI 检索引用。';
+      uploadFile.value = '';
+      window.eeDialog.close(document.getElementById('dlg-upload'));
+      window.eeToast('已上传 ' + name);
+      var kind = TYPE_TAGS[type] || 'note';
+      var segBtn = document.querySelector('.segmented .segment[data-panel="' + kind + '"]');
+      if (segBtn) segBtn.click();
+      st.tab = kind;
+      saveView();
+      selectNote(n.id);
+    });
+
+    /* ---------- 删除 ---------- */
+    var delName = document.getElementById('dlg-delete-name');
+    var delType = document.getElementById('dlg-delete-type');
+    document.getElementById('reader-delete').addEventListener('click', function () {
+      var n = currentId ? S.note(currentId) : null;
+      if (!n) { window.eeToast('先选一条资料', 'bad'); return; }
+      var km = KIND_META[kindOf(n)];
+      delName.textContent = n.title;
+      delType.textContent = km.label + ' · ' + bankName(n.bankId) + (n.file ? ' · 有上传文件 ' + n.file : '');
+    });
+    document.getElementById('dlg-delete-go').addEventListener('click', function () {
+      var id = currentId;
+      if (id) { S.removeNote(id); delete BODY[id]; delete REL[id]; }
+      window.eeDialog.close(document.getElementById('dlg-delete'));
+      closeNow();
+      window.eeToast('资料已删除');
+      currentId = null;
+      st.selected = null;
+      saveView();
+      render();
+    });
+
+    /* ---------- 阅读器：收藏 / 预览 / 下载 ---------- */
+    starBtn.addEventListener('click', function () {
+      if (!currentId) return;
+      var n = S.note(currentId);
+      if (!n) return;
+      S.updateNote(n.id, { starred: !n.starred });
+      window.eeToast(n.starred ? '已取消收藏' : '已收藏');
+      render();
+      renderReader();
+    });
+    document.getElementById('reader-preview').addEventListener('click', function () {
+      var n = currentId ? S.note(currentId) : null;
+      if (!n || !n.file) { window.eeToast('这条资料没有原始文件', 'bad'); return; }
+      window.eeToast('正在新标签打开 ' + n.file);
+    });
+    document.getElementById('reader-download').addEventListener('click', function () {
+      var n = currentId ? S.note(currentId) : null;
+      if (!n || !n.file) { window.eeToast('这条资料没有原始文件', 'bad'); return; }
+      window.eeToast('已开始下载 ' + n.file);
+    });
+
+    /* ---------- 状态格里的真实出口 ---------- */
+    document.querySelectorAll('[data-act="retry-reader"]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (!currentId) { window.eeToast('先选一条资料', 'bad'); return; }
+        renderReader();
+        window.eeToast('已重新读取这条资料');
+      });
+    });
+
+    /* ---------- Escape 与遮罩：同一条关闭路径 ---------- */
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      if (document.querySelector('dialog[open]')) return;
+      if (!aiDrawer.hidden) { e.preventDefault(); closeAI(); return; }
+      if (!reader.hidden) { e.preventDefault(); requestClose(); }
+    });
+    readerScrim.addEventListener('click', requestClose);
+    aiScrim.addEventListener('click', closeAI);
+    window.addEventListener('resize', syncChrome);
+
+    /* ---------- 对外接口（状态格按钮用） ---------- */
+    window.eeNotes = {
+      newNote: function (trigger) {
+        resetNoteDialog();
+        window.eeDialog.open('dlg-note', trigger);
+      },
+      openReader: function (id) {
+        if (id) selectNote(id, true);
+        openReader();
+      },
+      openAI: function (id) { openAI(id); },
+      closeAI: closeAI,
+      requestClose: requestClose,
+      closeNow: closeNow,
+      save: save,
+      cancelEdit: cancelEdit,
+      editCurrent: function () {
+        if (!currentId) { window.eeToast('先选一条资料', 'bad'); return; }
+        resetNoteDialog();
+        var n = S.note(currentId);
+        editingId = currentId;
+        if (n) {
+          noteTitle.value = n.title;
+          noteBody.value = bodyOf(n);
+          var rel = REL[n.id] || { qid: '', tags: [] };
+          qSel.value = rel.qid || '';
+          document.getElementById('note-tag').value = (rel.tags || []).join('、');
+          var kind = kindOf(n);
+          var typeLabel = KIND_META[kind].label;
+          Array.prototype.forEach.call(noteType.options, function (o) { if (o.text === typeLabel) noteType.value = o.value; });
+          noteDlgTitle.textContent = '编辑资料';
+          noteSaveBtn.textContent = '保存修改';
+        }
+        window.eeDialog.open('dlg-note', document.getElementById('reader-ai'));
+      },
+      renderReaderWithHit: renderReaderWithHit
+    };
+
+    /* ---------- 初始化 ---------- */
+    fillBanks();
+    fillQuestions();
+    render();
+    showPanel(st.tab || 'all');
+    syncUrl();
+    var first = S.notes()[0];
+    if (st.selected && S.note(st.selected)) selectNote(st.selected, true);
+    else if (first) selectNote(first.id, true);
+    syncChrome();
+
+    if (S.subscribe) S.subscribe(function (state, evt) {
+      if (!evt || evt.type === 'external') { fillBanks(); fillQuestions(); render(); }
+      else if (evt.type.indexOf('note:') === 0 || evt.type === 'reset') { fillBanks(); fillQuestions(); render(); }
+    });
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>题目 · 易考宝</title>
+<link rel="stylesheet" href="../../assets/ee.css">
+<style>/* 本屏特有：题目阅读块、竖线右栏、阅读式选项、答案行、解析正文、知识点、资料引用、
+     抽屉、状态格。未重定义令牌或控件 */
+
+  /* 题目阅读块：上沿一条墨色重线的编辑块（原版 .question-sheet 同值），不是卡片 */
+  .question-sheet{  border-top: 1px solid var(--ink); padding: var(--sp-4) 0 var(--sp-5); min-width: 0;  }
+.sheet-head{  display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; padding-bottom: var(--sp-3);  }
+.sheet-title{  font-size: var(--text-lg); font-weight: 500; margin: 0; font-family: var(--font-serif);  }
+.sheet-sub{  font-size: var(--text-xs); color: var(--ink-3);  }
+/* 右栏：一条竖线分隔的栏目（与首页 .today-rail 同值），不是两张叠在一起的卡片 */
+  .question-layout{  display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--sp-6); align-items: start;  }
+.question-rail{  border-left: 1px solid var(--line); padding-left: var(--sp-5); min-width: 0;  }
+.rail-block + .rail-block{  margin-top: var(--sp-6);  }
+.rail-title{  font-size: var(--text-sm); font-weight: 600; letter-spacing: .1em; color: var(--ink-3); margin: 0 0 var(--sp-2); display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap;  }
+.rail-note{  font-size: var(--text-xs); color: var(--ink-3); font-weight: 400; letter-spacing: 0;  }
+.question-rail .list-row{  padding: var(--sp-2) 0;  }
+.rail-hint{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); margin: var(--sp-3) 0 0;  }
+/* 阅读式选项（原版 .opt-list / .opt 同值）：上沿细线 + 行间细线的分行，
+     不是作答器里的方框按钮；标准答案只作压亮处理 */
+  .opt-list{  margin: var(--sp-5) 0 0; border-top: 1px solid var(--line); max-width: var(--reading-w);  }
+.opt{ 
+    display: grid; grid-template-columns: 22px minmax(0, 1fr) 18px; align-items: start; gap: var(--sp-3);
+    width: 100%; min-height: 0; margin-bottom: 0; padding: var(--sp-3) var(--sp-2) var(--sp-3) 0;
+    border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent;
+    font: inherit; font-size: var(--text-md); line-height: 1.65; color: var(--ink);
+   }
+.opt:hover{  background: transparent;  }
+.opt-key{  width: 22px; height: 22px; margin-top: 1px; border-radius: var(--r-xs);  }
+.opt.is-correct{  background: var(--brand-soft);  }
+.opt.is-correct .opt-key{  background: var(--brand); border-color: var(--brand); color: var(--brand-contrast);  }
+.opt-mark{  margin-left: 0; justify-self: end; color: var(--brand); display: flex; margin-top: 2px;  }
+/* 题干属性：k-v 横排（原版 .question-kv 同值） */
+  .q-meta{  display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-5); font-size: var(--text-xs); color: var(--ink-3); margin-bottom: var(--sp-4);  }
+.q-meta .k{  color: var(--ink-4);  }
+.q-meta .v{  color: var(--ink-2);  }
+.q-meta .sep{  display: none;  }
+.answer-line{  display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) 0; border-top: 1px solid var(--line-strong); font-size: var(--text-sm);  }
+.answer-line .od-icon{  --od-icon-size: 15px; color: var(--ok); flex: none;  }
+.answer-label{  color: var(--ink-3);  }
+.answer-value{  font-family: var(--font-mono); font-size: var(--text-md); font-weight: 500; color: var(--ink);  }
+/* 解析：上沿一条细线收住答案行，与知识点 / 资料引用同一节奏 */
+  .explain-block{  margin-top: var(--sp-4); border-top: 1px solid var(--line); padding-top: var(--sp-4);  }
+.explain-block-title{  font-size: var(--text-sm); color: var(--ink-3); margin: 0 0 var(--sp-2);  }
+.explain-body p{  margin: 0 0 var(--sp-2);  }
+.explain-body p:last-child{  margin-bottom: 0;  }
+.qp-tags{  display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-5) 0 0;  }
+/* 知识点 / 资料引用：上沿一条细线的编辑块，与解析同层，不另起卡片 */
+  .q-block{  margin-top: var(--sp-6); border-top: 1px solid var(--line); padding-top: var(--sp-4);  }
+.q-block-title{  font-size: var(--text-sm); color: var(--ink-3); margin: 0 0 var(--sp-3); display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap;  }
+.q-block-note{  font-size: var(--text-xs); color: var(--ink-4); font-weight: 400;  }
+.kp-list{  display: flex; flex-wrap: wrap; gap: var(--sp-2);  }
+/* 知识点标签内的移除钮：用文字链控件，不新造形态 */
+  .kp-del{  all: unset; cursor: pointer; margin-left: var(--sp-1); line-height: 1; color: inherit;  }
+.kp-del:hover{  color: var(--bad);  }
+.kp-del:focus-visible{  outline: 2px solid var(--brand); outline-offset: 1px;  }
+.ref-row{  align-items: flex-start;  }
+.ref-row .list-title{  font-size: var(--text-sm);  }
+.ref-add{  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-3);  }
+.ref-add .select{  width: auto; flex: 1 1 220px; min-width: 180px; max-width: 320px;  }
+.q-block-empty{  margin-top: var(--sp-3);  }
+/* 版本历史行：当前版本一条记，历史版本淡一档 */
+  .ver-row .list-title{  font-family: var(--font-mono);  }
+.ver-note{  font-size: var(--text-xs); color: var(--ink-3); margin: var(--sp-2) 0 0; line-height: var(--text-xs-lh);  }
+/* 冲突：可读结论 + 两个明确的处置入口 */
+  .conflict-actions{  display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-3);  }
+/* 抽屉内表单：与对话框同构，宽度自适应侧滑面板 */
+  .drawer .field{  margin: 0;  }
+.drawer .od-grid{  --od-cols: 2;  }
+.opt-key-input{  flex: 0 0 5em;  }
+.drawer-note{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); margin: 0;  }
+.overlay-grid{  display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--sp-4); align-items: start;  }
+.rail-gap{  margin-top: var(--sp-3);  }
+.wrap{  flex-wrap: wrap;  }
+/* 骨架宽度档（避免内联 style） */
+  .sk-35{  width: 35%;  }
+.sk-55{  width: 55%;  }
+.sk-70{  width: 70%;  }
+.sk-100{  width: 100%;  }
+.vh{  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;  }
+/* 规格区沿用本屏的编辑式分区：.panel 按原版同值覆写为上沿细线的编辑块，不是卡片 */
+  .panel{  background: transparent; border: 0; border-top: 1px solid var(--line); border-radius: 0;  }
+.panel + .panel{  margin-top: var(--sp-6);  }
+.panel-head{  padding: var(--sp-4) 0 var(--sp-3); border-bottom: 0;  }
+.panel-title{  font-size: var(--text-xs); font-weight: 600; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-3); font-family: var(--font-sans);  }
+.panel-body{  padding: var(--sp-2) 0 var(--sp-3);  }
+@media (max-width: 768px){
+    .question-layout { grid-template-columns: minmax(0, 1fr); }
+    /* 窄屏：竖线右栏转为横向分区，用上沿细线分隔（原版 .question-rail 移动端同值） */
+    .question-rail { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); margin-top: var(--sp-6); padding-top: var(--sp-5); }
+    .rail-block + .rail-block { margin-top: var(--sp-5); }
+  }
+@media (max-width: 640px){
+    .ref-add .select { max-width: none; }
+  }</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">跳到主内容</a>
+<div class="app-shell">
+  <!-- ============ 侧栏（导航由 assets/nav.js 统一转换为真实链接） ============ -->
+  <aside class="sidebar" aria-label="主导航">
+    <button type="button" class="side-brand">
+      <span class="brand-mark" aria-hidden="true">易</span>
+      <span class="brand-text">
+        <span class="brand-name">易考宝</span>
+        <span data-i18n="shell.brand.sub" class="brand-sub">私人学习档案</span>
+      </span>
+    </button>
+    <nav class="side-nav" aria-label="产品区域">
+      <span data-i18n="shell.group.learn" class="side-group-label">学习</span>
+      <button type="button" class="nav-item">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.today">今天</span>
+      </button>
+      <button type="button" class="nav-item">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.banks">题库</span>
+        <span class="nav-count" id="nav-bank-count">2</span>
+      </button>
+      <button type="button" class="nav-item">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.review">复习</span>
+      </button>
+      <button type="button" class="nav-item">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.exams">模考</span>
+      </button>
+      <button type="button" class="nav-item">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.notes">资料</span>
+      </button>
+    </nav>
+    <div class="side-study">
+      <span class="side-study-label">学习状态</span>
+      <div class="side-study-row"><span>今日待复习</span><b id="side-due">0</b></div>
+      <div class="side-study-row"><span>未完成会话</span><b id="side-sessions">0</b></div>
+    </div>
+    <div class="side-foot">
+      <button type="button" class="nav-item">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.settings">设置</span>
+      </button>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <!-- ============ 桌面顶栏：面包屑表达真实层级 题库 / 题库名 / 第 N 题 ============ -->
+    <header class="topbar">
+      <nav class="crumb" aria-label="面包屑">
+        <a class="link" href="banks.html">题库</a>
+        <span class="sep" aria-hidden="true">/</span>
+        <a class="link" id="crumb-bank" href="banks.html">题库</a>
+        <span class="sep" aria-hidden="true">/</span>
+        <span class="here" id="crumb-here">题目</span>
+      </nav>
+      <span class="spacer"></span>
+      <button data-ee-shell="theme" type="button" class="icon-btn" id="tb-theme" title="切换明暗" aria-label="切换明暗">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-moon"/></svg>
+      </button>
+      <button type="button" class="icon-btn" id="tb-lang" title="切换语言" data-ee-shell="lang" aria-label="切换语言">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-globe"/></svg>
+      </button>
+      <span class="menu-anchor">
+        <button type="button" class="user-mini" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单">A</button>
+        <span class="menu" role="menu" hidden>
+          <a class="menu-item" role="menuitem" href="settings.html">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-user"/></svg>账户资料
+          </a>
+          <a class="menu-item" role="menuitem" href="settings.html">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>设置
+          </a>
+          <span class="menu-sep" role="separator"></span>
+          <button class="menu-item is-danger" type="button" role="menuitem" id="tb-logout">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-logout"/></svg>退出登录
+          </button>
+        </span>
+      </span>
+    </header>
+
+    <!-- ============ 移动顶栏 ============ -->
+    <header class="mobile-top">
+      <a class="page-back" id="m-back" href="banks.html" aria-label="返回上一页">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>
+      </a>
+      <span class="mt-title" id="m-title">题目</span>
+      <span class="menu-anchor">
+        <button type="button" class="user-mini" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单">A</button>
+        <span class="menu" role="menu" hidden>
+          <a class="menu-item" role="menuitem" href="settings.html">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-user"/></svg>账户资料
+          </a>
+          <a class="menu-item" role="menuitem" href="settings.html">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>设置
+          </a>
+          <span class="menu-sep" role="separator"></span>
+          <button class="menu-item is-danger" type="button" role="menuitem" id="tb-logout-m">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-logout"/></svg>退出登录
+          </button>
+        </span>
+      </span>
+    </header>
+
+    <!-- ============ 主体 ============ -->
+    <main class="content has-bottomnav" id="main-content">
+
+      <!-- 题目不可见：整页空态（403 语义，不提示「不存在」以免泄露） -->
+      <div class="empty" id="q-notfound" hidden>
+        <span class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg></span>
+        <h4 class="empty-title" id="nf-title">你不在这个题库里</h4>
+        <p class="empty-desc" id="nf-desc">这个题库只对成员开放。请联系题库所有者把你加进来，或返回题库列表。</p>
+        <div class="empty-actions">
+          <a class="btn btn-primary" href="banks.html">返回题库列表</a>
+          <a class="btn btn-quiet" href="home.html">返回首页</a>
+        </div>
+      </div>
+
+      <div id="q-body" hidden>
+      <div class="page-head">
+        <div>
+          <p class="page-eyebrow" id="q-eyebrow">题库</p>
+          <h1 class="page-title" id="q-title">题目</h1>
+          <p class="page-sub" id="q-sub">—</p>
+        </div>
+        <div class="page-actions">
+          <a class="btn btn-primary" id="q-practice" href="practice.html">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>练习这道题
+          </a>
+          <button type="button" class="btn btn-quiet" id="q-edit-btn">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-edit"/></svg>编辑
+          </button>
+          <button type="button" class="btn btn-quiet" id="q-archive-btn">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-archive"/></svg><span id="q-archive-label">归档</span>
+          </button>
+          <span class="hint" id="q-gate-reason" hidden></span>
+        </div>
+      </div>
+
+      <!-- 这道题已归档：留在页面上说明状态，不跳走、不清空内容 -->
+      <div class="notice warn mt-5" id="q-archived-notice" role="status" hidden>
+        <svg class="od-icon" aria-hidden="true"><use href="#i-archive"/></svg>
+        <div class="notice-body">
+          <span class="notice-title">这道题已归档</span><br>
+          归档后不再参与练习与抽题，内容与历史作答都保留。恢复后可重新参与练习。
+          <span class="notice-actions">
+            <button class="btn btn-sm" type="button" id="q-restore-inline">恢复这道题</button>
+          </span>
+        </div>
+      </div>
+
+      <!-- 冲突：保存被拒绝，双方版本都保留（FN-115） -->
+      <div class="notice warn mt-5" id="q-conflict-notice" role="alert" hidden>
+        <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+        <div class="notice-body">
+          <span class="notice-title">保存被拒绝：这道题已被他人修改</span><br>
+          <span id="q-conflict-desc"></span>
+          <span class="notice-actions">
+            <button class="btn btn-sm" type="button" id="q-conflict-mine">查看我的版本</button>
+            <button class="btn btn-sm btn-quiet" type="button" id="q-conflict-theirs">使用对方版本</button>
+          </span>
+        </div>
+      </div>
+
+      <div class="question-layout">
+        <!-- ============ 题目阅读块 ============ -->
+        <section class="question-sheet" aria-labelledby="q-panel-title">
+          <div class="sheet-head">
+            <h2 class="sheet-title" id="q-panel-title">题目</h2>
+            <span class="sheet-sub" id="q-panel-sub">系统集成项目管理工程师</span>
+          </div>
+          <div class="q-meta" id="q-meta"></div>
+          <p class="q-stem" id="q-stem"></p>
+          <div class="opt-list" id="q-options"></div>
+          <div class="answer-line" id="q-answer-line" hidden>
+            <svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg>
+            <span class="answer-label">答案</span>
+            <span class="answer-value" id="q-answer"></span>
+          </div>
+          <div class="explain-block" id="q-explain" hidden>
+            <p class="explain-block-title">解析</p>
+            <div class="explain-body" id="q-explain-body"></div>
+          </div>
+          <div class="notice info mt-4" id="q-nodata" hidden>
+            <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+            <div class="notice-body">这道题还没有选项、答案与解析。共享数据里只保存题干、题型、章节、难度与标签；选项和解析请在「编辑」里补全。</div>
+          </div>
+          <p class="qp-tags" id="q-tags"></p>
+
+          <!-- ============ 知识点 ============ -->
+          <div class="q-block">
+            <h3 class="q-block-title">知识点<span class="q-block-note" id="kp-count"></span>
+              <button type="button" class="btn btn-sm btn-quiet" id="kp-add-btn">添加</button>
+            </h3>
+            <div class="kp-list" id="kp-list"></div>
+            <div class="empty q-block-empty" id="kp-empty" hidden>
+              <span class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-target"/></svg></span>
+              <h4 class="empty-title">这道题还没有挂知识点</h4>
+              <p class="empty-desc">挂上知识点后才能按考点筛题、看薄弱分布，练习报告也会归到对应考点。</p>
+              <div class="empty-actions"><button class="btn btn-sm" type="button" id="kp-add-cta">添加知识点</button></div>
+            </div>
+            <form class="ref-add" id="kp-add-form" onsubmit="return false" hidden>
+              <input class="input" type="text" id="kp-input" placeholder="例如：沟通管理 · 沟通方法" aria-label="知识点名称">
+              <button class="btn btn-sm" type="submit">添加</button>
+              <button class="btn btn-sm btn-quiet" type="button" id="kp-cancel">取消</button>
+            </form>
+          </div>
+
+          <!-- ============ 资料引用 ============ -->
+          <div class="q-block">
+            <h3 class="q-block-title">资料引用<span class="q-block-note">同一题库的资料笔记</span></h3>
+            <div class="list" id="ref-list"></div>
+            <div class="empty q-block-empty" id="ref-empty" hidden>
+              <span class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-file-text"/></svg></span>
+              <h4 class="empty-title">这道题还没有关联资料</h4>
+              <p class="empty-desc" id="ref-empty-desc">关联后可以从题目直接跳到对应笔记，复习时不用回资料库翻。</p>
+            </div>
+            <form class="ref-add" id="ref-add-form" onsubmit="return false">
+              <select class="select" id="ref-select" aria-label="选择要关联的资料"></select>
+              <button class="btn btn-sm" type="submit">关联</button>
+            </form>
+            <p class="rail-hint">关联只建立双向入口，不改动资料内容；解除关联也不会删除资料。</p>
+          </div>
+        </section>
+
+        <!-- ============ 右栏：一条竖线分隔的栏目，不是卡片 ============ -->
+        <aside class="question-rail" aria-label="版本与关联">
+          <div class="rail-block">
+            <h2 class="rail-title">版本历史<span class="rail-note" id="ver-sub">当前版本 v1</span></h2>
+            <div class="list-row dense is-active static">
+              <span class="list-main">
+                <span class="list-title mono" id="ver-current">v1</span>
+                <span class="list-meta" id="ver-meta"><span>初始版本</span></span>
+              </span>
+              <span class="list-side"><span class="tag ok">当前版本</span></span>
+            </div>
+            <div class="list" id="ver-history"></div>
+            <p class="ver-note" id="ver-note">题目内容变更会生成新版本，历史作答绑定原版本。</p>
+            <button type="button" class="btn btn-sm btn-quiet mt-3" id="ver-open">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-clock"/></svg>查看全部版本
+            </button>
+            <div class="notice warn rail-gap" id="ver-conflict-flag" role="status" hidden>
+              <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+              <div class="notice-body">
+                <span class="tag bad">有未决冲突</span> 服务端版本已前于你打开的版本。
+                <span class="notice-actions"><button class="btn btn-sm" type="button" id="ver-conflict-open">去处理</button></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="rail-block">
+            <h2 class="rail-title">历史作答重判</h2>
+            <div class="notice info">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+              <div class="notice-body">
+                <span class="notice-title">保存新版本后，历史作答仍按原版本判分</span><br>
+                判分口径依赖原版本快照，本期不提供对历史作答的重新判分。
+              </div>
+            </div>
+            <div class="od-row wrap mt-3">
+              <button type="button" class="btn btn-sm btn-quiet" disabled aria-describedby="rejudge-reason">重判历史作答</button>
+            </div>
+            <p class="rail-hint" id="rejudge-reason" role="status">入口保留但不开放：本期不做批量重判。</p>
+          </div>
+
+          <div class="rail-block" id="exam-ref-block" hidden>
+            <h2 class="rail-title">模考引用</h2>
+            <div class="notice info">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>
+              <div class="notice-body"><span id="exam-ref-text"></span></div>
+            </div>
+            <p class="rail-hint">模考不锁定题库内容：会话持有快照，编辑与归档都不被阻断。</p>
+          </div>
+
+          <div class="rail-block">
+            <h2 class="rail-title">复制到</h2>
+            <div class="field">
+              <label class="label" for="copy-target">选择目标题库</label>
+              <select class="select" id="copy-target"></select>
+            </div>
+            <button type="button" class="btn btn-sm" id="copy-go">复制</button>
+            <p class="rail-hint">复制会生成一道新题，学习记录不会一起复制。</p>
+          </div>
+        </aside>
+      </div>
+      </div><!-- /#q-body -->
+
+      <!-- ============ 状态规格：八态 ============ -->
+      <section class="section mt-8" aria-labelledby="q-states-title" data-spec>
+        <div class="section-head">
+          <h2 class="section-title" id="q-states-title">状态格</h2>
+          <span class="section-note">空 / 加载 / 错误 / 禁用 / 无权限 / 冲突 / 未配置 / 离线</span>
+        </div>
+
+        <div class="state-grid">
+          <!-- 加载 -->
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title">加载 · 题目读取中</h3></div>
+            <div class="panel-body od-stack gap-2">
+              <div class="skeleton sk-line sk-35"></div>
+              <div class="skeleton sk-line sk-70"></div>
+              <div class="skeleton sk-line sk-55"></div>
+              <div class="skeleton sk-line sk-100"></div>
+              <div class="skeleton sk-block"></div>
+            </div>
+            <p class="state-note">面包屑与页头先出来，题目本体用骨架占位；骨架与真实内容同构。</p>
+          </div>
+
+          <!-- 错误 -->
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title">错误 · 读取失败</h3></div>
+            <div class="panel-body">
+              <div class="notice bad" role="alert">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <span class="notice-body">
+                  <span class="notice-title">读取失败</span><br>题目加载失败，可能是网络中断。
+                  <span class="notice-actions"><button type="button" class="btn btn-sm" id="state-retry">重试</button></span>
+                </span>
+              </div>
+              <p class="state-note">页面骨架保持可用：面包屑与页头不消失，重试只重取题目本身。</p>
+            </div>
+          </div>
+
+          <!-- 空：没有选项与解析 -->
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title">空 · 无选项与解析</h3></div>
+            <div class="panel-body">
+              <div class="notice info">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+                <div class="notice-body">这道题还没有选项、答案与解析。共享数据里只保存题干、题型、章节、难度与标签；选项和解析请在「编辑」里补全。</div>
+              </div>
+              <p class="state-note">与「加载失败」分开：这里是数据真的缺，入口仍然可点。</p>
+            </div>
+          </div>
+
+          <!-- 禁用 -->
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title">禁用 · 带原因</h3></div>
+            <div class="panel-body od-stack gap-2">
+              <div class="od-row wrap">
+                <button type="button" class="btn btn-quiet" disabled aria-describedby="q-dis-reason">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-edit"/></svg>编辑
+                </button>
+                <button type="button" class="btn btn-quiet" disabled aria-describedby="q-dis-reason">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-archive"/></svg>归档
+                </button>
+              </div>
+              <p class="hint" id="q-dis-reason" role="status">你是这个题库的成员：可以浏览、练习与复制，不能改题或归档。</p>
+              <p class="state-note">入口不隐藏，禁用控件旁给可读原因，不只靠 title。</p>
+            </div>
+          </div>
+
+          <!-- 无权限：整页 -->
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title">无权限 · 403 整页</h3></div>
+            <div class="panel-body">
+              <div class="empty">
+                <span class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg></span>
+                <h4 class="empty-title">你不在这个题库里</h4>
+                <p class="empty-desc">这个题库只对成员开放。请联系题库所有者把你加进来，或返回题库列表。</p>
+                <div class="empty-actions">
+                  <a class="btn btn-primary" href="banks.html">返回题库列表</a>
+                  <a class="btn btn-quiet" href="home.html">返回首页</a>
+                </div>
+              </div>
+              <p class="state-note">深链进入且非成员时整页替换，不提示「题目不存在」以免泄露。</p>
+            </div>
+          </div>
+
+          <!-- 冲突 -->
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title">冲突 · 保存被拒绝</h3></div>
+            <div class="panel-body">
+              <div class="notice warn" role="alert">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <div class="notice-body">
+                  <span class="notice-title">保存被拒绝：这道题已被他人修改</span><br>
+                  你打开的是 v2，服务端现在已经是 v3。你的改动没有写入，也不会覆盖对方的版本。
+                  <span class="notice-actions">
+                    <button type="button" class="btn btn-sm" id="st-conflict-mine">查看我的版本</button>
+                    <button type="button" class="btn btn-sm btn-quiet" id="st-conflict-theirs">使用对方版本</button>
+                  </span>
+                </div>
+              </div>
+              <p class="state-note">两个版本都保留，由用户决定用哪一个；不自动覆盖任何一方。</p>
+            </div>
+          </div>
+
+          <!-- 未配置：历史重判本期不提供 -->
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title">未配置 · 历史重判不开放</h3></div>
+            <div class="panel-body">
+              <div class="notice info">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+                <div class="notice-body">
+                  <span class="notice-title">本期不提供</span><br>
+                  保存新版本后，历史作答与成绩报告仍按原版本判分，不会被改写。对历史作答重新判分的入口暂未开放。
+                </div>
+              </div>
+              <div class="od-row wrap mt-3">
+                <button type="button" class="btn btn-sm btn-quiet" disabled aria-describedby="st-rejudge-reason">重判历史作答</button>
+              </div>
+              <p class="hint mt-2" id="st-rejudge-reason" role="status">入口保留但不开放：判分口径依赖原版本快照，本期不做批量重判。</p>
+              <p class="state-note">入口不隐藏，禁用原因可读。</p>
+            </div>
+          </div>
+
+          <!-- 离线 -->
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title">离线</h3></div>
+            <div class="panel-body">
+              <div class="notice warn">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <div class="notice-body">
+                  <span class="tag warn">离线</span> 1 次保存待同步<br>
+                  当前离线，编辑内容会在本机暂存；恢复连接后自动提交，不会丢失。
+                  <span class="notice-actions"><button type="button" class="btn btn-sm">重试同步</button></span>
+                </div>
+              </div>
+              <p class="state-note">离线是持久标识 + 队列计数 + 重试。</p>
+            </div>
+          </div>
+
+          <!-- 已归档题目 -->
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title">已归档 · 题目页内</h3></div>
+            <div class="panel-body">
+              <div class="notice warn" role="status">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-archive"/></svg>
+                <div class="notice-body">
+                  <span class="notice-title">这道题已归档</span><br>
+                  归档后不再参与练习与抽题，内容与历史作答都保留。
+                  <span class="notice-actions"><button type="button" class="btn btn-sm">恢复这道题</button></span>
+                </div>
+              </div>
+              <p class="state-note">打开一道已归档题不跳走、不清空，页内给出状态与恢复入口。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 浮层规格 ============ -->
+      <section class="section mt-8" aria-labelledby="q-overlay-title" data-spec>
+        <div class="section-head">
+          <h2 class="section-title" id="q-overlay-title">浮层</h2>
+          <span class="section-note">编辑题目（抽屉）· 版本历史（抽屉）· 未完成会话（对话框）</span>
+        </div>
+        <div class="overlay-grid">
+          <button type="button" class="btn" data-q-open="edit">打开「编辑题目」抽屉</button>
+          <button type="button" class="btn btn-primary" data-q-open="versions">打开「版本历史」抽屉</button>
+          <button type="button" class="btn" data-q-open="study">打开「有未完成的学习会话」</button>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<nav class="bottomnav" aria-label="底部导航">
+  <button type="button" class="bn-item">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg><span data-i18n="shell.nav.today">今天</span>
+  </button>
+  <button type="button" class="bn-item">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg><span data-i18n="shell.nav.banks">题库</span>
+  </button>
+  <button type="button" class="bn-item">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg><span data-i18n="shell.nav.review">复习</span>
+  </button>
+  <button type="button" class="bn-item">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg><span data-i18n="shell.nav.exams">模考</span>
+  </button>
+  <button type="button" class="bn-item">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg><span data-i18n="shell.nav.notes">资料</span>
+  </button>
+  <button type="button" class="bn-item">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg><span data-i18n="shell.nav.more">更多</span>
+  </button>
+</nav>
+
+<!-- ============ 抽屉：编辑题目（FN-112） ============ -->
+<div class="drawer-scrim" id="edit-scrim" hidden></div>
+<aside class="drawer" id="drawer-edit" role="dialog" aria-modal="true" aria-labelledby="drawer-edit-title" hidden>
+  <div class="drawer-head">
+    <h2 class="drawer-title" id="drawer-edit-title">编辑题目</h2>
+    <button type="button" class="icon-btn sm" id="edit-close" aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <p class="drawer-note" id="qe-eyebrow">题库 · 题目</p>
+    <div class="field">
+      <label class="label" for="qe-stem">题干<span class="req">*</span></label>
+      <textarea class="textarea" id="qe-stem" rows="4" data-autofocus></textarea>
+      <span class="field-err" id="qe-stem-err" hidden>题干不能为空。</span>
+    </div>
+    <div class="od-grid g2">
+      <div class="field">
+        <label class="label" for="qe-type">题型</label>
+        <select class="select" id="qe-type">
+          <option selected>单选题</option>
+          <option>多选题</option>
+          <option>判断题</option>
+          <option>填空题</option>
+          <option>主观题</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="label" for="qe-difficulty">难度</label>
+        <select class="select" id="qe-difficulty">
+          <option selected>未分级</option>
+          <option>入门</option>
+          <option>基础</option>
+          <option>进阶</option>
+          <option>困难</option>
+          <option>挑战</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <span class="label">选项</span>
+      <div class="od-row"><input class="input opt-key-input" value="A" aria-label="选项 A 键"><input class="input" value="" aria-label="选项 A 文字"></div>
+      <div class="od-row"><input class="input opt-key-input" value="B" aria-label="选项 B 键"><input class="input" value="" aria-label="选项 B 文字"></div>
+      <div class="od-row"><input class="input opt-key-input" value="C" aria-label="选项 C 键"><input class="input" value="" aria-label="选项 C 文字"></div>
+      <div class="od-row"><input class="input opt-key-input" value="D" aria-label="选项 D 键"><input class="input" value="" aria-label="选项 D 文字"></div>
+      <p class="hint">共享数据暂不保存选项文字，这里填的内容只在本次会话内生效。</p>
+    </div>
+    <div class="field">
+      <label class="label" for="qe-answer">答案</label>
+      <input class="input" id="qe-answer" type="text" value="" placeholder="例如 A 或 AB">
+      <p class="hint">多选题直接连写答案字母。</p>
+    </div>
+    <div class="field">
+      <label class="label" for="qe-explanation">解析</label>
+      <textarea class="textarea" id="qe-explanation" rows="3"></textarea>
+    </div>
+    <div class="field">
+      <label class="label" for="qe-tags">标签</label>
+      <input class="input" id="qe-tags" type="text" placeholder="用逗号分隔">
+    </div>
+    <div class="notice info">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+      <div class="notice-body">
+        <span class="notice-title">保存后会生成新版本</span><br>
+        历史作答与成绩报告仍按原版本判分，不会被改写；原版本保留在版本历史里可回看。本期不提供对历史作答的重新判分。
+      </div>
+    </div>
+    <p class="drawer-note">题干、题型、难度与标签会立即写入共享数据；版本号 +1。</p>
+  </div>
+  <div class="drawer-foot">
+    <button type="button" class="btn btn-quiet" id="qe-cancel">取消</button>
+    <span class="od-spacer"></span>
+    <button type="button" class="btn btn-primary" id="qe-save">保存修改</button>
+  </div>
+</aside>
+
+<!-- ============ 抽屉：版本历史（FN-114） ============ -->
+<div class="drawer-scrim" id="ver-scrim" hidden></div>
+<aside class="drawer" id="drawer-versions" role="dialog" aria-modal="true" aria-labelledby="drawer-ver-title" hidden>
+  <div class="drawer-head">
+    <h2 class="drawer-title" id="drawer-ver-title">版本历史</h2>
+    <button type="button" class="icon-btn sm" id="ver-close" aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body" id="ver-drawer-body"></div>
+  <div class="drawer-foot">
+    <button type="button" class="btn btn-quiet" id="ver-drawer-close">关闭</button>
+  </div>
+</aside>
+
+<!-- ============ 对话框：有未完成的学习会话 ============ -->
+<dialog class="dlg narrow" id="dlg-start-study" aria-labelledby="dlg-ss-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">开始练习</p>
+      <h2 class="dlg-title" id="dlg-ss-title">有未完成的学习会话</h2>
+    </div>
+  </div>
+  <div class="dlg-body">
+    <p id="ss-desc" class="dlg-p">继续上次的进度，或结束它并开始新的练习。</p>
+    <div class="list" id="ss-list"></div>
+    <div class="empty" id="ss-empty" hidden>
+      <span class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg></span>
+      <h4 class="empty-title">没有未完成的会话</h4>
+      <p class="empty-desc">可以直接开始新的练习。</p>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>取消</button>
+    <button type="button" class="btn" id="ss-continue">继续</button>
+    <button type="button" class="btn btn-primary" id="ss-new">结束并新建</button>
+  </div>
+</dialog>
+
+<!-- ============ 对话框：归档 / 恢复这道题 ============ -->
+<dialog class="dlg narrow danger" id="dlg-question-archive" aria-labelledby="dlg-qa-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow" id="qa-eyebrow">可恢复 · 移出练习</p>
+      <h2 class="dlg-title" id="dlg-qa-title">归档这道题？</h2>
+    </div>
+  </div>
+  <div class="dlg-body">
+    <p id="qa-desc" class="dlg-p">归档后这道题不再参与练习与抽题，但不会删除。可在题库题目列表勾选「显示已归档」查看，并随时恢复。</p>
+    <p class="hint mt-3" id="qa-exam-hint" hidden></p>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>取消</button>
+    <button type="button" class="btn btn-danger-solid" id="qa-ok">归档</button>
+  </div>
+</dialog>
+
+<!-- ============ 对话框：通用确认 ============ -->
+<dialog class="dlg narrow" id="dlg-confirm" aria-labelledby="dlg-confirm-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow" id="dlg-confirm-eyebrow">确认</p>
+      <h2 class="dlg-title" id="dlg-confirm-title">确认操作</h2>
+    </div>
+    <button type="button" class="icon-btn sm" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <p id="dlg-confirm-desc" class="dlg-p"></p>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>取消</button>
+    <button type="button" class="btn btn-primary" id="dlg-confirm-ok">确认</button>
+  </div>
+</dialog>
+
+<script src="../../assets/icons.js"></script>
+<script src="../../assets/store.js"></script>
+<script src="../../assets/i18n.js"></script>
+<script src="../../assets/nav.js"></script>
+<script src="../../assets/spec-boot.js"></script>
+<script>
+  /* 账户菜单开闭（导航链接由 nav.js 处理） */
+  (function () {
+    function closeAll() {
+      document.querySelectorAll('.menu').forEach(function (m) { m.hidden = true; });
+      document.querySelectorAll('[data-menu-trigger]').forEach(function (t) { t.setAttribute('aria-expanded', 'false'); });
+    }
+    document.querySelectorAll('[data-menu-trigger]').forEach(function (trig) {
+      trig.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var wrap = trig.closest('.menu-anchor') || trig.parentElement;
+        var menu = wrap ? wrap.querySelector('.menu') : null;
+        if (!menu) return;
+        var willOpen = menu.hidden;
+        closeAll();
+        if (willOpen) {
+          menu.hidden = false;
+          trig.setAttribute('aria-expanded', 'true');
+          var first = menu.querySelector('.menu-item:not(:disabled)');
+          if (first) first.focus();
+        }
+      });
+    });
+    document.querySelectorAll('.menu .menu-item:not(:disabled)').forEach(function (item) {
+      item.addEventListener('click', closeAll);
+    });
+  })();
+</script>
+<script>
+/* ==========================================================================
+   题目详情 · P2 收敛
+   --------------------------------------------------------------------------
+   · 面包屑表达真实层级：题库 / 题库名 / 第 N 题
+   · 题干 / 选项 / 答案 / 解析 / 知识点 / 资料引用
+   · 编辑与版本生成走抽屉（FN-112）；版本历史走抽屉（FN-114）
+   · 冲突：保存被拒绝 + 「查看我的版本 / 使用对方版本」（FN-115），不自动覆盖
+   · 单题归档 / 恢复（FN-117），结果按 CR-27 口径「成功 X · 无须变更 Y」
+   · 历史作答重判本期不提供（FN-113）：入口保留、禁用、原因可读
+   · 不因进行中模考锁定任何内容（CR-26），只在归档确认里给引用场数提示
+   ========================================================================== */
+(function () {
+  var S = window.eeStore;
+  if (!S) return;
+
+  function $(s) { return document.querySelector(s); }
+  function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+  function esc(s) { return S.esc(s); }
+  function toast(m, k) { if (window.eeToast) window.eeToast(m, k); }
+  function icon(n) { return '<svg class="od-icon" aria-hidden="true"><use href="#i-' + n + '"/></svg>'; }
+
+  /* ---------- 页面级补充数据（选项/解析/知识点/资料关联/版本历史）----------
+     共享数据模型里没有这些字段；用 sessionStorage 保存本次会话内的补充，
+     明确标注为页面级状态，不冒充共享数据。 */
+  var XKEY = 'ee-qextra-v2';
+  function loadX() {
+    try { return JSON.parse(sessionStorage.getItem(XKEY)) || {}; } catch (e) { return {}; }
+  }
+  function saveX(o) { try { sessionStorage.setItem(XKEY, JSON.stringify(o)); } catch (e) {} }
+  var X = loadX();
+  function xOf(id) {
+    if (!X[id]) X[id] = { kp: null, refs: null, versions: null };
+    return X[id];
+  }
+  /* 种子题的选项 / 答案 / 解析（真实软考真题内容） */
+  var DEMO = {
+    '3F9A1C02': {
+      answer: 'A',
+      explain: ['直播中实时回应提问是双向、即时的信息交换，属于互动沟通。', '易混点：把「能收到消息」当成互动，判断标准是「能否实时交换」。'],
+      opts: [['A', '互动沟通'], ['B', '推式沟通'], ['C', '拉式沟通'], ['D', '公众沟通']]
+    },
+    '7B21E4D9': {
+      answer: 'C',
+      explain: ['OSI 的安全服务分布在网络层、传输层与应用层；会话层负责会话管理，不提供相应的安全服务。', '易混点：把「会话层管理连接」误当成安全服务。'],
+      opts: [['A', '会话层'], ['B', '表示层'], ['C', '网络层'], ['D', '物理层']]
+    },
+    'A05C8F31': {
+      answer: 'B',
+      explain: ['临时性强调项目有明确的起点与终点，不代表工期短。', '三个要点：明确起止、成果唯一、逐步完善。'],
+      opts: [['A', '临时性意味着项目持续时间一定很短'], ['B', '临时性具有明确的开始时间和结束时间'], ['C', '临时性强调成果的唯一性'], ['D', '临时性表示项目不会逐步完善']]
+    },
+    'E4D72B60': {
+      answer: 'A',
+      explain: ['按业务功能聚合性进行应用规划，并与应用组件一一对应，属于应用组件化的建设思路。', '注意与「融合基础设施」类表述区分：前者讲应用划分，后者讲资源整合。'],
+      opts: [['A', '应用组件化'], ['B', '融合基础设施'], ['C', '技术中立原则'], ['D', '数据驱动运营']]
+    }
+  };
+  var KP_SEED = {
+    '3F9A1C02': ['沟通管理 · 沟通方法', '沟通管理 · 沟通模型'],
+    '7B21E4D9': ['信息安全 · OSI 安全服务'],
+    'A05C8F31': ['项目管理基础 · 项目的临时性'],
+    'E4D72B60': ['信息化与系统集成 · 应用组件化']
+  };
+  var REF_SEED = { '7B21E4D9': ['n1'] };
+
+  /* ---------- 入口参数 ---------- */
+  var qp = new URLSearchParams(location.search);
+  var from = qp.get('from') || '';
+  var bankIdParam = qp.get('bank') || '';
+  var qid = qp.get('id') || '';
+  var backHref = from === 'workspace'
+    ? 'workspace.html?bank=' + encodeURIComponent(bankIdParam) + '&tab=questions'
+    : 'banks.html';
+  $('#m-back').setAttribute('href', backHref);
+
+  var current = null, bank = null;
+  var conflict = null;   /* { mine: {...}, theirs: version } 保存被拒绝时填充 */
+
+  function resolve() {
+    var q = qid ? S.question(qid) : null;
+    if (!q) {
+      /* 深链无效：落到目标题库（或第一个可访问题库）的第一道未归档题 */
+      var b = S.bank(bankIdParam) || S.banks({ archived: false }).filter(function (x) { return !x.shared; })[0]
+        || S.banks({ archived: false })[0] || S.banks()[0];
+      if (b) { var qs = S.questions(b.id, { archived: false }); q = qs[0] || S.questions(b.id)[0]; }
+    }
+    return q || null;
+  }
+
+  /* ---------- 知识点 ---------- */
+  function kpOf(id) {
+    var x = xOf(id);
+    if (x.kp === null) x.kp = (KP_SEED[id] || []).slice();
+    return x.kp;
+  }
+  function refsOf(id) {
+    var x = xOf(id);
+    if (x.refs === null) x.refs = (REF_SEED[id] || []).slice();
+    return x.refs;
+  }
+  function versionsOf(id) {
+    var x = xOf(id);
+    if (x.versions === null) x.versions = [];
+    return x.versions;
+  }
+
+  /* ---------- 渲染 ---------- */
+  function optionRows(demo) {
+    return (demo.opts || []).map(function (o) {
+      var ok = demo.answer && demo.answer.indexOf(o[0]) >= 0;
+      return '<div class="opt' + (ok ? ' is-correct' : '') + '"' + (ok ? ' title="标准答案"' : '') + '>' +
+        '<span class="opt-key">' + esc(o[0]) + '</span><span>' + esc(o[1]) + '</span>' +
+        (ok ? '<span class="opt-mark" aria-hidden="true">' + icon('check') + '</span>' : '') + '</div>';
+    }).join('');
+  }
+  function render() {
+    current = resolve();
+    if (!current) {
+      $('#q-body').hidden = true;
+      $('#q-notfound').hidden = false;
+      $('#nf-title').textContent = '题库里还没有题目';
+      $('#nf-desc').textContent = '这个题库目前没有可打开的题目。可以先新建或导入题目，再回来查看。';
+      return;
+    }
+    $('#q-body').hidden = false;
+    $('#q-notfound').hidden = true;
+
+    bank = S.bank(current.bankId);
+    var bankName = bank ? bank.name : '未知题库';
+    var list = S.questions(current.bankId, { archived: false });
+    var idx = list.indexOf(current);
+    var no = (idx >= 0 ? idx : 0) + 1;
+    var demo = DEMO[current.id];
+    var ver = current.version || 'v1';
+    var kp = kpOf(current.id);
+    var refs = refsOf(current.id);
+    var hist = versionsOf(current.id);
+
+    /* 面包屑 / 页头 */
+    $('#crumb-bank').textContent = bankName;
+    $('#crumb-bank').setAttribute('href', 'workspace.html?bank=' + encodeURIComponent(current.bankId) + '&tab=questions');
+    $('#crumb-here').textContent = '第 ' + no + ' 题';
+    $('#q-eyebrow').textContent = bankName;
+    $('#q-title').textContent = '第 ' + no + ' 题';
+    $('#m-title').textContent = '第 ' + no + ' 题';
+    $('#q-panel-sub').textContent = bank ? (bank.category || '默认分类') : '系统集成项目管理工程师';
+    $('#q-sub').innerHTML = '<span>' + esc(current.type) + '</span><span class="sep" aria-hidden="true">·</span>' +
+      '<span>章节 ' + esc(current.chapter || '—') + '</span><span class="sep" aria-hidden="true">·</span>' +
+      '<span>难度 ' + esc(current.difficulty || '未分级') + '</span><span class="sep" aria-hidden="true">·</span>' +
+      '<span class="mono">' + esc(ver) + '</span>';
+
+    /* 题目面板 */
+    $('#q-meta').innerHTML =
+      '<span class="k">题型</span><span class="v">' + esc(current.type) + '</span>' +
+      '<span class="k">章节</span><span class="v">' + esc(current.chapter || '—') + '</span>' +
+      '<span class="k">难度</span><span class="v">' + esc(current.difficulty || '未分级') + '</span>' +
+      '<span class="k">版本</span><span class="v mono">' + esc(ver) + '</span>';
+    $('#q-stem').textContent = current.stem;
+    if (demo) {
+      $('#q-options').innerHTML = optionRows(demo);
+      $('#q-answer-line').hidden = false;
+      $('#q-answer').textContent = demo.answer;
+      $('#q-explain').hidden = false;
+      $('#q-explain-body').innerHTML = demo.explain.map(function (p) { return '<p>' + esc(p) + '</p>'; }).join('');
+      $('#q-nodata').hidden = true;
+    } else {
+      $('#q-options').innerHTML = '';
+      $('#q-answer-line').hidden = true;
+      $('#q-explain').hidden = true;
+      $('#q-nodata').hidden = false;
+    }
+    $('#q-tags').innerHTML = (current.tags || []).map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join('');
+
+    /* 知识点 */
+    $('#kp-add-form').hidden = true;
+    $('#kp-list').hidden = false;
+    $('#kp-count').textContent = kp.length ? kp.length + ' 个' : '';
+    $('#kp-list').innerHTML = kp.map(function (k) {
+      return '<span class="tag brand">' + esc(k) +
+        '<button type="button" class="kp-del" data-kp="' + esc(k) + '" aria-label="移除知识点 ' + esc(k) + '" title="移除">×</button></span>';
+    }).join('');
+    $('#kp-empty').hidden = kp.length > 0;
+    $('#kp-add-btn').disabled = !S.can('question.edit');
+
+    /* 资料引用 */
+    var notes = S.notes(current.bankId);
+    $('#ref-list').innerHTML = refs.length ? refs.map(function (rid) {
+      var n = S.note(rid);
+      if (!n) return '';
+      return '<div class="list-row dense static ref-row" data-ref="' + rid + '">' +
+        '<span class="list-main"><span class="list-title">' + esc(n.title) + '</span>' +
+        '<span class="list-meta">' + esc(n.updatedAt || '') + (n.starred ? ' · 已标星' : '') + '</span></span>' +
+        '<span class="list-side"><button type="button" class="link-btn" data-ref-del="' + rid + '">解除关联</button></span></div>';
+    }).join('') : '';
+    $('#ref-empty').hidden = refs.length > 0;
+    $('#ref-empty-desc').textContent = notes.length
+      ? '这个题库的资料库里有 ' + notes.length + ' 条笔记可以关联；关联后可以从题目直接跳到对应笔记。'
+      : '这个题库的资料库还是空的；先去资料库建一条笔记，再回来关联。';
+    var avail = notes.filter(function (n) { return refs.indexOf(n.id) < 0; });
+    $('#ref-select').innerHTML = avail.length
+      ? avail.map(function (n) { return '<option value="' + n.id + '">' + esc(n.title) + '</option>'; }).join('')
+      : '<option value="">' + (notes.length ? '可关联的资料都已关联' : '资料库为空') + '</option>';
+    $('#ref-select').disabled = avail.length === 0;
+    $('#ref-add-form button[type=submit]').disabled = avail.length === 0;
+
+    /* 版本 */
+    $('#ver-sub').textContent = '当前版本 ' + ver;
+    $('#ver-current').textContent = ver;
+    $('#ver-meta').innerHTML = '<span>' + (hist.length ? '由上一版变更生成' : '初始版本') + '</span>';
+    $('#ver-history').innerHTML = hist.slice(0, 3).map(function (h) {
+      return '<div class="list-row dense static ver-row" data-ver="' + esc(h.v) + '">' +
+        '<span class="list-main"><span class="list-title mono">' + esc(h.v) + '</span>' +
+        '<span class="list-meta">' + esc(h.at) + ' · ' + esc(h.note) + '</span></span></div>';
+    }).join('');
+    $('#ver-note').textContent = hist.length
+      ? ('共 ' + (hist.length + 1) + ' 个版本；历史作答绑定原版本，切换版本不会改写成绩报告。')
+      : '题目内容变更会生成新版本，历史作答绑定原版本。';
+    $('#ver-conflict-flag').hidden = !conflict;
+
+    /* 历史作答重判：入口保留、禁用、原因可读（FN-113） */
+    $('#rejudge-reason').textContent = S.can('question.edit')
+      ? '入口保留但不开放：判分口径依赖原版本快照，本期不做批量重判。'
+      : '你是这个题库的成员：可以浏览与练习，没有重判入口。';
+
+    /* 模考引用：只作提示，不锁定（CR-26） */
+    var exams = S.sessions('exam').filter(function (s) { return s.bankId === current.bankId; });
+    $('#exam-ref-block').hidden = exams.length === 0;
+    if (exams.length) {
+      $('#exam-ref-text').textContent = exams.length + ' 场进行中的模考引用本题；会话持有快照，编辑与归档都不被阻断。';
+    }
+
+    /* 复制到 */
+    var others = S.banks({ archived: false }).filter(function (b) { return b.id !== current.bankId && !b.readonly; });
+    $('#copy-target').innerHTML = others.length
+      ? others.map(function (b) { return '<option value="' + b.id + '">' + esc(b.name) + '</option>'; }).join('')
+      : '<option value="">没有可用的目标题库</option>';
+    $('#copy-go').disabled = others.length === 0;
+
+    /* 归档 / 恢复 */
+    var archived = !!current.archived;
+    $('#q-archived-notice').hidden = !archived;
+    $('#q-archive-label').textContent = archived ? '恢复' : '归档';
+    $('#q-archive-btn').querySelector('use').setAttribute('href', archived ? '#i-restore' : '#i-archive');
+
+    /* 练习入口 */
+    $('#q-practice').setAttribute('href', 'practice.html?bank=' + encodeURIComponent(current.bankId));
+
+    /* 侧栏计数 */
+    var live = S.banks({ archived: false });
+    var badge = $('#nav-bank-count');
+    if (badge) { badge.textContent = String(live.length); badge.hidden = live.length === 0; }
+    $('#side-due').textContent = String(S.reviewQueue().length);
+    $('#side-sessions').textContent = String(S.sessions().length);
+
+    renderConflict();
+    bindInline();
+    gateAll();
+  }
+
+  /* ---------- 冲突渲染与处置 ---------- */
+  function renderConflict() {
+    var el = $('#q-conflict-notice');
+    el.hidden = !conflict;
+    if (!conflict) return;
+    $('#q-conflict-desc').textContent = '你打开的是 ' + conflict.base + '，服务端现在已经是 ' + conflict.theirs +
+      '。你的改动没有写入，也不会覆盖对方的版本。';
+  }
+  $('#q-conflict-mine').addEventListener('click', function () {
+    openVersions();
+    toast('已定位到你的版本（' + conflict.base + '）副本');
+  });
+  $('#q-conflict-theirs').addEventListener('click', function () {
+    conflict = null;
+    prefillEdit();
+    render();
+    toast('已载入对方版本（' + (current.version || 'v1') + '）');
+  });
+  $('#ver-conflict-open').addEventListener('click', function () {
+    $('#q-conflict-notice').scrollIntoView({ block: 'center' });
+    $('#q-conflict-mine').focus();
+  });
+
+  /* ---------- 权限 ---------- */
+  function gateAll() {
+    var canEdit = S.can('question.edit');
+    var canArch = S.can('question.archive');
+    var reasonEl = $('#q-gate-reason');
+    var reasons = [];
+    if (!canEdit) reasons.push(S.denyReason('question.edit'));
+    if (!canArch) reasons.push(S.denyReason('question.archive'));
+    $('#q-edit-btn').disabled = !canEdit;
+    if (!canEdit) $('#q-edit-btn').title = S.denyReason('question.edit');
+    $('#q-archive-btn').disabled = !canArch;
+    if (!canArch) $('#q-archive-btn').title = S.denyReason('question.archive');
+    reasonEl.textContent = reasons.join('；');
+    reasonEl.hidden = reasons.length === 0;
+    $('#qe-save').disabled = !canEdit;
+    if (!canEdit) $('#qe-save').title = S.denyReason('question.edit');
+    $('#copy-go').disabled = others0() || !S.can('question.create');
+  }
+  function others0() {
+    return S.banks({ archived: false }).filter(function (b) { return b.id !== (current && current.bankId) && !b.readonly; }).length === 0;
+  }
+
+  /* ---------- 行内绑定（每次渲染后重绑） ---------- */
+  function bindInline() {
+    $$('#kp-list .kp-del').forEach(function (b) {
+      b.onclick = function () {
+        if (!S.can('question.edit')) { toast(S.denyReason('question.edit'), 'bad'); return; }
+        var k = b.getAttribute('data-kp');
+        var arr = kpOf(current.id);
+        var i = arr.indexOf(k);
+        if (i >= 0) arr.splice(i, 1);
+        saveX(X); toast('已移除知识点「' + k + '」'); render();
+      };
+    });
+    $$('#ref-list [data-ref-del]').forEach(function (b) {
+      b.onclick = function () {
+        var rid = b.getAttribute('data-ref-del');
+        var arr = refsOf(current.id);
+        var i = arr.indexOf(rid);
+        if (i >= 0) arr.splice(i, 1);
+        saveX(X); toast('已解除关联 · 资料内容保留'); render();
+      };
+    });
+  }
+  $('#kp-add-btn').addEventListener('click', function () { openKpForm(); });
+  $('#kp-add-cta').addEventListener('click', function () { openKpForm(); });
+  function openKpForm() {
+    if (!S.can('question.edit')) { toast(S.denyReason('question.edit'), 'bad'); return; }
+    $('#kp-add-form').hidden = false;
+    $('#kp-list').hidden = true;
+    $('#kp-empty').hidden = true;
+    $('#kp-input').focus();
+  }
+  $('#kp-cancel').addEventListener('click', function () {
+    $('#kp-add-form').hidden = true;
+    $('#kp-list').hidden = false;
+    render();
+  });
+  $('#kp-add-form').onsubmit = function (e) {
+    if (e) e.preventDefault();
+    var v = ($('#kp-input').value || '').trim();
+    if (!v) { toast('知识点名称不能为空', 'bad'); return false; }
+    var arr = kpOf(current.id);
+    if (arr.indexOf(v) >= 0) { toast('已存在同名知识点', 'bad'); return false; }
+    arr.push(v); saveX(X);
+    $('#kp-input').value = '';
+    $('#kp-add-form').hidden = true;
+    $('#kp-list').hidden = false;
+    toast('已添加知识点「' + v + '」'); render();
+    return false;
+  };  $('#ref-add-form').onsubmit = function (e) {
+    if (e) e.preventDefault();
+    var rid = $('#ref-select').value;
+    if (!rid) { toast('没有可关联的资料', 'bad'); return false; }
+    var arr = refsOf(current.id);
+    if (arr.indexOf(rid) < 0) arr.push(rid);
+    saveX(X); toast('已关联资料'); render();
+    return false;
+  };
+
+  /* ---------- 抽屉：编辑题目（FN-112） ---------- */
+  var editDrawer = $('#drawer-edit'), editScrim = $('#edit-scrim');
+  var editBase = null;   /* 打开时快照，用于诚实的跨端冲突检测 */
+  function openEdit(trigger) {
+    if (!current) return;
+    if (!S.can('question.edit')) { toast(S.denyReason('question.edit'), 'bad'); return; }
+    prefillEdit();
+    openDrawer(editDrawer, editScrim);
+  }
+  function prefillEdit() {
+    var demo = DEMO[current.id] || {};
+    editBase = { version: current.version || 'v1', stem: current.stem, type: current.type,
+      difficulty: current.difficulty, chapter: current.chapter, tags: (current.tags || []).slice() };
+    $('#qe-eyebrow').textContent = (bank ? bank.name : '题库') + ' · 第 ' +
+      (S.questions(current.bankId, { archived: false }).indexOf(current) + 1) + ' 题 · ' + editBase.version;
+    $('#drawer-edit-title').textContent = '编辑题目（' + editBase.version + '）';
+    $('#qe-stem').value = current.stem;
+    $('#qe-type').value = current.type;
+    $('#qe-difficulty').value = current.difficulty || '未分级';
+    var keys = editDrawer.querySelectorAll('.opt-key-input');
+    var texts = editDrawer.querySelectorAll('.od-row .input:not(.opt-key-input)');
+    var opts = demo.opts || [];
+    for (var i = 0; i < 4; i++) {
+      if (keys[i]) keys[i].value = opts[i] ? opts[i][0] : String.fromCharCode(65 + i);
+      if (texts[i]) texts[i].value = opts[i] ? opts[i][1] : '';
+    }
+    $('#qe-answer').value = demo.answer || '';
+    $('#qe-explanation').value = (demo.explain || []).join('\n');
+    $('#qe-tags').value = (current.tags || []).join(', ');
+    $('#qe-stem-err').hidden = true;
+    conflict = null;
+    renderConflict();
+  }
+  $('#q-edit-btn').addEventListener('click', function () { openEdit(this); });
+  $('#edit-close').addEventListener('click', function () { closeDrawer(editDrawer, editScrim); });
+  $('#qe-cancel').addEventListener('click', function () { closeDrawer(editDrawer, editScrim); });
+  $('#qe-save').addEventListener('click', function () {
+    if (!current) return;
+    if (!S.can('question.edit')) { toast(S.denyReason('question.edit'), 'bad'); return; }
+    var stem = ($('#qe-stem').value || '').trim();
+    if (!stem) { $('#qe-stem-err').hidden = false; $('#qe-stem').focus(); return; }
+    /* 诚实冲突检测：把打开时的快照与当前共享数据比对 */
+    if (editBase && (current.version || 'v1') !== editBase.version) {
+      conflict = { base: editBase.version, theirs: current.version || 'v1' };
+      closeDrawer(editDrawer, editScrim);
+      render();
+      $('#q-conflict-notice').scrollIntoView({ block: 'center' });
+      return;
+    }
+    var ver = current.version || 'v1';
+    var next = 'v' + ((parseInt(ver.replace(/\D/g, ''), 10) || 1) + 1);
+    S.updateQuestion(current.id, {
+      stem: stem,
+      type: $('#qe-type').value,
+      difficulty: $('#qe-difficulty').value,
+      tags: ($('#qe-tags').value || '').split(/[,，]/).map(function (t) { return t.trim(); }).filter(Boolean),
+      version: next
+    });
+    versionsOf(current.id).unshift({ v: ver, at: todayTime(), note: '上一版内容' });
+    saveX(X);
+    closeDrawer(editDrawer, editScrim);
+    toast('题目已保存 · 已生成 ' + next);
+    render();
+  });
+
+  /* ---------- 抽屉：版本历史（FN-114） ---------- */
+  var verDrawer = $('#drawer-versions'), verScrim = $('#ver-scrim');
+  function openVersions() {
+    if (!current) return;
+    var ver = current.version || 'v1';
+    var hist = versionsOf(current.id);
+    var html = '';
+    if (!hist.length) {
+      html += '<div class="notice info">' + icon('info') +
+        '<div class="notice-body"><span class="notice-title">这是首版</span><br>' +
+        '题目自创建后没有被编辑过，所以还没有历史版本。任何一次内容变更都会生成新版本，并可在这里回看与回滚。</div></div>';
+    } else {
+      html += '<p class="drawer-note">共 ' + (hist.length + 1) + ' 个版本。历史作答绑定原版本，切换版本不会改写成绩报告。</p>';
+    }
+    html += '<div class="list">' +
+      '<div class="list-row dense static is-active">' +
+      '<span class="list-main"><span class="list-title mono">' + esc(ver) + '</span>' +
+      '<span class="list-meta">' + (hist.length ? '最近一次变更生成' : '初始版本') + '</span></span>' +
+      '<span class="list-side"><span class="tag ok">当前版本</span></span></div>' +
+      hist.map(function (h) {
+        return '<div class="list-row dense static ver-row" data-ver="' + esc(h.v) + '">' +
+          '<span class="list-main"><span class="list-title mono">' + esc(h.v) + '</span>' +
+          '<span class="list-meta">' + esc(h.at) + ' · ' + esc(h.note) + '</span></span>' +
+          '<span class="list-side"><button type="button" class="btn btn-sm btn-quiet" data-rollback="' + esc(h.v) + '">回滚到这一版</button></span></div>';
+      }).join('') + '</div>';
+    if (conflict) {
+      html += '<div class="notice warn" role="alert">' + icon('alert-triangle') +
+        '<div class="notice-body"><span class="notice-title">有未决冲突</span><br>' +
+        '你打开的是 ' + esc(conflict.base) + '，服务端现在已经是 ' + esc(conflict.theirs) + '。' +
+        '两个版本都保留，回滚只会基于当前版本生成新版本，不会删除任何一方的改动。</div></div>';
+    }
+    $('#ver-drawer-body').innerHTML = html;
+    $$('#ver-drawer-body [data-rollback]').forEach(function (b) {
+      b.onclick = function () {
+        var v = b.getAttribute('data-rollback');
+        confirmAction({
+          eyebrow: '回滚版本', title: '回滚到 ' + v + '？',
+          desc: '会基于 ' + v + ' 的内容生成一个新版本，当前版本保留在历史里；不会删除任何历史作答。',
+          okText: '回滚', danger: true,
+          onOk: function () {
+            var cur = current.version || 'v1';
+            var next = 'v' + ((parseInt(cur.replace(/\D/g, ''), 10) || 1) + 1);
+            versionsOf(current.id).unshift({ v: cur, at: todayTime(), note: '回滚前版本' });
+            S.updateQuestion(current.id, { version: next });
+            saveX(X);
+            closeDrawer(verDrawer, verScrim);
+            toast('已回滚 · 生成 ' + next); render();
+          }
+        }, b);
+      };
+    });
+    openDrawer(verDrawer, verScrim);
+  }
+  $('#ver-open').addEventListener('click', openVersions);
+  $('#ver-close').addEventListener('click', function () { closeDrawer(verDrawer, verScrim); });
+  $('#ver-drawer-close').addEventListener('click', function () { closeDrawer(verDrawer, verScrim); });
+
+  function openDrawer(d, scrim) {
+    scrim.hidden = false;
+    d.hidden = false;
+    document.body.style.overflow = 'hidden';
+    var f = d.querySelector('[data-autofocus]') || d.querySelector('button, input, select, textarea');
+    if (f) f.focus();
+  }
+  function closeDrawer(d, scrim) {
+    d.hidden = true;
+    scrim.hidden = true;
+    document.body.style.overflow = '';
+  }
+  editScrim.addEventListener('click', function () { closeDrawer(editDrawer, editScrim); });
+  verScrim.addEventListener('click', function () { closeDrawer(verDrawer, verScrim); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (!editDrawer.hidden) { closeDrawer(editDrawer, editScrim); }
+    else if (!verDrawer.hidden) { closeDrawer(verDrawer, verScrim); }
+  });
+
+  /* ---------- 归档 / 恢复（FN-117，CR-27 口径） ---------- */
+  var archDlg = $('#dlg-question-archive');
+  $('#q-archive-btn').addEventListener('click', function () {
+    if (!current) return;
+    if (!S.can('question.archive')) { toast(S.denyReason('question.archive'), 'bad'); return; }
+    var archived = !!current.archived;
+    var exams = S.sessions('exam').filter(function (s) { return s.bankId === current.bankId; });
+    $('#qa-eyebrow').textContent = archived ? '恢复 · 重新参与练习' : '可恢复 · 移出练习';
+    $('#dlg-qa-title').textContent = archived ? '恢复这道题？' : '归档这道题？';
+    $('#qa-desc').textContent = archived
+      ? '恢复后这道题重新参与练习与抽题，题干、答案与历史作答都不变。'
+      : '归档后这道题不再参与练习与抽题，但不会删除。可在题库题目列表勾选「显示已归档」查看，并随时恢复。';
+    $('#qa-ok').textContent = archived ? '恢复' : '归档';
+    $('#qa-ok').className = 'btn ' + (archived ? 'btn-primary' : 'btn-danger-solid');
+    $('#qa-exam-hint').hidden = exams.length === 0;
+    if (exams.length) {
+      $('#qa-exam-hint').textContent = exams.length + ' 场进行中的模考引用本题。模考不锁定题库内容：会话持有快照，' +
+        (archived ? '恢复后这些会话仍按快照判分。' : '归档后这些会话仍按快照判分。');
+    }
+    window.eeDialog.open('dlg-question-archive', this);
+  });
+  $('#q-restore-inline').addEventListener('click', function () { $('#q-archive-btn').click(); });
+  $('#qa-ok').addEventListener('click', function () {
+    var id = current && current.id;
+    var wasArchived = !!(current && current.archived);
+    var verb = wasArchived ? '已恢复' : '已归档';
+    window.eeDialog.close(archDlg);
+    if (!id) return;
+    if (!S.can('question.archive')) { toast(S.denyReason('question.archive'), 'bad'); return; }
+    /* CR-27：单题也按同一口径报「成功 X · 无须变更 Y」，X + Y = 已选 N */
+    var now = S.question(id);
+    var atTarget = now ? (!!now.archived === !wasArchived) : false;
+    if (atTarget) {
+      /* 已处于目标状态：无须变更，零写入（对话框打开期间被他人改过时会出现） */
+      toast('无须变更 1 项（已选 1，0 + 1 对账一致）：这道题已经是' + (wasArchived ? '未归档' : '已归档') + '状态。');
+      render();
+      return;
+    }
+    if (wasArchived) S.restoreQuestions([id]); else S.archiveQuestions([id]);
+    toast(verb + ' 1 题 · 无须变更 0 项（已选 1，1 + 0 对账一致）');
+    if (!wasArchived && from === 'workspace') {
+      S.view.save('workspace', { showArchived: true });
+      location.href = 'workspace.html?bank=' + encodeURIComponent(bank ? bank.id : '') + '&tab=questions';
+      return;
+    }
+    render();
+  });
+
+  /* ---------- 复制到 ---------- */
+  $('#copy-go').addEventListener('click', function () {
+    if (!current) return;
+    var target = $('#copy-target').value;
+    if (!target) { toast('没有可用的目标题库', 'bad'); return; }
+    S.addQuestion({
+      bankId: target, stem: current.stem, type: current.type,
+      difficulty: current.difficulty, chapter: current.chapter, tags: (current.tags || []).slice()
+    });
+    toast('已复制到「' + S.bankName(target) + '」');
+  });
+
+  /* ---------- 通用确认 ---------- */
+  var cDlg = $('#dlg-confirm'), pendingOk = null;
+  function confirmAction(opt, trigger) {
+    $('#dlg-confirm-eyebrow').textContent = opt.eyebrow || '确认';
+    $('#dlg-confirm-title').textContent = opt.title;
+    $('#dlg-confirm-desc').textContent = opt.desc;
+    var ok = $('#dlg-confirm-ok');
+    ok.textContent = opt.okText || '确认';
+    ok.className = 'btn ' + (opt.danger ? 'btn-danger-solid' : 'btn-primary');
+    pendingOk = opt.onOk;
+    window.eeDialog.open('dlg-confirm', trigger);
+  }
+  $('#dlg-confirm-ok').addEventListener('click', function () {
+    var fn = pendingOk; pendingOk = null;
+    window.eeDialog.close(cDlg);
+    if (fn) fn();
+  });
+
+  /* ---------- 未完成会话 ---------- */
+  function fillSessions() {
+    var list = S.sessions();
+    var box = $('#ss-list');
+    if (!list.length) {
+      box.innerHTML = ''; $('#ss-empty').hidden = false;
+      $('#ss-continue').disabled = true; $('#ss-new').disabled = true;
+      $('#ss-desc').textContent = '当前没有未完成的学习会话。';
+      return;
+    }
+    $('#ss-empty').hidden = true;
+    $('#ss-continue').disabled = false; $('#ss-new').disabled = false;
+    $('#ss-desc').textContent = '继续上次的进度，或结束它并开始新的练习。';
+    box.innerHTML = list.map(function (s) {
+      return '<div class="list-row dense static">' +
+        '<span class="list-main"><span class="list-title">' + esc(S.bankName(s.bankId)) + '</span>' +
+        '<span class="list-meta"><span class="tag">' + esc(s.mode || s.kind) + '</span><span>' + (s.done || 0) + ' / ' + (s.total || 0) + '</span></span></span></div>';
+    }).join('');
+  }
+  $$('[data-q-open]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var k = b.getAttribute('data-q-open');
+      if (k === 'edit') openEdit(b);
+      else if (k === 'versions') openVersions();
+      else { fillSessions(); window.eeDialog.open('dlg-start-study', b); }
+    });
+  });
+  $('#ss-continue').addEventListener('click', function () {
+    var s = S.sessions().filter(function (x) { return x.bankId === (bank && bank.id); })[0] || S.sessions()[0];
+    window.eeDialog.close($('#dlg-start-study'));
+    location.href = 'practice.html?bank=' + encodeURIComponent(s ? s.bankId : (bank && bank.id) || '');
+  });
+  $('#ss-new').addEventListener('click', function () {
+    var s = S.sessions().filter(function (x) { return x.bankId === (bank && bank.id); })[0] || S.sessions()[0];
+    if (s) S.finishSession(s.id);
+    window.eeDialog.close($('#dlg-start-study'));
+    location.href = 'practice.html?bank=' + encodeURIComponent(bank ? bank.id : '');
+  });
+
+  /* ---------- 状态格 ---------- */
+  $('#state-retry').addEventListener('click', function () { render(); toast('已重新读取题目'); });
+  $('#st-conflict-mine').addEventListener('click', function () { toast('已打开你的版本副本，可另存为新题'); });
+  $('#st-conflict-theirs').addEventListener('click', function () { toast('已载入对方版本，你的改动另存为草稿'); });
+
+  /* ---------- 跨端改动检测（file:// 下同源 storage 事件可用） ---------- */
+  var lastSeen = current ? (current.version || 'v1') : '';
+  window.addEventListener('storage', function (e) {
+    if (e.key !== 'eeStore.v3' || !current) return;
+    var now = S.question(current.id);
+    if (!now) return;
+    var v = now.version || 'v1';
+    if (v !== lastSeen) {
+      conflict = { base: lastSeen, theirs: v };
+      lastSeen = v;
+      render();
+    }
+  });
+
+  /* ---------- 工具 ---------- */
+  function todayTime() {
+    var d = new Date();
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+  function syncThemeBtn() {
+    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    var use = $('#tb-theme').querySelector('use');
+    if (use) use.setAttribute('href', dark ? '#i-moon' : '#i-sun');
+    $('#tb-theme').title = dark ? '切换到浅色' : '切换到深色';
+  }
+  [$('#tb-logout'), $('#tb-logout-m')].forEach(function (b) {
+    if (b) b.addEventListener('click', function () { S.logout(); location.href = 'login.html'; });
+  });
+
+  S.subscribe(function () { render(); });
+  syncThemeBtn();
+  render();
+  if (qp.get('edit') === '1' && current && S.can('question.edit')) openEdit($('#q-edit-btn'));
+})();
+</script>
+</body>
+</html>

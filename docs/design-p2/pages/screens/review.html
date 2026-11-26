@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>复习 · 易考宝</title>
+<link rel="stylesheet" href="../../assets/ee.css">
+<style>/* 本屏特有：纸内分区 + 编辑式工具条 + 编辑式列表（令牌与控件一律复用 ee.css）。
+     分区靠 .section-head 细线与留白划分；列表不包 .panel，行间 1px 细线、
+     主列表起点一条 1px 重线；工具条上沿重线、下沿细线，都不是卡片。 */
+  .ee-toolbar{ 
+    display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
+    padding: var(--sp-3) 0; margin: 0 0 var(--sp-4);
+    border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line);
+   }
+.ee-toolbar .search-box{  flex: 1 1 auto; max-width: 380px; min-width: 150px;  }
+.ee-toolbar .select{  flex: none; width: 160px;  }
+.ee-list{  display: flex; flex-direction: column;  }
+/* 行与分区标题左右对齐：列表自己占满纸面栏宽 */
+  .ee-list > .list-row, .ee-list > .queue-row{  padding-left: 0; padding-right: 0;  }
+.ee-list > .list-row:first-child, .ee-list > .queue-row:first-child{  border-top: 1px solid var(--ink);  }
+.ee-sub{  margin-top: var(--sp-6);  }
+/* 行首题型列与序号列 */
+  .ee-qno{  flex: none; width: 52px; font-size: var(--text-xs); letter-spacing: .04em; color: var(--ink-3); padding-top: 3px;  }
+.ee-rank{  flex: none; width: 28px; font-size: var(--text-xs); color: var(--ink-4);  }
+.ee-stem{  font-family: var(--font-serif); font-size: var(--text-md); line-height: 1.6;  }
+.ee-row-top{  align-items: flex-start;  }
+.ee-cause{  width: 116px; flex: none; font-size: var(--text-xs); min-height: 28px;  }
+.ee-tools{  flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-4);  }
+.ee-tools .select{  flex: none; width: 160px;  }
+.ee-grid-2{  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-5);  }
+.ee-state-grid{  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--sp-4); align-items: start;  }
+.ee-state-panel .panel-body{  padding: var(--sp-4);  }
+.ee-state-note{  margin-top: var(--sp-4);  }
+.ee-mt-4{  margin-top: var(--sp-4);  }
+.ee-mt-5{  margin-top: var(--sp-5);  }
+.ee-sk-cap{  width: 40%;  }
+.ee-section{  margin-top: var(--sp-8);  }
+.ee-tabpanel{  margin-top: var(--sp-5);  }
+/* 按到期时间分组的小标题：日期 + 条数，靠细线与留白分段 */
+  .ee-group{  display: flex; align-items: baseline; gap: var(--sp-3); padding: var(--sp-3) 0 var(--sp-2); border-bottom: 1px solid var(--line);  }
+.ee-group:first-child{  border-top: 1px solid var(--ink);  }
+.ee-group-date{  font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink);  }
+.ee-group-n{  font-size: var(--text-xs); color: var(--ink-3);  }
+.ee-rule{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); margin: var(--sp-4) 0 0; max-width: 76ch;  }
+.ee-rule b{  color: var(--ink-2); font-weight: 500;  }
+/* 详情抽屉里的选项：只读展示，不吃 hover */
+  #detail-body .opt{  cursor: default; pointer-events: none;  }
+.explain-body{  margin: var(--sp-2) 0 0; font-size: var(--text-sm); color: var(--ink-2); line-height: var(--text-base-lh);  }
+@media (max-width: 1024px){
+    .ee-grid-2 { grid-template-columns: minmax(0, 1fr); }
+  }
+@media (max-width: 640px){
+    .ee-tools .select, .ee-toolbar .select { width: 100%; }
+    .ee-cause { width: 100%; }
+    .ee-toolbar .search-box { max-width: none; }
+    .list-row { flex-wrap: wrap; row-gap: var(--sp-2); }
+    .list-main { flex: 1 1 100%; }
+    .list-side { flex: 1 1 100%; justify-content: flex-end; }
+    .queue-row { flex-wrap: wrap; row-gap: var(--sp-2); }
+    .queue-row .list-main { flex: 1 1 100%; }
+    .queue-row .list-side { flex: 1 1 100%; justify-content: flex-end; }
+  }</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">跳到主内容</a>
+<div class="app-shell">
+  <aside class="sidebar" aria-label="主导航">
+    <button class="side-brand" type="button">
+      <span class="brand-mark" aria-hidden="true">易</span>
+      <span class="brand-text"><span class="brand-name">易考宝</span><span data-i18n="shell.brand.sub" class="brand-sub">私人学习档案</span></span>
+    </button>
+    <nav class="side-nav" aria-label="产品区域">
+      <span data-i18n="shell.group.learn" class="side-group-label">学习</span>
+      <button class="nav-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg><span class="nav-label" data-i18n="shell.nav.today">今天</span></button>
+      <button class="nav-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg><span class="nav-label" data-i18n="shell.nav.banks">题库</span></button>
+      <button class="nav-item is-active" type="button" aria-current="page"><svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg><span class="nav-label" data-i18n="shell.nav.review">复习</span></button>
+      <button class="nav-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg><span class="nav-label" data-i18n="shell.nav.exams">模考</span></button>
+      <button class="nav-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg><span class="nav-label" data-i18n="shell.nav.notes">资料</span></button>
+    </nav>
+    <div class="side-study">
+      <span class="side-study-label">复习状态</span>
+      <div class="side-study-row"><span>待复习</span><b id="side-due">0</b></div>
+      <div class="side-study-row"><span>未清除错题</span><b id="side-mistakes">0</b></div>
+      <div class="side-study-row"><span>薄弱标记</span><b id="side-weak">0</b></div>
+    </div>
+    <div class="side-foot">
+      <button class="nav-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg><span class="nav-label" data-i18n="shell.nav.settings">设置</span></button>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <header class="topbar">
+      <div class="crumb">
+        <button class="link" type="button" onclick="location.href='home.html'">学习</button>
+        <span class="sep">/</span>
+        <span class="here">复习</span>
+      </div>
+      <span class="spacer"></span>
+      <button class="icon-btn" type="button" title="搜索与跳转" data-ee-shell="search" aria-label="搜索与跳转"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></button>
+      <button data-ee-shell="theme" class="icon-btn" type="button" title="切换明暗" aria-label="切换明暗"><svg class="od-icon" aria-hidden="true"><use href="#i-moon"/></svg></button>
+      <button class="icon-btn" type="button" title="切换语言" data-ee-shell="lang" aria-label="切换语言"><svg class="od-icon" aria-hidden="true"><use href="#i-globe"/></svg></button>
+      <button class="user-mini" type="button" title="账户菜单" aria-label="账户菜单">A</button>
+    </header>
+
+    <header class="mobile-top">
+      <a class="page-back" href="home.html"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>返回</a>
+      <span class="mt-title">复习</span>
+      <button class="icon-btn" type="button" title="搜索与跳转" data-ee-shell="search" aria-label="搜索与跳转"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></button>
+      <button class="user-mini" type="button" title="账户菜单" aria-label="账户菜单">A</button>
+    </header>
+
+    <main class="content has-bottomnav" id="main-content">
+      <div class="page-head">
+        <div>
+          <p class="page-eyebrow">学习</p>
+          <h1 class="page-title">复习</h1>
+          <p class="page-sub">待复习 · 错题 · 薄弱 · 斩杀：四个视图各回答一个问题</p>
+        </div>
+        <div class="page-actions">
+          <a class="link-btn" href="diagnosis.html">学习档案</a>
+          <button class="btn btn-primary" type="button" id="start-due-btn" onclick="EEreview.startDue(this)">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>开始复习
+          </button>
+        </div>
+      </div>
+
+      <div data-tab-scope>
+        <div class="tabs" role="tablist" aria-label="复习视图">
+          <button class="tab" role="tab" aria-selected="true" data-panel="due" type="button">待复习<span class="count" id="tab-due">0</span></button>
+          <button class="tab" role="tab" aria-selected="false" data-panel="mistakes" type="button">错题<span class="count" id="tab-mistakes">0</span></button>
+          <button class="tab" role="tab" aria-selected="false" data-panel="weak" type="button">薄弱<span class="count" id="tab-weak">0</span></button>
+          <button class="tab" role="tab" aria-selected="false" data-panel="killed" type="button">斩杀<span class="count" id="tab-killed">0</span></button>
+        </div>
+
+        <!-- ============ 视图一：待复习（当前可执行复习集合 · CR-05 / CR-29） ============ -->
+        <section class="ee-tabpanel" data-tab-panel="due">
+          <div class="stat-row" id="due-stats"></div>
+
+          <div class="ee-sub">
+            <div class="section-head">
+              <h2 class="section-title">复习队列</h2>
+              <span class="section-note" id="queue-count">0 道可执行</span>
+            </div>
+
+            <!-- 工具条：搜索 / 题库范围 / 呈现方式。原因筛选用 chips，与视图页签解耦。 -->
+            <div class="ee-toolbar" role="group" aria-label="搜索、题库范围与呈现方式">
+              <label class="search-box">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+                <input class="input" type="search" placeholder="搜索题干" aria-label="搜索题干" id="queue-search">
+              </label>
+              <select class="select" aria-label="选择题库" id="queue-scope"></select>
+              <span class="od-spacer"></span>
+              <div class="segmented" role="radiogroup" aria-label="呈现方式">
+                <button type="button" class="segment" role="radio" aria-checked="true" data-order="default">默认列表</button>
+                <button type="button" class="segment" role="radio" aria-checked="false" data-order="due">按到期时间</button>
+              </div>
+            </div>
+
+            <div class="chip-row" role="group" aria-label="按原因筛选" id="queue-chips"></div>
+
+            <div class="ee-list ee-mt-4" id="queue-host"></div>
+
+            <p class="ee-rule">
+              这里只放<b>现在就能练</b>的到期题：被我斩杀的、已归档的、或我已失去访问权的题都不进来。它们保留原来的学习状态，条件恢复后按原状态回来，不从头开始。
+              错题未清除 / 薄弱 / 巩固是叠加上去的原因标签，一道题可以同时带多个。
+            </p>
+            <p class="ee-rule" data-spec>
+              <b>集合口径（全产品唯一）</b>：到期（FSRS 卡片 <span class="mono">due_at</span> 已到）∧ 未被我斩杀 ∧ 未被归档 ∧ 我对该题所属题库仍有访问权。
+              已斩杀、已归档或失去访问权的题保留原有学习状态，条件恢复后凭原状态重新进入，不从头开始。
+              错题未清除 / 薄弱 / 巩固是叠加在集合上的原因标签，一个题可以同时带多个。
+            </p>
+          </div>
+        </section>
+
+        <!-- ============ 视图二：错题（全部未清除错题，不受是否到期限制） ============ -->
+        <section class="ee-tabpanel" data-tab-panel="mistakes" hidden>
+          <div class="od-row ee-tools ee-toolbar">
+            <select class="select" aria-label="选择题库" id="mistakes-scope"></select>
+            <select class="select" aria-label="按错因筛选" id="mistakes-cause"></select>
+            <span class="od-spacer"></span>
+            <span class="panel-sub" id="mistakes-count">0 道错题</span>
+            <button class="btn btn-sm" type="button" id="mistakes-batch" onclick="EEreview.askBatchCause(this)">批量设错因</button>
+            <button class="btn btn-sm btn-primary" type="button" id="mistakes-start" onclick="EEreview.startMistakes(this)">开始错题重做</button>
+          </div>
+
+          <div class="notice info">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+            <div class="notice-body">
+              错题视图列出<b>全部未清除错题</b>，不受是否到期限制；答对连续 2 次才清除，清除后错题记录仍保留。
+              <span id="mistakes-due-note"></span>
+              <span class="notice-actions">
+                <button class="btn btn-sm" type="button" onclick="EEreview.gotoTab('due')">去待复习视图</button>
+              </span>
+            </div>
+          </div>
+
+          <div class="ee-list ee-mt-4" id="mistakes-host"></div>
+          <p class="hint ee-mt-4" id="mistakes-rest"></p>
+        </section>
+
+        <!-- ============ 视图三：薄弱（全部主动标记的薄弱题，含未到期） ============ -->
+        <section class="ee-tabpanel" data-tab-panel="weak" hidden>
+          <div class="od-row ee-tools ee-toolbar">
+            <select class="select" aria-label="选择题库" id="weak-scope"></select>
+            <span class="od-spacer"></span>
+            <span class="panel-sub" id="weak-count">0 道薄弱题</span>
+            <button class="btn btn-sm" type="button" id="weak-batch" onclick="EEreview.askBatchUnweak(this)">批量取消标记</button>
+            <button class="btn btn-sm btn-primary" type="button" id="weak-start" onclick="EEreview.startWeak(this)">主动练习</button>
+          </div>
+
+          <div class="notice info">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+            <div class="notice-body">
+              这里是<b>薄弱题的权威列表</b>，包含还没到期的题——它们不出现在「待复习」视图里。
+              从这里开始的会话是<b>普通练习（PRACTICE）</b>，不是 FSRS 专项；FSRS 专项的集合仍限定为当前已到期集合。
+            </div>
+          </div>
+
+          <div class="ee-list ee-mt-4" id="weak-host"></div>
+          <p class="ee-rule">
+            <b>标记与取消</b>：在练习会话里按 <span class="kbd">W</span> 或点「标记薄弱」即可把题加入这里；取消标记只移除薄弱标记，
+            不影响这道题已有的错题记录与 FSRS 卡片。
+          </p>
+        </section>
+
+        <!-- ============ 视图四：斩杀（已斩杀题管理 + 查漏补缺） ============ -->
+        <section class="ee-tabpanel" data-tab-panel="killed" hidden>
+          <div class="od-row ee-tools ee-toolbar">
+            <select class="select" aria-label="选择题库" id="killed-scope"></select>
+            <span class="od-spacer"></span>
+            <span class="panel-sub" id="killed-count">0 道已斩杀</span>
+            <button class="btn btn-sm" type="button" id="killed-batch" onclick="EEreview.askBatchRestore(this)">批量恢复</button>
+            <button class="btn btn-sm btn-primary" type="button" id="killed-start" onclick="EEreview.startKilled(this)">查漏补缺</button>
+          </div>
+
+          <div class="notice info">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+            <div class="notice-body">
+              斩杀题答错一次会自动恢复；在恢复前，它不会出现在练习、到期与错题队列里。
+              斩杀只改变可见性，FSRS 卡片、错题记录与历史作答一律保留。
+            </div>
+          </div>
+
+          <div class="ee-list ee-mt-4" id="killed-host"></div>
+        </section>
+      </div>
+
+      <!-- ============ 状态格（规格） ============ -->
+      <section class="ee-section" data-spec>
+        <div class="section-head">
+          <h2 class="section-title">状态</h2>
+          <span class="section-note">同一屏幕的其余状态并列呈现；局部降级时列表数据照常展示</span>
+        </div>
+
+        <div class="ee-state-grid">
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">空 · 待复习集合为空</span></div>
+            <div class="panel-body">
+              <div class="empty">
+                <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg></div>
+                <div class="empty-title">现在没有可执行的复习题</div>
+                <div class="empty-desc">FSRS 只为错题与标记薄弱的题建卡，新题要通过练习才会进入调度。做一组练习，到期后回到这里。</div>
+                <div class="empty-actions">
+                  <button class="btn btn-sm btn-primary" type="button" onclick="EEreview.startWeak(this)">主动练习薄弱题</button>
+                  <a class="btn btn-sm btn-quiet" href="home.html">回到今天页</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">空 · 斩杀题库为空</span></div>
+            <div class="panel-body">
+              <div class="empty">
+                <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg></div>
+                <div class="empty-title">没有已斩杀的题</div>
+                <div class="empty-desc">在错题视图对某道题点「斩杀」，它会离开练习、到期与错题队列，直到做错一次自动恢复。</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">加载 · 队列读取中</span></div>
+            <div class="panel-body">
+              <div class="skeleton sk-line ee-sk-cap"></div>
+              <div class="skeleton sk-block"></div>
+              <div class="skeleton sk-block"></div>
+              <p class="state-note ee-state-note">未返回前用骨架占位，计数显示「—」，不虚构数字。</p>
+            </div>
+          </div>
+
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">错误 · 加载失败</span></div>
+            <div class="panel-body">
+              <div class="notice bad" role="alert">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">复习队列读取失败</div>
+                  <div>题库与错题仍可查看；重试会重新拉取队列。</div>
+                  <div class="notice-actions"><button class="btn btn-sm" type="button" onclick="EEreview.retryRead()">重试</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">禁用 · 只读成员</span></div>
+            <div class="panel-body">
+              <button class="btn btn-primary" type="button" disabled aria-describedby="rv-disabled-why">开始复习</button>
+              <p class="hint ee-state-note" id="rv-disabled-why">今天没有到期题目，FSRS 安排后即可开始。斩杀与恢复仍然可用，它们只影响你自己的学习记录。</p>
+            </div>
+          </div>
+
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">无权限 · 失去题库访问权</span></div>
+            <div class="panel-body">
+              <div class="empty">
+                <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg></div>
+                <div class="empty-title">无法访问这个题库（403）</div>
+                <div class="empty-desc">你已不是「共享题库 网络技术」的成员。历史作答、错题与成绩报告仍归你回看，但该库题目不再进入任何可执行学习队列。</div>
+                <div class="empty-actions"><a class="btn btn-sm btn-quiet" href="banks.html">回到题库列表</a></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">冲突 · 跨设备草稿分歧</span></div>
+            <div class="panel-body">
+              <div class="notice warn" role="note">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">第 3 题的答案在两台设备上不一致</div>
+                  <div>未提交的答案属于你创作的内容，系统不会静默覆盖。选一侧继续，另一侧保留在本地。</div>
+                  <div class="notice-actions">
+                    <button class="btn btn-sm" type="button" onclick="eeToast('已保留本机版本，服务器版本仍可在档案里对照')">查看我的版本</button>
+                    <button class="btn btn-sm btn-quiet" type="button" onclick="eeToast('已改用服务器版本，本机版本保留在本地备份')">使用对方版本</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel ee-state-panel">
+            <div class="panel-head"><span class="panel-title">未配置 / 离线</span></div>
+            <div class="panel-body">
+              <div class="notice info">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">还没有学习计划</div>
+                  <div>计划按每日预算把推荐切成日程；未配置时四个视图照常可用。<a class="link-btn" href="diagnosis.html">去学习档案配置</a></div>
+                </div>
+              </div>
+              <div class="notice warn ee-mt-4">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">离线 · 2 条作答待同步</div>
+                  <div>网络恢复后自动重试；交卷前有未同步条目会被拦住。</div>
+                  <div class="notice-actions"><button class="btn btn-sm" type="button" onclick="eeToast('已开始重试同步')">重试同步</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<nav class="bottomnav" aria-label="底部导航">
+  <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg>今天</button>
+  <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>题库</button>
+  <button class="bn-item is-active" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg>复习</button>
+  <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>模考</button>
+  <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>资料</button>
+  <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg>更多</button>
+</nav>
+
+<!-- ============ 浮层：开始决策（同模式未完成会话 · CR-14） ============ -->
+<dialog class="dlg" id="dlg-start" aria-labelledby="dlg-start-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">学习</p>
+      <h2 class="dlg-title" id="dlg-start-title">有未完成的学习会话</h2>
+    </div>
+    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="dlg-body">
+    <p class="hint" id="start-hint">继续上次的进度，或结束它并开始新的复习。结束只影响同模式的会话，其他模式的会话不受牵连。</p>
+    <div class="panel" id="start-session">
+      <div class="list" id="start-session-list"></div>
+    </div>
+    <div class="kv">
+      <span class="kv-key">范围</span><span class="kv-val" id="start-scope">复习队列</span>
+      <span class="kv-key">模式</span><span class="kv-val" id="start-mode">到期复习</span>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>取消</button>
+    <button type="button" class="btn" id="start-resume">继续</button>
+    <button type="button" class="btn btn-primary" id="start-new">结束并新建</button>
+  </div>
+</dialog>
+
+<!-- ============ 浮层：斩杀确认 ============ -->
+<dialog class="dlg danger" id="dlg-kill" aria-labelledby="dlg-kill-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">复习 · 斩杀</p>
+      <h2 class="dlg-title" id="dlg-kill-title">不再练这道题</h2>
+    </div>
+  </div>
+  <div class="dlg-body">
+    <p class="hint">斩杀把这道题从练习、到期与错题队列里移出，进入斩杀题库。只有你能恢复它，做错一次会自动恢复；FSRS 卡片与错题记录保留。</p>
+    <div class="kv">
+      <span class="kv-key">题目</span><span class="kv-val" id="kill-stem">—</span>
+      <span class="kv-key">题库</span><span class="kv-val" id="kill-bank">—</span>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>取消</button>
+    <button type="button" class="btn btn-danger-solid" id="kill-confirm">斩杀</button>
+  </div>
+</dialog>
+
+<!-- ============ 浮层：批量操作（整批校验 · CR-27 结果口径唯一） ============ -->
+<dialog class="dlg" id="dlg-batch" aria-labelledby="dlg-batch-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">复习 · 批量</p>
+      <h2 class="dlg-title" id="dlg-batch-title">批量操作</h2>
+    </div>
+    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="dlg-body">
+    <p class="hint" id="batch-note"></p>
+    <div class="field" id="batch-cause-field" hidden>
+      <span class="label">统一错因</span>
+      <select class="select" id="batch-cause"></select>
+      <span class="hint">已经等于目标错因的条目计为「无须变更」，不是失败。</span>
+    </div>
+    <div class="kv">
+      <span class="kv-key">已选</span><span class="kv-val mono" id="batch-selected">0 题</span>
+      <span class="kv-key">实际影响</span><span class="kv-val mono" id="batch-affect">0 题</span>
+    </div>
+    <div class="notice info" id="batch-rule">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+      <div class="notice-body">
+        整批校验、整批生效：任一条目不通过校验就<b>整批拒绝且零写入</b>，并给出可读原因。
+        结果只有「<b>成功 X · 无须变更 Y</b>」两项，X + Y = 已选 N，不存在「跳过 Z」。
+      </div>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>取消</button>
+    <button type="button" class="btn btn-primary" id="batch-confirm">执行</button>
+  </div>
+</dialog>
+
+<!-- ============ 抽屉：题目详情（与主内容对照） ============ -->
+<div class="drawer-scrim" id="detail-scrim" hidden></div>
+<aside class="drawer" id="detail-drawer" hidden role="dialog" aria-modal="true" aria-labelledby="detail-title">
+  <div class="drawer-head">
+    <h2 class="drawer-title" id="detail-title">题目详情</h2>
+    <button type="button" class="icon-btn" aria-label="关闭" onclick="EEreview.closeDetail()"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="drawer-body" id="detail-body"></div>
+  <div class="drawer-foot">
+    <button type="button" class="btn btn-quiet" onclick="EEreview.closeDetail()">关闭</button>
+    <button type="button" class="btn btn-primary" id="detail-go">开始这道题</button>
+  </div>
+</aside>
+
+<script src="../../assets/icons.js"></script>
+<script src="../../assets/store.js"></script>
+<script src="../../assets/i18n.js"></script>
+<script src="../../assets/nav.js"></script>
+<script src="../../assets/spec-boot.js"></script>
+<script>
+/* ==========================================================================
+   复习 · CR-29 四视图（待复习 / 错题 / 薄弱 / 斩杀）
+   · 待复习 = 当前可执行复习集合（CR-05：到期 ∧ 未斩杀 ∧ 未归档 ∧ 有访问权）
+   · 错题   = 全部未清除错题，不受是否到期限制
+   · 薄弱   = 全部主动标记的薄弱题，含未到期（薄弱题的权威列表）
+   · 斩杀   = 已斩杀题管理 + 查漏补缺（ELIMINATION）
+   · 学习档案是独立路由 /review/diagnosis，页头给入口，不是第五个页签
+   · 选择集与筛选解耦（CR-27）；批量结果只有「成功 X · 无须变更 Y」
+   ========================================================================== */
+window.EEreview = (function () {
+  var S = window.eeStore;
+
+  var REASON_LABEL = { mistakes: '错题未清除', weak: '薄弱', consolidation: '巩固' };
+  var REASON_CLASS = { mistakes: 'bad', weak: 'warn', consolidation: 'plain' };
+  var CAUSES = ['未标注', '审题遗漏', '概念欠缺', '思路不熟', '陷阱诱导', '计算错误', '其他手误'];
+
+  /* 队列只用搜索 / 题库范围 / 原因 chips / 呈现方式筛选 */
+  var state = { query: '', bank: '', reason: 'all', order: 'default' };
+  var startCtx = null;
+  var killId = null;
+  var batchCtx = null;
+  var selection = {};      /* 选择集：按题目行 id 记住，与当前筛选解耦（CR-27） */
+
+  /* 题干 → 选项 / 答案 / 解析（与练习 runner 同一份真题载荷） */
+  var PAYLOAD = {
+    'OSI': { options: [['A', '传输层'], ['B', '会话层'], ['C', '网络层'], ['D', '应用层']], answer: 'B', explain: '传输层、网络层、应用层都可以提供相应安全服务，会话层不适合。' },
+    '范围基准': { options: [['A', '范围基准包括项目范围说明书、WBS、WBS 字典'], ['B', '范围基准包含工作包、规划包与控制账户'], ['C', '范围基准是进度与成本估算的重要依据'], ['D', '范围基准是制定预算的输出']], answer: 'D', explain: '范围基准是创建 WBS 过程的输出，不是制定预算的输出。' },
+    '融合基础设施': { options: [['A', '科教基础设施'], ['B', '智能交通基础设施'], ['C', '新技术基础设施'], ['D', '算力基础设施']], answer: 'B', explain: '智能交通基础设施是典型的融合基础设施。' },
+    '干系人': { options: [['A', '不了解型，中立型'], ['B', '支持型，抵制型'], ['C', '中立型，支持型'], ['D', '领导型，抵制型']], answer: 'D', explain: '领导型干系人应积极参与；抵制型干系人知晓项目但反对。' },
+    '异常': { options: [['A', '韧性'], ['B', '弹性'], ['C', '架构持续演进'], ['D', '服务化']], answer: 'A', explain: '韧性指系统在出现异常时仍能持续提供服务的能力。' }
+  };
+  function payloadFor(stem) {
+    var keys = Object.keys(PAYLOAD);
+    for (var i = 0; i < keys.length; i++) if (String(stem).indexOf(keys[i]) > -1) return PAYLOAD[keys[i]];
+    return null;
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function allRows() { return S.reviewQueue(); }
+  /* 集合口径（CR-05）：到期 ∧ 未斩杀（store 的 reasons 已含斩杀标记） */
+  function dueRows() { return allRows().filter(function (r) { return r.reasons.indexOf('due') > -1 && r.reasons.indexOf('killed') < 0; }); }
+  function mistakeRows() { return allRows().filter(function (r) { return r.reasons.indexOf('mistakes') > -1 && r.reasons.indexOf('killed') < 0; }); }
+  function weakRows() { return allRows().filter(function (r) { return r.reasons.indexOf('weak') > -1 && r.reasons.indexOf('killed') < 0; }); }
+  function killedRows() { return allRows().filter(function (r) { return r.reasons.indexOf('killed') > -1; }); }
+  function bankName(id) { var b = S.bank(id); return b ? b.name : '未知题库'; }
+  /* 行首题型列 */
+  function typeLabel(row) {
+    var hit = S.questions().filter(function (q) { return q.stem === row.stem; })[0];
+    return (hit && hit.type) || '单选题';
+  }
+  /* 原因标签：错题未清除 < 薄弱 < 巩固，可叠加 */
+  function reasonKeys(row) {
+    var out = [];
+    if (row.reasons.indexOf('mistakes') > -1) out.push('mistakes');
+    if (row.reasons.indexOf('weak') > -1) out.push('weak');
+    if (!out.length && row.reasons.indexOf('due') > -1) out.push('consolidation');
+    return out;
+  }
+  function reasonTags(row) {
+    return '<span class="queue-causes">' + reasonKeys(row).map(function (k) {
+      return '<span class="tag ' + (REASON_CLASS[k] || 'plain') + '">' + REASON_LABEL[k] + '</span>';
+    }).join('') + '</span>';
+  }
+  function rowMeta(row, extra) {
+    var parts = ['<span>' + esc(bankName(row.bankId)) + '</span>'];
+    if (row.mistake_count) parts.push('<span class="mono">遗忘 ' + row.mistake_count + ' 次</span>');
+    if (row.due_at) parts.push('<span>到期 ' + esc(String(row.due_at).slice(0, 10)) + '</span>');
+    if (row.stability != null) parts.push('<span>稳定度 ' + Number(row.stability).toFixed(1) + '</span>');
+    if (extra) parts.push(extra);
+    return '<span class="list-meta">' + parts.join('') + '</span>';
+  }
+  function dueText(row) { return row.due_at ? String(row.due_at).slice(0, 10) : '—'; }
+  function nowStamp() {
+    var d = new Date();
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  function selectedIds() { return Object.keys(selection).filter(function (k) { return selection[k]; }); }
+
+  /* ---------- 待复习 ---------- */
+  function visibleQueue() {
+    var q = state.query.trim().toLowerCase();
+    return dueRows().filter(function (r) {
+      if (state.bank && r.bankId !== state.bank) return false;
+      if (state.reason !== 'all' && reasonKeys(r).indexOf(state.reason) < 0) return false;
+      if (q && String(r.stem).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    });
+  }
+  function queueRowHtml(row) {
+    var checked = !!selection[row.id];
+    return '<div class="queue-row ee-row-top" data-row="' + esc(row.id) + '">' +
+      '<label class="check" title="加入选择集（跨筛选保留）"><input type="checkbox"' + (checked ? ' checked' : '') +
+        ' data-select="' + esc(row.id) + '" aria-label="选择这道题"></label>' +
+      '<span class="ee-qno">' + esc(typeLabel(row)) + '</span>' +
+      '<span class="list-main"><span class="list-title ee-stem od-clamp-2">' + esc(row.stem) + '</span>' +
+      reasonTags(row) + rowMeta(row) + '</span>' +
+      '<span class="list-side">' +
+      '<button class="btn btn-sm btn-quiet" type="button" onclick="EEreview.openDetail(\'' + esc(row.id) + '\', this)">详情</button>' +
+      '<button class="btn btn-sm" type="button" onclick="EEreview.startRow(\'' + esc(row.id) + '\', this)">重做</button>' +
+      '</span></div>';
+  }
+  function renderQueue() {
+    var list = visibleQueue();
+    var total = dueRows().length;
+    document.getElementById('queue-count').textContent = (!state.bank && !state.query.trim() && state.reason === 'all')
+      ? total + ' 道可执行'
+      : list.length + ' / ' + total + ' 道匹配';
+    var host = document.getElementById('queue-host');
+    if (!list.length) {
+      host.innerHTML = '<div class="empty">' +
+        '<div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg></div>' +
+        '<div class="empty-title">当前筛选下没有题目</div>' +
+        '<div class="empty-desc">' + (state.reason !== 'all'
+          ? '这个原因下暂时没有可执行的题。换一个原因，或切回「全部」看整个集合。'
+          : '到期题会被斩杀、归档与访问权过滤掉；做一组练习，FSRS 安排到期后回到这里。') + '</div>' +
+        '<div class="empty-actions"><button class="btn btn-sm" type="button" onclick="EEreview.resetFilters()">清除筛选</button></div></div>';
+      return;
+    }
+    if (state.order === 'due') {
+      var groups = {};
+      list.forEach(function (r) { (groups[dueText(r)] = groups[dueText(r)] || []).push(r); });
+      var keys = Object.keys(groups).sort();
+      host.innerHTML = keys.map(function (k) {
+        return '<div class="ee-group"><span class="ee-group-date">' + esc(k) + ' 到期</span>' +
+          '<span class="ee-group-n">' + groups[k].length + ' 题</span></div>' +
+          groups[k].map(queueRowHtml).join('');
+      }).join('');
+    } else {
+      host.innerHTML = list.map(queueRowHtml).join('');
+    }
+  }
+  function renderChips() {
+    var list = dueRows();
+    var counts = { all: list.length, mistakes: 0, weak: 0, consolidation: 0 };
+    list.forEach(function (r) { reasonKeys(r).forEach(function (k) { counts[k]++; }); });
+    var defs = [
+      { k: 'all', label: '全部' }, { k: 'mistakes', label: REASON_LABEL.mistakes },
+      { k: 'weak', label: REASON_LABEL.weak }, { k: 'consolidation', label: REASON_LABEL.consolidation }
+    ];
+    document.getElementById('queue-chips').innerHTML = defs.map(function (d) {
+      return '<button type="button" class="chip' + (state.reason === d.k ? ' is-on' : '') + '" role="radio" aria-checked="' +
+        (state.reason === d.k) + '" data-reason="' + d.k + '">' + d.label +
+        '<span class="count">' + counts[d.k] + '</span></button>';
+    }).join('');
+  }
+  function renderScope(selId) {
+    var sel = document.getElementById(selId);
+    if (!sel) return;
+    var banks = S.banks({ archived: false });
+    var opts = '<option value="">全部题库</option>';
+    banks.forEach(function (b) { opts += '<option value="' + esc(b.id) + '">' + esc(b.name) + '</option>'; });
+    var keep = sel.value;
+    sel.innerHTML = opts;
+    if (keep && banks.some(function (b) { return b.id === keep; })) sel.value = keep;
+  }
+  /* 错因下拉：六种错因一套词典（审题遗漏 / 概念欠缺 / 思路不熟 / 陷阱诱导 / 计算错误 / 其他手误） */
+  function renderCauseFilter() {
+    var sel = document.getElementById('mistakes-cause');
+    if (!sel) return;
+    var keep = sel.value;
+    var opts = '<option>全部错因</option>' + CAUSES.map(function (c) { return '<option>' + c + '</option>'; }).join('');
+    sel.innerHTML = opts;
+    if (keep && CAUSES.indexOf(keep) > -1) sel.value = keep;
+  }
+
+  /* ---------- 错题 ---------- */
+  function renderMistakes() {
+    var all = mistakeRows();
+    var cause = document.getElementById('mistakes-cause').value;
+    var list = all.filter(function (r) {
+      if (state.bank && r.bankId !== state.bank) return false;
+      if (cause && cause !== '全部错因' && (r.cause || '未标注') !== cause) return false;
+      return true;
+    });
+    document.getElementById('mistakes-count').textContent = all.length + ' 道错题';
+    document.getElementById('mistakes-start').disabled = !all.length;
+    var overdue = all.filter(function (r) { return r.reasons.indexOf('due') > -1; }).length;
+    document.getElementById('mistakes-due-note').innerHTML = overdue
+      ? '其中 <b>' + overdue + '</b> 道当前已到期，在「待复习」视图可见。'
+      : '这些错题当前都还没到 FSRS 到期时间，可以主动重做。';
+    document.getElementById('mistakes-host').innerHTML = list.length ? list.map(function (r) {
+      var c = r.cause || '未标注';
+      var opts = CAUSES.map(function (x) { return '<option' + (x === c ? ' selected' : '') + '>' + x + '</option>'; }).join('');
+      var checked = !!selection[r.id];
+      return '<div class="list-row ee-row-top" data-row="' + esc(r.id) + '">' +
+        '<label class="check"><input type="checkbox"' + (checked ? ' checked' : '') + ' data-select="' + esc(r.id) + '" aria-label="选择这道题"></label>' +
+        '<span class="ee-qno">' + esc(typeLabel(r)) + '</span>' +
+        '<span class="list-main"><span class="list-title ee-stem od-clamp-2">' + esc(r.stem) + '</span>' +
+        '<span class="list-meta"><span>' + esc(bankName(r.bankId)) + '</span><span class="mono">' + (r.mistake_count || 0) + '×</span>' +
+        (r.due_at ? '<span>到期 ' + esc(dueText(r)) + '</span>' : '') + '</span>' + reasonTags(r) + '</span>' +
+        '<span class="list-side">' +
+        '<select class="select ee-cause" aria-label="错误原因" data-cause-for="' + esc(r.id) + '">' + opts + '</select>' +
+        '<button class="btn btn-sm" type="button" onclick="EEreview.startRow(\'' + esc(r.id) + '\', this)">重做</button>' +
+        '<button class="btn btn-sm btn-quiet" type="button" onclick="EEreview.askKill(\'' + esc(r.id) + '\', this)">斩杀</button>' +
+        '</span></div>';
+    }).join('') : '<div class="empty">' +
+      '<div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg></div>' +
+      '<div class="empty-title">错题还是空的</div>' +
+      '<div class="empty-desc">练习或模考答错的题会进到这里，并可按错因归类；连续 2 次答对才清除，清除后记录仍保留。</div>' +
+      '<div class="empty-actions"><a class="btn btn-sm btn-primary" href="home.html">去今天页开始练习</a></div></div>';
+    document.getElementById('mistakes-rest').textContent = list.length
+      ? '错题视图列出全部未清除错题，不受是否到期限制。' : '';
+  }
+
+  /* ---------- 薄弱（CR-29 新增视图 · FN-207 mark_weak） ---------- */
+  function renderWeak() {
+    var all = weakRows();
+    var list = all.filter(function (r) { return !state.bank || r.bankId === state.bank; });
+    document.getElementById('weak-count').textContent = all.length + ' 道薄弱题';
+    document.getElementById('weak-start').disabled = !all.length;
+    document.getElementById('weak-host').innerHTML = list.length ? list.map(function (r) {
+      var checked = !!selection[r.id];
+      var due = r.reasons.indexOf('due') > -1;
+      return '<div class="list-row ee-row-top" data-row="' + esc(r.id) + '">' +
+        '<label class="check"><input type="checkbox"' + (checked ? ' checked' : '') + ' data-select="' + esc(r.id) + '" aria-label="选择这道题"></label>' +
+        '<span class="ee-qno">' + esc(typeLabel(r)) + '</span>' +
+        '<span class="list-main"><span class="list-title ee-stem od-clamp-2">' + esc(r.stem) + '</span>' +
+        '<span class="list-meta"><span>' + esc(bankName(r.bankId)) + '</span>' +
+        '<span>' + (due ? '已到期' : '未到期') + ' · ' + esc(dueText(r)) + '</span></span>' + reasonTags(r) + '</span>' +
+        '<span class="list-side">' +
+        '<button class="btn btn-sm btn-quiet" type="button" onclick="EEreview.openDetail(\'' + esc(r.id) + '\', this)">详情</button>' +
+        '<button class="btn btn-sm" type="button" onclick="EEreview.startRow(\'' + esc(r.id) + '\', this)">练习</button>' +
+        '<button class="btn btn-sm btn-quiet" type="button" onclick="EEreview.unweak(\'' + esc(r.id) + '\', this)">取消标记</button>' +
+        '</span></div>';
+    }).join('') : '<div class="empty">' +
+      '<div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg></div>' +
+      '<div class="empty-title">没有标记薄弱的题</div>' +
+      '<div class="empty-desc">做题时犹豫但没错的题，按 <span class="kbd">W</span> 或点「标记薄弱」拉进这里；标记后立即进入调度。</div>' +
+      '<div class="empty-actions"><a class="btn btn-sm btn-primary" href="home.html">去今天页开始练习</a></div></div>';
+  }
+
+  /* ---------- 斩杀 ---------- */
+  function renderKilled() {
+    var all = killedRows();
+    var list = all.filter(function (r) { return !state.bank || r.bankId === state.bank; });
+    document.getElementById('killed-count').textContent = all.length + ' 道已斩杀';
+    document.getElementById('killed-start').disabled = !all.length;
+    document.getElementById('killed-host').innerHTML = list.length ? list.map(function (r) {
+      var checked = !!selection[r.id];
+      return '<div class="list-row ee-row-top" data-row="' + esc(r.id) + '">' +
+        '<label class="check"><input type="checkbox"' + (checked ? ' checked' : '') + ' data-select="' + esc(r.id) + '" aria-label="选择这道题"></label>' +
+        '<span class="ee-qno">' + esc(typeLabel(r)) + '</span>' +
+        '<span class="list-main"><span class="list-title ee-stem od-clamp-2">' + esc(r.stem) + '</span>' +
+        '<span class="list-meta"><span>' + esc(bankName(r.bankId)) + '</span>' +
+        (r.killed_at ? '<span>斩杀于 ' + esc(String(r.killed_at).slice(0, 10)) + '</span>' : '') +
+        '<span class="mono">稳定度 ' + (row_stability(r)) + '</span></span></span>' +
+        '<span class="list-side">' +
+        '<button class="btn btn-sm" type="button" onclick="EEreview.startRow(\'' + esc(r.id) + '\', this)">查漏补缺</button>' +
+        '<button class="btn btn-sm btn-quiet" type="button" onclick="EEreview.restore(\'' + esc(r.id) + '\', this)">恢复</button>' +
+        '</span></div>';
+    }).join('') : '<div class="empty">' +
+      '<div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg></div>' +
+      '<div class="empty-title">没有已斩杀的题</div>' +
+      '<div class="empty-desc">在错题视图对某道题点「斩杀」，它会离开练习、到期与错题队列；答错一次自动恢复，不因时间自动恢复。</div></div>';
+  }
+  function row_stability(r) { return r.stability == null ? '—' : Number(r.stability).toFixed(1); }
+
+  /* ---------- 侧栏 / 页签计数 ---------- */
+  function renderCounts() {
+    document.getElementById('tab-due').textContent = String(dueRows().length);
+    document.getElementById('tab-mistakes').textContent = String(mistakeRows().length);
+    document.getElementById('tab-weak').textContent = String(weakRows().length);
+    document.getElementById('tab-killed').textContent = String(killedRows().length);
+    document.getElementById('side-due').textContent = String(dueRows().length);
+    document.getElementById('side-mistakes').textContent = String(mistakeRows().length);
+    document.getElementById('side-weak').textContent = String(weakRows().length);
+    var btn = document.getElementById('start-due-btn');
+    var n = dueRows().length;
+    btn.disabled = !n;
+    if (!n) btn.setAttribute('aria-describedby', 'start-due-why');
+    else btn.removeAttribute('aria-describedby');
+    var why = document.getElementById('start-due-why');
+    if (!why) {
+      why = document.createElement('p');
+      why.className = 'hint';
+      why.id = 'start-due-why';
+      why.textContent = '今天没有到期题目，FSRS 安排后即可开始；也可以从错题或薄弱视图主动练习。';
+      btn.parentNode.insertBefore(why, btn.nextSibling);
+    }
+    why.hidden = !!n;
+  }
+
+  function renderAll() {
+    renderScope('queue-scope');
+    renderScope('mistakes-scope');
+    renderScope('weak-scope');
+    renderScope('killed-scope');
+    renderCauseFilter();
+    renderChips();
+    renderQueue();
+    renderMistakes();
+    renderWeak();
+    renderKilled();
+    renderCounts();
+  }
+
+  /* ---------- 开始决策：同模式未完成会话二选一（CR-14） ---------- */
+  function modeOf(row) {
+    if (row.reasons.indexOf('due') > -1) return '到期复习';
+    if (row.reasons.indexOf('mistakes') > -1) return '错题重做';
+    if (row.reasons.indexOf('weak') > -1) return '薄弱练习';
+    return '查漏补缺';
+  }
+  function conflictsFor(ctx) {
+    return S.sessions('review').filter(function (s) { return s.mode === ctx.mode; });
+  }
+  function openStart(ctx, trigger) {
+    startCtx = ctx;
+    var conflicts = conflictsFor(ctx);
+    document.getElementById('start-scope').textContent = ctx.scope || '复习队列';
+    document.getElementById('start-mode').textContent = ctx.mode;
+    document.getElementById('start-hint').textContent = conflicts.length
+      ? '继续上次的进度，或结束它并开始新的复习。结束只影响同模式的会话，其他模式的会话不受牵连。'
+      : '没有同模式的未完成会话，将直接开始下面这次学习。';
+    document.getElementById('start-session').hidden = !conflicts.length;
+    document.getElementById('start-session-list').innerHTML = conflicts.map(function (s) {
+      return '<div class="list-row static"><span class="list-main"><span class="list-title">' + esc(bankName(s.bankId)) + '</span>' +
+        '<span class="list-meta"><span>' + esc(s.mode) + '</span><span class="mono">已答 ' + (s.done || 0) + ' / ' + (s.total || 0) + '</span></span></span>' +
+        '<span class="list-side"><span class="tag brand">复习</span></span></div>';
+    }).join('');
+    document.getElementById('dlg-start-title').textContent = conflicts.length ? '有未完成的学习会话' : '开始这次学习';
+    document.getElementById('start-resume').hidden = !conflicts.length;
+    document.getElementById('start-new').textContent = conflicts.length ? '结束并新建' : '开始';
+    document.getElementById('start-resume').onclick = function () {
+      var last = conflicts[conflicts.length - 1];
+      eeDialog.close(document.getElementById('dlg-start'));
+      if (last) location.href = 'practice.html?sid=' + encodeURIComponent(last.id);
+    };
+    document.getElementById('start-new').onclick = commitStart;
+    eeDialog.open('dlg-start', trigger || document.activeElement);
+  }
+  function commitStart() {
+    var ctx = startCtx;
+    eeDialog.close(document.getElementById('dlg-start'));
+    conflictsFor(ctx).forEach(function (s) { S.finishSession(s.id); });
+    var s = S.startSession({
+      kind: 'review', bankId: ctx.bankId, mode: ctx.mode, title: ctx.title || '',
+      total: ctx.rowIds.length, rowIds: ctx.rowIds, index: 0, done: 0, answers: {}, ratings: {}, flags: {}, elapsed: 0
+    });
+    location.href = 'practice.html?sid=' + encodeURIComponent(s.id);
+  }
+  function reviewCtx(mode, rowList, scope) {
+    return {
+      mode: mode,
+      bankId: rowList.length ? rowList[0].bankId : 'b_rk',
+      rowIds: rowList.map(function (r) { return r.id; }),
+      title: mode + ' · 复习',
+      scope: scope || (mode + ' · ' + rowList.length + ' 题 · 复习')
+    };
+  }
+  function startDue(btn) { openStart(reviewCtx('到期复习', dueRows(), '当前可执行复习集合 · ' + dueRows().length + ' 题'), btn); }
+  function startMistakes(btn) { openStart(reviewCtx('错题重做', mistakeRows(), '全部未清除错题 · ' + mistakeRows().length + ' 题'), btn); }
+  function startWeak(btn) { openStart(reviewCtx('薄弱练习', weakRows(), '全部薄弱题 · ' + weakRows().length + ' 题'), btn); }
+  function startKilled(btn) { openStart(reviewCtx('查漏补缺', killedRows(), '斩杀题库 · ' + killedRows().length + ' 题'), btn); }
+  function startRow(rowId, btn) {
+    var row = S.reviewRow(rowId);
+    if (!row) return;
+    openStart(reviewCtx(modeOf(row), [row], '这道题 · ' + modeOf(row)), btn);
+  }
+
+  /* ---------- 详情抽屉 ---------- */
+  function openDetail(rowId, trigger) {
+    var row = S.reviewRow(rowId);
+    if (!row) return;
+    var p = payloadFor(row.stem);
+    var html = '<div class="q-meta"><span>' + esc(typeLabel(row)) + '</span><span>' + esc(bankName(row.bankId)) + '</span></div>' +
+      '<p class="q-stem">' + esc(row.stem) + '</p>' +
+      '<div><div class="rule-label">复习状态</div>' +
+      '<div class="kv ee-mt-4">' +
+      '<span class="kv-key">原因</span><span class="kv-val">' + reasonKeys(row).map(function (k) { return REASON_LABEL[k]; }).join('、') + '</span>' +
+      '<span class="kv-key">到期</span><span class="kv-val mono">' + esc(dueText(row)) + '</span>' +
+      '<span class="kv-key">稳定度</span><span class="kv-val mono">' + row_stability(row) + '</span>' +
+      '<span class="kv-key">错题次数</span><span class="kv-val mono">' + (row.mistake_count || 0) + '</span>' +
+      '</div></div>';
+    if (p) {
+      html += '<div><div class="rule-label">选项</div><div class="ee-mt-4">' +
+        p.options.map(function (o) {
+          return '<div class="opt" style="cursor:default"><span class="opt-key">' + o[0] + '</span><span class="opt-text">' + esc(o[1]) + '</span></div>';
+        }).join('') + '</div></div>' +
+        '<div><div class="rule-label">标准答案</div><p class="explain-body"><span class="mono">' + esc(p.answer) + '</span></p></div>' +
+        '<div><div class="rule-label">官方解析</div><p class="explain-body">' + esc(p.explain) + '</p></div>';
+    } else {
+      html += '<div class="notice info"><svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>' +
+        '<div class="notice-body">这道题的选项与解析在练习会话里查看；此处只呈现它的复习调度状态。</div></div>';
+    }
+    document.getElementById('detail-body').innerHTML = html;
+    var go = document.getElementById('detail-go');
+    go.textContent = '开始' + modeOf(row);
+    go.onclick = function () { closeDetail(); startRow(row.id, trigger); };
+    var scrim = document.getElementById('detail-scrim');
+    var drawer = document.getElementById('detail-drawer');
+    drawer._trigger = trigger || document.activeElement;
+    scrim.hidden = false;
+    drawer.hidden = false;
+    drawer.querySelector('button').focus();
+  }
+  function closeDetail() {
+    var scrim = document.getElementById('detail-scrim');
+    var drawer = document.getElementById('detail-drawer');
+    scrim.hidden = true;
+    drawer.hidden = true;
+    var t = drawer._trigger;
+    if (t && t.isConnected) t.focus();
+  }
+  document.addEventListener('click', function (e) {
+    if (e.target && e.target.id === 'detail-scrim') closeDetail();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (document.querySelector('dialog[open]')) return;
+    var d = document.getElementById('detail-drawer');
+    if (d && !d.hidden) closeDetail();
+  });
+
+  /* ---------- 斩杀 / 取消薄弱 / 恢复 ---------- */
+  function askKill(rowId, btn) {
+    var row = S.reviewRow(rowId);
+    if (!row) return;
+    killId = rowId;
+    document.getElementById('kill-stem').textContent = row.stem;
+    document.getElementById('kill-bank').textContent = bankName(row.bankId);
+    document.getElementById('kill-confirm').onclick = confirmKill;
+    eeDialog.open('dlg-kill', btn);
+  }
+  function confirmKill() {
+    var row = S.reviewRow(killId);
+    eeDialog.close(document.getElementById('dlg-kill'));
+    if (row) S.updateReviewRow(row.id, { reasons: ['killed'], killed_at: nowStamp() });
+    eeToast('已斩杀，题目离开复习队列');
+    killId = null;
+    renderAll();
+  }
+  function unweak(rowId) {
+    var row = S.reviewRow(rowId);
+    if (!row) return;
+    var reasons = row.reasons.filter(function (r) { return r !== 'weak'; });
+    S.updateReviewRow(rowId, { reasons: reasons });
+    eeToast(reasons.length ? '已取消薄弱标记' : '已取消薄弱标记，这道题暂时不在任何复习视图里');
+    renderAll();
+  }
+  function restore(rowId) {
+    var row = S.reviewRow(rowId);
+    if (!row) return;
+    var reasons = row.reasons.filter(function (r) { return r !== 'killed'; });
+    if (!reasons.length) reasons = ['weak'];
+    S.updateReviewRow(row.id, { reasons: reasons, killed_at: null });
+    eeToast('已恢复，题目回到复习队列');
+    renderAll();
+  }
+
+  /* ---------- 批量操作（CR-27：整批校验、两种结果） ---------- */
+  function askBatch(kind, btn) {
+    var ids = selectedIds();
+    if (!ids.length) { eeToast('先勾选要操作的题目'); return; }
+    batchCtx = { kind: kind, ids: ids };
+    var rows = ids.map(function (id) { return S.reviewRow(id); }).filter(Boolean);
+    var titles = { cause: '批量设错因', unweak: '批量取消薄弱标记', restore: '批量恢复' };
+    document.getElementById('dlg-batch-title').textContent = titles[kind];
+    document.getElementById('batch-selected').textContent = ids.length + ' 题';
+    document.getElementById('batch-affect').textContent = rows.length + ' 题（跨筛选保留，含当前不可见项）';
+    var notes = {
+      cause: '把勾选的错题统一设为一个错因。已经等于目标错因的条目计为「无须变更」。',
+      unweak: '取消勾选题目的薄弱标记。已经没被标记的条目计为「无须变更」。',
+      restore: '恢复勾选的斩杀题。已经不在斩杀状态的条目计为「无须变更」。'
+    };
+    document.getElementById('batch-note').textContent = notes[kind];
+    var field = document.getElementById('batch-cause-field');
+    field.hidden = kind !== 'cause';
+    if (kind === 'cause') {
+      var sel = document.getElementById('batch-cause');
+      var opts = CAUSES.map(function (c) { return '<option' + (c === '概念欠缺' ? ' selected' : '') + '>' + c + '</option>'; }).join('');
+      sel.innerHTML = opts;
+    }
+    document.getElementById('batch-confirm').onclick = runBatch;
+    eeDialog.open('dlg-batch', btn);
+  }
+  function askBatchCause(btn) { askBatch('cause', btn); }
+  function askBatchUnweak(btn) { askBatch('unweak', btn); }
+  function askBatchRestore(btn) { askBatch('restore', btn); }
+  function runBatch() {
+    if (!batchCtx) return;
+    var kind = batchCtx.kind;
+    var ok = 0, noop = 0, rejected = [];
+    batchCtx.ids.forEach(function (id) {
+      var row = S.reviewRow(id);
+      if (!row) { rejected.push('这道题已经不在队列里'); return; }
+      if (kind === 'cause') {
+        var target = document.getElementById('batch-cause').value;
+        if ((row.cause || '未标注') === target) { noop++; return; }
+        S.updateReviewRow(id, { cause: target });
+        ok++;
+      } else if (kind === 'unweak') {
+        if (row.reasons.indexOf('weak') < 0) { noop++; return; }
+        unweakSilent(id);
+        ok++;
+      } else if (kind === 'restore') {
+        if (row.reasons.indexOf('killed') < 0) { noop++; return; }
+        restoreSilent(id);
+        ok++;
+      }
+    });
+    eeDialog.close(document.getElementById('dlg-batch'));
+    if (rejected.length) {
+      eeToast('整批拒绝：' + rejected[0] + '，未做任何修改', 'bad');
+    } else {
+      eeToast('成功 ' + ok + ' · 无须变更 ' + noop);
+    }
+    selection = {};
+    batchCtx = null;
+    renderAll();
+  }
+  function unweakSilent(id) {
+    var row = S.reviewRow(id);
+    if (row) S.updateReviewRow(id, { reasons: row.reasons.filter(function (r) { return r !== 'weak'; }) });
+  }
+  function restoreSilent(id) {
+    var row = S.reviewRow(id);
+    if (!row) return;
+    var reasons = row.reasons.filter(function (r) { return r !== 'killed'; });
+    if (!reasons.length) reasons = ['weak'];
+    S.updateReviewRow(id, { reasons: reasons, killed_at: null });
+  }
+
+  /* ---------- 错因行内保存 ---------- */
+  document.addEventListener('change', function (e) {
+    var sel = e.target.closest ? e.target.closest('[data-cause-for]') : null;
+    if (!sel) return;
+    var rowId = sel.getAttribute('data-cause-for');
+    var next = sel.value;
+    var row = sel.closest('.list-row');
+    var note = row ? row.querySelector('.cause-note') : null;
+    if (!note) {
+      note = document.createElement('p');
+      note.className = 'cause-note hint';
+      row.appendChild(note);
+    }
+    sel.disabled = true;
+    note.hidden = false;
+    note.className = 'cause-note hint';
+    note.textContent = '保存中…';
+    setTimeout(function () {
+      sel.disabled = false;
+      var r = S.reviewRow(rowId);
+      if (r) S.updateReviewRow(rowId, { cause: next });
+      sel.classList.remove('is-error');
+      sel.removeAttribute('aria-invalid');
+      note.hidden = true;
+      eeToast('已保存错因：' + next);
+    }, 240);
+  });
+
+  /* ---------- 选择集 / 筛选 / 呈现方式 ---------- */
+  document.addEventListener('change', function (e) {
+    var box = e.target.closest ? e.target.closest('[data-select]') : null;
+    if (!box) return;
+    selection[box.getAttribute('data-select')] = box.checked;
+    var n = selectedIds().length;
+    if (n) eeToast('已选 ' + n + ' 题，切换筛选不会清空选择');
+  });
+  document.getElementById('queue-search').addEventListener('input', function (e) {
+    state.query = e.target.value;
+    renderQueue();
+  });
+  document.getElementById('queue-scope').addEventListener('change', function (e) {
+    state.bank = e.target.value;
+    renderQueue(); renderMistakes(); renderWeak(); renderKilled();
+  });
+  document.getElementById('mistakes-scope').addEventListener('change', function (e) {
+    state.bank = e.target.value;
+    renderQueue(); renderMistakes(); renderWeak(); renderKilled();
+  });
+  document.getElementById('weak-scope').addEventListener('change', function (e) {
+    state.bank = e.target.value;
+    renderQueue(); renderMistakes(); renderWeak(); renderKilled();
+  });
+  document.getElementById('killed-scope').addEventListener('change', function (e) {
+    state.bank = e.target.value;
+    renderQueue(); renderMistakes(); renderWeak(); renderKilled();
+  });
+  document.getElementById('mistakes-cause').addEventListener('change', renderMistakes);
+  document.getElementById('queue-chips').addEventListener('click', function (e) {
+    var chip = e.target.closest ? e.target.closest('[data-reason]') : null;
+    if (!chip) return;
+    state.reason = chip.getAttribute('data-reason');
+    renderChips();
+    renderQueue();
+  });
+  document.querySelectorAll('[data-order]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      state.order = btn.getAttribute('data-order');
+      document.querySelectorAll('[data-order]').forEach(function (b) {
+        b.setAttribute('aria-checked', b === btn ? 'true' : 'false');
+      });
+      renderQueue();
+    });
+  });
+  function resetFilters() {
+    state.query = ''; state.bank = ''; state.reason = 'all';
+    document.getElementById('queue-search').value = '';
+    document.getElementById('queue-scope').value = '';
+    renderChips();
+    renderQueue();
+  }
+  function gotoTab(name) {
+    var tab = document.querySelector('.tab[data-panel="' + name + '"]');
+    if (tab) tab.click();
+  }
+  function retryRead() { renderAll(); eeToast('已重新读取复习队列'); }
+
+  S.subscribe(function () { renderAll(); });
+  renderAll();
+
+  return {
+    startDue: startDue, startMistakes: startMistakes, startWeak: startWeak, startKilled: startKilled,
+    startRow: startRow, askKill: askKill, confirmKill: confirmKill, unweak: unweak, restore: restore,
+    openDetail: openDetail, closeDetail: closeDetail,
+    askBatchCause: askBatchCause, askBatchUnweak: askBatchUnweak, askBatchRestore: askBatchRestore,
+    gotoTab: gotoTab, resetFilters: resetFilters, retryRead: retryRead, renderAll: renderAll
+  };
+})();
+</script>
+</body>
+</html>

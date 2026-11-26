@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>易考宝 · 完整产品原型</title>
+<link rel="stylesheet" href="assets/ee.css">
+</head>
+<body>
+<div class="app-shell">
+  <!-- ============ 侧脊：同时也是产品地图，每一项都真实可达 ============ -->
+  <aside class="sidebar">
+    <div class="side-brand">
+      <span class="brand-mark">易</span>
+      <span class="brand-text">易考宝<small>私人学习档案</small></span>
+    </div>
+    <nav class="side-nav" aria-label="产品导航">
+      <p class="side-group-label">产品原型</p>
+      <a class="nav-item" href="pages/screens/home.html"><svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg><span class="nav-label">今天</span></a>
+      <a class="nav-item" href="pages/screens/banks.html"><svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg><span class="nav-label">题库</span><span class="nav-count" id="nav-bank-count">3</span></a>
+      <a class="nav-item" href="pages/screens/review.html"><svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg><span class="nav-label">复习</span><span class="nav-count">5</span></a>
+      <a class="nav-item" href="pages/screens/exams.html"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg><span class="nav-label">模考</span></a>
+      <a class="nav-item" href="pages/screens/notes.html"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg><span class="nav-label">资料</span><span class="nav-count" id="nav-note-count">6</span></a>
+      <p class="side-group-label">管理</p>
+      <a class="nav-item" href="pages/screens/import.html"><svg class="od-icon" aria-hidden="true"><use href="#i-import"/></svg><span class="nav-label">导入向导</span></a>
+      <a class="nav-item" href="pages/screens/instance.html"><svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg><span class="nav-label">实例管理</span></a>
+      <a class="nav-item" href="pages/screens/settings.html"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg><span class="nav-label">设置</span></a>
+      <p class="side-group-label">设计规范</p>
+      <a class="nav-item" href="index.html"><svg class="od-icon" aria-hidden="true"><use href="#i-book"/></svg><span class="nav-label">规范与决策清单</span></a>
+      <a class="nav-item" href="pages/tokens.html"><svg class="od-icon" aria-hidden="true"><use href="#i-sparkles"/></svg><span class="nav-label">设计令牌</span></a>
+      <a class="nav-item" href="pages/components.html"><svg class="od-icon" aria-hidden="true"><use href="#i-columns"/></svg><span class="nav-label">控件库</span></a>
+    </nav>
+    <div class="side-foot">
+      <button class="nav-item" type="button" id="btn-reset"><svg class="od-icon" aria-hidden="true"><use href="#i-restore"/></svg><span class="nav-label">重置演示数据</span></button>
+    </div>
+  </aside>
+
+  <div class="app-main">
+  <div class="topbar">
+    <div class="mobile-top">
+      <span class="mt-title">易考宝 · 产品原型</span>
+    </div>
+    <span class="topbar-title">完整产品原型入口</span>
+    <span class="od-spacer"></span>
+    <span class="tag plain" id="state-user">accept_admin_1794570360969</span>
+    <span class="tag brand" id="state-role">所有者</span>
+  </div>
+
+  <main class="content has-bottomnav" id="main-content">
+    <header class="page-head">
+      <p class="page-eyebrow">EasyExam · 可连续操作的产品原型</p>
+      <h1 class="page-title">从这里开始，像用真实产品一样走完整流程</h1>
+      <p class="page-sub">题库管理、题目工作区、练习、复习、模考、资料、导入、设置与实例管理已连成一个整体：同一份数据、同一套权限、同一套反馈。左侧每一项都真实可达。</p>
+    </header>
+
+    <!-- ============ 入口 ============ -->
+    <section class="section" aria-labelledby="entry-title">
+      <div class="section-head">
+        <h2 class="section-title" id="entry-title">进入产品</h2>
+        <span class="section-note">未登录会先到登录页；登录后回到今天页</span>
+      </div>
+      <div class="panel">
+        <div class="panel-body">
+          <div class="flow-actions">
+            <a class="btn btn-primary" href="pages/screens/login.html?next=pages/screens/home.html" id="btn-enter">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>进入产品
+            </a>
+            <a class="btn" href="pages/screens/home.html">直接进入今天页</a>
+            <a class="btn btn-quiet" href="index.html">查看设计规范</a>
+          </div>
+          <p class="hint mt-4" id="entry-hint">提示：改完设置、建完题库、导入完题目后，去其他页面看看数据是否跟上了——这正是本轮要验收的部分。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 演示状态 ============ -->
+    <section class="section" aria-labelledby="state-title">
+      <div class="section-head">
+        <h2 class="section-title" id="state-title">演示状态</h2>
+        <span class="section-note">切换角色可以验证权限与异常状态在全产品是否一致</span>
+      </div>
+      <div class="panel">
+        <div class="panel-body">
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-name">当前角色</div>
+              <div class="setting-desc">影响成员管理、题目编辑、导入等入口在不同页面的可见性与可点性。</div>
+            </div>
+            <div class="segmented setting-control" role="radiogroup" aria-label="当前角色" id="role-seg">
+              <button class="segment" type="button" role="radio" aria-checked="true" data-v="OWNER">所有者</button>
+              <button class="segment" type="button" role="radio" aria-checked="false" data-v="EDITOR">编辑者</button>
+              <button class="segment" type="button" role="radio" aria-checked="false" data-v="MEMBER">成员</button>
+              <button class="segment" type="button" role="radio" aria-checked="false" data-v="VIEWER">只读</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-name">外观与密度</div>
+              <div class="setting-desc">与设置页同一份配置，改完全产品生效并跨刷新保留。</div>
+            </div>
+            <div class="setting-control">
+              <div class="segmented" role="radiogroup" aria-label="明暗" data-seg="theme">
+                <button class="segment" type="button" role="radio" aria-checked="true" data-v="light">浅色</button>
+                <button class="segment" type="button" role="radio" aria-checked="false" data-v="dark">深色</button>
+              </div>
+              <div class="segmented mt-4" role="radiogroup" aria-label="信息密度" data-seg="density">
+                <button class="segment" type="button" role="radio" aria-checked="true" data-v="cozy">宽松</button>
+                <button class="segment" type="button" role="radio" aria-checked="false" data-v="compact">紧凑</button>
+              </div>
+            </div>
+          </div>
+          <div class="kv mt-4">
+            <span class="kv-key">题库</span><span class="kv-val mono" id="state-banks">3 个可访问</span>
+            <span class="kv-key">题目</span><span class="kv-val mono" id="state-questions">4 题</span>
+            <span class="kv-key">资料</span><span class="kv-val mono" id="state-notes">6 条</span>
+            <span class="kv-key">进行中会话</span><span class="kv-val mono" id="state-sessions">1 个</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 覆盖范围 ============ -->
+    <section class="section" aria-labelledby="map-title">
+      <div class="section-head">
+        <h2 class="section-title" id="map-title">原型覆盖范围</h2>
+        <span class="section-note">15 个屏幕 + 5 条核心流程，均带五态与三档视口</span>
+      </div>
+      <div class="panel">
+        <div class="panel-body">
+          <div class="chip-row" id="map-chips">
+            <a class="chip" href="pages/screens/login.html">登录 / 注册</a>
+            <a class="chip" href="pages/screens/home.html">今天</a>
+            <a class="chip" href="pages/screens/banks.html">题库列表</a>
+            <a class="chip" href="pages/screens/workspace.html">题库工作区</a>
+            <a class="chip" href="pages/screens/question.html">题目页</a>
+            <a class="chip" href="pages/screens/review.html">复习</a>
+            <a class="chip" href="pages/screens/exams.html">模考中心</a>
+            <a class="chip" href="pages/screens/practice.html">练习会话</a>
+            <a class="chip" href="pages/screens/exam.html">模考会话</a>
+            <a class="chip" href="pages/screens/notes.html">资料笔记</a>
+            <a class="chip" href="pages/screens/import.html">导入向导</a>
+            <a class="chip" href="pages/screens/settings.html">设置</a>
+            <a class="chip" href="pages/screens/instance.html">实例管理</a>
+            <a class="chip" href="pages/screens/forbidden.html">无法访问 403</a>
+            <a class="chip" href="pages/flows/practice.html">流程 · 练习</a>
+            <a class="chip" href="pages/flows/exam.html">流程 · 模考</a>
+            <a class="chip" href="pages/flows/review.html">流程 · 复习</a>
+            <a class="chip" href="pages/flows/import.html">流程 · 导入</a>
+            <a class="chip" href="pages/flows/collab.html">流程 · 协作</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="bottomnav" aria-label="底部导航">
+    <a class="bn-item" href="pages/screens/home.html"><svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg>今天</a>
+    <a class="bn-item" href="pages/screens/banks.html"><svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>题库</a>
+    <a class="bn-item" href="pages/screens/review.html"><svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>复习</a>
+    <a class="bn-item" href="pages/screens/exams.html"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>模考</a>
+    <a class="bn-item" href="pages/screens/notes.html"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>资料</a>
+    <a class="bn-item" href="pages/screens/settings.html"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>设置</a>
+  </nav>
+  </div>
+</div>
+
+<script src="assets/icons.js"></script>
+<script src="assets/store.js"></script>
+<script src="assets/spec-boot.js"></script>
+<script>
+(function () {
+  var ROLE_NAMES = { OWNER: '所有者', EDITOR: '编辑者', MEMBER: '成员', VIEWER: '只读' };
+
+  function sync() {
+    var s = window.eeStore;
+    document.getElementById('state-user').textContent = s.user();
+    document.getElementById('state-role').textContent = ROLE_NAMES[s.role()] || s.role();
+    document.getElementById('nav-bank-count').textContent = String(s.banks({ archived: false }).length);
+    document.getElementById('nav-note-count').textContent = String(s.notes().length);
+    document.getElementById('state-banks').textContent = s.banks({ archived: false }).length + ' 个可访问';
+    document.getElementById('state-questions').textContent = s.questions().length + ' 题';
+    document.getElementById('state-notes').textContent = s.notes().length + ' 条';
+    document.getElementById('state-sessions').textContent = s.sessions().length + ' 个';
+    Array.prototype.forEach.call(document.querySelectorAll('#role-seg .segment'), function (b) {
+      b.setAttribute('aria-checked', String(b.getAttribute('data-v') === s.role()));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-seg="theme"] .segment'), function (b) {
+      b.setAttribute('aria-checked', String(b.getAttribute('data-v') === s.settings().theme));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-seg="density"] .segment'), function (b) {
+      b.setAttribute('aria-checked', String(b.getAttribute('data-v') === s.settings().density));
+    });
+    var enter = document.getElementById('btn-enter');
+    var hint = document.getElementById('entry-hint');
+    if (s.isLoggedIn()) {
+      enter.setAttribute('href', 'pages/screens/home.html');
+      enter.innerHTML = '<svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>继续进入产品';
+      hint.textContent = '已登录为 ' + s.user() + '。进行中的会话、导入草稿与设置都还在，直接继续即可。';
+    } else {
+      enter.setAttribute('href', 'pages/screens/login.html?next=pages/screens/home.html');
+      enter.innerHTML = '<svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>进入产品';
+      hint.textContent = '提示：改完设置、建完题库、导入完题目后，去其他页面看看数据是否跟上了——这正是本轮要验收的部分。';
+    }
+  }
+
+  document.getElementById('role-seg').addEventListener('click', function (e) {
+    var b = e.target.closest('.segment');
+    if (!b) return;
+    window.eeStore.setRole(b.getAttribute('data-v'));
+    window.eeToast('已切换为' + (ROLE_NAMES[b.getAttribute('data-v')] || b.getAttribute('data-v')) + '视角，去各页面看权限变化');
+    sync();
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-seg="theme"] .segment'), function (b) {
+    b.addEventListener('click', function () { window.eeStore.setSetting('theme', b.getAttribute('data-v')); sync(); });
+  });
+  document.getElementById('btn-reset').addEventListener('click', function () {
+    window.eeStore.reset();
+    window.eeToast('演示数据已重置为初始状态');
+    sync();
+  });
+
+  window.eeStore.subscribe(sync);
+  sync();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1458 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>控件库 · EasyExam 设计规范</title>
+<link rel="stylesheet" href="../assets/ee.css">
+<style>
+  /* 仅本页文档排版所需：ee.css 未覆盖的容器与栅格；不重新定义令牌与控件 */
+  .doc-page { max-width: 1080px; margin: 0 auto; padding: var(--sp-8) var(--sp-6); }
+  .doc-h2 { font-family: var(--font-serif); font-size: var(--text-2xl); line-height: var(--text-2xl-lh); font-weight: 500; margin: 0; }
+  .doc-h2 .no { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink-4); font-weight: 400; margin-right: var(--sp-3); }
+  .doc-h3 { font-family: var(--font-sans); font-size: var(--text-base); font-weight: 500; color: var(--ink-2); margin: var(--sp-6) 0 0; }
+  .doc-rule { font-size: var(--text-sm); color: var(--ink-2); margin: var(--sp-2) 0 var(--sp-5); max-width: 80ch; }
+  .doc-note-line { font-size: var(--text-xs); color: var(--ink-3); margin: var(--sp-4) 0 0; max-width: 84ch; line-height: var(--text-xs-lh); }
+  .doc-note-line + .doc-note-line { margin-top: var(--sp-2); }
+  .doc-note-line b { color: var(--ink-2); font-weight: 500; }
+  .demo { display: flex; flex-wrap: wrap; gap: var(--sp-5); align-items: flex-start; }
+  .demo-cell { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+  .demo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: var(--sp-5); }
+  .demo-grid.g300 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .menu-anchor { position: relative; display: inline-block; }
+  .box-220 { width: 220px; max-width: 100%; }
+  .pad-0 { padding: 0; }
+  .mt-4 { margin-top: var(--sp-4); }
+  .mt-5 { margin-top: var(--sp-5); }
+  .mb-0 { margin-bottom: 0; }
+  .title-2xl { font-size: var(--text-2xl); line-height: var(--text-2xl-lh); }
+  .demo-col { display: flex; flex-direction: column; gap: var(--sp-4); }
+  .w-45 { width: 45%; } .w-60 { width: 60%; } .w-70 { width: 70%; }
+  .w-75 { width: 75%; } .w-88 { width: 88%; } .w-90 { width: 90%; }
+  .reader-p { margin: 0; font-size: var(--text-md); font-family: var(--font-serif); }
+  .dlg-p { margin: 0; font-size: var(--text-sm); color: var(--ink-2); }
+  .tbl-cap { padding: var(--sp-3) var(--sp-4); font-size: var(--text-xs); color: var(--ink-3); text-align: left; }
+  .doc-foot { border-top: 1px solid var(--line); padding-top: var(--sp-5); }
+  @media (max-width: 640px) {
+    .doc-page { padding: var(--sp-6) var(--sp-4); }
+    /* ee.css 在 ≤640 把 table 改为 block，caption 仍为 table-caption 会被收缩，这里扶正 */
+    .dtable caption { display: block; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">跳到主内容</a>
+
+<main class="doc-page" id="main-content">
+
+  <!-- ==================== 页头 ==================== -->
+  <header class="page-head">
+    <div>
+      <p class="page-eyebrow">02 / EasyExam UI/UX 设计规范</p>
+      <h1 class="page-title">控件库</h1>
+      <p class="page-sub">每一种控件只有一种实现。本章定义全部控件的形态、全部状态与行为边界；新页面不允许创造新控件形态，也不允许用十六进制或内联样式绕过令牌。</p>
+    </div>
+    <div class="page-actions">
+      <button class="btn btn-quiet" type="button" onclick="eeToast('已复制 62 个类名到剪贴板')">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-copy"/></svg>复制类名清单
+      </button>
+      <a class="btn" href="tokens.html">查看设计令牌</a>
+          <a class="btn btn-quiet" href="states.html">状态与外壳</a>
+    </div>
+  </header>
+
+  <!-- ==================== 01 按钮 ==================== -->
+  <section class="section" aria-labelledby="h-btn">
+    <h2 class="doc-h2" id="h-btn"><span class="no">01</span>按钮</h2>
+    <p class="doc-rule">按钮按「一个视口内同一主行动只有一个实心钮」分级：主色实心只给当前视口唯一的主行动，次级动作用描边钮，破坏性动作用危险描边或危险实心，quiet 只用于工具栏与取消。</p>
+
+    <div class="demo">
+      <div class="demo-cell">
+        <span class="hint">.btn 默认 / 描边次级</span>
+        <button class="btn" type="button">开始练习</button>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">.btn.btn-primary · 唯一主行动</span>
+        <button class="btn btn-primary" type="button" onclick="eeToast('已开始到期复习')">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>开始到期复习
+        </button>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">.btn.btn-quiet · 取消 / 工具栏</span>
+        <button class="btn btn-quiet" type="button">取消</button>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">.btn.btn-danger · 破坏性描边</span>
+        <button class="btn btn-danger" type="button" onclick="eeDialog.open('dlg-kill', this)">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-trash"/></svg>斩杀题库
+        </button>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">.btn.btn-danger-solid · 确认破坏</span>
+        <button class="btn btn-danger-solid" type="button" onclick="eeDialog.open('dlg-kill', this)">确认斩杀</button>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">.btn.btn-sm · 行内紧凑</span>
+        <button class="btn btn-sm" type="button" onclick="eeToast('已重做本题')">错题重做</button>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">:disabled · 需附可读原因</span>
+        <button class="btn" type="button" disabled>交卷</button>
+        <span class="hint">题库没有题目，无法开始练习</span>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">加载中 · spinner + 文案</span>
+        <button class="btn" type="button" disabled aria-busy="true"><span class="spinner" aria-hidden="true"></span>正在保存…</button>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">.link-btn · 文字链</span>
+        <button class="link-btn" type="button" onclick="eeToast('已展开全部 24 题')">查看全部 24 题</button>
+      </div>
+    </div>
+
+    <div class="demo mt-5">
+      <div class="demo-cell">
+        <span class="hint">.icon-btn · 32px</span>
+        <span class="demo">
+          <button class="icon-btn" type="button" aria-label="搜索" onclick="eeToast('已聚焦搜索框')"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></button>
+          <button class="icon-btn" type="button" aria-label="筛选" onclick="eeToast('已展开筛选')"><svg class="od-icon" aria-hidden="true"><use href="#i-filter"/></svg></button>
+          <button class="icon-btn" type="button" aria-label="主题" onclick="eeToast('主题切换入口')"><svg class="od-icon" aria-hidden="true"><use href="#i-sun"/></svg></button>
+          <button class="icon-btn" type="button" aria-label="已标记" onclick="eeToast('已切换第 3 题标记')"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg></button>
+          <button class="icon-btn" type="button" aria-label="更多" onclick="eeToast('更多操作见第 11 节菜单')"><svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg></button>
+        </span>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">.icon-btn.sm · 28px</span>
+        <span class="demo">
+          <button class="icon-btn sm" type="button" aria-label="编辑"><svg class="od-icon" aria-hidden="true"><use href="#i-edit"/></svg></button>
+          <button class="icon-btn sm" type="button" aria-label="复制"><svg class="od-icon" aria-hidden="true"><use href="#i-copy"/></svg></button>
+          <button class="icon-btn sm" type="button" aria-label="删除"><svg class="od-icon" aria-hidden="true"><use href="#i-trash"/></svg></button>
+        </span>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">.icon-btn.is-on · 已激活（标记）</span>
+        <button class="icon-btn is-on" type="button" aria-label="取消标记" aria-pressed="true"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg></button>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">.icon-btn:disabled · 附原因</span>
+        <button class="icon-btn" type="button" aria-label="上移" disabled><svg class="od-icon" aria-hidden="true"><use href="#i-chevron-up"/></svg></button>
+        <span class="hint">已在首位，无法上移</span>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">.btn-block · 撑满容器</span>
+        <div class="box-220">
+          <button class="btn btn-primary btn-block" type="button" onclick="eeToast('已提交答案')">提交答案</button>
+        </div>
+      </div>
+    </div>
+
+    <p class="doc-note-line"><b>hover</b>：`.btn:hover` 描边加深为 `--ink-3`、底色 `--surface-2`；`.btn-primary:hover` 用 `--brand-hover`；quiet hover 才显出 `--surface-2` 底与 `--line` 边。状态由 CSS 承担，此处不静态模拟。</p>
+    <p class="doc-note-line"><b>focus</b>：全局 `:focus-visible` 给出 2px `--focus` 焦点环（offset 2px），鼠标点击不显示、键盘导航必显示；禁止移除焦点环。</p>
+    <p class="doc-note-line"><b>规则</b>：一个视口内同一主行动只有一个实心钮；实心钮不并排出现两个；危险实心只出现在确认对话框的确认位。</p>
+  </section>
+
+  <!-- ==================== 02 表单 ==================== -->
+  <section class="section" aria-labelledby="h-form">
+    <h2 class="doc-h2" id="h-form"><span class="no">02</span>表单</h2>
+    <p class="doc-rule">标签常驻可见，不靠占位符代替标签；验证在 blur 之后出错，错误信息必须说清原因与补救办法；禁用必带可读原因。</p>
+
+    <div class="demo-grid g300">
+      <div class="field">
+        <label class="label" for="f-name">题库名称<span class="req">*</span></label>
+        <input class="input" id="f-name" type="text" value="验收题库 1794570360969" placeholder="例如：信息系统项目管理师">
+        <span class="hint">协作者可见的名称，2–40 个字符。</span>
+      </div>
+
+      <div class="field">
+        <label class="label" for="f-focus">题库名称（聚焦）</label>
+        <input class="input" id="f-focus" type="text" value="验收题库 1794570360969">
+        <span class="hint">聚焦时描边转 `--brand` 并带 3px 柔光环（CSS 承担，Tab 可见）。</span>
+      </div>
+
+      <div class="field">
+        <label class="label" for="f-err">题库名称（错误）</label>
+        <input class="input is-error" id="f-err" type="text" value="验收题库 1794570360969！！" aria-invalid="true" aria-describedby="f-err-msg">
+        <span class="field-err" id="f-err-msg">名称不能包含标点符号，请改用中英文、数字或短横线。</span>
+      </div>
+
+      <div class="field">
+        <label class="label" for="f-dis">每日目标题数（禁用）</label>
+        <input class="input" id="f-dis" type="text" value="20" disabled>
+        <span class="hint">模考进行中，编辑已锁定；交卷后可修改。</span>
+      </div>
+
+      <div class="field">
+        <label class="label" for="f-desc">题库简介</label>
+        <textarea class="textarea" id="f-desc" placeholder="一句话说明这个题库覆盖的范围与来源">2026 年上半年信息系统项目管理师真题整理，含案例分析与论文真题。</textarea>
+        <span class="hint">选填，显示在题库卡片次要行。</span>
+      </div>
+
+      <div class="field">
+        <label class="label" for="f-sel">题型</label>
+        <select class="select" id="f-sel">
+          <option>单选题</option>
+          <option selected>多选题</option>
+          <option>判断题</option>
+          <option>案例分析题</option>
+        </select>
+        <span class="hint">筛选条件会进 URL，返回即恢复。</span>
+      </div>
+
+      <div class="field">
+        <label class="label" for="f-sel2">题型（禁用）</label>
+        <select class="select" id="f-sel2" disabled>
+          <option>单选题</option>
+        </select>
+        <span class="hint">题库已有 128 道题，题型不可整体更改。</span>
+      </div>
+
+      <div class="field">
+        <label class="label" for="f-sel3">难度（占位）</label>
+        <select class="select" id="f-sel3">
+          <option value="" selected>请选择难度</option>
+          <option>容易</option>
+          <option>中等</option>
+          <option>困难</option>
+        </select>
+        <span class="hint">首项为空即占位，选中后不保留空值。</span>
+      </div>
+
+      <div class="field">
+        <span class="label">复选 .check</span>
+        <span class="demo">
+          <label class="check"><input type="checkbox">包含已斩杀的题</label>
+          <label class="check"><input type="checkbox" checked>仅看到期题</label>
+          <label class="check"><input type="checkbox" disabled>批量导出（无权限）</label>
+        </span>
+        <span class="hint">禁用项旁给出原因；accent-color 用 `--brand`。</span>
+      </div>
+
+      <div class="field">
+        <label class="label" for="f-search">搜索 .search-box</label>
+        <span class="search-box">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+          <input class="input" id="f-search" type="search" placeholder="搜索题干、选项或解析">
+        </span>
+        <span class="hint">图标绝对定位在左内缩处，输入框左内缩相应加大。</span>
+      </div>
+
+      <div class="field">
+        <span class="label">键帽 .kbd</span>
+        <span class="demo">
+          <span class="kbd">Enter</span><span class="kbd">Space</span><span class="kbd">F</span><span class="kbd">A</span>
+        </span>
+        <span class="hint">等宽字体 + 2px 下边框，模拟物理键帽；用于快捷键说明，不做按钮。</span>
+      </div>
+    </div>
+
+    <p class="doc-note-line"><b>结构</b>：`.field > .label(+.req) + .input/.textarea/.select + .hint/.field-err`；`req` 用 `--bad` 表示必填。</p>
+    <p class="doc-note-line"><b>验证时机</b>：blur 之后才判定并给出 `.is-error` + `.field-err`；输入过程中不报错（不打断），提交时统一复查。</p>
+    <p class="doc-note-line"><b>错误文案</b>：说原因与补救——「名称不能包含标点符号，请改用中英文、数字或短横线」，不写「输入无效」。</p>
+  </section>
+
+  <!-- ==================== 03 分段与页签 ==================== -->
+  <section class="section" aria-labelledby="h-seg">
+    <h2 class="doc-h2" id="h-seg"><span class="no">03</span>分段与页签</h2>
+    <p class="doc-rule">同一组互斥选项用分段（radiogroup 语义，可键盘操作）；视图级多面板切换用页签；chip 只做筛选、不做视图切换。三者的分工不可互换。</p>
+
+    <div class="demo-grid g300">
+      <div class="demo-cell">
+        <span class="hint">.segmented[role=radiogroup] · 可点击切换</span>
+        <div class="segmented" role="radiogroup" aria-label="题目筛选">
+          <button class="segment" type="button" role="radio" aria-checked="true">全部</button>
+          <button class="segment" type="button" role="radio" aria-checked="false">未作答</button>
+          <button class="segment" type="button" role="radio" aria-checked="false">已作答</button>
+          <button class="segment" type="button" role="radio" aria-checked="false" disabled>已标记 0</button>
+        </div>
+        <span class="hint">选中态由 `aria-checked="true"` 承担；禁用项说明原因。</span>
+      </div>
+
+      <div class="demo-cell">
+        <span class="hint">.chip-row + .chip(.count) · 筛选</span>
+        <div class="chip-row">
+          <button class="chip is-on" type="button">单选题<span class="count">86</span></button>
+          <button class="chip" type="button">多选题<span class="count">24</span></button>
+          <button class="chip" type="button">案例分析<span class="count">18</span></button>
+          <button class="chip" type="button">已斩杀<span class="count">7</span></button>
+        </div>
+        <span class="hint">可多选；`.count` 为等宽数字。chip 不承担视图切换。</span>
+      </div>
+    </div>
+
+    <div class="demo-cell mt-5" data-tab-scope>
+      <span class="hint">.tabs + .tab[aria-selected][data-panel] · 真实切换两个面板</span>
+      <div class="tabs" role="tablist" aria-label="题库工作区">
+        <button class="tab" type="button" role="tab" id="tab-q" aria-selected="true" aria-controls="panel-q" data-panel="panel-q">题目<span class="count">128</span></button>
+        <button class="tab" type="button" role="tab" id="tab-s" aria-selected="false" aria-controls="panel-s" data-panel="panel-s">设置</button>
+      </div>
+
+      <div class="panel mt-4" id="panel-q" data-tab-panel="panel-q" role="tabpanel" aria-labelledby="tab-q">
+        <div class="panel-body">
+          <div class="list">
+            <button class="list-row" type="button">
+              <span class="list-main">
+                <span class="list-title">每周一学校开展直播课程，在直播中实时回复学生问题属于（ ）</span>
+                <span class="list-meta">单选题 · 2026-11-13 导入</span>
+              </span>
+              <span class="list-side"><span class="tag ok"><span class="dot"></span>已掌握</span></span>
+            </button>
+            <button class="list-row" type="button">
+              <span class="list-main">
+                <span class="list-title">OSI 的（ ）不适合提供相应的安全服务。</span>
+                <span class="list-meta">单选题 · 2026-11-13 导入</span>
+              </span>
+              <span class="list-side"><span class="tag warn"><span class="dot"></span>薄弱</span></span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel mt-4" id="panel-s" data-tab-panel="panel-s" role="tabpanel" aria-labelledby="tab-s" hidden>
+        <div class="panel-body">
+          <div class="kv">
+            <span class="kv-key">题库名称</span><span class="kv-val">验收题库 1794570360969</span>
+            <span class="kv-key">协作成员</span><span class="kv-val">3 人（1 名管理员、2 名成员）</span>
+            <span class="kv-key">每日目标</span><span class="kv-val">20 题</span>
+          </div>
+        </div>
+        <div class="panel-foot">
+          <span class="hint">设置变更保存后出 toast，不弹原生对话框。</span>
+          <span class="od-spacer"></span>
+          <button class="btn btn-quiet" type="button">取消</button>
+          <button class="btn btn-primary" type="button" onclick="eeToast('已保存')">保存设置</button>
+        </div>
+      </div>
+    </div>
+
+    <p class="doc-note-line"><b>分段</b>：`.segmented > .segment` 点击切 `aria-checked`（spec-boot 已实现）；容器必须带 `role="radiogroup"` 与可访问名称。</p>
+    <p class="doc-note-line"><b>页签</b>：`.tab[data-panel]` + 祖先 `[data-tab-scope]` + 面板 `[data-tab-panel]`，三者齐备才切换；面板数量与 tab 一一对应，不写自定义 tab JS。</p>
+  </section>
+
+  <!-- ==================== 04 标签徽章 ==================== -->
+  <section class="section" aria-labelledby="h-tag">
+    <h2 class="doc-h2" id="h-tag"><span class="no">04</span>标签徽章</h2>
+    <p class="doc-rule">标签只做「分类 + 状态」的轻量标注；状态永远配文字，不只靠颜色——色盲用户与黑白打印都必须能读出含义。</p>
+
+    <div class="demo">
+      <div class="demo-cell">
+        <span class="hint">.tag 五种</span>
+        <span class="demo">
+          <span class="tag plain">草稿</span>
+          <span class="tag brand">复习中</span>
+          <span class="tag ok">已掌握</span>
+          <span class="tag warn">薄弱</span>
+          <span class="tag bad">已斩杀</span>
+        </span>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">.tag + .dot</span>
+        <span class="demo">
+          <span class="tag plain"><span class="dot"></span>未开始</span>
+          <span class="tag brand"><span class="dot"></span>进行中</span>
+          <span class="tag ok"><span class="dot"></span>已完成</span>
+          <span class="tag warn"><span class="dot"></span>待校对</span>
+          <span class="tag bad"><span class="dot"></span>失败</span>
+        </span>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">带图标</span>
+        <span class="demo">
+          <span class="tag ok"><svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg>已保存</span>
+          <span class="tag bad"><svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>超时</span>
+          <span class="tag warn"><svg class="od-icon" aria-hidden="true"><use href="#i-clock"/></svg>剩 5 分钟</span>
+        </span>
+      </div>
+    </div>
+
+    <p class="doc-note-line"><b>用途</b>：`.tag` 用于列表元信息、表格次要列、队列原因；不用于按钮、不用于导航、不承载点击。</p>
+    <p class="doc-note-line"><b>规则</b>：状态永远配文字（「薄弱」「已斩杀」），颜色只是第二通道；`.dot` 只在使用 `.tag` 内部时出现。</p>
+  </section>
+
+  <!-- ==================== 05 面板与页头 ==================== -->
+  <section class="section" aria-labelledby="h-panel">
+    <h2 class="doc-h2" id="h-panel"><span class="no">05</span>面板与页头</h2>
+    <p class="doc-rule">面板承担「一组相关内容的容器」，用 1px 分割线分区而非卡片堆叠；页头表达页面层级与主行动，分区标题表达分区内的内容说明。</p>
+
+    <div class="demo-grid g300">
+      <div class="panel">
+        <div class="panel-head">
+          <h3 class="panel-title">今日队列</h3>
+          <span class="od-spacer"></span>
+          <span class="panel-sub">2026-11-13 · 第 46 周</span>
+          <button class="icon-btn sm" type="button" aria-label="刷新队列" onclick="eeToast('队列已刷新')"><svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+        </div>
+        <div class="panel-body">
+          <div class="stat-row">
+            <div class="stat"><span class="stat-num">12</span><span class="stat-cap">到期复习</span></div>
+            <div class="stat"><span class="stat-num">8</span><span class="stat-cap">错题重做</span></div>
+            <div class="stat"><span class="stat-num">20</span><span class="stat-cap">每日目标</span></div>
+          </div>
+        </div>
+        <div class="panel-foot">
+          <span class="hint">主行动只有一个：开始到期复习。</span>
+          <span class="od-spacer"></span>
+          <button class="btn btn-quiet" type="button">查看计划</button>
+          <button class="btn btn-primary" type="button" onclick="eeToast('已开始到期复习')">开始到期复习</button>
+        </div>
+      </div>
+
+      <div class="demo-cell">
+        <span class="hint">.page-head · eyebrow + title + sub + actions</span>
+        <header class="page-head mb-0">
+          <div>
+            <p class="page-eyebrow">题库 / 验收题库 1794570360969</p>
+            <h3 class="page-title title-2xl">题库工作区</h3>
+            <p class="page-sub">128 道题 · 3 名协作者 · 更新于 2026-11-13</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn btn-quiet" type="button">导入</button>
+            <button class="btn btn-primary" type="button" onclick="eeToast('已新建题目')">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-plus"/></svg>新建题目
+            </button>
+          </div>
+        </header>
+        <span class="hint">.section-head · title + note</span>
+        <div class="section-head mb-0">
+          <h4 class="section-title">最近导入</h4>
+          <span class="section-note">按导入时间倒序，最多 20 条</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="doc-note-line"><b>结构</b>：`.panel > .panel-head(.panel-title) + .panel-body(+.panel-foot)`；页头 `.page-head > (.page-eyebrow + .page-title + .page-sub) + .page-actions`。</p>
+    <p class="doc-note-line"><b>禁止</b>：卡片套卡片、每标题配图标、用渐变或阴影制造层级——分区一律用 1px `--line`。</p>
+  </section>
+
+  <!-- ==================== 06 列表行 ==================== -->
+  <section class="section" aria-labelledby="h-list">
+    <h2 class="doc-h2" id="h-list"><span class="no">06</span>列表行</h2>
+    <p class="doc-rule">列表行是「可点击条目」的唯一实现：主信息在左（标题 + 元信息），状态与动作在右；当前行用 `.is-active` 表达，非交互行用 `.static`。</p>
+
+    <div class="demo-grid g300">
+      <div class="panel">
+        <div class="panel-head"><h3 class="panel-title">.list-row 全部状态</h3></div>
+        <div class="panel-body pad-0">
+          <div class="list">
+            <button class="list-row" type="button">
+              <span class="list-main">
+                <span class="list-title">默认行</span>
+                <span class="list-meta">单选题 · 导入于 2026-11-13</span>
+              </span>
+              <span class="list-side"><span class="tag plain">未作答</span></span>
+            </button>
+            <button class="list-row is-active" type="button" aria-current="true">
+              <span class="list-main">
+                <span class="list-title">当前行 .is-active</span>
+                <span class="list-meta">单选题 · 正在练习</span>
+              </span>
+              <span class="list-side"><span class="tag brand"><span class="dot"></span>进行中</span></span>
+            </button>
+            <button class="list-row dense" type="button">
+              <span class="list-main">
+                <span class="list-title">紧凑行 .dense</span>
+                <span class="list-meta">多选题 · 内缩更小，用于侧栏与抽屉</span>
+              </span>
+              <span class="list-side"><button class="btn btn-sm" type="button" onclick="event.stopPropagation(); eeToast('已重做')">重做</button></span>
+            </button>
+            <div class="list-row static">
+              <span class="list-main">
+                <span class="list-title">静态行 .static</span>
+                <span class="list-meta">不可点击，无 hover 背景</span>
+              </span>
+              <span class="list-side"><span class="hint">只读</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="demo-cell">
+        <span class="hint">.plan-row 计划行</span>
+        <div>
+          <button class="plan-row" type="button">
+            <span class="plan-index">01</span>
+            <span class="list-main">
+              <span class="plan-title">到期复习 · 信息系统项目管理师</span>
+              <span class="plan-meta">12 题 · 约 18 分钟 · FSRS 到期队列</span>
+            </span>
+            <span class="plan-arrow"><svg class="od-icon" aria-hidden="true"><use href="#i-chevron-right"/></svg></span>
+          </button>
+          <button class="plan-row" type="button">
+            <span class="plan-index">02</span>
+            <span class="list-main">
+              <span class="plan-title">错题重做 · 案例分析</span>
+              <span class="plan-meta">8 题 · 约 25 分钟</span>
+            </span>
+            <span class="plan-arrow"><svg class="od-icon" aria-hidden="true"><use href="#i-chevron-right"/></svg></span>
+          </button>
+        </div>
+
+        <span class="hint mt-5">.queue-row 队例行（含 .queue-causes）</span>
+        <div>
+          <div class="queue-row">
+            <span class="list-main">
+              <span class="list-title">范围基准的组成</span>
+              <span class="list-meta">到期 2026-11-12 · 间隔 3 天</span>
+            </span>
+            <span class="queue-causes">
+              <span class="tag bad"><span class="dot"></span>到期</span>
+              <span class="tag warn"><span class="dot"></span>薄弱</span>
+            </span>
+            <span class="list-side"><button class="btn btn-sm" type="button" onclick="eeToast('已开始本题练习')">开始</button></span>
+          </div>
+          <div class="queue-row">
+            <span class="list-main">
+              <span class="list-title">OSI 各层的安全服务</span>
+              <span class="list-meta">到期 2026-11-14 · 间隔 1 天</span>
+            </span>
+            <span class="queue-causes">
+              <span class="tag bad"><span class="dot"></span>到期</span>
+            </span>
+            <span class="list-side"><button class="btn btn-sm" type="button" onclick="eeToast('已开始本题练习')">开始</button></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="doc-note-line"><b>结构</b>：`.list-row > .list-main(.list-title + .list-meta) + .list-side`；`.list-row:hover` 出 `--surface-2` 底，`.is-active` 出 `--brand-soft` 底 + 左侧 3px 品牌条。</p>
+    <p class="doc-note-line"><b>行内动作</b>：行内按钮需阻止冒泡（`event.stopPropagation()`），避免同时触发行点击。</p>
+  </section>
+
+  <!-- ==================== 07 统计与进度 ==================== -->
+  <section class="section" aria-labelledby="h-stat">
+    <h2 class="doc-h2" id="h-stat"><span class="no">07</span>统计与进度</h2>
+    <p class="doc-rule">统计用等宽数字保证列对齐；进度条只有一根 4px 实条，颜色只表达 ok/bad 语义；加载用骨架而非空白或转圈占位整页。</p>
+
+    <div class="demo-grid g300">
+      <div class="demo-cell">
+        <span class="hint">.stat-row + .stat</span>
+        <div class="stat-row">
+          <div class="stat"><span class="stat-num">128</span><span class="stat-cap">题目总数</span></div>
+          <div class="stat"><span class="stat-num">86</span><span class="stat-cap">已掌握</span></div>
+          <div class="stat"><span class="stat-num">7</span><span class="stat-cap">已斩杀</span></div>
+          <div class="stat"><span class="stat-num">12</span><span class="stat-cap">今日到期</span></div>
+        </div>
+      </div>
+
+      <div class="demo-cell">
+        <span class="hint">.progress + .progress-fill</span>
+        <div class="demo-col">
+          <div class="demo-cell">
+            <span class="hint">32% · 默认（brand）</span>
+            <div class="progress"><div class="progress-fill" style="width: 32%"></div></div>
+          </div>
+          <div class="demo-cell">
+            <span class="hint">68% · .ok</span>
+            <div class="progress"><div class="progress-fill ok" style="width: 68%"></div></div>
+          </div>
+          <div class="demo-cell">
+            <span class="hint">91% · .bad（接近上限/超时预警）</span>
+            <div class="progress"><div class="progress-fill bad" style="width: 91%"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="demo-cell">
+        <span class="hint">.skeleton · sk-line × 3 + sk-block</span>
+        <div class="skeleton sk-line w-60"></div>
+        <div class="skeleton sk-line w-90"></div>
+        <div class="skeleton sk-line w-75"></div>
+        <div class="skeleton sk-block mt-4"></div>
+      </div>
+
+      <div class="demo-cell">
+        <span class="hint">.spinner · 局部等待</span>
+        <span class="demo">
+          <span class="spinner" role="status" aria-label="加载中"></span>
+          <span class="hint">16px · 仅用于按钮内或行内短等待；整页加载用骨架。</span>
+        </span>
+      </div>
+    </div>
+
+    <p class="doc-note-line"><b>规则</b>：`.progress-fill` 宽度是唯一允许的内联样式（动态值）；数字一律 `--font-mono`，不用比例字体。</p>
+  </section>
+
+  <!-- ==================== 08 通知与反馈 ==================== -->
+  <section class="section" aria-labelledby="h-notice">
+    <h2 class="doc-h2" id="h-notice"><span class="no">08</span>通知与反馈</h2>
+    <p class="doc-rule">反馈三分法：瞬态结果用 toast（4 秒自动消失）；需要留在屏幕上、用户可能要据以决策的结论用 notice；字段级结果贴在字段旁。`alert()` 与原生 confirm 全站禁用。</p>
+
+    <div class="demo-grid g300">
+      <div class="notice info">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+        <div class="notice-body">
+          <div class="notice-title">导入将继续在后台运行</div>
+          离开本页不会中断任务，完成后在「导入」页签可见。
+          <div class="notice-actions">
+            <button class="btn btn-sm btn-quiet" type="button" onclick="eeToast('已离开本页，任务继续')">离开本页</button>
+            <button class="btn btn-sm" type="button" onclick="eeToast('已查看导入进度')">查看进度</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="notice ok">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg>
+        <div class="notice-body">
+          <div class="notice-title">题库已保存</div>
+          128 道题与 3 名协作者的设置已生效。
+        </div>
+      </div>
+
+      <div class="notice warn">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+        <div class="notice-body">
+          <div class="notice-title">你在此题库为只读</div>
+          成员角色不能编辑题目；复制会生成独立的新题目，学习记录不会复制。
+          <div class="notice-actions">
+            <button class="btn btn-sm" type="button" onclick="eeToast('已申请编辑权限')">申请编辑权限</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="notice bad">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+        <div class="notice-body">
+          <div class="notice-title">题库加载失败</div>
+          网络请求未返回（超时 10 秒）。已保留上次加载的 128 道题。
+          <div class="notice-actions">
+            <button class="btn btn-sm btn-primary" type="button" onclick="eeToast('正在重试加载')">重试</button>
+            <button class="btn btn-sm btn-quiet" type="button">查看详情</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo mt-5">
+      <div class="demo-cell">
+        <span class="hint">toast · 瞬态成功（真实触发）</span>
+        <span class="demo">
+          <button class="btn" type="button" onclick="eeToast('已保存')">保存设置</button>
+          <button class="btn" type="button" onclick="eeToast('已斩杀 1 题')">斩杀题目</button>
+          <button class="btn" type="button" onclick="eeToast('复制失败，请重试', 'bad')">失败态 toast</button>
+        </span>
+      </div>
+    </div>
+
+    <p class="doc-note-line"><b>toast</b>：只调 `eeToast('文案')`，不手写 toast DOM；一次操作只出一条反馈，不叠加。</p>
+    <p class="doc-note-line"><b>notice</b>：四种语义（info/ok/warn/bad）各带图标与标题；带动作的 notice 用 `.notice-actions`，主行动放第一个。</p>
+  </section>
+
+  <!-- ==================== 09 对话框 ==================== -->
+  <section class="section" aria-labelledby="h-dlg">
+    <h2 class="doc-h2" id="h-dlg"><span class="no">09</span>对话框</h2>
+    <p class="doc-rule">全站只有一种对话框：原生 `&lt;dialog&gt;` + `.dlg-*` 三槽结构；尺寸差异只用 `wide` / `narrow`，破坏性确认只用 `danger`。打开：`eeDialog.open('id', this)`；关闭：`data-dlg-close`。</p>
+
+    <div class="demo">
+      <div class="demo-cell">
+        <span class="hint">标准 .dlg</span>
+        <button class="btn" type="button" onclick="eeDialog.open('dlg-std', this)">新建题库</button>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">.dlg.wide · 多列表单</span>
+        <button class="btn" type="button" onclick="eeDialog.open('dlg-wide', this)">导入设置</button>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">.dlg.danger · 不可逆确认</span>
+        <button class="btn btn-danger" type="button" onclick="eeDialog.open('dlg-kill', this)">斩杀题库</button>
+      </div>
+    </div>
+
+    <p class="doc-note-line"><b>初始焦点</b>：打开时聚焦 `[data-autofocus]` 或首个可聚焦元素，不落在关闭钮上。</p>
+    <p class="doc-note-line"><b>退出</b>：Escape 与点击遮罩都等于「取消」；关闭后焦点回到触发按钮。</p>
+    <p class="doc-note-line"><b>未保存保护</b>：取消类关闭（Escape / 遮罩 / 无动作的关闭钮）时，若用户改过表单且没有改回打开时的值，先弹「放弃未保存的更改？」确认——<b>继续编辑</b>回到原对话框（焦点与已填内容都在），<b>放弃更改</b>恢复打开时的值并关闭。程序预填不算未保存；带动作的按钮（`onclick` / `data-dlg-commit`）是提交，不过问。需要整体保护的用 `data-dlg-guard`，明确不保护的用 `data-dlg-noguard`，非表单内容可用 `eeDialog.markDirty(dlg)` 显式标记。</p>
+    <p class="doc-note-line"><b>按钮次序</b>：取消（quiet）· 破坏（danger-solid）· 确认（primary）；从左到右按此序，实心钮只有一个。</p>
+
+    <dialog class="dlg" id="dlg-std" aria-labelledby="dlg-std-t">
+      <div class="dlg-head">
+        <div class="dlg-head-text">
+          <p class="dlg-eyebrow">题库</p>
+          <h2 class="dlg-title" id="dlg-std-t">新建题库</h2>
+        </div>
+        <button class="icon-btn" type="button" aria-label="关闭" data-dlg-close><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="dlg-body">
+        <div class="field">
+          <label class="label" for="dlg-f1">题库名称<span class="req">*</span></label>
+          <input class="input" id="dlg-f1" type="text" data-autofocus placeholder="例如：信息系统项目管理师">
+          <span class="hint">协作者可见；2–40 个字符。</span>
+        </div>
+        <div class="field">
+          <label class="label" for="dlg-f2">简介</label>
+          <textarea class="textarea" id="dlg-f2" placeholder="选填"></textarea>
+        </div>
+      </div>
+      <div class="dlg-foot">
+        <button class="btn btn-quiet" type="button" data-dlg-close>取消</button>
+        <button class="btn btn-primary" type="button" data-dlg-close onclick="eeToast('已新建题库')">新建题库</button>
+      </div>
+    </dialog>
+
+    <dialog class="dlg wide" id="dlg-wide" aria-labelledby="dlg-wide-t">
+      <div class="dlg-head">
+        <div class="dlg-head-text">
+          <p class="dlg-eyebrow">导入</p>
+          <h2 class="dlg-title" id="dlg-wide-t">导入设置</h2>
+        </div>
+        <button class="icon-btn" type="button" aria-label="关闭" data-dlg-close><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="dlg-body">
+        <div class="demo-grid">
+          <div class="field">
+            <label class="label" for="dlg-f3">来源类型</label>
+            <select class="select" id="dlg-f3" data-autofocus>
+              <option selected>PDF 题库</option>
+              <option>表格（CSV / XLSX）</option>
+              <option>纯文本</option>
+            </select>
+            <span class="hint">PDF 走识别校对；表格走字段映射。</span>
+          </div>
+          <div class="field">
+            <label class="label" for="dlg-f4">重复项处理</label>
+            <select class="select" id="dlg-f4">
+              <option selected>导入前逐条校对</option>
+              <option>自动跳过重复</option>
+            </select>
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" checked>导入后自动开始练习</label>
+      </div>
+      <div class="dlg-foot">
+        <button class="btn btn-quiet" type="button" data-dlg-close>取消</button>
+        <button class="btn" type="button" data-dlg-close onclick="eeToast('已存为草稿')">存为草稿</button>
+        <button class="btn btn-primary" type="button" data-dlg-close onclick="eeToast('已开始导入')">开始导入</button>
+      </div>
+    </dialog>
+
+    <dialog class="dlg danger" id="dlg-kill" aria-labelledby="dlg-kill-t">
+      <div class="dlg-head">
+        <div class="dlg-head-text">
+          <p class="dlg-eyebrow">不可逆操作</p>
+          <h2 class="dlg-title" id="dlg-kill-t">斩杀「验收题库 1794570360969」？</h2>
+        </div>
+        <button class="icon-btn" type="button" aria-label="关闭" data-dlg-close><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="dlg-body">
+        <p class="dlg-p">斩杀后的题目不再进入复习队列，学习记录保留。此操作可在复习页撤销，但队列顺序会重置。</p>
+        <div class="notice warn">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+          <div class="notice-body">将影响 3 名协作者的今日队列。</div>
+        </div>
+      </div>
+      <div class="dlg-foot">
+        <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>取消</button>
+        <button class="btn btn-danger-solid" type="button" data-dlg-close onclick="eeToast('已斩杀，可在复习页撤销')">确认斩杀</button>
+      </div>
+    </dialog>
+  </section>
+
+  <!-- ==================== 10 抽屉 ==================== -->
+  <section class="section" aria-labelledby="h-drawer">
+    <h2 class="doc-h2" id="h-drawer"><span class="no">10</span>抽屉</h2>
+    <p class="doc-rule">抽屉承载「不离开当前页的补充内容」：资料阅读器、作答卡、筛选。桌面右侧滑入，≤640px 自动转为底部展开，同一套 DOM。</p>
+
+    <div class="demo">
+      <div class="demo-cell">
+        <span class="hint">资料阅读器</span>
+        <button class="btn" type="button" onclick="openDrawer('drawer-reader', this)">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-book"/></svg>打开资料
+        </button>
+      </div>
+    </div>
+
+    <p class="doc-note-line"><b>行为</b>：打开聚焦抽屉内首个可聚焦元素；Escape、点击遮罩、点「关闭」都退出，并回焦到触发按钮。</p>
+    <p class="doc-note-line"><b>响应式</b>：`width: min(460px, 100vw)`；≤640px 变为 `left/right/bottom: 0`、`max-height: 88dvh` 的底部展开面板，动画切换为 `sheet-in`。</p>
+
+    <div class="drawer-scrim" id="drawer-reader-scrim" hidden onclick="closeDrawer('drawer-reader')"></div>
+    <aside class="drawer" id="drawer-reader" hidden role="dialog" aria-modal="true" aria-labelledby="drawer-reader-t">
+      <div class="drawer-head">
+        <h2 class="drawer-title" id="drawer-reader-t">案例分析答题框架</h2>
+        <button class="icon-btn" type="button" aria-label="关闭" data-drawer-close onclick="closeDrawer('drawer-reader')"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="drawer-body">
+        <p class="reader-p">一、找问题：先读问题清单，再回题干定位事实，把每个问题映射到一个管理领域。</p>
+        <p class="reader-p">二、列要点：每个问题给出 3–5 个要点，先结论后依据，避免只描述现象。</p>
+        <p class="reader-p">三、写补救：针对每个问题给出可执行的纠正动作与责任角色。</p>
+        <div class="kv">
+          <span class="kv-key">来源</span><span class="kv-val">2026 上半年真题复盘笔记</span>
+          <span class="kv-key">更新</span><span class="kv-val">2026-11-09</span>
+          <span class="kv-key">标签</span><span class="kv-val"><span class="tag brand">知识口诀</span></span>
+        </div>
+      </div>
+      <div class="drawer-foot">
+        <span class="od-spacer"></span>
+        <button class="btn btn-quiet" type="button" onclick="closeDrawer('drawer-reader')">关闭</button>
+        <button class="btn btn-primary" type="button" onclick="closeDrawer('drawer-reader'); eeToast('已加入复习队列')">加入复习</button>
+      </div>
+    </aside>
+  </section>
+
+  <!-- ==================== 11 菜单 ==================== -->
+  <section class="section" aria-labelledby="h-menu">
+    <h2 class="doc-h2" id="h-menu"><span class="no">11</span>菜单</h2>
+    <p class="doc-rule">菜单是「一组同上下文动作」的唯一实现：触发器带 `data-menu-trigger`，菜单默认 `hidden`；危险项单独一行并置底，与安全项用 `.menu-sep` 分隔。</p>
+
+    <div class="demo">
+      <div class="demo-cell">
+        <span class="hint">行内「更多」菜单</span>
+        <span class="menu-anchor">
+          <button class="icon-btn" type="button" aria-label="更多操作" aria-haspopup="menu" aria-expanded="false" data-menu-trigger><svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg></button>
+          <div class="menu" role="menu" hidden>
+            <button class="menu-item" type="button" role="menuitem" onclick="eeToast('已进入编辑')"><svg class="od-icon" aria-hidden="true"><use href="#i-edit"/></svg>编辑题目</button>
+            <button class="menu-item" type="button" role="menuitem" onclick="eeToast('已复制题目')"><svg class="od-icon" aria-hidden="true"><use href="#i-copy"/></svg>复制为新题</button>
+            <button class="menu-item" type="button" role="menuitem" onclick="eeToast('已导出 1 题')"><svg class="od-icon" aria-hidden="true"><use href="#i-export"/></svg>导出</button>
+            <button class="menu-item" type="button" role="menuitem" disabled><svg class="od-icon" aria-hidden="true"><use href="#i-archive"/></svg>归档（已归档）</button>
+            <div class="menu-sep" role="separator"></div>
+            <button class="menu-item is-danger" type="button" role="menuitem" onclick="closeAllMenus(); eeDialog.open('dlg-kill', this)"><svg class="od-icon" aria-hidden="true"><use href="#i-trash"/></svg>斩杀本题</button>
+          </div>
+        </span>
+      </div>
+
+      <div class="demo-cell">
+        <span class="hint">账户菜单（含危险项与分隔）</span>
+        <span class="menu-anchor">
+          <button class="btn btn-quiet" type="button" aria-haspopup="menu" aria-expanded="false" data-menu-trigger>
+            <svg class="od-icon" aria-hidden="true"><use href="#i-user"/></svg>accept_admin_1794570360969
+            <svg class="od-icon" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+          </button>
+          <div class="menu" role="menu" hidden>
+            <button class="menu-item" type="button" role="menuitem" onclick="eeToast('已打开账户设置')"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>账户设置</button>
+            <button class="menu-item" type="button" role="menuitem" onclick="eeToast('已打开命令面板')"><svg class="od-icon" aria-hidden="true"><use href="#i-command"/></svg>命令面板<span class="od-spacer"></span><span class="kbd">⌘K</span></button>
+            <div class="menu-sep" role="separator"></div>
+            <button class="menu-item is-danger" type="button" role="menuitem" onclick="closeAllMenus(); eeToast('已退出登录')"><svg class="od-icon" aria-hidden="true"><use href="#i-logout"/></svg>退出登录</button>
+          </div>
+        </span>
+      </div>
+    </div>
+
+    <p class="doc-note-line"><b>键盘</b>：↑ / ↓ 在菜单项间移动（spec-boot 已实现），Escape 关闭并回焦触发器，Tab 移出即关闭。</p>
+    <p class="doc-note-line"><b>指针</b>：点击菜单外部任意处关闭；再次点击触发器切换开闭。菜单项点击后立即关闭，不保留打开态。</p>
+  </section>
+
+  <!-- ==================== 12 表格 ==================== -->
+  <section class="section" aria-labelledby="h-table">
+    <h2 class="doc-h2" id="h-table"><span class="no">12</span>表格</h2>
+    <p class="doc-rule">全站只有一种表格 `.dtable`：桌面为表格，≤640px 同一 DOM 自动转卡片（列名移入 `::before`）；每个 `<td>` 必须带 `data-label`。</p>
+
+    <h3 class="doc-h3">12.1 选择模型</h3>
+    <p class="doc-rule">需要批量操作的表格在第一列放复选框（`.col-check`）。选择集是<b>按题目 ID 的显式集合</b>（`tr[data-row-id]`），不是 DOM 属性——筛选变化不静默丢掉已选条目。</p>
+    <p class="doc-note-line"><b>全选 = 当前筛选结果</b>，不是整个题库：表头复选框只切换当前可见行，被筛掉的行不受影响。</p>
+    <p class="doc-note-line"><b>半选态</b>：可见行选中一部分时，表头复选框为 `indeterminate`。</p>
+    <p class="doc-note-line"><b>跨筛选保留</b>：行离开当前筛选后仍保持选中；计数显示<b>总已选</b>，并额外说明「含 N 条不在当前筛选内」，避免用户以为批量动作只作用于眼前几行。</p>
+    <p class="doc-note-line"><b>清除选择</b>：一个按钮清空整个集合（含不可见行），不需要用户逐行取消。</p>
+    <p class="doc-note-line"><b>锁定行跳过</b>：模考中 / 无权限编辑的行复选框禁用，全选与批量动作一律跳过它们，并说明原因。</p>
+    <p class="doc-note-line"><b>批量动作</b>：未选中任何行时禁用（「清除选择」保持可点），不出现空批量请求。</p>
+
+    <div class="demo" style="margin-bottom:12px">
+      <div class="demo-cell">
+        <span class="hint">筛选演示：切到「困难」后全选，看已选计数如何保留离筛选的行</span>
+        <button class="chip" type="button" id="tbl-filter" aria-pressed="false">只看困难题</button>
+      </div>
+    </div>
+
+    <div class="bulkbar" id="tbl-bulk">
+      <span class="muted">表头复选框 = 全选当前筛选结果</span>
+      <span class="spacer"></span>
+      <span class="muted" id="tbl-count">已选 0 题</span>
+      <button class="btn btn-sm btn-quiet" type="button" id="tbl-clear">清除选择</button>
+      <button class="btn btn-sm" type="button" id="tbl-bulk-act" onclick="eeToast('已批量设分类（演示）')">批量设分类</button>
+    </div>
+
+    <div class="dtable-wrap">
+      <table class="dtable" id="tbl-demo">
+        <caption class="tbl-cap">题库工作区题目表，以下为 4 行示例数据；Q-0103 为锁定行</caption>
+        <thead>
+          <tr>
+            <th scope="col" class="col-check"><input type="checkbox" id="tbl-all-th" aria-label="全选当前筛选结果"></th>
+            <th scope="col">题号</th>
+            <th scope="col">题干</th>
+            <th scope="col">题型</th>
+            <th scope="col">难度</th>
+            <th scope="col" class="col-actions">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr data-row-id="q-0042">
+            <td class="col-check" data-label="选择"><label class="check"><input type="checkbox" aria-label="选择 Q-0042"></label></td>
+            <td class="num" data-label="题号">Q-0042</td>
+            <td data-label="题干">每周一学校开展直播课程，在直播中实时回复学生问题属于（ ）</td>
+            <td data-label="题型">单选题</td>
+            <td data-label="难度"><span class="tag plain">容易</span></td>
+            <td class="col-actions" data-label="操作">
+              <button class="icon-btn sm" type="button" aria-label="编辑" onclick="eeToast('已进入编辑')"><svg class="od-icon" aria-hidden="true"><use href="#i-edit"/></svg></button>
+              <button class="icon-btn sm" type="button" aria-label="复制" onclick="eeToast('已复制题目')"><svg class="od-icon" aria-hidden="true"><use href="#i-copy"/></svg></button>
+            </td>
+          </tr>
+          <tr class="is-selected" data-row-id="q-0057">
+            <td class="col-check" data-label="选择"><label class="check"><input type="checkbox" checked aria-label="选择 Q-0057"></label></td>
+            <td class="num" data-label="题号">Q-0057</td>
+            <td data-label="题干">OSI 的（ ）不适合提供相应的安全服务。</td>
+            <td data-label="题型">单选题</td>
+            <td data-label="难度"><span class="tag warn">中等</span></td>
+            <td class="col-actions" data-label="操作">
+              <button class="icon-btn sm" type="button" aria-label="编辑" onclick="eeToast('已进入编辑')"><svg class="od-icon" aria-hidden="true"><use href="#i-edit"/></svg></button>
+              <button class="icon-btn sm" type="button" aria-label="复制" onclick="eeToast('已复制题目')"><svg class="od-icon" aria-hidden="true"><use href="#i-copy"/></svg></button>
+            </td>
+          </tr>
+          <tr data-row-id="q-0088">
+            <td class="col-check" data-label="选择"><label class="check"><input type="checkbox" aria-label="选择 Q-0088"></label></td>
+            <td class="num" data-label="题号">Q-0088</td>
+            <td data-label="题干">关于范围基准，以下说法不正确的是（ ）。</td>
+            <td data-label="题型">多选题</td>
+            <td data-label="难度"><span class="tag bad">困难</span></td>
+            <td class="col-actions" data-label="操作">
+              <button class="icon-btn sm" type="button" aria-label="编辑" onclick="eeToast('已进入编辑')"><svg class="od-icon" aria-hidden="true"><use href="#i-edit"/></svg></button>
+              <button class="icon-btn sm" type="button" aria-label="复制" onclick="eeToast('已复制题目')"><svg class="od-icon" aria-hidden="true"><use href="#i-copy"/></svg></button>
+            </td>
+          </tr>
+          <tr data-row-id="q-0103" data-locked="1">
+            <td class="col-check" data-label="选择"><label class="check"><input type="checkbox" disabled aria-label="选择 Q-0103（模考中，已锁定）"></label></td>
+            <td class="num" data-label="题号">Q-0103</td>
+            <td data-label="题干">（ ）按照业务功能聚合性进行应用规划，建设与应用组件对应的应用系统。</td>
+            <td data-label="题型">案例分析题</td>
+            <td data-label="难度"><span class="tag warn">中等</span><span class="hint" style="margin-left:6px">模考中，已锁定</span></td>
+            <td class="col-actions" data-label="操作">
+              <button class="icon-btn sm" type="button" aria-label="编辑" onclick="eeToast('已进入编辑')"><svg class="od-icon" aria-hidden="true"><use href="#i-edit"/></svg></button>
+              <button class="icon-btn sm" type="button" aria-label="复制" onclick="eeToast('已复制题目')"><svg class="od-icon" aria-hidden="true"><use href="#i-copy"/></svg></button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="doc-note-line"><b>响应式</b>：≤640px 时 `thead` 隐藏、`tr` 变卡片、列名由 `td::before { content: attr(data-label) }` 呈现；`.col-actions` 移到卡片底部右对齐。因此任何列都不会因窄屏丢失。</p>
+    <p class="doc-note-line"><b>宽表</b>：桌面端超宽时 `.dtable-wrap` 自滚（`overflow: auto`），不撑破页面；表头 `position: sticky` 便于长表浏览。</p>
+  </section>
+
+  <!-- ==================== 13 空态与状态格 ==================== -->
+  <section class="section" aria-labelledby="h-empty">
+    <h2 class="doc-h2" id="h-empty"><span class="no">13</span>空态与状态格</h2>
+    <p class="doc-rule">空态必须说明「为什么空」和「下一步做什么」；加载用骨架；错误可重试且不掩盖已有数据；禁用带原因；无权限用 403 语义说明并给两个出口。</p>
+
+    <div class="demo-grid g300">
+      <div class="empty">
+        <span class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-inbox"/></svg></span>
+        <h3 class="empty-title">这个题库还没有题目</h3>
+        <p class="empty-desc">导入第一批题目后即可开始练习；也支持先建一道题验证流程。</p>
+        <div class="empty-actions">
+          <button class="btn btn-primary" type="button" onclick="eeToast('已打开导入向导')">导入题目</button>
+          <button class="btn btn-quiet" type="button" onclick="eeToast('已新建题目')">新建一道题</button>
+        </div>
+      </div>
+
+      <div class="empty">
+        <span class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></span>
+        <h3 class="empty-title">没有匹配「范围基准」的题目</h3>
+        <p class="empty-desc">当前筛选：单选题 · 未斩杀。可以清空筛选，或换个关键词再试。</p>
+        <div class="empty-actions">
+          <button class="btn" type="button" onclick="eeToast('已清空筛选')">清空筛选</button>
+        </div>
+      </div>
+
+      <div class="empty">
+        <span class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg></span>
+        <h3 class="empty-title">你不在这个题库里（403）</h3>
+        <p class="empty-desc">需要该题库的管理员把你加为协作者；或者先回到你可见的题库列表。</p>
+        <div class="empty-actions">
+          <button class="btn btn-primary" type="button" onclick="eeToast('已返回来源页')">返回来源页</button>
+          <button class="btn btn-quiet" type="button" onclick="eeToast('已回到题库列表')">返回题库列表</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-grid g300 mt-5">
+      <div class="demo-cell">
+        <span class="hint">加载骨架</span>
+        <div class="skeleton sk-line w-45"></div>
+        <div class="skeleton sk-line w-88"></div>
+        <div class="skeleton sk-line w-70"></div>
+        <div class="skeleton sk-block mt-4"></div>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">错误 + 重试</span>
+        <div class="notice bad">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+          <div class="notice-body">
+            <div class="notice-title">题目加载失败</div>
+            请求超时（10 秒）。骨架保留，重试不会丢失已加载内容。
+            <div class="notice-actions">
+              <button class="btn btn-sm btn-primary" type="button" onclick="eeToast('正在重试')">重试</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">禁用 + 原因</span>
+        <button class="btn" type="button" disabled>交卷</button>
+        <span class="hint">还有 3 题未作答，全部作答或标记后即可交卷。</span>
+      </div>
+    </div>
+
+    <p class="doc-note-line"><b>规则</b>：空态 `.empty > .empty-mark + .empty-title + .empty-desc + .empty-actions`；说明为什么空 + 下一步 CTA，不用「暂无数据」四个字打发。</p>
+    <p class="doc-note-line"><b>三种失败分开</b>：网络/装载失败（可重试，保留骨架）、题库真的没题（空态 + 去导入）、会话已结束（进报告）——三者文案与出口不同。</p>
+  </section>
+
+  <!-- ==================== 14 答题控件 ==================== -->
+  <section class="section" aria-labelledby="h-quiz">
+    <h2 class="doc-h2" id="h-quiz"><span class="no">14</span>答题控件（学习域）</h2>
+    <p class="doc-rule">选项是唯一作答入口：选中、正确、错误三态用描边与底色表达，键帽 `A–D` 固定；评级四钮在交卷/判定后出现，答错时 Again 预选。</p>
+
+    <div class="demo-grid g300">
+      <div class="demo-cell">
+        <span class="hint">.opt 四种状态</span>
+        <div>
+          <button class="opt" type="button">
+            <span class="opt-key">A</span>互动沟通
+          </button>
+          <button class="opt is-selected" type="button">
+            <span class="opt-key">B</span>推式沟通<span class="opt-mark">已选</span>
+          </button>
+          <button class="opt is-correct" type="button" disabled>
+            <span class="opt-key">A</span>互动沟通<span class="opt-mark">标准答案</span>
+          </button>
+          <button class="opt is-wrong" type="button" disabled>
+            <span class="opt-key">B</span>推式沟通<span class="opt-mark">你的选择</span>
+          </button>
+        </div>
+        <span class="hint">判定后选项禁用（`:disabled`），不再接受改答案。</span>
+      </div>
+
+      <div class="demo-cell">
+        <span class="hint">可交互选择（点击切换 is-selected）</span>
+        <div data-opt-group="osi-layer">
+          <button class="opt" type="button">
+            <span class="opt-key">A</span>传输层
+          </button>
+          <button class="opt" type="button">
+            <span class="opt-key">B</span>会话层
+          </button>
+          <button class="opt" type="button">
+            <span class="opt-key">C</span>网络层
+          </button>
+        </div>
+        <span class="hint">选项为单选；键盘 A–D 直接选中（见 15 节）。</span>
+      </div>
+
+      <div class="demo-cell">
+        <span class="hint">.sheet-grid + .sheet-cell 作答卡</span>
+        <div class="sheet-grid">
+          <button class="sheet-cell is-answered" type="button">1</button>
+          <button class="sheet-cell is-answered" type="button">2</button>
+          <button class="sheet-cell is-current" type="button" aria-current="true">3</button>
+          <button class="sheet-cell" type="button">4</button>
+          <button class="sheet-cell is-flagged" type="button" aria-label="第 5 题，已标记">5</button>
+          <button class="sheet-cell is-answered is-flagged" type="button">6</button>
+          <button class="sheet-cell" type="button">7</button>
+          <button class="sheet-cell" type="button">8</button>
+          <button class="sheet-cell is-answered" type="button">9</button>
+          <button class="sheet-cell" type="button">10</button>
+        </div>
+        <span class="hint">已作答 = 品牌实心；当前题 = 焦点轮廓；旗标 = 底部 3px `--flag` 条。点击格子切换当前题。</span>
+      </div>
+
+      <div class="demo-cell">
+        <span class="hint">FSRS 评级四钮（答错时 Again 预选）</span>
+        <div class="demo">
+          <button class="btn btn-danger" type="button" aria-pressed="true">Again · 1 天后</button>
+          <button class="btn" type="button">Hard</button>
+          <button class="btn btn-primary" type="button">Good</button>
+          <button class="btn" type="button">Easy</button>
+        </div>
+        <span class="hint">Again=1 天后、Hard=按卡片、Good/Easy=按稳定性延长；不承诺分钟级间隔。</span>
+      </div>
+
+      <div class="demo-cell">
+        <span class="hint">.timer 计时（含 .low）</span>
+        <span class="demo">
+          <span class="timer">18:42</span>
+          <span class="timer low">02:15</span>
+        </span>
+        <span class="hint">剩 5 分钟以内转 `--bad` 并配文字提示，不只靠变色。</span>
+      </div>
+    </div>
+
+    <p class="doc-note-line"><b>规则</b>：`.opt(.opt-key + 文本 + .opt-mark)` + `.is-selected/.is-correct/.is-wrong`；未作答时提交禁用并说明「请先作答」。</p>
+  </section>
+
+  <!-- ==================== 15 快捷键与帮助 ==================== -->
+  <section class="section" aria-labelledby="h-key">
+    <h2 class="doc-h2" id="h-key"><span class="no">15</span>快捷键与帮助</h2>
+    <p class="doc-rule">快捷键只覆盖四个高频动作，且必须在界面可见处列出；浮层打开时快捷键统一挂起（仅放行 Escape）。</p>
+
+    <div class="demo-grid g300">
+      <div class="demo-cell">
+        <span class="hint">练习会话快捷键</span>
+        <div class="kv">
+          <span class="kv-key">选择选项</span><span class="kv-val"><span class="kbd">A</span> – <span class="kbd">D</span></span>
+          <span class="kv-key">提交答案</span><span class="kv-val"><span class="kbd">Enter</span></span>
+          <span class="kv-key">下一题</span><span class="kv-val"><span class="kbd">Space</span></span>
+          <span class="kv-key">标记本题</span><span class="kv-val"><span class="kbd">F</span></span>
+        </div>
+      </div>
+
+      <div class="demo-cell">
+        <span class="hint">全局快捷键</span>
+        <div class="kv">
+          <span class="kv-key">命令面板</span><span class="kv-val"><span class="kbd">Ctrl</span> + <span class="kbd">K</span> / <span class="kbd">⌘</span> + <span class="kbd">K</span></span>
+          <span class="kv-key">关闭浮层</span><span class="kv-val"><span class="kbd">Esc</span></span>
+          <span class="kv-key">菜单导航</span><span class="kv-val"><span class="kbd">↑</span> <span class="kbd">↓</span></span>
+          <span class="kv-key">跳到主内容</span><span class="kv-val"><span class="kbd">Tab</span> 首次聚焦</span>
+        </div>
+      </div>
+
+      <div class="demo-cell">
+        <span class="hint">帮助入口</span>
+        <span class="demo">
+          <button class="btn btn-quiet" type="button" onclick="eeToast('已打开快捷键帮助')">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-command"/></svg>快捷键帮助
+          </button>
+          <span class="kbd">?</span>
+        </span>
+        <span class="hint">帮助浮层可用 Escape 关闭；打开期间 A–D / Space / F 不生效。</span>
+      </div>
+    </div>
+
+    <p class="doc-note-line"><b>可见性</b>：命令面板入口旁必须展示 `<span class="kbd">⌘K</span>`；练习会话在右栏或抽屉内常驻快捷键图例，不因窄屏消失。</p>
+  </section>
+
+    <!-- ==================== 17 共享布局模式 ==================== -->
+  <section class="section" aria-labelledby="h-shared">
+    <h2 class="doc-h2" id="h-shared"><span class="no">17</span>共享布局模式</h2>
+    <p class="doc-rule">这些是跨屏复用的布局与工具类，唯一定义在 <code class="mono">assets/ee.css §15</code>。<b>屏幕的 <code class="mono">&lt;style&gt;</code> 块里不得再写一遍</b>；本页只是把它们展示出来。八态格栅、流程页骨架、菜单锚点、间距工具都属此列。</p>
+
+    <h3 class="doc-h3">八态格栅（每个产品屏的「状态」分区都用它）</h3>
+    <div class="demo">
+      <div class="demo-cell" style="flex:1 1 100%">
+        <span class="hint">.state-grid &gt; .state-cell（+ .state-note 说明行）——自动适配列数，容器窄于 300px 也不再溢出</span>
+        <div class="state-grid">
+          <div class="state-cell">
+            <p class="rule-label" style="margin:0">空</p>
+            <div class="panel"><div class="panel-body"><p class="hint" style="margin:0">.empty：为什么空 + 下一步 CTA</p></div></div>
+          </div>
+          <div class="state-cell">
+            <p class="rule-label" style="margin:0">加载</p>
+            <div class="panel"><div class="panel-body"><p class="hint" style="margin:0">.skeleton：与真实内容同构</p></div></div>
+          </div>
+          <div class="state-cell">
+            <p class="rule-label" style="margin:0">错误</p>
+            <div class="panel"><div class="panel-body"><p class="hint" style="margin:0">.notice.bad + 可读原因 + 重试</p></div></div>
+          </div>
+          <div class="state-cell">
+            <p class="rule-label" style="margin:0">禁用</p>
+            <div class="panel"><div class="panel-body"><p class="hint" style="margin:0">disabled + .hint 原因，入口不隐藏</p></div></div>
+          </div>
+        </div>
+        <p class="state-note">完整八态（含无权限两变体、冲突、未配置、离线）见 <a class="link-btn" href="states.html">状态与外壳</a>。</p>
+      </div>
+    </div>
+
+    <h3 class="doc-h3">流程页骨架（pages/flows/*.html 统一用）</h3>
+    <div class="demo">
+      <div class="demo-cell" style="flex:1 1 100%">
+        <span class="hint">.doc-page &gt; .flow-head(.flow-eyebrow + .flow-title + .flow-sub) + .flow-stepbar(.steps) + .flow-stage + .flow-foot(.flow-note + .flow-actions)</span>
+        <div class="doc-page" style="border:1px dashed var(--line);padding:var(--sp-4);max-width:none">
+          <div class="flow-head">
+            <div>
+              <p class="flow-eyebrow">流程 · 第 1 步 / 共 8 步</p>
+              <h4 class="flow-title" style="margin:0">练习闭环</h4>
+              <p class="flow-sub">一句话说清这一步要证明什么。</p>
+            </div>
+            <div class="flow-actions"><button class="btn btn-sm" type="button">上一步</button></div>
+          </div>
+          <div class="flow-stepbar"><div class="steps"><span class="step is-on"><span class="step-n">1</span><span class="step-name">开始</span></span><span class="step-line"></span><span class="step"><span class="step-n">2</span><span class="step-name">作答</span></span></div></div>
+          <div class="flow-stage"><p class="hint" style="margin:0">.flow-stage：本步主体内容</p></div>
+          <div class="flow-foot"><p class="flow-note">左侧放说明，右侧放动作。</p><div class="flow-actions"><button class="btn btn-primary btn-sm" type="button">下一步</button></div></div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="doc-h3">工具类</h3>
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <caption>间距与锚点工具（ee.css §15 唯一定义）</caption>
+        <thead><tr><th scope="col">类</th><th scope="col">作用</th></tr></thead>
+        <tbody>
+          <tr><td data-label="类"><code class="mono">.mt-4</code> / <code class="mono">.mt-5</code> / <code class="mono">.mb-4</code></td><td data-label="作用">间距微调，值走令牌；不要再写 <code class="mono">style="margin-top:16px"</code></td></tr>
+          <tr><td data-label="类"><code class="mono">.menu-anchor</code></td><td data-label="作用">下拉菜单的定位容器；挂 <code class="mono">[data-menu-trigger]</code> 的按钮必须是它的子元素</td></tr>
+          <tr><td data-label="类"><code class="mono">.sheet-legend</code></td><td data-label="作用">作答卡图例（已答 / 未答 / 当前 / 标记），形状 + 颜色双编码</td></tr>
+          <tr><td data-label="类"><code class="mono">.doc-page</code></td><td data-label="作用">文档与流程页的纸面容器，宽 1120px、居中、四档自适应</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ==================== 16 命令面板 ==================== -->
+  <section class="section" aria-labelledby="h-cmd">
+    <h2 class="doc-h2" id="h-cmd"><span class="no">16</span>命令面板</h2>
+    <p class="doc-rule">全产品唯一的跨页直达通道，用来缩短高频路径，不是又一个导航。无权限的命令<b>置灰并说明原因</b>，不隐藏；空结果要给出可行提示，不留空列表。完整行为（分组权重、快捷键、移动端变体）见<a class="link-btn" href="states.html">状态与外壳</a>。</p>
+
+    <div class="demo">
+      <div class="demo-cell">
+        <span class="hint">桌面形态：居中面板，快捷键打开</span>
+        <button class="btn" type="button" onclick="openCmd(this)">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-command"/></svg>搜索页面、命令或设置
+          <span class="kbd">Cmd K</span>
+        </button>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">命令的三种内容</span>
+        <div class="panel"><div class="panel-body">
+          <p class="hint" style="margin:0">跳页：今天 / 题库工作区 / 学习档案 / 模考中心</p>
+          <p class="hint" style="margin:0">对当前对象执行：归档本题 / 标为薄弱 / 导出题库</p>
+          <p class="hint" style="margin:0">改全局设置：暗色 / 配色 / 语言 / 密度</p>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="cmd-host" id="cmd-host" hidden>
+      <div class="cmd-scrim" data-cmd-close></div>
+      <div class="cmd-panel" role="dialog" aria-modal="true" aria-label="命令面板">
+        <div class="cmd-input-row">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+          <input class="cmd-input" id="cmd-input" type="text" placeholder="搜索页面、命令或设置" autocomplete="off">
+          <span class="cmd-kbd">Esc</span>
+        </div>
+        <ul class="cmd-list" id="cmd-list" role="listbox"></ul>
+        <div class="cmd-foot"><span class="kbd">上</span><span class="kbd">下</span> 移动 · <span class="kbd">Enter</span> 执行 · <span class="kbd">Esc</span> 关闭</div>
+      </div>
+    </div>
+  </section>
+
+<footer class="section doc-foot">
+    <p class="hint mb-0">本页覆盖控件形态与状态。命令面板、通知操作行、作答卡、答题选项、计划行、计时器、批量条等学习域控件在 <code class="mono">assets/ee.css</code> 有完整定义。八态契约、命令面板行为、快捷键、同步态、URL 状态契约与跨端断点见<a class="link-btn" href="states.html">状态与外壳</a>；构建合同见 <code class="mono">CONTRACT.md</code>（v2）。</p>
+  </footer>
+
+
+</main>
+
+<script src="../assets/icons.js"></script>
+<script src="../assets/spec-boot.js"></script>
+<script>
+/* ==================== 本页交互（仅演示性：选中态、抽屉、菜单） ==================== */
+
+/* 抽屉：开 / 关 / Escape / 遮罩 */
+function openDrawer(id, trigger) {
+  var d = document.getElementById(id);
+  var s = document.getElementById(id + '-scrim');
+  if (!d) return;
+  d._trigger = trigger || document.activeElement;
+  if (s) s.hidden = false;
+  d.hidden = false;
+  var f = d.querySelector('[data-autofocus]') || d.querySelector('button, [href], input, select, textarea');
+  if (f) f.focus();
+}
+function closeDrawer(id) {
+  var d = document.getElementById(id);
+  var s = document.getElementById(id + '-scrim');
+  if (!d) return;
+  d.hidden = true;
+  if (s) s.hidden = true;
+  var t = d._trigger;
+  if (t && t.isConnected) t.focus();
+}
+document.addEventListener('keydown', function (e) {
+  if (e.key !== 'Escape') return;
+  var d = document.querySelector('.drawer:not([hidden])');
+  if (d) closeDrawer(d.id);
+  closeAllMenus();
+});
+
+/* 菜单：data-menu-trigger 切换开闭，并同步 aria-expanded */
+function closeAllMenus() {
+  document.querySelectorAll('.menu').forEach(function (m) { m.hidden = true; });
+  document.querySelectorAll('[data-menu-trigger]').forEach(function (t) { t.setAttribute('aria-expanded', 'false'); });
+}
+document.addEventListener('click', function (e) {
+  var trig = e.target.closest ? e.target.closest('[data-menu-trigger]') : null;
+  var menu = trig ? trig.parentElement.querySelector('.menu') : null;
+  closeAllMenus();
+  if (trig && menu) {
+    menu.hidden = !menu.hidden;
+    trig.setAttribute('aria-expanded', String(!menu.hidden));
+    if (!menu.hidden) {
+      var f = menu.querySelector('.menu-item:not(:disabled)');
+      if (f) f.focus();
+    }
+  }
+});
+
+/* chip 筛选：多选切换 is-on */
+document.addEventListener('click', function (e) {
+  var c = e.target.closest ? e.target.closest('.chip') : null;
+  if (c) c.classList.toggle('is-on');
+});
+
+/* 选项：单选切换 is-selected */
+document.addEventListener('click', function (e) {
+  var o = e.target.closest ? e.target.closest('[data-opt-group] .opt') : null;
+  if (!o || o.disabled) return;
+  var g = o.closest('[data-opt-group]');
+  g.querySelectorAll('.opt').forEach(function (x) { x.classList.remove('is-selected'); });
+  o.classList.add('is-selected');
+});
+
+/* 作答卡：点击切换当前题 */
+document.addEventListener('click', function (e) {
+  var c = e.target.closest ? e.target.closest('.sheet-grid .sheet-cell') : null;
+  if (!c) return;
+  var g = c.closest('.sheet-grid');
+  g.querySelectorAll('.sheet-cell').forEach(function (x) { x.classList.remove('is-current'); x.removeAttribute('aria-current'); });
+  c.classList.add('is-current');
+  c.setAttribute('aria-current', 'true');
+});
+
+/* ==================== 12.1 表格选择模型（T7）====================
+   选择集 = 按 data-row-id 的显式集合：筛选变化不丢弃已选条目；
+   全选只作用于当前筛选结果（可见行）；锁定行（data-locked）一律跳过。 */
+(function () {
+  var table = document.getElementById('tbl-demo');
+  if (!table) return;
+  var all = document.getElementById('tbl-all-th');
+  var count = document.getElementById('tbl-count');
+  var clear = document.getElementById('tbl-clear');
+  var bulk = document.getElementById('tbl-bulk-act');
+  var filter = document.getElementById('tbl-filter');
+  var rows = Array.prototype.slice.call(table.querySelectorAll('tbody tr[data-row-id]'));
+  function rowCb(r) { return r.querySelector('.col-check input[type=checkbox]'); }
+  function locked(r) { return r.getAttribute('data-locked') === '1'; }
+  function visible() { return rows.filter(function (r) { return !r.hidden; }); }
+  function selected() { return rows.filter(function (r) { var cb = rowCb(r); return cb && cb.checked; }); }
+  function sync() {
+    var vis = visible().filter(function (r) { return !locked(r); });
+    var sel = selected();
+    var offFilter = sel.filter(function (r) { return r.hidden; }).length;
+    count.textContent = '已选 ' + sel.length + ' 题' + (offFilter ? '（含 ' + offFilter + ' 条不在当前筛选内）' : '');
+    if (vis.length === 0) { all.checked = false; all.indeterminate = false; }
+    else {
+      var n = vis.filter(function (r) { return rowCb(r).checked; }).length;
+      all.checked = n === vis.length;
+      all.indeterminate = n > 0 && n < vis.length;
+    }
+    if (bulk) bulk.disabled = sel.length === 0;
+  }
+  rows.forEach(function (r) {
+    var cb = rowCb(r);
+    if (!cb || locked(r)) return;
+    cb.addEventListener('change', function () {
+      r.classList.toggle('is-selected', cb.checked);
+      sync();
+    });
+  });
+  all.addEventListener('change', function () {
+    var on = all.checked;
+    visible().forEach(function (r) {
+      if (locked(r)) return;
+      var cb = rowCb(r);
+      if (cb) cb.checked = on;
+      r.classList.toggle('is-selected', on);
+    });
+    sync();
+  });
+  if (clear) clear.addEventListener('click', function () {
+    rows.forEach(function (r) {
+      var cb = rowCb(r);
+      if (cb && !locked(r)) cb.checked = false;
+      r.classList.remove('is-selected');
+    });
+    sync();
+  });
+  if (filter) filter.addEventListener('click', function () {
+    var on = filter.getAttribute('aria-pressed') !== 'true';
+    filter.setAttribute('aria-pressed', String(on));
+    filter.classList.toggle('is-on', on);
+    rows.forEach(function (r) {
+      r.hidden = on && !/困难/.test(r.querySelector('td[data-label="难度"]').textContent);
+    });
+    sync();
+  });
+  sync();
+})();
+
+/* ==================== 命令面板 ==================== */
+(function () {
+  var host = document.getElementById('cmd-host');
+  var input = document.getElementById('cmd-input');
+  var list = document.getElementById('cmd-list');
+  var lastTrigger = null;
+  if (!host) return;
+  var CMDS = [
+    { g: '今天', t: '继续上次练习', d: '还有 5 题到期', i: 'play' },
+    { g: '今天', t: '开始今日复习', d: '待复习 5 · 错题 12', i: 'review' },
+    { g: '转到', t: '题库工作区', d: '验收题库 1794570360969', i: 'library' },
+    { g: '转到', t: '学习档案与趋势', d: '最近 7 天正确率', i: 'chart' },
+    { g: '转到', t: '模考中心', d: '2 个考试档案', i: 'exam' },
+    { g: '转到', t: '资料库', d: '18 条笔记', i: 'note' },
+    { g: '转到', t: '设置', d: '账户 / 偏好 / 外观 / AI', i: 'settings' },
+    { g: '对当前对象执行', t: '归档本题', d: '归档后不再进入复习集合', i: 'archive', off: '需要管理员' },
+    { g: '对当前对象执行', t: '标为薄弱', d: '进入薄弱视图', i: 'flag' },
+    { g: '对当前对象执行', t: '导出题库', d: '导出为 JSON', i: 'export' },
+    { g: '设置', t: '切换暗色', d: '当前：亮色', i: 'moon' },
+    { g: '设置', t: '切换配色', d: 'editorial / gruvbox / everforest / catppuccin', i: 'sun' },
+    { g: '设置', t: '切换语言', d: '中文 / English', i: 'globe' }
+  ];
+  var active = 0, filtered = CMDS.slice();
+  function render() {
+    list.innerHTML = '';
+    if (!filtered.length) {
+      var e = document.createElement('li');
+      e.className = 'cmd-empty';
+      e.textContent = '没有匹配的页面或命令';
+      list.appendChild(e);
+      var h = document.createElement('li');
+      h.className = 'cmd-empty';
+      h.style.paddingTop = '0';
+      h.innerHTML = '试试：<b>复习</b>、<b>导出题库</b>、<b>切换暗色</b>';
+      list.appendChild(h);
+      return;
+    }
+    var lastG = null;
+    filtered.forEach(function (c, idx) {
+      if (c.g !== lastG) {
+        lastG = c.g;
+        var h = document.createElement('li');
+        h.className = 'rule-label';
+        h.style.padding = 'var(--sp-3) var(--sp-4) var(--sp-1)';
+        h.textContent = c.g;
+        list.appendChild(h);
+      }
+      var li = document.createElement('li');
+      li.className = 'cmd-item' + (idx === active ? ' is-on' : '');
+      li.setAttribute('role', 'option');
+      li.innerHTML = '<svg class="od-icon" aria-hidden="true"><use href="#i-' + c.i + '"/></svg>' +
+        '<span style="flex:1 1 auto;min-width:0">' + c.t +
+        '<span class="hint" style="display:block;margin:0">' + c.d + '</span></span>' +
+        (c.off ? '<span class="tag plain" style="flex:none">' + c.off + '</span>' : '');
+      if (c.off) li.style.opacity = '.55';
+      li.addEventListener('click', function () {
+        if (c.off) { eeToast('需要管理员角色：' + c.t); return; }
+        close();
+        eeToast('已执行：' + c.t);
+      });
+      list.appendChild(li);
+    });
+  }
+  function filter(q) {
+    q = (q || '').trim().toLowerCase();
+    filtered = !q ? CMDS.slice() : CMDS.filter(function (c) {
+      return (c.t + ' ' + c.d + ' ' + c.g).toLowerCase().indexOf(q) >= 0;
+    });
+    active = 0;
+    render();
+  }
+  function open(trigger) { lastTrigger = trigger || null; host.hidden = false; input.value = ''; filter(''); input.focus(); }
+  function close() { host.hidden = true; if (lastTrigger && lastTrigger.focus) lastTrigger.focus(); }
+  window.openCmd = open;
+  host.addEventListener('click', function (e) { if (e.target.hasAttribute('data-cmd-close')) close(); });
+  input.addEventListener('input', function () { filter(input.value); });
+  document.addEventListener('keydown', function (e) {
+    var k = (e.key || '').toLowerCase();
+    if (host.hidden) {
+      if ((e.metaKey || e.ctrlKey) && k === 'k') { e.preventDefault(); open(document.activeElement); }
+      return;
+    }
+    if (e.key === 'Escape') { e.preventDefault(); close(); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); active = Math.min(active + 1, filtered.length - 1); render(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, 0); render(); }
+  });
+})();
+</script>
+</body>
+</html>

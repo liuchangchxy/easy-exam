@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>命令面板 · 易考宝</title>
+<link rel="stylesheet" href="../../assets/ee.css">
+<style>/* 本屏特有：命令面板浮层（ee.css 未覆盖；沿用真实产品的 cmd-palette 结构，全部走令牌） */
+  .cmd-palette-backdrop{ 
+    position: fixed; inset: 0; z-index: 200;
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: var(--sp-9) var(--sp-4) var(--sp-4);
+    background: color-mix(in srgb, var(--d-spine) 55%, transparent);
+   }
+.cmd-palette{ 
+    width: min(100%, 600px); max-height: 74dvh;
+    display: flex; flex-direction: column; overflow: hidden;
+    background: var(--surface); border: 1px solid var(--line-strong);
+    border-radius: var(--r-md); box-shadow: var(--shadow-2);
+   }
+.cmd-search-row{  display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-4); border-bottom: 1px solid var(--line);  }
+.cmd-search-row .od-icon{  --od-icon-size: 16px; color: var(--ink-3); flex: none;  }
+.cmd-input{  flex: 1 1 auto; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--text-md);  }
+.cmd-input::placeholder{  color: var(--ink-4);  }
+.cmd-list{  overflow-y: auto; padding: var(--sp-2); display: flex; flex-direction: column;  }
+.cmd-group{  padding: var(--sp-3) var(--sp-3) var(--sp-1); font-size: var(--text-xs); color: var(--ink-4); letter-spacing: .09em;  }
+.cmd-item{  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-2) var(--sp-3); border-left: 2px solid transparent; border-radius: var(--r-sm); cursor: pointer;  }
+.cmd-item.is-active{  background: var(--surface-2); border-left-color: var(--brand);  }
+.cmd-item-left{  display: flex; align-items: center; gap: var(--sp-3); flex: 1 1 auto; min-width: 0;  }
+.cmd-item-left .od-icon{  --od-icon-size: 15px; color: var(--ink-3); flex: none;  }
+.cmd-item.is-active .cmd-item-left .od-icon{  color: var(--brand);  }
+.cmd-item-info{  display: flex; flex-direction: column; gap: 1px; min-width: 0;  }
+.cmd-item-title{  font-size: var(--text-sm); color: var(--ink);  }
+.cmd-item-desc{  font-size: var(--text-xs); color: var(--ink-3);  }
+.cmd-item-right{  display: flex; align-items: center; gap: var(--sp-3); flex: none;  }
+.cmd-count{  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-4);  }
+.cmd-empty{  padding: var(--sp-7) var(--sp-4); text-align: center; color: var(--ink-4); font-size: var(--text-sm);  }
+.cmd-foot{  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-2) var(--sp-4); border-top: 1px solid var(--line); background: var(--surface-2); font-size: var(--text-xs); color: var(--ink-3);  }
+.cmd-hints{  display: flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap;  }
+.cmd-footer-tag{  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-4);  }
+.tb-search{  max-width: 220px;  }
+.visually-hidden{  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;  }
+@media (max-width: 640px){
+    .cmd-palette-backdrop { padding-top: var(--sp-6); }
+    .cmd-footer-tag { display: none; }
+    .cmd-count { display: none; }
+  }</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">跳到主内容</a>
+
+<!-- ============ 背景：简化的今天页 ============ -->
+<div class="app-shell">
+  <aside class="sidebar">
+    <button type="button" class="side-brand">
+      <span class="brand-mark serif">易</span>
+      <span class="brand-text">
+        <span class="brand-name">易考宝</span>
+        <span data-i18n="shell.brand.sub" class="brand-sub">私人学习档案</span>
+      </span>
+    </button>
+    <div data-i18n="shell.group.learn" class="side-group-label">学习</div>
+    <nav class="side-nav" aria-label="学习导航">
+      <button type="button" class="nav-item is-active" aria-current="page"><svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg><span class="nav-label" data-i18n="shell.nav.today">今天</span><span class="nav-count">12</span></button>
+      <button type="button" class="nav-item"><svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg><span class="nav-label" data-i18n="shell.nav.banks">题库</span></button>
+      <button type="button" class="nav-item"><svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg><span class="nav-label" data-i18n="shell.nav.review">复习</span><span class="nav-count">8</span></button>
+      <button type="button" class="nav-item"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg><span class="nav-label" data-i18n="shell.nav.exams">模考</span></button>
+      <button type="button" class="nav-item"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg><span class="nav-label" data-i18n="shell.nav.notes">资料</span></button>
+    </nav>
+    <div class="side-study">
+      <div class="side-study-label">学习状态</div>
+      <div class="side-study-row"><span>今日复习</span><b>12 题</b></div>
+      <div class="side-study-row"><span>连胜</span><b>6 天</b></div>
+    </div>
+    <div class="side-foot">
+      <button type="button" class="nav-item"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg><span class="nav-label" data-i18n="shell.nav.settings">设置</span></button>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <header class="topbar">
+      <div class="crumb">
+        <button type="button" class="link">学习</button>
+        <span class="sep">/</span>
+        <span class="here">今天</span>
+      </div>
+      <span class="spacer"></span>
+      <div class="search-box tb-search">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+        <input class="input" type="search" placeholder="搜索题库" aria-label="搜索题库">
+      </div>
+      <button type="button" class="btn btn-sm" onclick="openPalette()"><svg class="od-icon" aria-hidden="true"><use href="#i-command"/></svg>命令面板 <span class="kbd">⌘K</span></button>
+      <button type="button" class="icon-btn" aria-label="切换主题" onclick="eeToggleTheme(this)"><svg class="od-icon" aria-hidden="true"><use href="#i-sun"/></svg></button>
+      <button type="button" class="icon-btn" aria-label="切换语言" onclick="eeToggleLang(this)"><svg class="od-icon" aria-hidden="true"><use href="#i-globe"/></svg></button>
+      <button type="button" class="user-mini" aria-label="账号：accept_admin_1794570360969">A</button>
+    </header>
+
+    <header class="mobile-top">
+      <span class="brand-mark serif">易</span>
+      <span class="mt-title">今天</span>
+      <button type="button" class="icon-btn" aria-label="命令面板" onclick="openPalette()"><svg class="od-icon" aria-hidden="true"><use href="#i-command"/></svg></button>
+      <button type="button" class="user-mini" aria-label="账号">A</button>
+    </header>
+
+    <main class="content" id="main-content">
+      <div class="masthead">
+        <div>
+          <h1 class="masthead-title">今天</h1>
+          <p class="masthead-lede">2026-11-25 · 第 48 周 · 到期 8 题，错题 5 题</p>
+        </div>
+        <div class="page-actions">
+          <button type="button" class="btn btn-primary" onclick="openPalette()"><svg class="od-icon" aria-hidden="true"><use href="#i-command"/></svg>命令面板 <span class="kbd">⌘K</span></button>
+        </div>
+      </div>
+
+      <div class="od-grid" style="--od-cols: 2">
+        <section class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">今日计划</h2>
+            <span class="spacer"></span>
+            <span class="panel-sub">3 项</span>
+          </div>
+          <div class="panel-body" style="padding: 0">
+            <button type="button" class="plan-row">
+              <span class="plan-index">01</span>
+              <span style="flex: 1 1 auto; min-width: 0">
+                <span class="plan-title">到期复习</span>
+                <span class="plan-meta">8 题 · FSRS 安排 · 约 12 分钟</span>
+              </span>
+              <span class="plan-arrow"><svg class="od-icon" aria-hidden="true"><use href="#i-chevron-right"/></svg></span>
+            </button>
+            <button type="button" class="plan-row">
+              <span class="plan-index">02</span>
+              <span style="flex: 1 1 auto; min-width: 0">
+                <span class="plan-title">错题重做</span>
+                <span class="plan-meta">5 题 · 来自上周模考与练习</span>
+              </span>
+              <span class="plan-arrow"><svg class="od-icon" aria-hidden="true"><use href="#i-chevron-right"/></svg></span>
+            </button>
+            <button type="button" class="plan-row">
+              <span class="plan-index">03</span>
+              <span style="flex: 1 1 auto; min-width: 0">
+                <span class="plan-title">斩杀题库</span>
+                <span class="plan-meta">2 题 · 标记为已掌握就不再出现</span>
+              </span>
+              <span class="plan-arrow"><svg class="od-icon" aria-hidden="true"><use href="#i-chevron-right"/></svg></span>
+            </button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">继续上次</h2>
+            <span class="spacer"></span>
+            <span class="tag warn">未完成</span>
+          </div>
+          <div class="panel-body" style="padding: 0">
+            <div class="list-row static">
+              <div class="list-main">
+                <div class="list-title">顺序练习 · 验收题库 1794570360969</div>
+                <div class="list-meta">已答 1 / 3 · 昨天 21:40 开始</div>
+              </div>
+              <div class="list-side">
+                <button type="button" class="btn btn-sm btn-primary" onclick="eeGo('pages/screens/practice.html')"><svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>继续</button>
+              </div>
+            </div>
+            <div class="list-row static">
+              <div class="list-main">
+                <div class="list-title">模考 · 网络技术 · 综合卷</div>
+                <div class="list-meta">已答 8 / 10 · 剩余 04:38</div>
+              </div>
+              <div class="list-side">
+                <button type="button" class="btn btn-sm" onclick="eeGo('pages/screens/exam.html')">继续答题</button>
+              </div>
+            </div>
+          </div>
+          <div class="panel-foot">
+            <span class="rule-label">快捷入口</span>
+            <span class="spacer"></span>
+            <div class="chip-row">
+              <button type="button" class="chip" onclick="eeGo('pages/screens/banks.html?new=1')"><svg class="od-icon" aria-hidden="true"><use href="#i-plus"/></svg>新建题库</button>
+              <button type="button" class="chip" onclick="eeGo('pages/screens/import.html?new=1')"><svg class="od-icon" aria-hidden="true"><use href="#i-import"/></svg>导入</button>
+              <button type="button" class="chip" onclick="eeGo('pages/screens/review.html')"><svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>开始到期复习</button>
+              <button type="button" class="chip" onclick="eeGo('pages/screens/review.html?chip=mistakes')"><svg class="od-icon" aria-hidden="true"><use href="#i-target"/></svg>查看错题</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- 规格段：对现状的修正 -->
+      <section class="section" data-spec>
+        <div class="section-head">
+          <h2 class="section-title">规格段 · 对现状的修正</h2>
+          <span class="section-note">命令面板（Ctrl/⌘+K）覆盖在今天页之上</span>
+        </div>
+        <div class="notice info">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+          <div class="notice-body">
+            <div class="notice-title">补齐入口</div>
+            <p>现状的命令面板只有「今天 / 题库 / 复习 / 模考 / 资料 / 设置 / 退出」，导入、新建题库、查看错题都要回到页面里找。修正后命令组包含：今天、题库、复习、模考、资料、设置、新建题库、导入、开始到期复习、查看错题、切换主题、切换语言、退出。</p>
+          </div>
+        </div>
+        <div class="notice warn" style="margin-top: var(--sp-4)">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+          <div class="notice-body">
+            <div class="notice-title">aria-expanded 不再恒真</div>
+            <p>现状里输入框的 <code>aria-expanded</code> 写死为 <code>true</code>。修正后它跟随列表实际状态：有结果时为 <code>true</code>，无结果（空查询之外的过滤无命中）时为 <code>false</code>，并显示「没有匹配的命令或题库」。</p>
+          </div>
+        </div>
+        <div class="panel" style="margin-top: var(--sp-4)">
+          <div class="panel-head"><h3 class="panel-title" style="font-size: var(--text-md)">键盘</h3></div>
+          <div class="panel-body">
+            <div class="kv">
+              <span class="kv-key"><span class="kbd">↑</span> <span class="kbd">↓</span></span><span class="kv-val">在题库与命令之间移动高亮（aria-activedescendant 同步）</span>
+              <span class="kv-key"><span class="kbd">Enter</span></span><span class="kv-val">执行当前高亮项；题库行内的「练习」按钮打开该题库的<b>开始学习决策</b>（与首页「开始」同一条链路，不跳过决策直接开会话）</span>
+              <span class="kv-key"><span class="kbd">Esc</span></span><span class="kv-val">关闭面板，焦点回到打开它的按钮</span>
+              <span class="kv-key"><span class="kbd">⌘K</span></span><span class="kv-val">打开 / 关闭命令面板</span>
+            </div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top: var(--sp-4)">
+          <div class="panel-head"><h3 class="panel-title" style="font-size: var(--text-md)">状态格</h3><span class="spacer"></span><span class="panel-sub">空 / 加载 / 错误 / 禁用</span></div>
+          <div class="panel-body">
+            <div class="rule-label">空态</div>
+            <p class="hint" style="margin-top: var(--sp-1)">面板内已内置「没有匹配的命令或题库」：输入一个不存在的关键词即可看到，同时 <code>aria-expanded</code> 变为 <code>false</code>。</p>
+
+            <div class="rule-label" style="margin-top: var(--sp-5)">加载中（题库列表）</div>
+            <div class="panel" style="margin-top: var(--sp-2)">
+              <div class="panel-body">
+                <div class="skeleton sk-line" style="width:35%"></div>
+                <div class="skeleton sk-line" style="width:60%"></div>
+                <div class="skeleton sk-block" style="margin-top: var(--sp-3)"></div>
+              </div>
+            </div>
+
+            <div class="rule-label" style="margin-top: var(--sp-5)">加载失败</div>
+            <div class="notice bad" role="alert" style="margin-top: var(--sp-2)">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+              <div class="notice-body">
+                <div class="notice-title">题库列表读取失败</div>
+                <p>命令组仍然可用；题库组显示重试入口。</p>
+                <div class="notice-actions">
+                  <button type="button" class="btn btn-sm" onclick="eeRetryBanks(this)"><svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>重试</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="rule-label" style="margin-top: var(--sp-5)">禁用</div>
+            <div class="od-cluster" style="margin-top: var(--sp-2)">
+              <button type="button" class="btn btn-sm" disabled>开始到期复习</button>
+              <button type="button" class="btn btn-sm btn-quiet" onclick="openPalette()">打开命令面板</button>
+            </div>
+            <p class="hint" style="margin-top: var(--sp-2)">今天没有到期题目时，「开始到期复习」禁用并说明原因，而不是从面板里消失。</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<nav class="bottomnav" aria-label="底部导航">
+  <button type="button" class="bn-item is-active" aria-current="page"><svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg>今天</button>
+  <button type="button" class="bn-item"><svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>题库</button>
+  <button type="button" class="bn-item"><svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg>复习</button>
+  <button type="button" class="bn-item"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>模考</button>
+  <button type="button" class="bn-item"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>资料</button>
+  <button type="button" class="bn-item"><svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg>更多</button>
+</nav>
+
+<!-- ============ 命令面板（Ctrl/⌘+K） ============ -->
+<div class="cmd-palette-backdrop" id="cmd-backdrop" hidden>
+  <div class="cmd-palette" role="dialog" aria-modal="true" aria-labelledby="cmd-palette-title">
+    <h2 id="cmd-palette-title" class="visually-hidden">命令面板</h2>
+    <div class="cmd-search-row">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+      <input id="cmd-input" class="cmd-input" type="text" role="combobox" aria-autocomplete="list"
+             aria-expanded="true" aria-controls="cmd-listbox" aria-activedescendant="cmd-opt-b0"
+             placeholder="搜索题库、页面与命令" aria-label="搜索题库、页面与命令" autocomplete="off">
+      <span class="kbd">Esc</span>
+    </div>
+
+    <div class="cmd-list" id="cmd-listbox" role="listbox" aria-label="搜索结果">
+      <div class="cmd-group" data-group="banks" role="presentation">题库</div>
+      <div class="cmd-item" role="option" id="cmd-opt-b0" aria-selected="true" data-group="banks" data-bank="b_acc" data-name="验收题库 1794570360969" data-search="验收题库 1794570360969 系统集成">
+        <div class="cmd-item-left">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>
+          <div class="cmd-item-info">
+            <span class="cmd-item-title">验收题库 1794570360969</span>
+            <span class="cmd-item-desc">系统集成 · 最近练习：顺序练习</span>
+          </div>
+        </div>
+        <div class="cmd-item-right">
+          <span class="cmd-count">128 道</span>
+          <button type="button" class="btn btn-sm" data-name="练习：验收题库">练习</button>
+        </div>
+      </div>
+      <div class="cmd-item" role="option" id="cmd-opt-b1" aria-selected="false" data-group="banks" data-bank="b_rk" data-name="软考中级 · 信息系统管理工程师" data-search="软考中级 信息系统管理工程师 356">
+        <div class="cmd-item-left">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>
+          <div class="cmd-item-info">
+            <span class="cmd-item-title">软考中级 · 信息系统管理工程师</span>
+            <span class="cmd-item-desc">2026 年考纲 · 按章节组织</span>
+          </div>
+        </div>
+        <div class="cmd-item-right">
+          <span class="cmd-count">356 道</span>
+          <button type="button" class="btn btn-sm" data-name="练习：软考中级">练习</button>
+        </div>
+      </div>
+      <div class="cmd-item" role="option" id="cmd-opt-b2" aria-selected="false" data-group="banks" data-bank="b_sh" data-name="网络技术综合" data-search="网络技术综合 42">
+        <div class="cmd-item-left">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>
+          <div class="cmd-item-info">
+            <span class="cmd-item-title">网络技术综合</span>
+            <span class="cmd-item-desc">模考卷来源 · 有 1 份未完成模考</span>
+          </div>
+        </div>
+        <div class="cmd-item-right">
+          <span class="cmd-count">42 道</span>
+          <button type="button" class="btn btn-sm" data-name="练习：网络技术综合">练习</button>
+        </div>
+      </div>
+      <div class="cmd-item" role="option" id="cmd-opt-b3" aria-selected="false" data-group="banks" data-bank="b_en" data-name="英语词汇 · 每日 50 词" data-search="英语词汇 每日 50 词 1024">
+        <div class="cmd-item-left">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>
+          <div class="cmd-item-info">
+            <span class="cmd-item-title">英语词汇 · 每日 50 词</span>
+            <span class="cmd-item-desc">碎片时间 · 已完成 12 天</span>
+          </div>
+        </div>
+        <div class="cmd-item-right">
+          <span class="cmd-count">1024 道</span>
+          <button type="button" class="btn btn-sm" data-name="练习：英语词汇">练习</button>
+        </div>
+      </div>
+      <div class="cmd-item" role="option" id="cmd-opt-b4" aria-selected="false" data-group="banks" data-bank="b_mis" data-name="错题回顾 · 上周模考" data-search="错题回顾 上周模考 37">
+        <div class="cmd-item-left">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>
+          <div class="cmd-item-info">
+            <span class="cmd-item-title">错题回顾 · 上周模考</span>
+            <span class="cmd-item-desc">由错题生成 · 可整组重做</span>
+          </div>
+        </div>
+        <div class="cmd-item-right">
+          <span class="cmd-count">37 道</span>
+          <button type="button" class="btn btn-sm" data-name="练习：错题回顾">练习</button>
+        </div>
+      </div>
+
+      <div class="cmd-group" data-group="actions" role="presentation">命令</div>
+      <div class="cmd-item" role="option" id="cmd-opt-a0" aria-selected="false" data-group="actions" data-name="今天" data-search="今天 首页 home">
+        <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg><span class="cmd-item-title">今天</span></div>
+        <div class="cmd-item-right"><span class="kbd">⌘1</span></div>
+      </div>
+      <div class="cmd-item" role="option" id="cmd-opt-a1" aria-selected="false" data-group="actions" data-name="题库" data-search="题库 列表 banks">
+        <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg><span class="cmd-item-title">题库</span></div>
+        <div class="cmd-item-right"><span class="kbd">⌘2</span></div>
+      </div>
+      <div class="cmd-item" role="option" id="cmd-opt-a2" aria-selected="false" data-group="actions" data-name="复习" data-search="复习 到期 队列 review">
+        <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg><span class="cmd-item-title">复习</span></div>
+        <div class="cmd-item-right"><span class="kbd">⌘3</span></div>
+      </div>
+      <div class="cmd-item" role="option" id="cmd-opt-a3" aria-selected="false" data-group="actions" data-name="模考" data-search="模考 考试 exam">
+        <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg><span class="cmd-item-title">模考</span></div>
+        <div class="cmd-item-right"><span class="kbd">⌘4</span></div>
+      </div>
+      <div class="cmd-item" role="option" id="cmd-opt-a4" aria-selected="false" data-group="actions" data-name="资料" data-search="资料 笔记 文件 notes">
+        <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg><span class="cmd-item-title">资料</span></div>
+        <div class="cmd-item-right"><span class="kbd">⌘5</span></div>
+      </div>
+      <div class="cmd-item" role="option" id="cmd-opt-a5" aria-selected="false" data-group="actions" data-name="设置" data-search="设置 外观 账号 settings">
+        <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg><span class="cmd-item-title">设置</span></div>
+        <div class="cmd-item-right"><span class="kbd">⌘,</span></div>
+      </div>
+      <div class="cmd-item" role="option" id="cmd-opt-a6" aria-selected="false" data-group="actions" data-name="新建题库" data-search="新建题库 创建 bank">
+        <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-plus"/></svg><span class="cmd-item-title">新建题库</span></div>
+        <div class="cmd-item-right"><span class="kbd">⌘N</span></div>
+      </div>
+      <div class="cmd-item" role="option" id="cmd-opt-a7" aria-selected="false" data-group="actions" data-name="导入" data-search="导入 题目 文件 import">
+        <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-import"/></svg><span class="cmd-item-title">导入</span></div>
+        <div class="cmd-item-right"><span class="kbd">⌘I</span></div>
+      </div>
+      <div class="cmd-item" role="option" id="cmd-opt-a8" aria-selected="false" data-group="actions" data-name="开始到期复习" data-search="开始到期复习 fsrs 到期">
+        <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg><span class="cmd-item-title">开始到期复习</span></div>
+        <div class="cmd-item-right"><span class="kbd">⌘R</span></div>
+      </div>
+      <div class="cmd-item" role="option" id="cmd-opt-a9" aria-selected="false" data-group="actions" data-name="查看错题" data-search="查看错题 错题 mistakes">
+        <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-target"/></svg><span class="cmd-item-title">查看错题</span></div>
+        <div class="cmd-item-right"><span class="kbd">⌘M</span></div>
+      </div>
+      <div class="cmd-item" role="option" id="cmd-opt-a10" aria-selected="false" data-group="actions" data-name="切换主题" data-search="切换主题 深色 浅色 theme">
+        <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-moon"/></svg><span class="cmd-item-title">切换主题</span></div>
+        <div class="cmd-item-right"><span class="kbd">⌘T</span></div>
+      </div>
+      <div class="cmd-item" role="option" id="cmd-opt-a11" aria-selected="false" data-group="actions" data-name="切换语言" data-search="切换语言 中文 英文 locale">
+        <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-globe"/></svg><span class="cmd-item-title">切换语言</span></div>
+        <div class="cmd-item-right"><span class="kbd">⌘L</span></div>
+      </div>
+      <div class="cmd-item" role="option" id="cmd-opt-a12" aria-selected="false" data-group="actions" data-name="退出" data-search="退出 登出 logout">
+        <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-logout"/></svg><span class="cmd-item-title">退出</span></div>
+        <div class="cmd-item-right"><span class="kbd">⌘Q</span></div>
+      </div>
+
+      <div class="cmd-empty" id="cmd-empty" hidden>
+        <svg class="od-icon" aria-hidden="true" style="--od-icon-size: 22px"><use href="#i-search"/></svg>
+        <p style="margin: var(--sp-2) 0 0">没有匹配的命令或题库</p>
+      </div>
+    </div>
+
+    <div class="cmd-foot">
+      <div class="cmd-hints">
+        <span class="kbd">↑</span><span class="kbd">↓</span><span>选择</span>
+        <span class="kbd">↵</span><span>执行</span>
+        <span class="kbd">Esc</span><span>关闭</span>
+      </div>
+      <span class="cmd-footer-tag">EasyExam · ⌘K</span>
+    </div>
+  </div>
+</div>
+
+<script src="../../assets/icons.js"></script>
+<script src="../../assets/store.js"></script>
+<script src="../../assets/i18n.js"></script>
+<script src="../../assets/nav.js"></script>
+<script src="../../assets/spec-boot.js"></script>
+<script>
+  (function () {
+    var backdrop = document.getElementById('cmd-backdrop');
+    var input = document.getElementById('cmd-input');
+    var list = document.getElementById('cmd-listbox');
+    var empty = document.getElementById('cmd-empty');
+    var lastFocus = null;
+    var activeIndex = 0;
+
+    function allOptions() { return Array.prototype.slice.call(list.querySelectorAll('.cmd-item')); }
+    function visibleOptions() { return allOptions().filter(function (o) { return !o.hidden; }); }
+
+    function setActive(i) {
+      /* 先清全部选项的高亮：被筛掉的选项若留着 aria-selected，
+         读屏软件会同时报出多个「已选中」，与实际唯一高亮不符 */
+      allOptions().forEach(function (o) { o.classList.remove('is-active'); o.setAttribute('aria-selected', 'false'); });
+      var v = visibleOptions();
+      if (!v.length) { input.setAttribute('aria-activedescendant', ''); return; }
+      var idx = ((i % v.length) + v.length) % v.length;
+      activeIndex = idx;
+      var o = v[idx];
+      o.classList.add('is-active');
+      o.setAttribute('aria-selected', 'true');
+      input.setAttribute('aria-activedescendant', o.id);
+      if (o.scrollIntoView) o.scrollIntoView({ block: 'nearest' });
+    }
+
+    function filter(q) {
+      q = (q || '').trim().toLowerCase();
+      allOptions().forEach(function (o) {
+        var t = (o.getAttribute('data-search') || '').toLowerCase();
+        o.hidden = q ? t.indexOf(q) < 0 : false;
+      });
+      Array.prototype.forEach.call(list.querySelectorAll('.cmd-group'), function (g) {
+        var key = g.getAttribute('data-group');
+        var any = allOptions().some(function (o) { return o.getAttribute('data-group') === key && !o.hidden; });
+        g.hidden = !any;
+      });
+      var n = visibleOptions().length;
+      if (empty) empty.hidden = n > 0;
+      /* 修正点：aria-expanded 跟随列表实际是否有结果 */
+      input.setAttribute('aria-expanded', n > 0 ? 'true' : 'false');
+      setActive(0);
+    }
+
+    /* ---- 全产品通用小动作（与设置页同一份共享状态） ---- */
+    window.eeGo = function (rel) { window.location.href = rel; };
+    window.eeToggleTheme = function () {
+      if (!window.eeStore) return;
+      var next = window.eeStore.settings().theme === 'dark' ? 'light' : 'dark';
+      window.eeStore.setSetting('theme', next);
+      eeToast(next === 'dark' ? '已切换为深色' : '已切换为浅色');
+    };
+    window.eeToggleLang = function () {
+      if (!window.eeStore) return;
+      var next = window.eeStore.settings().lang === 'en' ? 'zh' : 'en';
+      window.eeStore.setSetting('lang', next);
+      eeToast(next === 'en' ? 'Switched to English' : '已切换为中文');
+    };
+    window.eeRetryBanks = function (btn) {
+      if (btn) { btn.disabled = true; btn.textContent = '重试中…'; }
+      setTimeout(function () {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>重试'; }
+        eeToast('题库列表已重新读取');
+      }, 600);
+    };
+
+    window.openPalette = function () {
+      lastFocus = document.activeElement;
+      backdrop.hidden = false;
+      document.body.style.overflow = 'hidden';
+      input.value = '';
+      filter('');
+      input.focus();
+      setActive(0);
+    };
+    /* 回焦：只有「真的拿过焦点的元素」才能当回焦目标；
+       初始自动展开时 activeElement 是 body，此时退回到页面第一个可见按钮，
+       避免关闭后焦点丢到 body、键盘用户丢失位置。 */
+    function refocusable(el) {
+      if (!el || !el.isConnected) return false;
+      if (el === document.body || el === document.documentElement) return false;
+      if (el.disabled) return false;
+      if (typeof el.focus !== 'function') return false;
+      return true;
+    }
+    window.closePalette = function () {
+      backdrop.hidden = true;
+      document.body.style.overflow = '';
+      var t = refocusable(lastFocus) ? lastFocus : document.querySelector('.topbar button, .page-head button, button');
+      if (refocusable(t)) t.focus();
+      lastFocus = null;
+    };
+    /* 命令目标：页面命令真实跳转；设置命令真实改共享状态并即时生效 */
+    var PAGE_CMD = {
+      '今天': 'home.html', '题库': 'banks.html', '复习': 'review.html',
+      '模考': 'exams.html', '资料': 'notes.html', '设置': 'settings.html',
+      '新建题库': 'banks.html?new=1', '导入': 'import.html?new=1',
+      '开始到期复习': 'review.html', '查看错题': 'review.html?chip=mistakes',
+      '退出': 'login.html'
+    };
+    function execute(option) {
+      var group = option.getAttribute('data-group');
+      var name = option.getAttribute('data-name') || '';
+      closePalette();
+      if (group === 'banks') {
+        var bid = option.getAttribute('data-bank') || 'b_acc';
+        /* 「错题回顾」是复习视图而不是题库，按语义进复习的错题筛选 */
+        if (bid === 'b_mis') { eeGo('review.html?chip=mistakes'); return; }
+        eeGo('workspace.html?bank=' + encodeURIComponent(bid));
+        return;
+      }
+      if (name === '切换主题') { eeToggleTheme(); return; }
+      if (name === '切换语言') { eeToggleLang(); return; }
+      if (name === '退出') {
+        if (window.eeStore) window.eeStore.logout();
+        eeToast('已退出登录');
+        setTimeout(function () { eeGo('login.html?next=home.html'); }, 300);
+        return;
+      }
+      var target = PAGE_CMD[name];
+      if (target) { eeGo(target); return; }
+      eeToast('执行：' + name);
+    }
+
+    input.addEventListener('input', function () { filter(input.value); });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(activeIndex + 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(activeIndex - 1); }
+      else if (e.key === 'Enter') {
+        e.preventDefault();
+        var v = visibleOptions();
+        if (v[activeIndex]) execute(v[activeIndex]);
+      } else if (e.key === 'Escape') { e.preventDefault(); closePalette(); }
+    });
+
+    /* 行内「练习」按钮：打开该题库的开始学习决策（与首页「开始」同链路），不执行行的默认动作 */
+    list.addEventListener('click', function (e) {
+      var btn = e.target.closest ? e.target.closest('.cmd-item .btn') : null;
+      if (btn) {
+        e.stopPropagation();
+        closePalette();
+        /* 「练习」= 打开该题库的开始学习决策（与首页「开始」同链路，由首页落会话） */
+        var bankName = (btn.getAttribute('data-name') || '').replace(/^练习：/, '');
+        eeGo('home.html?bank=' + encodeURIComponent(bankName));
+        return;
+      }
+      var item = e.target.closest ? e.target.closest('.cmd-item') : null;
+      if (item && !item.hidden) execute(item);
+    });
+    list.addEventListener('mouseenter', function (e) {
+      var item = e.target.closest ? e.target.closest('.cmd-item') : null;
+      if (!item) return;
+      var v = visibleOptions();
+      var i = v.indexOf(item);
+      if (i >= 0) setActive(i);
+    }, true);
+
+    backdrop.addEventListener('click', function (e) {
+      if (e.target === backdrop) closePalette();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        if (backdrop.hidden) openPalette(); else closePalette();
+        return;
+      }
+      if (e.key === 'Escape' && !backdrop.hidden) { e.preventDefault(); closePalette(); }
+    });
+
+    /* 默认展开，方便直接看到面板内容 */
+    openPalette();
+  })();
+</script>
+</body>
+</html>

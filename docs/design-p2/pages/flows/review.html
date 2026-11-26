@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>复习四视图闭环 · 流程原型 · EasyExam 设计规范</title>
+<link rel="stylesheet" href="../../assets/ee.css">
+<style>/* ===== 流程原型骨架（本页特有布局，未重定义令牌或控件） ===== */
+.doc-page{  max-width: 1100px; margin: 0 auto; padding: 28px 24px 60px;  }
+.steps .step:disabled{  cursor: default;  }
+/* ===== 本页布局助手 ===== */
+.flow-stack{  display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0;  }
+.rail-title{  font-size: var(--text-xs); font-weight: 600; letter-spacing: .06em; color: var(--ink-2);  }
+.toolbar{  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-4);  }
+.toolbar-search{  flex: 0 1 240px; min-width: 160px;  }
+.qtype{  font-size: var(--text-xs); letter-spacing: .04em; color: var(--ink-3); width: 40px; flex: none; padding-top: 3px;  }
+.qrow-stem{  display: block; font-family: var(--font-serif); font-size: var(--text-sm); line-height: 1.7; color: var(--ink);  }
+.review-queue-row{  align-items: flex-start;  }
+.review-reason-tag{  margin-left: 2px;  }
+.list{  border-top: 1px solid var(--ink);  }
+.start-block{  border-top: 1px solid var(--ink); padding: var(--sp-4) 0 var(--sp-5);  }
+.mode-tag{  display: inline-flex; align-items: center; gap: var(--sp-2);  }
+.segment .count{  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-4); margin-left: 2px;  }
+.segment[aria-checked="true"] .count, .segment.is-on .count{  color: var(--brand-ink);  }
+/* ===== 会话 ===== */
+.runner-top{  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-4);  }
+.runner-mode{  font-size: var(--text-sm); color: var(--ink-2);  }
+.runner{  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface);  }
+.runner-body{  padding: var(--sp-6); min-width: 0;  }
+.runner-foot{  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--line);  }
+.verdict{  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--bad-line); background: var(--bad-soft); border-radius: var(--r-sm);  }
+.verdict.ok{  border-color: var(--ok-line); background: var(--ok-soft);  }
+.verdict-mark{  display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--bad); color: var(--on-bad); flex: none;  }
+.verdict.ok .verdict-mark{  background: var(--ok); color: var(--surface);  }
+.verdict strong{  font-size: var(--text-md);  }
+.answer-line{  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-3); font-size: var(--text-sm); color: var(--ink-3); margin-top: var(--sp-3);  }
+.answer-line .ans{  font-family: var(--font-mono); color: var(--ink);  }
+.explain-body{  font-size: var(--text-sm); color: var(--ink-2); line-height: var(--text-base-lh); margin-top: var(--sp-2); white-space: pre-line;  }
+.fsrs-btns{  display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2);  }
+.fsrs-btns .btn.is-on{  background: var(--brand-soft); border-color: var(--brand-line); color: var(--brand-ink); font-weight: 500;  }
+.fsrs-btns .mono{  opacity: .7; font-size: var(--text-xs);  }
+@media (max-width: 640px){
+  .steps .step-name { display: none; }
+  .steps { gap: var(--sp-1); }
+  .flow-title { font-size: var(--text-2xl); }
+}</style>
+</head>
+<body>
+<a class="skip-link" href="#flowStage">跳到主内容</a>
+<div class="doc-page">
+  <header class="flow-head">
+    <div class="flow-exits" data-spec>
+      <a class="btn btn-sm btn-quiet" href="../../product.html">完整产品</a>
+      <a class="btn btn-sm btn-quiet" href="../../index.html">设计规范</a>
+    </div>
+    <div>
+      <p class="flow-eyebrow" data-spec>流程原型 · 学习域</p>
+      <h1 class="flow-title">复习闭环</h1>
+      <p class="flow-sub" data-spec>复习四视图 → 行内开始 → 复习会话 → 回流与清除 → 队列更新</p>
+    </div>
+  </header>
+
+  <div class="flow-stepbar">
+    <div class="steps" id="flowSteps" role="group" aria-label="复习闭环步骤"></div>
+    <p class="flow-caption" id="flowCaption" aria-live="polite"></p>
+  </div>
+
+  <main class="flow-stage" id="flowStage"></main>
+
+  <footer class="flow-foot">
+    <button type="button" class="btn btn-quiet" id="flowPrev">上一步</button>
+    <span class="flow-note" id="flowNote"></span>
+    <button type="button" class="btn btn-primary" id="flowNext">下一步</button>
+  </footer>
+</div>
+
+<script src="../../assets/icons.js"></script>
+<script src="../../assets/store.js"></script>
+<script src="../../assets/i18n.js"></script>
+<script src="../../assets/nav.js"></script>
+<script src="../../assets/spec-boot.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- 合并队列：数据来自 eeStore，本页只带题干载荷 ---------- */
+  var S = window.eeStore;
+  /* store 的队列行只存题干与调度状态；选项 / 答案 / 解析按行 id 挂在本页 */
+  var PAYLOAD = {
+    rq1: {
+      type: 'SINGLE', answer: 'B',
+      options: [
+        { key: 'A', content: '传输层' }, { key: 'B', content: '会话层' }, { key: 'C', content: '网络层' }, { key: 'D', content: '应用层' }
+      ],
+      explanation: '*   复核状态：已逐题重做；置信度：高。\n*   复核结论：本题为反向选择题，需找出“不属于/不正确/不是”的选项。B 项与教材概念或过程边界不符。\n*   本次重做后与原答案一致。'
+    },
+    rq2: {
+      type: 'SINGLE', answer: 'D',
+      options: [
+        { key: 'A', content: '范围基准包括项目范围说明书、WBS、WBS 字典' }, { key: 'B', content: '范围基准包含工作包、规划包与控制账户' },
+        { key: 'C', content: '范围基准是进度与成本估算的重要依据' }, { key: 'D', content: '范围基准是制定预算的输出' }
+      ],
+      explanation: '范围基准是创建 WBS 过程的输出，不是制定预算的输出。'
+    },
+    rq3: {
+      type: 'SINGLE', answer: 'B',
+      options: [
+        { key: 'A', content: '科教基础设施' }, { key: 'B', content: '智能交通基础设施' },
+        { key: 'C', content: '新技术基础设施' }, { key: 'D', content: '算力基础设施' }
+      ],
+      explanation: '智能交通基础设施是典型的融合基础设施。'
+    },
+    rq4: {
+      type: 'SINGLE', answer: 'D',
+      options: [
+        { key: 'A', content: '不了解型，中立型' }, { key: 'B', content: '支持型，抵制型' },
+        { key: 'C', content: '中立型，支持型' }, { key: 'D', content: '领导型，抵制型' }
+      ],
+      explanation: '领导型干系人应积极参与；抵制型干系人知晓项目但反对。'
+    },
+    rq5: {
+      type: 'SINGLE', answer: 'A',
+      options: [
+        { key: 'A', content: '韧性' }, { key: 'B', content: '弹性' }, { key: 'C', content: '架构持续演进' }, { key: 'D', content: '服务化' }
+      ],
+      explanation: '*   复核状态：已逐题重做；置信度：高。\n*   复核结论：逐项核对题干关键词、教材定义和选项含义后，A 项与题干限定最匹配。\n*   本次重做后与原答案一致。'
+    }
+  };
+  /* 初始队列快照：「重新开始」用它把 store 的队列还原到种子状态 */
+  var SEED = {
+    rq1: { reasons: ['due', 'mistakes'], due_at: '2026-11-25 08:00', stability: 2.4, mistake_count: 2 },
+    rq2: { reasons: ['weak', 'mistakes'], due_at: '2026-11-28 08:00', stability: 1.2, mistake_count: 1 },
+    rq3: { reasons: ['killed'], due_at: '2026-11-27 08:00', stability: 3.1, mistake_count: 0 },
+    rq4: { reasons: ['weak'], due_at: '2026-11-30 08:00', stability: 0.9, mistake_count: 0 },
+    rq5: { reasons: ['due'], due_at: '2026-11-25 08:00', stability: 2.0, mistake_count: 0 }
+  };
+
+  function rowFromStore(r) {
+    var p = PAYLOAD[r.id] || {};
+    return {
+      key: r.id, id: r.id, bankId: r.bankId, stem: r.stem,
+      reasons: (r.reasons || []).slice(), due_at: r.due_at, stability: r.stability,
+      mistake_count: r.mistake_count || 0, killed_at: r.killed_at,
+      type: p.type || 'SINGLE', options: p.options || [], answer: p.answer || '',
+      explanation: p.explanation || ''
+    };
+  }
+  function loadRows() {
+    var list = S ? S.reviewQueue() : [];
+    return list.map(rowFromStore);
+  }
+  var ROWS = loadRows();
+  /* 队列是活的：每次渲染都从 store 同步一次（回流 / 斩杀 / 恢复都会改这里） */
+  function syncRows() {
+    var next = loadRows();
+    if (next.length !== ROWS.length) { ROWS = next; return; }
+    for (var i = 0; i < next.length; i++) {
+      ROWS[i].reasons = next[i].reasons;
+      ROWS[i].due_at = next[i].due_at;
+      ROWS[i].stability = next[i].stability;
+      ROWS[i].mistake_count = next[i].mistake_count;
+      ROWS[i].killed_at = next[i].killed_at;
+      ROWS[i].stem = next[i].stem;
+    }
+  }
+
+  /* CR-29：复习区四个视图，语义固定。
+     待复习 = 当前可执行复习集合（到期 ∧ 未斩杀 ∧ 未归档 ∧ 有访问权）；
+     错题 = 全部未清除错题（不受是否到期限制）；
+     薄弱 = 全部主动标记的薄弱题（含未到期，薄弱题的权威列表）；
+     斩杀 = 已斩杀题管理 + 查漏补缺。学习档案是独立路由，不是第五个页签。 */
+  var REASON_LABEL = { due: '到期', mistakes: '错题未清除', weak: '薄弱', consolidation: '巩固', killed: '斩杀' };
+  var REASON_CLASS = { due: 'brand', mistakes: 'bad', weak: 'warn', killed: 'plain' };
+  var VIEWS = [
+    { key: 'due', label: '待复习' },
+    { key: 'mistakes', label: '错题' },
+    { key: 'weak', label: '薄弱' },
+    { key: 'killed', label: '斩杀' }
+  ];
+  /* 原因 chips 只作用于「待复习」视图内部：视图选集合，chips 选原因子集 */
+  var FILTERS = [
+    { key: 'all', label: '全部' }, { key: 'mistakes', label: '错题未清除' },
+    { key: 'weak', label: '薄弱' }, { key: 'consolidation', label: '巩固' }
+  ];
+  var MODE_LABEL = { FSRS: '到期复习', MISTAKE: '错题重做', ELIMINATION: '查漏补缺', PRACTICE: '普通练习' };
+
+  var state = {
+    step: 0,
+    maxStep: 0,
+    view: 'due',
+    reason: 'all',
+    query: '',
+    selectedKey: null,
+    mode: null,
+    selected: null,
+    submitted: false,
+    rating: null,
+    reflowed: false,
+    sid: null           // store 会话 id：与复习页 / 首页同一份进行中会话
+  };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function ico(name, size) { return window.eeIcon ? window.eeIcon(name, size) : ''; }
+
+  /* FSRS 四档间隔：按本题稳定度实时推算，算不出来就不显示（Q-210） */
+  function spanDue(row, r) {
+    var mult = { 1: 0.5, 2: 1.2, 3: 2.6, 4: 5.0 }[r];
+    if (!row || row.stability == null || !mult) return '';
+    var d = mult * Number(row.stability);
+    var txt = d < 1 ? Math.max(1, Math.round(d * 24 * 60)) + ' 分钟' : (Math.round(d * 10) / 10) + ' 天';
+    return '<span class="mono">+' + esc(txt) + '</span>';
+  }
+
+  /* 原因标签：错题未清除 < 薄弱 < 巩固，可叠加 */
+  function reasonKeys(row) {
+    var out = [];
+    if (row.reasons.indexOf('mistakes') > -1) out.push('mistakes');
+    if (row.reasons.indexOf('weak') > -1) out.push('weak');
+    if (!out.length && row.reasons.indexOf('due') > -1) out.push('consolidation');
+    return out;
+  }
+  function inView(row, view) {
+    if (view === 'due') return row.reasons.indexOf('due') > -1 && row.reasons.indexOf('killed') < 0;
+    if (view === 'mistakes') return row.reasons.indexOf('mistakes') > -1 && row.reasons.indexOf('killed') < 0;
+    if (view === 'weak') return row.reasons.indexOf('weak') > -1 && row.reasons.indexOf('killed') < 0;
+    return row.reasons.indexOf('killed') > -1;
+  }
+  function viewRows(view) { return ROWS.filter(function (r) { return inView(r, view || state.view); }); }
+  function visibleRows() {
+    var list = viewRows();
+    if (state.view === 'due' && state.reason !== 'all') {
+      list = list.filter(function (r) { return reasonKeys(r).indexOf(state.reason) > -1; });
+    }
+    var q = state.query.trim().toLowerCase();
+    if (q) list = list.filter(function (r) { return r.stem.toLowerCase().indexOf(q) > -1; });
+    return list;
+  }
+  function reasonCount(key) {
+    if (key === 'all') return viewRows().length;
+    return viewRows().filter(function (r) { return reasonKeys(r).indexOf(key) > -1; }).length;
+  }
+  function viewCount(view) { return ROWS.filter(function (r) { return inView(r, view); }).length; }
+  function rowOf(key) { for (var i = 0; i < ROWS.length; i++) if (ROWS[i].key === key) return ROWS[i]; return null; }
+  function selectedRow() { return rowOf(state.selectedKey); }
+
+  function reasonTags(row) {
+    var keys = reasonKeys(row);
+    if (!keys.length) keys = row.reasons.indexOf('killed') > -1 ? ['killed'] : [];
+    return keys.map(function (r) {
+      return '<span class="tag review-reason-tag ' + (REASON_CLASS[r] || 'plain') + '" data-reason="' + r + '">' + REASON_LABEL[r] + '</span>';
+    }).join('');
+  }
+  function bankLabel(row) {
+    if (S && row.bankId) { var n = S.bankName(row.bankId); if (n) return n; }
+    return '复习题库';
+  }
+  function rowMeta(row) {
+    var parts = ['<span>' + esc(bankLabel(row)) + '</span>', reasonTags(row)];
+    if (row.mistake_count) parts.push('<span class="mono">' + row.mistake_count + '×</span>');
+    if (row.due_at) parts.push('<span>到期 ' + esc(String(row.due_at).slice(0, 10)) + '</span>');
+    if (row.stability != null) parts.push('<span>稳定度 ' + Number(row.stability).toFixed(1) + '</span>');
+    if (row.killed_at && row.reasons.indexOf('killed') > -1) parts.push('<span>斩杀于 ' + esc(String(row.killed_at).slice(0, 10)) + '</span>');
+    return '<span class="list-meta">' + parts.join('') + '</span>';
+  }
+  function queueList() {
+    var rows = visibleRows();
+    if (!rows.length) {
+      var why = state.view === 'due'
+        ? 'FSRS 只为错题与标记薄弱的题建卡；做一组练习，到期后回到这里。'
+        : (state.view === 'weak'
+          ? '做题时犹豫但没错的题，按 W 或点「标记薄弱」拉进这里。'
+          : '这个视图暂时没有题目。');
+      return '<div class="empty">' +
+        '<div class="empty-mark">' + ico('check', '26px') + '</div>' +
+        '<div class="empty-title">' + (VIEWS.filter(function (v) { return v.key === state.view; })[0] || {}).label + '视图里还没有题目</div>' +
+        '<div class="empty-desc">' + why + '</div>' +
+        '</div>';
+    }
+    return rows.map(function (r) {
+      var active = r.key === state.selectedKey;
+      return '' +
+        '<div class="list-row review-queue-row' + (active ? ' is-active' : '') + '" data-key="' + r.key + '">' +
+        '  <span class="qtype mono">单选</span>' +
+        '  <span class="list-main"><span class="qrow-stem">' + esc(r.stem) + '</span>' + rowMeta(r) + '</span>' +
+        '  <span class="list-side"><button type="button" class="btn btn-sm btn-quiet" data-act="pick-row" data-key="' + r.key + '">练习</button></span>' +
+        '</div>';
+    }).join('');
+  }
+
+  /* ---------- 步骤 0：复习四视图（CR-29） ---------- */
+  function renderQueue() {
+    var views = VIEWS.map(function (v) {
+      return '<button type="button" class="segment' + (state.view === v.key ? ' is-on' : '') + '" role="radio" aria-checked="' + (state.view === v.key) + '" data-act="view" data-key="' + v.key + '">' +
+        v.label + '<span class="count">' + viewCount(v.key) + '</span></button>';
+    }).join('');
+    var chips = FILTERS.map(function (f) {
+      return '<button type="button" class="chip' + (state.reason === f.key ? ' is-on' : '') + '" data-act="filter" data-key="' + f.key + '" aria-pressed="' + (state.reason === f.key) + '">' +
+        f.label + '<span class="count">' + reasonCount(f.key) + '</span></button>';
+    }).join('');
+
+    return '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow">学习</p>' +
+      '    <h1 class="page-title">复习</h1>' +
+      '    <p class="page-sub">待复习 · 错题 · 薄弱 · 斩杀：四个视图各回答一个问题</p>' +
+      '  </div>' +
+      '  <div class="page-actions">' +
+      '    <a class="link-btn" href="diagnosis.html">学习档案</a>' +
+      '    <button type="button" class="btn btn-primary" data-act="start-view">' + ico('play', '14px') + '开始复习</button>' +
+      '  </div>' +
+      '</header>' +
+      '<div class="stat-row">' +
+      '  <div class="stat"><div class="stat-num">' + viewCount('due') + '</div><div class="stat-cap">待复习（可执行集合）</div></div>' +
+      '  <div class="stat"><div class="stat-num">' + viewCount('mistakes') + '</div><div class="stat-cap">错题</div></div>' +
+      '  <div class="stat"><div class="stat-num">' + viewCount('weak') + '</div><div class="stat-cap">薄弱</div></div>' +
+      '  <div class="stat"><div class="stat-num">' + viewCount('killed') + '</div><div class="stat-cap">斩杀</div></div>' +
+      '</div>' +
+      '<div class="toolbar mt-5">' +
+      '  <div class="segmented" role="radiogroup" aria-label="复习视图">' + views + '</div>' +
+      '  <span class="od-spacer"></span>' +
+      '  <label class="search-box toolbar-search">' + ico('search', '14px') +
+      '    <input class="input" type="search" placeholder="搜索题干" aria-label="搜索题干" value="' + esc(state.query) + '" data-act="search">' +
+      '  </label>' +
+      '  <span class="flow-note" id="queueCount">' + visibleRows().length + ' 道</span>' +
+      '</div>' +
+      (state.view === 'due'
+        ? '<div class="chip-row" role="group" aria-label="按原因筛选">' + chips + '</div>' +
+          '<p class="hint mt-4">集合口径（全产品唯一）：到期（FSRS 卡片 due_at 已到）∧ 未被我斩杀 ∧ 未被归档 ∧ 我对该题所属题库仍有访问权。错题未清除 / 薄弱 / 巩固是叠加在集合上的原因标签。</p>'
+        : '') +
+      (state.view === 'weak'
+        ? '<p class="hint mt-4">这里是薄弱题的权威列表，包含还没到期的题；从这里开始的会话是普通练习（PRACTICE），不是 FSRS 专项。</p>'
+        : '') +
+      (state.view === 'mistakes'
+        ? '<p class="hint mt-4">错题视图列出全部未清除错题，不受是否到期限制；答对连续 2 次才清除，清除后记录仍保留。</p>'
+        : '') +
+      (state.view === 'killed'
+        ? '<p class="hint mt-4">斩杀题答错一次会自动恢复；在恢复前，它不会出现在练习、到期与错题队列里。</p>'
+        : '') +
+      '<section class="section mt-5">' +
+      '  <div class="section-head"><h2 class="section-title">' + (VIEWS.filter(function (v) { return v.key === state.view; })[0] || {}).label + '</h2>' +
+      '    <span class="section-note">' + (state.view === 'due' ? '同一集合内可切换原因筛选与呈现方式' : '同一题的多个原因合并为一行') + '</span></div>' +
+      '  <div id="queueHost"><div class="list">' + queueList() + '</div></div>' +
+      '</section>';
+  }
+
+  /* ---------- 步骤 1：行内开始 ---------- */
+  function renderStart() {
+    var row = selectedRow();
+    if (!row) {
+      /* 从步骤条直接回到本步但没有选中行：给出口，而不是白屏或报错 */
+      return '' +
+        '<header class="page-head">' +
+        '  <div>' +
+        '    <p class="page-eyebrow">学习 / 复习</p>' +
+        '    <h1 class="page-title">行内开始</h1>' +
+        '    <p class="page-sub">先在待复习视图里选一行，再决定用哪个模式开始</p>' +
+        '  </div>' +
+        '</header>' +
+        '<div class="notice warn">' + ico('alert-triangle', '15px') +
+        '  <div class="notice-body">还没有选中题目。回到「待复习」点某一行的「练习」，这里会按那道题的原因给出可练模式。</div>' +
+        '</div>' +
+        '<div class="flow-actions mt-4">' +
+        '  <button type="button" class="btn btn-primary" data-act="back-queue">返回复习页</button>' +
+        '</div>';
+    }
+    var isDue = row.reasons.indexOf('due') > -1;
+    var isWeak = row.reasons.indexOf('weak') > -1;
+    var isMistake = row.reasons.indexOf('mistakes') > -1;
+    var isKilled = row.reasons.indexOf('killed') > -1;
+
+    /* 模式只由这道题的原因决定：到期 → FSRS；错题未清除 → 错题重做；
+       只标了薄弱 → 普通练习（PRACTICE，不写 FSRS 卡片）；斩杀 → 查漏补缺。 */
+    var mode = isDue ? 'FSRS' : (isMistake ? 'MISTAKE' : (isWeak ? 'PRACTICE' : 'ELIMINATION'));
+
+    var decision;
+    if (isDue) {
+      decision = '' +
+        '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body">这道题今天到期，按 FSRS 安排进入「到期复习」。</div></div>' +
+        '<div class="flow-actions">' +
+        '  <button type="button" class="btn btn-primary" data-act="begin">' + ico('play', '14px') + '开始到期复习</button>' +
+        '  <button type="button" class="btn btn-quiet" data-act="back-queue">返回复习页</button>' +
+        '</div>';
+    } else if (isMistake) {
+      decision = '' +
+        '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body">这道题在错题里，按「错题重做」进入练习。</div></div>' +
+        '<div class="flow-actions">' +
+        '  <button type="button" class="btn btn-primary" data-act="begin">开始错题重做</button>' +
+        '  <button type="button" class="btn btn-quiet" data-act="back-queue">返回复习页</button>' +
+        '</div>';
+    } else if (isWeak) {
+      decision = '' +
+        '<div class="notice info">' + ico('info', '15px') +
+        '  <div class="notice-body"><span class="notice-title">未到到期时间，按普通练习直接做</span><br>' +
+        '  薄弱视图是薄弱题的权威列表，包含还没到 FSRS 到期时间的题。从这里开始的会话是普通练习（PRACTICE），答对不产生新的到期时间。</div>' +
+        '</div>' +
+        '<div class="flow-actions">' +
+        '  <button type="button" class="btn btn-primary" data-act="begin">开始普通练习</button>' +
+        '  <button type="button" class="btn btn-quiet" disabled title="未到到期时间">按到期复习</button>' +
+        '  <button type="button" class="btn btn-quiet" data-act="back-queue">返回复习页</button>' +
+        '</div>';
+    } else {
+      decision = '' +
+        '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body">这道题被斩杀过，恢复后按「查漏补缺」回顾一次。</div></div>' +
+        '<div class="flow-actions">' +
+        '  <button type="button" class="btn btn-primary" data-act="begin">开始查漏补缺</button>' +
+        '  <button type="button" class="btn btn-quiet" data-act="back-queue">返回复习页</button>' +
+        '</div>';
+    }
+
+    return '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow">学习 / 复习</p>' +
+      '    <h1 class="page-title">行内开始</h1>' +
+      '    <p class="page-sub">四个视图的每一行按自身原因决定会话模式</p>' +
+      '  </div>' +
+      '</header>' +
+      '<section class="section">' +
+      '  <div class="section-head"><h2 class="section-title">' + (VIEWS.filter(function (v) { return v.key === state.view; })[0] || {}).label + '视图</h2><span class="section-note">选中行以松绿标出</span></div>' +
+      '  <div class="list">' + queueList() + '</div>' +
+      '</section>' +
+      '<section class="section">' +
+      '  <div class="section-head"><h2 class="section-title">开始复习</h2>' +
+      '    <span class="section-note mode-tag"><span class="tag brand">' + MODE_LABEL[mode] + '</span></span></div>' +
+      '  <div class="flow-stack start-block">' +
+      '    <p class="qrow-stem">' + esc(row.stem) + '</p>' +
+      '    ' + rowMeta(row) +
+      '    ' + decision +
+      '  </div></div>' +
+      '</section>';
+  }
+
+  /* ---------- 步骤 2：复习会话（答题 → 判定） ---------- */
+  function renderSession() {
+    var row = selectedRow();
+    var opts = row.options.map(function (o) {
+      var cls = 'opt';
+      if (state.selected === o.key) cls += ' is-selected';
+      if (state.submitted && o.key === row.answer) cls += ' is-correct';
+      if (state.submitted && state.selected === o.key && o.key !== row.answer) cls += ' is-wrong';
+      var mark = '';
+      if (state.submitted && o.key === row.answer) mark = '<span class="opt-mark">' + ico('check', '14px') + '</span>';
+      else if (state.submitted && state.selected === o.key && o.key !== row.answer) mark = '<span class="opt-mark">' + ico('x', '14px') + '</span>';
+      return '<button type="button" class="' + cls + '" data-act="pick-opt" data-key="' + o.key + '"' + (state.submitted ? ' disabled' : '') + ' aria-pressed="' + (state.selected === o.key) + '">' +
+        '<span class="opt-key">' + o.key + '</span><span>' + esc(o.content) + '</span>' + mark + '</button>';
+    }).join('');
+
+    var feedback = '';
+    if (state.submitted) {
+      var ok = state.selected === row.answer;
+      /* 只有 FSRS 会话写卡片；普通练习（薄弱视图）只记错题，不给到期时间 */
+      var ratingBlock = state.mode === 'FSRS'
+        ? '<div class="flow-stack-sm">' +
+          '    <span class="rail-title">这道题记得怎样？</span>' +
+          '    <div class="fsrs-btns">' +
+          '      <button type="button" class="btn btn-sm' + (state.rating === 1 ? ' is-on' : '') + '" data-act="rate" data-r="1">重来 ' + spanDue(row, 1) + '</button>' +
+          '      <button type="button" class="btn btn-sm' + (state.rating === 2 ? ' is-on' : '') + '" data-act="rate" data-r="2"' + (ok ? '' : ' disabled') + '>困难 ' + spanDue(row, 2) + '</button>' +
+          '      <button type="button" class="btn btn-sm' + (state.rating === 3 ? ' is-on' : '') + '" data-act="rate" data-r="3"' + (ok ? '' : ' disabled') + '>一般 ' + spanDue(row, 3) + '</button>' +
+          '      <button type="button" class="btn btn-sm' + (state.rating === 4 ? ' is-on' : '') + '" data-act="rate" data-r="4"' + (ok ? '' : ' disabled') + '>轻松 ' + spanDue(row, 4) + '</button>' +
+          '    </div>' +
+          '    <p class="hint">间隔由服务端按本题稳定度实时计算，不写死。</p>' +
+          '  </div>'
+        : '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body">普通练习不写 FSRS 卡片，也不产生新的到期时间；答错会记入错题。</div></div>';
+      feedback = '' +
+        '<div class="flow-stack">' +
+        '  <div class="verdict' + (ok ? ' ok' : '') + '">' +
+        '    <span class="verdict-mark">' + ico(ok ? 'check' : 'x', '14px') + '</span>' +
+        '    <strong>' + (ok ? '正确' : '错误') + '</strong>' +
+        '  </div>' +
+        '  <div class="answer-line"><span>答案</span><span class="ans">' + esc(row.answer) + '</span>' +
+        '  <span>你的作答 · ' + esc(state.selected || '未作答') + '</span></div>' +
+        '  <div><div class="rule-label">官方解析</div><div class="explain-body">' + esc(row.explanation) + '</div></div>' +
+        '  ' + ratingBlock +
+        '</div>';
+    }
+
+    var foot = state.submitted
+      ? '<button type="button" class="btn btn-primary" data-act="to-reflow">下一题</button><span class="flow-note">' + (state.mode === 'FSRS' ? '已记录本次评级' : '本次作答已记录') + '</span>'
+      : '<button type="button" class="btn btn-primary" data-act="submit"' + (state.selected ? '' : ' disabled') + '>提交答案</button><span class="flow-note">' + (state.selected ? '已选择 ' + state.selected : '选择一个选项后提交') + '</span>';
+
+    return '' +
+      '<div class="runner-top">' +
+      '  <button type="button" class="btn btn-quiet btn-sm" data-act="exit">' + ico('arrow-left', '14px') + '退出</button>' +
+      '  <span class="runner-mode">' + MODE_LABEL[state.mode] + ' · 单选题</span>' +
+      '  <span class="od-spacer"></span>' +
+      '  <span class="runner-mode mono">1 / 1</span>' +
+      '</div>' +
+      '<div class="runner"><div class="runner-body">' +
+      '  <div class="q-meta"><span>第 1 题 · 共 1 题</span><span>单选题</span></div>' +
+      '  <p class="q-stem">' + esc(row.stem) + '</p>' +
+      '  <div class="opt-list">' + opts + '</div>' +
+      '  ' + feedback +
+      '  <div class="runner-foot">' + foot + '</div>' +
+      '</div></div>';
+  }
+
+  /* ---------- 步骤 3：错题回流 ---------- */
+  function renderReflow() {
+    var row = selectedRow();
+    return '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow">学习 / 复习 / 会话结束</p>' +
+      '    <h1 class="page-title">回流与清除</h1>' +
+      '    <p class="page-sub">' + (state.submitted && state.selected === row.answer ? '答对：按原因标签决定是否继续留在集合里' : '答错：自动回到复习视图，并记入错题') + '</p>' +
+      '  </div>' +
+      '</header>' +
+      '<section class="section">' +
+      '  <div class="section-head"><h2 class="section-title">这道题现在在复习视图里</h2><span class="section-note">' + esc(bankLabel(row)) + '</span></div>' +
+      '  <div class="list">' +
+      '  <div class="list-row review-queue-row is-active" data-key="' + row.key + '">' +
+      '    <span class="qtype mono">单选</span>' +
+      '    <span class="list-main"><span class="qrow-stem">' + esc(row.stem) + '</span>' + rowMeta(row) + '</span>' +
+      '    <span class="list-side"><span class="tag ' + (row.reasons.indexOf('mistakes') > -1 ? 'bad">错题' : 'plain">巩固') + '</span></span>' +
+      '  </div>' +
+      '</div></div>' +
+      '</section>' +
+      '<div class="notice ok">' + ico('check', '15px') +
+      '  <div class="notice-body">' + (state.submitted && state.selected === row.answer
+        ? (state.mode === 'FSRS' ? '本次答对。到期时间已按本次评级重排；错题连续 2 次正确后自动清除。' : '本次答对。普通练习不写 FSRS 卡片；错题连续 2 次正确后自动清除。')
+        : (state.mode === 'FSRS'
+          ? '已记入错题，连续 2 次正确可清除；到期时间已按本次评级重新安排。'
+          : '已记入错题，连续 2 次正确可清除；普通练习不写 FSRS 卡片，本题的到期时间不变。')) + '</div>' +
+      '</div>' +
+      '<div class="flow-actions mt-4">' +
+      '  <button type="button" class="btn btn-primary" data-act="to-queue">继续</button>' +
+      '</div>';
+  }
+
+  /* ---------- 步骤 4：队列更新 ---------- */
+  function renderUpdated() {
+    var row = selectedRow();
+    return '' +
+      '<header class="page-head">' +
+      '  <div>' +
+      '    <p class="page-eyebrow">学习 / 复习</p>' +
+      '    <h1 class="page-title">队列更新</h1>' +
+      '    <p class="page-sub">同一行的原因标签、错题次数与到期时间已变化</p>' +
+      '  </div>' +
+      '  <div class="page-actions">' +
+      '    <button type="button" class="btn btn-quiet" data-act="back-queue">返回复习页</button>' +
+      '  </div>' +
+      '</header>' +
+      '<div class="stat-row">' +
+      '  <div class="stat"><div class="stat-num">' + viewCount('due') + '</div><div class="stat-cap">待复习（可执行集合）</div></div>' +
+      '  <div class="stat"><div class="stat-num">' + viewCount('mistakes') + '</div><div class="stat-cap">错题</div></div>' +
+      '  <div class="stat"><div class="stat-num">' + viewCount('weak') + '</div><div class="stat-cap">薄弱</div></div>' +
+      '  <div class="stat"><div class="stat-num">' + viewCount('killed') + '</div><div class="stat-cap">斩杀</div></div>' +
+      '</div>' +
+      '<div class="toolbar mt-5">' +
+      '  <div class="segmented" role="radiogroup" aria-label="复习视图">' + VIEWS.map(function (v) {
+        return '<button type="button" class="segment' + (state.view === v.key ? ' is-on' : '') + '" role="radio" aria-checked="' + (state.view === v.key) + '" data-act="view" data-key="' + v.key + '">' +
+          v.label + '<span class="count">' + viewCount(v.key) + '</span></button>';
+      }).join('') + '</div>' +
+      '  <span class="od-spacer"></span><span class="flow-note" id="queueCount">' + visibleRows().length + ' 道</span>' +
+      '</div>' +
+      (state.view === 'due'
+        ? '<div class="chip-row" role="group" aria-label="按原因筛选">' + FILTERS.map(function (f) {
+          return '<button type="button" class="chip' + (state.reason === f.key ? ' is-on' : '') + '" data-act="filter" data-key="' + f.key + '" aria-pressed="' + (state.reason === f.key) + '">' + f.label + '<span class="count">' + reasonCount(f.key) + '</span></button>';
+        }).join('') + '</div>'
+        : '') +
+      '<section class="section">' +
+      '  <div class="section-head"><h2 class="section-title">' + (VIEWS.filter(function (v) { return v.key === state.view; })[0] || {}).label + '</h2><span class="section-note">选中行已更新</span></div>' +
+      '  <div id="queueHost"><div class="list">' + queueList() + '</div></div>' +
+      '</section>' +
+      '<div class="notice info">' + ico('info', '15px') +
+      '  <div class="notice-body">「' + esc(row.stem) + '」下次到期 ' + esc(String(row.due_at || '—').slice(0, 10)) + '，稳定度 ' + (row.stability != null ? Number(row.stability).toFixed(1) : '—') + '，错题 ' + row.mistake_count + ' 次。</div>' +
+      '</div>';
+  }
+
+  /* ---------- 步骤定义 ---------- */
+  var STEPS = [
+    { id: 'queue', name: '复习四视图', render: renderQueue, nextLabel: '开始复习', note: 'CR-29：待复习 / 错题 / 薄弱 / 斩杀四个视图各回答一个问题；学习档案是独立路由，不是第五个页签。' },
+    {
+      id: 'start', name: '行内开始', render: renderStart,
+      nextLabel: function () {
+        var r = selectedRow();
+        if (!r) return '开始复习';
+        if (r.reasons.indexOf('due') > -1) return '开始到期复习';
+        if (r.reasons.indexOf('mistakes') > -1) return '开始错题重做';
+        if (r.reasons.indexOf('weak') > -1) return '开始普通练习';
+        return '开始查漏补缺';
+      },
+      note: '模式只由行的原因决定：到期 → FSRS；错题 → 错题重做；只标薄弱 → 普通练习；斩杀 → 查漏补缺。',
+      nextDisabled: function () { return !state.selectedKey; }
+    },
+    {
+      id: 'session', name: '复习会话', render: renderSession,
+      nextLabel: function () { return state.submitted ? '下一题' : '提交答案'; },
+      note: '简化版会话：答题后立即判定。',
+      nextDisabled: function () { return !state.selected; }
+    },
+    { id: 'reflow', name: '回流与清除', render: renderReflow, nextLabel: '继续', note: '答错回流错题并重排到期；答对只重排到期，连续 2 次正确才清除。' },
+    { id: 'updated', name: '队列更新', render: renderUpdated, nextLabel: '重新开始', note: '行状态与到期时间已更新。' }
+  ];
+
+  /* ---------- 状态机 ---------- */
+  var stage = document.getElementById('flowStage');
+  var stepsOl = document.getElementById('flowSteps');
+  var caption = document.getElementById('flowCaption');
+  var prevBtn = document.getElementById('flowPrev');
+  var nextBtn = document.getElementById('flowNext');
+  var noteEl = document.getElementById('flowNote');
+
+  function render() {
+    syncRows();   /* 队列是 store 的一份投影，渲染前先同步 */
+    var step = STEPS[state.step];
+    var html = '';
+    for (var i = 0; i < STEPS.length; i++) {
+      var s = STEPS[i];
+      var cls = 'step';
+      if (i === state.step) cls += ' is-active';
+      if (i < state.step) cls += ' is-done';
+      html += '<button type="button" class="' + cls + '" data-goto="' + i + '"' + (i === state.step ? ' aria-current="step"' : '') + '>' +
+        '<span class="step-n">' + (i < state.step ? ico('check', '11px') : (i + 1)) + '</span>' +
+        '<span class="step-name">' + esc(s.name) + '</span></button>';
+      if (i < STEPS.length - 1) html += '<span class="step-line" aria-hidden="true"></span>';
+    }
+    stepsOl.innerHTML = html;
+
+    stage.innerHTML = step.render();
+    caption.innerHTML = '当前第 <b>' + (state.step + 1) + '</b> 步 / 共 <b>' + STEPS.length + '</b> 步 · ' + esc(step.name);
+
+    prevBtn.disabled = state.step === 0;
+    nextBtn.textContent = typeof step.nextLabel === 'function' ? step.nextLabel() : step.nextLabel;
+    nextBtn.disabled = typeof step.nextDisabled === 'function' ? step.nextDisabled() : !!step.nextDisabled;
+    noteEl.textContent = typeof step.note === 'function' ? step.note() : (step.note || '');
+  }
+
+  function go(n) {
+    state.step = Math.max(0, Math.min(STEPS.length - 1, n));
+    if (state.step > state.maxStep) state.maxStep = state.step;
+    render();
+    stage.scrollIntoView({ block: 'nearest' });
+  }
+
+  prevBtn.addEventListener('click', function () { go(state.step - 1); });
+  nextBtn.addEventListener('click', function () { ACTIONS[STEPS[state.step].id + ':next'](); });
+  stepsOl.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-goto]');
+    if (!t) return;
+    var n = parseInt(t.getAttribute('data-goto'), 10);
+    /* 没有选中行时不允许直接跳到会话 / 回流 / 更新步（T22：回跳不能产生错乱状态） */
+    /* T22：步骤条只能回到已完成或当前步骤，不能前跳到没走过的状态 */
+    if (n > state.maxStep) { window.eeToast('请先完成当前步骤'); return; }
+    if (n > 0 && !state.selectedKey) { window.eeToast('请先在复习视图里选一行'); return; }
+    go(n);
+  });
+
+  /* ---------- 动作 ---------- */
+  var ACTIONS = {
+    /* 从当前视图开始：优先已选中的行，否则取当前视图可见的第一行 */
+    'queue:next': function () { startVisible(); },
+    'start-view': function () { startVisible(); },
+    'start:next': function () { beginSession(state.mode); },
+    'session:next': function () { if (state.submitted) toReflow(); else submitAnswer(); },
+    'reflow:next': function () { go(4); },
+    'updated:next': function () { restart(); },
+
+    'filter': function (el) { state.reason = el.getAttribute('data-key'); render(); },
+    'view': function (el) {
+      state.view = el.getAttribute('data-key');
+      state.reason = 'all';           /* 切视图时重置原因筛选，避免两套筛选叠加 */
+      render();
+    },
+    'search': function (el) { state.query = el.value; refreshQueue(); },
+    'pick-row': function (el) { startRow(rowOf(el.getAttribute('data-key'))); },
+    'begin': function () { beginSession(state.mode); },
+    'back-queue': function () { go(0); },
+    'pick-opt': function (el) {
+      if (state.submitted) return;
+      state.selected = el.getAttribute('data-key');
+      render();
+    },
+    'submit': function () { submitAnswer(); },
+    'rate': function (el) {
+      state.rating = parseInt(el.getAttribute('data-r'), 10);
+      render();
+    },
+    'to-reflow': function () { toReflow(); },
+    'to-queue': function () { go(4); },
+    'exit': function () {
+      /* 退出会话：不写报告，会话从 store 撤掉，进度不落成绩 */
+      if (S && state.sid) S.finishSession(state.sid);
+      state.sid = null;
+      window.eeToast('已退出复习会话');
+      go(0);
+    }
+  };
+
+  function startVisible() {
+    if (state.selectedKey && rowOf(state.selectedKey)) { startRow(rowOf(state.selectedKey)); return; }
+    var rows = visibleRows();
+    if (rows.length) { startRow(rows[0]); return; }
+    window.eeToast('当前视图没有可开始的题目');
+  }
+
+  function startRow(row) {
+    if (!row) return;
+    state.selectedKey = row.key;
+    /* 模式只由原因决定：到期 → FSRS；错题未清除 → 错题重做；只标薄弱 → 普通练习；斩杀 → 查漏补缺 */
+    state.mode = row.reasons.indexOf('due') > -1
+      ? 'FSRS'
+      : (row.reasons.indexOf('mistakes') > -1 ? 'MISTAKE' : (row.reasons.indexOf('weak') > -1 ? 'PRACTICE' : 'ELIMINATION'));
+    state.selected = null;
+    state.submitted = false;
+    state.rating = null;
+    state.reflowed = false;
+    go(1);
+  }
+
+  function beginSession(mode) {
+    if (!state.selectedKey) return;
+    var r = selectedRow();
+    state.mode = mode;
+    state.selected = null;
+    state.submitted = false;
+    state.rating = null;
+    state.reflowed = false;
+    /* 同模式 + 同题库只保留一个进行中会话（store 兜底），这里显式收口旧会话 */
+    if (S) S.sessions('review').forEach(function (x) { S.finishSession(x.id); });
+    var s = S ? S.startSession({
+      kind: 'review', bankId: r ? r.bankId : null, mode: MODE_LABEL[mode] || mode,
+      title: (MODE_LABEL[mode] || mode) + ' · ' + (r ? r.stem.slice(0, 18) : ''),
+      total: 1, rowIds: [state.selectedKey], index: 0, done: 0, answers: {}, ratings: {}, flags: {}
+    }) : null;
+    state.sid = s ? s.id : null;
+    go(2);
+    window.eeToast('已开始「' + MODE_LABEL[mode] + '」');
+  }
+
+  function persist() {
+    if (!S || !state.sid) return;
+    S.updateSession(state.sid, {
+      answers: state.selected ? { 0: state.selected } : {},
+      ratings: state.rating ? { 0: state.rating } : {},
+      index: 0, done: state.submitted ? 1 : 0
+    });
+  }
+
+  function submitAnswer() {
+    if (!state.selected) return;
+    state.submitted = true;
+    var ok = state.selected === selectedRow().answer;
+    state.rating = ok ? null : 1;
+    persist();
+    render();
+  }
+
+  function toReflow() {
+    var row = selectedRow();
+    if (!state.reflowed) {
+      state.reflowed = true;
+      var right = state.submitted && state.selected === (row ? row.answer : '');
+      var rating = state.rating || (right ? 3 : 1);
+      if (S && row) {
+        if (right) {
+          /* 答对：不回流错题，只按评级重排到期时间（FSRS 会话才写卡片） */
+          S.updateReviewRow(row.id, {
+            stability: rating === 4 ? 3.1 : (rating === 3 ? 2.4 : 1.2),
+            due_at: rating === 4 ? '2026-11-16 08:00' : (rating === 3 ? '2026-11-16 08:00' : '2026-11-14 08:00')
+          });
+          window.eeToast('已记录评级，到期时间已重排');
+        } else {
+          /* 答错：回流错题，错题次数 +1，按评级重排到期时间 */
+          S.reflowRow(row.id, rating);
+          window.eeToast('已记入错题，连续 2 次正确可清除');
+        }
+      }
+      syncRows();
+      if (S && state.sid) {
+        var r2 = selectedRow();
+        S.finishSession(state.sid, {
+          title: (MODE_LABEL[state.mode] || '复习') + ' · ' + (r2 ? r2.stem.slice(0, 18) : ''),
+          score: state.selected === (r2 ? r2.answer : '') ? 100 : 0,
+          correct: state.selected === (r2 ? r2.answer : '') ? 1 : 0, total: 1,
+          answered: 1, minutes: 1, kind: 'review'
+        });
+        state.sid = null;
+      }
+    }
+    go(3);
+  }
+
+  /* 「重新开始」：把 store 的队列还原到种子状态（只用既有 updateReviewRow） */
+  function resetRows() {
+    if (!S) return;
+    Object.keys(SEED).forEach(function (id) {
+      var r = S.reviewRow(id);
+      if (!r) return;
+      S.updateReviewRow(id, {
+        reasons: SEED[id].reasons.slice(), due_at: SEED[id].due_at,
+        stability: SEED[id].stability, mistake_count: SEED[id].mistake_count
+      });
+    });
+    syncRows();
+  }
+
+  function restart() {
+    resetRows();
+    state.maxStep = 0;
+    state.selectedKey = null;
+    state.mode = null;
+    state.selected = null;
+    state.submitted = false;
+    state.rating = null;
+    state.reflowed = false;
+    state.sid = null;
+    state.reason = 'all';
+    state.query = '';
+    go(0);
+  }
+
+  /* 只刷新队列列表：搜索输入保持焦点，不整页重绘 */
+  function refreshQueue() {
+    var host = document.getElementById('queueHost');
+    var count = document.getElementById('queueCount');
+    if (host) host.innerHTML = '<div class="list">' + queueList() + '</div>';
+    if (count) count.textContent = visibleRows().length + ' 道';
+  }
+
+  /* ---------- 事件委托 ---------- */
+  function bind(delegate, attr) {
+    ['click', 'change', 'input'].forEach(function (type) {
+      delegate.addEventListener(type, function (e) {
+        var el = e.target.closest ? e.target.closest('[' + attr + ']') : null;
+        if (!el || !delegate.contains(el)) return;
+        var fn = ACTIONS[el.getAttribute(attr)];
+        if (fn) { e.preventDefault(); fn(el, e); }
+      });
+    });
+  }
+  bind(stage, 'data-act');
+
+  render();
+})();
+</script>
+</body>
+</html>

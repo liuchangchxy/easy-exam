@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>状态与外壳 · EasyExam 设计规范</title>
+<link rel="stylesheet" href="../assets/ee.css">
+<style>
+  /* 本文档页的布局辅助：ee.css 未覆盖的文档版式；不重新定义令牌与控件 */
+  .doc-page { max-width: 1080px; margin: 0 auto; padding: var(--sp-8) var(--sp-6); }
+  .doc-h2 { font-family: var(--font-serif); font-size: var(--text-2xl); line-height: var(--text-2xl-lh); font-weight: 500; margin: 0; }
+  .doc-h2 .no { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink-4); font-weight: 400; margin-right: var(--sp-3); }
+  .doc-h3 { font-family: var(--font-sans); font-size: var(--text-base); font-weight: 500; color: var(--ink-2); margin: var(--sp-6) 0 0; }
+  .doc-rule { font-size: var(--text-sm); color: var(--ink-2); margin: var(--sp-2) 0 var(--sp-5); max-width: 80ch; }
+  .doc-note-line { font-size: var(--text-xs); color: var(--ink-3); margin: var(--sp-4) 0 0; max-width: 84ch; line-height: var(--text-xs-lh); }
+  .doc-note-line + .doc-note-line { margin-top: var(--sp-2); }
+  .doc-note-line b { color: var(--ink-2); font-weight: 500; }
+  .demo { display: flex; flex-wrap: wrap; gap: var(--sp-5); align-items: flex-start; }
+  .demo-cell { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+  .demo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--sp-5); }
+  .state-card { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
+  .state-card > .rule-label { margin: 0; }
+  .state-card > .panel { flex: 1 1 auto; }
+  .cmd-demo-btn { width: 220px; justify-content: flex-start; }
+  .kbd-list { display: grid; gap: var(--sp-2); }
+  .kbd-row { display: flex; align-items: baseline; gap: var(--sp-3); font-size: var(--text-sm); color: var(--ink-2); }
+  .kbd-row .kbd { flex: none; }
+  .bp-table td { vertical-align: top; }
+  .mono { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-2); }
+  .mt-4 { margin-top: var(--sp-4); }
+  .mt-5 { margin-top: var(--sp-5); }
+  .mb-0 { margin-bottom: 0; }
+  @media (max-width: 640px) {
+    .doc-page { padding: var(--sp-6) var(--sp-4); }
+    .dtable caption { display: block; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">跳到主内容</a>
+
+<main class="doc-page" id="main-content">
+
+  <!-- ==================== 页头 ==================== -->
+  <header class="page-head">
+    <div>
+      <p class="page-eyebrow">03 / EasyExam UI/UX 设计规范</p>
+      <h1 class="page-title">状态与外壳</h1>
+      <p class="page-sub">八种状态是全产品统一契约：任何屏幕不得只设计「正常那一档」。命令面板、快捷键、同步态、URL 状态契约与跨端断点同属全局外壳，由本页定义，各屏直接引用。</p>
+    </div>
+    <div class="page-actions">
+      <button class="btn btn-quiet" type="button" onclick="openCmd(this)">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-command"/></svg>命令面板
+        <span class="kbd">⌘K</span>
+      </button>
+      <a class="btn" href="components.html">查看控件库</a>
+    </div>
+  </header>
+
+  <!-- ==================== 01 八态矩阵 ==================== -->
+  <section class="section" aria-labelledby="h-states">
+    <h2 class="doc-h2" id="h-states"><span class="no">01</span>八态矩阵</h2>
+    <p class="doc-rule">每个屏幕都必须显式设计下面八种状态，并用同一屏内的不同面板并列呈现。空态必须说明<b>为什么</b>空并给出下一步动作；禁用必须给出可读原因且不隐藏入口；未配置与离线不是错误，是正常的产品状态，要有自己的表达。</p>
+
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <caption>八态契约：状态、触发条件、统一表达、禁止事项</caption>
+        <thead>
+          <tr>
+            <th scope="col">状态</th>
+            <th scope="col">触发条件</th>
+            <th scope="col">统一表达</th>
+            <th scope="col">禁止</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td data-label="状态"><span class="tag plain">空</span></td>
+            <td data-label="触发条件">集合本身为空（不是加载失败）</td>
+            <td data-label="统一表达"><code class="mono">.empty</code>：空标 + 标题 + <b>为什么空</b> + 下一步 CTA</td>
+            <td data-label="禁止">只写「暂无数据」；给一个死按钮</td>
+          </tr>
+          <tr>
+            <td data-label="状态"><span class="tag plain">加载</span></td>
+            <td data-label="触发条件">首次进入、切换筛选、翻页</td>
+            <td data-label="统一表达"><code class="mono">.skeleton</code> + <code class="mono">.sk-line</code>／<code class="mono">.sk-block</code>，与真实内容同构</td>
+            <td data-label="禁止">整页转圈；骨架与真实结构不一致导致跳动</td>
+          </tr>
+          <tr>
+            <td data-label="状态"><span class="tag bad">错误</span></td>
+            <td data-label="触发条件">请求失败、导入作业失败、判分失败</td>
+            <td data-label="统一表达"><code class="mono">.notice.bad</code> + 可读原因 + 重试按钮</td>
+            <td data-label="禁止">把技术堆栈当成用户可读原因；无重试入口</td>
+          </tr>
+          <tr>
+            <td data-label="状态"><span class="tag warn">禁用</span></td>
+            <td data-label="触发条件">有入口但当前不可执行（无写权限、前置未满足）</td>
+            <td data-label="统一表达">控件 <code class="mono">disabled</code> + <code class="mono">.hint</code> 说明原因</td>
+            <td data-label="禁止">隐藏入口让用户找不到；禁用而不说为什么</td>
+          </tr>
+          <tr>
+            <td data-label="状态"><span class="tag warn">无权限</span></td>
+            <td data-label="触发条件">越权访问（FN-421 两种变体）</td>
+            <td data-label="统一表达">看不到 → 整页 <code class="mono">.empty</code>（403 语义）；看得到不能操作 → 控件禁用 + 原因</td>
+            <td data-label="禁止">两种变体混为一谈；跳登录页却不说明原因</td>
+          </tr>
+          <tr>
+            <td data-label="状态"><span class="tag warn">冲突</span></td>
+            <td data-label="触发条件">草稿冲突（FN-216/423）、题目冲突（FN-115）、并发编辑（FN-424）</td>
+            <td data-label="统一表达"><code class="mono">.notice.warn</code> + 「查看我的版本 / 使用对方版本」</td>
+            <td data-label="禁止">静默覆盖任一侧；不说明冲突发生在哪个字段</td>
+          </tr>
+          <tr>
+            <td data-label="状态"><span class="tag brand">未配置</span></td>
+            <td data-label="触发条件">AI 未配置（FN-510/518）、无蓝图（FN-311）、注册关闭（FN-405）</td>
+            <td data-label="统一表达"><code class="mono">.notice.info</code> + 去配置的链接；功能仍可用的部分照常可用</td>
+            <td data-label="禁止">报成错误；让整个功能因未配置而消失（违反 P-8）</td>
+          </tr>
+          <tr>
+            <td data-label="状态"><span class="tag plain">离线</span></td>
+            <td data-label="触发条件">网络断开（FN-217 离线作答队列、FN-617 同步态）</td>
+            <td data-label="统一表达">持久标识 + 队列计数 + 重试入口；作答不中断</td>
+            <td data-label="禁止">阻断作答；把离线当失败弹错误</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="doc-h3">真实渲染：八种状态的同屏样例</h3>
+    <div class="demo-grid">
+
+      <div class="state-card">
+        <p class="rule-label">空 · 说明为什么空</p>
+        <div class="panel">
+          <div class="empty">
+            <p class="empty-mark">还没有到期的复习题</p>
+            <p class="empty-title">今天的复习已经清空了</p>
+            <p class="empty-desc">你最近 7 天每天完成的复习量都够，FSRS 把下一次到期排到了 11 月 28 日。想提前练，可以去题库手动起一组练习。</p>
+            <div class="empty-actions">
+              <a class="btn btn-primary btn-sm" href="screens/banks.html">去题库练习</a>
+              <a class="btn btn-quiet btn-sm" href="screens/review.html">看做题记录</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state-card">
+        <p class="rule-label">加载 · 与真实内容同构</p>
+        <div class="panel">
+          <div class="panel-body">
+            <div class="skeleton" aria-hidden="true">
+              <div class="sk-block" style="height:56px"></div>
+              <div class="sk-line" style="width:72%"></div>
+              <div class="sk-line" style="width:54%"></div>
+              <div class="sk-line" style="width:88%"></div>
+              <div class="sk-line" style="width:40%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state-card">
+        <p class="rule-label">错误 · 可读原因 + 重试</p>
+        <div class="panel">
+          <div class="panel-body">
+            <div class="notice bad">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+              <div class="notice-body">
+                <p class="notice-title">这批 12 道题的归档没有成功</p>
+                <p>服务器在写入第 5 道题时断开了连接，整批已回滚，没有留下半归档状态。</p>
+                <div class="notice-actions">
+                  <button class="btn btn-sm" type="button" onclick="eeToast('已重新提交这 12 道题')">重试</button>
+                  <button class="btn btn-quiet btn-sm" type="button">取消</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state-card">
+        <p class="rule-label">禁用 · 不隐藏入口</p>
+        <div class="panel">
+          <div class="panel-body">
+            <div class="field">
+              <span class="label">导出题库</span>
+              <button class="btn" type="button" disabled>
+                <svg class="od-icon" aria-hidden="true"><use href="#i-export"/></svg>导出
+              </button>
+              <p class="hint">题库还是空的，没有可导出的题目。先导入或新建题目。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state-card">
+        <p class="rule-label">无权限 · 看不到</p>
+        <div class="panel">
+          <div class="empty">
+            <p class="empty-mark">403</p>
+            <p class="empty-title">这个题库不在你的访问范围里</p>
+            <p class="empty-desc">它可能已被所有者撤销共享，或者你记错了名字。你能看到的题库在「题库 / 共享给我」里。</p>
+            <div class="empty-actions">
+              <a class="btn btn-sm" href="screens/banks.html">回到题库列表</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state-card">
+        <p class="rule-label">无权限 · 看得到但不能操作</p>
+        <div class="panel">
+          <div class="panel-body">
+            <div class="notice warn">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+              <div class="notice-body">
+                <p class="notice-title">你是这个题库的成员，不是管理员</p>
+                <p>可以看题、做题、导入；成员与角色变更需要管理员权限。</p>
+              </div>
+            </div>
+            <div class="field mt-4">
+              <span class="label">题库成员</span>
+              <button class="btn" type="button" disabled>
+                <svg class="od-icon" aria-hidden="true"><use href="#i-plus"/></svg>添加成员
+              </button>
+              <p class="hint">需要管理员角色。入口保留在这里，只是不能点。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state-card">
+        <p class="rule-label">冲突 · 两个版本都要能看到</p>
+        <div class="panel">
+          <div class="panel-body">
+            <div class="notice warn">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+              <div class="notice-body">
+                <p class="notice-title">这道题有 2 个未合并的修改</p>
+                <p>「答案解析」字段：你的版本写于 11 月 24 日 21:08，lin 的版本写于 11 月 24 日 21:12。题干与选项没有分歧。</p>
+                <div class="notice-actions">
+                  <button class="btn btn-sm" type="button">查看我的版本</button>
+                  <button class="btn btn-sm" type="button">使用对方版本</button>
+                  <button class="btn btn-quiet btn-sm" type="button">逐字段对比</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state-card">
+        <p class="rule-label">未配置 · 不是错误</p>
+        <div class="panel">
+          <div class="panel-body">
+            <div class="notice info">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-cpu"/></svg>
+              <div class="notice-body">
+                <p class="notice-title">还没有配置 AI 解释</p>
+                <p>配好之后，做完题可以一键要讲解。现在你仍然可以正常刷题、看题库自带的解析、把题标成错题。</p>
+                <div class="notice-actions">
+                  <a class="btn btn-sm" href="screens/settings.html">去设置里配置</a>
+                  <button class="btn btn-quiet btn-sm" type="button">本次不再提示</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state-card">
+        <p class="rule-label">离线 · 作答不中断</p>
+        <div class="panel">
+          <div class="panel-body">
+            <div class="notice info">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>
+              <div class="notice-body">
+                <p class="notice-title">已离线，作答照常进行</p>
+                <p>你有 <b>3 条作答</b>排在本地队列里，恢复网络后会自动补传。评级与判分在本地先算，不会卡住你。</p>
+                <div class="notice-actions">
+                  <button class="btn btn-sm" type="button" onclick="eeToast('已手动触发一次补传')">立即重试</button>
+                  <button class="btn btn-quiet btn-sm" type="button">查看队列</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state-card">
+        <p class="rule-label">批量结果 · 只有两项（CR-27）</p>
+        <div class="panel">
+          <div class="panel-body">
+            <div class="notice ok">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg>
+              <div class="notice-body">
+                <p class="notice-title">已选 12 题 · 成功 9 · 无须变更 3</p>
+                <p>9 道原本未归档的题已归档；3 道本来就是归档状态，没有重复写入。不存在「跳过」这一项。</p>
+              </div>
+            </div>
+            <p class="hint mt-4">整批拒绝时长这样：<span class="tag bad">整批拒绝</span> 零写入 + 可读原因，绝不给部分成功。</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <p class="doc-note-line"><b>为什么把八态做成契约：</b>P2 之后每个屏都自己决定空态怎么写，就会出现十种「暂无数据」。统一之后，P3 只需要实现一套状态组件，用户在任何页面看到的都是同一种语言。</p>
+  </section>
+
+  <!-- ==================== 02 命令面板 ==================== -->
+  <section class="section" aria-labelledby="h-cmd">
+    <h2 class="doc-h2" id="h-cmd"><span class="no">02</span>命令面板（FN-605）</h2>
+    <p class="doc-rule">命令面板是全产品唯一的「跨页直达」通道，用来缩短高频路径，不是又一个导航。它只做三件事：跳到某个页面、对当前对象执行一个动作、切换一个全局设置。没有权限的命令<b>置灰并说明原因</b>，不隐藏。</p>
+
+    <div class="demo">
+      <div class="demo-cell">
+        <span class="hint">打开方式：⌘K / Ctrl+K，或点这里</span>
+        <button class="btn cmd-demo-btn" type="button" onclick="openCmd(this)">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-command"/></svg>搜索或执行命令
+          <span class="kbd">⌘K</span>
+        </button>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">移动端：底部抽屉变体，同一份命令数据</span>
+        <button class="btn btn-quiet cmd-demo-btn" type="button" onclick="openCmd(this, true)">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-command"/></svg>移动端形态
+        </button>
+      </div>
+    </div>
+
+    <h3 class="doc-h3">命令的分组与权重</h3>
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <caption>命令面板收录规则：高频学习动作优先，管理动作收在「转到」分组</caption>
+        <thead>
+          <tr><th scope="col">分组</th><th scope="col">示例</th><th scope="col">规则</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td data-label="分组">今天</td>
+            <td data-label="示例">继续上次练习 / 开始今日复习 / 查看今日计划</td>
+            <td data-label="规则">永远排在列表最上方，带当前上下文（如「还有 5 题到期」）</td>
+          </tr>
+          <tr>
+            <td data-label="分组">转到</td>
+            <td data-label="示例">题库工作区 / 学习档案 / 模考中心 / 资料库 / 设置</td>
+            <td data-label="规则">页面级跳转，无权限的目标不出现（用户根本看不到那个对象）</td>
+          </tr>
+          <tr>
+            <td data-label="分组">对当前对象执行</td>
+            <td data-label="示例">归档本题 / 标为薄弱 / 加入斩杀 / 导出题库</td>
+            <td data-label="规则">只在对应页面出现；无写权限时置灰 + 原因，不隐藏</td>
+          </tr>
+          <tr>
+            <td data-label="分组">设置</td>
+            <td data-label="示例">切换暗色 / 切换配色 / 切换语言 / 切换密度</td>
+            <td data-label="规则">即时生效，执行后 toast 确认</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="doc-note-line"><b>空结果也是有意义的：</b>搜不到时说明「没有匹配的页面或命令」，并列出三个最可能的命令，不要让用户面对一个空列表。</p>
+  </section>
+
+  <!-- ==================== 03 全局快捷键 ==================== -->
+  <section class="section" aria-labelledby="h-keys">
+    <h2 class="doc-h2" id="h-keys"><span class="no">03</span>全局快捷键（FN-612）</h2>
+    <p class="doc-rule">快捷键只覆盖两类：跨页导航与 runner 内的作答操作。每个快捷键在命令面板里都能用文字搜到，不强迫记忆。</p>
+
+    <div class="demo">
+      <div class="demo-cell">
+        <span class="hint">全局</span>
+        <div class="panel"><div class="panel-body">
+          <div class="kbd-list">
+            <p class="kbd-row mb-0"><span class="kbd">⌘K</span><span>命令面板</span></p>
+            <p class="kbd-row mb-0"><span class="kbd">G</span><span>然后 <span class="kbd">T</span> 去今天</span></p>
+            <p class="kbd-row mb-0"><span class="kbd">G</span><span>然后 <span class="kbd">B</span> 去题库</span></p>
+            <p class="kbd-row mb-0"><span class="kbd">G</span><span>然后 <span class="kbd">R</span> 去复习</span></p>
+            <p class="kbd-row mb-0"><span class="kbd">/</span><span>聚焦页面内搜索框</span></p>
+            <p class="kbd-row mb-0"><span class="kbd">?</span><span>快捷键帮助</span></p>
+            <p class="kbd-row mb-0"><span class="kbd">Esc</span><span>关闭最上层浮层</span></p>
+          </div>
+        </div></div>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">练习 / 考试 runner 内</span>
+        <div class="panel"><div class="panel-body">
+          <div class="kbd-list">
+            <p class="kbd-row mb-0"><span class="kbd">1</span>–<span class="kbd">4</span><span>选择第 N 个选项</span></p>
+            <p class="kbd-row mb-0"><span class="kbd">Enter</span><span>提交 / 下一题</span></p>
+            <p class="kbd-row mb-0"><span class="kbd">A</span><span>标记待复查（考试）</span></p>
+            <p class="kbd-row mb-0"><span class="kbd">F</span><span>标记薄弱（练习）</span></p>
+            <p class="kbd-row mb-0"><span class="kbd">1</span>–<span class="kbd">4</span><span>判分后：Again / Hard / Good / Easy</span></p>
+            <p class="kbd-row mb-0"><span class="kbd">S</span><span>打开作答卡</span></p>
+            <p class="kbd-row mb-0"><span class="kbd">Esc</span><span>退出确认（runner 专用，不直接退出）</span></p>
+          </div>
+        </div></div>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">列表 / 表格内</span>
+        <div class="panel"><div class="panel-body">
+          <div class="kbd-list">
+            <p class="kbd-row mb-0"><span class="kbd">↑</span><span class="kbd">↓</span><span>移动焦点行</span></p>
+            <p class="kbd-row mb-0"><span class="kbd">Space</span><span>选中 / 取消选中当前行</span></p>
+            <p class="kbd-row mb-0"><span class="kbd">⌘A</span><span>全选当前筛选结果</span></p>
+            <p class="kbd-row mb-0"><span class="kbd">Enter</span><span>打开焦点行</span></p>
+            <p class="kbd-row mb-0"><span class="kbd">Tab</span><span>在批量条出现时进入批量条</span></p>
+          </div>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 04 同步态 ==================== -->
+  <section class="section" aria-labelledby="h-sync">
+    <h2 class="doc-h2" id="h-sync"><span class="no">04</span>同步态 / 在线态 / 多标签页（FN-617）</h2>
+    <p class="doc-rule">同步状态用一个常驻但不抢注意力的标识表达。它只在「需要用户知道」时升级为通知：离线且队列非空、同步失败、另一个标签页正在改同一对象。</p>
+
+    <div class="demo">
+      <div class="demo-cell">
+        <span class="hint">顶栏常驻标识（四态）</span>
+        <div class="panel"><div class="panel-body">
+          <div class="demo" style="gap:var(--sp-3)">
+            <span class="tag ok"><span class="dot"></span>已同步</span>
+            <span class="tag brand"><span class="dot"></span>同步中</span>
+            <span class="tag warn"><span class="dot"></span>离线 · 队列 3</span>
+            <span class="tag bad"><span class="dot"></span>同步失败</span>
+          </div>
+        </div></div>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">多标签页冲突</span>
+        <div class="panel"><div class="panel-body">
+          <div class="notice warn">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+            <div class="notice-body">
+              <p class="notice-title">另一个标签页正在改这道题</p>
+              <p>这个页面已切成只读，避免两边同时写。回到那个标签页保存后，这里会自动恢复。</p>
+              <div class="notice-actions">
+                <button class="btn btn-sm" type="button" onclick="eeToast('已尝试重新获取编辑权')">重新获取编辑权</button>
+              </div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">宽限期（CR-31）——不是失败</span>
+        <div class="panel"><div class="panel-body">
+          <div class="notice info">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-clock"/></svg>
+            <div class="notice-body">
+              <p class="notice-title">作答窗口已结束，宽限 60 秒</p>
+              <p>你的答卷已在本地封存，正在等服务端收卷。这 60 秒里网络恢复就会自动补交；超时则由服务端按已封存内容收卷。<b>不会判定你缺考。</b></p>
+            </div>
+          </div>
+        </div></div>
+      </div>
+    </div>
+    <p class="doc-note-line"><b>「作答窗口结束」不是会话终止。</b>宽限期内界面必须是正常状态（info 级），不能变红、不能报错。只有服务端明确收卷失败才进入错误态，并给出重交入口。</p>
+  </section>
+
+  <!-- ==================== 05 URL 状态契约 ==================== -->
+  <section class="section" aria-labelledby="h-url">
+    <h2 class="doc-h2" id="h-url"><span class="no">05</span>URL 状态契约与可深链（FN-614）</h2>
+    <p class="doc-rule">能被分享、被刷新、被记住的状态必须进 URL。同一语义只允许一种 URL 写法，别名与重复参数一律禁止——否则 P3 会出现两个入口指向同一屏却行为不同。</p>
+
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <caption>进 URL 的状态与不进 URL 的状态</caption>
+        <thead>
+          <tr><th scope="col">状态</th><th scope="col">进 URL</th><th scope="col">写法</th><th scope="col">说明</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td data-label="状态">当前页签</td><td data-label="进 URL"><span class="tag ok">进</span></td>
+            <td data-label="写法"><code class="mono">/review?view=due</code></td>
+            <td data-label="说明">四个值：due / mistakes / weak / killed</td>
+          </tr>
+          <tr>
+            <td data-label="状态">分段（集合定义）</td><td data-label="进 URL"><span class="tag ok">进</span></td>
+            <td data-label="写法"><code class="mono">/banks?scope=shared</code></td>
+            <td data-label="说明">scope=mine / shared</td>
+          </tr>
+          <tr>
+            <td data-label="状态">筛选与检索词</td><td data-label="进 URL"><span class="tag ok">进</span></td>
+            <td data-label="写法"><code class="mono">/banks/12/questions?q=缓存&amp;chapter=3</code></td>
+            <td data-label="说明">刷新后保持，可分享给同事</td>
+          </tr>
+          <tr>
+            <td data-label="状态">分页</td><td data-label="进 URL"><span class="tag ok">进</span></td>
+            <td data-label="写法"><code class="mono">?page=3</code></td>
+            <td data-label="说明">配合筛选词一起变</td>
+          </tr>
+          <tr>
+            <td data-label="状态">主题 / 配色 / 密度</td><td data-label="进 URL"><span class="tag ok">进</span></td>
+            <td data-label="写法"><code class="mono">?theme=dark&amp;palette=gruvbox</code></td>
+            <td data-label="说明">同时写入本地偏好，URL 参数优先</td>
+          </tr>
+          <tr>
+            <td data-label="状态">语言</td><td data-label="进 URL"><span class="tag ok">进</span></td>
+            <td data-label="写法"><code class="mono">?lang=en-US</code></td>
+            <td data-label="说明">同主题</td>
+          </tr>
+          <tr>
+            <td data-label="状态">浮层开闭</td><td data-label="进 URL"><span class="tag plain">不进</span></td>
+            <td data-label="写法">—</td>
+            <td data-label="说明">对话框/抽屉/菜单是瞬时状态，进 URL 会造成返回键歧义</td>
+          </tr>
+          <tr>
+            <td data-label="状态">runner 内的题目位置</td><td data-label="进 URL"><span class="tag ok">进</span></td>
+            <td data-label="写法"><code class="mono">/practice/s/88?n=7</code></td>
+            <td data-label="说明">断点恢复与跨设备续考靠它</td>
+          </tr>
+          <tr>
+            <td data-label="状态">登录回跳目标</td><td data-label="进 URL"><span class="tag ok">进</span></td>
+            <td data-label="写法"><code class="mono">/login?next=/review/diagnosis</code></td>
+            <td data-label="说明">目标不可达时回落今天，不报错</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="doc-note-line"><b>非法参数一律回落，不白屏：</b><code class="mono">/review?view=all</code>（已废弃的别名）与 <code class="mono">/review?view= nonsense</code> 都回落到 <code class="mono">view=due</code>，并在首屏用一次 toast 说明「已回到待复习」。</p>
+  </section>
+
+  <!-- ==================== 06 跨端断点 ==================== -->
+  <section class="section" aria-labelledby="h-bp">
+    <h2 class="doc-h2" id="h-bp"><span class="no">06</span>跨端断点与软键盘 / 安全区（FN-615）</h2>
+    <p class="doc-rule">三档共享同一套 DOM 与同一套语义，只改布局与交互方式，不做机械缩放。判断标准是「这只手现在能做什么」，不是「这块屏有多宽」。</p>
+
+    <div class="dtable-wrap">
+      <table class="dtable bp-table">
+        <caption>四档断点：1440 / 1024 / 768 / 375</caption>
+        <thead>
+          <tr>
+            <th scope="col">档位</th>
+            <th scope="col">导航</th>
+            <th scope="col">布局</th>
+            <th scope="col">交互方式</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td data-label="档位"><span class="tag brand">&gt;1024 桌面</span></td>
+            <td data-label="导航">完整侧栏 236px + 顶栏</td>
+            <td data-label="布局">纸面居中 1120px，宽变体 1320px；列表双栏</td>
+            <td data-label="交互方式">鼠标 + 快捷键；hover 有反馈；右键菜单不用，一律用「更多」按钮</td>
+          </tr>
+          <tr>
+            <td data-label="档位"><span class="tag brand">769–1024 平板</span></td>
+            <td data-label="导航">侧栏收成 64px 图标轨 + 顶栏</td>
+            <td data-label="布局">纸面通栏，双栏收成单栏 + 右栏下移</td>
+            <td data-label="交互方式">触屏；hover 失效的状态必须有 active/selected 兜底；批量条常驻底部</td>
+          </tr>
+          <tr>
+            <td data-label="档位"><span class="tag brand">641–768 小平板</span></td>
+            <td data-label="导航">侧栏隐藏，底部导航 6 项</td>
+            <td data-label="布局">单列；表格转卡片（<code class="mono">td[data-label]</code>）</td>
+            <td data-label="交互方式">触屏 + 拇指可达区优先；底部固定操作区</td>
+          </tr>
+          <tr>
+            <td data-label="档位"><span class="tag brand">≤640 手机</span></td>
+            <td data-label="导航">侧栏隐藏，底部导航 6 项 + 移动顶栏</td>
+            <td data-label="布局">单列；长文限宽 <code class="mono">.measure</code> 68ch</td>
+            <td data-label="交互方式">单手拇指；触摸目标 ≥44px；表单避免被软键盘遮</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="doc-note-line"><b>断点取 768，这是唯一判据。</b>70 册 §6 的跨端行为表把 641–1024 整段归为平板（侧栏图标轨、底部导航不显示），而 CR-28 规定「底部导航与侧栏不得并存」。两处对 641–768 给出相反答案，本设计以<b>侧栏是否可见</b>为唯一判据：&gt;768 侧栏可见（&gt;1024 完整 / 769–768 图标轨），≤768 侧栏隐藏并由底部导航接管。实现见 <code class="mono">ee.css</code>（<code class="mono">max-width:768</code> 隐藏侧栏、<code class="mono">min-width:769</code> 隐藏底栏），文档以它为准。</p>
+
+    <h3 class="doc-h3">移动端专项（不为桌面视觉牺牲移动可用性）</h3>
+    <div class="demo-grid">
+      <div class="state-card">
+        <p class="rule-label">单手操作与触摸目标</p>
+        <p class="hint">主要操作落在屏幕下半部的拇指弧内：底部导航、底部固定操作条、抽屉从底部弹出。次级操作（返回、更多）在顶部，但都不应是完成任务的唯一路径。</p>
+        <p class="hint">任何可点元素不小于 44×44（<code class="mono">.od-touch</code>）；列表行的整行可点，不只点标题。</p>
+      </div>
+      <div class="state-card">
+        <p class="rule-label">作答卡与答题卡</p>
+        <p class="hint">手机端答题卡是从底部拉出的抽屉，不是右侧常驻栏——常驻栏会把题干挤到一行三个字。格子在抽屉里保持 5 列，已答/当前/待复查三种态用形状 + 颜色双编码，不只靠颜色。</p>
+      </div>
+      <div class="state-card">
+        <p class="rule-label">表单与软键盘</p>
+        <p class="hint">软键盘弹出时，页面滚动到当前输入框，提交按钮跟随键盘上浮（<code class="mono">padding-bottom: env(safe-area-inset-bottom)</code> 已全局处理）。不在软键盘上方再放一层浮层。</p>
+      </div>
+      <div class="state-card">
+        <p class="rule-label">对话框 / 抽屉 / 长文</p>
+        <p class="hint">手机端对话框改为底部抽屉式，标题与关闭在顶部，主操作在底部；长文（解析、资料）限宽 68ch 并保留纸面底色，不用纯白背景。</p>
+      </div>
+      <div class="state-card">
+        <p class="rule-label">固定操作区 vs 页面滚动</p>
+        <p class="hint">只有「当前这一步的主操作」固定在底部（提交答案、交卷、保存），且固定区不超过一个按钮组。页面内容在固定区下方滚动，不被遮挡（<code class="mono">.has-bottomnav</code> 已处理）。</p>
+      </div>
+      <div class="state-card">
+        <p class="rule-label">安全区</p>
+        <p class="hint">底部导航与固定操作条用 <code class="mono">env(safe-area-inset-bottom)</code> 留出主屏幕指示条的空间；顶部用 viewport-fit=cover 处理刘海。横屏时底部导航保持可见，不因键盘高度抖动。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 07 runner 退出确认 ==================== -->
+  <section class="section" aria-labelledby="h-runner">
+    <h2 class="doc-h2" id="h-runner"><span class="no">07</span>全屏 runner 外壳与退出确认（FN-616）</h2>
+    <p class="doc-rule">练习与考试是全产品唯一进入全屏的场景。全屏的意义是排除导航干扰，所以 runner 内不出现一级导航，只保留退出、进度与交卷。退出必须确认，并且要说清楚「退出了会怎样」。</p>
+
+    <div class="demo-grid">
+      <div class="state-card">
+        <p class="rule-label">练习 · 退出确认</p>
+        <p class="hint">「退出后这组的作答会存成草稿，你可以从今天页继续。已提交的评级不会撤回。」两个按钮：继续练习（主）/ 退出并存草稿（quiet）。</p>
+      </div>
+      <div class="state-card">
+        <p class="rule-label">考试 · 退出确认</p>
+        <p class="hint">danger 对话框。「现在退出会暂存草稿，你可以在宽限期内从同一台或另一台设备续考。超过宽限期服务端将按已暂存内容收卷。」确认按钮写「退出并暂存」，不写「确定」。</p>
+      </div>
+      <div class="state-card">
+        <p class="rule-label">runner 内不允许出现的东西</p>
+        <p class="hint">一级导航、面包屑跳转、设置入口、与当前题无关的推荐。它们全部收进退出后的正常外壳。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 页脚 ==================== -->
+  <footer class="doc-foot" style="border-top:1px solid var(--line);padding-top:var(--sp-6);margin-top:var(--sp-8)">
+    <p class="hint">本页与 <code class="mono">CONTRACT.md</code>、<code class="mono">docs/IA-AND-OWNERSHIP.md</code> 共同构成 P2 设计契约。产品语义以 <code class="mono">docs/product-spec/</code> 第一层「产品最终应该怎样工作」为唯一权威。</p>
+  </footer>
+
+</main>
+
+<!-- ==================== 命令面板 ==================== -->
+<div class="cmd-host" id="cmd-host" hidden>
+  <div class="cmd-scrim" data-cmd-close></div>
+  <div class="cmd-panel" role="dialog" aria-modal="true" aria-label="命令面板">
+    <div class="cmd-input-row">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+      <input class="cmd-input" id="cmd-input" type="text" placeholder="搜索页面、命令或设置…" autocomplete="off" aria-controls="cmd-list">
+      <span class="cmd-kbd">Esc</span>
+    </div>
+    <ul class="cmd-list" id="cmd-list" role="listbox"></ul>
+    <div class="cmd-foot"><span class="kbd">↑</span><span class="kbd">↓</span> 移动 · <span class="kbd">Enter</span> 执行 · <span class="kbd">Esc</span> 关闭</div>
+  </div>
+</div>
+
+<script src="../assets/icons.js"></script>
+<script src="../assets/spec-boot.js"></script>
+<script>
+(function () {
+  var host = document.getElementById('cmd-host');
+  var input = document.getElementById('cmd-input');
+  var list = document.getElementById('cmd-list');
+  var lastTrigger = null;
+
+  var CMDS = [
+    { g: '今天', t: '继续上次练习', d: '还有 5 题到期 · 上次做到第 7 题', i: 'play', href: 'screens/practice.html' },
+    { g: '今天', t: '开始今日复习', d: '待复习 5 · 错题 12 · 薄弱 3', i: 'review', href: 'screens/review.html?view=due' },
+    { g: '今天', t: '查看今日计划', d: '已背 20 / 计划 40', i: 'calendar', href: 'screens/home.html' },
+    { g: '转到', t: '题库工作区', d: '验收题库 1794570360969', i: 'library', href: 'screens/workspace.html' },
+    { g: '转到', t: '学习档案与趋势', d: '最近 7 天正确率', i: 'chart', href: 'screens/diagnosis.html' },
+    { g: '转到', t: '模考中心', d: '2 个考试档案', i: 'exam', href: 'screens/exams.html' },
+    { g: '转到', t: '资料库', d: '18 条笔记 · 3 个上传文件', i: 'note', href: 'screens/notes.html' },
+    { g: '转到', t: '设置', d: '账户 / 偏好 / 外观 / AI', i: 'settings', href: 'screens/settings.html' },
+    { g: '对当前对象执行', t: '归档本题', d: '归档后不再进入复习集合', i: 'archive', href: null, off: '你是成员，不是管理员' },
+    { g: '对当前对象执行', t: '标为薄弱', d: '进入薄弱视图', i: 'flag', href: null },
+    { g: '对当前对象执行', t: '加入斩杀题库', d: '斩后不再出现', i: 'target', href: null },
+    { g: '对当前对象执行', t: '导出题库', d: '导出为 JSON', i: 'export', href: null },
+    { g: '设置', t: '切换暗色', d: '当前：亮色', i: 'moon', href: null },
+    { g: '设置', t: '切换配色', d: 'editorial / gruvbox / everforest / catppuccin', i: 'sun', href: null },
+    { g: '设置', t: '切换语言', d: '中文 / English', i: 'globe', href: null },
+    { g: '设置', t: '切换显示密度', d: '标准 / 紧凑', i: 'columns', href: null }
+  ];
+
+  var active = 0;
+  var filtered = CMDS.slice();
+
+  function render() {
+    list.innerHTML = '';
+    if (!filtered.length) {
+      var e = document.createElement('li');
+      e.className = 'cmd-empty';
+      e.textContent = '没有匹配的页面或命令';
+      list.appendChild(e);
+      var hint = document.createElement('li');
+      hint.className = 'cmd-empty';
+      hint.style.paddingTop = '0';
+      hint.innerHTML = '试试：<b>复习</b>、<b>导出题库</b>、<b>切换暗色</b>';
+      list.appendChild(hint);
+      return;
+    }
+    var lastG = null;
+    filtered.forEach(function (c, idx) {
+      if (c.g !== lastG) {
+        lastG = c.g;
+        var h = document.createElement('li');
+        h.className = 'rule-label';
+        h.style.padding = 'var(--sp-3) var(--sp-4) var(--sp-1)';
+        h.textContent = c.g;
+        list.appendChild(h);
+      }
+      var li = document.createElement('li');
+      li.className = 'cmd-item' + (idx === active ? ' is-on' : '') + (c.off ? ' is-off' : '');
+      li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', idx === active ? 'true' : 'false');
+      if (c.off) li.setAttribute('aria-disabled', 'true');
+      li.innerHTML =
+        '<svg class="od-icon" aria-hidden="true"><use href="#i-' + c.i + '"/></svg>' +
+        '<span style="flex:1 1 auto;min-width:0">' + c.t +
+        '<span class="hint" style="display:block;margin:0">' + c.d + '</span></span>' +
+        (c.off ? '<span class="tag plain" style="flex:none">' + c.off + '</span>' : '') +
+        (c.href ? '<span class="cmd-kbd" style="flex:none">↵</span>' : '');
+      if (c.off) li.style.opacity = '.55';
+      li.addEventListener('click', function () {
+        if (c.off) { eeToast('需要管理员角色：' + c.t); return; }
+        close();
+        if (c.href) { location.href = c.href; return; }
+        eeToast('已执行：' + c.t);
+      });
+      list.appendChild(li);
+    });
+  }
+
+  function filter(q) {
+    q = (q || '').trim().toLowerCase();
+    filtered = !q ? CMDS.slice() : CMDS.filter(function (c) {
+      return (c.t + ' ' + c.d + ' ' + c.g).toLowerCase().indexOf(q) >= 0;
+    });
+    active = 0;
+    render();
+  }
+
+  function open(trigger) {
+    lastTrigger = trigger || null;
+    host.hidden = false;
+    input.value = '';
+    filter('');
+    input.focus();
+  }
+  function close() {
+    host.hidden = true;
+    if (lastTrigger && lastTrigger.focus) lastTrigger.focus();
+  }
+  window.openCmd = open;
+
+  host.addEventListener('click', function (e) {
+    if (e.target.hasAttribute('data-cmd-close')) close();
+  });
+  input.addEventListener('input', function () { filter(input.value); });
+  document.addEventListener('keydown', function (e) {
+    if (host.hidden) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); open(document.activeElement); }
+      return;
+    }
+    if (e.key === 'Escape') { e.preventDefault(); close(); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); active = Math.min(active + 1, filtered.length - 1); render(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, 0); render(); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      var c = filtered[active];
+      if (!c) return;
+      if (c.off) { eeToast('需要管理员角色：' + c.t); return; }
+      close();
+      if (c.href) { location.href = c.href; return; }
+      eeToast('已执行：' + c.t);
+    }
+  });
+})();
+</script>
+</body>
+</html>

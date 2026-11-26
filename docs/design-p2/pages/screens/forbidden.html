@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>无法访问 403 · 易考宝</title>
+<link rel="stylesheet" href="../../assets/ee.css">
+<style>/* 本屏特有：403 整页空态的大图标与出口排布（ee.css 未覆盖的布局微调，全部走令牌） */
+  /* 403 是整页空态：在纸面内垂直居中，避免内容贴在纸上缘、下方留一大片无意义空白 */
+  .forbidden-empty{  padding: var(--sp-9) var(--sp-5); min-height: calc(100dvh - var(--topbar-h) - var(--sp-10)); justify-content: center;  }
+.forbidden-mark{  color: var(--ink-4); opacity: .8;  }
+.forbidden-mark .od-icon{  --od-icon-size: 44px;  }
+.forbidden-eyebrow{  font-size: var(--text-xs); color: var(--ink-3); letter-spacing: .12em; margin: 0;  }
+.forbidden-desc{  max-width: 46ch;  }
+.spec-section{  margin-top: var(--sp-8);  }
+.tb-search{  max-width: 220px;  }
+/* 变体 B：只读题库片段 */
+  .ro-fragment{  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); overflow: hidden;  }
+.ro-fragment-head{  display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; padding: var(--sp-4) var(--sp-5); border-bottom: 1px solid var(--line);  }
+.ro-fragment-title{  font-family: var(--font-serif); font-size: var(--text-md); font-weight: 500; margin: 0;  }
+.ro-fragment-body{  padding: var(--sp-4) var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-4);  }
+.ro-controls{  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3);  }
+.ro-controls .hint{  flex: 1 1 220px; min-width: 0;  }
+/* 面板内小标题与骨架宽度（本屏特有尺寸，走令牌） */
+  .panel-title-md{  font-size: var(--text-md);  }
+.forbidden-title{  font-size: var(--text-2xl);  }
+.sk-40{  width: 40%;  }
+.sk-70{  width: 70%;  }
+.trigger-row{  display: flex; gap: var(--sp-4); padding: var(--sp-4) 0; border-top: 1px solid var(--line); flex-wrap: wrap;  }
+.trigger-row:first-child{  border-top: 0;  }
+.trigger-n{  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-4); flex: none; width: 1.5em; padding-top: 2px;  }
+.trigger-body{  flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-1);  }
+.trigger-title{  font-size: var(--text-sm); color: var(--ink); font-weight: 500;  }
+.trigger-desc{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh);  }
+/* ≤768 顶栏换成移动顶栏：空态按移动顶栏高度计算，避免纸面上方留一条无意义空白 */
+  @media (max-width: 768px){ 
+    .forbidden-empty { min-height: calc(100dvh - var(--mobile-top-h) - var(--sp-10)); }
+   }</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">跳到主内容</a>
+<div class="app-shell">
+  <aside class="sidebar">
+    <button type="button" class="side-brand">
+      <span class="brand-mark serif">易</span>
+      <span class="brand-text">
+        <span class="brand-name">易考宝</span>
+        <span data-i18n="shell.brand.sub" class="brand-sub">私人学习档案</span>
+      </span>
+    </button>
+    <div data-i18n="shell.group.learn" class="side-group-label">学习</div>
+    <nav class="side-nav" aria-label="学习导航">
+      <button type="button" class="nav-item"><svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg><span class="nav-label" data-i18n="shell.nav.today">今天</span><span class="nav-count">12</span></button>
+      <button type="button" class="nav-item is-active" aria-current="page"><svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg><span class="nav-label" data-i18n="shell.nav.banks">题库</span></button>
+      <button type="button" class="nav-item"><svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg><span class="nav-label" data-i18n="shell.nav.review">复习</span><span class="nav-count">8</span></button>
+      <button type="button" class="nav-item"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg><span class="nav-label" data-i18n="shell.nav.exams">模考</span></button>
+      <button type="button" class="nav-item"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg><span class="nav-label" data-i18n="shell.nav.notes">资料</span></button>
+    </nav>
+    <div class="side-study">
+      <div class="side-study-label">学习状态</div>
+      <div class="side-study-row"><span>今日复习</span><b>12 题</b></div>
+      <div class="side-study-row"><span>连胜</span><b>6 天</b></div>
+    </div>
+    <div class="side-foot">
+      <button type="button" class="nav-item"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg><span class="nav-label" data-i18n="shell.nav.settings">设置</span></button>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <header class="topbar">
+      <div class="crumb">
+        <a class="link" href="banks.html">题库</a>
+        <span class="sep" aria-hidden="true">/</span>
+        <span class="here">无法访问</span>
+      </div>
+      <span class="spacer"></span>
+      <div class="search-box tb-search">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+        <input class="input" type="search" placeholder="搜索题库" aria-label="搜索题库">
+      </div>
+      <button type="button" class="icon-btn" aria-label="切换明暗" title="切换明暗" data-ee-shell="theme"><svg class="od-icon" aria-hidden="true"><use href="#i-sun"/></svg></button>
+      <button type="button" class="icon-btn" aria-label="切换语言" title="切换语言" data-ee-shell="lang"><svg class="od-icon" aria-hidden="true"><use href="#i-globe"/></svg></button>
+      <button type="button" class="user-mini" aria-label="账户菜单" title="账户菜单">A</button>
+    </header>
+
+    <header class="mobile-top">
+      <span class="brand-mark serif">易</span>
+      <span class="mt-title">无法访问</span>
+      <button type="button" class="icon-btn" aria-label="搜索"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></button>
+      <button type="button" class="user-mini" aria-label="账号">A</button>
+    </header>
+
+    <main class="content" id="main-content">
+      <!-- ============ 变体 A · 看不到：整页 .empty，403 语义（本页主形态） ============ -->
+      <section class="empty forbidden-empty" aria-labelledby="fb-title">
+        <div class="forbidden-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg></div>
+        <p class="forbidden-eyebrow">无法访问 · 403</p>
+        <h1 class="empty-title forbidden-title" id="fb-title">你不在这个题库里</h1>
+        <p class="empty-desc forbidden-desc" id="fb-desc">这个题库只对成员开放。请联系题库所有者把你加进来，或返回题库列表。</p>
+        <p class="hint forbidden-desc" id="fb-identity">你已登录为 <span id="fb-me">accept_admin_1794570360969</span>；这个题库的成员名单里没有你。实例管理员身份不会自动给你任何题库的访问权。</p>
+        <div class="empty-actions">
+          <button type="button" class="btn btn-primary" id="fb-primary">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg><span class="fb-primary-label">返回来源页</span>
+          </button>
+          <a class="btn btn-quiet" href="banks.html">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>返回题库列表
+          </a>
+        </div>
+      </section>
+
+      <!-- ============ 触发条件 ============ -->
+      <section class="spec-section" aria-labelledby="fb-triggers-title" data-spec>
+        <div class="section-head">
+          <h2 class="section-title" id="fb-triggers-title">三种触发，两种变体</h2>
+          <span class="section-note">FN-421 · 入口禁用而非隐藏，禁用旁给可读原因</span>
+        </div>
+        <div class="panel"><div class="panel-body">
+          <div class="trigger-row">
+            <span class="trigger-n">①</span>
+            <div class="trigger-body">
+              <span class="trigger-title">非成员访问 <span class="mono">/banks/:id</span></span>
+              <span class="trigger-desc">含「曾经是成员、已退出或被移除」的前成员。落到<strong>变体 A（整页 403）</strong>：看不到这个题库的任何内容，措辞与出口和「从来不是成员」完全一致——都给出「联系题库所有者把你加进来」的出路。你仍可回看自己在这道题上得过几分，但不能再看这道题现在长什么样（CR-30）。</span>
+            </div>
+          </div>
+          <div class="trigger-row">
+            <span class="trigger-n">②</span>
+            <div class="trigger-body">
+              <span class="trigger-title">成员操作编辑类控件</span>
+              <span class="trigger-desc">落到<strong>变体 B（控件禁用 + 原因）</strong>：页面照常打开，题目与成员名单都看得见，只是编辑、导入、批量维护、成员管理这些控件被禁用，并在旁边写明为什么。权限改变能力，不改变结构。</span>
+            </div>
+          </div>
+          <div class="trigger-row">
+            <span class="trigger-n">③</span>
+            <div class="trigger-body">
+              <span class="trigger-title">非管理员访问 <span class="mono">/instance</span></span>
+              <span class="trigger-desc">落到<strong>变体 C（整页 403）</strong>：实例管理只对实例管理员开放，整页替换，不泄露任何用户数据；设置页里同样看不到实例管理入口。</span>
+            </div>
+          </div>
+        </div></div>
+      </section>
+
+      <!-- ============ 变体 A 的两种措辞：权限问题 / 数据问题 ============ -->
+      <section class="spec-section" aria-labelledby="fb-missing-title" data-spec>
+        <div class="section-head">
+          <h2 class="section-title">规格段 · <code>?kind=missing</code></h2>
+          <span class="section-note">同一个空态外壳，只换标题与描述</span>
+        </div>
+        <div class="od-grid" style="--od-cols: 2">
+          <div class="panel"><div class="panel-body">
+            <div class="empty">
+              <div class="forbidden-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg></div>
+              <p class="forbidden-eyebrow">无法访问 · 403</p>
+              <h3 class="empty-title">你不在这个题库里</h3>
+              <p class="empty-desc forbidden-desc">这个题库只对成员开放。请联系题库所有者把你加进来，或返回题库列表。</p>
+              <div class="empty-actions"><a class="btn btn-primary btn-sm" href="banks.html">返回题库列表</a></div>
+            </div>
+            <p class="state-note">权限问题：出路是「找人把你加进来」。</p>
+          </div></div>
+          <div class="panel"><div class="panel-body">
+            <div class="empty">
+              <div class="forbidden-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg></div>
+              <p class="forbidden-eyebrow">无法访问 · 404</p>
+              <h3 class="empty-title" id="fb-missing-title">这个题库不存在</h3>
+              <p class="empty-desc forbidden-desc">链接可能已过期，或题库已被删除。返回题库列表看看其他题库。</p>
+              <div class="empty-actions"><a class="btn btn-primary btn-sm" href="banks.html">返回题库列表</a></div>
+            </div>
+            <p class="state-note">数据问题：提示链接过期，不给「联系管理员」的误导出路。</p>
+          </div></div>
+        </div>
+      </section>
+
+      <!-- ============ 变体 B · 看得到但不能操作 ============ -->
+      <section class="spec-section" aria-labelledby="fb-variant-b-title" data-spec>
+        <div class="section-head">
+          <h2 class="section-title" id="fb-variant-b-title">变体 B · 看得到，但不能操作</h2>
+          <span class="section-note">有读权限无写权限：控件禁用 + 可读原因，入口不隐藏</span>
+        </div>
+
+        <div class="notice warn" role="note">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+          <div class="notice-body">
+            <div class="notice-title">你在这个题库里是成员：可以浏览和练习，不能编辑内容。</div>
+            <p>页面结构与编辑者看到的完全一致，只是写操作被禁用并说明原因。退出或被移除后，这个页面会整页替换为变体 A。</p>
+          </div>
+        </div>
+
+        <div class="ro-fragment mt-4">
+          <div class="ro-fragment-head">
+            <h3 class="ro-fragment-title">验收题库 1794570360969</h3>
+            <span class="tag plain">成员</span>
+            <span class="section-note">4 题 · 共 4 题</span>
+          </div>
+          <div class="ro-fragment-body">
+            <div class="ro-controls">
+              <button type="button" class="btn btn-primary" disabled aria-describedby="ro-edit-reason">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-edit"/></svg>编辑题目
+              </button>
+              <button type="button" class="btn" disabled aria-describedby="ro-edit-reason">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-import"/></svg>导入
+              </button>
+              <button type="button" class="btn" disabled aria-describedby="ro-edit-reason">批量维护</button>
+              <p class="hint" id="ro-edit-reason">成员只能检索、浏览与练习；改题、导入与批量维护需要所有者或编辑者角色。</p>
+            </div>
+
+            <div class="list">
+              <div class="list-row static">
+                <span class="list-main">
+                  <span class="list-title">OSI 的（ ）不适合提供相应的安全服务。</span>
+                  <span class="list-meta"><span>单选题</span><span>信息安全</span><span>v1</span></span>
+                </span>
+                <span class="list-side">
+                  <button type="button" class="btn btn-sm" disabled aria-describedby="ro-row-reason">编辑</button>
+                  <button type="button" class="btn btn-sm btn-quiet">查看</button>
+                </span>
+              </div>
+              <div class="list-row static">
+                <span class="list-main">
+                  <span class="list-title">每周一学校开展直播课程，在直播中实时回复学生问题属于（ ）</span>
+                  <span class="list-meta"><span>单选题</span><span>沟通管理</span><span>v1</span></span>
+                </span>
+                <span class="list-side">
+                  <button type="button" class="btn btn-sm" disabled aria-describedby="ro-row-reason">编辑</button>
+                  <button type="button" class="btn btn-sm btn-quiet">查看</button>
+                </span>
+              </div>
+            </div>
+            <p class="hint" id="ro-row-reason">行内「编辑」禁用并说明原因；「查看」照常可用——权限改变能力，不改变结构。</p>
+
+            <div class="ro-controls">
+              <button type="button" class="btn" disabled aria-describedby="ro-member-reason">管理成员</button>
+              <p class="hint" id="ro-member-reason">只有所有者可以管理成员。成员名单与自己的角色仍然可见；需要调整时请联系题库所有者。</p>
+            </div>
+            <div class="ro-controls">
+              <button type="button" class="btn" disabled aria-describedby="ro-setting-reason">修改题库设置</button>
+              <button type="button" class="btn" disabled aria-describedby="ro-setting-reason">归档题库</button>
+              <p class="hint" id="ro-setting-reason">只有题库所有者可以修改题库设置或归档题库。</p>
+            </div>
+          </div>
+        </div>
+
+        <p class="state-note">编辑者看到的是同一页：能改题与导入，但「管理成员」「修改题库设置」同样禁用并给出原因。三类禁用原因各不相同，不共用一句「没有权限」。</p>
+      </section>
+
+      <!-- ============ 变体 C · 非管理员访问实例管理 ============ -->
+      <section class="spec-section" aria-labelledby="fb-variant-c-title" data-spec>
+        <div class="section-head">
+          <h2 class="section-title" id="fb-variant-c-title">变体 C · 非管理员访问实例管理</h2>
+          <span class="section-note">整页替换，三个出口，不泄露任何用户数据</span>
+        </div>
+        <div class="panel"><div class="panel-body">
+          <div class="empty">
+            <div class="forbidden-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg></div>
+            <p class="forbidden-eyebrow">无法访问 · 403</p>
+            <h3 class="empty-title">需要管理员权限</h3>
+            <p class="empty-desc forbidden-desc" id="fb-variant-c-desc">实例管理只对实例管理员开放。用管理员账号登录后重试，或返回设置。</p>
+            <div class="empty-actions">
+              <a class="btn btn-primary" href="settings.html">返回设置</a>
+              <button class="btn btn-quiet" type="button" data-back-source>返回来源页</button>
+              <a class="btn btn-quiet" href="home.html">返回首页</a>
+            </div>
+          </div>
+        </div></div>
+        <p class="state-note" id="fb-variant-c-note">普通用户在设置页看不到实例管理入口（与当前用户无关的管理入口不显示）；直达 URL 由路由守卫落到这里。</p>
+      </section>
+
+      <!-- ============ 出口规则 ============ -->
+      <section class="spec-section" data-spec>
+        <div class="section-head">
+          <h2 class="section-title">简述 · 出口规则</h2>
+          <span class="section-note">403 不是死路</span>
+        </div>
+        <div class="notice info">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+          <div class="notice-body">
+            <div class="notice-title">「返回来源页」用 <code>from</code> 参数</div>
+            <p>路由守卫拒绝访问时把来源地址写进 <code>?from=</code>：主按钮回到来源页（例如刚点开的那道题、那次搜索结果），副按钮回到题库列表。没有 <code>from</code> 时主按钮退化为「返回题库列表」——不留禁用的主按钮，也不留两个同义出口。产品界面只呈现按钮本身，不向用户解释参数。</p>
+          </div>
+        </div>
+        <div class="notice warn mt-4">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+          <div class="notice-body">
+            <div class="notice-title">两种 403 分开说，出口必须留一个</div>
+            <p>「你不在这个题库里」是权限问题，给「联系题库所有者」的出路；「这个题库不存在」是数据问题，提示链接过期。主按钮因故被禁用时，必须仍保留一个可用出口，不得把用户留在死页。</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 状态格 ============ -->
+      <section class="spec-section" data-spec>
+        <div class="section-head">
+          <h2 class="section-title">状态格</h2>
+          <span class="section-note">本页主形态是「空 / 无权限」态，其余态为并列变体</span>
+        </div>
+        <div class="state-grid">
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title panel-title-md">空 · 整页空态</h3></div>
+            <div class="panel-body">
+              <div class="empty">
+                <div class="forbidden-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg></div>
+                <h3 class="empty-title">看不到任何内容</h3>
+                <p class="empty-desc forbidden-desc">这个屏的「空」就是页面顶部那一屏：403 语义的整页 <code>.empty</code>，说明为什么看不到（不在成员名单里 / 题库不存在），并给出下一步 CTA（返回来源页或题库列表）。</p>
+                <div class="empty-actions"><a class="btn btn-sm btn-quiet" href="#main-content">回到页面顶部</a></div>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title panel-title-md">加载中</h3></div>
+            <div class="panel-body">
+              <div class="skeleton sk-line sk-40"></div>
+              <div class="skeleton sk-line sk-70"></div>
+              <div class="skeleton sk-block mt-3"></div>
+              <p class="state-note">拿到访问信息前只显示骨架，不提前渲染 403——「没权限」和「还没查到」是两件事。</p>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title panel-title-md">加载失败</h3></div>
+            <div class="panel-body">
+              <div class="notice bad" role="alert">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">读取失败</div>
+                  <p>没拿到这个题库的访问信息，暂时判断不了是没权限还是不存在。</p>
+                  <div class="notice-actions">
+                    <button type="button" class="btn btn-sm" onclick="eeToast('已重试')"><svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>重试</button>
+                    <a class="btn btn-sm btn-quiet" href="banks.html">返回题库列表</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title panel-title-md">禁用 · 主出口不可用</h3></div>
+            <div class="panel-body">
+              <div class="od-cluster">
+                <button type="button" class="btn btn-primary" disabled>返回来源页</button>
+                <a class="btn btn-quiet" href="banks.html">返回题库列表</a>
+              </div>
+              <p class="hint mt-3">主按钮在无 <code>from</code> 时降级为「返回题库列表」（见上方规格段）；本格展示「主出口被禁用」的反例形态——<b>禁用主出口时必须仍留一个可用出口</b>，不能把用户留在死页。</p>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title panel-title-md">无权限（内联变体）</h3></div>
+            <div class="panel-body">
+              <div class="notice warn">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">没有权限</div>
+                  <p>这个题库只对成员开放。联系题库所有者把你加进来。</p>
+                </div>
+              </div>
+              <p class="state-note">嵌入在页面里的 403 语义（如成员列表顶部），与整页变体共用同一套措辞。</p>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title panel-title-md">冲突 · 版本被他人改过</h3></div>
+            <div class="panel-body">
+              <div class="notice warn" role="note">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">这道题刚被另一位成员修改</div>
+                  <p>你手里是旧版本。两个版本都保留，由你选择，不静默覆盖。</p>
+                  <div class="notice-actions">
+                    <button type="button" class="btn btn-sm">查看我的版本</button>
+                    <button type="button" class="btn btn-sm btn-quiet">使用对方版本</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title panel-title-md">未配置 · 没有来源信息</h3></div>
+            <div class="panel-body">
+              <div class="notice info" role="note">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">这个地址是直接打开的</div>
+                  <p>守卫没有写入 <code>from</code>，所以没有「返回来源页」可给。</p>
+                  <div class="notice-actions"><a class="btn btn-sm btn-primary" href="banks.html">去题库列表</a></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title panel-title-md">离线</h3></div>
+            <div class="panel-body">
+              <div class="notice warn" role="status">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">当前离线</div>
+                  <p>有 <b>1</b> 次访问校验没做完，暂时判断不了能不能进。联网后自动重试。</p>
+                  <div class="notice-actions"><button type="button" class="btn btn-sm">重试</button></div>
+                </div>
+              </div>
+              <p class="state-note">离线是持久标识 + 队列计数 + 重试，不是一闪而过的 toast。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<nav class="bottomnav" aria-label="底部导航">
+  <button type="button" class="bn-item"><svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg>今天</button>
+  <button type="button" class="bn-item is-active" aria-current="page"><svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>题库</button>
+  <button type="button" class="bn-item"><svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg>复习</button>
+  <button type="button" class="bn-item"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>模考</button>
+  <button type="button" class="bn-item"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>资料</button>
+  <button type="button" class="bn-item"><svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg>更多</button>
+</nav>
+
+<script src="../../assets/icons.js"></script>
+<script src="../../assets/store.js"></script>
+<script src="../../assets/i18n.js"></script>
+<script src="../../assets/nav.js"></script>
+<script src="../../assets/spec-boot.js"></script>
+<script>
+  /* 规格页辅助：按 URL 参数切换 403 的两种措辞与可用出口（演示 ?kind=missing 与 ?from=）
+     - 有 from：主按钮真实回跳（站内路径映射到对应规格页；否则按 referrer 后退）
+     - 无 from：主按钮退化为「返回题库列表」并真实可点，副按钮隐藏——
+       不留禁用主钮，也不留两个同义出口 */
+  (function () {
+    var SOURCE_MAP = {
+      banks: 'banks.html', settings: 'settings.html', instance: 'instance.html',
+      home: 'home.html', questions: 'question.html', notes: 'notes.html', import: 'import.html'
+    };
+    function goSource(from) {
+      var m = from ? String(from).match(/^\/([a-z-]+)/) : null;
+      if (m && SOURCE_MAP[m[1]]) { location.href = SOURCE_MAP[m[1]]; return; }
+      if (document.referrer) { window.history.back(); return; }
+      window.eeToast('没有可返回的来源页面：这个地址是直接打开的。', 'bad');
+    }
+
+    var q = new URLSearchParams(location.search);
+    var kind = q.get('kind');
+    var from = q.get('from');
+
+    /* 两种 403 措辞分开：kind=missing 是数据问题，默认是权限问题 */
+    var title = document.getElementById('fb-title');
+    var desc = document.getElementById('fb-desc');
+    var identity = document.getElementById('fb-identity');
+    var eyebrow = document.querySelector('.forbidden-empty .forbidden-eyebrow');
+    if (kind === 'missing') {
+      if (title) title.textContent = '这个题库不存在';
+      if (desc) desc.textContent = '链接可能已过期，或题库已被删除。返回题库列表看看其他题库。';
+      if (identity) identity.textContent = '也可能是这个题库刚被所有者归档或删除：归档只影响题库本身，你在这个库的学习记录仍保留在个人统计里。';
+      if (eyebrow) eyebrow.textContent = '无法访问 · 404';
+    }
+
+    /* 身份说明用真实登录账号；不向用户呈现 URL 参数（from 只决定按钮去向） */
+    var meEl = document.getElementById('fb-me');
+    if (meEl && window.eeStore && window.eeStore.user) meEl.textContent = window.eeStore.user();
+
+    /* 变体 C 按真实实例角色走：非管理员看到服务端给出的可读原因 */
+    var S = window.eeStore;
+    var isAdmin = S && S.isInstanceAdmin ? S.isInstanceAdmin() : true;
+    var vcDesc = document.getElementById('fb-variant-c-desc');
+    if (vcDesc) {
+      var reason = (!isAdmin && S && S.denyReason) ? S.denyReason('instance.manage') : '';
+      vcDesc.textContent = (reason ? reason + '。' : '实例管理只对实例管理员开放。') + '用管理员账号登录后重试，或返回设置。';
+    }
+    var vcNote = document.getElementById('fb-variant-c-note');
+    if (vcNote) {
+      vcNote.textContent = isAdmin
+        ? '你当前是实例管理员，所以看得到这一页；普通用户在设置页看不到实例管理入口，直达 URL 也落在这里。'
+        : '你当前不是实例管理员，看到的整页就是这一屏：不泄露任何用户数据。';
+    }
+
+    /* 主按钮规则：有 from 回来源，无 from 退化为返回题库列表 */
+    var btn = document.getElementById('fb-primary');
+    if (btn) {
+      var label = btn.querySelector('.fb-primary-label');
+      var use = btn.querySelector('svg use');
+      var secondary = btn.nextElementSibling;
+      if (from) {
+        btn.addEventListener('click', function () { goSource(from); });
+      } else {
+        if (label) label.textContent = '返回题库列表';
+        if (use) use.setAttribute('href', '#i-library');
+        btn.addEventListener('click', function () { location.href = 'banks.html'; });
+        if (secondary) secondary.hidden = true;
+      }
+    }
+
+    /* 变体 C 的「返回来源页」：同样按 from 解析 */
+    document.querySelectorAll('[data-back-source]').forEach(function (b) {
+      b.addEventListener('click', function () { goSource(from); });
+    });
+  })();
+</script>
+</body>
+</html>

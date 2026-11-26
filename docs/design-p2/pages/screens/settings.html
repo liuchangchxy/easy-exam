@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>设置 · 易考宝</title>
+<link rel="stylesheet" href="../../assets/ee.css">
+<style>/* ============ 本屏特有微调（ee.css 未覆盖的部分）============
+     仅：左轨粘性布局与导航项、设置行（标签 + 控件）、调色板卡片、
+         移动端左轨转横向可滚动分段、字段行内反馈、英文规格段分隔。
+     不重新定义令牌，不新建控件形态。                                */
+
+  /* 间距与栅格工具 */
+  .mt-1{  margin-top: var(--sp-1);  }
+.mt-6{  margin-top: var(--sp-6);  }
+.mb-3{  margin-bottom: var(--sp-3);  }
+.g2{  --od-cols: 2;  }
+.g3{  --od-cols: 3;  }
+.gap-3{  --od-gap: var(--sp-3);  }
+.gap-4{  --od-gap: var(--sp-4);  }
+.actions-start{  justify-content: flex-start;  }
+.sk-45{  width: 45%;  }
+.sk-70{  width: 70%;  }
+.sk-100{  width: 100%;  }
+/* 账户菜单锚点（inline-block：绝对定位菜单以触发按钮下方为静态位） */
+  .menu-anchor{  position: relative; display: inline-block;  }
+.menu-anchor .menu{  top: calc(100% + var(--sp-2));  }
+.topbar .menu-anchor .menu{  right: 0; left: auto;  }
+.menu-wide{  min-width: 248px;  }
+.menu-group-label{  font-size: var(--text-xs); color: var(--ink-4); letter-spacing: .08em;
+    padding: var(--sp-2) var(--sp-3) var(--sp-1); cursor: default;  }
+/* 左轨（粘性） */
+  .set-layout{  display: grid; grid-template-columns: var(--rail-settings) minmax(0, 1fr); gap: var(--sp-7); align-items: start;  }
+.set-rail{  position: sticky; top: calc(var(--topbar-h) + var(--sp-5)); display: flex; flex-direction: column; gap: var(--sp-1);  }
+.set-group{  font-size: var(--text-xs); color: var(--ink-4); letter-spacing: .08em; padding: var(--sp-3) var(--sp-3) var(--sp-1);  }
+.set-item{  display: flex; align-items: center; gap: var(--sp-3); width: 100%; min-height: 36px;
+    padding: var(--sp-2) var(--sp-3); background: none; border: none; border-radius: var(--r-sm);
+    font: inherit; font-size: var(--text-sm); color: var(--ink-2); text-align: left; cursor: pointer; text-decoration: none;  }
+.set-item:hover{  background: var(--surface-2); color: var(--ink);  }
+.set-item.is-active{  background: var(--brand-soft); color: var(--brand-ink); font-weight: 500;  }
+.set-item .od-icon{  --od-icon-size: 15px; flex: none;  }
+.set-item .ext{  margin-left: auto; --od-icon-size: 13px; color: var(--ink-4);  }
+.set-rail-note{  font-size: var(--text-xs); color: var(--ink-3); padding: var(--sp-3); line-height: var(--text-xs-lh);  }
+/* 设置行：标签 + 控件 */
+  .setting-row{  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4);
+    flex-wrap: wrap; padding: var(--sp-4) 0; border-bottom: 1px solid var(--line);  }
+.setting-row:last-child{  border-bottom: none;  }
+.setting-row.is-top{  align-items: flex-start;  }
+.setting-label{  display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 260px;  }
+.setting-name{  font-size: var(--text-sm); color: var(--ink); font-weight: 500;  }
+.setting-desc{  font-size: var(--text-xs); color: var(--ink-3);  }
+.setting-control{  flex: 0 1 auto; min-width: 0;  }
+/* 设置分区不包卡片：分区细线 + 行间细线已划分层级（规则 6，原版 setting-row 同值） */
+  .section > .panel{  background: transparent; border: 0; border-radius: 0; box-shadow: none;  }
+.section > .panel > .panel-body{  padding: 0;  }
+.section > .panel > .panel-head{  padding: 0 0 var(--sp-4);  }
+/* 调色板卡片 */
+  .palette-grid{  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-3);  }
+.palette-card{  display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-2);
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm);
+    font: inherit; color: var(--ink); text-align: left; cursor: pointer;  }
+.palette-card:hover{  border-color: var(--ink-3);  }
+.palette-card[aria-checked="true"]{  border-color: var(--brand); outline: var(--focus-ring) solid var(--brand); outline-offset: 1px;  }
+.palette-swatch{  display: flex; height: var(--sp-6); overflow: hidden; border: 1px solid var(--line); border-radius: var(--r-xs);  }
+.palette-swatch i{  flex: 1 1 0;  }
+.sw-paper{  background: var(--paper);  }
+.sw-ink{  background: var(--ink);  }
+.sw-brand{  background: var(--brand);  }
+.palette-name{  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); font-size: var(--text-xs);  }
+.palette-card[aria-checked="true"] .palette-name{  color: var(--brand-ink); font-weight: 500;  }
+.palette-check{  visibility: hidden; flex: none;  }
+.palette-card[aria-checked="true"] .palette-check{  visibility: visible;  }
+/* 账号块 */
+  .account-block{  display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-4) 0;  }
+.account-name{  font-size: var(--text-md); color: var(--ink);  }
+.account-role{  font-size: var(--text-xs); color: var(--ink-3);  }
+.field-row{  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;  }
+/* 外观预览：密度与主题真实作用在本屏的一段示例上 */
+  .preview-box{  border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--sp-4); background: var(--surface-2);  }
+.preview-box .list-row{  border-bottom: 1px solid var(--line);  }
+.preview-box .list-row:last-child{  border-bottom: none;  }
+/* 字段错误：默认收起，校验失败时展示 */
+  .field-err.is-off{  display: none;  }
+/* 规格段分隔线（英文规格段与状态格共用） */
+  .spec-block{  border-top: 1px solid var(--line); padding-top: var(--sp-6);  }
+/* 状态格 */
+  .state-grid{  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--sp-4); align-items: start;  }
+.ee-state-panel .panel-body{  padding: var(--sp-4);  }
+/* ============ 移动端：左轨收成两行网格（OP-510） ============
+   不用横向滚动长条：六个分区 + 两个分组标签在 375px 上会溢出到屏外，
+   激活项也看不见。改成 flex-wrap 两行网格，什么都不被藏起来；
+   仍保留溢出兜底（单项超宽时右侧渐隐 + 激活项滚入视野）。           */
+  @media (max-width: 768px){
+    .set-layout { grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); }
+    .set-rail {
+      display: flex; flex-direction: row; flex-wrap: wrap; align-items: center;
+      gap: var(--sp-2); position: static;
+      padding: 0 0 var(--sp-3); border-bottom: 1px solid var(--line);
+    }
+    /* 每个分组独占一整行：分组标签永远和自己的条目在同一行，
+       不会出现「关于」孤零零挂在行尾、条目掉到下一行的情况。*/
+    .set-group {
+      display: flex; flex-direction: row; flex-wrap: wrap; align-items: center;
+      gap: var(--sp-2); flex: 1 1 100%; padding: 0; border-right: 0; white-space: nowrap;
+    }
+    .set-group + .set-group { padding-top: var(--sp-3); border-top: 1px solid var(--line); }
+    .set-item { flex: none; width: auto; white-space: nowrap; }
+    .set-rail-note { display: none; }
+    /* 溢出兜底：右侧渐隐提示还有内容 */
+    .set-rail.is-clipped {
+      mask-image: linear-gradient(to right, #000 0, #000 calc(100% - var(--sp-6)), transparent 100%);
+      -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - var(--sp-6)), transparent 100%);
+    }
+   }
+@media (max-width: 1024px) and (min-width: 769px){
+    .set-layout { grid-template-columns: calc(var(--rail-settings) - var(--sp-5)) minmax(0, 1fr); gap: var(--sp-5); }
+    .set-item { padding: var(--sp-2); }
+  }
+@media (max-width: 640px){
+    .palette-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .setting-row { align-items: flex-start; }
+  }</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">跳到主内容</a>
+<div class="app-shell">
+
+  <!-- ================= 侧栏（同一 DOM，CSS 三档；导航由 nav.js 统一转为真实链接）================= -->
+  <aside class="sidebar">
+    <button class="side-brand" type="button">
+      <span class="brand-mark">易</span>
+      <span class="brand-text">
+        <span class="brand-name">易考宝</span>
+        <span class="brand-sub">私人学习档案</span>
+      </span>
+    </button>
+    <div class="side-group-label">学习</div>
+    <nav class="side-nav" aria-label="学习导航">
+      <button class="nav-item" type="button">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg>
+        <span class="nav-label">今天</span>
+      </button>
+      <button class="nav-item" type="button">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>
+        <span class="nav-label">题库</span>
+        <span class="nav-count" id="nav-bank-count">3</span>
+      </button>
+      <button class="nav-item" type="button">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg>
+        <span class="nav-label">复习</span>
+        <span class="nav-count" id="nav-review-count">5</span>
+      </button>
+      <button class="nav-item" type="button">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>
+        <span class="nav-label">模考</span>
+      </button>
+      <button class="nav-item" type="button">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>
+        <span class="nav-label">资料</span>
+        <span class="nav-count" id="nav-note-count">6</span>
+      </button>
+    </nav>
+    <div class="side-study">
+      <div class="side-study-label">第 46 周 · 2026-11-24</div>
+      <div class="side-study-row"><span>到期复习</span><b>12</b></div>
+      <div class="side-study-row"><span>错题重做</span><b>8</b></div>
+      <div class="side-study-row"><span>本周新增</span><b>46</b></div>
+    </div>
+    <div class="side-foot">
+      <span class="nav-item is-active" aria-current="page">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>
+        <span class="nav-label">设置</span>
+      </span>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <!-- ================= 桌面顶栏 ================= -->
+    <header class="topbar">
+      <nav class="crumb" aria-label="面包屑">
+        <button class="link" type="button" id="crumb-parent">设置</button>
+        <span class="sep" aria-hidden="true">/</span>
+        <span class="here" id="crumb-here">账号与安全</span>
+      </nav>
+      <span class="spacer"></span>
+      <button class="icon-btn" type="button" aria-label="搜索与跳转" title="搜索与跳转" data-ee-shell="search">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+      </button>
+      <button data-ee-shell="theme" class="icon-btn" type="button" id="tb-theme" aria-label="切换明暗" title="切换明暗">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-sun" id="tb-theme-use"/></svg>
+      </button>
+      <button class="icon-btn" type="button" id="tb-lang" aria-label="切换语言" title="切换语言" data-ee-shell="lang">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-globe"/></svg>
+      </button>
+      <div class="menu-anchor">
+        <button class="user-mini" type="button" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单">A</button>
+        <div class="menu" role="menu" hidden>
+          <a class="menu-item" role="menuitem" href="#account">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-user"/></svg><span data-i18n="sec.account">账户与安全</span>
+          </a>
+          <a class="menu-item" role="menuitem" href="instance.html" id="menu-instance">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg><span>实例管理</span>
+          </a>
+          <div class="menu-sep" role="separator"></div>
+          <button class="menu-item is-danger" type="button" role="menuitem" onclick="eeDialog.open('dlg-logout', this)">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-logout"/></svg><span>退出登录</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ================= 移动顶栏 ================= -->
+    <header class="mobile-top">
+      <a class="page-back" href="home.html">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg><span>今天</span>
+      </a>
+      <span class="mt-title">设置</span>
+      <button class="icon-btn" type="button" title="搜索与跳转" data-ee-shell="search" aria-label="搜索与跳转">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+      </button>
+      <span class="user-mini" aria-hidden="true">A</span>
+    </header>
+
+    <!-- ================= 主体 ================= -->
+    <main class="content has-bottomnav" id="main-content">
+
+      <div class="page-head">
+        <div>
+          <p class="page-eyebrow">设置</p>
+          <h1 class="page-title">设置</h1>
+          <p class="page-sub" data-i18n="set.sub">个人偏好、AI 与检索、账户与数据都在这页；实例管理是另一个入口。</p>
+        </div>
+      </div>
+
+      <!--
+        URL 契约（规范说明；本规格页以 ?section= 呈现）
+          ?section=account      账号与安全（默认）
+          ?section=appearance   外观（主题 / 配色 / 语言 / 密度）
+          ?section=practice     练习偏好
+          ?section=ai           AI 与联网检索
+          ?section=about        关于与数据
+        未知或缺失值回退 account；「实例管理」是独立路由 /instance，不写入 ?section=。
+      -->
+
+      <!-- ============ 常驻状态条：AI 未配置是一等公民（FN-510 / FN-518） ============ -->
+      <div class="notice info mb-4" role="status" id="ai-banner">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+        <div class="notice-body">
+          <span class="notice-title">AI 尚未配置；练习、模考、错题与复习仍可正常使用。</span>
+          <span class="notice-actions">
+            <a class="btn btn-sm" href="#ai">去配置 AI</a>
+            <a class="btn btn-sm btn-quiet" href="notes.html">先去看资料</a>
+          </span>
+          <span data-spec>配好模型后，「AI 解释」「联网核查」与「变式题草稿」自动可用，无需重启。</span>
+        </div>
+      </div>
+
+      <div class="set-layout">
+
+        <!-- ================= 左轨：两组（个人 / 关于），分组标题对辅助技术可读 ================= -->
+        <nav class="set-rail" aria-label="设置分区">
+          <div class="set-group" data-i18n="rail.personal">个人</div>
+          <a class="set-item is-active" href="#account" aria-current="true">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg><span data-i18n="sec.account">账号与安全</span>
+          </a>
+          <a class="set-item" href="#appearance">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-sun"/></svg><span data-i18n="sec.appearance">外观</span>
+          </a>
+          <a class="set-item" href="#practice">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-target"/></svg><span data-i18n="sec.practice">练习偏好</span>
+          </a>
+          <a class="set-item" href="#ai">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-cpu"/></svg><span data-i18n="sec.ai">AI 与联网检索</span>
+          </a>
+
+          <div class="set-group" data-i18n="rail.about">关于</div>
+          <a class="set-item" href="#about">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg><span data-i18n="sec.about">关于与数据</span>
+          </a>
+          <a class="set-item" href="instance.html" id="rail-instance">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg><span>实例管理</span>
+            <svg class="od-icon ext" aria-hidden="true"><use href="#i-external"/></svg>
+          </a>
+
+          <p class="set-rail-note">「实例管理」是独立路由，只对实例管理员开放；非管理员看不到这个入口。</p>
+        </nav>
+
+        <!-- ================= 右侧内容 ================= -->
+        <div>
+
+          <!-- ========== 账号与安全（FN-515 / FN-404） ========== -->
+          <section class="section" id="account">
+            <div class="section-head">
+              <h2 class="section-title" data-i18n="sec.account">账号与安全</h2>
+              <span class="section-note">账号安全只影响你自己；学习记录只属于当前账号。</span>
+            </div>
+
+            <div class="account-block">
+              <span class="user-mini" aria-hidden="true">A</span>
+              <div>
+                <div class="account-name" id="account-name">accept_admin_1794570360969</div>
+                <div class="account-role" id="account-role">实例角色 · 管理员</div>
+              </div>
+            </div>
+
+            <div class="field-row">
+              <button class="btn" type="button" onclick="eeDialog.open('dlg-password', this)">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-key"/></svg>修改密码
+              </button>
+              <button class="btn btn-danger" type="button" onclick="eeDialog.open('dlg-logout', this)">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-logout"/></svg>退出登录
+              </button>
+            </div>
+            <p class="hint mt-3">改密成功后，其他设备上的会话会立即失效；当前设备保持登录。</p>
+
+            <div class="rule-label mt-6">设备与会话</div>
+            <div class="setting-row is-top mt-3">
+              <div class="setting-label">
+                <div class="setting-name">这些设备当前登录着你的账号。</div>
+                <div class="setting-desc">本机不能自助退出；退出其他设备不会影响当前设备。</div>
+              </div>
+              <div class="setting-control">
+                <button class="btn" type="button" id="btn-revoke" onclick="eeDialog.open('dlg-revoke', this)">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-logout"/></svg>退出其他设备
+                </button>
+              </div>
+            </div>
+
+            <!-- 会话表（加载 / 失败 / 空 / 禁用四态见本屏状态格） -->
+            <div class="dtable-wrap mt-4">
+              <table class="dtable">
+                <thead>
+                  <tr>
+                    <th scope="col">设备</th>
+                    <th scope="col">登录于</th>
+                    <th scope="col">最近活动</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td data-label="设备">
+                      <span>Chrome 131 · Windows</span>
+                      <span class="tag brand">本机</span>
+                    </td>
+                    <td class="num" data-label="登录于">2026-11-24 07:52</td>
+                    <td class="num" data-label="最近活动">2026-11-24 09:20</td>
+                  </tr>
+                  <tr>
+                    <td data-label="设备"><span>Edge 130 · Windows</span></td>
+                    <td class="num" data-label="登录于">2026-11-22 22:14</td>
+                    <td class="num" data-label="最近活动">2026-11-23 23:41</td>
+                  </tr>
+                  <tr>
+                    <td data-label="设备"><span>Safari · iPhone</span></td>
+                    <td class="num" data-label="登录于">2026-11-20 12:03</td>
+                    <td class="num" data-label="最近活动">2026-11-21 08:15</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="notice info mt-5">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+              <div class="notice-body">学习记录私有：题库所有者与实例管理员都看不到你的作答、错题、FSRS 状态与资料。</div>
+            </div>
+          </section>
+
+          <!-- ========== 外观（FN-512 / FN-513 / FN-514） ========== -->
+          <section class="section" id="appearance">
+            <div class="section-head">
+              <h2 class="section-title" data-i18n="sec.appearance">外观</h2>
+              <span class="section-note">主题、配色、密度与语言只对这台设备生效，改完立刻变化，不跟随账号到其他设备。</span>
+            </div>
+
+            <div class="panel">
+              <div class="panel-body">
+                <div class="setting-row is-top">
+                  <div class="setting-label">
+                    <div class="setting-name">主题</div>
+                    <div class="setting-desc">跟随系统会随操作系统的浅色 / 深色设置实时切换。</div>
+                  </div>
+                  <div class="segmented setting-control" role="radiogroup" aria-label="主题" data-theme-group="theme">
+                    <button class="segment" type="button" role="radio" aria-checked="false" data-theme-mode="system"><span>跟随系统</span></button>
+                    <button class="segment" type="button" role="radio" aria-checked="false" data-theme-mode="light">
+                      <svg class="od-icon" aria-hidden="true"><use href="#i-sun"/></svg><span>浅色</span>
+                    </button>
+                    <button class="segment" type="button" role="radio" aria-checked="false" data-theme-mode="dark">
+                      <svg class="od-icon" aria-hidden="true"><use href="#i-moon"/></svg><span>深色</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="setting-row is-top">
+                  <div class="setting-label">
+                    <div class="setting-name">配色方案</div>
+                    <div class="setting-desc">配色与明暗相互独立：切换配色不会改变浅色或深色模式。</div>
+                  </div>
+                  <div class="palette-grid setting-control" role="radiogroup" aria-label="配色方案" data-palette-group>
+                    <button class="palette-card" type="button" role="radio" aria-checked="true" data-theme-palette="editorial" aria-label="编辑部">
+                      <span class="palette-swatch"><i class="sw-paper"></i><i class="sw-ink"></i><i class="sw-brand"></i></span>
+                      <span class="palette-name"><span>编辑部</span>
+                        <svg class="od-icon palette-check" aria-hidden="true"><use href="#i-check"/></svg>
+                      </span>
+                    </button>
+                    <button class="palette-card" type="button" role="radio" aria-checked="false" data-theme-palette="gruvbox" aria-label="Gruvbox">
+                      <span class="palette-swatch"><i class="sw-paper"></i><i class="sw-ink"></i><i class="sw-brand"></i></span>
+                      <span class="palette-name"><span>Gruvbox</span>
+                        <svg class="od-icon palette-check" aria-hidden="true"><use href="#i-check"/></svg>
+                      </span>
+                    </button>
+                    <button class="palette-card" type="button" role="radio" aria-checked="false" data-theme-palette="everforest" aria-label="Everforest">
+                      <span class="palette-swatch"><i class="sw-paper"></i><i class="sw-ink"></i><i class="sw-brand"></i></span>
+                      <span class="palette-name"><span>Everforest</span>
+                        <svg class="od-icon palette-check" aria-hidden="true"><use href="#i-check"/></svg>
+                      </span>
+                    </button>
+                    <button class="palette-card" type="button" role="radio" aria-checked="false" data-theme-palette="catppuccin" aria-label="Catppuccin">
+                      <span class="palette-swatch"><i class="sw-paper"></i><i class="sw-ink"></i><i class="sw-brand"></i></span>
+                      <span class="palette-name"><span>Catppuccin</span>
+                        <svg class="od-icon palette-check" aria-hidden="true"><use href="#i-check"/></svg>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="setting-row">
+                  <div class="setting-label">
+                    <div class="setting-name">界面语言</div>
+                    <div class="setting-desc">题库内容、用户录入内容与已落库的解释文本保持原语言，不随界面语言翻译。</div>
+                  </div>
+                  <div class="segmented setting-control" role="radiogroup" aria-label="界面语言" data-seg="lang">
+                    <button class="segment" type="button" role="radio" aria-checked="true" data-v="zh"><span>简体中文</span></button>
+                    <button class="segment" type="button" role="radio" aria-checked="false" data-v="en"><span>English</span></button>
+                  </div>
+                </div>
+
+                <div class="setting-row">
+                  <div class="setting-label">
+                    <div class="setting-name">信息密度</div>
+                    <div class="setting-desc">宽松适合阅读，紧凑适合管理与批量校对；练习与模考的专注布局不受影响。</div>
+                  </div>
+                  <div class="segmented setting-control" role="radiogroup" aria-label="信息密度" data-seg="density">
+                    <button class="segment" type="button" role="radio" aria-checked="true" data-v="cozy"><span>宽松</span></button>
+                    <button class="segment" type="button" role="radio" aria-checked="false" data-v="compact"><span>紧凑</span></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 预览：主题 / 语言 / 密度的切换真实反映在本屏这段示例上 -->
+            <div class="preview-box mt-4">
+              <div class="rule-label">预览</div>
+              <div class="list">
+                <div class="list-row static">
+                  <span class="list-main">
+                    <span class="list-title">软考真题库 1794570360969</span>
+                    <span class="list-meta"><span class="tag brand">所有者</span><span>120 题</span><span>2026-11-20 更新</span></span>
+                  </span>
+                  <span class="list-side"><span class="hint">共 120 题 · 我可练 118 题</span></span>
+                </div>
+                <div class="list-row static">
+                  <span class="list-main">
+                    <span class="list-title">共享题库 网络技术</span>
+                    <span class="list-meta"><span class="tag plain">成员</span><span>0 题</span><span>2026-11-18 更新</span></span>
+                  </span>
+                  <span class="list-side"><span class="hint">题库没有题目，先导入题目</span></span>
+                </div>
+              </div>
+              <p class="hint mt-3">这一段就是当前主题、语言与密度下的真实效果：切换上面的分段，行高、字色与间距会跟着变。</p>
+            </div>
+          </section>
+
+          <!-- ========== 练习偏好（FN-516） ========== -->
+          <section class="section" id="practice">
+            <div class="section-head">
+              <h2 class="section-title" data-i18n="sec.practice">练习偏好</h2>
+              <span class="section-note">两项偏好跟随账号，跨设备一致；练习与模考会读取。</span>
+            </div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="setting-row">
+                  <div class="setting-label">
+                    <div class="setting-name">普通练习计时器</div>
+                    <div class="setting-desc">关闭后普通练习不常驻计时器；模考恒定显示倒计时与已用时长，不受这项影响。</div>
+                  </div>
+                  <div class="setting-control">
+                    <label class="check">
+                      <input type="checkbox" id="set-timer" data-autofocus>
+                      <span id="set-timer-label">显示计时器</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-label">
+                    <div class="setting-name">判定模式</div>
+                    <div class="setting-desc">单选与判断题可用「点选即判」；多选保持提交后判。两种模式都不保留提交后的模糊改判窗口。</div>
+                  </div>
+                  <div class="segmented setting-control" role="radiogroup" aria-label="判定模式" data-seg="judge">
+                    <button class="segment" type="button" role="radio" aria-checked="true" data-v="submit"><span>明确提交</span></button>
+                    <button class="segment" type="button" role="radio" aria-checked="false" data-v="instant"><span>点选即判</span></button>
+                  </div>
+                </div>
+                <div class="notice info mt-4">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+                  <div class="notice-body">
+                    <div class="notice-title">作答会自动保存</div>
+                    <div>作答会自动保存，所以这里不提供「自动保存」开关。</div>
+                    <div>普通练习也不提供「是否记录错题」开关：普通练习默认记录学习过程；这个开关只有模考有，默认开。</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ========== AI 与联网检索（FN-510） ========== -->
+          <section class="section" id="ai">
+            <div class="section-head">
+              <h2 class="section-title" data-i18n="sec.ai">AI 与联网检索</h2>
+              <span class="section-note">AI 是可选能力。未配置时，练习、模考、错题与复习仍然完整可用。</span>
+            </div>
+
+            <!-- 谁配置：实例级与个人级的归属分层（FN-511） -->
+            <div class="rule-label">谁配置</div>
+            <div class="kv mt-3">
+              <span class="kv-key">实例级</span><span class="kv-val">实例默认值由部署时设定，本页不能改；个人留空即继承它。</span>
+              <span class="kv-key">个人级</span><span class="kv-val">本页改的就是个人配置：改完一个字段立刻保存，不会冲掉另一个字段。</span>
+              <span class="kv-key">实例管理</span><span class="kv-val">账号与注册开关在「实例管理」页，和题库角色、实例角色都无关。</span>
+            </div>
+
+            <!-- 当前状态：四态（R14 / ST-505 / BR-527） -->
+            <div class="rule-label mt-6">配置状态</div>
+            <div class="od-stack gap-3 mt-3">
+              <div class="notice info" role="status">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+                <div class="notice-body">
+                  <span class="notice-title">未配置</span>
+                  <span>还没有可用的 AI 服务。这时「AI 解释」「联网核查」只会提示你去配置，不会产生任何内容。</span>
+                  <span class="notice-actions"><button class="btn btn-sm" type="button" onclick="EESettings.focusAi()">填写下面的配置</button></span>
+                </div>
+              </div>
+              <div class="notice info" role="status">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+                <div class="notice-body">
+                  <span class="notice-title">继承实例默认</span>
+                  <span>正在用实例默认的服务：地址与模型留空时，解释请求会发给实例配好的服务。这不等于你自己配过。</span>
+                </div>
+              </div>
+              <div class="notice ok" role="status">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg>
+                <div class="notice-body">
+                  <span class="notice-title">已配置</span>
+                  <span>已经按你自己的设置保存，改动立刻生效。</span>
+                </div>
+              </div>
+              <div class="notice warn" role="status">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <div class="notice-body">
+                  <span class="notice-title">已显式关闭</span>
+                  <span>你开启了「不使用 AI」：所有 AI 入口会禁用，并说明原因。</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="rule-label mt-6">AI 解释</div>
+            <div class="panel mt-3">
+              <div class="panel-body">
+                <div class="od-grid g2 gap-4">
+                  <label class="field">
+                    <span class="label">服务类型</span>
+                    <select class="select" id="ai-provider" data-autosave>
+                      <option selected>兼容 OpenAI 接口</option>
+                      <option>本地 Ollama</option>
+                      <option>自建网关 / 内网推理</option>
+                    </select>
+                    <span class="hint" id="ai-provider-hint">是否需要密钥由服务类型决定，不由地址是否 localhost 决定。</span>
+                  </label>
+                  <label class="field">
+                    <span class="label">模型</span>
+                    <input class="input" type="text" placeholder="例如：gpt-4o-mini" data-autosave>
+                    <span class="hint">留空则使用实例默认值。</span>
+                  </label>
+                  <label class="field">
+                    <span class="label">接口地址</span>
+                    <input class="input" type="text" id="ai-base" placeholder="https://api.openai.com/v1" data-autosave>
+                    <span class="hint">留空则使用实例默认值。填了地址就按这个地址走，不会被换成实例默认。</span>
+                  </label>
+                  <label class="field">
+                    <span class="label">API Key</span>
+                    <input class="input" type="password" id="ai-key" placeholder="已保存的 Key 不回显；输入新值即替换" data-autosave>
+                    <span class="hint" id="ai-key-hint">只以密文落库；输入框里永远是你要写入的新值。</span>
+                  </label>
+                </div>
+
+                <div class="field-row mt-4">
+                  <button class="btn btn-sm" type="button" id="ai-clear-key">清除已保存的密钥</button>
+                  <label class="check">
+                    <input type="checkbox" id="ai-off">
+                    <span>不使用 AI</span>
+                  </label>
+                  <span class="od-spacer"></span>
+                  <span class="hint">更改后自动保存。</span>
+                  <button class="btn btn-sm" type="button" data-test-conn>
+                    <svg class="od-icon" aria-hidden="true"><use href="#i-zap"/></svg><span class="tc-label">测试连接</span>
+                  </button>
+                  <span class="field-ok" role="status" id="ai-test-ok" hidden>连接成功</span>
+                </div>
+
+                <!-- 密钥校验失败态：可读原因 + 明确动作，不静默回落 -->
+                <div class="notice bad mt-4" role="alert">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                  <div class="notice-body">
+                    <span class="notice-title">密钥校验失败 · 401 未授权</span>
+                    <span>错误里不会显示地址与密钥。请补密钥，或者改用实例默认。</span>
+                    <span class="notice-actions">
+                      <button class="btn btn-sm" type="button" onclick="EESettings.focusAi()">补密钥</button>
+                      <button class="btn btn-sm btn-quiet" type="button" onclick="eeToast('已清空个人配置，改为继承实例默认')">改用实例默认</button>
+                    </span>
+                  </div>
+                </div>
+
+                <div class="notice info mt-4">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg>
+                  <div class="notice-body">AI 只能生成解释草稿与候选答案，不改写标准答案，也不替你采纳。</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="rule-label mt-6">联网核查</div>
+            <div class="panel mt-3">
+              <div class="panel-body">
+                <div class="od-grid g2 gap-4">
+                  <label class="field">
+                    <span class="label">检索方式</span>
+                    <select class="select" id="net-mode" data-autosave>
+                      <option value="on" selected>联网检索</option>
+                      <option value="off">关闭联网</option>
+                    </select>
+                    <span class="hint">选择「关闭联网」后，下面的接口与密钥不再显示，核查直接返回未取得外部证据。</span>
+                  </label>
+                  <label class="field" data-net-only>
+                    <span class="label">检索接口</span>
+                    <input class="input" type="text" placeholder="http://localhost:8000/v1/search" data-autosave>
+                    <span class="hint">留空则使用实例默认值。</span>
+                  </label>
+                  <label class="field" data-net-only>
+                    <span class="label">检索 Key</span>
+                    <input class="input" type="password" placeholder="已保存的 Key 不回显；输入新值即替换" data-autosave>
+                    <span class="hint">可替换，也可清除。</span>
+                  </label>
+                </div>
+                <div class="field-row mt-4">
+                  <button class="btn btn-sm" type="button" id="net-clear-key">清除检索密钥</button>
+                  <span class="od-spacer"></span>
+                  <button class="btn btn-sm" type="button" data-test-conn>
+                    <svg class="od-icon" aria-hidden="true"><use href="#i-zap"/></svg><span class="tc-label">测试连接</span>
+                  </button>
+                  <span class="field-ok" role="status" id="net-state">已保存</span>
+                </div>
+                <p class="hint mt-3">核查超时 2 秒并自动重试一次。</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- ========== 关于与数据（FN-517） ========== -->
+          <section class="section" id="about">
+            <div class="section-head">
+              <h2 class="section-title" data-i18n="sec.about">关于与数据</h2>
+              <span class="section-note">私有云 · 数据保存在你的实例</span>
+            </div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="kv">
+                  <span class="kv-key">部署方式</span><span class="kv-val">私有云 · 数据保存在你的实例</span>
+                  <span class="kv-key">存储</span><span class="kv-val">题库内容共享，学习记录私有</span>
+                  <span class="kv-key">语言</span><span class="kv-val">简体中文 / English</span>
+                  <span class="kv-key">同步</span><span class="kv-val">多设备同步学习记录</span>
+                  <span class="kv-key">版本</span><span class="kv-val mono">v1.0.24</span>
+                  <span class="kv-key">构建</span><span class="kv-val mono">ae40fd1</span>
+                </div>
+                <div class="notice info mt-4">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+                  <div class="notice-body">外观（主题 / 配色 / 密度）与语言只保存在这台设备；题库内容、资料与解释版本跟随账号，在任何设备上都一样。</div>
+                </div>
+                <div class="field-row mt-5">
+                  <button class="btn" type="button" onclick="eeDialog.open('dlg-export', this)">
+                    <svg class="od-icon" aria-hidden="true"><use href="#i-export"/></svg>导出数据
+                  </button>
+                  <button class="btn btn-danger" type="button" onclick="eeDialog.open('dlg-purge', this)">
+                    <svg class="od-icon" aria-hidden="true"><use href="#i-trash"/></svg>清空学习记录
+                  </button>
+                </div>
+                <p class="hint mt-3">导出与清空都在本机执行，不影响其他成员；题库内容归题库所有者，清空只动你自己的学习数据。</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- ========== 英文规格段 ============ -->
+          <section class="section spec-block" id="en-appearance" lang="en-US" data-spec>
+            <div class="section-head">
+              <h2 class="section-title">Appearance <span class="section-note">English specification</span></h2>
+              <span class="section-note">Light and dark apply immediately and are stored on this device.</span>
+            </div>
+
+            <div class="panel">
+              <div class="panel-body">
+                <div class="setting-row is-top">
+                  <div class="setting-label">
+                    <div class="setting-name">Theme</div>
+                    <div class="setting-desc">Follow system tracks your operating system's light or dark setting.</div>
+                  </div>
+                  <div class="segmented setting-control" role="radiogroup" aria-label="Theme" data-theme-group="theme">
+                    <button class="segment" type="button" role="radio" aria-checked="false" data-theme-mode="system">Follow system</button>
+                    <button class="segment" type="button" role="radio" aria-checked="false" data-theme-mode="light">
+                      <svg class="od-icon" aria-hidden="true"><use href="#i-sun"/></svg>Light
+                    </button>
+                    <button class="segment" type="button" role="radio" aria-checked="false" data-theme-mode="dark">
+                      <svg class="od-icon" aria-hidden="true"><use href="#i-moon"/></svg>Dark
+                    </button>
+                  </div>
+                </div>
+
+                <div class="setting-row is-top">
+                  <div class="setting-label">
+                    <div class="setting-name">Colour palette</div>
+                    <div class="setting-desc">Palette and mode are independent: changing the palette never changes light or dark mode.</div>
+                  </div>
+                  <div class="palette-grid setting-control" role="radiogroup" aria-label="Colour palette" data-palette-group>
+                    <button class="palette-card" type="button" role="radio" aria-checked="true" data-theme-palette="editorial" aria-label="Editorial">
+                      <span class="palette-swatch"><i class="sw-paper"></i><i class="sw-ink"></i><i class="sw-brand"></i></span>
+                      <span class="palette-name"><span>Editorial</span>
+                        <svg class="od-icon palette-check" aria-hidden="true"><use href="#i-check"/></svg>
+                      </span>
+                    </button>
+                    <button class="palette-card" type="button" role="radio" aria-checked="false" data-theme-palette="gruvbox" aria-label="Gruvbox">
+                      <span class="palette-swatch"><i class="sw-paper"></i><i class="sw-ink"></i><i class="sw-brand"></i></span>
+                      <span class="palette-name"><span>Gruvbox</span>
+                        <svg class="od-icon palette-check" aria-hidden="true"><use href="#i-check"/></svg>
+                      </span>
+                    </button>
+                    <button class="palette-card" type="button" role="radio" aria-checked="false" data-theme-palette="everforest" aria-label="Everforest">
+                      <span class="palette-swatch"><i class="sw-paper"></i><i class="sw-ink"></i><i class="sw-brand"></i></span>
+                      <span class="palette-name"><span>Everforest</span>
+                        <svg class="od-icon palette-check" aria-hidden="true"><use href="#i-check"/></svg>
+                      </span>
+                    </button>
+                    <button class="palette-card" type="button" role="radio" aria-checked="false" data-theme-palette="catppuccin" aria-label="Catppuccin">
+                      <span class="palette-swatch"><i class="sw-paper"></i><i class="sw-ink"></i><i class="sw-brand"></i></span>
+                      <span class="palette-name"><span>Catppuccin</span>
+                        <svg class="od-icon palette-check" aria-hidden="true"><use href="#i-check"/></svg>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="setting-row">
+                  <div class="setting-label">
+                    <div class="setting-name">Density</div>
+                    <div class="setting-desc">Balanced for reading; dense for management and bulk review. Practice always uses the focused layout.</div>
+                  </div>
+                  <div class="segmented setting-control" role="radiogroup" aria-label="Density" data-seg="density">
+                    <button class="segment" type="button" role="radio" aria-checked="true" data-v="cozy">Balanced</button>
+                    <button class="segment" type="button" role="radio" aria-checked="false" data-v="compact">Dense</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ========== 状态格（规格演示：成品模式隐藏） ============ -->
+          <section class="section spec-block" id="states" data-spec>
+            <div class="section-head">
+              <h2 class="section-title">状态</h2>
+              <span class="section-note">八态在同一屏内并列呈现；设置是低频管理面，每个分区都要说清自己的状态</span>
+            </div>
+
+            <div class="state-grid">
+              <div class="panel ee-state-panel">
+                <div class="panel-head"><span class="panel-title">空 · 没有其他登录记录</span></div>
+                <div class="panel-body">
+                  <div class="empty">
+                    <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg></div>
+                    <p class="empty-title">没有其他登录记录</p>
+                    <p class="empty-desc">只有本机登录着你的账号，不需要退出其他设备。</p>
+                  </div>
+                  <p class="state-note">空态说明为什么空，并让「退出其他设备」保持可解释。</p>
+                </div>
+              </div>
+
+              <div class="panel ee-state-panel">
+                <div class="panel-head"><span class="panel-title">加载 · 会话读取中</span></div>
+                <div class="panel-body">
+                  <div class="skeleton sk-line sk-45"></div>
+                  <div class="skeleton sk-line sk-100"></div>
+                  <div class="skeleton sk-line sk-70"></div>
+                  <div class="skeleton sk-block"></div>
+                  <p class="state-note">只在切到「账号与安全」时拉取；未返回前不显示「0 个设备」。</p>
+                </div>
+              </div>
+
+              <div class="panel ee-state-panel">
+                <div class="panel-head"><span class="panel-title">错误 · 会话读取失败</span></div>
+                <div class="panel-body">
+                  <div class="notice bad" role="alert">
+                    <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                    <div class="notice-body">
+                      <div class="notice-title">会话读取失败</div>
+                      <div>请求超时（HTTP 504）。重试只重新拉取这一份列表，不影响其他设置。</div>
+                      <div class="notice-actions"><button class="btn btn-sm" type="button" onclick="eeToast('已重新拉取会话列表')">重试</button></div>
+                    </div>
+                  </div>
+                  <p class="state-note">失败带原因与重试，不只写「读取失败」四个字。</p>
+                </div>
+              </div>
+
+              <div class="panel ee-state-panel">
+                <div class="panel-head"><span class="panel-title">禁用 · 没有可退出的设备</span></div>
+                <div class="panel-body">
+                  <div class="field-row">
+                    <button class="btn" type="button" disabled>退出其他设备</button>
+                    <span class="hint" role="status">当前没有其他登录设备。</span>
+                  </div>
+                  <div class="field-row mt-4">
+                    <button class="btn" type="button" disabled>测试连接</button>
+                    <span class="hint" role="status">AI 已显式关闭，测试连接不可用。</span>
+                  </div>
+                  <p class="state-note">入口不隐藏：禁用 + 可读原因（FN-421 / CR-12）。</p>
+                </div>
+              </div>
+
+              <div class="panel ee-state-panel">
+                <div class="panel-head"><span class="panel-title">无权限 · 非管理员</span></div>
+                <div class="panel-body">
+                  <div class="notice warn" role="alert">
+                    <svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg>
+                    <div class="notice-body">
+                      <div class="notice-title">实例管理只对实例管理员开放</div>
+                      <div>普通用户看不到用户列表，也不能改注册开关；直达 /instance 会被守卫拦到 403 页并给可读原因。</div>
+                    </div>
+                  </div>
+                  <p class="state-note">与当前用户完全无关的管理入口不出现；直达 URL 有明确出口。</p>
+                </div>
+              </div>
+
+              <div class="panel ee-state-panel">
+                <div class="panel-head"><span class="panel-title">冲突 · 设置在另一设备被改</span></div>
+                <div class="panel-body">
+                  <div class="notice warn" role="alert">
+                    <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                    <div class="notice-body">
+                      <div class="notice-title">AI 配置在另一台设备上被更新</div>
+                      <div>本机有未保存的模型字段。选一个版本继续，另一个会留在历史里。</div>
+                      <div class="notice-actions">
+                        <button class="btn btn-sm" type="button" onclick="eeToast('已保留本机版本')">查看我的版本</button>
+                        <button class="btn btn-sm btn-quiet" type="button" onclick="eeToast('已改用对方版本')">使用对方版本</button>
+                      </div>
+                    </div>
+                  </div>
+                  <p class="state-note">配置按字段合并，不整行覆盖；冲突时保留两个版本让用户选。</p>
+                </div>
+              </div>
+
+              <div class="panel ee-state-panel">
+                <div class="panel-head"><span class="panel-title">未配置 · AI 尚未配置</span></div>
+                <div class="panel-body">
+                  <div class="notice info" role="status">
+                    <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+                    <div class="notice-body">
+                      <div class="notice-title">AI 尚未配置</div>
+                      <div>页面顶部常驻这条状态条；练习、模考、错题与复习照常可用。配好模型后状态条变为「AI 已配置」。</div>
+                      <div class="notice-actions"><a class="btn btn-sm" href="#ai">去配置</a></div>
+                    </div>
+                  </div>
+                  <p class="state-note">未配置是一等公民：notice.info + 去配置链接，不产生垃圾数据。</p>
+                </div>
+              </div>
+
+              <div class="panel ee-state-panel">
+                <div class="panel-head"><span class="panel-title">离线 · 保存在本机</span></div>
+                <div class="panel-body">
+                  <div class="notice warn" role="status">
+                    <svg class="od-icon" aria-hidden="true"><use href="#i-inbox"/></svg>
+                    <div class="notice-body">
+                      <div class="notice-title">当前离线 · 1 项配置改动排队</div>
+                      <div>外观与语言本来就在本机，照常生效；服务端配置与偏好改动恢复网络后按顺序提交。</div>
+                      <div class="notice-actions"><button class="btn btn-sm" type="button" onclick="eeToast('已重新提交排队的配置改动')">重试</button></div>
+                    </div>
+                  </div>
+                  <p class="state-note">离线有持久标识 + 队列计数 + 重试，不假装保存成功。</p>
+                </div>
+              </div>
+
+              <div class="panel ee-state-panel">
+                <div class="panel-head"><span class="panel-title">浮层</span><span class="panel-sub">本屏全部对话框</span></div>
+                <div class="panel-body">
+                  <div class="od-cluster">
+                    <button class="btn btn-sm" type="button" onclick="eeDialog.open('dlg-password', this)">修改密码</button>
+                    <button class="btn btn-sm" type="button" onclick="eeDialog.open('dlg-revoke', this)">退出其他设备</button>
+                    <button class="btn btn-sm" type="button" onclick="eeDialog.open('dlg-logout', this)">退出登录</button>
+                    <button class="btn btn-sm" type="button" onclick="eeDialog.open('dlg-export', this)">导出数据</button>
+                    <button class="btn btn-sm" type="button" onclick="eeDialog.open('dlg-purge', this)">清空学习记录</button>
+                  </div>
+                  <p class="state-note">确认按钮次序统一：取消在左、确认在右；危险操作用危险实心。</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ================= 底部导航（≤768；nav.js 统一转为真实链接）================= -->
+<nav class="bottomnav" aria-label="底部导航">
+  <button class="bn-item" type="button">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg><span>今天</span>
+  </button>
+  <button class="bn-item" type="button">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg><span>题库</span>
+  </button>
+  <button class="bn-item" type="button">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg><span>复习</span>
+  </button>
+  <button class="bn-item" type="button">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg><span>模考</span>
+  </button>
+  <button class="bn-item" type="button">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg><span>资料</span>
+  </button>
+  <button class="bn-item" type="button">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg><span>更多</span>
+  </button>
+</nav>
+
+<!-- ================= 浮层：修改密码 ================= -->
+<dialog class="dlg" id="dlg-password" aria-labelledby="dlg-password-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">账号与安全</p>
+      <h2 class="dlg-title" id="dlg-password-title">修改密码</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <label class="field">
+      <span class="label">当前密码</span>
+      <input class="input" type="password" data-autofocus autocomplete="current-password" aria-describedby="pwd-cur-err">
+      <span class="field-err is-off" id="pwd-cur-err">请输入当前密码。</span>
+    </label>
+    <label class="field">
+      <span class="label">新密码</span>
+      <input class="input" type="password" autocomplete="new-password" aria-describedby="pwd-new-err">
+      <span class="hint">至少 8 个字符。建议混合大小写字母与数字。</span>
+      <span class="field-err is-off" id="pwd-new-err">新密码至少需要 8 个字符。</span>
+    </label>
+    <label class="field">
+      <span class="label">确认新密码</span>
+      <input class="input" type="password" autocomplete="new-password" aria-describedby="pwd-new2-err">
+      <span class="field-err is-off" id="pwd-new2-err">两次输入的新密码不一致。</span>
+    </label>
+    <div class="notice info">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+      <div class="notice-body">保存成功后，其他设备上的会话会立即失效；当前设备保持登录。</div>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close>取消</button>
+    <button class="btn btn-primary" type="button" id="pwd-save">保存新密码</button>
+  </div>
+</dialog>
+
+<!-- ================= 浮层：退出其他设备 ================= -->
+<dialog class="dlg" id="dlg-revoke" aria-labelledby="dlg-revoke-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">设备与会话</p>
+      <h2 class="dlg-title" id="dlg-revoke-title">退出其他设备</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <p class="hint">其他设备上的登录会立即失效，需要重新输入账号与密码。当前设备会保持登录。</p>
+    <div class="kv">
+      <span class="kv-key">将退出</span><span class="kv-val">Edge 130 · Windows、Safari · iPhone</span>
+      <span class="kv-key">保留</span><span class="kv-val">Chrome 131 · Windows（本机）</span>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close>取消</button>
+    <button class="btn btn-danger-solid" type="button" data-autofocus onclick="eeToast('已退出 2 个其他设备'); eeDialog.close(this.closest('dialog'));">退出其他设备</button>
+  </div>
+</dialog>
+
+<!-- ================= 浮层：退出登录（危险） ================= -->
+<dialog class="dlg danger narrow" id="dlg-logout" aria-labelledby="dlg-logout-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">账号与安全</p>
+      <h2 class="dlg-title" id="dlg-logout-title">退出登录</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <p class="hint">确定要退出登录吗？退出后需要重新输入账号与密码才能继续。未提交的作答已自动保存在服务端。</p>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close>取消</button>
+    <button class="btn btn-danger-solid" type="button" data-autofocus data-logout>退出登录</button>
+  </div>
+</dialog>
+
+<!-- ================= 浮层：导出数据 ================= -->
+<dialog class="dlg" id="dlg-export" aria-labelledby="dlg-export-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">关于与数据</p>
+      <h2 class="dlg-title" id="dlg-export-title">导出数据</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <p class="hint">导出内容包含你自己的学习数据，请在安全的机器上保管。</p>
+    <div class="kv">
+      <span class="kv-key">题库内容</span><span class="kv-val">你拥有所有权的题库（题目、版本、标签、章节）</span>
+      <span class="kv-key">学习记录</span><span class="kv-val">作答、错题、FSRS 状态、斩杀、成绩报告</span>
+      <span class="kv-key">资料</span><span class="kv-val">你的笔记、口诀与上传文件的原始文件</span>
+      <span class="kv-key">不含</span><span class="kv-val">其他成员的学习记录；他人共享给你的题库内容</span>
+      <span class="kv-key">格式</span><span class="kv-val mono">easyexam-export-2026-11-24.zip</span>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close>取消</button>
+    <button class="btn btn-primary" type="button" onclick="eeToast('已开始导出，完成后可下载'); eeDialog.close(this.closest('dialog'));">导出</button>
+  </div>
+</dialog>
+
+<!-- ================= 浮层：清空学习记录（危险） ================= -->
+<dialog class="dlg danger" id="dlg-purge" aria-labelledby="dlg-purge-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">关于与数据</p>
+      <h2 class="dlg-title" id="dlg-purge-title">清空学习记录</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <div class="notice bad">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+      <div class="notice-body">这个操作不可撤销：作答、错题、FSRS 卡片、斩杀状态与成绩报告都会被删除，复习队列随之清空。</div>
+    </div>
+    <div class="kv">
+      <span class="kv-key">会删除</span><span class="kv-val">作答 214 条 · 错题 8 条 · FSRS 卡 46 张 · 斩杀 3 题 · 成绩报告 1 份</span>
+      <span class="kv-key">会保留</span><span class="kv-val">题库内容、题目版本、你的资料与文件、账号与外观偏好</span>
+      <span class="kv-key">不影响</span><span class="kv-val">其他成员的学习记录</span>
+    </div>
+    <label class="field">
+      <span class="label">输入「清空学习记录」以确认</span>
+      <input class="input" type="text" id="purge-confirm" placeholder="清空学习记录" data-autofocus>
+      <span class="field-err is-off" id="purge-err">请准确输入「清空学习记录」。</span>
+    </label>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close>取消</button>
+    <button class="btn btn-danger-solid" type="button" id="purge-go">清空学习记录</button>
+  </div>
+</dialog>
+
+<script src="../../assets/icons.js"></script>
+<script src="../../assets/store.js"></script>
+<script src="../../assets/i18n.js"></script>
+<script src="../../assets/nav.js"></script>
+<script src="../../assets/spec-boot.js"></script>
+<script>
+  (function () {
+  /* ======================================================================
+     设置屏
+     · 主题 / 配色 / 密度 / 语言 / 计时器 / 判定模式 读写 eeStore.settings()；
+     · 分区状态进 URL（?section=），刷新 / 后退 / 分享恢复同一分区；
+     · AI 与联网配置按「谁配置」分层呈现：实例级只读、个人级可改；
+     · 面包屑表达真实层级：设置 / 当前分区。
+     ====================================================================== */
+  var store = window.eeStore;
+
+  var I18N = {
+    'set.sub': ['个人偏好、AI 与检索、账户与数据都在这页；实例管理是另一个入口。',
+      'Two groups, Personal and About: split by "affects only me" versus "affects others or the whole instance". Instance admin is a separate route.'],
+    'sec.account': ['账号与安全', 'Account and security'],
+    'sec.appearance': ['外观', 'Appearance'],
+    'sec.practice': ['练习偏好', 'Practice'],
+    'sec.ai': ['AI 与联网检索', 'AI and web search'],
+    'sec.about': ['关于与数据', 'About and data'],
+    'rail.personal': ['个人', 'Personal'],
+    'rail.about': ['关于', 'About']
+  };
+  function applyI18n() {
+    var lang = store ? store.settings().lang : 'zh';
+    var idx = lang === 'en' ? 1 : 0;
+    document.querySelectorAll('[data-i18n]').forEach(function (el) {
+      var pair = I18N[el.getAttribute('data-i18n')];
+      if (pair) el.textContent = pair[idx];
+    });
+    document.documentElement.setAttribute('lang', lang === 'en' ? 'en' : 'zh-CN');
+  }
+
+  /* ---------- 分区导航：?section= 与滚动侦测 ---------- */
+  var railItems = Array.prototype.slice.call(document.querySelectorAll('.set-rail .set-item[href^="#"]'));
+  var sections = railItems.map(function (a) { return document.getElementById(a.getAttribute('href').slice(1)); }).filter(Boolean);
+  var names = railItems.map(function (a) { return (a.textContent || '').trim(); });
+  var crumbHere = document.getElementById('crumb-here');
+  var ORDER = ['account', 'appearance', 'practice', 'ai', 'about'];
+
+  function setSection(id, scroll) {
+    var idx = ORDER.indexOf(id);
+    if (idx < 0) idx = 0;
+    railItems.forEach(function (a, i) {
+      var on = i === idx;
+      a.classList.toggle('is-active', on);
+      if (on) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current');
+    });
+    if (crumbHere) crumbHere.textContent = names[idx] || '设置';
+    try { history.replaceState(null, '', '?section=' + ORDER[idx]); } catch (e) {}
+    revealRailItem(railItems[idx]);
+    if (scroll) {
+      var el = sections[idx];
+      if (el) {
+        var top = el.getBoundingClientRect().top + window.scrollY - 80;
+        window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
+      }
+    }
+  }
+  /* 激活项在左轨里必须看得见：横向溢出时才滚（窄屏两行网格下通常不触发） */
+  function revealRailItem(el) {
+    var c = el && el.parentElement;
+    if (!c || c.scrollWidth <= c.clientWidth + 1) { syncRailOverflow(); return; }
+    var left = el.offsetLeft - (c.clientWidth - el.offsetWidth) / 2;
+    c.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+    syncRailOverflow();
+  }
+  /* 右侧渐隐只在「还有内容没露出来」时出现 */
+  function syncRailOverflow() {
+    var c = document.querySelector('.set-rail');
+    if (!c) return;
+    var clipped = c.scrollWidth > c.clientWidth + 1 && c.scrollLeft + c.clientWidth < c.scrollWidth - 1;
+    c.classList.toggle('is-clipped', clipped);
+  }
+  var railEl = document.querySelector('.set-rail');
+  if (railEl) {
+    railEl.addEventListener('scroll', syncRailOverflow, { passive: true });
+    window.addEventListener('resize', syncRailOverflow);
+  }
+  railItems.forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      setSection(a.getAttribute('href').slice(1), true);
+    });
+  });
+  if (document.getElementById('crumb-parent')) {
+    document.getElementById('crumb-parent').addEventListener('click', function () {
+      setSection(ORDER[0], true);
+    });
+  }
+
+  var raf = null;
+  function spy() {
+    raf = null;
+    var y = window.scrollY + 140;
+    var idx = 0;
+    for (var i = 0; i < sections.length; i++) {
+      if (sections[i].offsetTop <= y) idx = i;
+    }
+    railItems.forEach(function (a, i) {
+      var on = i === idx;
+      a.classList.toggle('is-active', on);
+      if (on) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current');
+    });
+    if (crumbHere) crumbHere.textContent = names[idx] || '设置';
+    try { history.replaceState(null, '', '?section=' + ORDER[idx]); } catch (e) {}
+    revealRailItem(railItems[idx]);
+  }
+  window.addEventListener('scroll', function () { if (!raf) raf = requestAnimationFrame(spy); }, { passive: true });
+  window.addEventListener('resize', function () { if (!raf) raf = requestAnimationFrame(spy); });
+
+  /* ---------- 菜单开闭：由 spec-boot 外壳统一接线（Escape / 外点 / 方向键） ---------- */
+
+  /* ---------- 主题：三态 ---------- */
+  var themeMode = store ? store.settings().theme : 'light';
+  var darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  var urlTheme = new URLSearchParams(location.search).get('theme');
+  if (urlTheme === 'dark' || urlTheme === 'light') themeMode = urlTheme;
+
+  function resolvedTheme() {
+    return themeMode === 'system' ? (darkQuery && darkQuery.matches ? 'dark' : 'light') : themeMode;
+  }
+  function syncThemeUI() {
+    var t = resolvedTheme();
+    document.querySelectorAll('[data-theme-group="theme"] .segment').forEach(function (s) {
+      s.setAttribute('aria-checked', s.getAttribute('data-theme-mode') === themeMode ? 'true' : 'false');
+    });
+    var use = document.getElementById('tb-theme-use');
+    if (use) use.setAttribute('href', t === 'dark' ? '#i-moon' : '#i-sun');
+    var tb = document.getElementById('tb-theme');
+    if (tb) {
+      tb.title = t === 'dark' ? '切换为浅色' : '切换为深色';
+      tb.setAttribute('aria-label', tb.title);
+    }
+  }
+  function applyTheme(mode, persist) {
+    themeMode = mode;
+    document.documentElement.setAttribute('data-theme', resolvedTheme());
+    syncThemeUI();
+    if (persist && store) store.setSetting('theme', mode);
+  }
+  document.addEventListener('click', function (e) {
+    var seg = e.target.closest ? e.target.closest('.segment[data-theme-mode]') : null;
+    if (seg && !seg.disabled) applyTheme(seg.getAttribute('data-theme-mode'), true);
+  });
+  window.eeShellThemeChanged = function (next) { applyTheme(next, false); };
+  window.eeShellLangChanged = function () { applyI18n(); syncLangUI(); };
+  if (darkQuery && darkQuery.addEventListener) {
+    darkQuery.addEventListener('change', function () { if (themeMode === 'system') applyTheme('system', false); });
+  }
+
+  /* ---------- 配色方案 ---------- */
+  function syncPaletteUI() {
+    var current = store ? store.settings().palette : document.documentElement.getAttribute('data-theme-palette');
+    document.querySelectorAll('.palette-card[data-theme-palette]').forEach(function (c) {
+      c.setAttribute('aria-checked', c.getAttribute('data-theme-palette') === current ? 'true' : 'false');
+    });
+  }
+  document.querySelectorAll('.palette-card[data-theme-palette]').forEach(function (card) {
+    card.addEventListener('click', function () {
+      var p = card.getAttribute('data-theme-palette');
+      if (store) store.setSetting('palette', p);
+      else document.documentElement.setAttribute('data-theme-palette', p);
+      syncPaletteUI();
+    });
+  });
+
+  /* ---------- 密度 / 语言 / 判定模式：分段选中态同步 ---------- */
+  function syncSeg(key, get) {
+    document.querySelectorAll('[data-seg="' + key + '"] .segment').forEach(function (s) {
+      s.setAttribute('aria-checked', String(s.getAttribute('data-v') === get()));
+    });
+  }
+  document.querySelectorAll('[data-seg="density"]').forEach(function (g) {
+    g.addEventListener('click', function () { setTimeout(function () { syncSeg('density', function () { return store.settings().density; }); }, 0); });
+  });
+  function syncLangUI() {
+    if (!store) return;
+    syncSeg('lang', function () { return store.settings().lang; });
+    applyI18n();
+  }
+  var langSeg = document.querySelector('[data-seg="lang"]');
+  if (langSeg) {
+    langSeg.addEventListener('click', function (e) {
+      var seg = e.target.closest ? e.target.closest('.segment[data-v]') : null;
+      if (!seg || !store) return;
+      store.setSetting('lang', seg.getAttribute('data-v'));
+      syncLangUI();
+    });
+  }
+  var JUDGE_KEY = 'eeSettings.judge';
+  function judgeMode() {
+    try { return localStorage.getItem(JUDGE_KEY) || 'submit'; } catch (e) { return 'submit'; }
+  }
+  var judgeSeg = document.querySelector('[data-seg="judge"]');
+  if (judgeSeg) {
+    judgeSeg.addEventListener('click', function () {
+      setTimeout(function () { syncSeg('judge', judgeMode); }, 0);
+    });
+  }
+
+  /* ---------- 练习偏好 ---------- */
+  var timerBox = document.getElementById('set-timer');
+  var timerLabel = document.getElementById('set-timer-label');
+  function syncPracticeUI() {
+    if (!store) return;
+    var en = store.settings().lang === 'en';
+    timerBox.checked = !!store.settings().practiceTimer;
+    timerLabel.textContent = timerBox.checked ? (en ? 'Show timer' : '显示计时器') : (en ? 'Hide timer' : '隐藏计时器');
+  }
+  if (timerBox) {
+    timerBox.addEventListener('change', function () {
+      if (!store) return;
+      store.setSetting('practiceTimer', timerBox.checked);
+      syncPracticeUI();
+      window.eeToast(timerBox.checked ? '普通练习将显示计时器' : '普通练习将隐藏计时器');
+    });
+  }
+
+  /* ---------- AI 与联网：服务类型决定是否需要密钥（CR-19） ---------- */
+  var aiProvider = document.getElementById('ai-provider');
+  var aiKeyHint = document.getElementById('ai-key-hint');
+  var aiProviderHint = document.getElementById('ai-provider-hint');
+  function syncProvider() {
+    var self = aiProvider.value === '自建网关 / 内网推理';
+    if (aiProviderHint) {
+      aiProviderHint.textContent = self
+        ? '自建网关 / 内网推理通常不需要密钥：留空密钥即合法配置，不会因为地址不是 localhost 被要求补密钥。'
+        : '是否需要密钥由服务类型决定，不由地址是否 localhost 决定。';
+    }
+    if (aiKeyHint) {
+      aiKeyHint.textContent = self
+        ? '该服务类型不需要密钥；要清除已存密钥，用左侧「清除已保存的密钥」。'
+        : '只以密文落库；输入框里永远是你要写入的新值。';
+    }
+  }
+  if (aiProvider) aiProvider.addEventListener('change', syncProvider);
+
+  /* 检索方式：关闭联网后隐藏接口与密钥 */
+  var netMode = document.getElementById('net-mode');
+  function syncNet() {
+    var off = netMode.value === 'off';
+    document.querySelectorAll('[data-net-only]').forEach(function (f) { f.hidden = off; });
+    var state = document.getElementById('net-state');
+    if (state) state.textContent = off ? '已关闭联网' : '已保存';
+  }
+  if (netMode) {
+    netMode.value = (store && store.settings().online === false) ? 'off' : 'on';
+    netMode.addEventListener('change', function () {
+      syncNet();
+      if (store) store.setSetting('online', netMode.value === 'on');
+    });
+    syncNet();
+  }
+
+  /* 字段失焦即保存（PATCH 只写改过的键） */
+  document.querySelectorAll('[data-autosave]').forEach(function (el) {
+    el.addEventListener('change', function () { window.eeToast('已保存'); });
+  });
+  /* 清除密钥：独立按钮，清除后该字段回到「未配置」语义 */
+  ['ai-clear-key', 'net-clear-key'].forEach(function (id) {
+    var b = document.getElementById(id);
+    if (!b) return;
+    b.addEventListener('click', function () {
+      var input = id === 'ai-clear-key' ? document.getElementById('ai-key') : null;
+      if (input) input.value = '';
+      window.eeToast('已清除密钥，该字段回到未配置');
+    });
+  });
+  /* 测试连接：进行态禁用 + 结果反馈（只含状态码或异常类名） */
+  document.querySelectorAll('[data-test-conn]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (btn.disabled) return;
+      var label = btn.querySelector('.tc-label');
+      var old = label.textContent;
+      var ok = document.getElementById('ai-test-ok');
+      btn.disabled = true;
+      label.textContent = '连接中…';
+      if (ok) ok.hidden = true;
+      setTimeout(function () {
+        btn.disabled = false;
+        label.textContent = old;
+        window.eeToast('连接成功');
+        if (ok) ok.hidden = false;
+      }, 900);
+    });
+  });
+
+  /* ---------- 账号信息 ---------- */
+  var ROLE_NAMES = { OWNER: '所有者', EDITOR: '编辑者', MEMBER: '成员', VIEWER: '只读' };
+  function syncAccount() {
+    if (!store) return;
+    document.getElementById('account-name').textContent = store.user();
+    document.getElementById('account-role').textContent = '实例角色 · ' + (store.role() === 'OWNER' ? '管理员' : '普通用户');
+  }
+  /* 实例管理入口：只对实例管理员可见（CR-12：完全无关的入口不出现） */
+  function syncInstanceEntry() {
+    if (!store) return;
+    var can = store.can('instance.manage');
+    var rail = document.getElementById('rail-instance');
+    var menu = document.getElementById('menu-instance');
+    if (rail) rail.hidden = !can;
+    if (menu) menu.hidden = !can;
+  }
+
+  /* ---------- 退出登录 ---------- */
+  document.querySelectorAll('[data-logout]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (store) store.logout();
+      window.eeToast('已退出登录');
+      setTimeout(function () { window.location.href = 'login.html?next=settings.html'; }, 300);
+    });
+  });
+
+  /* ---------- 修改密码：前置校验 ---------- */
+  var pwdDlg = document.getElementById('dlg-password');
+  var pwdInputs = pwdDlg ? pwdDlg.querySelectorAll('.dlg-body input') : [];
+  function pwdErrors(show) {
+    [['pwd-cur-err', show.cur], ['pwd-new-err', show.newPwd], ['pwd-new2-err', show.newPwd2]].forEach(function (pair) {
+      var el = document.getElementById(pair[0]);
+      if (el) el.classList.toggle('is-off', !pair[1]);
+    });
+    pwdInputs[0].setAttribute('aria-invalid', show.cur ? 'true' : 'false');
+    pwdInputs[1].setAttribute('aria-invalid', show.newPwd ? 'true' : 'false');
+    pwdInputs[2].setAttribute('aria-invalid', show.newPwd2 ? 'true' : 'false');
+  }
+  if (pwdDlg) {
+    Array.prototype.forEach.call(pwdInputs, function (i) {
+      i.addEventListener('input', function () { pwdErrors({ cur: false, newPwd: false, newPwd2: false }); });
+    });
+    document.getElementById('pwd-save').addEventListener('click', function () {
+      var cur = pwdInputs[0].value, n1 = pwdInputs[1].value, n2 = pwdInputs[2].value;
+      var bad = { cur: !cur, newPwd: n1.length < 8, newPwd2: n1 !== n2 || !n2 };
+      pwdErrors(bad);
+      if (bad.cur || bad.newPwd || bad.newPwd2) {
+        (bad.cur ? pwdInputs[0] : bad.newPwd ? pwdInputs[1] : pwdInputs[2]).focus();
+        return;
+      }
+      window.eeToast('密码已修改，其他设备会话已失效');
+      window.eeDialog.close(pwdDlg);
+    });
+  }
+
+  /* ---------- 清空学习记录：输入确认 ---------- */
+  var purgeDlg = document.getElementById('dlg-purge');
+  if (purgeDlg) {
+    var confirmInput = document.getElementById('purge-confirm');
+    var purgeErr = document.getElementById('purge-err');
+    confirmInput.addEventListener('input', function () { purgeErr.classList.add('is-off'); });
+    document.getElementById('purge-go').addEventListener('click', function () {
+      if (confirmInput.value.trim() !== '清空学习记录') {
+        purgeErr.classList.remove('is-off');
+        confirmInput.focus();
+        return;
+      }
+      window.eeDialog.close(purgeDlg);
+      window.eeToast('学习记录已清空');
+    });
+  }
+
+  /* ---------- 对外接口 ---------- */
+  window.EESettings = {
+    focusAi: function () {
+      setSection('ai', true);
+      setTimeout(function () {
+        var el = document.getElementById('ai-base');
+        if (el) el.focus();
+      }, 400);
+    }
+  };
+
+  /* ---------- 初始化与跨页同步 ---------- */
+  applyTheme(themeMode, false);
+  syncPaletteUI();
+  syncSeg('density', function () { return store ? store.settings().density : 'cozy'; });
+  syncSeg('lang', function () { return store ? store.settings().lang : 'zh'; });
+  syncSeg('judge', judgeMode);
+  syncPracticeUI();
+  syncProvider();
+  syncAccount();
+  syncInstanceEntry();
+  var startSection = new URLSearchParams(location.search).get('section');
+  var deepLink = ORDER.indexOf(startSection) >= 0;
+  /* 深链（分享链接）进站时滚到该分区；刷新由浏览器自己恢复滚动位置 */
+  setSection(deepLink ? startSection : ORDER[0], deepLink && window.scrollY === 0);
+  syncRailOverflow();
+  /* 不在初始化时跑 scroll 侦测：深链分区已由 setSection 定好，
+     浏览器恢复的滚动位置可能还没到位，先按 URL 分区渲染，用户一滚动再跟随。 */
+
+  if (store) {
+    store.subscribe(function () {
+      themeMode = store.settings().theme;
+      applyTheme(themeMode, false);
+      syncPaletteUI();
+      syncSeg('density', function () { return store.settings().density; });
+      syncLangUI();
+      syncPracticeUI();
+      syncAccount();
+      syncInstanceEntry();
+    });
+  }
+  })();
+</script>
+</body>
+</html>

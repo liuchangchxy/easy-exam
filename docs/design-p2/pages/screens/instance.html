@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>实例管理 · 易考宝</title>
+<link rel="stylesheet" href="../../assets/ee.css">
+<style>/* ============ 本屏特有微调（ee.css 未覆盖的部分）============
+     仅：用户表操作列宽度、行内锁定原因、实例设置行、临时密码展示、
+         状态格栅格、间距工具。不重新定义令牌，不新建控件形态。 */
+
+  .mt-1{  margin-top: var(--sp-1);  }
+.mt-6{  margin-top: var(--sp-6);  }
+/* 行内图标按钮组：收紧簇间距（od-cluster 的 --od-gap 变量由类提供，不用内联） */
+  .cluster-tight{  --od-gap: var(--sp-1);  }
+.notice-block{  margin-bottom: var(--sp-6);  }
+/* 账户菜单锚点（inline-block：与控件库 components.html 一致） */
+  .menu-anchor{  position: relative; display: inline-block;  }
+.menu-anchor .menu{  top: calc(100% + var(--sp-2));  }
+.topbar .menu-anchor .menu{  right: 0; left: auto;  }
+/* 用户表 = 编辑式行：起点 1px 重线 + 行间细线，不包卡片外框 */
+  [data-tab-panel="users"] .dtable-wrap{  border: 0; border-radius: 0; background: transparent;  }
+[data-tab-panel="users"] .dtable th{  border-top: 1px solid var(--ink); background: transparent;  }
+[data-tab-panel="settings"] .setting-row{  border-top: 1px solid var(--line);  }
+.admin-table .col-actions{  width: 148px;  }
+.admin-username{  display: block;  }
+/* 日期与计数不折行：窄屏时由 .dtable-wrap 自行横滚，不把「2026-10-28 09:11」拆成三行 */
+  .admin-table td.num{  white-space: nowrap;  }
+/* ≤1024（侧栏收成图标档 / 转底导）：七列仍要在一屏内读完，不出横向滚动条。
+   只做不改变语义的压缩：收窄单元格左右留白、注册时间省去同年份、
+   表头「题库数（含所有）」省去括注（完整语义保留在表上方说明句里）。 */
+@media (max-width: 1024px){
+    .admin-table th, .admin-table td{  padding-left: var(--sp-3); padding-right: var(--sp-3);  }
+    .admin-table td.num .yr{  display: none;  }
+    .admin-table th.col-banks .banks-all{  display: none;  }
+    .admin-table .col-actions{  width: 108px;  }
+  }
+/* 锁定原因：可见文本，不只靠 title（触屏可见，FN-421 / CR-12） */
+  .lock-reason{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); max-width: 22em;  }
+/* ≤640 表格转卡片后，行内禁用原因跟着行进卡片：触屏上没有 title 可看 */
+  .lock-inline{  display: none;  }
+@media (max-width: 640px){
+    .lock-inline { display: block; flex: 1 1 100%; min-width: 0; max-width: 100%;
+      font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh);
+      margin-top: var(--sp-1); white-space: normal; text-align: left; }
+  }
+/* 实例设置行 */
+  .setting-row{  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4);
+    flex-wrap: wrap; padding: var(--sp-5) 0;  }
+.setting-label{  display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 280px;  }
+.setting-name{  font-size: var(--text-sm); color: var(--ink); font-weight: 500;  }
+.setting-desc{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh);  }
+.setting-control{  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;  }
+/* 重置密码结果 */
+  .tmp-row{  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;  }
+.tmp-code{  font-family: var(--font-mono); font-size: var(--text-md); letter-spacing: .04em;
+    padding: var(--sp-2) var(--sp-3); background: var(--surface-2);
+    border: 1px solid var(--line-strong); border-radius: var(--r-sm);  }
+/* 状态格 */
+  .state-grid{  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--sp-4); align-items: start;  }
+.state-cell.is-full{  grid-column: 1 / -1;  }
+[data-tab-panel]{  padding-top: var(--sp-5);  }
+.mini-table th, .mini-table td{  padding-top: var(--sp-2); padding-bottom: var(--sp-2);  }
+.mini-table .col-actions{  width: 120px;  }
+@media (max-width: 640px){
+    .admin-table .col-actions { width: auto; }
+    .admin-table td.col-actions { flex-direction: column; align-items: flex-end; row-gap: var(--sp-2); }
+  }</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">跳到主内容</a>
+<div class="app-shell">
+
+  <!-- ================= 侧栏（同一 DOM，CSS 三档）================= -->
+  <aside class="sidebar">
+    <button class="side-brand" type="button">
+      <span class="brand-mark">易</span>
+      <span class="brand-text">
+        <span class="brand-name">易考宝</span>
+        <span data-i18n="shell.brand.sub" class="brand-sub">私人学习档案</span>
+      </span>
+    </button>
+    <div data-i18n="shell.group.learn" class="side-group-label">学习</div>
+    <nav class="side-nav" aria-label="学习导航">
+      <button class="nav-item" type="button">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.today">今天</span>
+      </button>
+      <button class="nav-item" type="button">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.banks">题库</span>
+        <span class="nav-count">12</span>
+      </button>
+      <button class="nav-item" type="button">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.review">复习</span>
+        <span class="nav-count">12</span>
+      </button>
+      <button class="nav-item" type="button">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.exams">模考</span>
+      </button>
+      <button class="nav-item" type="button">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.notes">资料</span>
+        <span class="nav-count">6</span>
+      </button>
+    </nav>
+    <div class="side-study">
+      <div class="side-study-label">第 46 周 · 2026-11-13</div>
+      <div class="side-study-row"><span>到期复习</span><b>12</b></div>
+      <div class="side-study-row"><span>错题重做</span><b>8</b></div>
+      <div class="side-study-row"><span>本周新增</span><b>46</b></div>
+    </div>
+    <div class="side-foot">
+      <a class="nav-item is-active" href="instance.html" aria-current="page">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.settings">设置</span>
+      </a>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <!-- ================= 桌面顶栏 ================= -->
+    <header class="topbar">
+      <nav class="crumb" aria-label="面包屑">
+        <a class="link" href="settings.html">设置</a>
+        <span class="sep" aria-hidden="true">/</span>
+        <span class="here">实例管理</span>
+      </nav>
+      <span class="spacer"></span>
+      <button class="icon-btn" type="button" aria-label="搜索与跳转" title="搜索与跳转" data-ee-shell="search">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+      </button>
+      <button data-ee-shell="theme" class="icon-btn" type="button" aria-label="切换明暗" title="切换明暗">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-sun"/></svg>
+      </button>
+      <button class="icon-btn" type="button" aria-label="切换语言" title="切换语言" data-ee-shell="lang">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-globe"/></svg>
+      </button>
+      <div class="menu-anchor">
+        <button class="user-mini" type="button" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单">A</button>
+        <div class="menu" role="menu" hidden>
+          <a class="menu-item" role="menuitem" href="settings.html#account">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-user"/></svg>账户资料
+          </a>
+          <a class="menu-item" role="menuitem" href="settings.html">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>设置
+          </a>
+          <div class="menu-sep" role="separator"></div>
+          <button class="menu-item is-danger" type="button" role="menuitem" onclick="eeDialog.open('dlg-logout', this)">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-logout"/></svg>退出登录
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ================= 移动顶栏 ================= -->
+    <header class="mobile-top">
+      <a class="page-back" href="settings.html" aria-label="返回设置">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>设置
+      </a>
+      <span class="mt-title">实例管理</span>
+      <button class="icon-btn" type="button" aria-label="搜索与跳转" data-ee-shell="search">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+      </button>
+      <span class="user-mini" aria-hidden="true">A</span>
+    </header>
+
+    <!-- ================= 主体 ================= -->
+    <main class="content has-bottomnav" id="main-content">
+
+      <div class="page-head">
+        <div>
+          <p class="page-eyebrow">实例</p>
+          <h1 class="page-title">实例管理</h1>
+          <p class="page-sub">管理这个实例的用户、注册与访问。你已登录为 <span class="mono" id="inst-me">accept_admin_1794570360969</span>，实例角色：<span id="inst-role-name">管理员</span>。</p>
+        </div>
+        <div class="page-actions">
+          <a class="btn btn-quiet" href="settings.html">返回设置</a>
+        </div>
+      </div>
+
+      <!-- 权限门：当前用户不是实例管理员时整页替换为 403，不泄露任何用户数据（FN-421 变体 C） -->
+      <div class="panel" id="inst-403" hidden>
+        <div class="panel-body">
+          <div class="empty">
+            <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg></div>
+            <p class="empty-title">需要管理员权限</p>
+            <p class="empty-desc">实例管理只对实例管理员开放。用管理员账号登录后重试，或返回设置。</p>
+            <div class="empty-actions">
+              <a class="btn btn-primary" href="settings.html">返回设置</a>
+              <button class="btn btn-quiet" type="button" data-back-source>返回来源页</button>
+              <a class="btn btn-quiet" href="home.html">返回首页</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 两个视图页签 ================= -->
+      <div data-tab-scope id="inst-body">
+        <div class="tabs" role="tablist" aria-label="实例管理">
+          <button class="tab" type="button" role="tab" aria-selected="true" data-panel="users">用户<span class="count">6</span></button>
+          <button class="tab" type="button" role="tab" aria-selected="false" data-panel="settings">实例设置</button>
+        </div>
+
+        <!-- ========== 用户 ========== -->
+        <section data-tab-panel="users">
+          <p class="section-note mb-4">实例角色决定谁能进入这个页面；题库角色在题库内单独设置。</p>
+
+          <div class="notice ok notice-block" role="status" id="admin-updated" hidden>
+            <svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg>
+            <div class="notice-body">用户已更新。</div>
+          </div>
+
+          <!-- 状态筛选：全部 / 正常 / 已禁用 / 待改密（按状态筛选，不是视图页签） -->
+          <div class="chip-row mb-4" role="group" aria-label="按状态筛选">
+            <button class="chip is-on" type="button" data-filter="all" aria-pressed="true">全部<span class="count">6</span></button>
+            <button class="chip" type="button" data-filter="active" aria-pressed="false">正常<span class="count">5</span></button>
+            <button class="chip" type="button" data-filter="disabled" aria-pressed="false">已禁用<span class="count">1</span></button>
+            <button class="chip" type="button" data-filter="pending" aria-pressed="false">待改密<span class="count">1</span></button>
+          </div>
+
+          <div class="dtable-wrap">
+            <table class="dtable admin-table" id="admin-table">
+              <thead>
+                <tr>
+                  <th scope="col">用户名</th>
+                  <th scope="col">实例角色</th>
+                  <th scope="col">状态</th>
+                  <th scope="col">注册时间</th>
+                  <th class="col-banks" scope="col">题库数<span class="banks-all">（含所有）</span></th>
+                  <th scope="col">最后活跃</th>
+                  <th class="col-actions" scope="col">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- 本人：三项操作都预先禁用，并给可见原因（FN-421：禁用而非隐藏） -->
+                <tr data-status="active" data-pending="0">
+                  <td data-label="用户名">
+                    <span class="admin-username">accept_admin_1794570360969</span>
+                    <span class="tag brand">我</span>
+                  </td>
+                  <td data-label="实例角色"><span class="tag brand">管理员</span></td>
+                  <td data-label="状态"><span class="tag ok">正常</span></td>
+                  <td class="num" data-label="注册时间"><span class="yr">2026-</span>10-28 09:11</td>
+                  <td class="num" data-label="题库数">3</td>
+                  <td class="num" data-label="最后活跃">3 分钟前</td>
+                  <td class="col-actions" data-label="操作">
+                    <span class="od-cluster cluster-tight">
+                      <button class="icon-btn sm" type="button" disabled aria-label="取消管理员" aria-describedby="lock-self">
+                        <svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg>
+                      </button>
+                      <button class="icon-btn sm" type="button" disabled aria-label="禁用" aria-describedby="lock-self">
+                        <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+                      </button>
+                      <button class="icon-btn sm" type="button" disabled aria-label="重置密码" aria-describedby="lock-self-reset">
+                        <svg class="od-icon" aria-hidden="true"><use href="#i-key"/></svg>
+                      </button>
+                    </span>
+                    <span class="lock-inline">自己的行不能改角色或状态；改自己的密码请到「设置 → 账户与安全」。</span>
+                  </td>
+                </tr>
+                <tr data-status="active" data-pending="0">
+                  <td data-label="用户名"><span class="admin-username">accept_owner_1794570360969</span></td>
+                  <td data-label="实例角色"><span class="tag brand">管理员</span></td>
+                  <td data-label="状态"><span class="tag ok">正常</span></td>
+                  <td class="num" data-label="注册时间"><span class="yr">2026-</span>10-29 08:02</td>
+                  <td class="num" data-label="题库数">1</td>
+                  <td class="num" data-label="最后活跃">2 小时前</td>
+                  <td class="col-actions" data-label="操作">
+                    <span class="od-cluster cluster-tight">
+                      <button class="icon-btn sm" type="button" aria-label="取消管理员" title="取消管理员" data-act="admin-off">
+                        <svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg>
+                      </button>
+                      <button class="icon-btn sm" type="button" aria-label="禁用" title="禁用" data-act="disable">
+                        <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+                      </button>
+                      <button class="icon-btn sm" type="button" aria-label="重置密码" title="重置密码" data-act="reset">
+                        <svg class="od-icon" aria-hidden="true"><use href="#i-key"/></svg>
+                      </button>
+                    </span>
+                  </td>
+                </tr>
+                <tr data-status="active" data-pending="0">
+                  <td data-label="用户名"><span class="admin-username">accept_editor_1794570360969</span></td>
+                  <td data-label="实例角色"><span class="tag">普通用户</span></td>
+                  <td data-label="状态"><span class="tag ok">正常</span></td>
+                  <td class="num" data-label="注册时间"><span class="yr">2026-</span>11-02 14:22</td>
+                  <td class="num" data-label="题库数">2</td>
+                  <td class="num" data-label="最后活跃">昨天 21:40</td>
+                  <td class="col-actions" data-label="操作">
+                    <span class="od-cluster cluster-tight">
+                      <button class="icon-btn sm" type="button" aria-label="设为管理员" title="设为管理员" data-act="admin-on">
+                        <svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg>
+                      </button>
+                      <button class="icon-btn sm" type="button" aria-label="禁用" title="禁用" data-act="disable">
+                        <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+                      </button>
+                      <button class="icon-btn sm" type="button" aria-label="重置密码" title="重置密码" data-act="reset">
+                        <svg class="od-icon" aria-hidden="true"><use href="#i-key"/></svg>
+                      </button>
+                    </span>
+                  </td>
+                </tr>
+                <tr data-status="active" data-pending="0">
+                  <td data-label="用户名"><span class="admin-username">accept_member_1794570360969</span></td>
+                  <td data-label="实例角色"><span class="tag">普通用户</span></td>
+                  <td data-label="状态"><span class="tag ok">正常</span></td>
+                  <td class="num" data-label="注册时间"><span class="yr">2026-</span>11-05 08:47</td>
+                  <td class="num" data-label="题库数">1</td>
+                  <td class="num" data-label="最后活跃">11-24 19:12</td>
+                  <td class="col-actions" data-label="操作">
+                    <span class="od-cluster cluster-tight">
+                      <button class="icon-btn sm" type="button" aria-label="设为管理员" title="设为管理员" data-act="admin-on">
+                        <svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg>
+                      </button>
+                      <button class="icon-btn sm" type="button" aria-label="禁用" title="禁用" data-act="disable">
+                        <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+                      </button>
+                      <button class="icon-btn sm" type="button" aria-label="重置密码" title="重置密码" data-act="reset">
+                        <svg class="od-icon" aria-hidden="true"><use href="#i-key"/></svg>
+                      </button>
+                    </span>
+                  </td>
+                </tr>
+                <tr data-status="disabled" data-pending="0">
+                  <td data-label="用户名"><span class="admin-username">accept_tester_1794570360969</span></td>
+                  <td data-label="实例角色"><span class="tag">普通用户</span></td>
+                  <td data-label="状态"><span class="tag bad">已禁用</span></td>
+                  <td class="num" data-label="注册时间"><span class="yr">2026-</span>11-07 16:30</td>
+                  <td class="num" data-label="题库数">0</td>
+                  <td class="num" data-label="最后活跃">11-20 10:05</td>
+                  <td class="col-actions" data-label="操作">
+                    <span class="od-cluster cluster-tight">
+                      <button class="icon-btn sm" type="button" aria-label="设为管理员" title="设为管理员" data-act="admin-on">
+                        <svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg>
+                      </button>
+                      <button class="icon-btn sm" type="button" aria-label="启用" title="启用" data-act="enable">
+                        <svg class="od-icon" aria-hidden="true"><use href="#i-unlock"/></svg>
+                      </button>
+                      <button class="icon-btn sm" type="button" aria-label="重置密码" title="重置密码" data-act="reset">
+                        <svg class="od-icon" aria-hidden="true"><use href="#i-key"/></svg>
+                      </button>
+                    </span>
+                  </td>
+                </tr>
+                <tr data-status="active" data-pending="1">
+                  <td data-label="用户名"><span class="admin-username">accept_reviewer_1794570360969</span></td>
+                  <td data-label="实例角色"><span class="tag">普通用户</span></td>
+                  <td data-label="状态">
+                    <span class="tag ok">正常</span>
+                    <span class="tag warn">待改密</span>
+                  </td>
+                  <td class="num" data-label="注册时间"><span class="yr">2026-</span>11-10 11:05</td>
+                  <td class="num" data-label="题库数">1</td>
+                  <td class="num" data-label="最后活跃">11-24 08:31</td>
+                  <td class="col-actions" data-label="操作">
+                    <span class="od-cluster cluster-tight">
+                      <button class="icon-btn sm" type="button" aria-label="设为管理员" title="设为管理员" data-act="admin-on">
+                        <svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg>
+                      </button>
+                      <button class="icon-btn sm" type="button" aria-label="禁用" title="禁用" data-act="disable">
+                        <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+                      </button>
+                      <button class="icon-btn sm" type="button" aria-label="重置密码" title="重置密码" data-act="reset">
+                        <svg class="od-icon" aria-hidden="true"><use href="#i-key"/></svg>
+                      </button>
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 控件旁的可读原因：与禁用按钮通过 aria-describedby 关联，触屏与读屏都看得到。
+               按 FN-421「禁用不隐藏 + 可读原因」，这些必须留在产品里。 -->
+          <p class="lock-reason mt-3" id="lock-self">你不能在这里修改自己的角色或状态。要改自己的密码，请到「设置 → 账户与安全 → 修改密码」。</p>
+          <p class="lock-reason mt-1" id="lock-self-reset">重置自己的密码会让你也进入「待改密」，并踢出当前这台设备的会话，所以请改用设置里的「修改密码」。</p>
+          <!-- 纯规则说明（不挂在具体控件上）进规格段，产品模式下自动隐藏 -->
+          <div data-spec>
+            <p class="lock-reason mt-1">最后一位管理员不可禁用、也不可降级：实例必须至少保留一位管理员。主表里「我」是唯一管理员，规则落在自己行上；下方状态格把「最后一位管理员是别人」的情形补出来，让这条约束可被观察。</p>
+          </div>
+
+          <div class="notice info mt-4" role="note">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+            <div class="notice-body">
+              <div class="notice-title">禁用不删数据</div>
+              <p>禁用会立刻吊销该用户在全部设备上的会话，他的题库、作答、错题、FSRS 与成绩报告全部保留；重新启用后恢复原来的实例角色。</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== 实例设置 ========== -->
+        <section data-tab-panel="settings" hidden>
+          <p class="section-note mb-4">这些设置影响整个实例，不只当前账号。</p>
+
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-name">允许注册</div>
+              <div class="setting-desc">关闭后，新用户无法自行注册；已有用户不受影响。空实例的第一个账号始终放行。</div>
+            </div>
+            <div class="setting-control">
+              <label class="check">
+                <input type="checkbox" id="reg-switch" checked>
+                <span id="reg-switch-label">开放</span>
+              </label>
+              <button class="btn btn-primary btn-sm" type="button" id="reg-save" disabled>保存</button>
+              <span class="field-ok" role="status" id="reg-saved" hidden>设置已保存。</span>
+            </div>
+          </div>
+
+          <div class="notice info mt-4" role="note">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+            <div class="notice-body">
+              <div class="notice-title">关闭注册后，新增账号只有一条路</div>
+              <p>管理员临时开启注册 → 创建账号 → 再关闭。重置已有账号的密码只是发放/恢复登录凭据，不会产生新账号；不提供邀请系统。</p>
+            </div>
+          </div>
+
+          <div class="notice warn mt-4" role="note">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-globe"/></svg>
+            <div class="notice-body">
+              <div class="notice-title">登录页会跟着变</div>
+              <p>关闭后登录页不再出现「还没有账号？注册」切换入口，只显示一句「本站点已关闭注册，请联系管理员。」<a class="link-btn" href="login.html">去登录页看看</a></p>
+            </div>
+          </div>
+
+          <!-- 行内反馈的三种形态：保存中 / 已保存 / 失败时保留原值。
+               这是状态变体演示（规格内容），产品模式下隐藏；产品里只保留上方真实的保存行。 -->
+          <div data-spec>
+            <div class="setting-row mt-2">
+              <div class="setting-label">
+                <div class="setting-name">行内反馈形态</div>
+                <div class="setting-desc">保存中、已保存、失败三种反馈都写在行内，不用 toast，也不清空你改过的值。</div>
+              </div>
+              <div class="setting-control">
+                <button class="btn btn-sm" type="button" disabled>保存中…</button>
+                <span class="hint" role="status">保存中…</span>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <div class="setting-name">保存失败</div>
+                <div class="setting-desc">失败时草稿回滚到拨动前的值，并说明原因。</div>
+              </div>
+              <div class="setting-control">
+                <button class="btn btn-sm" type="button">保存</button>
+                <span class="field-err" role="alert">保存失败，仍保留原值：注册开关被实例策略锁定。</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 两层角色为什么互不授予：设计口径（规格内容），产品模式下隐藏 -->
+          <div class="panel mt-5" data-spec>
+            <div class="panel-head"><h3 class="panel-title">两层角色互不授予</h3><span class="panel-sub">CR-11 / PR-401</span></div>
+            <div class="panel-body">
+              <div class="kv">
+                <span class="kv-key">实例角色</span><span class="kv-val">管理员 / 普通用户 —— 管这个实例的用户与注册开关</span>
+                <span class="kv-key">题库角色</span><span class="kv-val">所有者 / 编辑者 / 成员 —— 管一个题库的内容与成员</span>
+                <span class="kv-key">不会发生的事</span><span class="kv-val">实例管理员不因此获得任何题库的编辑权或成员管理权；他要改某个库，必须被显式加为该库的所有者或编辑者</span>
+                <span class="kv-key">用词</span><span class="kv-val">两套词永不共用，任何界面不得同句出现两个「管理员」</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ================= 状态规格 ================= -->
+      <section class="section mt-8" data-spec>
+        <div class="section-head">
+          <h2 class="section-title">状态规格</h2>
+          <span class="section-note">空 / 加载 / 错误 / 禁用 / 无权限 / 冲突 / 未配置 / 离线</span>
+        </div>
+
+        <div class="state-grid">
+          <!-- 空 -->
+          <div class="state-cell">
+            <div class="rule-label">空 · 用户为空</div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="empty">
+                  <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg></div>
+                  <div class="empty-title">这个实例还没有用户。</div>
+                  <div class="empty-desc">初始化时创建的第一个账号会成为实例管理员。空实例的首个账号不受注册开关影响。</div>
+                  <div class="empty-actions"><a class="btn btn-primary" href="login.html">去创建第一个账号</a></div>
+                </div>
+              </div>
+            </div>
+            <p class="state-note">空态说明为什么空（没有账号）并给出下一步（创建第一个账号），不是「暂无数据」。</p>
+          </div>
+
+          <!-- 加载 -->
+          <div class="state-cell">
+            <div class="rule-label">加载 · 读取中</div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="state-loading" role="status">
+                  <span class="spinner" aria-hidden="true"></span>
+                  <span>读取中</span>
+                </div>
+                <div class="skeleton sk-line mt-3"></div>
+                <div class="skeleton sk-line"></div>
+                <div class="skeleton sk-line"></div>
+              </div>
+            </div>
+            <p class="state-note">用户列表与实例设置各自独立加载，任一失败不影响另一个；骨架与真实表格同构。</p>
+          </div>
+
+          <!-- 错误 -->
+          <div class="state-cell">
+            <div class="rule-label">错误 · 读取与操作失败</div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="notice bad" role="alert">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                  <div class="notice-body">
+                    用户列表读取失败。
+                    <div class="notice-actions"><button class="btn btn-sm" type="button">重试</button></div>
+                  </div>
+                </div>
+                <div class="notice bad mt-3" role="alert">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                  <div class="notice-body">更新用户失败：不能禁用最后一位管理员。</div>
+                </div>
+              </div>
+            </div>
+            <p class="state-note">整表失败给重试；单行操作失败只影响该行，已加载的数据不被清空。</p>
+          </div>
+
+          <!-- 禁用 -->
+          <div class="state-cell">
+            <div class="rule-label">禁用 · 入口不隐藏</div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="od-cluster">
+                  <button class="btn btn-sm" type="button" disabled aria-describedby="st-disable-reason">取消管理员</button>
+                  <button class="btn btn-sm" type="button" disabled aria-describedby="st-disable-reason">禁用</button>
+                </div>
+                <p class="hint mt-3" id="st-disable-reason">自己的行与最后一位管理员的行预先禁用，并在旁边给出可读原因——禁用而不是隐藏，用户看得见「这里有一件事我做不了」以及为什么。</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 无权限（变体 C） -->
+          <div class="state-cell">
+            <div class="rule-label">无权限 · 非管理员整页 403</div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="empty">
+                  <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg></div>
+                  <div class="empty-title">需要管理员权限</div>
+                  <div class="empty-desc">实例管理只对实例管理员开放。用管理员账号登录后重试，或返回设置。</div>
+                  <div class="empty-actions">
+                    <a class="btn btn-primary btn-sm" href="settings.html">返回设置</a>
+                    <a class="btn btn-quiet btn-sm" href="home.html">返回首页</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="state-note">路由守卫拒绝时整页替换，不泄露任何用户数据；普通用户在设置页看不到实例管理入口，直达 URL 也落在这里。</p>
+          </div>
+
+          <!-- 冲突 -->
+          <div class="state-cell">
+            <div class="rule-label">冲突 · 行已被他人更新</div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="notice warn" role="note">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>
+                  <div class="notice-body">
+                    <span class="notice-title">这一行刚被另一位管理员改过</span><br>
+                    你看到的角色是旧的。可以用服务端当前值刷新，也可以保留你手里的版本再决定。
+                    <span class="notice-actions">
+                      <button class="btn btn-sm" type="button">查看我的版本</button>
+                      <button class="btn btn-sm btn-quiet" type="button">使用服务端值</button>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="state-note">两个管理员同时改同一行时不静默覆盖：保留两个版本并提示选择（CR-23）。</p>
+          </div>
+
+          <!-- 未配置 -->
+          <div class="state-cell">
+            <div class="rule-label">未配置 · 实例设置未初始化</div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="notice info" role="note">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+                  <div class="notice-body">
+                    <span class="notice-title">注册开关还没有保存过</span><br>
+                    当前按默认值「开放」运行。保存一次后，登录页才会跟着这个值变化。
+                    <span class="notice-actions"><a class="btn btn-sm btn-primary" href="settings.html#instance">去配置</a></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="state-note">未配置给一句说明 + 去配置的链接，不把用户留在猜测里。</p>
+          </div>
+
+          <!-- 离线 -->
+          <div class="state-cell">
+            <div class="rule-label">离线 · 操作未提交</div>
+            <div class="panel">
+              <div class="panel-body">
+                <div class="notice warn" role="status">
+                  <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                  <div class="notice-body">
+                    <span class="notice-title">当前离线</span><br>
+                    本机有 <b>1</b> 个用户操作未提交（禁用 accept_tester_1794570360969）。联网后自动重试，你也可以手动重试。
+                    <span class="notice-actions"><button class="btn btn-sm" type="button">重试</button></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="state-note">离线是持久标识 + 队列计数 + 重试入口，不是一闪而过的 toast。</p>
+          </div>
+
+          <!-- 最后一位管理员（FN-409 的可观测反例） -->
+          <div class="state-cell is-full">
+            <div class="rule-label">最后一位管理员 · 不可降级（FN-409）</div>
+            <div class="dtable-wrap">
+              <table class="dtable admin-table mini-table">
+                <thead>
+                  <tr>
+                    <th scope="col">用户名</th>
+                    <th scope="col">实例角色</th>
+                    <th scope="col">状态</th>
+                    <th class="col-actions" scope="col">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td data-label="用户名"><span class="admin-username">accept_admin_1794570360969</span><span class="tag brand">我</span></td>
+                    <td data-label="实例角色"><span class="tag brand">管理员</span></td>
+                    <td data-label="状态"><span class="tag ok">正常</span></td>
+                    <td class="col-actions" data-label="操作">
+                      <span class="hint" id="st-lock-me">自己的行不可改</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td data-label="用户名"><span class="admin-username">accept_owner_1794570360969</span></td>
+                    <td data-label="实例角色"><span class="tag brand">管理员</span></td>
+                    <td data-label="状态"><span class="tag ok">正常</span></td>
+                    <td class="col-actions" data-label="操作">
+                      <span class="od-cluster cluster-tight">
+                        <button class="icon-btn sm" type="button" disabled aria-label="取消管理员" aria-describedby="st-lock-last">
+                          <svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg>
+                        </button>
+                        <button class="icon-btn sm" type="button" disabled aria-label="禁用" aria-describedby="st-lock-last">
+                          <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+                        </button>
+                      </span>
+                      <span class="lock-inline">这是最后一位管理员，不能禁用或降级。</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td data-label="用户名"><span class="admin-username">accept_editor_1794570360969</span></td>
+                    <td data-label="实例角色"><span class="tag">普通用户</span></td>
+                    <td data-label="状态"><span class="tag ok">正常</span></td>
+                    <td class="col-actions" data-label="操作">
+                      <span class="od-cluster cluster-tight">
+                        <button class="icon-btn sm" type="button" aria-label="设为管理员" title="设为管理员">
+                          <svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg>
+                        </button>
+                        <button class="icon-btn sm" type="button" aria-label="禁用" title="禁用">
+                          <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+                        </button>
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="hint mt-3" id="st-lock-last">当实例里只剩一位管理员时，「取消管理员」与「禁用」都不可用：不能禁用或降级最后一位管理员，否则没有人能管理用户与注册开关。实例必须至少保留一位管理员。</p>
+            <p class="state-note">主表里「我」是唯一管理员，规则落在自己行上；本格把「最后一位管理员是别人」的情形补出来，让这条约束可被观察。</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- ================= 底部导航（≤768）================= -->
+<nav class="bottomnav" aria-label="底部导航">
+  <button class="bn-item" type="button">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg>今天
+  </button>
+  <button class="bn-item" type="button">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>题库
+  </button>
+  <button class="bn-item" type="button">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg>复习
+  </button>
+  <button class="bn-item" type="button">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>模考
+  </button>
+  <button class="bn-item" type="button">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>资料
+  </button>
+  <button class="bn-item" type="button">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg>更多
+  </button>
+</nav>
+
+<!-- ================= 浮层：禁用用户（危险确认 + 可选原因） ================= -->
+<dialog class="dlg danger" id="dlg-disable" aria-labelledby="dlg-disable-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">用户</p>
+      <h2 class="dlg-title" id="dlg-disable-title">禁用用户</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <p class="dlg-p" id="dlg-disable-user">禁用 accept_editor_1794570360969？</p>
+    <div class="notice warn" role="alert">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+      <div class="notice-body">该用户在当前所有设备上的会话会被立即吊销，需要重新登录；他的题库、作答、错题、FSRS 状态与成绩报告全部保留。重新启用后恢复原来的实例角色。</div>
+    </div>
+    <label class="field">
+      <span class="label">原因（可选，会显示给对方）</span>
+      <textarea class="textarea" id="dlg-disable-reason-input" placeholder="例如：这个账号暂时不用了" rows="2"></textarea>
+      <span class="hint">填了原因，对方下次登录会看到「你的账号已被管理员停用」及这条原因。</span>
+    </label>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>取消</button>
+    <button class="btn btn-danger-solid" type="button" id="dlg-disable-go">禁用用户</button>
+  </div>
+</dialog>
+
+<!-- ================= 浮层：启用用户 ================= -->
+<dialog class="dlg" id="dlg-enable" aria-labelledby="dlg-enable-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">用户</p>
+      <h2 class="dlg-title" id="dlg-enable-title">启用用户</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <p class="dlg-p" id="dlg-enable-user">启用 accept_tester_1794570360969？</p>
+    <p class="hint">启用后对方可以重新登录，实例角色与「待改密」状态保持原样；已保存的学习记录一直都在。</p>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>取消</button>
+    <button class="btn btn-primary" type="button" id="dlg-enable-go">启用</button>
+  </div>
+</dialog>
+
+<!-- ================= 浮层：设为 / 取消实例管理员 ================= -->
+<dialog class="dlg" id="dlg-admin" aria-labelledby="dlg-admin-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">用户</p>
+      <h2 class="dlg-title" id="dlg-admin-title">设为实例管理员</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <p class="dlg-p" id="dlg-admin-user">把 accept_editor_1794570360969 设为实例管理员？</p>
+    <div class="notice info" role="note">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+      <div class="notice-body" id="dlg-admin-effect">设为管理员后，对方刷新即可进入实例管理面，能管理用户与注册开关。这不会给对方任何题库的编辑权或成员管理权——两层角色互不授予。</div>
+    </div>
+    <p class="hint" id="dlg-admin-last" hidden>不能取消：这是实例里最后一位管理员。</p>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>取消</button>
+    <button class="btn btn-primary" type="button" id="dlg-admin-go">确认</button>
+  </div>
+</dialog>
+
+<!-- ================= 浮层：重置密码确认 ================= -->
+<dialog class="dlg" id="dlg-reset" aria-labelledby="dlg-reset-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">用户</p>
+      <h2 class="dlg-title" id="dlg-reset-title">重置密码</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <p class="hint" id="dlg-reset-user">为 accept_editor_1794570360969 生成新的临时密码。该用户在当前所有设备上的会话会被立即吊销，需要重新登录。</p>
+    <div class="notice warn" role="alert">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg>
+      <div class="notice-body">重置的是这个已有账号的密码，不会产生新账号；临时密码只显示一次，没记住只能再重置一次。</div>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>取消</button>
+    <button class="btn btn-danger-solid" type="button" id="dlg-reset-go">重置密码</button>
+  </div>
+</dialog>
+
+<!-- ================= 浮层：临时密码（仅显示一次） ================= -->
+<dialog class="dlg" id="dlg-reset-done" aria-labelledby="dlg-reset-done-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">用户</p>
+      <h2 class="dlg-title" id="dlg-reset-done-title">临时密码</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <p class="hint" id="dlg-reset-done-user">用户 accept_editor_1794570360969 的临时密码</p>
+    <div class="tmp-row">
+      <span class="tmp-code">Tmp-7f42c1a9</span>
+      <button class="btn btn-sm" type="button" onclick="eeToast('已复制')">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-copy"/></svg>复制
+      </button>
+    </div>
+    <div class="notice warn" role="alert">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg>
+      <div class="notice-body">这个密码只显示一次，不落明文、不写日志。请当面交给对方；如果没记住，只能再重置一次生成新的。对方下次登录会被要求先改密码。</div>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-primary" type="button" data-dlg-close data-autofocus>我已记下</button>
+  </div>
+</dialog>
+
+<!-- ================= 浮层：注册开关未保存 ================= -->
+<dialog class="dlg narrow" id="dlg-reg-leave" aria-labelledby="dlg-reg-leave-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">实例设置</p>
+      <h2 class="dlg-title" id="dlg-reg-leave-title">有未保存的更改</h2>
+    </div>
+  </div>
+  <div class="dlg-body">
+    <p class="hint">「允许注册」改过但还没有保存。离开这个页签前要先保存吗？</p>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>继续编辑</button>
+    <button class="btn btn-danger" type="button" id="dlg-reg-discard">放弃并离开</button>
+    <button class="btn btn-primary" type="button" id="dlg-reg-save-switch">保存并离开</button>
+  </div>
+</dialog>
+
+<!-- ================= 浮层：退出登录（危险） ================= -->
+<dialog class="dlg danger narrow" id="dlg-logout" aria-labelledby="dlg-logout-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">账号</p>
+      <h2 class="dlg-title" id="dlg-logout-title">退出登录</h2>
+    </div>
+  </div>
+  <div class="dlg-body">
+    <p class="hint">只会退出这一台设备，其他设备仍保持登录。退出后需要重新输入账号与密码。</p>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>取消</button>
+    <button class="btn btn-danger-solid" type="button" data-logout>退出登录</button>
+  </div>
+</dialog>
+
+<script src="../../assets/icons.js"></script>
+<script src="../../assets/store.js"></script>
+<script src="../../assets/i18n.js"></script>
+<script src="../../assets/nav.js"></script>
+<script src="../../assets/spec-boot.js"></script>
+<script>
+  /* 本屏交互：账户菜单 / 状态筛选 / 行内操作对话框 / 注册开关草稿态 / 403 门禁 */
+  (function () {
+    /* ---------- 账户菜单 ---------- */
+    document.querySelectorAll('[data-menu-trigger]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var menu = btn.parentElement.querySelector('.menu');
+        if (!menu) return;
+        var willOpen = menu.hidden;
+        document.querySelectorAll('.menu').forEach(function (m) { m.hidden = true; });
+        document.querySelectorAll('[data-menu-trigger]').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+        menu.hidden = !willOpen;
+        btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        if (willOpen) {
+          var first = menu.querySelector('.menu-item');
+          if (first) first.focus();
+        }
+      });
+    });
+    document.querySelectorAll('.menu .menu-item').forEach(function (item) {
+      item.addEventListener('click', function () {
+        var menu = item.closest('.menu');
+        if (menu) menu.hidden = true;
+        var trig = menu && menu.parentElement.querySelector('[data-menu-trigger]');
+        if (trig) trig.setAttribute('aria-expanded', 'false');
+      });
+    });
+
+    /* ---------- 状态筛选（按状态筛选，不是视图页签） ---------- */
+    var chips = document.querySelectorAll('.chip-row .chip');
+    var rows = document.querySelectorAll('#admin-table tbody tr');
+    function countVisible(filter) {
+      var n = 0;
+      rows.forEach(function (tr) {
+        var ok = filter === 'all'
+          || (filter === 'active' && tr.getAttribute('data-status') === 'active')
+          || (filter === 'disabled' && tr.getAttribute('data-status') === 'disabled')
+          || (filter === 'pending' && tr.getAttribute('data-pending') === '1');
+        if (ok) n++;
+      });
+      return n;
+    }
+    chips.forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        chips.forEach(function (c) { c.classList.remove('is-on'); c.setAttribute('aria-pressed', 'false'); });
+        chip.classList.add('is-on');
+        chip.setAttribute('aria-pressed', 'true');
+        var f = chip.getAttribute('data-filter');
+        rows.forEach(function (tr) {
+          var ok = f === 'all'
+            || (f === 'active' && tr.getAttribute('data-status') === 'active')
+            || (f === 'disabled' && tr.getAttribute('data-status') === 'disabled')
+            || (f === 'pending' && tr.getAttribute('data-pending') === '1');
+          tr.hidden = !ok;
+        });
+      });
+    });
+
+    /* ---------- 行内操作：对话框跟随所在行的用户 ---------- */
+    var targetRow = null;
+    function rowUser(row) { return row.querySelector('.admin-username').textContent.trim(); }
+    function setRowStatus(row, status, pending) {
+      var cell = row.querySelector('td[data-label="状态"]');
+      if (!cell) return;
+      cell.innerHTML = '';
+      var ok = document.createElement('span');
+      ok.className = 'tag ' + (status === 'disabled' ? 'bad' : 'ok');
+      ok.textContent = status === 'disabled' ? '已禁用' : '正常';
+      cell.appendChild(ok);
+      if (pending) {
+        var p = document.createElement('span');
+        p.className = 'tag warn';
+        p.textContent = '待改密';
+        cell.appendChild(p);
+      }
+      row.setAttribute('data-status', status);
+      row.setAttribute('data-pending', pending ? '1' : '0');
+      /* 状态列变化后，操作列切换「启用 / 禁用」 */
+      var actions = row.querySelector('td.col-actions');
+      if (!actions) return;
+      var lockBtn = actions.querySelector('[data-act="disable"], [data-act="enable"]');
+      if (lockBtn) {
+        var isDisable = lockBtn.getAttribute('data-act') === 'disable';
+        if ((status === 'disabled') === isDisable) {
+          lockBtn.setAttribute('data-act', status === 'disabled' ? 'enable' : 'disable');
+          lockBtn.setAttribute('aria-label', status === 'disabled' ? '启用' : '禁用');
+          lockBtn.setAttribute('title', status === 'disabled' ? '启用' : '禁用');
+          lockBtn.querySelector('use').setAttribute('href', status === 'disabled' ? '#i-unlock' : '#i-lock');
+        }
+      }
+    }
+    function setRowRole(row, isAdmin) {
+      var cell = row.querySelector('td[data-label="实例角色"]');
+      if (!cell) return;
+      cell.innerHTML = '';
+      var tag = document.createElement('span');
+      tag.className = 'tag' + (isAdmin ? ' brand' : '');
+      tag.textContent = isAdmin ? '管理员' : '普通用户';
+      cell.appendChild(tag);
+      var btn = row.querySelector('[data-act="admin-on"], [data-act="admin-off"]');
+      if (btn) {
+        btn.setAttribute('data-act', isAdmin ? 'admin-off' : 'admin-on');
+        btn.setAttribute('aria-label', isAdmin ? '取消管理员' : '设为管理员');
+        btn.setAttribute('title', isAdmin ? '取消管理员' : '设为管理员');
+      }
+    }
+    function flashUpdated() {
+      var n = document.getElementById('admin-updated');
+      if (n) { n.hidden = false; }
+    }
+
+    document.querySelectorAll('#admin-table [data-act]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var row = btn.closest('tr');
+        targetRow = row;
+        var user = rowUser(row);
+        var act = btn.getAttribute('data-act');
+        if (act === 'disable') {
+          document.getElementById('dlg-disable-user').textContent = '禁用 ' + user + '？';
+          document.getElementById('dlg-disable-reason-input').value = '';
+          window.eeDialog.open('dlg-disable', btn);
+        } else if (act === 'enable') {
+          document.getElementById('dlg-enable-user').textContent = '启用 ' + user + '？';
+          window.eeDialog.open('dlg-enable', btn);
+        } else if (act === 'admin-on' || act === 'admin-off') {
+          var on = act === 'admin-on';
+          document.getElementById('dlg-admin-title').textContent = on ? '设为实例管理员' : '取消实例管理员';
+          document.getElementById('dlg-admin-user').textContent = (on ? '把 ' : '把 ') + user + (on ? ' 设为实例管理员？' : ' 取消实例管理员身份？');
+          document.getElementById('dlg-admin-effect').textContent = on
+            ? '设为管理员后，对方刷新即可进入实例管理面，能管理用户与注册开关。这不会给对方任何题库的编辑权或成员管理权——两层角色互不授予。'
+            : '取消后对方立刻失去实例管理能力：看不到用户列表，也不能改注册开关。他已经打开的管理员面在下一次请求时被整页替换为 403。';
+          window.eeDialog.open('dlg-admin', btn);
+        } else if (act === 'reset') {
+          document.getElementById('dlg-reset-user').textContent =
+            '为 ' + user + ' 生成新的临时密码。该用户在当前所有设备上的会话会被立即吊销，需要重新登录。';
+          document.getElementById('dlg-reset-done-user').textContent = '用户 ' + user + ' 的临时密码';
+          window.eeDialog.open('dlg-reset', btn);
+        }
+      });
+    });
+
+    document.getElementById('dlg-disable-go').addEventListener('click', function () {
+      if (targetRow) setRowStatus(targetRow, 'disabled', targetRow.getAttribute('data-pending') === '1');
+      window.eeDialog.close(document.getElementById('dlg-disable'));
+      flashUpdated();
+      window.eeToast('已禁用该用户');
+    });
+    document.getElementById('dlg-enable-go').addEventListener('click', function () {
+      if (targetRow) setRowStatus(targetRow, 'active', targetRow.getAttribute('data-pending') === '1');
+      window.eeDialog.close(document.getElementById('dlg-enable'));
+      flashUpdated();
+      window.eeToast('已启用该用户');
+    });
+    document.getElementById('dlg-admin-go').addEventListener('click', function () {
+      var on = document.getElementById('dlg-admin-title').textContent === '设为实例管理员';
+      if (targetRow) setRowRole(targetRow, on);
+      window.eeDialog.close(document.getElementById('dlg-admin'));
+      flashUpdated();
+      window.eeToast(on ? '已设为实例管理员' : '已取消实例管理员');
+    });
+    document.getElementById('dlg-reset-go').addEventListener('click', function () {
+      if (targetRow) setRowStatus(targetRow, targetRow.getAttribute('data-status'), true);
+      window.eeDialog.close(document.getElementById('dlg-reset'));
+      window.eeDialog.open('dlg-reset-done', this);
+      flashUpdated();
+    });
+
+    /* ---------- 注册开关：草稿态与已保存值分离，写回跨屏共享键 ---------- */
+    var regSwitch = document.getElementById('reg-switch');
+    var regLabel = document.getElementById('reg-switch-label');
+    var regSave = document.getElementById('reg-save');
+    var regSaved = document.getElementById('reg-saved');
+    var regPendingTab = null;
+    /* 已保存值 = 共享键里的值（login.html 读同一把键，两屏因此对得上） */
+    function regStored() { return localStorage.getItem('eeInstance.allowRegistration') !== '0'; }
+    function regDirty() { return regSwitch.checked !== regStored(); }
+    function syncRegLabel() { regLabel.textContent = regSwitch.checked ? '开放' : '关闭'; }
+    function syncRegSave() {
+      syncRegLabel();
+      regSave.disabled = !regDirty();
+      if (regSaved) regSaved.hidden = true;
+    }
+    regSwitch.checked = regStored();
+    syncRegSave();
+    regSwitch.addEventListener('change', syncRegSave);
+    regSave.addEventListener('click', function () {
+      localStorage.setItem('eeInstance.allowRegistration', regSwitch.checked ? '1' : '0');
+      regSave.disabled = true;
+      if (regSaved) regSaved.hidden = false;
+      window.eeToast(regSwitch.checked ? '注册已开放' : '注册已关闭');
+    });
+    window.addEventListener('storage', function (e) {
+      if (e.key === 'eeInstance.allowRegistration') { regSwitch.checked = regStored(); syncRegSave(); }
+    });
+
+    function switchTo(panel) {
+      var tab = document.querySelector('.tabs .tab[data-panel="' + panel + '"]');
+      if (tab) tab.click();
+    }
+    /* 捕获阶段拦截：有未保存改动时，切页签先问 */
+    document.addEventListener('click', function (e) {
+      var tab = e.target.closest ? e.target.closest('[data-tab-scope] .tabs .tab') : null;
+      if (!tab || tab.disabled) return;
+      var target = tab.getAttribute('data-panel');
+      if (regDirty() && target !== 'settings') {
+        e.preventDefault();
+        e.stopPropagation();
+        regPendingTab = tab;
+        window.eeDialog.open('dlg-reg-leave', tab);
+      }
+    }, true);
+    document.getElementById('dlg-reg-save-switch').addEventListener('click', function () {
+      localStorage.setItem('eeInstance.allowRegistration', regSwitch.checked ? '1' : '0');
+      syncRegSave();
+      window.eeDialog.close(document.getElementById('dlg-reg-leave'));
+      window.eeToast('设置已保存。');
+      var tab = regPendingTab; regPendingTab = null;
+      if (tab) switchTo(tab.getAttribute('data-panel'));
+    });
+    document.getElementById('dlg-reg-discard').addEventListener('click', function () {
+      regSwitch.checked = regStored();
+      syncRegSave();
+      window.eeDialog.close(document.getElementById('dlg-reg-leave'));
+      window.eeToast('已放弃更改', 'bad');
+      var tab = regPendingTab; regPendingTab = null;
+      if (tab) switchTo(tab.getAttribute('data-panel'));
+    });
+
+    /* ---------- 403：返回来源页（有来源才回跳，否则说明原因） ---------- */
+    var SOURCE_MAP = { banks: 'banks.html', settings: 'settings.html', instance: 'instance.html', home: 'home.html', questions: 'question.html', notes: 'notes.html', import: 'import.html' };
+    function goSource(from) {
+      var m = from ? String(from).match(/^\/([a-z-]+)/) : null;
+      if (m && SOURCE_MAP[m[1]]) { location.href = SOURCE_MAP[m[1]]; return; }
+      if (document.referrer) { window.history.back(); return; }
+      window.eeToast('没有可返回的来源页面：这个地址是直接打开的。', 'bad');
+    }
+    document.querySelectorAll('[data-back-source]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        goSource(new URLSearchParams(location.search).get('from'));
+      });
+    });
+
+    /* ---------- 权限门：实例角色只由 instanceRole 决定，与题库角色无关（CR-11）----------
+       普通用户在设置页看不到实例管理入口；直达 URL 由守卫整页拒绝。
+       ?denied=1 供设计复查强制呈现这个整页 403 变体。 */
+    var S = window.eeStore;
+    var forced = new URLSearchParams(location.search).get('denied') === '1';
+    function isAdmin() { return S && S.isInstanceAdmin ? S.isInstanceAdmin() : true; }
+    function syncRoleGate() {
+      var denied = forced || !isAdmin();
+      var body = document.getElementById('inst-body');
+      var deny = document.getElementById('inst-403');
+      var desc = document.getElementById('inst-403-desc');
+      var me = document.getElementById('inst-me');
+      var roleName = document.getElementById('inst-role-name');
+      if (body) body.hidden = denied;
+      if (deny) deny.hidden = !denied;
+      if (me && S && S.user) me.textContent = S.user();
+      if (roleName) roleName.textContent = isAdmin() ? '管理员' : '普通用户';
+      if (desc && denied) {
+        var reason = (S && S.denyReason) ? S.denyReason('instance.manage') : '';
+        desc.textContent = (reason ? reason + '。' : '实例管理只对实例管理员开放。') + '用管理员账号登录后重试，或返回设置。';
+      }
+    }
+    syncRoleGate();
+    if (S && S.subscribe) {
+      S.subscribe(function (st, evt) {
+        if (!evt || evt.type === 'role' || evt.type === 'instanceRole' || evt.type === 'reset' || evt.type === 'external' || evt.type === 'login' || evt.type === 'logout') syncRoleGate();
+      });
+    }
+
+    /* ---------- 退出登录 ---------- */
+    document.querySelectorAll('[data-logout]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        window.eeStore.logout();
+        window.eeToast('已退出登录');
+        setTimeout(function () { window.location.href = 'login.html?next=instance.html'; }, 300);
+      });
+    });
+  })();
+</script>
+</body>
+</html>

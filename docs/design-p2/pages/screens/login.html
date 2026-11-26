@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登录 · 易考宝</title>
+<link rel="stylesheet" href="../../assets/ee.css">
+<style>/* 本屏特有：登录页为独立全屏布局（无 app-shell），仅布局微调，不重定义令牌 */
+  .auth-layout{  min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);  }
+.auth-brand-pane{ 
+    background: var(--d-spine); color: var(--d-spine-ink);
+    display: flex; flex-direction: column; gap: var(--sp-8);
+    padding: var(--sp-9) var(--sp-8);
+   }
+.auth-brand-pane .side-brand{  padding: 0;  }
+.auth-brand-pane .brand-name{  color: var(--d-spine-ink);  }
+.auth-brand-pane .brand-sub{  color: var(--d-spine-ink-3);  }
+.auth-headline{ 
+    font-family: var(--font-serif); font-size: var(--text-4xl); font-weight: 500;
+    line-height: var(--text-4xl-lh); margin: 0; color: var(--d-spine-ink);
+   }
+.auth-lede{  font-size: var(--text-md); line-height: var(--text-md-lh); color: var(--d-spine-ink-2); margin: var(--sp-4) 0 0; max-width: 46ch;  }
+.auth-points{  display: flex; flex-direction: column; margin-top: var(--sp-2);  }
+.auth-point{  display: flex; gap: var(--sp-4); padding: var(--sp-4) 0; border-top: 1px solid var(--d-spine-line);  }
+.auth-point-n{  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--d-spine-accent); padding-top: var(--sp-1); flex: none;  }
+.auth-point-title{  font-size: var(--text-base); font-weight: 500; color: var(--d-spine-ink);  }
+.auth-point-desc{  font-size: var(--text-sm); line-height: var(--text-sm-lh); color: var(--d-spine-ink-3); margin-top: var(--sp-1);  }
+.auth-colophon{  margin-top: auto; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--d-spine-ink-3); letter-spacing: .04em;  }
+.auth-form-pane{  display: flex; align-items: center; justify-content: center; padding: var(--sp-8) var(--sp-5); position: relative;  }
+.auth-form-wrap{  width: min(100%, 28em);  }
+.auth-toggles{  position: absolute; top: var(--sp-4); right: var(--sp-4); display: flex; gap: var(--sp-1);  }
+.auth-form-title{  font-family: var(--font-serif); font-size: var(--text-4xl); font-weight: 500; line-height: var(--text-4xl-lh); margin: var(--sp-2) 0 var(--sp-6);  }
+.auth-form{  display: flex; flex-direction: column; gap: var(--sp-4);  }
+.auth-input-row{  display: flex; align-items: center; gap: var(--sp-2);  }
+.auth-input-row .input{  flex: 1 1 auto; min-width: 0;  }
+.auth-eye{  flex: none; font-size: var(--text-xs);  }
+.auth-submit{  width: 100%; margin-top: var(--sp-2);  }
+.auth-switch{  display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-6); padding-top: var(--sp-4); border-top: 1px solid var(--line); flex-wrap: wrap;  }
+.auth-gate-note{  margin-top: var(--sp-5);  }
+.en-sheet{  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-6);  }
+.en-sheet .auth-form-title{  font-size: var(--text-3xl); margin-bottom: var(--sp-5);  }
+.variant-panel{  padding-top: var(--sp-5);  }
+.variant-head{  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-3); margin-bottom: var(--sp-4);  }
+.variant-fn{  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-3);  }
+.blocked-list{  margin: 0;  }
+.blocked-list .kv-key{  width: 8.5em;  }
+@media (max-width: 1024px){
+    .auth-layout { grid-template-columns: 1fr; }
+    .auth-brand-pane { padding: var(--sp-7) var(--sp-5) var(--sp-5); gap: var(--sp-5); }
+    .auth-points, .auth-colophon { display: none; }
+    .auth-form-pane { padding: var(--sp-6) var(--sp-4) var(--sp-8); }
+    .auth-toggles { top: var(--sp-3); right: var(--sp-3); }
+  }
+@media (max-width: 640px){
+    .auth-headline { font-size: var(--text-3xl); }
+    .auth-form-title { font-size: var(--text-3xl); }
+    /* 软键盘：主操作贴在可视区底部，输入框不被遮、也不用翻页才能点到「登录」。
+       整屏表单由浏览器自行处理聚焦滚动，这里只保证主按钮始终可达。 */
+    .auth-submit { position: sticky; bottom: var(--sp-2); z-index: 5; box-shadow: var(--shadow-1); }
+    .auth-form { padding-bottom: var(--sp-3); }
+    /* 引导步骤条窄屏只留序号（与流程页步骤条同一处理） */
+    .steps .step-name { display: none; }
+    .steps { gap: var(--sp-2); }
+  }</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">跳到主内容</a>
+
+<div class="auth-layout">
+  <!-- ============ 左：品牌叙事栏 ============ -->
+  <section class="auth-brand-pane" aria-labelledby="brand-headline">
+    <button type="button" class="side-brand">
+      <span class="brand-mark" aria-hidden="true">易</span>
+      <span class="brand-text">
+        <span class="brand-name">易考宝</span>
+        <span data-i18n="shell.brand.sub" class="brand-sub">私人学习档案</span>
+      </span>
+    </button>
+
+    <div>
+      <h1 class="auth-headline" id="brand-headline">题库、模考、复习。</h1>
+      <p class="auth-lede">数据保存在你的实例。题库可以共享，学习记录只属于账号本人。</p>
+    </div>
+
+    <div class="auth-points">
+      <div class="auth-point">
+        <span class="auth-point-n">01</span>
+        <div>
+          <div class="auth-point-title">围绕每道题建立长期学习记录</div>
+          <div class="auth-point-desc">每次作答、评级与笔记都归属到题目本身，历史作答绑定题目版本。</div>
+        </div>
+      </div>
+      <div class="auth-point">
+        <span class="auth-point-n">02</span>
+        <div>
+          <div class="auth-point-title">FSRS 间隔复习</div>
+          <div class="auth-point-desc">按遗忘曲线安排到期复习，只把该看的题排进今天。</div>
+        </div>
+      </div>
+      <div class="auth-point">
+        <span class="auth-point-n">03</span>
+        <div>
+          <div class="auth-point-title">模考与错题闭环</div>
+          <div class="auth-point-desc">交卷后生成成绩报告，答错的题自动进入错题重做。</div>
+        </div>
+      </div>
+      <div class="auth-point">
+        <span class="auth-point-n">04</span>
+        <div>
+          <div class="auth-point-title">家庭与小团队可共享</div>
+          <div class="auth-point-desc">题库内容共享，学习记录各自私有；他人看不到你的作答与错题。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="auth-colophon">易考宝 1.0 · 私人学习档案</div>
+  </section>
+
+  <!-- ============ 右：表单卡 ============ -->
+  <section class="auth-form-pane" id="main-content" aria-labelledby="auth-form-title">
+    <div class="auth-toggles">
+      <button type="button" class="icon-btn" title="切换语言" data-ee-shell="lang" aria-label="切换语言">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-globe"/></svg>
+      </button>
+      <button data-ee-shell="theme" type="button" class="icon-btn" title="切换明暗" aria-label="切换明暗">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-moon"/></svg>
+      </button>
+    </div>
+
+    <!-- ===== 登录 / 注册（默认态）===== -->
+    <div class="auth-form-wrap" id="auth-signin">
+      <p class="page-eyebrow" id="auth-eyebrow">登录</p>
+      <h2 class="auth-form-title" id="auth-form-title">登录</h2>
+
+      <div class="notice warn" role="note" id="auth-expired" hidden>
+        <svg class="od-icon" aria-hidden="true"><use href="#i-clock"/></svg>
+        <span class="notice-body">
+          <span class="notice-title">登录状态已过期</span><br>
+          为了安全，会话到期后需要重新登录。勾选「保持登录」可保持 30 天，不勾选为 12 小时。
+        </span>
+      </div>
+
+      <form class="auth-form mt-4" novalidate id="auth-form">
+        <div class="field">
+          <label class="label" for="login-username">用户名<span class="req">*</span></label>
+          <input class="input" id="login-username" name="username" type="text" placeholder="用户名"
+                 autocomplete="username" autocapitalize="off" autocorrect="off" value="accept_admin_1794570360969">
+          <p class="field-err" id="auth-user-err" hidden>请输入用户名。</p>
+        </div>
+
+        <div class="field">
+          <label class="label" for="login-password">密码<span class="req">*</span></label>
+          <div class="auth-input-row">
+            <input class="input" id="login-password" name="password" type="password" placeholder="密码"
+                   autocomplete="current-password" minlength="8" value="············">
+            <button type="button" class="link-btn auth-eye" aria-controls="login-password" aria-pressed="false"
+                    aria-label="显示密码">显示</button>
+          </div>
+          <p class="hint" id="auth-pass-hint">至少 8 个字符。</p>
+          <p class="field-err" id="auth-pass-err" hidden>密码至少需要 8 个字符。</p>
+        </div>
+
+        <!-- 注册态才出现：确认密码（FN-401 两次一致性校验） -->
+        <div class="field" id="auth-confirm-field" hidden>
+          <label class="label" for="login-confirm">确认密码<span class="req">*</span></label>
+          <div class="auth-input-row">
+            <input class="input" id="login-confirm" name="confirm_password" type="password" placeholder="再输入一次密码"
+                   autocomplete="new-password" minlength="8">
+            <button type="button" class="link-btn auth-eye" aria-controls="login-confirm" aria-pressed="false"
+                    aria-label="显示密码">显示</button>
+          </div>
+          <p class="field-err" id="auth-confirm-err" hidden>两次输入的密码不一致。</p>
+        </div>
+
+        <label class="check">
+          <input type="checkbox" id="auth-stay" checked>
+          <span>保持登录</span>
+        </label>
+
+        <button type="submit" class="btn btn-primary auth-submit" id="auth-submit">登录</button>
+      </form>
+
+      <div class="auth-switch" id="auth-switch">
+        <span class="hint" id="auth-switch-hint">还没有账号？</span>
+        <button type="button" class="link-btn" id="auth-switch-btn">注册</button>
+      </div>
+
+      <!-- 注册关闭（FN-405 / ST-404）：不出现切换入口，改为一句可读提示 -->
+      <div class="notice info auth-gate-note" role="note" id="auth-reg-closed" hidden>
+        <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+        <span class="notice-body">本站点已关闭注册，请联系管理员。关闭注册不影响已有用户登录。</span>
+      </div>
+
+      <p class="hint auth-gate-note" id="auth-bootstrap-link-row" hidden>
+        这个实例还没有任何账号？<button type="button" class="link-btn" id="auth-bootstrap-link">创建第一个账号</button>
+      </p>
+    </div>
+
+    <!-- ===== 首个管理员引导 bootstrap（FN-410）：引导完成前不可跳过 ===== -->
+    <div class="auth-form-wrap" id="auth-bootstrap" hidden>
+      <p class="page-eyebrow">实例初始化</p>
+      <h2 class="auth-form-title">创建第一个账号</h2>
+      <p class="hint">这个实例还没有任何账号。第一个创建的账号会成为实例管理员，负责用户管理与注册开关。</p>
+
+      <div class="notice info mt-4" role="note">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+        <span class="notice-body">空实例的首个账号不受注册开关影响：即使已关闭注册，第一个账号仍可创建。</span>
+      </div>
+
+      <form class="auth-form mt-4" novalidate id="bootstrap-form">
+        <div class="field">
+          <label class="label" for="boot-username">用户名<span class="req">*</span></label>
+          <input class="input" id="boot-username" type="text" placeholder="用户名" autocomplete="username" autocapitalize="off">
+          <p class="hint">1–64 个字符；字母、数字、下划线、连字符或中文。大小写不敏感。</p>
+        </div>
+        <div class="field">
+          <label class="label" for="boot-password">密码<span class="req">*</span></label>
+          <div class="auth-input-row">
+            <input class="input" id="boot-password" type="password" placeholder="密码" autocomplete="new-password" minlength="8">
+            <button type="button" class="link-btn auth-eye" aria-controls="boot-password" aria-pressed="false" aria-label="显示密码">显示</button>
+          </div>
+          <p class="hint">至少 8 个字符。</p>
+        </div>
+        <div class="field">
+          <label class="label" for="boot-confirm">确认密码<span class="req">*</span></label>
+          <input class="input" id="boot-confirm" type="password" placeholder="再输入一次密码" autocomplete="new-password" minlength="8">
+          <p class="field-err" id="boot-confirm-err" hidden>两次输入的密码不一致。</p>
+        </div>
+        <button type="submit" class="btn btn-primary auth-submit">创建账号并进入</button>
+        <button type="button" class="btn btn-quiet auth-submit" disabled aria-describedby="boot-skip-reason">稍后再说</button>
+        <p class="hint" id="boot-skip-reason">引导完成前不能跳过：实例必须至少有一位管理员，否则没有人能管理用户与注册开关。</p>
+      </form>
+    </div>
+  </section>
+</div>
+
+<!-- ============ 状态规格：八态 ============ -->
+<main class="content" aria-labelledby="login-states-title" data-spec>
+  <section class="section">
+    <div class="section-head">
+      <h2 class="section-title" id="login-states-title">状态规格</h2>
+      <span class="section-note">空 / 加载 / 错误 / 禁用 / 无权限 / 冲突 / 未配置 / 离线</span>
+    </div>
+
+    <div class="state-grid">
+      <!-- 空：实例还没有用户 -->
+      <div class="state-cell">
+        <div class="rule-label">空 · 实例没有用户</div>
+        <div class="panel"><div class="panel-body">
+          <div class="empty">
+            <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg></div>
+            <h3 class="empty-title">这个实例还没有账号</h3>
+            <p class="empty-desc">初始化时创建的第一个账号会成为实例管理员，之后才能登录使用。</p>
+            <div class="empty-actions"><button type="button" class="btn btn-primary" onclick="eeDialog.open('dlg-bootstrap', this)">创建第一个账号</button></div>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- 加载：提交中 -->
+      <div class="state-cell">
+        <div class="rule-label">加载 · 提交中</div>
+        <div class="panel"><div class="panel-body">
+          <form class="auth-form" novalidate>
+            <div class="field">
+              <label class="label" for="st-busy-user">用户名</label>
+              <input class="input" id="st-busy-user" type="text" value="accept_admin_1794570360969" disabled>
+            </div>
+            <div class="field">
+              <label class="label" for="st-busy-pass">密码</label>
+              <div class="auth-input-row">
+                <input class="input" id="st-busy-pass" type="password" value="············" disabled>
+                <button type="button" class="link-btn auth-eye" disabled aria-label="显示密码">显示</button>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary auth-submit" disabled>
+              <span class="spinner" aria-hidden="true"></span>登录中
+            </button>
+          </form>
+          <p class="state-note">提交期间整个表单只读，主按钮禁用并改用进行时文案，避免重复提交。</p>
+        </div></div>
+      </div>
+
+      <!-- 错误：登录失败 -->
+      <div class="state-cell">
+        <div class="rule-label">错误 · 登录失败</div>
+        <div class="panel"><div class="panel-body">
+          <div class="notice bad" role="alert">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+            <span class="notice-body">
+              <span class="notice-title">用户名或密码不正确</span><br>
+              请重新输入。连续失败会被限速，但账号不会被锁定。
+            </span>
+          </div>
+          <form class="auth-form mt-4" novalidate>
+            <div class="field">
+              <label class="label" for="st-err-user">用户名</label>
+              <input class="input" id="st-err-user" type="text" value="accept_admin_1794570360969">
+            </div>
+            <div class="field">
+              <label class="label" for="st-err-pass">密码</label>
+              <div class="auth-input-row">
+                <input class="input is-error" id="st-err-pass" type="password" value="wrongpass" aria-invalid="true" aria-describedby="st-err-pass-msg">
+                <button type="button" class="link-btn auth-eye" aria-controls="st-err-pass" aria-pressed="false" aria-label="显示密码">显示</button>
+              </div>
+              <p class="field-err" id="st-err-pass-msg">密码不正确，已填内容保留，请修正后重试。</p>
+            </div>
+            <button type="submit" class="btn btn-primary auth-submit">重试登录</button>
+          </form>
+        </div></div>
+      </div>
+
+      <!-- 禁用：密码不足 8 位 -->
+      <div class="state-cell">
+        <div class="rule-label">禁用 · 规则不满足</div>
+        <div class="panel"><div class="panel-body">
+          <form class="auth-form" novalidate>
+            <div class="field">
+              <label class="label" for="st-dis-user">用户名</label>
+              <input class="input" id="st-dis-user" type="text" value="new_member">
+            </div>
+            <div class="field">
+              <label class="label" for="st-dis-pass">密码</label>
+              <div class="auth-input-row">
+                <input class="input is-error" id="st-dis-pass" type="password" value="short" aria-invalid="true" aria-describedby="st-dis-pass-msg">
+                <button type="button" class="link-btn auth-eye" aria-controls="st-dis-pass" aria-pressed="false" aria-label="显示密码">显示</button>
+              </div>
+              <p class="field-err" id="st-dis-pass-msg">密码至少需要 8 个字符。</p>
+            </div>
+            <label class="check">
+              <input type="checkbox" checked>
+              <span>保持登录</span>
+            </label>
+            <button type="submit" class="btn btn-primary auth-submit" disabled aria-describedby="st-dis-reason">注册</button>
+            <p class="hint" id="st-dis-reason">密码至少需要 8 个字符，补齐后才能提交；入口不隐藏，只禁用并说明原因。</p>
+          </form>
+        </div></div>
+      </div>
+
+      <!-- 无权限：会话过期 / 账号已停用 -->
+      <div class="state-cell">
+        <div class="rule-label">无权限 · 会话过期与停用</div>
+        <div class="panel"><div class="panel-body">
+          <div class="notice warn" role="note">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-clock"/></svg>
+            <span class="notice-body"><span class="notice-title">登录状态已过期</span><br>会话到期后需要重新登录；未勾选「保持登录」的会话为 12 小时。</span>
+          </div>
+          <div class="notice bad mt-4" role="alert">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+            <span class="notice-body"><span class="notice-title">你的账号已被管理员停用</span><br>请联系实例管理员。停用不影响你已有的学习记录。</span>
+          </div>
+          <p class="state-note">两种情况给出不同文案：过期是「重新登录」，停用是「找管理员」，不让用户反复试密码。</p>
+        </div></div>
+      </div>
+
+      <!-- 冲突：另一台设备改密 -->
+      <div class="state-cell">
+        <div class="rule-label">冲突 · 另一台设备改密</div>
+        <div class="panel"><div class="panel-body">
+          <div class="notice warn" role="note">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>
+            <span class="notice-body">
+              <span class="notice-title">这个账号刚在另一台设备上修改了密码</span><br>
+              改密会吊销其他设备的会话。本设备还留着未同步的作答，两个版本都保留，由你选择。
+            </span>
+            <span class="notice-actions">
+              <button type="button" class="btn btn-sm" onclick="eeToast('已打开本机保存的未同步作答')">查看我的版本</button>
+              <button type="button" class="btn btn-sm btn-quiet" onclick="eeToast('已接受服务端状态，请重新登录')">使用对方版本</button>
+            </span>
+          </div>
+          <p class="state-note">未提交的答案是用户创作类数据：保留两个版本并提示选择，不静默覆盖（CR-23）。</p>
+        </div></div>
+      </div>
+
+      <!-- 未配置：实例未初始化 -->
+      <div class="state-cell">
+        <div class="rule-label">未配置 · 实例未初始化</div>
+        <div class="panel"><div class="panel-body">
+          <div class="notice info" role="note">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+            <span class="notice-body">
+              <span class="notice-title">实例还没有任何账号</span><br>
+              先创建第一个账号（它会成为实例管理员），才能登录。
+            </span>
+            <span class="notice-actions">
+              <a class="btn btn-sm btn-primary" href="#variant-bootstrap">去创建第一个账号</a>
+            </span>
+          </div>
+          <p class="state-note">与「注册关闭」是两件事：关闭注册只挡第二及以后的账号，首个账号始终放行（BR-403）。</p>
+        </div></div>
+      </div>
+
+      <!-- 离线 -->
+      <div class="state-cell">
+        <div class="rule-label">离线 · 未同步作答</div>
+        <div class="panel"><div class="panel-body">
+          <div class="notice warn" role="status">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+            <span class="notice-body">
+              <span class="notice-title">当前离线</span><br>
+              本机有 <b>2</b> 条作答未同步，联网后自动补交；登录需要联网后进行。
+            </span>
+            <span class="notice-actions">
+              <button type="button" class="btn btn-sm" onclick="eeToast('已重新尝试同步')">重试</button>
+            </span>
+          </div>
+          <p class="state-note">离线态是持久标识 + 队列计数 + 重试，不是一闪而过的 toast。</p>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 屏幕变体：登录 / 注册 / 强制改密门禁 / 首个管理员引导 / 回跳 ============ -->
+  <section class="section" id="variants" data-spec>
+    <div class="section-head">
+      <h2 class="section-title">屏幕变体</h2>
+      <span class="section-note">登录 / 注册 / 强制改密门禁 / 首个管理员引导 / 登录后回跳</span>
+    </div>
+
+    <div data-tab-scope>
+      <div class="tabs" role="tablist" aria-label="登录页变体">
+        <button class="tab" type="button" role="tab" aria-selected="true" data-panel="v-signin">登录</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-panel="v-register">注册</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-panel="v-gate">强制改密门禁</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-panel="v-bootstrap" id="variant-bootstrap">首个管理员引导</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-panel="v-next">登录后回跳</button>
+      </div>
+
+      <!-- 登录 -->
+      <div class="variant-panel" data-tab-panel="v-signin">
+        <div class="state-grid">
+          <div class="en-sheet">
+            <p class="page-eyebrow">登录</p>
+            <h3 class="auth-form-title">登录</h3>
+            <form class="auth-form" novalidate>
+              <div class="field">
+                <label class="label" for="v-signin-user">用户名<span class="req">*</span></label>
+                <input class="input" id="v-signin-user" type="text" value="accept_admin_1794570360969" autocomplete="username">
+              </div>
+              <div class="field">
+                <label class="label" for="v-signin-pass">密码<span class="req">*</span></label>
+                <div class="auth-input-row">
+                  <input class="input" id="v-signin-pass" type="password" value="············" autocomplete="current-password">
+                  <button type="button" class="link-btn auth-eye" aria-controls="v-signin-pass" aria-pressed="false" aria-label="显示密码">显示</button>
+                </div>
+                <p class="hint">至少 8 个字符。</p>
+              </div>
+              <label class="check"><input type="checkbox" checked><span>保持登录</span></label>
+              <p class="hint">勾选 = 30 天，不勾选 = 12 小时；两种情况都不自动续期。</p>
+              <button type="submit" class="btn btn-primary auth-submit">登录</button>
+            </form>
+            <div class="auth-switch">
+              <span class="hint">还没有账号？</span>
+              <button type="button" class="link-btn">注册</button>
+            </div>
+          </div>
+          <div class="state-cell">
+            <p class="state-note">FN-402：任何已注册且未被停用的账号都能登录。<code>must_change_password</code> 的账号仍可登录，但会立刻落入改密门禁（见下一个变体）。</p>
+            <p class="state-note">FN-413：未登录时地址原样保留，登录后回到原地址；目标不可达时回落今天。</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 注册 -->
+      <div class="variant-panel" data-tab-panel="v-register" hidden>
+        <div class="state-grid">
+          <div class="en-sheet">
+            <p class="page-eyebrow">创建账号</p>
+            <h3 class="auth-form-title">创建账号</h3>
+            <form class="auth-form" novalidate>
+              <div class="field">
+                <label class="label" for="v-reg-user">用户名<span class="req">*</span></label>
+                <input class="input" id="v-reg-user" type="text" placeholder="用户名" autocomplete="username" autocapitalize="off">
+                <p class="hint">1–64 个字符；大小写不敏感，不能与已有账号重复。</p>
+              </div>
+              <div class="field">
+                <label class="label" for="v-reg-pass">密码<span class="req">*</span></label>
+                <div class="auth-input-row">
+                  <input class="input" id="v-reg-pass" type="password" placeholder="密码" autocomplete="new-password" minlength="8">
+                  <button type="button" class="link-btn auth-eye" aria-controls="v-reg-pass" aria-pressed="false" aria-label="显示密码">显示</button>
+                </div>
+                <p class="hint">至少 8 个字符，本期不强制字符类别。</p>
+              </div>
+              <div class="field">
+                <label class="label" for="v-reg-confirm">确认密码<span class="req">*</span></label>
+                <div class="auth-input-row">
+                  <input class="input is-error" id="v-reg-confirm" type="password" value="anotherpass8" autocomplete="new-password" minlength="8" aria-invalid="true" aria-describedby="v-reg-confirm-msg">
+                  <button type="button" class="link-btn auth-eye" aria-controls="v-reg-confirm" aria-pressed="false" aria-label="显示密码">显示</button>
+                </div>
+                <p class="field-err" id="v-reg-confirm-msg">两次输入的密码不一致。</p>
+              </div>
+              <label class="check"><input type="checkbox" checked><span>保持登录</span></label>
+              <button type="submit" class="btn btn-primary auth-submit" disabled aria-describedby="v-reg-reason">注册</button>
+              <p class="hint" id="v-reg-reason">两次密码一致后才能提交。</p>
+            </form>
+            <div class="auth-switch">
+              <span class="hint">已有账号？</span>
+              <button type="button" class="link-btn">登录</button>
+            </div>
+          </div>
+          <div class="state-cell">
+            <p class="state-note">FN-401：注册不创建任何题库、不加入任何题库；成功后用同一凭据登录。注册受 FN-405 控制，关闭时不出现这个切换入口。</p>
+            <div class="notice info mt-4" role="note">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+              <span class="notice-body">注册关闭时新增账号的唯一路径：管理员在实例管理里临时开启注册 → 创建账号 → 再关闭（FN-405）。</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 强制改密门禁 -->
+      <div class="variant-panel" data-tab-panel="v-gate" hidden>
+        <div class="variant-head">
+          <span class="variant-fn">FN-403 · must_change_password</span>
+          <span class="hint">登录后全屏门禁：不改密，什么都做不了</span>
+        </div>
+        <div class="state-grid">
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title">门禁卡片</h3><span class="panel-sub">全屏，无导航</span></div>
+            <div class="panel-body">
+              <p class="page-eyebrow">需要修改密码</p>
+              <h4 class="panel-title">你需要先修改密码</h4>
+              <p class="hint mt-3">你的账号使用临时密码（管理员重置或旧库迁移产生）。修改后即可进入主系统。</p>
+              <form class="auth-form mt-4" novalidate>
+                <div class="field">
+                  <label class="label" for="gate-old">当前密码（临时密码）<span class="req">*</span></label>
+                  <input class="input" id="gate-old" type="password" autocomplete="current-password">
+                </div>
+                <div class="field">
+                  <label class="label" for="gate-new">新密码<span class="req">*</span></label>
+                  <input class="input" id="gate-new" type="password" autocomplete="new-password" minlength="8">
+                  <p class="hint">至少 8 个字符。</p>
+                </div>
+                <div class="field">
+                  <label class="label" for="gate-confirm">确认新密码<span class="req">*</span></label>
+                  <input class="input" id="gate-confirm" type="password" autocomplete="new-password" minlength="8">
+                  <p class="field-err" hidden>两次输入的新密码不一致。</p>
+                </div>
+                <button type="submit" class="btn btn-primary auth-submit">修改密码</button>
+                <button type="button" class="btn btn-quiet auth-submit">退出登录</button>
+              </form>
+            </div>
+          </div>
+          <div class="state-cell">
+            <div class="notice warn" role="note">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+              <span class="notice-body">
+                <span class="notice-title">改密完成前，主系统不可用</span><br>
+                除「修改密码」「退出登录」与读取当前用户外，所有接口都会返回 403；题库、复习、模考、资料、设置与实例管理都进不去，设备与会话列表同样被阻断。
+              </span>
+            </div>
+            <div class="panel mt-4">
+              <div class="panel-body">
+                <div class="od-cluster">
+                  <button type="button" class="btn btn-primary" disabled aria-describedby="gate-enter-reason">进入今天</button>
+                  <button type="button" class="btn" disabled aria-describedby="gate-enter-reason">打开题库</button>
+                  <button type="button" class="btn" disabled aria-describedby="gate-enter-reason">设备与会话</button>
+                </div>
+                <p class="hint mt-3" id="gate-enter-reason">入口不隐藏，只禁用并给出原因：改密完成前不能进入任何业务页面。</p>
+              </div>
+            </div>
+            <p class="state-note mt-4">改密成功后会吊销该账号在其他设备上的会话，只保留当前这台（BR-419）。</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 首个管理员引导 -->
+      <div class="variant-panel" data-tab-panel="v-bootstrap" hidden>
+        <div class="variant-head">
+          <span class="variant-fn">FN-410 · bootstrap</span>
+          <span class="hint">保证任何实例在任何时刻至少有一位管理员</span>
+        </div>
+        <div class="state-grid">
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title">引导步骤</h3><span class="panel-sub">完成前不可跳过</span></div>
+            <div class="panel-body">
+              <div class="steps">
+                <span class="step is-active"><span class="step-n">1</span><span class="step-name">创建第一个账号</span></span>
+                <span class="step-line" aria-hidden="true"></span>
+                <span class="step"><span class="step-n">2</span><span class="step-name">成为实例管理员</span></span>
+              </div>
+              <form class="auth-form mt-5" novalidate>
+                <div class="field">
+                  <label class="label" for="bs-user">用户名<span class="req">*</span></label>
+                  <input class="input" id="bs-user" type="text" placeholder="例如 accept_admin_1794570360969" autocomplete="username" autocapitalize="off">
+                </div>
+                <div class="field">
+                  <label class="label" for="bs-pass">密码<span class="req">*</span></label>
+                  <input class="input" id="bs-pass" type="password" autocomplete="new-password" minlength="8">
+                  <p class="hint">至少 8 个字符。</p>
+                </div>
+                <div class="field">
+                  <label class="label" for="bs-confirm">确认密码<span class="req">*</span></label>
+                  <input class="input" id="bs-confirm" type="password" autocomplete="new-password" minlength="8">
+                </div>
+                <button type="submit" class="btn btn-primary auth-submit">创建账号并进入</button>
+                <button type="button" class="btn btn-quiet auth-submit" disabled aria-describedby="bs-skip-reason">跳过引导</button>
+                <p class="hint" id="bs-skip-reason">没有「跳过」：实例必须至少有一位管理员，否则没有人能管理用户与注册开关。</p>
+              </form>
+            </div>
+          </div>
+          <div class="state-cell">
+            <div class="kv blocked-list">
+              <span class="kv-key">触发条件</span><span class="kv-val">users 表为空（空实例首账号）、旧库升级、启动时发现无管理员</span>
+              <span class="kv-key">与注册开关</span><span class="kv-val">互不影响：关闭注册时空实例首账号仍放行（BR-403）</span>
+              <span class="kv-key">结果</span><span class="kv-val">该账号 <code>is_admin=1</code>，可进入实例管理面</span>
+              <span class="kv-key">升级路径</span><span class="kv-val">被 bootstrap 提升的管理员在下次登录时看到一次性的「你已成为这个实例的管理员」提示</span>
+            </div>
+            <div class="notice info mt-4" role="note">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+              <span class="notice-body">引导只建立账号，不创建题库、不加入题库；进入后从今天页开始。</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 登录后回跳 -->
+      <div class="variant-panel" data-tab-panel="v-next" hidden>
+        <div class="variant-head">
+          <span class="variant-fn">FN-413 · next</span>
+          <span class="hint">未登录时地址原样保留，登录后回到原地址；目标不可达时回落今天</span>
+        </div>
+        <div class="dtable-wrap">
+          <table class="dtable">
+            <thead>
+              <tr><th scope="col">被请去登录前所在地址</th><th scope="col">目标是否可达</th><th scope="col">登录后落到</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td data-label="地址"><span class="mono">/banks/b_acc/questions/3F9A1C02</span></td>
+                <td data-label="目标"><span class="tag ok">可达</span></td>
+                <td data-label="登录后">回到那道题目页</td>
+              </tr>
+              <tr>
+                <td data-label="地址"><span class="mono">/settings</span></td>
+                <td data-label="目标"><span class="tag ok">可达</span></td>
+                <td data-label="登录后">回到设置页</td>
+              </tr>
+              <tr id="next-instance-row">
+                <td data-label="地址"><span class="mono">/instance</span><span id="next-instance-who">（当前用户不是实例管理员）</span></td>
+                <td data-label="目标"><span class="tag warn" id="next-instance-tag">需要管理员</span></td>
+                <td data-label="登录后" id="next-instance-land">回落今天，不落管理员面再被弹走</td>
+              </tr>
+              <tr>
+                <td data-label="地址"><span class="mono">/banks/已删除的题库</span></td>
+                <td data-label="目标"><span class="tag bad">不可达</span></td>
+                <td data-label="登录后">回落今天</td>
+              </tr>
+              <tr>
+                <td data-label="地址">直接打开登录页（无来源）</td>
+                <td data-label="目标"><span class="tag plain">—</span></td>
+                <td data-label="登录后">今天</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="state-note mt-4">「next」用于登录前回去；越权页的「from」用于越权时回去，两套机制命名与语义分开（FN-421）。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 英文规格段 ============ -->
+  <section class="section" lang="en-US" dir="ltr" aria-labelledby="en-auth-title" data-spec>
+    <div class="section-head">
+      <h2 class="section-title" id="en-auth-title">Sign in</h2>
+      <span class="section-note">English specification · same keys as the en-US dictionary</span>
+    </div>
+
+    <div class="state-grid">
+      <div class="en-sheet">
+        <p class="page-eyebrow">Sign in</p>
+        <h3 class="auth-form-title">Sign in</h3>
+        <form class="auth-form" novalidate>
+          <div class="field">
+            <label class="label" for="en-login-username">Username</label>
+            <input class="input" id="en-login-username" name="username" type="text" placeholder="Username"
+                   autocomplete="username" autocapitalize="off" value="accept_admin_1794570360969">
+          </div>
+          <div class="field">
+            <label class="label" for="en-login-password">Password</label>
+            <div class="auth-input-row">
+              <input class="input" id="en-login-password" name="password" type="password" placeholder="Password"
+                     autocomplete="current-password" minlength="8" value="············">
+              <button type="button" class="link-btn auth-eye" aria-controls="en-login-password" aria-pressed="false"
+                      aria-label="Show password">Show</button>
+            </div>
+            <p class="hint">At least 8 characters.</p>
+          </div>
+          <label class="check">
+            <input type="checkbox" checked>
+            <span>Stay signed in</span>
+          </label>
+          <p class="hint">Checked keeps you signed in for 30 days; unchecked for 12 hours. Neither refreshes on use.</p>
+          <button type="submit" class="btn btn-primary auth-submit">Sign in</button>
+        </form>
+        <div class="auth-switch">
+          <span class="hint">No account yet?</span>
+          <button type="button" class="link-btn">Register</button>
+        </div>
+      </div>
+
+      <div class="en-sheet">
+        <p class="page-eyebrow">Create account</p>
+        <h3 class="auth-form-title">Create account</h3>
+        <form class="auth-form" novalidate>
+          <div class="field">
+            <label class="label" for="en-reg-username">Username</label>
+            <input class="input" id="en-reg-username" name="username" type="text" placeholder="Username" autocomplete="username" autocapitalize="off">
+          </div>
+          <div class="field">
+            <label class="label" for="en-reg-password">Password</label>
+            <div class="auth-input-row">
+              <input class="input" id="en-reg-password" name="password" type="password" placeholder="Password" autocomplete="new-password" minlength="8">
+              <button type="button" class="link-btn auth-eye" aria-controls="en-reg-password" aria-pressed="false" aria-label="Show password">Show</button>
+            </div>
+          </div>
+          <div class="field">
+            <label class="label" for="en-reg-confirm">Confirm new password</label>
+            <div class="auth-input-row">
+              <input class="input is-error" id="en-reg-confirm" name="confirm_password" type="password" placeholder="Confirm new password" autocomplete="new-password" minlength="8" aria-invalid="true" aria-describedby="en-reg-confirm-msg">
+              <button type="button" class="link-btn auth-eye" aria-controls="en-reg-confirm" aria-pressed="false" aria-label="Show password">Show</button>
+            </div>
+            <p class="field-err" id="en-reg-confirm-msg">The new passwords do not match.</p>
+          </div>
+          <label class="check">
+            <input type="checkbox" checked>
+            <span>Stay signed in</span>
+          </label>
+          <button type="submit" class="btn btn-primary auth-submit" disabled aria-describedby="en-reg-reason">Register</button>
+          <p class="hint" id="en-reg-reason">The password must be at least 8 characters, and both entries must match.</p>
+        </form>
+        <div class="auth-switch">
+          <span class="hint">Already have an account?</span>
+          <button type="button" class="link-btn">Sign in</button>
+        </div>
+      </div>
+
+      <div class="en-sheet">
+        <p class="page-eyebrow">Password change required</p>
+        <h3 class="auth-form-title">You need to change your password first</h3>
+        <form class="auth-form" novalidate>
+          <div class="field">
+            <label class="label" for="en-gate-old">Current password (temporary)</label>
+            <input class="input" id="en-gate-old" type="password" autocomplete="current-password">
+          </div>
+          <div class="field">
+            <label class="label" for="en-gate-new">New password</label>
+            <input class="input" id="en-gate-new" type="password" autocomplete="new-password" minlength="8">
+            <p class="hint">At least 8 characters.</p>
+          </div>
+          <div class="field">
+            <label class="label" for="en-gate-confirm">Confirm new password</label>
+            <input class="input" id="en-gate-confirm" type="password" autocomplete="new-password" minlength="8">
+          </div>
+          <button type="submit" class="btn btn-primary auth-submit">Change password</button>
+          <button type="submit" class="btn btn-quiet auth-submit">Sign out</button>
+        </form>
+        <div class="notice warn mt-4" role="note">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+          <span class="notice-body">Until the password is changed, only changing the password and signing out are available. Banks, review, exams, notes, settings and instance admin stay blocked.</span>
+        </div>
+      </div>
+
+      <div class="en-sheet">
+        <p class="page-eyebrow">Sign in</p>
+        <h3 class="auth-form-title">Sign in</h3>
+        <form class="auth-form" novalidate>
+          <div class="field">
+            <label class="label" for="en-closed-username">Username</label>
+            <input class="input" id="en-closed-username" name="username" type="text" placeholder="Username" autocomplete="username">
+          </div>
+          <div class="field">
+            <label class="label" for="en-closed-password">Password</label>
+            <div class="auth-input-row">
+              <input class="input" id="en-closed-password" name="password" type="password" placeholder="Password" autocomplete="current-password">
+              <button type="button" class="link-btn auth-eye" aria-controls="en-closed-password" aria-pressed="false" aria-label="Show password">Show</button>
+            </div>
+          </div>
+          <label class="check">
+            <input type="checkbox" checked>
+            <span>Stay signed in</span>
+          </label>
+          <div class="notice info" role="note">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+            <span class="notice-body">Registration is closed on this instance. Contact an administrator for an account. Existing accounts are unaffected.</span>
+          </div>
+          <button type="submit" class="btn btn-primary auth-submit">Sign in</button>
+        </form>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ============ 浮层：空实例引导 ============ -->
+<dialog class="dlg" id="dlg-bootstrap" aria-labelledby="dlg-bootstrap-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">实例初始化</p>
+      <h2 class="dlg-title" id="dlg-bootstrap-title">创建第一个账号</h2>
+    </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <p class="dlg-p">这个实例还没有任何账号。第一个创建的账号会成为实例管理员，负责用户管理与注册开关。</p>
+    <div class="notice info" role="note">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+      <div class="notice-body">空实例的首个账号不受注册开关影响：即使已关闭注册，第一个账号仍可创建。</div>
+    </div>
+    <p class="hint">引导完成前不能跳过——实例必须至少有一位管理员。</p>
+  </div>
+  <div class="dlg-foot">
+    <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>知道了</button>
+    <button class="btn btn-primary" type="button" id="dlg-bootstrap-go">去创建</button>
+  </div>
+</dialog>
+
+<script src="../../assets/icons.js"></script>
+<script src="../../assets/store.js"></script>
+<script src="../../assets/i18n.js"></script>
+<script src="../../assets/nav.js"></script>
+<script src="../../assets/spec-boot.js"></script>
+<script>
+  /* 密码可见性切换：aria-pressed 同步，按钮在 Tab 序中 */
+  document.querySelectorAll('.auth-eye').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var id = btn.getAttribute('aria-controls');
+      var input = document.getElementById(id);
+      if (!input) return;
+      var shown = input.type === 'text';
+      input.type = shown ? 'password' : 'text';
+      btn.setAttribute('aria-pressed', shown ? 'false' : 'true');
+      var label = btn.getAttribute('aria-label') || '';
+      var isEn = /password/i.test(label);
+      btn.textContent = shown ? (isEn ? 'Show' : '显示') : (isEn ? 'Hide' : '隐藏');
+      btn.setAttribute('aria-label', shown
+        ? (isEn ? 'Show password' : '显示密码')
+        : (isEn ? 'Hide password' : '隐藏密码'));
+    });
+  });
+
+  (function () {
+    /* ---------- 实例级共享状态（与 instance.html 的注册开关、账号名册同一把键）----------
+       演示原型的跨屏一致性：实例管理里关闭注册，登录页的注册入口随之消失。 */
+    var KEY_REG = 'eeInstance.allowRegistration';
+    var KEY_USERS = 'eeInstance.hasUsers';
+    function regOpen() { return localStorage.getItem(KEY_REG) !== '0'; }
+    function hasUsers() { return localStorage.getItem(KEY_USERS) !== '0'; }
+    /* 实例角色来自共享状态（与 instance.html 同一把判定），与题库角色互不推导 */
+    function isInstanceAdmin() { return window.eeStore && window.eeStore.isInstanceAdmin ? window.eeStore.isInstanceAdmin() : true; }
+
+    /* ---------- 登录 / 注册切换 ---------- */
+    var registering = false;
+    var authForm = document.getElementById('auth-form');
+    var authEyebrow = document.getElementById('auth-eyebrow');
+    var authTitle = document.getElementById('auth-form-title');
+    var authSubmit = document.getElementById('auth-submit');
+    var authHint = document.getElementById('auth-switch-hint');
+    var authSwitchBtn = document.getElementById('auth-switch-btn');
+    var confirmField = document.getElementById('auth-confirm-field');
+    var passInput = document.getElementById('login-password');
+    var confirmInput = document.getElementById('login-confirm');
+    var switchRow = document.getElementById('auth-switch');
+    var regClosed = document.getElementById('auth-reg-closed');
+    function clearErr() {
+      ['auth-user-err', 'auth-pass-err', 'auth-confirm-err'].forEach(function (id) {
+        var el = document.getElementById(id); if (el) el.hidden = true;
+      });
+      [document.getElementById('login-username'), passInput, confirmInput].forEach(function (el) {
+        if (el) el.removeAttribute('aria-invalid');
+      });
+    }
+    function syncAuthMode() {
+      authEyebrow.textContent = registering ? '创建账号' : '登录';
+      authTitle.textContent = registering ? '创建账号' : '登录';
+      authSubmit.textContent = registering ? '注册' : '登录';
+      authHint.textContent = registering ? '已有账号？' : '还没有账号？';
+      authSwitchBtn.textContent = registering ? '登录' : '注册';
+      confirmField.hidden = !registering;
+      passInput.setAttribute('autocomplete', registering ? 'new-password' : 'current-password');
+      clearErr();
+    }
+    if (authSwitchBtn) authSwitchBtn.addEventListener('click', function () { registering = !registering; syncAuthMode(); });
+
+    /* 注册开关（FN-405）：关闭时切换入口本身不出现，改为一句可读提示 */
+    function syncRegGate() {
+      if (regClosed) regClosed.hidden = regOpen();
+      if (switchRow) switchRow.hidden = !regOpen();
+      if (!regOpen() && registering) { registering = false; syncAuthMode(); }
+    }
+    syncRegGate();
+    window.addEventListener('storage', function (e) { if (e.key === KEY_REG) syncRegGate(); });
+
+    /* 会话过期（FN-402）：URL 带 expired=1 时给出可读提示 */
+    if (new URLSearchParams(location.search).get('expired') === '1') {
+      var exp = document.getElementById('auth-expired');
+      if (exp) exp.hidden = false;
+    }
+
+    /* ---------- 首个管理员引导（FN-410）---------- */
+    var signinPane = document.getElementById('auth-signin');
+    var bootPane = document.getElementById('auth-bootstrap');
+    function showBootstrap(on) {
+      if (!signinPane || !bootPane) return;
+      signinPane.hidden = on;
+      bootPane.hidden = !on;
+    }
+    var bootLink = document.getElementById('auth-bootstrap-link');
+    if (bootLink) bootLink.addEventListener('click', function () { showBootstrap(true); });
+    /* 只有「实例里确实没有账号」时才给这条入口；有账号的实例不出现它 */
+    var bootRow = document.getElementById('auth-bootstrap-link-row');
+    if (bootRow) bootRow.hidden = hasUsers();
+    if (!hasUsers()) showBootstrap(true);
+    var bootForm = document.getElementById('bootstrap-form');
+    if (bootForm) bootForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var u = document.getElementById('boot-username');
+      var p = document.getElementById('boot-password');
+      var c = document.getElementById('boot-confirm');
+      var err = document.getElementById('boot-confirm-err');
+      if (!u.value.trim()) { u.focus(); return; }
+      if (p.value.length < 8) { p.focus(); return; }
+      if (p.value !== c.value) { err.hidden = false; c.focus(); return; }
+      err.hidden = true;
+      localStorage.setItem(KEY_USERS, '1');
+      window.eeStore.login(u.value.trim());
+      window.eeToast('账号已创建，你是这个实例的管理员');
+      setTimeout(function () { window.location.href = 'home.html'; }, 350);
+    });
+
+    /* ---------- 登录后回跳 next（FN-413）----------
+       next 两种写法都认：项目根相对（pages/screens/x.html，入口页用）与
+       同目录相对（x.html，产品内各页用）；按登录页所在目录解析，避免 404。
+       目标不可达（需要管理员而非管理员 / 地址非法 / 深链目标已不存在）时回落今天。 */
+    var nextTarget = (function () {
+      var n = new URLSearchParams(location.search).get('next') || '';
+      var target = null;
+      if (/^pages\/[a-z]+\/[a-z0-9-]+\.html$/.test(n)) target = '../../' + n;
+      else if (/^[a-z0-9-]+\.html$/.test(n)) target = n;
+      if (!target) return 'home.html';
+      if (/^\.\.\/\.\.\/pages\/screens\/instance\.html$/.test(target) || target === 'instance.html') {
+        return isInstanceAdmin() ? target : 'home.html';
+      }
+      return target;
+    })();
+
+    if (authForm) authForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      clearErr();
+      var userInput = document.getElementById('login-username');
+      var user = userInput.value.trim();
+      if (!user) {
+        userInput.setAttribute('aria-invalid', 'true'); userInput.focus();
+        document.getElementById('auth-user-err').hidden = false;
+        return;
+      }
+      if (!passInput.value || passInput.value.length < 8) {
+        passInput.setAttribute('aria-invalid', 'true'); passInput.focus();
+        document.getElementById('auth-pass-err').hidden = false;
+        return;
+      }
+      if (registering && confirmInput.value !== passInput.value) {
+        confirmInput.setAttribute('aria-invalid', 'true'); confirmInput.focus();
+        document.getElementById('auth-confirm-err').hidden = false;
+        return;
+      }
+      if (registering) localStorage.setItem(KEY_USERS, '1');
+      window.eeStore.login(user);
+      window.eeToast(registering ? '账号已创建，欢迎加入' : '已登录，欢迎回来');
+      setTimeout(function () { window.location.href = nextTarget; }, 350);
+    });
+
+    /* 空态对话框：去创建第一个账号 */
+    var go = document.getElementById('dlg-bootstrap-go');
+    if (go) go.addEventListener('click', function () {
+      window.eeDialog.close(document.getElementById('dlg-bootstrap'));
+      showBootstrap(true);
+      var u = document.getElementById('boot-username');
+      if (u) u.focus();
+    });
+
+    /* 回跳表里 /instance 那一行按真实实例角色走（CR-11：实例角色与题库角色互不推导） */
+    var niRow = document.getElementById('next-instance-row');
+    if (niRow) {
+      var who = document.getElementById('next-instance-who');
+      var tag = document.getElementById('next-instance-tag');
+      var land = document.getElementById('next-instance-land');
+      if (isInstanceAdmin()) {
+        if (who) who.textContent = '（当前用户是实例管理员）';
+        if (tag) { tag.textContent = '可达'; tag.className = 'tag ok'; }
+        if (land) land.textContent = '回到实例管理面';
+      } else {
+        if (who) who.textContent = '（当前用户不是实例管理员）';
+        if (tag) { tag.textContent = '需要管理员'; tag.className = 'tag warn'; }
+        if (land) land.textContent = '回落今天，不落管理员面再被弹走';
+      }
+    }
+  })();
+</script>
+</body>
+</html>

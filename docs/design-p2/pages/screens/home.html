@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-theme-palette="editorial">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>今天 · 易考宝</title>
+<link rel="stylesheet" href="../../assets/ee.css">
+<style>/* 本屏特有：首页刊头、纸内两栏、7 日柱状、会话卡、状态格。未重定义令牌或控件 */
+
+  /* 刊头：日期行带报头细线 → 标题行。左：serif 大标题 + 主操作　右：四项横向统计 */
+  .masthead-meta{  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-3); font-size: var(--text-sm); color: var(--ink-3); letter-spacing: .04em; padding-bottom: var(--sp-3); border-bottom: 1px solid var(--line);  }
+.masthead-meta .sep{  color: var(--ink-4);  }
+.masthead-meta .byline{  margin-left: auto;  }
+.masthead-row{  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-7); padding: var(--sp-5) 0 0; flex-wrap: wrap;  }
+.masthead-col{  display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0;  }
+.masthead-actions{  flex-wrap: wrap; align-items: center;  }
+.masthead-figures{  display: flex; align-items: flex-end; gap: 0; flex: 0 0 auto; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 13px 0 11px;  }
+.mf{  padding: 0 var(--sp-4); border-left: 1px solid var(--line); min-width: 0;  }
+.mf:first-child{  border-left: 0;  }
+.mf-n{  font-family: var(--font-mono); font-size: 26px; font-weight: 500; line-height: 1.1; letter-spacing: -.03em; font-variant-numeric: tabular-nums;  }
+.mf-c{  font-size: var(--text-sm); letter-spacing: .03em; color: var(--ink-3); margin-top: var(--sp-1);  }
+/* 纸内两栏：主栏 + 一条竖线分隔的右栏，不用卡片 */
+  .today-grid{  display: grid; grid-template-columns: minmax(0, 1fr) 296px; gap: var(--sp-8); margin-top: var(--sp-6); align-items: start;  }
+.today-main{  min-width: 0;  }
+.today-rail{  border-left: 1px solid var(--line); padding-left: var(--sp-5); min-width: 0;  }
+.rail-block + .rail-block{  margin-top: var(--sp-7);  }
+.rail-title{  font-size: var(--text-sm); font-weight: 600; letter-spacing: .1em; color: var(--ink-3); margin: 0 0 var(--sp-2);  }
+.rail-link{  display: flex; align-items: center; gap: var(--sp-3); width: 100%; background: none; border: none; border-top: 1px solid var(--line); font: inherit; text-align: left; padding: var(--sp-3) 0; cursor: pointer; color: inherit;  }
+.rail-link:first-of-type{  border-top: 0;  }
+.rail-link:hover .list-title{  color: var(--brand-ink);  }
+.rail-link-n{  margin-left: auto; color: var(--ink-4); flex: none;  }
+/* 未完成会话：上沿一条墨色重线的编辑块，不是卡片 */
+  .resume-card{  border-top: 1px solid var(--ink); padding: var(--sp-4) 0 var(--sp-5);  }
+.resume-card + .resume-card{  border-top: 1px solid var(--line);  }
+.session-kicker{  display: flex; align-items: center; gap: var(--sp-2); font-size: var(--text-xs); font-weight: 600; letter-spacing: .1em; color: var(--brand-ink);  }
+.session-title{  font-family: var(--font-sans); font-size: var(--text-xl); font-weight: 600; line-height: 1.3; margin-top: var(--sp-2);  }
+.session-meta{  font-size: var(--text-sm); color: var(--ink-3); margin: var(--sp-1) 0 var(--sp-3);  }
+.session-progress-meta{  justify-content: space-between; margin-top: var(--sp-2); font-size: var(--text-xs); color: var(--ink-3);  }
+.session-actions{  margin-top: var(--sp-4); flex-wrap: wrap;  }
+.week-bars{  display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--sp-2); align-items: end; height: var(--sp-10);  }
+.week-bar{  display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; gap: var(--sp-1); height: 100%; min-width: 0;  }
+.week-bar i{  display: block; width: 100%; min-height: var(--sp-1); background: var(--brand); border-radius: var(--r-xs);  }
+.week-bar em{  font-size: var(--text-xs); color: var(--ink-3); font-style: normal; text-align: center;  }
+.rail-note{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); margin: var(--sp-3) 0 0;  }
+.list-title{  overflow-wrap: anywhere;  }
+.plan-disabled{  cursor: default;  }
+.plan-disabled .plan-title{  color: var(--ink-4);  }
+.bank-progress{  margin-top: var(--sp-2);  }
+.reco-reason{  display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--text-xs); color: var(--brand-ink);  }
+.ee-list{  display: flex; flex-direction: column;  }
+.ee-list > .list-row:first-child{  border-top: 1px solid var(--ink);  }
+.ee-stem{  font-family: var(--font-serif); font-size: var(--text-md); line-height: 1.6;  }
+.ee-row-top{  align-items: flex-start;  }
+.ee-qno{  flex: none; width: 52px; font-size: var(--text-xs); letter-spacing: .04em; color: var(--ink-3); padding-top: 3px;  }
+.ee-rule{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); margin: var(--sp-3) 0 0; max-width: 76ch;  }
+.ee-rule b{  color: var(--ink-2); font-weight: 500;  }
+.sk-cap{  width: 40%;  }
+/* 侧栏学习状态：四个可跳转项是控件，必须看起来可点 */
+  .side-study-link{  appearance: none; background: none; border: 0; font: inherit; color: inherit; width: 100%; text-align: left; cursor: pointer; padding: var(--sp-1) 0; border-radius: var(--r-xs); text-decoration: none;  }
+.side-study-link:hover{  color: var(--brand-ink);  }
+.side-study-link:hover b{  color: var(--brand-ink);  }
+.side-study-link:focus-visible{  outline: 2px solid var(--brand); outline-offset: 2px;  }
+.side-study-link b{  text-decoration: none;  }
+/* 开始面板：本次学习参数。默认收起（高频路径不加步骤），参数不完整时才展开 */
+  .start-params{  margin-top: var(--sp-5); border-top: 1px solid var(--line); padding-top: var(--sp-4);  }
+.start-params-head{  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;  }
+.start-params-summary{  font-size: var(--text-xs); color: var(--ink-3);  }
+.start-params-summary b{  font-family: var(--font-mono); font-weight: 500; color: var(--ink-2);  }
+.start-params-grid{  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); margin-top: var(--sp-4);  }
+.start-params-grid .field{  margin: 0;  }
+.start-params-grid .check{  grid-column: 1 / -1;  }
+@media (max-width: 768px){
+    .today-grid { grid-template-columns: minmax(0, 1fr); }
+    .today-rail { border-left: 0; padding-left: 0; }
+    .masthead-figures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 0; padding: var(--sp-3) 0; }
+    .mf { border-left: 1px solid var(--line); padding: var(--sp-1) 0 var(--sp-1) var(--sp-4); }
+    .mf:nth-child(odd) { border-left: 0; padding-left: 0; }
+    .mf:nth-child(n+3) { border-top: 1px solid var(--line); padding-top: var(--sp-2); margin-top: var(--sp-1); }
+    .masthead-meta .byline { margin-left: 0; }
+    .masthead-meta .sep:has(+ .byline) { display: none; }
+    .masthead-title { font-size: var(--text-4xl); }
+  }
+@media (max-width: 640px){
+    .list-row { flex-wrap: wrap; row-gap: var(--sp-2); }
+    .list-main { flex: 1 1 100%; }
+    .list-side { flex: 1 1 100%; justify-content: flex-end; }
+    .masthead-title { font-size: var(--text-3xl); }
+  }</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">跳到主内容</a>
+<div class="app-shell">
+  <!-- ============ 侧栏 ============ -->
+  <aside class="sidebar" aria-label="主导航">
+    <button type="button" class="side-brand">
+      <span class="brand-mark" aria-hidden="true">易</span>
+      <span class="brand-text">
+        <span class="brand-name">易考宝</span>
+        <span data-i18n="shell.brand.sub" class="brand-sub">私人学习档案</span>
+      </span>
+    </button>
+    <nav class="side-nav" aria-label="产品区域">
+      <span data-i18n="shell.group.learn" class="side-group-label">学习</span>
+      <button type="button" class="nav-item is-active" aria-current="page">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.today">今天</span>
+      </button>
+      <button type="button" class="nav-item">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.banks">题库</span>
+      </button>
+      <button type="button" class="nav-item">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.review">复习</span>
+      </button>
+      <button type="button" class="nav-item">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.exams">模考</span>
+      </button>
+      <button type="button" class="nav-item">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.notes">资料</span>
+      </button>
+    </nav>
+    <div class="side-study">
+      <span class="side-study-label">学习状态</span>
+      <a class="side-study-row side-study-link" href="review.html" title="去复习页处理今日到期"><span>今日待复习</span><b id="side-due">0</b></a>
+      <button type="button" class="side-study-row side-study-link" onclick="EEHome.openSessions(this)" title="选择要继续哪一件"><span>未完成会话</span><b id="side-sessions">0</b></button>
+      <a class="side-study-row side-study-link" href="diagnosis.html" title="去学习档案看覆盖率构成"><span>覆盖率</span><b id="side-coverage">—</b></a>
+      <a class="side-study-row side-study-link" href="diagnosis.html" title="去学习档案看近期正确率与长期基线"><span>近 7 天正确率</span><b id="side-acc">—</b></a>
+    </div>
+    <div class="side-foot">
+      <button type="button" class="nav-item">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>
+        <span class="nav-label" data-i18n="shell.nav.settings">设置</span>
+      </button>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <!-- ============ 桌面顶栏 ============ -->
+    <header class="topbar">
+      <div class="crumb"><span class="here">今天</span></div>
+      <span class="spacer"></span>
+      <button type="button" class="icon-btn" title="搜索与跳转" data-ee-shell="search" aria-label="搜索与跳转">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+      </button>
+      <button data-ee-shell="theme" type="button" class="icon-btn" title="切换明暗" aria-label="切换明暗">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-moon"/></svg>
+      </button>
+      <button type="button" class="icon-btn" title="切换语言" data-ee-shell="lang" aria-label="切换语言">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-globe"/></svg>
+      </button>
+      <button type="button" class="user-mini" title="账户菜单" aria-label="账户菜单">A</button>
+    </header>
+
+    <!-- ============ 移动顶栏 ============ -->
+    <header class="mobile-top">
+      <button type="button" class="page-back" aria-label="返回">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>
+      </button>
+      <span class="mt-title">今天</span>
+      <button type="button" class="icon-btn" title="搜索与跳转" data-ee-shell="search" aria-label="搜索与跳转">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+      </button>
+      <button type="button" class="user-mini" title="账户菜单" aria-label="账户菜单">A</button>
+    </header>
+
+    <!-- ============ 主体 ============ -->
+    <main class="content has-bottomnav" id="main-content">
+      <header class="masthead">
+        <p class="masthead-meta">
+          <span>2026年11月13日</span>
+          <span class="sep" aria-hidden="true">·</span>
+          <span>第 46 周</span>
+          <span class="sep" aria-hidden="true">·</span>
+          <span class="byline" id="masthead-user">accept_admin_1794570360969 · 私人学习档案</span>
+        </p>
+        <div class="masthead-row">
+          <div class="masthead-col">
+            <h1 class="masthead-title">今天</h1>
+            <div class="od-row masthead-actions" id="masthead-actions"></div>
+          </div>
+          <div class="masthead-figures" id="masthead-stats"></div>
+        </div>
+      </header>
+
+      <div class="today-grid">
+        <!-- ============ 主栏 ============ -->
+        <div class="today-main">
+          <!-- 未完成会话 -->
+          <section class="section" aria-labelledby="session-title">
+            <div class="section-head">
+              <h2 class="section-title" id="session-title">未完成会话</h2>
+              <span class="section-note">会话保存在实例上，可以稍后继续；不同模式的会话允许并存。</span>
+              <span class="spacer"></span>
+              <button type="button" class="link-btn" id="sessions-all" hidden onclick="EEHome.openSessions(this)">查看全部 <span id="sessions-all-n">0</span></button>
+            </div>
+            <div id="sessions-host"></div>
+          </section>
+
+          <!-- 今日计划 -->
+          <section class="section" aria-labelledby="plan-title">
+            <div class="section-head">
+              <h2 class="section-title" id="plan-title">今日计划</h2>
+              <span class="section-note">按 FSRS 安排；完成度按真实学习记录计算，不要求从计划入口开始</span>
+            </div>
+            <div id="plan-host"></div>
+            <p class="ee-rule" id="plan-rule"></p>
+          </section>
+
+          <!-- 题库进度 -->
+          <section class="section" aria-labelledby="banks-title">
+            <div class="section-head">
+              <h2 class="section-title" id="banks-title">题库</h2>
+              <span class="section-note" id="banks-note">2 个可访问的题库</span>
+              <span class="spacer"></span>
+              <button type="button" class="link-btn" id="banks-all" aria-pressed="false" onclick="EEHome.toggleAllBanks(this)">全部</button>
+            </div>
+            <div id="banks-host"></div>
+            <p class="ee-rule">
+              <b>两个数分开看</b>：题库内容量 = 该库未归档题目（公共语义，斩杀不影响它）；我的可练题量 = 内容量 − 我斩杀的题（个人语义）。
+              只有可练题量为 0 时「开始练习」才禁用并说明原因。
+            </p>
+          </section>
+
+          <!-- 提分推荐 -->
+          <section class="section" aria-labelledby="reco-title">
+            <div class="section-head">
+              <h2 class="section-title" id="reco-title">提分推荐</h2>
+              <span class="section-note">纯确定性规则，不依赖 AI</span>
+              <span class="spacer"></span>
+              <a class="link-btn" href="diagnosis.html">全部推荐与筛选</a>
+            </div>
+            <div id="reco-host"></div>
+          </section>
+        </div>
+
+        <!-- ============ 右栏 ============ -->
+        <aside class="today-rail" aria-label="计划与接下来">
+          <div class="rail-block">
+            <h2 class="rail-title">7 日计划</h2>
+            <div class="week-bars" aria-hidden="true" id="week-bars"></div>
+            <p class="rail-note" id="week-note">3 题 · 6 分钟</p>
+          </div>
+
+          <div class="rail-block">
+            <h2 class="rail-title">接下来</h2>
+            <div id="next-host"></div>
+          </div>
+
+          <div class="rail-block">
+            <h2 class="rail-title">模考</h2>
+            <p class="rail-note" id="exam-note">正式考试：按考试档案与蓝图组卷，交卷前不显示对错与解析。</p>
+            <div class="od-cluster" style="margin-top: var(--sp-3)">
+              <a class="btn btn-sm" href="exams.html">模考中心</a>
+              <button type="button" class="btn btn-sm btn-quiet" onclick="eeDialog.open('dlg-exam', this)">快速模考</button>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <!-- ============ 状态格 ============ -->
+      <section class="section" aria-labelledby="home-states-title" data-spec>
+        <div class="section-head">
+          <h2 class="section-title" id="home-states-title">状态</h2>
+          <span class="section-note">空 / 加载 / 错误 / 禁用 / 无权限 / 冲突 / 未配置 / 离线</span>
+        </div>
+
+        <div class="state-grid">
+          <!-- 空 -->
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title">空 · 无题库</h3></div>
+            <div class="panel-body">
+              <div class="empty">
+                <span class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg></span>
+                <h4 class="empty-title">还没有题库</h4>
+                <p class="empty-desc">学习域从题库开始。创建一个题库，或从文件导入题目；导入后计划、复习与推荐都会自动有内容。</p>
+                <div class="empty-actions">
+                  <button type="button" class="btn btn-primary btn-sm" onclick="eeDialog.open('dlg-new-bank', this)">新建题库</button>
+                  <a class="btn btn-sm" href="import.html">去导入</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 加载 -->
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title">加载 · 题库读取中</h3></div>
+            <div class="panel-body">
+              <div class="skeleton sk-line"></div>
+              <div class="skeleton sk-line"></div>
+              <div class="skeleton sk-block"></div>
+              <p class="state-note">题库列表未返回前用骨架占位；统计与计划区显示「—」，不虚构数字。任一学习接口失败只降级对应数字，不降级为 0。</p>
+            </div>
+          </div>
+
+          <!-- 错误 -->
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title">错误 · 加载失败</h3></div>
+            <div class="panel-body">
+              <div class="notice bad" role="alert">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <span class="notice-body">
+                  <span class="notice-title">加载失败</span><br>题库列表读取失败，可操作入口保持可用。
+                  <span class="notice-actions">
+                    <button type="button" class="btn btn-sm" onclick="EEHome.retryRead(this)">重试</button>
+                  </span>
+                </span>
+              </div>
+              <p class="state-note">错误是持久结论，用 notice.bad 留在屏中，并提供重试入口。</p>
+            </div>
+          </div>
+
+          <!-- 禁用 / 无权限（看得到但不能操作） -->
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title">禁用 · 可练题量为 0</h3></div>
+            <div class="panel-body">
+              <div class="notice warn" role="note">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <span class="notice-body">只读权限：可以浏览与练习，不能改题。</span>
+              </div>
+              <div class="list-row static" style="margin-top: var(--sp-3)">
+                <span class="list-main">
+                  <span class="list-title">共享题库 网络技术</span>
+                  <span class="list-meta"><span class="tag brand">成员</span><span>共 0 题 · 我可练 0 题</span></span>
+                </span>
+                <span class="list-side">
+                  <button type="button" class="btn btn-sm" disabled aria-describedby="home-disabled-reason">开始练习</button>
+                </span>
+              </div>
+              <p class="hint" id="home-disabled-reason">题库没有题目，先导入题目。</p>
+              <div class="list-row static" style="margin-top: var(--sp-3)">
+                <span class="list-main">
+                  <span class="list-title">软考真题库 1794570360969</span>
+                  <span class="list-meta"><span>共 120 题 · 我可练 119 题</span><span class="tag warn">已斩杀 1</span></span>
+                </span>
+                <span class="list-side">
+                  <button type="button" class="btn btn-sm" disabled aria-describedby="home-disabled-kill">开始练习</button>
+                </span>
+              </div>
+              <p class="hint" id="home-disabled-kill">未归档的 120 题被我全部斩杀，去斩杀题库恢复后才能继续练。</p>
+            </div>
+          </div>
+
+          <!-- 无权限（看不到） -->
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title">无权限 · 403</h3></div>
+            <div class="panel-body">
+              <div class="empty">
+                <span class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg></span>
+                <h4 class="empty-title">无法访问这个题库（403）</h4>
+                <p class="empty-desc">你已不是「共享题库 网络技术」的成员。你已经登录，但这个题库只对成员开放，所以你进不去。你在别处学的东西都还在：历史作答、错题、斩杀记录和成绩报告一件不少，可以直接继续学习。</p>
+                <div class="empty-actions">
+                  <a class="btn btn-sm btn-quiet" href="banks.html">回到题库列表</a>
+                  <a class="btn btn-sm" href="forbidden.html">查看 403 规范</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 冲突 -->
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title">冲突 · 跨设备草稿分歧</h3></div>
+            <div class="panel-body">
+              <div class="notice warn" role="note">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <span class="notice-body">
+                  <span class="notice-title">第 3 题的答案在两台设备上不一致</span><br>未提交的答案属于你创作的内容，系统不静默覆盖。
+                  <span class="notice-actions">
+                    <button type="button" class="btn btn-sm" onclick="eeToast('已保留本机版本')">查看我的版本</button>
+                    <button type="button" class="btn btn-sm btn-quiet" onclick="eeToast('已改用服务器版本')">使用对方版本</button>
+                  </span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 未配置 -->
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title">未配置 · AI 未配置</h3></div>
+            <div class="panel-body">
+              <div class="notice info">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-cpu"/></svg>
+                <span class="notice-body">
+                  <span class="notice-title">未配置 AI 助教</span><br>计划、复习与推荐都是确定性规则，不依赖 AI；AI 只在练习与资料里补充解释。
+                  <span class="notice-actions"><a class="btn btn-sm" href="settings.html">去设置</a></span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 离线 -->
+          <div class="panel">
+            <div class="panel-head"><h3 class="panel-title">离线 · 作答待同步</h3></div>
+            <div class="panel-body">
+              <div class="notice warn">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <span class="notice-body">
+                  <span class="notice-title">离线 · 2 条作答待同步</span><br>答案已存在本机，网络恢复后自动重试；交卷前有未同步条目会被拦住。
+                  <span class="notice-actions">
+                    <button type="button" class="btn btn-sm" onclick="eeToast('已开始重试同步')">重试同步</button>
+                  </span>
+                </span>
+              </div>
+              <p class="state-note">待同步计数同时出现在侧栏「学习状态」，点击跳到对应会话。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<nav class="bottomnav" aria-label="底部导航">
+  <button type="button" class="bn-item is-active" aria-current="page">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg><span data-i18n="shell.nav.today">今天</span>
+  </button>
+  <button type="button" class="bn-item">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg><span data-i18n="shell.nav.banks">题库</span>
+  </button>
+  <button type="button" class="bn-item">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg><span data-i18n="shell.nav.review">复习</span>
+  </button>
+  <button type="button" class="bn-item">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg><span data-i18n="shell.nav.exams">模考</span>
+  </button>
+  <button type="button" class="bn-item">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg><span data-i18n="shell.nav.notes">资料</span>
+  </button>
+  <button type="button" class="bn-item">
+    <svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg><span data-i18n="shell.nav.more">更多</span>
+  </button>
+</nav>
+
+<!-- ============ 浮层：会话选择器（CR-14：未完成会话总数 > 1 时出现，不是管理台） ============ -->
+<dialog class="dlg wide" id="dlg-sessions" aria-labelledby="dlg-sessions-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">今天 · 未完成会话</p>
+      <h2 class="dlg-title" id="dlg-sessions-title">选择要继续哪一件</h2>
+    </div>
+    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="dlg-body">
+    <p class="hint">不同模式的会话允许并存、互不提示、互不代管。这里只决定「先继续哪一件」；同模式是否冲突由开始门负责。不提供「放弃全部」这类跨模式批量动作。</p>
+    <div class="list" id="sessions-list"></div>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>取消</button>
+    <button type="button" class="btn btn-primary" id="sessions-resume">继续最近的一个</button>
+  </div>
+</dialog>
+
+<!-- ============ 浮层：开始决策 ============ -->
+<dialog class="dlg" id="dlg-start" aria-labelledby="dlg-start-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">开始学习</p>
+      <h2 class="dlg-title" id="dlg-start-title">开始这次学习</h2>
+    </div>
+    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="dlg-body">
+    <div class="panel" id="start-session">
+      <div class="list" id="start-session-list"></div>
+    </div>
+    <p class="hint" id="start-clean" hidden>没有同模式的未完成会话，将直接开始下面这次学习。</p>
+    <p class="hint" id="start-conflict-hint">继续上次的进度，或结束它并开始新的练习。「结束并新建」只结束同模式的会话，不会连坐其他模式。</p>
+
+    <!-- 本次学习参数：默认收起，只读摘要；要调才展开，参数不完整时自动展开 -->
+    <div class="start-params" id="start-params">
+      <div class="start-params-head">
+        <span class="rule-label">本次学习参数</span>
+        <span class="start-params-summary" id="start-params-summary">范围 全部题目 · 数量 4 题 · 模式 顺序练习</span>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-sm btn-quiet" id="start-params-toggle" aria-expanded="false" aria-controls="start-params-body">调整参数</button>
+      </div>
+      <div class="start-params-grid" id="start-params-body" hidden>
+        <label class="field">
+          <span class="label">来源范围</span>
+          <select class="select" id="p-scope">
+            <option>全部题目</option>
+            <option>未做过</option>
+            <option>错题</option>
+            <option>到期</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="label">数量</span>
+          <select class="select" id="p-count">
+            <option>10</option>
+            <option selected>20</option>
+            <option>50</option>
+            <option>全部</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="label">题型</span>
+          <select class="select" id="p-type"></select>
+        </label>
+        <label class="field">
+          <span class="label">章节或标签</span>
+          <select class="select" id="p-tag"></select>
+        </label>
+        <label class="field">
+          <span class="label">模式</span>
+          <select class="select" id="p-mode">
+            <option>顺序练习</option>
+            <option>随机练习</option>
+            <option>错题重做</option>
+            <option>到期复习</option>
+          </select>
+        </label>
+        <label class="check" id="p-record-wrap" hidden>
+          <input type="checkbox" id="p-record" checked>
+          <span>本场纳入学习记录</span>
+        </label>
+      </div>
+      <p class="hint" id="start-params-hint" hidden></p>
+      <p class="hint" id="start-params-note" hidden>复习会话由 FSRS 与队列安排出题，范围与数量在这里调不了。</p>
+    </div>
+
+    <div class="kv" id="start-kv">
+      <span class="kv-key">范围</span><span class="kv-val" id="start-scope">全部题目</span>
+      <span class="kv-key">数量</span><span class="kv-val" id="start-count">20 题</span>
+      <span class="kv-key">模式</span><span class="kv-val" id="start-mode">顺序练习</span>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>取消</button>
+    <button type="button" class="btn" id="start-resume" hidden>继续</button>
+    <button type="button" class="btn btn-primary" id="start-new">开始</button>
+  </div>
+</dialog>
+
+<!-- ============ 浮层：放弃会话 ============ -->
+<dialog class="dlg danger" id="dlg-abandon" aria-labelledby="dlg-abandon-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">未完成会话</p>
+      <h2 class="dlg-title" id="dlg-abandon-title">放弃这次练习？</h2>
+    </div>
+  </div>
+  <div class="dlg-body">
+    <p class="hint" id="abandon-note">放弃后本次已作答的 1 题不再计入，会话从「未完成会话」里消失；错题与复习队列不受影响。</p>
+    <div class="kv">
+      <span class="kv-key">会话</span><span class="kv-val" id="abandon-session">验收题库 1794570360969 · 顺序练习</span>
+      <span class="kv-key">进度</span><span class="kv-val mono" id="abandon-progress">已答 1 / 3</span>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>取消</button>
+    <button type="button" class="btn btn-danger-solid" id="abandon-confirm">放弃本次</button>
+  </div>
+</dialog>
+
+<!-- ============ 浮层：新建题库 ============ -->
+<dialog class="dlg" id="dlg-new-bank" aria-labelledby="dlg-new-bank-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">题库</p>
+      <h2 class="dlg-title" id="dlg-new-bank-title">新建题库</h2>
+    </div>
+    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="dlg-body">
+    <label class="field">
+      <span class="label">题库名称<span class="req">*</span></span>
+      <input class="input" type="text" placeholder="例如：网络技术基础 1794570360971" data-autofocus aria-describedby="new-bank-err">
+      <span class="field-err" id="new-bank-err" hidden>请填写题库名称。</span>
+    </label>
+    <label class="field">
+      <span class="label">说明</span>
+      <input class="input" type="text" placeholder="选填">
+      <span class="hint">建好后可以在题库里导入题目。</span>
+    </label>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close>取消</button>
+    <button type="button" class="btn btn-primary" onclick="EEHome.createBank()">创建题库</button>
+  </div>
+</dialog>
+
+<!-- ============ 浮层：快速模考（FN-219，低频入口） ============ -->
+<dialog class="dlg" id="dlg-exam" aria-labelledby="dlg-exam-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">模考 · 快速开始</p>
+      <h2 class="dlg-title" id="dlg-exam-title">快速模考</h2>
+    </div>
+    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="dlg-body">
+    <p class="hint">完整组卷（考试档案、蓝图、版本绑定）在模考中心。这里只按基础题库模式快速开一场。</p>
+    <label class="field">
+      <span class="label">题库</span>
+      <select class="select" id="exam-bank"></select>
+    </label>
+    <div class="od-grid" style="--od-cols:2; --od-gap: var(--sp-4)">
+      <label class="field">
+        <span class="label">题数</span>
+        <select class="select">
+          <option selected>10 题</option>
+          <option>20 题</option>
+          <option>50 题</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="label">时长</span>
+        <select class="select">
+          <option selected>60 分钟</option>
+          <option>90 分钟</option>
+          <option>120 分钟</option>
+        </select>
+      </label>
+    </div>
+    <label class="check">
+      <input type="checkbox" checked>
+      <span>本场纳入学习记录</span>
+    </label>
+    <p class="hint">关闭时本场不写错题、不写也不推进 FSRS、不计入任何学习统计与趋势，报告仍可回看。普通练习不暴露这个开关（默认记录学习过程）。</p>
+    <div class="notice info">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+      <div class="notice-body">交卷前不显示对错与解析；到点后进入 60 秒宽限，只同步已产生的答案，不用于继续答题。</div>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>取消</button>
+    <button type="button" class="btn btn-primary" onclick="EEHome.beginExam()">开始模考</button>
+  </div>
+</dialog>
+
+<!-- ============ 浮层：丢弃确认 ============ -->
+<dialog class="dlg narrow" id="dlg-discard" aria-labelledby="dlg-discard-title">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">未保存的修改</p>
+      <h2 class="dlg-title" id="dlg-discard-title">放弃已填写的内容？</h2>
+    </div>
+  </div>
+  <div class="dlg-body">
+    <p class="hint">关闭后已填写的内容不会保留。</p>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>继续编辑</button>
+    <button type="button" class="btn btn-danger-solid" onclick="EEHome.confirmDiscard()">放弃修改</button>
+  </div>
+</dialog>
+
+<script src="../../assets/icons.js"></script>
+<script src="../../assets/store.js"></script>
+<script src="../../assets/i18n.js"></script>
+<script src="../../assets/nav.js"></script>
+<script src="../../assets/spec-boot.js"></script>
+<script>
+/* ==========================================================================
+   今天页 · 高频核心（P-1：三次点击内开始一次练习）
+   · 主操作决策顺序固定：① 有未完成会话 → 继续练习（次级「结束并新建」）
+                           ② 无会话且有今日计划 → 开始今日计划（N 题）
+                           ③ 无计划 → 开始练习（20 题）
+                           ④ 我的可练题量为 0 → 禁用并解释（CR-04）
+   · 未完成会话总数 > 1 时出现「查看全部 N」轻量选择器（CR-14，不是管理台）
+   · 「结束并新建」只结束同模式会话；不做跨模式「放弃全部」
+   · 题库内容量与我的可练题量分开显示（CR-04）
+   ========================================================================== */
+window.EEHome = (function () {
+  var S = window.eeStore;
+  var KIND_LABEL = { practice: '练习', exam: '模考', review: '复习' };
+  var showAllBanks = false;
+  var startCtx = null;
+  var abandonId = null;
+  var PLAN = [];
+  var BANKCTX = [];
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  /* 题库内容量 = 未归档题目（公共语义）；我的可练题量 = 内容量 − 我斩杀的题（CR-04） */
+  function contentCount(bankId) {
+    var b = S.bank(bankId);
+    var listed = S.questions(bankId).filter(function (q) { return !q.archived; }).length;
+    return listed || (b ? b.count : 0);
+  }
+  function killedInBank(bankId) {
+    return S.reviewQueue().filter(function (r) { return r.bankId === bankId && r.reasons.indexOf('killed') > -1; }).length;
+  }
+  function practiceCount(bankId) { return Math.max(0, contentCount(bankId) - killedInBank(bankId)); }
+  function studiedInBank(bankId) { return S.reviewQueue().filter(function (r) { return r.bankId === bankId; }).length; }
+  function bankName(id) { var b = S.bank(id); return b ? b.name : '未知题库'; }
+  function dueRows() { return S.reviewQueue().filter(function (r) { return r.reasons.indexOf('due') > -1 && r.reasons.indexOf('killed') < 0; }); }
+  function mistakeRows() { return S.reviewQueue().filter(function (r) { return r.reasons.indexOf('mistakes') > -1 && r.reasons.indexOf('killed') < 0; }); }
+  function weakRows() { return S.reviewQueue().filter(function (r) { return r.reasons.indexOf('weak') > -1 && r.reasons.indexOf('killed') < 0; }); }
+  function killedRows() { return S.reviewQueue().filter(function (r) { return r.reasons.indexOf('killed') > -1; }); }
+  function ownBanks() { return S.banks({ archived: false, shared: false }); }
+  function allBanks() { return S.banks({ archived: false }); }
+  function sessions() { return S.sessions(); }
+  function primaryBank() {
+    var list = ownBanks().filter(function (b) { return practiceCount(b.id) > 0; });
+    return list[0] || ownBanks()[0] || null;
+  }
+  function freshQuestions() {
+    var done = {};
+    S.reviewQueue().forEach(function (r) { done[r.stem] = 1; });
+    return S.questions().filter(function (q) { return !done[q.stem]; });
+  }
+  function findSession(id) {
+    var list = sessions();
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  }
+  function runnerOf(s) { return s.kind === 'exam' ? 'exam.html' : 'practice.html'; }
+  function rowIds(rows) { return rows.map(function (r) { return r.id; }); }
+
+  function reviewCtx(mode, rows, scope) {
+    return {
+      kind: 'review', bankId: rows.length ? rows[0].bankId : 'b_rk', mode: mode,
+      total: rows.length, rowIds: rowIds(rows),
+      scope: scope || (mode + ' · ' + rows.length + ' 题')
+    };
+  }
+  function practiceCtx(bank, n) {
+    var total = n == null ? practiceCount(bank.id) : Math.min(n, practiceCount(bank.id));
+    return { kind: 'practice', bankId: bank.id, mode: '顺序练习', total: total, count: total, scope: '全部题目 · ' + bank.name };
+  }
+  /* 主操作决策：四步固定顺序 */
+  function defaultCtx() {
+    var list = sessions();
+    if (list.length) {
+      var last = list[list.length - 1];
+      return { kind: last.kind, bankId: last.bankId, mode: last.mode || '顺序练习', total: last.total || 0, resume: last.id, scope: (KIND_LABEL[last.kind] || '练习') + ' · ' + bankName(last.bankId) };
+    }
+    var due = dueRows();
+    if (due.length) return reviewCtx('到期复习', due, '今日计划 01 · 到期复习 ' + due.length + ' 题');
+    var pb = primaryBank();
+    if (pb) return practiceCtx(pb, 20);
+    return { kind: 'practice', bankId: 'b_acc', mode: '顺序练习', total: 0, scope: '还没有可练习的题库' };
+  }
+
+  /* ---------- 主操作区 ---------- */
+  function renderActions() {
+    var host = document.getElementById('masthead-actions');
+    var list = sessions();
+    var pb = primaryBank();
+    if (list.length) {
+      var last = list[list.length - 1];
+      host.innerHTML =
+        '<button type="button" class="btn btn-primary" onclick="EEHome.resume(\'' + esc(last.id) + '\')">' +
+        '<svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>继续' + esc(KIND_LABEL[last.kind] || '练习') + '</button>' +
+        '<button type="button" class="btn" onclick="EEHome.openStart(EEHome.planCtx(2), this)">结束并新建（只结束同模式会话）</button>';
+      return;
+    }
+    if (dueRows().length) {
+      host.innerHTML = '<button type="button" class="btn btn-primary" onclick="EEHome.openStart(EEHome.planCtx(0), this)">' +
+        '<svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>开始今日计划（' + dueRows().length + ' 题）</button>';
+      return;
+    }
+    if (pb) {
+      host.innerHTML = '<button type="button" class="btn btn-primary" onclick="EEHome.openStart(EEHome.bankCtx(\'' + esc(pb.id) + '\'), this)">' +
+        '<svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>开始练习（20 题）</button>';
+      return;
+    }
+    host.innerHTML = '<button type="button" class="btn btn-primary" onclick="eeDialog.open(\'dlg-new-bank\', this)">' +
+      '<svg class="od-icon" aria-hidden="true"><use href="#i-plus"/></svg>新建题库</button>' +
+      '<a class="btn" href="import.html">去导入</a>';
+  }
+
+  /* ---------- 未完成会话 ---------- */
+  function renderSessions() {
+    var host = document.getElementById('sessions-host');
+    var list = sessions();
+    document.getElementById('side-sessions').textContent = String(list.length);
+    var all = document.getElementById('sessions-all');
+    all.hidden = list.length <= 1;
+    document.getElementById('sessions-all-n').textContent = String(list.length);
+    if (!list.length) {
+      host.innerHTML = '<div class="empty">' +
+        '<span class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg></span>' +
+        '<p class="empty-title">没有未完成的会话</p>' +
+        '<p class="empty-desc">从今日计划或题库开始一次学习；会话会出现在这里，刷新页面也能从原题继续。退出时选「保存并退出」即为暂存。</p>' +
+        '<div class="empty-actions"><button type="button" class="btn btn-primary btn-sm" onclick="EEHome.openStart(EEHome.defaultCtx(), this)">开始练习</button></div>' +
+        '</div>';
+      return;
+    }
+    host.innerHTML = list.map(function (s) {
+      var done = s.done || 0, total = s.total || 0;
+      var pct = total ? Math.round(done / total * 100) : 0;
+      /* 刊头主操作已是最新会话的恢复入口；多场会话时行内才各自给「继续」，避免同一动作两个入口 */
+      var resume = list.length > 1
+        ? '<button type="button" class="btn btn-primary btn-sm" onclick="EEHome.resume(\'' + esc(s.id) + '\')">继续</button>'
+        : '';
+      return '<div class="resume-card">' +
+        '<p class="session-kicker"><svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>未完成 · ' + esc(KIND_LABEL[s.kind] || '练习') + '</p>' +
+        '<div class="session-title">' + esc(bankName(s.bankId)) + '</div>' +
+        '<p class="session-meta">' + esc(s.mode || '顺序练习') + ' · 更新于 ' + esc(s.updatedAt || s.startedAt || '—') + '</p>' +
+        '<div class="progress" role="progressbar" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100" aria-label="会话进度">' +
+        '<div class="progress-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="od-row session-progress-meta"><span>' + done + ' / ' + total + ' 已答</span><span class="mono">' + pct + '%</span></div>' +
+        '<div class="od-row session-actions">' + resume +
+        '<button type="button" class="btn btn-quiet btn-sm" onclick="EEHome.askAbandon(\'' + esc(s.id) + '\', this)">放弃本次</button>' +
+        '</div></div>';
+    }).join('');
+  }
+
+  /* ---------- 今日计划（三类任务 + 完成度按真实学习记录） ---------- */
+  function renderPlan() {
+    var due = dueRows(), mis = mistakeRows(), wk = weakRows(), pb = primaryBank();
+    PLAN = [
+      { idx: '01', title: '到期复习', n: due.length, unit: '题到期', meta: '当前可执行复习集合', ctx: reviewCtx('到期复习', due), off: !due.length, why: '今天没有到期题目。FSRS 只为错题与标记薄弱的题建卡，做一组练习后回来。' },
+      { idx: '02', title: '错题重做', n: mis.length, unit: '道未清除', meta: '不受是否到期限制', ctx: reviewCtx('错题重做', mis), off: !mis.length, why: '错题还是空的。练习中答错的题会自动进到这里。' },
+      { idx: '03', title: '新题练习', n: pb ? practiceCount(pb.id) : 0, unit: '题可练', meta: pb ? pb.name : '还没有可练习的题库', ctx: pb ? practiceCtx(pb, 20) : null, off: !pb, why: '还没有可练习的题库，先导入题目。' }
+    ];
+    document.getElementById('plan-host').innerHTML = PLAN.map(function (p, i) {
+      var attrs = p.off
+        ? ' disabled aria-describedby="plan-why-' + i + '" title="' + esc(p.why) + '"'
+        : ' onclick="EEHome.openStart(EEHome.planCtx(' + i + '), this)"';
+      return '<button type="button" class="plan-row' + (p.off ? ' plan-disabled' : '') + '"' + attrs + '>' +
+        '<span class="plan-index">' + p.idx + '</span>' +
+        '<span class="list-main"><span class="plan-title">' + esc(p.title) + '</span>' +
+        '<span class="plan-meta">' + p.n + ' ' + esc(p.unit) + ' · ' + esc(p.meta) + '</span></span>' +
+        '<span class="spacer"></span>' +
+        '<span class="plan-arrow"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></span>' +
+        '</button>' +
+        (p.off ? '<p class="hint" id="plan-why-' + i + '">' + esc(p.why) + '</p>' : '');
+    }).join('');
+    document.getElementById('plan-rule').innerHTML =
+      '<b>完成度按真实学习记录计算</b>：同一道题无论从今天页、复习页、题库页还是计划入口做，完成判定一致；' +
+      '未完成的天可以补做，补做后该日标记完成，剩余任务按「补做日之后顺延」重排。完整计划与参数在学习档案。';
+  }
+
+  /* ---------- 题库进度 ---------- */
+  function renderBanks() {
+    var list = showAllBanks ? allBanks() : ownBanks();
+    var all = allBanks();
+    var shared = all.filter(function (b) { return b.shared; }).length;
+    document.getElementById('banks-note').textContent = showAllBanks
+      ? all.length + ' 个题库（' + shared + ' 个只读）'
+      : list.length + ' 个可访问的题库';
+    BANKCTX = [];
+    document.getElementById('banks-host').innerHTML = list.map(function (b, i) {
+      BANKCTX[i] = practiceCtx(b);
+      var content = contentCount(b.id), mine = practiceCount(b.id), killed = killedInBank(b.id), studied = studiedInBank(b.id);
+      var canPractice = mine > 0;
+      var reason = content === 0
+        ? '题库没有题目，先导入题目。'
+        : '未归档的 ' + content + ' 题被我全部斩杀，去斩杀题库恢复后才能继续练。';
+      var pct = content ? Math.round(studied / content * 100) : 0;
+      return '<div class="list-row static">' +
+        '<span class="list-main"><span class="list-title">' + esc(b.name) + '</span>' +
+        '<span class="list-meta"><span>' + esc(b.category || '默认分类') + '</span>' +
+        '<span>共 ' + content + ' 题 · 我可练 ' + mine + ' 题</span>' +
+        '<span>学习过 ' + studied + ' 题</span>' +
+        (killed ? '<span class="tag warn">已斩杀 ' + killed + '</span>' : '') +
+        (b.shared ? '<span class="tag brand">只读</span>' : '') + '</span>' +
+        '<div class="progress bank-progress" role="progressbar" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100" aria-label="题库学习进度">' +
+        '<div class="progress-fill" style="width:' + pct + '%"></div></div></span>' +
+        '<span class="list-side">' +
+        (canPractice
+          ? '<button type="button" class="btn btn-sm" onclick="EEHome.openStart(EEHome.bankCtx(\'' + esc(b.id) + '\'), this)">开始练习</button>'
+          : '<button type="button" class="btn btn-sm" disabled aria-describedby="bank-why-' + i + '" title="' + esc(reason) + '">开始练习</button>') +
+        '<a class="icon-btn sm" href="banks.html" aria-label="打开题库"><svg class="od-icon" aria-hidden="true"><use href="#i-chevron-right"/></svg></a>' +
+        '</span></div>' +
+        (canPractice ? '' : '<p class="hint" id="bank-why-' + i + '">' + esc(reason) + '</p>');
+    }).join('');
+  }
+
+  /* ---------- 提分推荐（FN-213，紧凑三条，按优先级排序） ---------- */
+  function renderReco() {
+    var host = document.getElementById('reco-host');
+    var pool = [];
+    /* 优先级：错题待复习 > 薄弱 > 复习到期 > 新题覆盖 > 巩固练习 */
+    mistakeRows().forEach(function (r) { pool.push({ row: r, reason: '错题待复习', cls: 'bad', p: 100 }); });
+    weakRows().filter(function (r) { return r.reasons.indexOf('mistakes') < 0; }).forEach(function (r) { pool.push({ row: r, reason: '薄弱', cls: 'warn', p: 90 }); });
+    dueRows().filter(function (r) { return r.reasons.indexOf('mistakes') < 0 && r.reasons.indexOf('weak') < 0; }).forEach(function (r) { pool.push({ row: r, reason: '复习到期', cls: 'brand', p: 80 }); });
+    var fresh = freshQuestions();
+    if (fresh.length) pool.push({ row: { id: '', bankId: fresh[0].bankId, stem: fresh[0].stem }, reason: '新题覆盖', cls: 'plain', p: 50 });
+    if (!pool.length) {
+      host.innerHTML = '<div class="empty">' +
+        '<span class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-target"/></svg></span>' +
+        '<p class="empty-title">数据不足，还没有推荐</p>' +
+        '<p class="empty-desc">推荐按「错题待复习 &gt; 薄弱 &gt; 复习到期 &gt; 新题覆盖 &gt; 巩固练习」排序，需要先有作答记录。做一组练习后这里会出现前三条。</p>' +
+        '<div class="empty-actions"><button type="button" class="btn btn-primary btn-sm" onclick="EEHome.openStart(EEHome.defaultCtx(), this)">开始练习</button></div></div>';
+      return;
+    }
+    pool.sort(function (a, b) { return b.p - a.p; });
+    var rows = pool.slice(0, 3);
+    host.innerHTML = '<div class="ee-list">' + rows.map(function (x) {
+      var r = x.row;
+      var meta = ['<span>' + esc(bankName(r.bankId)) + '</span>'];
+      if (r.mistake_count) meta.push('<span class="mono">遗忘 ' + r.mistake_count + ' 次</span>');
+      if (r.due_at) meta.push('<span>到期 ' + esc(String(r.due_at).slice(0, 10)) + '</span>');
+      var act = r.id
+        ? '<button type="button" class="btn btn-sm" onclick="EEHome.openStart(EEHome.rowCtx(\'' + esc(r.id) + '\'), this)">开始</button>'
+        : '<button type="button" class="btn btn-sm" onclick="EEHome.openStart(EEHome.bankCtx(\'' + esc(r.bankId) + '\'), this)">开始</button>';
+      return '<div class="list-row ee-row-top">' +
+        '<span class="ee-qno">单选题</span>' +
+        '<span class="list-main"><span class="list-title ee-stem od-clamp-2">' + esc(r.stem) + '</span>' +
+        '<span class="reco-reason"><span class="tag ' + x.cls + '">' + x.reason + '</span></span>' +
+        '<span class="list-meta">' + meta.join('') + '</span></span>' +
+        '<span class="list-side">' + act + '</span></div>';
+    }).join('') + '</div>' +
+      '<p class="ee-rule">提分推荐是纯确定性规则，不依赖 AI；完整筛选（题型、标签、数量、难度、新题比例）在<a class="link-btn" href="diagnosis.html">学习档案</a>。</p>';
+  }
+  function rowCtx(rowId) {
+    var row = S.reviewRow(rowId);
+    if (!row) return defaultCtx();
+    var mode = row.reasons.indexOf('due') > -1 ? '到期复习' : (row.reasons.indexOf('mistakes') > -1 ? '错题重做' : '薄弱练习');
+    return reviewCtx(mode, [row], '这道题 · ' + mode);
+  }
+
+  /* ---------- 右栏 ---------- */
+  function renderRail() {
+    /* 7 日分布：把四类任务按每日预算摊到 7 天，前两天重（到期 + 错题），之后递减 */
+    var due = dueRows().length, mis = mistakeRows().length, wk = weakRows().length, fresh = freshQuestions().length;
+    var perDay = [0, 0, 0, 0, 0, 0, 0];
+    var spread = function (n, weight) {
+      var total = weight.reduce(function (a, b) { return a + b; }, 0);
+      var left = n;
+      for (var i = 0; i < 7 && left > 0; i++) {
+        var take = Math.min(left, Math.max(1, Math.round(n * weight[i] / total)));
+        perDay[i] += take; left -= take;
+      }
+      if (left > 0) perDay[0] += left;
+    };
+    spread(due, [2, 1, 1, 1, 1, 0, 0]);
+    spread(mis, [1, 1, 1, 1, 0, 0, 0]);
+    spread(wk, [0, 1, 1, 1, 0, 0, 0]);
+    spread(Math.min(fresh, 6), [0, 0, 1, 1, 1, 1, 1]);
+    var max = Math.max.apply(null, perDay.concat([1]));
+    document.getElementById('week-bars').innerHTML = perDay.map(function (n, i) {
+      return '<span class="week-bar"><i style="height:' + Math.round(n / max * 100) + '%"></i><em>' + (i + 1) + '</em></span>';
+    }).join('');
+    var total = perDay.reduce(function (a, b) { return a + b; }, 0);
+    document.getElementById('week-note').textContent = total + ' 题 · 约 ' + Math.max(1, Math.round(total * 1.2)) + ' 分钟 · 每日预算 30 分钟';
+    var pb = primaryBank();
+    var host = document.getElementById('next-host');
+    if (!pb) {
+      host.innerHTML = '<p class="rail-note">还没有可练习的题库，先去导入题目。</p>';
+    } else {
+      host.innerHTML = '<button type="button" class="rail-link" onclick="EEHome.openStart(EEHome.bankCtx(\'' + esc(pb.id) + '\'), this)">' +
+        '<span class="list-main"><span class="list-title">' + esc(pb.name) + '</span>' +
+        '<span class="list-meta"><span>我可练 ' + practiceCount(pb.id) + ' 题</span></span></span>' +
+        '<span class="rail-link-n">→</span></button>';
+    }
+    var sel = document.getElementById('exam-bank');
+    var banks = ownBanks().filter(function (b) { return contentCount(b.id) > 0; });
+    sel.innerHTML = banks.length
+      ? banks.map(function (b) { return '<option>' + esc(b.name) + '</option>'; }).join('')
+      : '<option>还没有可用的题库</option>';
+    document.getElementById('exam-note').textContent = banks.length
+      ? '正式考试：按考试档案与蓝图组卷，交卷前不显示对错与解析。'
+      : '还没有可用的题库，先导入题目才能组卷。';
+  }
+
+  /* ---------- 统计 ---------- */
+  function renderStats() {
+    var due = dueRows().length, mis = mistakeRows().length;
+    var reports = S.reports();
+    var answered = 0, correct = 0;
+    reports.forEach(function (r) { answered += r.total || 0; correct += r.correct || 0; });
+    sessions().forEach(function (s) { answered += s.done || 0; });
+    var acc = answered ? Math.round(correct / answered * 100) + '%' : '—';
+    var available = 0, studied = 0;
+    allBanks().forEach(function (b) { available += contentCount(b.id); studied += studiedInBank(b.id); });
+    var coverage = available ? Math.round(studied / available * 100) + '%' : '—';
+    document.getElementById('masthead-stats').innerHTML =
+      '<div class="mf"><div class="mf-n">' + answered + '</div><div class="mf-c">累计作答</div></div>' +
+      '<div class="mf"><div class="mf-n">' + due + '</div><div class="mf-c">今日待复习</div></div>' +
+      '<div class="mf"><div class="mf-n">' + coverage + '</div><div class="mf-c">题库覆盖率</div></div>' +
+      '<div class="mf"><div class="mf-n">' + acc + '</div><div class="mf-c">近 7 天正确率</div></div>';
+    document.getElementById('side-due').textContent = String(due);
+    document.getElementById('side-coverage').textContent = coverage;
+    document.getElementById('side-acc').textContent = acc;
+    document.getElementById('masthead-user').textContent = S.user() + ' · 私人学习档案';
+  }
+
+  function renderAll() {
+    renderActions();
+    renderSessions();
+    renderPlan();
+    renderBanks();
+    renderReco();
+    renderRail();
+    renderStats();
+  }
+
+  /* ---------- 会话选择器（CR-14） ---------- */
+  function openSessions(btn) {
+    var list = sessions();
+    document.getElementById('dlg-sessions-title').textContent = '选择要继续哪一件（' + list.length + ' 件未完成）';
+    document.getElementById('sessions-list').innerHTML = list.map(function (s) {
+      return '<div class="list-row static">' +
+        '<span class="list-main"><span class="list-title">' + esc(bankName(s.bankId)) + '</span>' +
+        '<span class="list-meta"><span>' + esc(KIND_LABEL[s.kind] || '练习') + '</span><span>' + esc(s.mode || '顺序练习') + '</span>' +
+        '<span class="mono">已答 ' + (s.done || 0) + ' / ' + (s.total || 0) + '</span>' +
+        '<span>更新于 ' + esc(s.updatedAt || '—') + '</span></span></span>' +
+        '<span class="list-side">' +
+        '<button type="button" class="btn btn-sm btn-primary" onclick="EEHome.resume(\'' + esc(s.id) + '\')">继续</button>' +
+        '<button type="button" class="btn btn-sm btn-quiet" onclick="EEHome.askAbandon(\'' + esc(s.id) + '\', this)">放弃</button>' +
+        '</span></div>';
+    }).join('');
+    document.getElementById('sessions-resume').onclick = function () {
+      var last = list[list.length - 1];
+      eeDialog.close(document.getElementById('dlg-sessions'));
+      if (last) location.href = runnerOf(last) + '?sid=' + encodeURIComponent(last.id);
+    };
+    eeDialog.open('dlg-sessions', btn);
+  }
+
+  /* ---------- 开始决策：所有入口共用一个面板 ---------- */
+  function conflictsFor(ctx) {
+    var list = sessions();
+    if (ctx.kind === 'exam') return list.filter(function (s) { return s.kind === 'exam'; });
+    if (ctx.kind === 'review') return list.filter(function (s) { return s.kind === 'review' && s.mode === ctx.mode; });
+    return list.filter(function (s) { return s.kind === 'practice' && s.bankId === ctx.bankId; });
+  }
+
+  /* ---------- 本次学习参数（FN-203）----------
+     默认收起：参数完整时面板只是一段摘要，「开始」一键直达，不给高频路径加步骤。
+     参数不完整（这个范围里一道题都没有）时才自动展开，让用户改范围，而不是给一个死按钮。 */
+  var startParams = { scope: '全部题目', count: '20', type: '不限', tag: '不限', mode: '顺序练习' };
+  var startPool = { items: [], size: 0, exact: true };
+
+  function fillParamOptions() {
+    var bankId = startCtx ? startCtx.bankId : null;
+    var qs = bankId ? S.questions(bankId).filter(function (q) { return !q.archived; }) : [];
+    var types = {}, tags = {};
+    qs.forEach(function (q) {
+      if (q.type) types[q.type] = 1;
+      if (q.chapter) tags[q.chapter] = 1;
+      (q.tags || []).forEach(function (t) { tags[t] = 1; });
+    });
+    var typeSel = document.getElementById('p-type');
+    var tagSel = document.getElementById('p-tag');
+    /* 题库只给了内容量、没带题目记录时：不给假的题型/章节选项，直接禁用这两个筛选 */
+    var hasRecords = qs.length > 0;
+    typeSel.innerHTML = '<option>不限</option>' + Object.keys(types).map(function (t) { return '<option>' + esc(t) + '</option>'; }).join('');
+    tagSel.innerHTML = '<option>不限</option>' + Object.keys(tags).sort().map(function (t) { return '<option>' + esc(t) + '</option>'; }).join('');
+    typeSel.disabled = !hasRecords;
+    tagSel.disabled = !hasRecords;
+    typeSel.value = hasRecords && types[startParams.type] ? startParams.type : '不限';
+    tagSel.value = hasRecords && tags[startParams.tag] ? startParams.tag : '不限';
+    startParams.type = typeSel.value;
+    startParams.tag = tagSel.value;
+    /* 模式：入口带来的模式不在候选里时，保留它，不要留空 */
+    var modeSel = document.getElementById('p-mode');
+    var want = startParams.mode;
+    var has = false;
+    for (var i = 0; i < modeSel.options.length; i++) if (modeSel.options[i].value === want) has = true;
+    if (!has && want) {
+      var o = document.createElement('option');
+      o.value = want; o.textContent = want;
+      modeSel.appendChild(o);
+    }
+    modeSel.value = want || '顺序练习';
+  }
+  /* 按当前参数算出这一场有多少题：exact=false 表示只拿到内容量、没拿到题目记录 */
+  function computePool() {
+    var bankId = startCtx ? startCtx.bankId : null;
+    if (!bankId) return { items: [], size: 0, exact: true };
+    var qs = S.questions(bankId).filter(function (q) { return !q.archived; });
+    if (!qs.length) return { items: [], size: contentCount(bankId), exact: false };
+    if (startParams.scope === '未做过' || startParams.scope === '错题') {
+      var seen = {};
+      S.reviewQueue().forEach(function (r) { seen[r.stem] = 1; });
+      qs = qs.filter(function (q) { return startParams.scope === '错题' ? !!seen[q.stem] : !seen[q.stem]; });
+    } else if (startParams.scope === '到期') {
+      var dueStems = {};
+      S.reviewQueue().forEach(function (r) {
+        if (r.bankId === bankId && r.reasons.indexOf('due') > -1 && r.reasons.indexOf('killed') < 0) dueStems[r.stem] = 1;
+      });
+      qs = qs.filter(function (q) { return !!dueStems[q.stem]; });
+    }
+    if (startParams.type !== '不限') qs = qs.filter(function (q) { return q.type === startParams.type; });
+    if (startParams.tag !== '不限') qs = qs.filter(function (q) { return q.chapter === startParams.tag || (q.tags || []).indexOf(startParams.tag) > -1; });
+    return { items: qs, size: qs.length, exact: true };
+  }
+  function readParams() {
+    startParams.scope = document.getElementById('p-scope').value;
+    startParams.count = document.getElementById('p-count').value;
+    startParams.type = document.getElementById('p-type').value;
+    startParams.tag = document.getElementById('p-tag').value;
+    startParams.mode = document.getElementById('p-mode').value;
+  }
+  function paramsComplete() { return startPool.size > 0; }
+  function setParamsOpen(open) {
+    document.getElementById('start-params-body').hidden = !open;
+    var t = document.getElementById('start-params-toggle');
+    t.setAttribute('aria-expanded', open ? 'true' : 'false');
+    t.textContent = open ? '收起参数' : '调整参数';
+  }
+  /* 参数变了：重算题目数、刷新摘要；不完整就禁用「开始」并说清缺什么 */
+  function syncParams() {
+    readParams();
+    startPool = computePool();
+    var n = startPool.size;
+    var want = startParams.count === '全部' ? n : Math.min(parseInt(startParams.count, 10) || 20, n);
+    var ok = paramsComplete();
+    var scopeText = startParams.scope + (startParams.type !== '不限' ? ' · ' + startParams.type : '') + (startParams.tag !== '不限' ? ' · ' + startParams.tag : '');
+    document.getElementById('start-scope').textContent = scopeText;
+    document.getElementById('start-count').textContent = want + ' 题';
+    document.getElementById('start-mode').textContent = startParams.mode;
+    document.getElementById('start-params-summary').innerHTML =
+      '范围 <b>' + esc(scopeText) + '</b> · 数量 <b>' + want + ' 题</b> · 模式 <b>' + esc(startParams.mode) + '</b>';
+    var newBtn = document.getElementById('start-new');
+    newBtn.disabled = !ok;
+    var hint = document.getElementById('start-params-hint');
+    if (!ok) {
+      hint.hidden = false;
+      hint.textContent = '这个范围里暂时没有可练的题：换一个来源范围，或把题型与章节标签放宽到「不限」。';
+    } else if (!startPool.exact) {
+      hint.hidden = false;
+      hint.textContent = '这个题库有 ' + n + ' 道题，但题目记录还没加载，题型与章节筛选暂时不可用。';
+    } else if (want < n) {
+      hint.hidden = false;
+      hint.textContent = '这个范围里共 ' + n + ' 道题，按你选的数量先做前 ' + want + ' 道。';
+    } else {
+      hint.hidden = true;
+    }
+    if (!ok) setParamsOpen(true);
+    return { ok: ok, want: want, pool: startPool };
+  }
+  function bindParams() {
+    ['p-scope', 'p-count', 'p-type', 'p-tag', 'p-mode'].forEach(function (id) {
+      document.getElementById(id).addEventListener('change', syncParams);
+    });
+    document.getElementById('start-params-toggle').addEventListener('click', function () {
+      setParamsOpen(document.getElementById('start-params-body').hidden);
+    });
+  }
+  /* 复习会话不走参数面板：队列与 FSRS 决定出题，范围/数量在这里没有意义 */
+  function paramsUsable(ctx) { return ctx && (ctx.kind === 'practice' || ctx.kind === 'exam'); }
+
+  /* 调用约定：openStart(ctx, trigger)——所有入口都按这个次序传参 */
+  function openStart(ctx, trigger) {
+    startCtx = ctx || defaultCtx();
+    var conflicts = conflictsFor(startCtx);
+    document.getElementById('start-scope').textContent = startCtx.scope || '全部题目';
+    document.getElementById('start-count').textContent = startCtx.count != null ? startCtx.count + ' 题' : '按题库剩余';
+    document.getElementById('start-mode').textContent = startCtx.mode || '顺序练习';
+    var sameMode = conflicts.length > 0;
+    document.getElementById('start-session').hidden = !sameMode;
+    document.getElementById('start-clean').hidden = sameMode;
+    document.getElementById('start-conflict-hint').hidden = !sameMode;
+    var resumeBtn = document.getElementById('start-resume');
+    resumeBtn.hidden = !sameMode;
+    var newBtn = document.getElementById('start-new');
+    newBtn.textContent = sameMode ? '结束并新建' : '开始';
+    document.getElementById('dlg-start-title').textContent = sameMode ? '有未完成的学习会话' : '开始这次学习';
+    document.getElementById('start-session-list').innerHTML = conflicts.map(function (s) {
+      return '<div class="list-row static">' +
+        '<span class="list-main"><span class="list-title">' + esc(bankName(s.bankId)) + '</span>' +
+        '<span class="list-meta"><span>' + esc(s.mode || '顺序练习') + '</span><span class="mono">已答 ' + (s.done || 0) + ' / ' + (s.total || 0) + '</span></span></span>' +
+        '<span class="list-side"><span class="tag brand">' + esc(KIND_LABEL[s.kind] || '练习') + '</span></span></div>';
+    }).join('');
+    resumeBtn.onclick = function () {
+      var last = conflicts[conflicts.length - 1];
+      eeDialog.close(document.getElementById('dlg-start'));
+      if (last) location.href = runnerOf(last) + '?sid=' + encodeURIComponent(last.id);
+    };
+
+    /* 参数区：只有普通练习与模考可调；模考额外暴露「纳入学习记录」，普通练习不显示 */
+    var usable = paramsUsable(startCtx);
+    document.getElementById('start-params').hidden = !usable;
+    document.getElementById('start-params-note').hidden = usable;
+    document.getElementById('start-kv').hidden = usable;   /* 可调时摘要已在参数行里，不重复一遍 */
+    document.getElementById('p-record-wrap').hidden = startCtx.kind !== 'exam';
+    if (usable) {
+      startParams.scope = '全部题目';
+      startParams.count = startCtx.total ? String(Math.min(50, Math.max(10, startCtx.total))) : '20';
+      startParams.type = '不限';
+      startParams.tag = '不限';
+      startParams.mode = startCtx.mode || '顺序练习';
+      fillParamOptions();
+      document.getElementById('p-scope').value = startParams.scope;
+      document.getElementById('p-count').value = startParams.count;
+      document.getElementById('p-mode').value = startParams.mode;
+      var r = syncParams();
+      setParamsOpen(!r.ok);           /* 完整 → 收起；不完整 → 展开 */
+      newBtn.disabled = !r.ok;
+    } else {
+      newBtn.disabled = false;
+    }
+    newBtn.onclick = commitStart;
+    eeDialog.open('dlg-start', trigger || document.activeElement);
+  }
+  function commitStart() {
+    var ctx = startCtx;
+    eeDialog.close(document.getElementById('dlg-start'));
+    conflictsFor(ctx).forEach(function (s) { S.finishSession(s.id); });
+    if (paramsUsable(ctx)) {
+      var r = syncParams();
+      if (!r.ok) { eeToast('这个范围里没有可练的题，先调整参数'); return; }
+      ctx = {
+        kind: ctx.kind, bankId: ctx.bankId, mode: startParams.mode,
+        total: r.want, count: r.want,
+        scope: startParams.scope + (startParams.type !== '不限' ? ' · ' + startParams.type : '') + (startParams.tag !== '不限' ? ' · ' + startParams.tag : ''),
+        rowIds: [], record: ctx.kind === 'exam' ? document.getElementById('p-record').checked : undefined
+      };
+    }
+    var s = S.startSession({
+      kind: ctx.kind, bankId: ctx.bankId, mode: ctx.mode, title: ctx.title || '',
+      total: ctx.total || 0, rowIds: ctx.rowIds || [], index: 0, done: 0, answers: {}, flags: {}, elapsed: 0
+    });
+    location.href = (ctx.kind === 'exam' ? 'exam.html' : 'practice.html') + '?sid=' + encodeURIComponent(s.id);
+  }
+  function beginExam() {
+    eeDialog.close(document.getElementById('dlg-exam'));
+    eeToast('已按基础题库模式开始模考；交卷前不显示对错');
+  }
+  function bankCtx(bankId) {
+    var b = S.bank(bankId);
+    return b ? practiceCtx(b) : defaultCtx();
+  }
+  function planCtx(i) { return PLAN[i] ? PLAN[i].ctx : defaultCtx(); }
+  function defaultCtxPublic() { return defaultCtx(); }
+
+  /* ---------- 继续 / 放弃 ---------- */
+  function resume(sid) {
+    var s = findSession(sid);
+    if (!s) { eeToast('这个会话已经不在了'); renderAll(); return; }
+    location.href = runnerOf(s) + '?sid=' + encodeURIComponent(sid);
+  }
+  function askAbandon(sid, btn) {
+    var s = findSession(sid);
+    if (!s) return;
+    abandonId = sid;
+    var label = KIND_LABEL[s.kind] || '练习';
+    document.getElementById('dlg-abandon-title').textContent = '放弃这次' + label + '？';
+    document.getElementById('abandon-session').textContent = bankName(s.bankId) + ' · ' + (s.mode || '顺序练习');
+    document.getElementById('abandon-progress').textContent = '已答 ' + (s.done || 0) + ' / ' + (s.total || 0);
+    document.getElementById('abandon-note').textContent = '放弃后本次已作答的 ' + (s.done || 0) +
+      ' 题不再计入，会话从「未完成会话」里消失；错题与复习队列不受影响。';
+    document.getElementById('abandon-confirm').onclick = confirmAbandon;
+    eeDialog.open('dlg-abandon', btn);
+  }
+  function confirmAbandon() {
+    var s = findSession(abandonId);
+    eeDialog.close(document.getElementById('dlg-abandon'));
+    if (s) S.finishSession(s.id);
+    eeToast('已放弃本次' + (s ? (KIND_LABEL[s.kind] || '会话') : '会话'));
+    abandonId = null;
+    renderAll();
+  }
+
+  /* ---------- 题库「全部」 ---------- */
+  function toggleAllBanks(btn) {
+    showAllBanks = btn.getAttribute('aria-pressed') !== 'true';
+    btn.setAttribute('aria-pressed', showAllBanks ? 'true' : 'false');
+    btn.textContent = showAllBanks ? '收起' : '全部';
+    renderBanks();
+    if (showAllBanks) eeToast('已显示全部题库，含只读共享题库');
+  }
+
+  /* ---------- 未保存保护 ---------- */
+  var pendingDiscard = null;
+  function guardDialog(id, isDirty) {
+    var d = document.getElementById(id);
+    if (!d) return;
+    d.addEventListener('cancel', function (e) {
+      e.preventDefault();
+      if (isDirty()) askDiscard(id); else eeDialog.close(d);
+    });
+    d.addEventListener('click', function (e) {
+      if (e.target !== d) return;
+      if (isDirty()) askDiscard(id); else eeDialog.close(d);
+    });
+  }
+  function askDiscard(id) {
+    pendingDiscard = id;
+    eeDialog.open('dlg-discard', document.activeElement);
+  }
+  function confirmDiscard() {
+    var d = document.getElementById(pendingDiscard);
+    eeDialog.close(document.getElementById('dlg-discard'));
+    if (d) {
+      var form = d.querySelector('input, textarea, select');
+      if (form && d.id === 'dlg-new-bank') form.value = '';
+      eeDialog.close(d);
+    }
+    pendingDiscard = null;
+  }
+
+  /* ---------- 新建题库 ---------- */
+  function createBank() {
+    var inputs = document.querySelectorAll('#dlg-new-bank .input');
+    var input = inputs[0];
+    var err = document.getElementById('new-bank-err');
+    if (!input.value.trim()) {
+      err.hidden = false;
+      input.setAttribute('aria-invalid', 'true');
+      input.focus();
+      return;
+    }
+    err.hidden = true;
+    input.removeAttribute('aria-invalid');
+    var b = S.addBank({ name: input.value.trim(), desc: inputs[1] ? inputs[1].value : '' });
+    eeToast('已创建题库「' + b.name + '」');
+    input.value = '';
+    if (inputs[1]) inputs[1].value = '';
+    eeDialog.close(document.getElementById('dlg-new-bank'));
+    renderAll();
+  }
+
+  function retryRead() { renderAll(); eeToast('已重新读取题库列表'); }
+
+  guardDialog('dlg-new-bank', function () {
+    var input = document.querySelector('#dlg-new-bank .input');
+    return !!input && input.value.trim().length > 0;
+  });
+
+  S.subscribe(function () { renderAll(); });
+  bindParams();
+  renderAll();
+
+  return {
+    openStart: openStart, openSessions: openSessions, resume: resume, askAbandon: askAbandon,
+    toggleAllBanks: toggleAllBanks, createBank: createBank, confirmDiscard: confirmDiscard,
+    retryRead: retryRead, beginExam: beginExam, bankCtx: bankCtx, planCtx: planCtx,
+    rowCtx: rowCtx, defaultCtx: defaultCtxPublic, renderAll: renderAll
+  };
+})();
+</script>
+</body>
+</html>
