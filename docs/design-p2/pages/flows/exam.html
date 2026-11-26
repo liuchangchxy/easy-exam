@@ -99,6 +99,7 @@
 <script src="../../assets/i18n.js"></script>
 <script src="../../assets/nav.js"></script>
 <script src="../../assets/spec-boot.js"></script>
+<script src="../../assets/report.js"></script>
 <script>
 (function () {
   'use strict';
@@ -214,6 +215,46 @@
       rows.push({ no: i + 1, q: q, mine: a ? a : '未答', right: q.answer, subj: !OBJECTIVE[q.type] });
     });
     return rows;
+  }
+  /* 判分所依据的题目版本快照（BR-109）：交卷时保存，报告落库后不随后续改题变化。
+     真实数据随作答记录落库（question_version_id），P3 回填；这里给示例值。 */
+  var EXAM_VER_SNAP = {
+    e12: { ver: 'v3', verAt: '2026-11-20 11:41', cur: 'v5', curAt: '2026-11-26 09:12', curNote: '参考答案的评分要点做了补充。' }
+  };
+  var EXAM_RATING = {
+    e1: ['良好', '12 月 4 日'], e2: ['重来', '11 月 27 日'], e3: ['良好', '12 月 6 日'], e4: ['重来', '11 月 27 日'],
+    e5: ['良好', '12 月 4 日'], e6: ['困难', '11 月 27 日'], e7: ['良好', '12 月 5 日'], e8: ['重来', '11 月 27 日'],
+    e9: ['一般', '12 月 1 日'], e10: [null, null], e11: [null, null], e12: [null, null]
+  };
+  /* 报告逐题明细：交卷当次报告与模考中心的归档成绩报告共用 assets/report.js 的同一套
+     渲染。字段一致，所以「刚交卷看到的报告」和「过后回看的报告」是同一份内容。 */
+  function reportItems() {
+    return paper().map(function (q) {
+      var a = state.answers[q.id];
+      var answered = !!a;
+      var subj = !OBJECTIVE[q.type];
+      var ok = answered && isCorrect(q);
+      var snap = EXAM_VER_SNAP[q.id] || { ver: 'v3', verAt: '2026-11-20 11:41' };
+      var rt = EXAM_RATING[q.id] || [null, null];
+      var it = {
+        qid: q.id, bankId: state.setup.bankId, type: q.type, subjective: subj, answered: answered,
+        ratio: subj ? null : (ok ? 1 : 0),
+        correctness: subj ? (answered ? 'UNGRADED' : 'BLANK') : (answered ? (ok ? 'CORRECT' : 'INCORRECT') : 'BLANK'),
+        stem: q.stem,
+        mine: answered ? (q.type === '多选题' ? String(a).split('').join(' · ') : String(a)) : '未作答',
+        answer: subj ? '主观题不自动判分' : String(q.answer),
+        explain: q.explanation,
+        rating: rt[0], ratingDue: rt[1],
+        ver: snap.ver, verAt: snap.verAt, cur: snap.cur, curAt: snap.curAt, curNote: snap.curNote
+      };
+      if (q.type === '多选题' && answered) {
+        var raws = String(q.answer).split(''), mines = String(a).split('');
+        it.multi = true;
+        it.missed = raws.filter(function (x) { return mines.indexOf(x) < 0; });
+        it.extra = mines.filter(function (x) { return raws.indexOf(x) < 0; });
+      }
+      return it;
+    });
   }
 
   /* ---------- 步骤 0：模考中心 ---------- */
@@ -347,7 +388,7 @@
       }).join('') + '</div>' +
         '<label class="field mt-4"><span class="label">或上传 JSON 模板</span>' +
         '<input class="input" type="text" value="soft-exam-blueprint.json" aria-label="JSON 模板文件名">' +
-        '<span class="hint">只接受内置模板或用户上传的 JSON；本期不提供 AI 建议蓝图。</span></label>';
+        '<span class="hint">只接受内置模板或你自己上传的 JSON；蓝图始终由你确认后生效。</span></label>';
     } else if (state.tplStep === 1) {
       var t = TEMPLATES[state.tplIndex];
       tplPanel =
@@ -458,8 +499,8 @@
       '  </div>' +
       '  <div class="flow-actions">' +
       '    <button type="button" class="btn btn-primary" data-act="begin"' + (invalid ? ' disabled' : '') + '>' + ico('play', '14px') + '开始模考</button>' +
-      '    <button type="button" class="btn btn-quiet" data-act="refuse-insufficient">演示：题库不足</button>' +
-      '    <button type="button" class="btn btn-quiet" data-act="refuse-archived">演示：题目已归档</button>' +
+      '    <span data-spec><button type="button" class="btn btn-quiet" data-act="refuse-insufficient">演示：题库不足</button>' +
+      '    <button type="button" class="btn btn-quiet" data-act="refuse-archived">演示：题目已归档</button></span>' +
       '    <button type="button" class="btn btn-quiet" data-act="to-center">取消</button>' +
       '  </div>' +
       '</div></div>' +
@@ -701,7 +742,7 @@
       '    </div>' +
       '  </div>' +
       '  <div>' +
-      '    <div class="rule-label">会话时间线（CR-31）</div>' +
+      '    <div class="rule-label">会话时间线</div>' +
       '    <div class="kv mt-3">' +
       '      <span class="kv-key">作答窗口</span><span class="kv-val mono">开考 → 22:14（正常作答、同步草稿、标记）</span>' +
       '      <span class="kv-key">宽限</span><span class="kv-val mono">22:14 → 22:15（' + GRACE + ' 秒，只同步截止前已产生的答案）</span>' +
@@ -724,16 +765,7 @@
     });
     var acc = answeredObj ? Math.round(correctObj / answeredObj * 100) : null;
     var rows = wrongRows();
-    var detail = rows.map(function (r) {
-      return '' +
-        '<tr>' +
-        '  <td data-label="题号" class="num">' + String(r.no).padStart(2, '0') + '</td>' +
-        '  <td data-label="题干"><span class="wrong-stem">' + esc(r.q.stem) + '</span></td>' +
-        '  <td data-label="你的答案"><span class="mono">' + esc(r.mine) + '</span></td>' +
-        '  <td data-label="标准答案"><span class="mono">' + (r.right || '—') + '</span></td>' +
-        '  <td data-label="状态">' + (r.subj ? '<span class="tag brand">已作答 · 未判分</span>' : (r.mine === '未答' ? '<span class="tag plain">未答</span>' : '<span class="tag bad">错误</span>')) + '</td>' +
-        '</tr>';
-    }).join('');
+    var items = reportItems();
 
     return '' +
       '<header class="page-head">' +
@@ -763,8 +795,7 @@
       '    <div class="count-cell"><b>' + answeredCount() + '</b><span>已答（含 ' + ungradedCount() + ' 题已作答·未判分）</span></div>' +
       '    <div class="count-cell"><b>' + (p.length - answeredCount()) + '</b><span>未答（含未作答的主观题）</span></div>' +
       '    <div class="count-cell"><b>' + ungradedCount() + '</b><span>未判分（主观题，不计入得分与满分）</span></div>' +
-      '    <div class="count-cell"><b>' + score + ' / ' + full + '</b><span>客观题得分 / 客观题满分</span></div>' +
-      '    <div class="count-cell"><b>' + score + ' / ' + full + '</b><span>卷面总分 / 满分（主观题部分未判分，不计入）</span></div>' +
+      '    <div class="count-cell"><b>' + score + ' / ' + full + '</b><span>客观题得分 / 客观题满分（主观题未判分，不计入，故卷面总分同此）</span></div>' +
       '  </div>' +
       '  <div class="kv">' +
       '    <span class="kv-key">负分规则</span><span class="kv-val">答错扣 0.5 分；未设 0 分下限，总分可为负</span>' +
@@ -780,11 +811,8 @@
       '    </table></div>' +
       '  </div>' +
       '  <div>' +
-      '    <div class="section-head"><h2 class="section-title">错题与未答</h2><span class="section-note">共 ' + rows.length + ' 题</span></div>' +
-      '    <div class="dtable-wrap"><table class="dtable">' +
-      '      <thead><tr><th>题号</th><th>题干</th><th>你的答案</th><th>标准答案</th><th>状态</th></tr></thead>' +
-      '      <tbody>' + detail + '</tbody>' +
-      '    </table></div>' +
+      '    <div class="section-head"><h2 class="section-title">逐题明细</h2><span class="section-note">共 ' + items.length + ' 题 · 答错与未答 ' + rows.length + ' 题 · 点开看作答、判定、解析与判分版本</span></div>' +
+      '    <div class="rep-list" id="exam-report-items">' + window.eeReport.itemsHtml(items, true, { scope: 'e', qPrefix: '../screens/', rPrefix: '../screens/' }) + '</div>' +
       '  </div>' +
       (state.setup.recordMistakes
         ? '  <div class="notice ok">' + ico('check', '15px') + '<div class="notice-body">答错的 ' + wrongCount() + ' 题已进入错题，FSRS 已按本场调度。</div></div>'
@@ -876,7 +904,7 @@
       var legacyNote = legacy
         ? '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body"><span class="notice-title">早期报告</span><br>' +
           '落库时未记录客观题满分，得分率与已答客观题正确率不回溯计算；得分本身仍然有效。完整报告在考试会话页的报告态。</div></div>'
-        : '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body">报告一经落库即永久不可变：不可修改、不可重新计算、不可覆盖；本期不提供历史重判。完整报告在考试会话页的报告态。</div></div>';
+        : '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body">报告一经落库即永久不可变：不可修改、不可重新计算、不可覆盖。完整报告在考试会话页的报告态。</div></div>';
       return '' +
         '<dialog class="dlg wide" id="dlgReport" aria-labelledby="dlgReportTitle">' +
         '  <div class="dlg-head">' +
@@ -952,9 +980,9 @@
       } },
     { id: 'setup', name: '组卷确认', render: renderSetup, nextLabel: '开始模考', note: '开始前确认七项；题库不足或题目已归档时给出可读的拒绝态。', nextDisabled: function () { return state.setup.total < 1 || state.setup.total > bankMax(state.setup.bankId); } },
     { id: 'runner', name: '考试会话', render: renderRunner, nextLabel: '到点 · 宽限 60 秒', note: '倒计时常显；答题卡跳题；B 标记待复查；选项只记录选中，不判对错。点「交卷」打开交卷确认。' },
-    { id: 'grace', name: '宽限 60 秒', render: renderGrace, nextLabel: '服务端收卷', note: 'CR-31 第二段：只同步截止前已产生的答案，不用于继续答题；这是正常状态，不是失败。' },
-    { id: 'collected', name: '服务端收卷', render: renderCollected, nextLabel: '看成绩报告', note: 'CR-31 第三段：由服务端完成交卷并生成报告，不要求用户保持页面打开。' },
-    { id: 'report', name: '成绩报告', render: renderReport, nextLabel: '看历史报告', note: 'CR-06：得分 / 客观题满分 / 得分率 / 已答客观题正确率分别标注，分母不同不得混用。' },
+    { id: 'grace', name: '宽限 60 秒', render: renderGrace, nextLabel: '服务端收卷', note: '只同步截止前已经产生的答案，不能用来继续答题；这是正常状态，不是故障。' },
+    { id: 'collected', name: '服务端收卷', render: renderCollected, nextLabel: '看成绩报告', note: '由服务端完成交卷并生成报告，不需要你一直开着这个页面。' },
+    { id: 'report', name: '成绩报告', render: renderReport, nextLabel: '看历史报告', note: '得分、客观题满分、得分率、已答客观题正确率分别标注，分母不同，不要混用。' },
     { id: 'history', name: '历史与重考', render: renderHistory, nextLabel: '重新开始', note: '历史成绩可回看；重新考试用档案当前最新蓝图版本开新会话。' }
   ];
 
@@ -986,6 +1014,7 @@
     nextBtn.textContent = typeof step.nextLabel === 'function' ? step.nextLabel() : step.nextLabel;
     nextBtn.disabled = typeof step.nextDisabled === 'function' ? step.nextDisabled() : !!step.nextDisabled;
     noteEl.textContent = typeof step.note === 'function' ? step.note() : (step.note || '');
+    if (window.eeReport) window.eeReport.bind(document.getElementById('exam-report-items'));
     if (step.afterRender) step.afterRender();
   }
 
@@ -1291,6 +1320,7 @@
         rate: objectiveFullPaper() ? Math.round(objectiveScore() / objectiveFullPaper() * 100) : 0,
         accObj: null, answered: answeredCount(), objTotal: p.filter(function (q) { return OBJECTIVE[q.type]; }).length,
         correct: correctCount(), ungraded: ungradedCount(),
+        total: p.length, items: reportItems(),
         minutes: Math.max(1, Math.round((Math.max(60, state.setup.minutes * 60) - state.remaining) / 60)),
         via: state.via
       };

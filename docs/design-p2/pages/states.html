@@ -60,7 +60,7 @@
   <!-- ==================== 01 八态矩阵 ==================== -->
   <section class="section" aria-labelledby="h-states">
     <h2 class="doc-h2" id="h-states"><span class="no">01</span>八态矩阵</h2>
-    <p class="doc-rule">每个屏幕都必须显式设计下面八种状态，并用同一屏内的不同面板并列呈现。空态必须说明<b>为什么</b>空并给出下一步动作；禁用必须给出可读原因且不隐藏入口；未配置与离线不是错误，是正常的产品状态，要有自己的表达。</p>
+    <p class="doc-rule">每个屏幕都必须显式设计下面八种状态，并用同一屏内的不同面板并列呈现。空态必须说明<b>为什么</b>空并给出下一步动作；禁用必须给出可读原因，但<b>只适用于与当前用户相关的控件</b>；完全无关的管理入口不出现；未配置与离线不是错误，是正常的产品状态，要有自己的表达。</p>
 
     <div class="dtable-wrap">
       <table class="dtable">
@@ -179,7 +179,7 @@
       </div>
 
       <div class="state-card">
-        <p class="rule-label">禁用 · 不隐藏入口</p>
+        <p class="rule-label">禁用 · 相关但不可用</p>
         <div class="panel">
           <div class="panel-body">
             <div class="field">
@@ -310,7 +310,7 @@
   <!-- ==================== 02 命令面板 ==================== -->
   <section class="section" aria-labelledby="h-cmd">
     <h2 class="doc-h2" id="h-cmd"><span class="no">02</span>命令面板（FN-605）</h2>
-    <p class="doc-rule">命令面板是全产品唯一的「跨页直达」通道，用来缩短高频路径，不是又一个导航。它只做三件事：跳到某个页面、对当前对象执行一个动作、切换一个全局设置。没有权限的命令<b>置灰并说明原因</b>，不隐藏。</p>
+    <p class="doc-rule">命令面板是全产品唯一的「跨页直达」通道，用来缩短高频路径，不是又一个导航。它只做三件事：跳到某个页面、对当前对象执行一个动作、切换一个全局设置。与当前用户相关但无权限的命令<b>置灰并说明原因</b>；与当前用户完全无关的管理入口<b>不出现</b>。</p>
 
     <div class="demo">
       <div class="demo-cell">
@@ -349,7 +349,7 @@
           <tr>
             <td data-label="分组">对当前对象执行</td>
             <td data-label="示例">归档本题 / 标为薄弱 / 加入斩杀 / 导出题库</td>
-            <td data-label="规则">只在对应页面出现；无写权限时置灰 + 原因，不隐藏</td>
+            <td data-label="规则">只在对应页面出现；相关但无写权限时置灰 + 原因，完全无关的管理命令不出现</td>
           </tr>
           <tr>
             <td data-label="分组">设置</td>
@@ -542,7 +542,7 @@
           <tr>
             <td data-label="档位"><span class="tag brand">&gt;1024 桌面</span></td>
             <td data-label="导航">完整侧栏 236px + 顶栏</td>
-            <td data-label="布局">纸面居中 1120px，宽变体 1320px；列表双栏</td>
+            <td data-label="布局">统一纸面居中 1120px（全产品同一张纸）；列表双栏</td>
             <td data-label="交互方式">鼠标 + 快捷键；hover 有反馈；右键菜单不用，一律用「更多」按钮</td>
           </tr>
           <tr>

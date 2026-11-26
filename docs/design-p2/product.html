@@ -23,7 +23,7 @@
       <a class="nav-item" href="pages/screens/notes.html"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg><span class="nav-label">资料</span><span class="nav-count" id="nav-note-count">6</span></a>
       <p class="side-group-label">管理</p>
       <a class="nav-item" href="pages/screens/import.html"><svg class="od-icon" aria-hidden="true"><use href="#i-import"/></svg><span class="nav-label">导入向导</span></a>
-      <a class="nav-item" href="pages/screens/instance.html"><svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg><span class="nav-label">实例管理</span></a>
+      <a class="nav-item" id="nav-instance" href="pages/screens/instance.html"><svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg><span class="nav-label">实例管理</span></a>
       <a class="nav-item" href="pages/screens/settings.html"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg><span class="nav-label">设置</span></a>
       <p class="side-group-label">设计规范</p>
       <a class="nav-item" href="index.html"><svg class="od-icon" aria-hidden="true"><use href="#i-book"/></svg><span class="nav-label">规范与决策清单</span></a>
@@ -44,6 +44,7 @@
     <span class="od-spacer"></span>
     <span class="tag plain" id="state-user">accept_admin_1794570360969</span>
     <span class="tag brand" id="state-role">所有者</span>
+    <span class="tag plain" id="state-instance-role">实例管理员</span>
   </div>
 
   <main class="content has-bottomnav" id="main-content">
@@ -84,13 +85,23 @@
           <div class="setting-row">
             <div class="setting-label">
               <div class="setting-name">当前角色</div>
-              <div class="setting-desc">影响成员管理、题目编辑、导入等入口在不同页面的可见性与可点性。</div>
+              <div class="setting-desc">影响成员管理、题目编辑、导入等入口在不同页面是禁用并解释，还是整个不出现。</div>
             </div>
-            <div class="segmented setting-control" role="radiogroup" aria-label="当前角色" id="role-seg">
+            <div class="segmented setting-control" role="radiogroup" aria-label="当前题库角色" id="role-seg">
               <button class="segment" type="button" role="radio" aria-checked="true" data-v="OWNER">所有者</button>
               <button class="segment" type="button" role="radio" aria-checked="false" data-v="EDITOR">编辑者</button>
               <button class="segment" type="button" role="radio" aria-checked="false" data-v="MEMBER">成员</button>
               <button class="segment" type="button" role="radio" aria-checked="false" data-v="VIEWER">只读</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-name">实例角色</div>
+              <div class="setting-desc">与题库角色互不推导。普通用户看不到「实例管理」入口——它跟这个用户没有关系，不是禁用。</div>
+            </div>
+            <div class="segmented setting-control" role="radiogroup" aria-label="当前实例角色" id="instance-role-seg">
+              <button class="segment" type="button" role="radio" aria-checked="true" data-v="admin">实例管理员</button>
+              <button class="segment" type="button" role="radio" aria-checked="false" data-v="user">普通用户</button>
             </div>
           </div>
           <div class="setting-row">
@@ -175,6 +186,7 @@
     var s = window.eeStore;
     document.getElementById('state-user').textContent = s.user();
     document.getElementById('state-role').textContent = ROLE_NAMES[s.role()] || s.role();
+    document.getElementById('state-instance-role').textContent = s.isInstanceAdmin() ? '实例管理员' : '普通用户';
     document.getElementById('nav-bank-count').textContent = String(s.banks({ archived: false }).length);
     document.getElementById('nav-note-count').textContent = String(s.notes().length);
     document.getElementById('state-banks').textContent = s.banks({ archived: false }).length + ' 个可访问';
@@ -184,6 +196,13 @@
     Array.prototype.forEach.call(document.querySelectorAll('#role-seg .segment'), function (b) {
       b.setAttribute('aria-checked', String(b.getAttribute('data-v') === s.role()));
     });
+    Array.prototype.forEach.call(document.querySelectorAll('#instance-role-seg .segment'), function (b) {
+      b.setAttribute('aria-checked', String(b.getAttribute('data-v') === s.instanceRole()));
+    });
+    /* CR-12 两向规则：完全无关的管理入口不渲染，不是置灰。
+       普通用户的侧栏里「实例管理」整项消失；题库面同理（见各产品屏）。 */
+    var navInstance = document.getElementById('nav-instance');
+    if (navInstance) navInstance.hidden = !s.relevant('instance.manage');
     Array.prototype.forEach.call(document.querySelectorAll('[data-seg="theme"] .segment'), function (b) {
       b.setAttribute('aria-checked', String(b.getAttribute('data-v') === s.settings().theme));
     });
@@ -207,7 +226,14 @@
     var b = e.target.closest('.segment');
     if (!b) return;
     window.eeStore.setRole(b.getAttribute('data-v'));
-    window.eeToast('已切换为' + (ROLE_NAMES[b.getAttribute('data-v')] || b.getAttribute('data-v')) + '视角，去各页面看权限变化');
+    window.eeToast('已切换为' + (ROLE_NAMES[b.getAttribute('data-v')] || b.getAttribute('data-v')) + '视角：相关但不能做的入口会禁用并说明，无关的管理入口会消失');
+    sync();
+  });
+  document.getElementById('instance-role-seg').addEventListener('click', function (e) {
+    var b = e.target.closest('.segment');
+    if (!b) return;
+    window.eeStore.setInstanceRole(b.getAttribute('data-v'));
+    window.eeToast(b.getAttribute('data-v') === 'admin' ? '已切换为实例管理员视角' : '已切换为普通用户视角：侧栏的「实例管理」整项消失');
     sync();
   });
   Array.prototype.forEach.call(document.querySelectorAll('[data-seg="theme"] .segment'), function (b) {

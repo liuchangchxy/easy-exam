@@ -228,7 +228,7 @@
         <div>
           <p class="page-eyebrow">设置</p>
           <h1 class="page-title">设置</h1>
-          <p class="page-sub" data-i18n="set.sub">个人偏好、AI 与检索、账户与数据都在这页；实例管理是另一个入口。</p>
+          <p class="page-sub" data-i18n="set.sub">个人偏好、AI 与检索、账户与数据都在这页；学习记录只属于当前账号。</p>
         </div>
       </div>
 
@@ -282,7 +282,8 @@
             <svg class="od-icon ext" aria-hidden="true"><use href="#i-external"/></svg>
           </a>
 
-          <p class="set-rail-note">「实例管理」是独立路由，只对实例管理员开放；非管理员看不到这个入口。</p>
+          <!-- 入口对非管理员整个不渲染，这条说明也随之消失，不留悬空指引 -->
+          <p class="set-rail-note" id="rail-instance-note">「实例管理」是独立路由，只对实例管理员开放。</p>
         </nav>
 
         <!-- ================= 右侧内容 ================= -->
@@ -524,7 +525,8 @@
             <div class="kv mt-3">
               <span class="kv-key">实例级</span><span class="kv-val">实例默认值由部署时设定，本页不能改；个人留空即继承它。</span>
               <span class="kv-key">个人级</span><span class="kv-val">本页改的就是个人配置：改完一个字段立刻保存，不会冲掉另一个字段。</span>
-              <span class="kv-key">实例管理</span><span class="kv-val">账号与注册开关在「实例管理」页，和题库角色、实例角色都无关。</span>
+              <!-- 对非实例管理员，这一行说的是他进不去的页面，整个不渲染 -->
+              <span class="kv-key" id="ai-config-owner">实例管理</span><span class="kv-val" id="ai-config-owner-val">账号与注册开关在「实例管理」页，和题库角色、实例角色都无关。</span>
             </div>
 
             <!-- 当前状态：四态（R14 / ST-505 / BR-527） -->
@@ -1093,8 +1095,8 @@
   var store = window.eeStore;
 
   var I18N = {
-    'set.sub': ['个人偏好、AI 与检索、账户与数据都在这页；实例管理是另一个入口。',
-      'Two groups, Personal and About: split by "affects only me" versus "affects others or the whole instance". Instance admin is a separate route.'],
+    'set.sub': ['个人偏好、AI 与检索、账户与数据都在这页；学习记录只属于当前账号。',
+      'Preferences, AI & web search, account and data all live on this page; your study records belong to this account only.'],
     'sec.account': ['账号与安全', 'Account and security'],
     'sec.appearance': ['外观', 'Appearance'],
     'sec.practice': ['练习偏好', 'Practice'],
@@ -1373,16 +1375,38 @@
   function syncAccount() {
     if (!store) return;
     document.getElementById('account-name').textContent = store.user();
-    document.getElementById('account-role').textContent = '实例角色 · ' + (store.role() === 'OWNER' ? '管理员' : '普通用户');
+    /* 实例角色与题库角色是两个独立维度：实例管理员不因此获得任何题库访问权，
+       题库所有者也不因此获得实例管理权。两行分开说，不互相推导。 */
+    var instRole = store.instanceRole ? store.instanceRole() : 'user';
+    document.getElementById('account-role').textContent =
+      '实例角色 · ' + (instRole === 'admin' ? '管理员' : '普通用户') +
+      ' · 当前题库角色 · ' + (ROLE_NAMES[store.role()] || store.role());
   }
-  /* 实例管理入口：只对实例管理员可见（CR-12：完全无关的入口不出现） */
+  /* 实例管理入口：只对实例管理员相关（CR-12：完全无关的入口不渲染，不是禁用） */
   function syncInstanceEntry() {
     if (!store) return;
-    var can = store.can('instance.manage');
+    var show = store.relevant ? store.relevant('instance.manage') : store.can('instance.manage');
     var rail = document.getElementById('rail-instance');
     var menu = document.getElementById('menu-instance');
-    if (rail) rail.hidden = !can;
-    if (menu) menu.hidden = !can;
+    var note = document.getElementById('rail-instance-note');
+    var aiKey = document.getElementById('ai-config-owner');
+    var aiVal = document.getElementById('ai-config-owner-val');
+    if (rail) rail.hidden = !show;
+    if (menu) menu.hidden = !show;
+    if (note) note.hidden = !show;
+    /* 「谁配置」里的实例管理一行：非管理员进不去那个页面，键值一起不渲染 */
+    if (aiKey) aiKey.hidden = !show;
+    if (aiVal) aiVal.hidden = !show;
+    /* ⌘K 命令面板的页面清单同样按相关性过滤：非管理员的清单里不出现实例管理 */
+    var nav = window.eeNav;
+    if (nav && nav.routes && !show) {
+      var out = {};
+      Object.keys(nav.routes).forEach(function (k) {
+        if (nav.routes[k] === 'instance.html') return;
+        out[k] = nav.routes[k];
+      });
+      nav.routes = out;
+    }
   }
 
   /* ---------- 退出登录 ---------- */
@@ -1481,6 +1505,9 @@
       syncInstanceEntry();
     });
   }
+  /* 外壳（nav.js / spec-boot）在 DOMContentLoaded 才装配完导航与账户菜单，
+     那时再按当前实例角色收一次实例管理入口（左轨、账户菜单、⌘K 清单）。 */
+  document.addEventListener('DOMContentLoaded', syncInstanceEntry);
   })();
 </script>
 </body>

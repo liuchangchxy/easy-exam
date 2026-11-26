@@ -69,6 +69,14 @@
 .start-params-grid{  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); margin-top: var(--sp-4);  }
 .start-params-grid .field{  margin: 0;  }
 .start-params-grid .check{  grid-column: 1 / -1;  }
+/* 右轨 296px 是常驻栏，纸面 1120 时主栏仍有 760px，够用；
+   纸面收窄到 1024 以下（实际纸面 ≈ 920）主栏只剩 300px 出头，
+   题库行与提分推荐会被压成三四行，右轨自己却空着一大片。
+   1024 起右轨下移，主栏拿满宽度——这是纸面内部的排版适配，不改纸张规格。 */
+@media (max-width: 1024px){
+    .today-grid { grid-template-columns: minmax(0, 1fr); }
+    .today-rail { border-left: 0; padding-left: 0; }
+  }
 @media (max-width: 768px){
     .today-grid { grid-template-columns: minmax(0, 1fr); }
     .today-rail { border-left: 0; padding-left: 0; }
@@ -277,7 +285,7 @@
                 <h4 class="empty-title">还没有题库</h4>
                 <p class="empty-desc">学习域从题库开始。创建一个题库，或从文件导入题目；导入后计划、复习与推荐都会自动有内容。</p>
                 <div class="empty-actions">
-                  <button type="button" class="btn btn-primary btn-sm" onclick="eeDialog.open('dlg-new-bank', this)">新建题库</button>
+                  <button type="button" class="btn btn-primary btn-sm" data-act="new-bank" onclick="eeDialog.open('dlg-new-bank', this)">新建题库</button>
                   <a class="btn btn-sm" href="import.html">去导入</a>
                 </div>
               </div>
@@ -578,7 +586,7 @@
   </div>
   <div class="dlg-foot">
     <button type="button" class="btn btn-quiet" data-dlg-close>取消</button>
-    <button type="button" class="btn btn-primary" onclick="EEHome.createBank()">创建题库</button>
+    <button type="button" class="btn btn-primary" data-dlg-commit onclick="EEHome.createBank()">创建题库</button>
   </div>
 </dialog>
 
@@ -762,7 +770,7 @@ window.EEHome = (function () {
         '<svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>开始练习（20 题）</button>';
       return;
     }
-    host.innerHTML = '<button type="button" class="btn btn-primary" onclick="eeDialog.open(\'dlg-new-bank\', this)">' +
+    host.innerHTML = '<button type="button" class="btn btn-primary" data-act="new-bank" onclick="eeDialog.open(\'dlg-new-bank\', this)">' +
       '<svg class="od-icon" aria-hidden="true"><use href="#i-plus"/></svg>新建题库</button>' +
       '<a class="btn" href="import.html">去导入</a>';
   }
@@ -984,6 +992,26 @@ window.EEHome = (function () {
     renderReco();
     renderRail();
     renderStats();
+    syncCreateBank();
+  }
+
+  /* ---------- 新建题库入口的权限门（CR-12 两向规则） ----------
+     建题库对任何用户都有意义，因此「不能建」的呈现是禁用 + 可读原因，不是藏起来。
+     VIEWER 视角下原来没有任何门控，点进去就能建库——属权限泄露。 */
+  function syncCreateBank() {
+    var ok = S.can('bank.create');
+    Array.prototype.forEach.call(document.querySelectorAll('[data-act="new-bank"]'), function (btn) {
+      btn.disabled = !ok;
+      if (!ok) {
+        btn.title = S.denyReason('bank.create') || '当前角色不能新建题库';
+        btn.setAttribute('aria-disabled', 'true');
+      } else {
+        btn.removeAttribute('title');
+        btn.removeAttribute('aria-disabled');
+      }
+    });
+    var dlgBtn = document.querySelector('#dlg-new-bank [data-dlg-commit]');
+    if (dlgBtn) dlgBtn.disabled = !ok;
   }
 
   /* ---------- 会话选择器（CR-14） ---------- */
@@ -1285,6 +1313,11 @@ window.EEHome = (function () {
 
   /* ---------- 新建题库 ---------- */
   function createBank() {
+    /* 双保险：入口已按两向规则禁用，这里再拦一次，避免脚本或旧书签绕过 */
+    if (!S.can('bank.create')) {
+      eeToast(S.denyReason('bank.create') || '当前角色不能新建题库', 'bad');
+      return;
+    }
     var inputs = document.querySelectorAll('#dlg-new-bank .input');
     var input = inputs[0];
     var err = document.getElementById('new-bank-err');

@@ -9,9 +9,10 @@
 .doc-page{  max-width: 1100px; margin: 0 auto; padding: 28px 24px 60px;  }
 /* 编辑式列表：起点一条墨色重线（原版 .bank-list 同值），不用卡片 */
 .list{  border-top: 1px solid var(--ink);  }
-/* 步骤条与页签同一处理：窄屏时自身横滚，不撑破纸面（11 步在 768 也放不下） */
-.flow-stepbar .steps{  overflow-x: auto; scrollbar-width: none;  }
-.flow-stepbar .steps::-webkit-scrollbar{  display: none;  }
+/* 步骤条与页签同一处理：窄屏时自身横滚，不撑破纸面（11 步在 768 也放不下）。
+   滚动条必须可见：藏起来的话后几步（失去访问权后 / 成员后进入）在任何宽度都
+   没有任何可发现性，等于被裁掉。当前步名同时在页脚给出，不缺上下文。 */
+.flow-stepbar .steps{  overflow-x: auto; scrollbar-width: thin; padding-bottom: var(--sp-1);  }
 .flow-stepbar .step{  flex: none;  }
 .steps .step:disabled{  cursor: default;  }
 /* ===== 本页布局助手 ===== */
@@ -464,7 +465,7 @@
     /* 角色变更需二次确认 + 降级自己要被拒绝（FN-416） */
     var extra = '' +
       '<div class="panel mt-5"><div class="panel-body flow-stack">' +
-      '  <div class="panel-head sub-head"><h3 class="panel-title panel-title-md">成员角色变更</h3><span class="panel-sub">FN-416</span></div>' +
+      '  <div class="panel-head sub-head"><h3 class="panel-title panel-title-md">成员角色变更</h3><span class="panel-sub">改角色前会二次确认，并说明新旧权限差</span></div>' +
       '  <div class="list-row static">' +
       '    <span class="avatar">E</span>' +
       '    <span class="list-main"><span class="list-title">' + esc(OTHER_EDITOR) + '</span>' +
@@ -580,7 +581,7 @@
       '<div class="od-grid" style="--od-cols: 2">' + cols + '</div>' +
 
       '<div class="panel mt-5"><div class="panel-body flow-stack">' +
-      '  <div class="panel-head sub-head"><h3 class="panel-title panel-title-md">三类数据，两种策略</h3><span class="panel-sub">CR-23 · 判据是「丢了能不能重建」</span></div>' +
+      '  <div class="panel-head sub-head"><h3 class="panel-title panel-title-md">三类数据，两种策略</h3><span class="panel-sub">丢了能不能重建，决定处理方式</span></div>' +
       '  <div class="dtable-wrap"><table class="dtable">' +
       '    <thead><tr><th scope="col">类别</th><th scope="col">对象</th><th scope="col">策略</th></tr></thead>' +
       '    <tbody>' +
@@ -717,7 +718,7 @@
       '<div class="od-grid mt-5" style="--od-cols: 2">' + ownerCard + memberCard + '</div>' +
       '<div class="notice warn mt-5" role="note">' + ico('alert-triangle', '15px') +
       '<div class="notice-body"><div class="notice-title">退出 ≠ 题库归档</div>' +
-      '<p>归档是「库的事」，影响所有人；退出是「这个人与这个库的关系的事」，只影响你自己。两套规则不得互相套用（CR-30）。</p></div></div>' + dlg;
+      '<p>归档是「库的事」，影响所有人；退出是「这个人与这个库的关系的事」，只影响你自己。这两件事不要互相套用。</p></div></div>' + dlg;
   }
 
   /* ---------- 步骤 8：越权 403 深链（FN-421 变体 A） ---------- */
@@ -796,7 +797,7 @@
     var html = workspace('members');
     var extra = '' +
       '<div class="panel mt-5"><div class="panel-body flow-stack">' +
-      '  <div class="panel-head sub-head"><h3 class="panel-title panel-title-md">学习记录私有</h3><span class="panel-sub">FN-422</span></div>' +
+      '  <div class="panel-head sub-head"><h3 class="panel-title panel-title-md">学习记录私有</h3><span class="panel-sub">只属于你，别人看不到</span></div>' +
       '  <div class="notice info">' + ico('shield', '15px') +
       '  <div class="notice-body"><div class="notice-title">题库内容共享，学习记录各自私有</div>' +
       '  <p>共享只包含题目内容与题目版本。作答记录、错题与错因、FSRS 状态、斩杀状态、薄弱标记、复习计划与个人笔记一律私有——<b>所有者看不到编辑者/成员的作答，成员之间也互相看不到</b>。</p></div></div>' +
@@ -817,7 +818,7 @@
 
   /* ---------- 步骤定义 ---------- */
   var STEPS = [
-    { id: 'create', name: '新建题库', render: renderCreate, nextLabel: '确认创建', note: '对话框收集名称、分类与说明；名称必填。创建者成为这个题库的所有者。' },
+    { id: 'create', name: '新建题库', render: renderCreate, nextLabel: '打开创建对话框', note: '对话框收集名称、分类与说明；名称必填。创建者成为这个题库的所有者。' },
     { id: 'banks', name: '题库列表', render: renderBanks, nextLabel: '打开新题库', note: '「我的题库」出现新库；「共享给我」单独分组，段说明写清「内容共享，学习记录各自私有」。' },
     { id: 'members', name: '添加成员', render: renderMembers, defaultTab: 'members', nextLabel: '进入工作区', note: '用户名搜索 + 角色选择；候选过滤掉已在库成员；重复添加给出可读提示，不静默改角色。' },
     { id: 'editor', name: '成员与角色', render: renderEditorView, defaultTab: 'questions', nextLabel: '看并发编辑', note: '角色只有三种：所有者/编辑者/成员。改角色要二次确认并说明权限差；不能把自己降级；编辑者看不到成员管理，只看到说明。' },
@@ -935,7 +936,8 @@
 
   /* ---------- 动作 ---------- */
   var ACTIONS = {
-    'create:next': function () { createBank(); },
+    /* 这一步的主操作在对话框里；页脚只负责把对话框打开，不重复一个「确认创建」 */
+    'create:next': function () { ACTIONS['open-create'](); },
     'banks:next': function () { go(2); },
     'members:next': function () { go(3); },
     'editor:next': function () { go(4); },
@@ -1145,6 +1147,7 @@
       '<div class="dlg-head"><div class="dlg-head-text">' +
       '<p class="dlg-eyebrow">成员</p>' +
       '<h2 class="dlg-title" id="dlgRoleChangeTitle">把 ' + esc(OTHER_EDITOR) + ' 改为成员？</h2>' +
+      '</div>' +
       '<button class="icon-btn" type="button" aria-label="关闭" data-dlg-close>' + ico('x', '15px') + '</button></div>' +
       '<div class="dlg-body">' +
       '  <p class="dlg-p">角色立即生效。</p>' +

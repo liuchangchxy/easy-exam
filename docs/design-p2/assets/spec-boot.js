@@ -381,7 +381,11 @@
   var SHELL = {
     theme: function () { return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'; },
     lang: function () { return (window.eeStore && window.eeStore.settings().lang) || 'zh'; },
-    routes: function () { return (window.eeNav && window.eeNav.routes) || {}; },
+    routes: function () {
+      /* 命令面板只列出与当前用户相关的入口（CR-12）：实例管理对普通用户不出现 */
+      if (window.eeNav && window.eeNav.visibleRoutes) return window.eeNav.visibleRoutes();
+      return (window.eeNav && window.eeNav.routes) || {};
+    },
     setTheme: setTheme,
     setLang: setLang,
     openPalette: openPalette
@@ -535,12 +539,26 @@
       menu.className = 'menu';
       menu.setAttribute('role', 'menu');
       menu.hidden = true;
+      /* CR-12 两向规则：实例管理只对实例管理员有意义，普通用户的菜单里整项不出现——
+         不是置灰。题库面的管理入口由各产品屏按 relevant() 自行判定。 */
+      var instItem = (window.eeStore && !window.eeStore.relevant('instance.manage')) ? '' :
+        '<a class="menu-item" role="menuitem" href="instance.html" data-ee-instance-item data-i18n="shell.menu.instance">' + ico('users') + (t('shell.menu.instance') || '实例管理') + '</a>';
       menu.innerHTML =
         '<a class="menu-item" role="menuitem" href="settings.html#account" data-i18n="shell.menu.profile">' + ico('user') + (t('shell.menu.profile') || '账户资料') + '</a>' +
-        '<a class="menu-item" role="menuitem" href="instance.html" data-i18n="shell.menu.instance">' + ico('users') + (t('shell.menu.instance') || '实例管理') + '</a>' +
+        instItem +
         '<div class="menu-sep" role="separator"></div>' +
         '<button class="menu-item is-danger" type="button" role="menuitem" data-ee-signout data-i18n="shell.menu.logout">' + ico('logout') + (t('shell.menu.logout') || '退出登录') + '</button>';
       anchor.appendChild(menu);
+    });
+  }
+  /* 角色可能在本页切换（演示壳/设置页），账户菜单要跟着相关性重算：
+     实例管理只对实例管理员有意义，普通用户整项不出现（CR-12）。 */
+  function syncAccountMenus() {
+    var store = window.eeStore;
+    if (!store || !store.relevant) return;
+    var show = store.relevant('instance.manage');
+    document.querySelectorAll('.menu [data-ee-instance-item]').forEach(function (el) {
+      el.hidden = !show;
     });
   }
   function ensureSignoutDialog() {
@@ -607,6 +625,7 @@
     applyI18n();
     syncThemeButtons();
     syncLangButtons();
+    syncAccountMenus();
     document.querySelectorAll('[data-ee-shell="theme"]').forEach(function (b) {
       if (b._eeShellTheme) return;
       b._eeShellTheme = true;
@@ -641,6 +660,10 @@
   else wireShell();
   /* 其他页改了设置（storage 事件）→ 同步外壳 */
   window.addEventListener('storage', function (e) {
-    if (e.key && e.key.indexOf('eeStore') === 0) { setTimeout(function () { applyI18n(); syncThemeButtons(); }, 30); }
+    if (e.key && e.key.indexOf('eeStore') === 0) { setTimeout(function () { applyI18n(); syncThemeButtons(); syncAccountMenus(); }, 30); }
   });
+  /* 本页改了角色/实例角色 → 账户菜单与命令面板的相关性要立刻重算 */
+  if (window.eeStore && window.eeStore.subscribe) {
+    window.eeStore.subscribe(function () { syncAccountMenus(); });
+  }
 })();

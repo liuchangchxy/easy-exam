@@ -79,6 +79,9 @@
   #q-table tbody tr.is-selected{  background: var(--brand-soft); box-shadow: inset 3px 0 0 var(--brand);  }
 #q-table tbody tr.is-selected td{  border-bottom-color: var(--brand-line);  }
 #q-table tbody tr[data-archived="1"] td{  color: var(--ink-3);  }
+/* 行内「编辑」文字按钮禁用态：置灰、去下划线、禁指针——与 .btn / .icon-btn:disabled 同一套表达（CR-12） */
+  .link-btn:disabled{  color: var(--ink-4); cursor: not-allowed; text-decoration: none; opacity: .7;  }
+.link-btn:disabled:hover{  color: var(--ink-4);  }
 #q-table tbody tr[data-archived="1"] .q-stem{  color: var(--ink-3);  }
 .q-toolbar{  row-gap: var(--sp-3); padding: 10px 0; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line);  }
 .q-search{  flex: 1 1 240px; min-width: 200px;  }
@@ -576,7 +579,7 @@
 
         <!-- ========== 设置 ========== -->
         <section data-tab-panel="settings" hidden>
-          <div class="panel">
+          <div class="panel" id="set-profile-panel">
             <div class="panel-head"><span class="panel-title">题库资料</span></div>
             <div class="panel-body">
               <p class="section-note">题库名称、分类与说明可修改；保存后会写入管理日志。</p>
@@ -618,7 +621,7 @@
           </div>
 
           <!-- 导出 -->
-          <div class="panel panel-stack">
+          <div class="panel panel-stack" id="set-export-panel">
             <div class="panel-head"><span class="panel-title">导出</span></div>
             <div class="panel-body">
               <p class="section-note">导出当前题库内容，可选择格式与是否包含已归档题目。任何成员都可导出。</p>
@@ -646,7 +649,7 @@
           </div>
 
           <!-- 危险区 -->
-          <div class="panel panel-stack">
+          <div class="panel panel-stack" id="set-danger-panel">
             <div class="panel-head"><span class="panel-title">危险操作</span></div>
             <div class="panel-body">
               <p class="section-note">归档后题库会移到已归档视图，练习记录与历史数据保留，可随时恢复。</p>
@@ -659,12 +662,12 @@
                 </button>
                 <span class="hint" id="set-archive-reason" role="status" hidden></span>
               </div>
-              <p class="hint mt-3">进行中的模考不锁定题库内容：会话持有快照，编辑与归档都不被阻断（CR-26）。归档被进行中模考引用的题库时，只会提示引用场数。</p>
+              <p class="hint mt-3">进行中的模考不锁定题库内容：会话持有快照，编辑与归档都不被阻断。归档被进行中模考引用的题库时，只会提示引用场数。</p>
             </div>
           </div>
 
           <!-- 管理日志 -->
-          <div class="panel panel-stack">
+          <div class="panel panel-stack" id="set-audit-panel">
             <div class="panel-head"><span class="panel-title">管理日志</span><span class="panel-sub">最近 50 条 · 仅所有者可见</span></div>
             <div class="list">
               <div class="list-row static dense">
@@ -1469,6 +1472,11 @@
   function qRow(x) {
     var sel = !!st.selected[x.id];
     var arch = !!x.archived;
+    /* CR-12 两向规则：编辑 / 归档题目对所有成员相关，成员与只读置灰 + 可读原因，不隐藏、不假装可点 */
+    var canEdit = canEditContent();
+    var editWhy = blockReason() || S.denyReason('question.edit');
+    var canArch = S.can('question.archive') && !readonly();
+    var archWhy = blockReason() || S.denyReason('question.archive');
     return '<tr data-row-id="' + x.id + '"' + (arch ? ' data-archived="1"' : '') + (sel ? ' class="is-selected"' : '') + '>' +
       '<td class="col-check" data-label="选择"><label class="check"><input type="checkbox" aria-label="选择题目 ' + esc(x.id) + '"' + (sel ? ' checked' : '') + '><span class="vh">选择</span></label></td>' +
       '<td class="num" data-label="题号">' + esc(x.id) + '</td>' +
@@ -1479,8 +1487,9 @@
       '<td data-label="难度">' + esc(x.difficulty || '未分级') + '</td>' +
       '<td class="num" data-label="版本">' + esc(x.version || 'v1') + '</td>' +
       '<td class="col-actions" data-label="操作">' +
-        '<button class="link-btn" type="button" data-q-edit="' + x.id + '">编辑</button>' +
-        '<button class="icon-btn sm" type="button" data-q-arch="' + x.id + '" aria-label="' + (arch ? '恢复' : '归档') + '题目 ' + esc(x.id) + '" title="' + (arch ? '恢复' : '归档') + '">' +
+        '<button class="link-btn" type="button" data-q-edit="' + x.id + '"' + (canEdit ? '' : ' disabled title="' + esc(editWhy) + '"') + '>编辑</button>' +
+        '<button class="icon-btn sm" type="button" data-q-arch="' + x.id + '" aria-label="' + (arch ? '恢复' : '归档') + '题目 ' + esc(x.id) + '"' +
+          (canArch ? ' title="' + (arch ? '恢复' : '归档') + '"' : ' disabled title="' + esc(archWhy) + '"') + '>' +
           icon(arch ? 'restore' : 'archive') + '</button>' +
       '</td></tr>';
   }
@@ -2227,6 +2236,20 @@
   /* ---------- 渲染：题库设置 ---------- */
   function renderSettings() {
     var canEdit = S.can('bank.edit') && !readonly();
+    /* CR-12 两向规则：题库资料（bank.settings）与危险操作（归档 / 物理删除）只与所有者、
+       编辑者相关，成员与只读看不到这两块；管理日志仅所有者；导出对所有成员开放。 */
+    $('#set-profile-panel').hidden = !S.relevant('bank.settings');
+    $('#set-danger-panel').hidden = !S.relevant('bank.archive');
+    $('#set-audit-panel').hidden = !S.can('member.manage');
+    $('#set-export-panel').hidden = false;
+    /* 设置页签对成员只剩「导出」一项，而页头本来就常驻「导出」按钮——
+       留着这个页签既是一片无意义空白，又是同一个操作的两个入口。成员不显示该页签。 */
+    var settingsTab = document.querySelector('#ws-tabs .tab[data-panel="settings"]');
+    if (settingsTab) {
+      var onlyExport = !S.relevant('bank.settings') && !S.relevant('bank.archive') && !S.can('member.manage');
+      settingsTab.hidden = onlyExport;
+      if (onlyExport && st.tab === 'settings') st.tab = 'questions';
+    }
     $('#set-name').value = bank.name;
     $('#set-category').value = bank.category || '';
     $('#set-desc').value = bank.desc || '';

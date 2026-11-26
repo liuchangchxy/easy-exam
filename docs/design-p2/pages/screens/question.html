@@ -351,21 +351,6 @@
             </div>
           </div>
 
-          <div class="rail-block">
-            <h2 class="rail-title">历史作答重判</h2>
-            <div class="notice info">
-              <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
-              <div class="notice-body">
-                <span class="notice-title">保存新版本后，历史作答仍按原版本判分</span><br>
-                判分口径依赖原版本快照，本期不提供对历史作答的重新判分。
-              </div>
-            </div>
-            <div class="od-row wrap mt-3">
-              <button type="button" class="btn btn-sm btn-quiet" disabled aria-describedby="rejudge-reason">重判历史作答</button>
-            </div>
-            <p class="rail-hint" id="rejudge-reason" role="status">入口保留但不开放：本期不做批量重判。</p>
-          </div>
-
           <div class="rail-block" id="exam-ref-block" hidden>
             <h2 class="rail-title">模考引用</h2>
             <div class="notice info">
@@ -643,7 +628,7 @@
       <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
       <div class="notice-body">
         <span class="notice-title">保存后会生成新版本</span><br>
-        历史作答与成绩报告仍按原版本判分，不会被改写；原版本保留在版本历史里可回看。本期不提供对历史作答的重新判分。
+        历史作答与成绩报告仍按原版本判分，不会被改写；原版本保留在版本历史里可回看，可以随时对照。
       </div>
     </div>
     <p class="drawer-note">题干、题型、难度与标签会立即写入共享数据；版本号 +1。</p>
@@ -774,7 +759,7 @@
    · 编辑与版本生成走抽屉（FN-112）；版本历史走抽屉（FN-114）
    · 冲突：保存被拒绝 + 「查看我的版本 / 使用对方版本」（FN-115），不自动覆盖
    · 单题归档 / 恢复（FN-117），结果按 CR-27 口径「成功 X · 无须变更 Y」
-   · 历史作答重判本期不提供（FN-113）：入口保留、禁用、原因可读
+   · 历史作答重判本期不提供（FN-113）：产品界面不再呈现该入口；「报告按题目版本判分、永久不可变」的事实由版本历史承载（CR-25 / BR-109）
    · 不因进行中模考锁定任何内容（CR-26），只在归档确认里给引用场数提示
    ========================================================================== */
 (function () {
@@ -984,11 +969,6 @@
       ? ('共 ' + (hist.length + 1) + ' 个版本；历史作答绑定原版本，切换版本不会改写成绩报告。')
       : '题目内容变更会生成新版本，历史作答绑定原版本。';
     $('#ver-conflict-flag').hidden = !conflict;
-
-    /* 历史作答重判：入口保留、禁用、原因可读（FN-113） */
-    $('#rejudge-reason').textContent = S.can('question.edit')
-      ? '入口保留但不开放：判分口径依赖原版本快照，本期不做批量重判。'
-      : '你是这个题库的成员：可以浏览与练习，没有重判入口。';
 
     /* 模考引用：只作提示，不锁定（CR-26） */
     var exams = S.sessions('exam').filter(function (s) { return s.bankId === current.bankId; });

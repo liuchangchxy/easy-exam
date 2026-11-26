@@ -852,20 +852,25 @@
   }
   function menuOf(b) {
     var canEdit = S.can('bank.edit') && !b.shared;
-    var canArch = S.can('bank.archive') && !b.shared;
-    var canDel = S.can('bank.archive') && !b.shared && b.count === 0;
+    var archRelevant = S.relevant('bank.archive');
+    var canArch = archRelevant && S.can('bank.archive') && !b.shared;
+    var canDel = archRelevant && S.can('bank.archive') && !b.shared && b.count === 0;
     var delReason = b.shared ? '他人共享的题库不能删除'
       : (b.count > 0 ? '题库还有 ' + b.count + ' 题，不能物理删除；请改用「归档」' : '');
     var expReason = b.count === 0 ? '题库还没有题目，不能导出' : '';
-    return '<span class="menu-wrap">' +
+    /* CR-12 两向规则：编辑资料对所有人相关（成员看不到→禁用+原因）；归档 / 物理删除
+       只与所有者、编辑者相关，成员与只读压根看不到这两项，不渲染而非置灰。 */
+    var html = '<span class="menu-wrap">' +
       '<button type="button" class="icon-btn sm" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="更多操作 ' + esc(b.name) + '">' + icon('more') + '</button>' +
       '<div class="menu" role="menu" hidden>' +
         '<button type="button" class="menu-item" role="menuitem" data-act="edit" data-id="' + b.id + '"' + (canEdit ? '' : ' disabled title="' + esc(reasonFor(b, 'bank.edit')) + '"') + '>' + icon('edit') + '编辑资料</button>' +
-        '<button type="button" class="menu-item" role="menuitem" data-act="export" data-id="' + b.id + '"' + (expReason ? ' disabled title="' + esc(expReason) + '"' : '') + '>' + icon('export') + '导出…</button>' +
-        '<div class="menu-sep" role="separator"></div>' +
+        '<button type="button" class="menu-item" role="menuitem" data-act="export" data-id="' + b.id + '"' + (expReason ? ' disabled title="' + esc(expReason) + '"' : '') + '>' + icon('export') + '导出…</button>';
+    if (archRelevant) {
+      html += '<div class="menu-sep" role="separator"></div>' +
         '<button type="button" class="menu-item is-danger" role="menuitem" data-act="archive" data-id="' + b.id + '"' + (canArch ? '' : ' disabled title="' + esc(reasonFor(b, 'bank.archive')) + '"') + '>' + icon('archive') + '归档题库</button>' +
-        '<button type="button" class="menu-item is-danger" role="menuitem" data-act="delete" data-id="' + b.id + '"' + (canDel ? '' : ' disabled title="' + esc(delReason || S.denyReason('bank.archive')) + '"') + '>' + icon('trash') + '删除题库（空库）</button>' +
-      '</div></span>';
+        '<button type="button" class="menu-item is-danger" role="menuitem" data-act="delete" data-id="' + b.id + '"' + (canDel ? '' : ' disabled title="' + esc(delReason || S.denyReason('bank.archive')) + '"') + '>' + icon('trash') + '删除题库（空库）</button>';
+    }
+    return html + '</div></span>';
   }
   function liveRow(b) {
     var why = practiceReason(b);
@@ -885,13 +890,17 @@
       '</span></div>';
   }
   function archivedRow(b) {
+    var archRelevant = S.relevant('bank.archive');
     return '<div class="list-row static">' +
       '<span class="list-main"><span class="list-title">' + esc(b.name) + ' <span class="tag warn">已归档</span></span>' +
       '<span class="list-meta"><span>' + esc(b.category || '默认分类') + '</span><span>共 ' + b.count + ' 题</span></span></span>' +
       '<span class="list-side">' +
-      '<button type="button" class="btn btn-sm" data-act="restore" data-id="' + b.id + '"' +
-        (S.can('bank.archive') && !b.shared ? '' : ' disabled title="' + esc(reasonFor(b, 'bank.archive')) + '"') + '>' +
-        icon('restore') + '恢复</button></span></div>';
+      (archRelevant
+        ? '<button type="button" class="btn btn-sm" data-act="restore" data-id="' + b.id + '"' +
+          (S.can('bank.archive') && !b.shared ? '' : ' disabled title="' + esc(reasonFor(b, 'bank.archive')) + '"') + '>' +
+          icon('restore') + '恢复</button>'
+        : '') +
+      '</span></div>';
   }
   function emptyBlock(title, desc, withCreate) {
     return '<div class="empty"><span class="empty-mark">' + icon('library') + '</span>' +
@@ -916,7 +925,11 @@
 
     el.navBank.textContent = String(live.length);
     el.navBank.hidden = live.length === 0;
-    el.sideDue.textContent = String(S.reviewQueue().length);
+    /* 与侧栏「复习」角标、复习页「待复习」页签、今天页「到期复习」同一口径：
+       CR-05 可执行复习集合（到期 ∧ 未斩杀 ∧ 未归档 ∧ 有访问权）。
+       原来这里用 reviewQueue().length 把已斩杀行也算进「今日待复习」，
+       同一标签在题库页显示 8、在今天页显示 5。 */
+    el.sideDue.textContent = String(S.executableReview().length);
     el.sideSessions.textContent = String(S.sessions().length);
     el.sub.textContent = live.length === 0 ? '还没有可访问的题库'
       : (live.length + ' 个在用题库' + (archived.length ? ' · 已归档 ' + archived.length + ' 个' : ''));
@@ -971,6 +984,9 @@
       el.sharedNote.hidden = !(st.scope === 'shared' && sharedAll.length > 0);
       el.owned.hidden = st.scope !== 'mine' || ownedAll.length === 0;
     }
+    /* 批量归档同样遵循两向规则：归档只与所有者、编辑者相关，成员与只读看不到该按钮 */
+    var archBulk = $('#bank-bulk [data-bulk="archive"]');
+    if (archBulk) archBulk.hidden = !S.relevant('bank.archive');
     syncSelection();
     bindRows();
   }

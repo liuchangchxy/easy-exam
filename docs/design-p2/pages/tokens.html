@@ -110,7 +110,7 @@
 .b1 { width: var(--sp-1); }  .b2 { width: var(--sp-2); }  .b3 { width: var(--sp-3); }  .b4 { width: var(--sp-4); }
 .b5 { width: var(--sp-5); }  .b6 { width: var(--sp-6); }  .b7 { width: var(--sp-7); }  .b8 { width: var(--sp-8); }
 .b9 { width: var(--sp-9); }  .b10 { width: var(--sp-10); }
-/* 布局比例：以 --d-max-wide 1320px 为满尺 */
+/* 布局比例：以统一纸面 --d-max 1120px 为满尺 */
 .lg1 { width: 17.9%; } .lg2 { width: 4.2%; } .lg3 { width: 4.8%; }
 .lg4 { width: 56.4%; } .lg5 { width: 84.8%; } .lg6 { width: 100%; }
 /* 断点比例：以 1440px 为满尺 */
@@ -593,7 +593,7 @@
         <h2>布局</h2>
         <span class="tsec-en">Layout Scales</span>
       </div>
-      <p class="tsec-desc">六个布局尺度令牌决定外壳与内容区的几何。比例条以 <span class="tk">--d-max-wide</span>（1320px）为满尺，条长即真实占比。</p>
+      <p class="tsec-desc">六个布局尺度令牌决定外壳与内容区的几何。比例条以统一纸面 <span class="tk">--d-max</span>（1120px）为满尺，条长即真实占比。</p>
 
       <div class="lay-list">
         <div class="lay-row">
@@ -627,10 +627,10 @@
           <span class="lay-use">页面内容最大宽（= --d-max），常规屏幕封顶值</span>
         </div>
         <div class="lay-row">
-          <span class="lay-tok">--d-max-wide</span>
+          <span class="lay-tok">--d-max</span>
           <span class="lay-bar lg6"></span>
-          <span class="lay-val">1320px</span>
-          <span class="lay-use">宽页最大宽：首页、模考中心等宽幅屏幕</span>
+          <span class="lay-val">1120px</span>
+          <span class="lay-use">唯一纸面宽度：全产品普通页面共用同一张纸，功能差异在纸面内部用排版解决</span>
         </div>
       </div>
       <p class="tsec-note">正文行宽另有 <span class="tk">--measure: 68ch</span> 作为度量上限；左右轨宽 <span class="tk">--rail-settings: 184px</span> / <span class="tk">--rail-exam: 232px</span> 供设置页与模考 runner 使用。</p>
@@ -678,7 +678,7 @@
             <tr>
               <td data-label="断点" class="mono">1440</td>
               <td data-label="令牌"><span class="tk">--bp-max</span></td>
-              <td data-label="布局行为">内容最大宽度：--page-w 1120 / --d-max-wide 1320 封顶，两侧留白，内容不再随窗口拉伸</td>
+              <td data-label="布局行为">内容最大宽度：统一纸面 1120 封顶，两侧留白，内容不再随窗口拉伸</td>
               <td data-label="比例"><span class="bar bp5"></span></td>
             </tr>
           </tbody>

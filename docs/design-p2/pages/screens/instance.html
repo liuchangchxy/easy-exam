@@ -187,7 +187,7 @@
           <div class="empty">
             <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg></div>
             <p class="empty-title">需要管理员权限</p>
-            <p class="empty-desc">实例管理只对实例管理员开放。用管理员账号登录后重试，或返回设置。</p>
+            <p class="empty-desc" id="inst-403-desc">实例管理只对实例管理员开放。用管理员账号登录后重试，或返回设置。</p>
             <div class="empty-actions">
               <a class="btn btn-primary" href="settings.html">返回设置</a>
               <button class="btn btn-quiet" type="button" data-back-source>返回来源页</button>
@@ -1116,11 +1116,12 @@
     });
 
     /* ---------- 权限门：实例角色只由 instanceRole 决定，与题库角色无关（CR-11）----------
-       普通用户在设置页看不到实例管理入口；直达 URL 由守卫整页拒绝。
+       普通用户在设置页看不到实例管理入口（relevant('instance.manage') 为假，入口不渲染）；
+       直达 URL 由守卫整页拒绝——看不到，不是禁用。
        ?denied=1 供设计复查强制呈现这个整页 403 变体。 */
     var S = window.eeStore;
     var forced = new URLSearchParams(location.search).get('denied') === '1';
-    function isAdmin() { return S && S.isInstanceAdmin ? S.isInstanceAdmin() : true; }
+    function isAdmin() { return S && S.relevant ? S.relevant('instance.manage') : (S && S.isInstanceAdmin ? S.isInstanceAdmin() : true); }
     function syncRoleGate() {
       var denied = forced || !isAdmin();
       var body = document.getElementById('inst-body');
@@ -1131,7 +1132,8 @@
       if (body) body.hidden = denied;
       if (deny) deny.hidden = !denied;
       if (me && S && S.user) me.textContent = S.user();
-      if (roleName) roleName.textContent = isAdmin() ? '管理员' : '普通用户';
+      /* 身份行与整页状态保持一致：被拒时也报「普通用户」，不自相矛盾 */
+      if (roleName) roleName.textContent = (!denied && isAdmin()) ? '管理员' : '普通用户';
       if (desc && denied) {
         var reason = (S && S.denyReason) ? S.denyReason('instance.manage') : '';
         desc.textContent = (reason ? reason + '。' : '实例管理只对实例管理员开放。') + '用管理员账号登录后重试，或返回设置。';

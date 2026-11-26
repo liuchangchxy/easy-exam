@@ -76,9 +76,40 @@
           { user: 'reviewer_02', role: 'MEMBER' }
         ] }
       ],
-      /* 已交卷报告：回看入口的数据源 */
+      /* 已交卷报告：回看入口的数据源。一份完整报告自带逐题明细（BR-109：判分版本快照
+         随作答记录落库），所以归档回看与交卷当次看到的是同一份内容。 */
       reports: [
-        { id: 'r1', kind: 'exam', bankId: 'b_rk', title: '模考 · 系统集成项目管理工程师', score: 78, correct: 8, total: 10, at: '2026-11-21 09:40' }
+        { id: 'r1', kind: 'exam', bankId: 'b_rk', title: '模考 · 系统集成项目管理工程师', at: '2026-11-21 09:40',
+          score: 9, full: 14, rate: 64, accObj: 80, answered: 5, objTotal: 6, total: 6, correct: 4, ungraded: 0,
+          minutes: 96, wall: 101, via: 'manual',
+          items: [
+            { qid: '3F9A1C02', bankId: 'b_rk', type: '单选题', answered: true, ratio: 1, correctness: 'CORRECT',
+              stem: '每周一学校开展直播课程，在直播中实时回复学生问题属于（ ）',
+              mine: 'A', answer: 'A', explain: '直播中实时回复学生问题，信息按需推送、学生自行获取，属于拉式沟通。',
+              rating: '良好', ratingDue: '12 月 4 日', ver: 'v1', verAt: '2026-11-10 08:30' },
+            { qid: '7B21E4D9', bankId: 'b_rk', type: '单选题', answered: true, ratio: 1, correctness: 'CORRECT',
+              stem: 'OSI 的（ ）不适合提供相应的安全服务。',
+              mine: 'B', answer: 'B', explain: '传输层、网络层、应用层都可以提供相应安全服务，会话层不适合。',
+              rating: '一般', ratingDue: '11 月 30 日', ver: 'v2', verAt: '2026-11-12 10:05' },
+            { qid: 'A05C8F31', bankId: 'b_rk', type: '单选题', answered: true, ratio: 1, correctness: 'CORRECT',
+              stem: '以下不属于“临时性”的是（ ）',
+              mine: 'D', answer: 'D', explain: '“结束阶段”是项目阶段名称，不属于临时性这一特征。',
+              rating: '良好', ratingDue: '12 月 6 日', ver: 'v1', verAt: '2026-11-10 08:30' },
+            { qid: 'E4D72B60', bankId: 'b_rk', type: '单选题', answered: true, ratio: 0, correctness: 'INCORRECT',
+              stem: '（ ）按照业务功能聚合性进行应用规划，建设与应用组件对应的应用系统，实现专业化发展。',
+              mine: 'B', answer: 'A', explain: '按业务功能聚合性进行应用规划，体现的是功能专业化原则。',
+              rating: '重来', ratingDue: '11 月 27 日', ver: 'v1', verAt: '2026-11-10 08:30' },
+            { qid: 'q_rk_09', bankId: 'b_rk', type: '多选题', answered: true, ratio: 1, correctness: 'CORRECT', multi: true,
+              stem: '以下属于项目临时性特征的有（ ）。',
+              mine: 'A · B · D', answer: 'A · B · D',
+              explain: '临时性的特征是：有明确的开始时间和结束时间、可交付成果在项目结束后依然存在、独特性；「结束阶段」是阶段名称，不属于特征。',
+              rating: '一般', ratingDue: '12 月 1 日', ver: 'v2', verAt: '2026-11-15 19:02' },
+            { qid: 'q_rk_10', bankId: 'b_rk', type: '多选题', answered: false, ratio: null, correctness: 'BLANK', multi: true,
+              stem: '关于项目沟通管理，下列说法正确的有（ ）。',
+              mine: '未作答', answer: 'A · B · D',
+              explain: '沟通管理计划描述干系人的信息需求与分发方式；会议管理属于执行沟通；沟通需求分析是规划沟通的输入。C 项把交互式、推式、拉式多种沟通模型说成一种，错误。',
+              rating: null, ver: 'v3', verAt: '2026-11-18 09:24' }
+          ] }
       ],
       /* 复习合并队列：到期 / 错题 / 薄弱 / 斩杀恢复 合并为一行一题 */
       reviewQueue: [
@@ -165,6 +196,8 @@
     },
     applySettings: applySettings,
     setRole: function (r) { state.role = r; commit({ type: 'role' }); },
+    /* 实例角色与题库角色互不推导（P1 §5.1）：切实例面才能验证「普通用户看不到实例管理入口」 */
+    setInstanceRole: function (r) { state.instanceRole = (r === 'admin') ? 'admin' : 'user'; commit({ type: 'instanceRole' }); },
     login: function (user) { state.session.loggedIn = true; if (user) state.session.user = user; commit({ type: 'login' }); },
     logout: function () { state.session.loggedIn = false; commit({ type: 'logout' }); },
 
@@ -360,7 +393,7 @@
       if (!s) return null;
       state.sessions = state.sessions.filter(function (x) { return x.id !== id; });
       if (report) {
-        state.reports.unshift(Object.assign({ id: uid('r'), at: nowTime(), kind: s.kind, bankId: s.bankId }, report));
+        state.reports.unshift(Object.assign({ id: uid('r'), at: nowStamp(), kind: s.kind, bankId: s.bankId }, report));
       }
       commit({ type: 'session:finish', id: id });
       return s;
@@ -455,14 +488,47 @@
       var allow = table[action];
       return !allow || allow.indexOf(r) >= 0;
     },
+
+    /* ---- CR-12：权限改变能力，不改变结构；表达方式按「相关性」分流 ----
+       与当前用户相关、但此刻不可用的控件 → 禁用并解释（置灰 + 可读原因）。
+       与当前用户完全无关的管理入口 → 不渲染。
+       判据：这个入口说的事，对这个用户有意义吗。有意义但不能做 → 禁用；
+       没意义 → 不出现。不得用英文 banner 或错误码当唯一反馈。
+
+       只对「库与实例的管理权」判定相关性：普通成员没有归档/删除一个自己只读的库
+       的理由，普通用户也没有进入实例管理的理由。内容操作（编辑题目、批量维护、
+       导入）与成员名单对所有成员都有意义，一律禁用并解释而不是隐藏。 */
+    relevant: function (action) {
+      if (action === 'instance.manage') return state.instanceRole === 'admin';
+      if (action === 'bank.archive' || action === 'bank.delete' || action === 'bank.settings') {
+        return state.role === 'OWNER' || state.role === 'EDITOR';
+      }
+      return true;
+    },
     isInstanceAdmin: function () { return state.instanceRole === 'admin'; },
     instanceRole: function () { return state.instanceRole; },
     denyReason: function (action) {
       if (api.can(action)) return '';
+      var ro = state.role === 'VIEWER';
       if (action === 'instance.manage') return '只有实例管理员可以管理实例；实例管理员身份不会自动给你任何题库的访问权';
       if (action === 'member.manage') return '只有所有者可以管理成员';
-      if (action === 'bank.edit' || action === 'question.edit') return '你是成员，只能查看，不能修改';
-      if (action === 'bank.import') return '你不是管理员或编辑者，无法导入题目';
+      if (action === 'bank.create') return ro
+        ? '你是只读成员，不能新建题库；可以在别人共享给你的题库里练习，或让所有者给你编辑权限'
+        : '当前角色不能新建题库';
+      if (action === 'bank.edit') return ro
+        ? '你是只读成员，不能修改题库资料'
+        : '你是成员，只能查看，不能修改';
+      if (action === 'question.edit') return ro
+        ? '你是只读成员，不能编辑题目'
+        : '你是成员，只能查看，不能修改';
+      if (action === 'question.create' || action === 'question.archive') return ro
+        ? '你是只读成员，不能新增或归档题目'
+        : '你是成员，只能查看，不能新增或归档题目';
+      if (action === 'bank.archive') return '只有所有者可以归档或删除题库；编辑者与成员不能改动题库本身';
+      if (action === 'bank.settings') return '只有所有者可以改题库设置；编辑者与成员不能改动题库本身';
+      if (action === 'bank.import') return ro
+        ? '你是只读成员，无法导入题目'
+        : '你不是管理员或编辑者，无法导入题目';
       return '当前角色没有该操作权限';
     },
 
@@ -501,6 +567,11 @@
   function nowTime() {
     var d = new Date();
     return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+  /* 报告是永久记录，可能要隔很多天再回看，`at` 用完整日期时间
+     （与种子报告 r1 的 '2026-11-21 09:40' 同格式，避免归档报告顶栏只有时分） */
+  function nowStamp() {
+    return today() + ' ' + nowTime();
   }
 
   /* 另一页改了数据 → 本页跟上（file:// 下同源 storage 事件可用） */

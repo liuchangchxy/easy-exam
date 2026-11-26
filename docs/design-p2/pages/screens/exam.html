@@ -304,7 +304,7 @@
 
           <div class="q-meta"><span>第 12 题 · 共 12 题</span><span>问答题</span><span class="tag plain">主观题 · 不判分</span><span class="tag warn">待复查</span></div>
           <h1 class="q-stem">结合本项目，说明范围基准失控的主要原因，并给出纠正措施。</h1>
-          <label class="field">
+          <label class="field field-grow">
             <span class="label">你的作答（截止前保存，只读）</span>
             <textarea class="textarea" readonly>范围基准失控主要因为需求没有基线化……</textarea>
             <span class="hint">主观题保存作答与参考解析：作答状态「已作答」，判分状态「未判分」；不计入得分与客观题满分。</span>
@@ -398,7 +398,7 @@
 
           <div class="q-meta"><span>第 12 题 · 共 12 题</span><span>问答题</span><span class="tag plain">主观题 · 不判分</span><span class="tag warn">待复查</span></div>
           <h1 class="q-stem">结合本项目，说明范围基准失控的主要原因，并给出纠正措施。</h1>
-          <label class="field">
+          <label class="field field-grow">
             <span class="label">你的作答（截止前保存，只读）</span>
             <textarea class="textarea" readonly>范围基准失控主要因为需求没有基线化……</textarea>
             <span class="hint">主观题保存作答与参考解析：作答状态「已作答」，判分状态「未判分」；不计入得分与客观题满分。</span>
@@ -416,7 +416,7 @@
             </div>
           </div>
           <div class="rail-block">
-            <div class="rule-label">会话时间线（CR-31）</div>
+            <div class="rule-label">会话时间线</div>
             <div class="kv">
               <span class="kv-key">开考</span><span class="kv-val mono">22:14 前 120 分钟</span>
               <span class="kv-key">作答窗口</span><span class="kv-val mono">开考 → 22:14</span>
@@ -503,8 +503,7 @@
               <div class="report-count"><b>10</b><span>已答（含 1 题已作答·未判分）</span></div>
               <div class="report-count"><b>2</b><span>未答（含未作答的主观题）</span></div>
               <div class="report-count"><b>1</b><span>未判分（主观题，不计入得分与满分）</span></div>
-              <div class="report-count"><b>11 / 24</b><span>客观题得分 / 客观题满分</span></div>
-              <div class="report-count"><b>11 / 24</b><span>卷面总分 / 满分（主观题部分未判分，不计入）</span></div>
+              <div class="report-count"><b>11 / 24</b><span>客观题得分 / 客观题满分（主观题未判分不计入，卷面总分同此）</span></div>
             </div>
 
             <div class="kv ee-mt-4">
@@ -634,7 +633,7 @@
           </div>
           <div class="rail-block">
             <div class="rule-label">判分依据</div>
-            <p class="rail-note">本报告按交卷时保存的<strong>题目版本 v3</strong>判分。答案与解析不会因为重新组卷或后续改题而改变；本期不提供历史重判。</p>
+            <p class="rail-note">本报告按交卷时保存的<strong>题目版本 v3</strong>判分。答案与解析不会因为重新组卷或后续改题而改变。</p>
             <div class="notice info">
               <svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>
               <div class="notice-body">
@@ -1380,11 +1379,15 @@ window.EEexam = (function () {
     document.getElementById('ex-stem').textContent = q.stem;
 
     if (!q.options.length) {
-      document.getElementById('ex-options').innerHTML =
+      /* 问答题：作答区随栏高生长（.field-grow），不在纸面尾部留空洞 */
+      var optHost = document.getElementById('ex-options');
+      optHost.classList.add('field-grow');
+      optHost.innerHTML =
         '<label class="field"><span class="label">你的作答</span>' +
         '<textarea class="textarea" placeholder="输入文字作答；交卷后显示参考解析，不自动判分"' + (locked ? ' disabled' : ' oninput="EEexam.typeAnswer(this.value)"') + '>' + esc(R.answers[R.index] || '') + '</textarea>' +
         '<span class="hint">主观题保存作答与参考解析：作答状态「已作答」，判分状态「未判分」。</span></label>';
     } else {
+      document.getElementById('ex-options').classList.remove('field-grow');
       var opts = '';
       q.options.forEach(function (o) {
         var on = q.type === '多选题'

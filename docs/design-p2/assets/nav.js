@@ -127,7 +127,21 @@
   window.addEventListener('storage', function (e) {
     if (e.key && e.key.indexOf('eeStore') === 0) setTimeout(counts, 30);
   });
-  window.eeNav = { routes: ROUTES, refresh: function () { run(); } };
+  window.eeNav = {
+    routes: ROUTES,
+    /* CR-12 两向规则：与当前用户完全无关的管理入口不进入命令面板。
+       实例管理只对实例管理员有意义；题库面的管理操作由各产品屏按 relevant() 判定。 */
+    visibleRoutes: function () {
+      var out = {};
+      var store = window.eeStore;
+      Object.keys(ROUTES).forEach(function (label) {
+        if ((label === '实例管理' || label === 'Instance') && store && !store.relevant('instance.manage')) return;
+        out[label] = ROUTES[label];
+      });
+      return out;
+    },
+    refresh: function () { run(); }
+  };
 
   /* ---- 滚动位置：离开页面时记住，返回同一页面时回到原处 ----
      语义：只有「这个页面本轮已经看过」才恢复；第一次进入停在被引导的位置。

@@ -177,7 +177,7 @@
           <section class="report-block" aria-labelledby="rp-title">
             <div class="report-head">
               <div>
-                <p class="rule-label">练习报告</p>
+                <p class="rule-label">练习报告 · 交卷当时的快照</p>
                 <h2 class="report-title" id="rp-title">报告已归档，不可变更</h2>
               </div>
               <span class="tag ok"><svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg>已交卷</span>
@@ -185,7 +185,7 @@
             <div class="report-hero">
               <div>
                 <div class="report-score" id="rp-score">—</div>
-                <p class="report-score-cap">考试得分率</p>
+                <p class="report-score-cap">客观题得分</p>
               </div>
               <div class="stat-row" style="flex:1 1 auto" id="rp-stats"></div>
             </div>
@@ -196,6 +196,32 @@
               <a class="btn btn-quiet" href="diagnosis.html">学习档案</a>
               <a class="btn btn-primary" href="home.html">再练一组</a>
             </div>
+          </section>
+
+          <!-- 历史快照与当前题目版本是两件事：先讲清楚一次，再在每题上给入口 -->
+          <div class="notice info ee-mt-5">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+            <div class="notice-body">
+              <span class="notice-title">这是交卷当时的快照</span>
+              报告按交卷时的题目版本判分，落库后不可变更。下面每题的题干、标准答案、判定与解析都是当时的版本；题目后来被改过，报告不会跟着变。
+              想知道题目现在长什么样，展开任意一题，用「查看该题当前版本」自己对照。
+            </div>
+          </div>
+
+          <section class="ee-mt-5" aria-labelledby="rp-detail-title">
+            <div class="section-head">
+              <h2 class="section-title" id="rp-detail-title">逐题明细</h2>
+              <span class="section-note">题目 · 我的作答 · 判定 · 解析 · 评级 · 判分版本</span>
+            </div>
+            <div class="rep-list" id="rp-items"></div>
+            <p class="ee-rule" data-spec>
+              <b>逐题明细的落库点</b>：交卷时随报告一起写入题目快照（题干、我的作答、判定、官方解析、评级、<span class="mono">question_version_id</span>），
+              所以历史报告永久不可变——题目之后被改，报告里的题干与判分依据都不变。字段与渲染逻辑和交卷当次报告（「已交卷报告」态）完全一致，只多出判分版本条与「查看该题当前版本」入口。
+              <b>P3 收敛点</b>：改由统一数据源按 <span class="mono">question_version_id</span> 取快照，屏幕侧字段不变。
+            </p>
+            <p class="ee-rule" data-spec>
+              <b>老报告没有逐题明细时</b>：与模考域的「早期报告」同一处理——明说这一场没记逐题快照，不用演示数据冒充用户的作答。
+            </p>
           </section>
         </article>
         <aside class="focus-rail" aria-label="报告辅助">
@@ -716,13 +742,8 @@
           </section>
 
           <section class="ee-mt-5" aria-labelledby="rep-detail-title">
-            <div class="section-head"><h2 class="section-title" id="rep-detail-title">逐题明细</h2><span class="section-note">答案、解析与评级都可查</span></div>
-            <div class="dtable-wrap">
-              <table class="dtable">
-                <thead><tr><th>#</th><th>题型</th><th>作答状态</th><th>判分状态</th><th>得分</th><th>评级</th></tr></thead>
-                <tbody id="report-rows"></tbody>
-              </table>
-            </div>
+            <div class="section-head"><h2 class="section-title" id="rep-detail-title">逐题明细</h2><span class="section-note">展开看题目、我的作答、判定、解析与评级</span></div>
+            <div class="rep-list" id="report-items"></div>
             <p class="ee-rule">
               得分只看客观题：没作答的客观题按 0 分计分，但仍然占满分；主观题显示「已作答 · 未判分」，不计入总分，也不会被算成未作答。
               两个比例的分母不一样：考试得分率按满分算，已答客观题正确率只按已经答过的客观题算。
@@ -1127,6 +1148,7 @@
 <script src="../../assets/i18n.js"></script>
 <script src="../../assets/nav.js"></script>
 <script src="../../assets/spec-boot.js"></script>
+<script src="../../assets/report.js"></script>
 <script>
 /* ==========================================================================
    练习会话 runner
@@ -1285,6 +1307,7 @@ window.EErun = (function () {
 
   /* ---------- 初始化 ---------- */
   function init() {
+    bindRepLists();
     if (openPersistedReport()) return;
     var s = loadSession();
     if (s && s.kind === 'exam') {
@@ -1320,7 +1343,10 @@ window.EErun = (function () {
   }
 
   /* ---------- 已归档报告（?rid=）：学习档案的「回看」落点 ----------
-     持久化的报告只保存汇总计数，逐题明细与评级不重建——缺的就不显示，不拿猜测填。 */
+     报告永久不可变：汇总计数与逐题明细都按落库当时的快照呈现，不做任何重算。
+     逐题明细与判分版本在交卷时随报告一起写入（rep.items / question_version_id 快照），
+     P3 改由统一数据源取快照，屏幕侧字段与呈现不变；老报告没有明细时明说没有，
+     不拿演示数据冒充用户的作答。 */
   function openPersistedReport() {
     var rid = new URLSearchParams(location.search).get('rid');
     if (!rid) return false;
@@ -1328,30 +1354,26 @@ window.EErun = (function () {
     S.reports().forEach(function (r) { if (r.id === rid) rep = r; });
     if (!rep) { showNone(); return true; }
     if (rep.kind === 'exam') { location.replace('exams.html'); return true; }
-    var total = rep.total || 0;
-    var answered = rep.answered == null ? total : rep.answered;
-    var correct = rep.correct || 0;
-    var notFull = Math.max(0, answered - correct);
-    var unanswered = Math.max(0, total - answered);
     document.getElementById('run-live').hidden = true;
     document.getElementById('run-none').hidden = true;
     document.getElementById('run-report').hidden = false;
-    document.getElementById('rp-at').textContent = '交卷于 ' + (rep.at || '—');
-    document.getElementById('rp-counter').textContent = answered + ' / ' + total;
-    document.getElementById('rp-score').textContent = (rep.score == null ? '—' : rep.score + '%');
-    document.getElementById('rp-stats').innerHTML =
-      '<div class="stat"><div class="stat-num">' + answered + '<span class="unit">/ ' + total + '</span></div><div class="stat-cap">已答</div></div>' +
-      '<div class="stat"><div class="stat-num">' + (rep.minutes == null ? '—' : rep.minutes) + '<span class="unit"> 分钟</span></div><div class="stat-cap">用时</div></div>' +
-      '<div class="stat"><div class="stat-num">' + correct + '</div><div class="stat-cap">答对（客观题）</div></div>';
-    document.getElementById('rp-tags').innerHTML =
-      '<span class="tag ok">答对 ' + correct + '</span>' +
-      '<span class="tag warn">部分正确或错误 ' + notFull + '</span>' +
-      '<span class="tag">未答 ' + unanswered + '</span>';
-    document.getElementById('rp-note').textContent =
-      '归档报告只保留汇总计数：逐题明细、评级与 AI 解释不随报告重建，交卷当次的结果页里可以逐题查看。报告按题目版本判分，落库后不可变。';
-    document.getElementById('rp-progress-num').textContent = answered + ' / ' + total;
-    document.getElementById('rp-progress-fill').style.width = (total ? Math.round(answered / total * 100) : 0) + '%';
-    document.getElementById('rp-bank-note').textContent = '本次练习 · ' + bankName(rep.bankId);
+    /* 逐题明细必须是这一场自己的快照。落库时没记明细的老报告（CR-25：不可重算），
+       与模考域的「早期报告」同一处理：明说没有明细，不拿演示数据冒充用户的作答。 */
+    var hasItems = !!(rep.items && rep.items.length);
+    var host = document.getElementById('rp-items');
+    fillReport({
+      p: 'rp', rep: rep,
+      items: [],
+      bank: bankName(rep.bankId), bankId: rep.bankId,
+      at: rep.at, withVer: true, sheet: false
+    });
+    /* fillReport 会按 cfg.items 重写列表容器，所以明细放在它之后渲染 */
+    host.innerHTML = hasItems
+      ? window.eeReport.itemsHtml(rep.items, true, { scope: 'rp', qPrefix: '', rPrefix: '' })
+      : '<div class="notice info"><svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg><div class="notice-body">这是一份早期交卷的练习报告：落库时没有记录逐题快照。报告一经落库即永久不可变、不重算，因此这一场没有逐题明细可回看；上面的汇总计数是当时记录下来的部分。</div></div>';
+    window.eeReport.bind(host);
+    var title = document.getElementById('rp-title');
+    if (title) title.textContent = rep.title || '练习报告';
     syncToastInset();
     return true;
   }
@@ -1483,23 +1505,7 @@ window.EErun = (function () {
     document.getElementById('sheet-total').textContent = String(total);
 
     /* 底栏 */
-    document.getElementById('run-prev').disabled = R.index === 0;
-    var submit = document.getElementById('run-submit');
-    var reason = document.getElementById('run-submit-reason');
-    if (R.submitted) {
-      submit.disabled = true;
-      submit.textContent = '已提交';
-      reason.textContent = '本题已提交，判定与评级在下方反馈里';
-    } else {
-      submit.disabled = !hasAnswer();
-      submit.textContent = '提交答案';
-      reason.textContent = hasAnswer() ? '已作答，按 Enter 也可提交' : (q.subjective ? '请先写下答案' : '请先选择一个答案');
-    }
-    var skip = document.getElementById('run-skip');
-    skip.disabled = false;
-    skip.textContent = R.submitted ? (R.index + 1 >= total ? '交卷' : '下一题') : '跳过';
-    skip.classList.toggle('btn-primary', R.submitted);
-    skip.classList.toggle('btn-quiet', !R.submitted);
+    paintFoot(q);
 
     /* 顶栏标记态 */
     var flagBtn = document.getElementById('run-flag-btn');
@@ -1528,6 +1534,27 @@ window.EErun = (function () {
     if (q.subjective) return false;
     if (Array.isArray(q.answer)) return Array.isArray(R.selected) ? R.selected.indexOf(key) > -1 : R.selected === key;
     return R.selected === key;
+  }
+
+  /* 底栏提交态：主观题边写边刷新，不能等一次 render（会重建输入框、丢光标） */
+  function paintFoot(q) {
+    document.getElementById('run-prev').disabled = R.index === 0;
+    var submit = document.getElementById('run-submit');
+    var reason = document.getElementById('run-submit-reason');
+    if (R.submitted) {
+      submit.disabled = true;
+      submit.textContent = '已提交';
+      reason.textContent = '本题已提交，判定与评级在下方反馈里';
+    } else {
+      submit.disabled = !hasAnswer();
+      submit.textContent = '提交答案';
+      reason.textContent = hasAnswer() ? '已作答，按 Enter 也可提交' : (q.subjective ? '请先写下答案' : '请先选择一个答案');
+    }
+    var skip = document.getElementById('run-skip');
+    skip.disabled = false;
+    skip.textContent = R.submitted ? (R.index + 1 >= R.paper.length ? '交卷' : '下一题') : '跳过';
+    skip.classList.toggle('btn-primary', R.submitted);
+    skip.classList.toggle('btn-quiet', !R.submitted);
   }
 
   /* ---------- 动作 ---------- */
@@ -1754,6 +1781,9 @@ window.EErun = (function () {
       answeredObj: answeredObj, answeredObjCorrect: answeredObjCorrect,
       minutes: Math.max(1, Math.round(R.elapsed / 60))
     };
+    /* 逐题明细随报告一起落库：题干、我的作答、判定、解析、评级与判分版本都是交卷当时的快照。
+       报告因此永久不可变——题目之后被改，报告里的题干与判分依据都不会跟着变（BR-109 / CR-25）。 */
+    report.items = R.paper.map(function (q, i) { return itemFromRunner(q, i); });
     S.finishSession(s.id, report);
     R.report = report;
     R.done = true;
@@ -1764,14 +1794,47 @@ window.EErun = (function () {
     eeToast('已交卷，报告已保存');
   }
   /* 演示报告：规格态里也要能看到完整的报告形态（真实交卷后用 R.report 覆盖） */
-  function demoRows() {
-    return [
-      { type: '单选题', subjective: false, answered: true, ratio: 1, rating: '一般' },
-      { type: '单选题', subjective: false, answered: false, ratio: 0, rating: '—' },
-      { type: '多选题', subjective: false, answered: true, ratio: 1 / 3, rating: '重来' },
-      { type: '简答题', subjective: true, answered: true, ratio: null, rating: '—' }
-    ];
-  }
+  var REPORT_DEMO = {
+    bank: '验收题库 1794570360969',
+    items: [
+      {
+        qid: '7B21E4D9', type: '单选题', subjective: false, answered: true, ratio: 1, correctness: 'CORRECT',
+        stem: 'OSI 的（ ）不适合提供相应的安全服务。',
+        mine: 'B', answer: 'B', explain: '传输层、网络层、应用层都可以提供相应安全服务，会话层不适合。',
+        rating: '一般', ratingDue: '12 月 1 日', ver: 'v2', verAt: '2026-11-12 10:05'
+      },
+      {
+        type: '多选题', subjective: false, answered: true, ratio: 1 / 3, correctness: 'PARTIAL', multi: true,
+        stem: '关于项目沟通管理，下列说法正确的有（ ）。',
+        mine: 'B · C', answer: 'A · B · D', missed: ['A', 'D'], extra: ['C'],
+        explain: '沟通管理计划描述干系人的信息需求与分发方式；会议管理属于执行沟通；沟通需求分析是规划沟通的输入。C 项把交互式、推式、拉式多种沟通模型说成一种，错误。',
+        rating: '重来', ratingDue: '11 月 27 日',
+        ver: 'v3', verAt: '2026-11-18 09:24', cur: 'v4', curAt: '2026-11-25 16:10',
+        curNote: 'D 项表述有调整，选项顺序也变了。'
+      },
+      {
+        qid: 'A05C8F31', type: '单选题', subjective: false, answered: true, ratio: 0, correctness: 'INCORRECT',
+        stem: '以下不属于“临时性”的是（ ）',
+        mine: 'B', answer: 'D', explain: '“结束阶段”是项目阶段名称，不属于临时性这一特征。',
+        rating: '重来', ratingDue: '11 月 27 日', ver: 'v1', verAt: '2026-11-10 08:30',
+        ai: { text: '题干问「不属于」。临时性的特征是：有明确的开始与结束、成果可长期存在、独特性；B 描述的正是临时性本身，D 是阶段名称。', src: '2026-11-24 22:20 · 模型 gpt-4o-mini · 联网：未开启' }
+      },
+      {
+        type: '简答题', subjective: true, answered: true, ratio: null, correctness: 'UNGRADED',
+        stem: '请简述项目范围基准的组成部分，并说明它与 WBS 的关系。',
+        mine: '范围基准由项目范围说明书、WBS 与 WBS 字典组成；WBS 是范围基准的核心，范围说明书为 WBS 提供高层级需求与边界，WBS 字典补充每个工作包的详细说明。',
+        answer: '主观题不自动判分',
+        explain: '范围基准 = 项目范围说明书 + WBS + WBS 字典。范围说明书是创建 WBS 的输入，WBS 字典是对 WBS 组件的说明；三者共同构成范围基准，作为变更与验收的对照基准。',
+        rating: null, ver: 'v2', verAt: '2026-11-15 19:02'
+      },
+      {
+        type: '单选题', subjective: false, answered: false, ratio: null, correctness: 'BLANK',
+        stem: '（ ）属于融合基础设施。',
+        mine: '未作答', answer: 'B', explain: '智能交通基础设施是典型的融合基础设施。',
+        rating: null, ver: 'v1', verAt: '2026-11-10 08:30'
+      }
+    ]
+  };
   function tally(rows) {
     var t = { correct: 0, partial: 0, wrong: 0, ungraded: 0, objScore: 0, objFull: 0, answered: 0, answeredObj: 0, answeredObjCorrect: 0 };
     rows.forEach(function (r) {
@@ -1791,60 +1854,114 @@ window.EErun = (function () {
     t.score = t.objFull ? Math.round(t.objScore / t.objFull * 100) : 0;
     return t;
   }
-  function renderReportWith(rep, rows, bank) {
-    var accRate = rep.answeredObj ? Math.round(rep.answeredObjCorrect / rep.answeredObj * 100) + '%' : '暂无数据';
-    document.getElementById('report-mode').textContent = (R.s && R.s.mode) || '顺序练习';
-    document.getElementById('report-counter').textContent = rep.answered + ' / ' + rep.total;
-    document.getElementById('report-score').textContent = (Math.round(rep.objScore * 10) / 10) + ' / ' + rep.objFull;
-    document.getElementById('report-stats').innerHTML =
-      '<div class="stat"><div class="stat-num">' + rep.score + '<span class="unit">%</span></div><div class="stat-cap">考试得分率（客观题得分 ÷ 客观题满分）</div></div>' +
+  REPORT_DEMO.rep = Object.assign(tally(REPORT_DEMO.items), {
+    title: '练习 · 顺序练习 · 验收题库 1794570360969', at: '2026-11-24 22:31', minutes: 6
+  });
+
+  /* ---------- 题目版本：判分所依据的版本 + 当前版本 ----------
+     真实数据随作答记录落库（question_version_id 快照），P3 回填；这里给示例值。 */
+  var VER_SNAPSHOT = {};
+  [
+    ['OSI 的（ ）不适合提供相应的安全服务。', { ver: 'v2', at: '2026-11-12 10:05' }],
+    ['关于项目沟通管理，下列说法正确的有（ ）。', { ver: 'v3', at: '2026-11-18 09:24', cur: 'v4', curAt: '2026-11-25 16:10', curNote: 'D 项表述有调整，选项顺序也变了。' }],
+    ['以下不属于“临时性”的是（ ）', { ver: 'v1', at: '2026-11-10 08:30' }],
+    ['请简述项目范围基准的组成部分，并说明它与 WBS 的关系。', { ver: 'v2', at: '2026-11-15 19:02' }],
+    ['（ ）属于融合基础设施。', { ver: 'v1', at: '2026-11-10 08:30' }],
+    ['每周一学校开展直播课程，在直播中实时回复学生问题属于（  ）', { ver: 'v1', at: '2026-11-10 08:30' }],
+    ['关于范围基准，以下说法不正确的是（）。', { ver: 'v3', at: '2026-11-20 11:41', cur: 'v4', curAt: '2026-11-26 09:12', curNote: 'B 项改为「范围基准包含工作包、规划包与控制账户」，原表述不严谨。' }],
+    ['当出现异常时软件需要有持续提供服务，属于（）。', { ver: 'v1', at: '2026-11-10 08:30' }]
+  ].forEach(function (p) { VER_SNAPSHOT[norm(p[0])] = p[1]; });
+  function verInfo(stem) {
+    return VER_SNAPSHOT[norm(stem)] || { ver: 'v1', at: '2026-11-10 08:30' };
+  }
+
+  /* ---------- 报告填充：交卷当次报告与历史归档报告共用 ----------
+     同一套字段、同一套呈现逻辑；历史报告只多出判分版本条（withVer）。
+     逐题明细的渲染与展开交互在 assets/report.js，与模考的归档报告共用。 */
+  function num(v, d) { var n = parseFloat(v); return isNaN(n) ? (d == null ? 0 : d) : n; }
+  function fillReport(cfg) {
+    var rep = cfg.rep;
+    function el(s) { return document.getElementById(cfg.p + '-' + s); }
+    var mode = el('mode');
+    if (mode) mode.textContent = cfg.mode || '顺序练习';
+    var at = el('at');
+    if (at) at.textContent = '交卷于 ' + (cfg.at || '—');
+    var counter = el('counter');
+    if (counter) counter.textContent = num(rep.answered) + ' / ' + num(rep.total);
+    var score = el('score');
+    if (score) {
+      var objScore = rep.objectiveScore != null ? rep.objectiveScore : rep.objScore;
+      var objFull = rep.objectiveFull != null ? rep.objectiveFull : rep.objFull;
+      score.textContent = (Math.round(num(objScore) * 10) / 10) + ' / ' + num(objFull);
+    }
+    var accRate = num(rep.answeredObj) ? Math.round(num(rep.answeredObjCorrect) / num(rep.answeredObj) * 100) + '%' : '暂无数据';
+    el('stats').innerHTML =
+      '<div class="stat"><div class="stat-num">' + num(rep.score) + '<span class="unit">%</span></div><div class="stat-cap">考试得分率（客观题得分 ÷ 客观题满分）</div></div>' +
       '<div class="stat"><div class="stat-num">' + accRate + '</div><div class="stat-cap">已答客观题正确率（分母：已答客观题）</div></div>' +
-      '<div class="stat"><div class="stat-num">' + rep.answered + '<span class="unit">/ ' + rep.total + '</span></div><div class="stat-cap">已答（含未判分）</div></div>' +
-      '<div class="stat"><div class="stat-num">' + (rep.minutes == null ? '—' : rep.minutes) + '<span class="unit"> 分钟</span></div><div class="stat-cap">用时</div></div>';
-    document.getElementById('report-tags').innerHTML =
-      '<span class="tag ok">正确 ' + rep.correct + '</span>' +
-      '<span class="tag warn">部分正确 ' + rep.partial + '</span>' +
-      '<span class="tag bad">错误 ' + rep.wrong + '</span>' +
-      '<span class="tag">未答 ' + rep.unanswered + '</span>' +
-      '<span class="tag plain">未判分 ' + rep.ungraded + '</span>';
-    document.getElementById('report-note').textContent = '答错的题已进入错题；标记为薄弱的题出现在复习队列。报告按题目版本判分，永久不可变。';
-    document.getElementById('report-progress-num').textContent = rep.answered + ' / ' + rep.total;
-    document.getElementById('report-progress-fill').style.width = (rep.total ? Math.round(rep.answered / rep.total * 100) : 0) + '%';
-    document.getElementById('report-bank-note').textContent = '本次练习 · ' + bank;
-    var html = '';
-    rows.forEach(function (r, i) {
-      var grading = r.subjective ? '未判分' : (r.answered ? '已判分' : '—');
-      var scoreTxt = r.subjective ? '不计入' : (r.answered ? Math.round(r.ratio * 100) + '%' : '0%');
-      html += '<tr>' +
-        '<td data-label="#" class="num">' + (i + 1) + '</td>' +
-        '<td data-label="题型">' + esc(r.type) + '</td>' +
-        '<td data-label="作答状态">' + (r.answered ? '已作答' : '未作答') + '</td>' +
-        '<td data-label="判分状态">' + grading + '</td>' +
-        '<td data-label="得分" class="num">' + scoreTxt + '</td>' +
-        '<td data-label="评级">' + (r.rating || '—') + '</td></tr>';
-    });
-    document.getElementById('report-rows').innerHTML = html;
-    var cells = '';
-    rows.forEach(function (r, i) {
-      cells += '<button type="button" class="sheet-cell' + (r.answered ? ' is-answered' : '') + '" disabled>' + (i + 1) + '</button>';
-    });
-    document.getElementById('report-sheet').innerHTML = cells;
+      '<div class="stat"><div class="stat-num">' + num(rep.answered) + '<span class="unit">/ ' + num(rep.total) + '</span></div><div class="stat-cap">已答（含未判分）</div></div>' +
+      '<div class="stat"><div class="stat-num">' + (rep.minutes == null ? '—' : num(rep.minutes)) + '<span class="unit"> 分钟</span></div><div class="stat-cap">用时</div></div>';
+    el('tags').innerHTML =
+      '<span class="tag ok">正确 ' + num(rep.correct) + '</span>' +
+      '<span class="tag warn">部分正确 ' + num(rep.partial) + '</span>' +
+      '<span class="tag bad">错误 ' + num(rep.wrong) + '</span>' +
+      '<span class="tag">未答 ' + num(rep.unanswered) + '</span>' +
+      '<span class="tag plain">未判分 ' + num(rep.ungraded) + '</span>';
+    el('note').textContent = '答错的题已进入错题；标记为薄弱的题出现在复习队列。报告按交卷时的题目版本判分，永久不可变。';
+    el('progress-num').textContent = num(rep.answered) + ' / ' + num(rep.total);
+    el('progress-fill').style.width = (num(rep.total) ? Math.round(num(rep.answered) / num(rep.total) * 100) : 0) + '%';
+    el('bank-note').textContent = '本次练习 · ' + cfg.bank;
+    el('items').innerHTML = cfg.items.map(function (it, i) { return repItemHtml(it, i, cfg.withVer, cfg.bankId); }).join('');
+    var sheet = el('sheet');
+    if (cfg.sheet && sheet) {
+      var cells = '';
+      cfg.items.forEach(function (it, i) {
+        cells += '<button type="button" class="sheet-cell' + (it.answered ? ' is-answered' : '') + '" disabled>' + (i + 1) + '</button>';
+      });
+      sheet.innerHTML = cells;
+    }
     syncToastInset();
   }
+  /* 逐题明细项：交卷当次报告与历史归档报告共用 assets/report.js 的同一套渲染 */
+  function repItemHtml(it, i, withVer, bankId) {
+    return window.eeReport.itemHtml(it, i, withVer, { scope: 'p', bankId: bankId, qPrefix: '', rPrefix: '' });
+  }
+  /* 逐题明细展开 / 收起：两份报告列表共用 assets/report.js 的同一套交互 */
+  function bindRepLists() {
+    window.eeReport.bind(['rp-items', 'report-items'].map(function (id) { return document.getElementById(id); }));
+  }
+  function itemFromRunner(q, i) {
+    var ans = R.answers[i];
+    var answered = ans != null && ans !== '';
+    var g = grade(i);
+    var ver = verInfo(q.stem);
+    return {
+      qid: q.id, type: q.type, subjective: !!q.subjective, answered: answered,
+      multi: Array.isArray(q.answer),
+      correctness: q.subjective ? (answered ? 'UNGRADED' : 'BLANK') : (answered ? g.correctness : 'BLANK'),
+      ratio: g.graded ? g.ratio : null,
+      stem: q.stem,
+      mine: answered ? (q.subjective ? String(ans) : answerText(q, ans)) : '未作答',
+      answer: q.subjective ? '主观题不自动判分' : answerText(q),
+      missed: g.missed, extra: g.extra, explain: q.explain,
+      rating: R.ratings[i] ? RATING_NAME[R.ratings[i]] : null,
+      ratingDue: R.ratings[i] ? (dueDateFor(i, R.ratings[i]) || '未调度') : null,
+      ver: ver.ver, verAt: ver.at, cur: ver.cur || null, curAt: ver.curAt || null, curNote: ver.curNote || null
+    };
+  }
   function renderReport() {
+    /* withVer 恒为 true：交卷当次的报告与过后回看的归档报告必须是同一份内容
+       （CONTRACT 自查第 14 条）。判分版本是报告的一部分，不是历史态才有的附加物。 */
     if (R.report && R.paper.length) {
-      var rows = R.paper.map(function (q, i) {
-        var g = grade(i);
-        return {
-          type: q.type, subjective: !!q.subjective, answered: !!R.answers[i],
-          ratio: g.graded ? g.ratio : null, rating: R.ratings[i] ? RATING_NAME[R.ratings[i]] : '—'
-        };
+      fillReport({
+        p: 'report', rep: R.report, items: R.paper.map(function (q, i) { return itemFromRunner(q, i); }),
+        bank: bankName(R.s.bankId), bankId: R.s.bankId, mode: R.s.mode || '顺序练习', withVer: true, sheet: true
       });
-      renderReportWith(tally(rows), rows, bankName(R.s.bankId));
       return;
     }
-    var demo = demoRows();
-    renderReportWith(Object.assign(tally(demo), { minutes: 6 }), demo, '验收题库 1794570360969');
+    fillReport({
+      p: 'report', rep: REPORT_DEMO.rep, items: REPORT_DEMO.items, bank: REPORT_DEMO.bank, bankId: 'b_acc',
+      mode: '顺序练习', withVer: true, sheet: true
+    });
   }
   function again() {
     var s = R.s || {};
@@ -2003,11 +2120,12 @@ window.EErun = (function () {
       rate(parseInt(key, 10));
     }
   });
-  /* 主观题作答区：输入即存本地草稿 */
+  /* 主观题作答区：输入即存本地草稿，并刷新底栏提交态 */
   document.addEventListener('input', function (e) {
     if (e.target && e.target.id === 'run-essay') {
       R.selected = e.target.value;
       persist();
+      if (R.paper[R.index]) paintFoot(R.paper[R.index]);
     }
   });
 

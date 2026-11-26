@@ -76,7 +76,6 @@
 @media (max-width: 640px){
     .ee-toolbar .search-box { flex: 1 1 100%; }
     .ee-row-top { flex-wrap: wrap; row-gap: var(--sp-2); }
-    .list-open { flex: 1 1 100%; }
     .ee-reader-file-actions { margin-left: 0; }
     /* 窄屏分段允许横向滚动，不让四个类型挤出纸面 */
     .ee-filter { max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
@@ -177,28 +176,8 @@
         </section>
       </div>
 
-      <!-- ============ AI 建议标签与蓝图 · 本期不做（FN-509，入口不隐藏，只说明） ============ -->
-      <section class="section ee-mt-5" aria-labelledby="fn509-title">
-        <div class="section-head">
-          <h2 class="section-title" id="fn509-title">AI 建议标签与蓝图</h2>
-          <span class="section-note" data-spec>本期不做（FN-509 · Q-506 裁定 A / R13）</span>
-        </div>
-        <div class="notice info">
-          <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
-          <div class="notice-body">
-            <div class="notice-title">本期不提供「AI 建议知识点标签」与「AI 建议考试蓝图」</div>
-            <div>知识点标签由你自己在题库工作区整理，考试蓝图在模考中心手动配置；两件事都不需要 AI。</div>
-            <div class="notice-actions">
-              <a class="btn btn-sm" href="workspace.html?tab=structure">去看结构页签</a>
-              <a class="btn btn-sm btn-quiet" href="settings.html?section=ai">AI 与联网检索配置</a>
-            </div>
-            <div data-spec>
-              <p class="hint ee-mt-3">裁定理由：真实使用中蓝图为 0、标签是人工组织决策，AI 建议需逐条人工确认，成本高于收益。本条只登记边界，不宣称已实现，也不把入口藏起来。</p>
-              <p class="hint">若未来纳入：入口在题库工作区「结构」页签（标签建议）与考试档案蓝图编辑器（蓝图建议）；建议必须带依据、永不自动生效、批量确认整批校验整批生效。</p>
-            </div>
-          </div>
-        </div>
-      </section>
+      <!-- FN-509「AI 建议知识点标签 / AI 建议考试蓝图」本期不做，产品界面不出现占位
+           入口、未实现说明或设计阶段解释（CONTRACT §3.3c）。规格记录留在 docs/。 -->
 
       <!-- ============ 状态格（规格演示：成品模式隐藏，与首页同约定） ============ -->
       <section class="section ee-subhead" data-spec>
@@ -408,10 +387,21 @@
           </div>
 
           <div class="panel ee-state-panel">
-            <div class="panel-head"><span class="panel-title">本期不做 · FN-509</span></div>
+            <div class="panel-head"><span class="panel-title">禁用 · 已显式关闭 AI</span></div>
             <div class="panel-body">
-              <p class="hint">AI 建议知识点标签与 AI 建议考试蓝图本期不做（Q-506 裁定 A / R13）。规格页保留说明块，不隐藏入口、不宣称已实现。</p>
-              <p class="state-note">说明块即本屏 AI 建议分区；未来纳入时入口在题库工作区结构页签与蓝图编辑器。</p>
+              <div class="notice info" role="status">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">你开启了「不使用 AI」</div>
+                  <div>生成解释与联网核查两个入口一并禁用，并说明原因；读官方解析、读你自己的资料、复制题干去检索三条路径照常可用。</div>
+                </div>
+              </div>
+              <div class="od-cluster ee-mt-3">
+                <button class="btn btn-sm" type="button" disabled>生成解释</button>
+                <button class="btn btn-sm" type="button" disabled>联网核查</button>
+              </div>
+              <p class="hint ee-mt-3">在「设置 · AI 与联网检索」里可以随时改回来。</p>
+              <p class="state-note">AI 是可选能力：关掉它，资料这一屏仍然完整可用。</p>
             </div>
           </div>
         </div>
@@ -666,6 +656,30 @@
      ====================================================================== */
   (function () {
     var S = window.eeStore;
+
+    /* ---------- CR-12 两向规则：实例管理入口只对实例管理员渲染 ----------
+       本页没有自有账户菜单，外壳（spec-boot）会补一个标准菜单；命令面板的条目
+       来自 nav.js 的唯一导航契约。两处都可能带出「实例管理」——它只与实例管理员
+       有关系：普通用户不是「禁用」，是这一项根本不出现。 */
+    function syncInstanceEntries() {
+      if (!S || !S.relevant || S.relevant('instance.manage')) return;
+      /* 1) 外壳补的标准账户菜单 */
+      document.querySelectorAll('.menu a[href$="instance.html"], .menu [data-i18n="shell.menu.instance"]').forEach(function (el) {
+        el.hidden = true;
+        var sep = el.nextElementSibling;
+        if (sep && sep.classList.contains('menu-sep')) sep.hidden = true;
+      });
+      /* 2) ⌘K 命令面板的页面清单（spec-boot 每次打开都从 eeNav.routes 重建） */
+      var nav = window.eeNav;
+      if (!nav || !nav.routes) return;
+      var out = {};
+      Object.keys(nav.routes).forEach(function (k) {
+        if (nav.routes[k] === 'instance.html') return;
+        out[k] = nav.routes[k];
+      });
+      nav.routes = out;
+    }
+    document.addEventListener('DOMContentLoaded', syncInstanceEntries);
 
     /* ---------- 类型归属：新建时把类型写进 tags；种子资料按既有标签归类 ---------- */
     var TYPE_TAGS = { '笔记': 'note', '错题小结': 'summary', '知识口诀': 'knowledge' };
@@ -1551,15 +1565,20 @@
       renderReaderWithHit: renderReaderWithHit
     };
 
-    /* ---------- 初始化 ---------- */
+    /* ---------- 初始化 ----------
+       桌面阅读器是常开抽屉（`.content.ee-reader-open` 让出右栏 476px）：进页面就选中
+       第一条并展开，面包屑说的就是眼前这一条。移动端阅读器是浮层：不预选、不自动展开，
+       面包屑保持「全部资料」；已保存的选中只用于高亮列表行，不改面包屑。 */
     fillBanks();
     fillQuestions();
     render();
     showPanel(st.tab || 'all');
     syncUrl();
     var first = S.notes()[0];
-    if (st.selected && S.note(st.selected)) selectNote(st.selected, true);
-    else if (first) selectNote(first.id, true);
+    if (isDesktop()) {
+      if (st.selected && S.note(st.selected)) selectNote(st.selected, false);
+      else if (first) selectNote(first.id, false);
+    }
     syncChrome();
 
     if (S.subscribe) S.subscribe(function (state, evt) {

@@ -338,7 +338,7 @@ A. 互动沟通  B. 推式沟通  C. 拉式沟通  D. 公众沟通
                 </div>
               </div>
 
-              <div class="state-block">
+              <div class="state-block" data-spec>
                 <div class="state-block-head">
                   <h3 class="section-title">状态格</h3>
                   <span class="section-note">空 / 加载 / 错误</span>
@@ -427,7 +427,7 @@ A. 互动沟通  B. 推式沟通  C. 拉式沟通  D. 公众沟通
                   </div>
                 </div>
 
-                <div class="state-block">
+                <div class="state-block" data-spec>
                   <div class="state-block-head">
                     <h3 class="section-title">状态格</h3>
                     <span class="section-note">加载 / 空 / 错误</span>
@@ -873,13 +873,18 @@ A. 互动沟通  B. 推式沟通  C. 拉式沟通  D. 公众沟通
       return '<option value="' + esc(b.id) + '"' + (b.id === state.bankId ? ' selected' : '') + '>' + esc(b.name) + mark + ' · ' + b.count + ' 题</option>';
     }).join('');
     var ok = canImport();
+    var b0 = bank();
     $('#imp-bank-ro-row').hidden = ok;
     $('#imp-bank-deny').hidden = ok;
+    /* 标题随真实原因变化：共享只读库说「只读」，否则是「没有导入权限」，不用错误码或误导性措辞 */
+    $('#imp-bank-deny-title').textContent = (b0 && (b0.readonly || b0.shared)) ? '当前题库只读' : '没有导入权限';
     $('#imp-bank-deny-text').textContent = denyText();
     $('#imp-next-1').disabled = !ok;
     $('#imp-next-1-reason').textContent = ok
       ? ('将读取 ' + items().length + ' 行，进入' + (isPdf() ? 'PDF 预检与人工校正' : '表格字段映射') + '。')
-      : '目标题库不可写入：切换题库后才能继续。';
+      : ((b0 && (b0.readonly || b0.shared))
+          ? '目标题库是他人共享的只读题库：切换到自己的题库后才能继续。'
+          : '没有导入权限：当前角色不能写入题目，暂时不能继续。');
     $('#imp-file-name').textContent = state.sourceMode === 'file' ? state.fileName : '粘贴的文本';
     $('#imp-file-fmt').textContent = isPdf() ? 'pdf' : (state.sourceMode === 'file' ? (state.format || 'text') : 'text');
     $('#imp-file-rows').textContent = isPdf() ? '14 页' : String(items().length);

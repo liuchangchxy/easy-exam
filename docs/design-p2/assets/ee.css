@@ -76,7 +76,6 @@ dialog:not([open]) { display: none !important; }
   --measure: 68ch;
   --reading-w: 744px;
   --page-w: 1120px;
-  --page-w-wide: 1320px;
   --kb-inset: 0px;
 
   /* ---- 断点（v3 收敛：21 → 5）----
@@ -135,7 +134,6 @@ dialog:not([open]) { display: none !important; }
   --d-spine: #1d211c;
   --d-gasket: #e7e2d6;
   --d-max: 1120px;
-  --d-max-wide: 1320px;
   --d-spine-accent: #8fc2b2;
   --d-spine-ink: #eceee5;
   --d-spine-ink-2: #a8afa2;
@@ -642,9 +640,15 @@ dialog.dlg.danger .dlg-title { color: var(--bad); }
 .dtable th {
   text-align: left; font-weight: 500; font-size: var(--text-xs); color: var(--ink-3);
   padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line); background: var(--surface-2);
-  white-space: nowrap; position: sticky; top: 0;
+  /* 表头必须可折行：nowrap 会让「表头最小宽度之和」成为表格最小宽度，列数一多
+     （如成绩报告的 8 列）就把表格顶出容器，行内操作被横向滚动裁掉。
+     放得下的表头不会折，与原先观感一致。 */
+  white-space: normal; overflow-wrap: anywhere; position: sticky; top: 0;
 }
-.dtable td { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line); vertical-align: middle; }
+.dtable td { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line); vertical-align: middle;
+  /* 长 token（accept_admin_1794570360969 这类用户名）必须能断行，否则它的 min-content
+     宽度会变成整张表的最小宽度，把表格顶出容器。只在放不下时才断。 */
+  overflow-wrap: anywhere; }
 .dtable tbody tr:last-child td { border-bottom: none; }
 .dtable tbody tr:hover { background: var(--surface-2); }
 .dtable tbody tr.is-selected { background: var(--brand-soft); }
@@ -759,7 +763,19 @@ dialog.dlg.danger .dlg-title { color: var(--bad); }
 .bn-item .bn-count { position: absolute; transform: translate(14px, -8px); font-family: var(--font-mono); font-size: 10px; }
 
 /* 纸面：桌面上的那张纸。原版同值：width calc(100% - 40px) / max 1120 /
-   margin 10 auto 40 / padding 32 40 64 / 1px 边 / 4px 圆角 / 软阴影。 */
+   margin 10 auto 40 / padding 32 40 64 / 1px 边 / 4px 圆角 / 软阴影。
+
+   【统一纸面构图（P2 收口）】全产品普通页面共用同一张纸：同一个宽度、同一条
+   左边界、同一份外边距、同一套基础内容网格。页面之间的功能差异一律在纸面
+   内部用排版解决（分栏、密度、表格滚动、次要信息下沉），不得改纸张规格。
+   `.wide` 只作语义标记保留（宽幅内容页），不再改变纸面宽度——原 P2 曾让
+   三个页面宽 44px 且整张左移 22px，属构图退化，已收敛。
+   例外（确有特殊需求，可不套用本纸面）：登录页、全屏练习与模考 runner
+   （.focus-shell）。窄幅 `.content.narrow` 与 `--d-max-wide` 已废除。
+
+   【纸张高度】纸面贴合内容，不强行撑满视口。原实现用 min-height 把纸面拉到
+   视口高，内容短的页面（题库 3 行、403 门、刚交卷的报告）下方会出现几百像素
+   带边框的空白纸，读起来像没做完。现在是文档式纸张：长页自然长，短页就短。 */
 .content {
   width: calc(100% - var(--sp-8));
   max-width: var(--d-max);
@@ -768,11 +784,9 @@ dialog.dlg.danger .dlg-title { color: var(--bad); }
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  min-height: calc(100dvh - var(--topbar-h) - var(--sp-2) - var(--sp-8));
   box-shadow: var(--shadow-1);
 }
-.content.wide { max-width: var(--d-max-wide); }
-.content.narrow { max-width: 860px; }
+.content.wide { max-width: var(--d-max); }
 .has-bottomnav { padding-bottom: calc(var(--bottomnav-h) + var(--sp-6) + env(safe-area-inset-bottom)); }
 
 @media (max-width: 1024px) {
@@ -805,8 +819,26 @@ dialog.dlg.danger .dlg-title { color: var(--bad); }
    12. 学习域专用（答题器 / 会话 / 队列）
    ========================================================================== */
 .focus-shell { display: grid; grid-template-columns: 1fr var(--rail-exam); gap: 0; min-height: calc(100dvh - var(--topbar-h)); }
-.focus-body { padding: var(--sp-7) var(--sp-8) var(--sp-8); max-width: 780px; }
-.focus-rail { border-left: 1px solid var(--line); padding: var(--sp-6); display: flex; flex-direction: column; gap: var(--sp-5); background: var(--surface); }
+/* runner 是全屏阅读面：题目顶对齐，纸面尾部是呼吸空间，不是空洞。flex 列只为让
+   问答题的作答区（.field-grow）能按剩余栏高生长。 */
+.focus-body { padding: var(--sp-7) var(--sp-8) var(--sp-8); max-width: 780px; display: flex; flex-direction: column; }
+/* 问答题作答区：主观题答案值得一整个作答区。字段随栏高生长，纸面尾部不留空洞；
+   客观题（选项列表）不挂这个类，排版不变。 */
+.field-grow { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.field-grow > .field { flex: 1 1 auto; min-height: 0; }
+.field-grow .textarea { flex: 1 1 auto; min-height: 200px; resize: vertical; }
+/* 右轨贴合自身内容并随页面滚动停留，不拉满主栏高度。
+   原实现让栅格把右轨拉伸到与左栏齐高：报告态左栏 2800px、右轨内容只到 600px，
+   于是 2200px 的空栏外面还拖着一条 1px 左边线——这是"纸面内部排版没解决
+   功能差异"的反例。sticky + align-self:start 后，左栏长页自然滚动，右轨常在视野内。 */
+.focus-rail {
+  border-left: 1px solid var(--line);
+  padding: var(--sp-6);
+  display: flex; flex-direction: column; gap: var(--sp-5);
+  background: var(--surface);
+  position: sticky; top: var(--topbar-h); align-self: start;
+  max-height: calc(100dvh - var(--topbar-h)); overflow-y: auto;
+}
 .focus-foot {
   position: sticky; bottom: 0; display: flex; align-items: center; gap: var(--sp-4);
   padding: var(--sp-3) var(--sp-6); border-top: 1px solid var(--line); background: var(--surface);
@@ -925,7 +957,10 @@ dialog.dlg.danger .dlg-title { color: var(--bad); }
 .flow-eyebrow { font-size: var(--text-xs); color: var(--ink-3); letter-spacing: .08em; margin: 0 0 var(--sp-1); }
 .flow-title { font-family: var(--font-serif); font-size: var(--text-3xl); font-weight: 500; margin: 0; line-height: var(--text-3xl-lh); }
 .flow-sub { font-size: var(--text-sm); color: var(--ink-3); margin: var(--sp-2) 0 0; }
-.flow-stepbar { margin-bottom: var(--sp-6); }
+/* 步骤条：步数多于纸面放得下时（协作流程 11 步）整条可横向滚动，每一步都够得着，
+   不把后几步裁成看不见的死内容。放得下的流程不出现滚动条。
+   当前步名同时在页脚「当前第 N 步 / 共 M 步 · <步名>」里给出，不缺上下文。 */
+.flow-stepbar { margin-bottom: var(--sp-6); overflow-x: auto; scrollbar-width: thin; overscroll-behavior-x: contain; }
 .flow-stage { min-height: 60vh; }
 .flow-caption { font-size: var(--text-sm); color: var(--ink-3); margin: var(--sp-3) 0 0; }
 .flow-caption b { color: var(--ink); font-family: var(--font-mono); font-weight: 500; }
@@ -934,6 +969,45 @@ dialog.dlg.danger .dlg-title { color: var(--bad); }
 .flow-stack { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
 .flow-stack-sm { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
 .flow-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+
+/* ---- 报告逐题明细（P2 收口：交卷当次报告与历史归档报告共用同一组件，
+       保证内容一致；历史报告额外标注判分版本与当前版本差异）---- */
+.rep-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.rep-item { border-bottom: 1px solid var(--line); }
+.rep-item-head {
+  display: flex; align-items: center; gap: var(--sp-3); width: 100%;
+  padding: var(--sp-3) var(--sp-2); background: none; border: 0; font: inherit;
+  color: inherit; text-align: left; cursor: pointer; min-height: 44px;
+}
+.rep-item-head:hover { background: var(--surface-2); }
+.rep-item-head:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.rep-item-n { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-4); flex: none; width: 2ch; }
+.rep-item-type { font-size: var(--text-sm); color: var(--ink-2); flex: 0 1 auto; min-width: 0; }
+.rep-item-spacer { flex: 1 1 auto; }
+.rep-item-caret { flex: none; color: var(--ink-4); transition: transform var(--dur-fast) ease; }
+.rep-item.is-open .rep-item-caret { transform: rotate(180deg); }
+.rep-item-body { padding: 0 var(--sp-2) var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-4); }
+.rep-item-body[hidden] { display: none; }
+.rep-kv { display: grid; grid-template-columns: minmax(5.5em, auto) 1fr; gap: var(--sp-2) var(--sp-4); align-items: baseline; }
+.rep-kv dt { font-size: var(--text-xs); color: var(--ink-3); }
+.rep-kv dd { margin: 0; font-size: var(--text-sm); color: var(--ink); min-width: 0; }
+.rep-kv dd.mono { font-family: var(--font-mono); font-size: var(--text-xs); }
+.rep-stem { font-family: var(--font-serif); font-size: var(--text-base); line-height: 1.65; margin: 0; max-width: var(--measure); }
+.rep-parse { font-size: var(--text-sm); line-height: var(--text-sm-lh); color: var(--ink-2); margin: 0; max-width: var(--measure); }
+/* 判分版本条：标签是一行元信息，说明文字整行落在标签下方。
+   早先让说明文字 flex: 1 1 240px 与标签挤在同一行，桌面被压成 250px 的窄栏、
+   最长一句折成三行；窄屏三个标签又各自占一行，整条比题干还高。
+   现在标签成组、说明独占一行，桌面窄屏都是两行收住。 */
+.rep-ver { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); padding: var(--sp-3) var(--sp-4); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); }
+.rep-ver-tags { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); min-width: 0; }
+.rep-ver-note { font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); margin: 0; flex: 1 1 100%; min-width: 0; }
+.rep-item-acts { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+@media (max-width: 640px) {
+  .rep-item-head { flex-wrap: wrap; }
+  .rep-item-spacer { display: none; }
+  .rep-kv { grid-template-columns: 1fr; gap: var(--sp-1); }
+  .rep-kv dt { margin-top: var(--sp-2); }
+}
 
 /* ==========================================================================
    14. 可访问性兜底

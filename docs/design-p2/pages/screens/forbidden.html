@@ -453,7 +453,7 @@
 
     /* 变体 C 按真实实例角色走：非管理员看到服务端给出的可读原因 */
     var S = window.eeStore;
-    var isAdmin = S && S.isInstanceAdmin ? S.isInstanceAdmin() : true;
+    var isAdmin = S && S.relevant ? S.relevant('instance.manage') : (S && S.isInstanceAdmin ? S.isInstanceAdmin() : true);
     var vcDesc = document.getElementById('fb-variant-c-desc');
     if (vcDesc) {
       var reason = (!isAdmin && S && S.denyReason) ? S.denyReason('instance.manage') : '';
@@ -466,8 +466,34 @@
         : '你当前不是实例管理员，看到的整页就是这一屏：不泄露任何用户数据。';
     }
 
-    /* 主按钮规则：有 from 回来源，无 from 退化为返回题库列表 */
-    var btn = document.getElementById('fb-primary');
+    /* ---------- CR-12 两向规则：实例管理入口只对实例管理员渲染 ----------
+       本页没有自有账户菜单，外壳（spec-boot）会补一个标准菜单；⌘K 命令面板的页面
+       清单来自 nav.js 的唯一导航契约。两处都可能带出「实例管理」——它只与实例管理员
+       有关系：普通用户不是「禁用」，是这一项根本不出现。403 页同样遵守这条规则。 */
+    function syncInstanceEntries() {
+      /* 相关性在 DOMContentLoaded 时重新读一次：页面脚本先于本监听器执行，
+         捕获时的 isAdmin 可能还没反映当前实例角色 */
+      var admin = S && S.relevant ? S.relevant('instance.manage') : isAdmin;
+      if (admin) return;
+      /* 1) 外壳补的标准账户菜单 */
+      document.querySelectorAll('.menu a[href$="instance.html"], .menu [data-i18n="shell.menu.instance"]').forEach(function (el) {
+        el.hidden = true;
+        var sep = el.nextElementSibling;
+        if (sep && sep.classList.contains('menu-sep')) sep.hidden = true;
+      });
+      /* 2) ⌘K 命令面板的页面清单（spec-boot 每次打开都从 eeNav.routes 重建） */
+      var nav = window.eeNav;
+      if (!nav || !nav.routes) return;
+      var out = {};
+      Object.keys(nav.routes).forEach(function (k) {
+        if (nav.routes[k] === 'instance.html') return;
+        out[k] = nav.routes[k];
+      });
+      nav.routes = out;
+    }
+    document.addEventListener('DOMContentLoaded', syncInstanceEntries);
+
+    /* 主按钮规则：有 from 回来源，无 from 退化为返回题库列表 */    var btn = document.getElementById('fb-primary');
     if (btn) {
       var label = btn.querySelector('.fb-primary-label');
       var use = btn.querySelector('svg use');

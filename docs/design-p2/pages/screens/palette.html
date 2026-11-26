@@ -34,6 +34,11 @@
 .cmd-item-desc{  font-size: var(--text-xs); color: var(--ink-3);  }
 .cmd-item-right{  display: flex; align-items: center; gap: var(--sp-3); flex: none;  }
 .cmd-count{  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-4);  }
+/* CR-12：相关但不能做的命令保留为禁用态，行内给中文可读原因（不隐藏、不用错误码） */
+.cmd-item.is-disabled{  cursor: default;  }
+.cmd-item.is-disabled .cmd-item-title{  color: var(--ink-4);  }
+.cmd-item.is-disabled .cmd-item-left .od-icon{  color: var(--ink-4);  }
+.cmd-perm-why{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh);  }
 .cmd-empty{  padding: var(--sp-7) var(--sp-4); text-align: center; color: var(--ink-4); font-size: var(--text-sm);  }
 .cmd-foot{  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-2) var(--sp-4); border-top: 1px solid var(--line); background: var(--surface-2); font-size: var(--text-xs); color: var(--ink-3);  }
 .cmd-hints{  display: flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap;  }
@@ -426,6 +431,71 @@
 <script>
   (function () {
     var backdrop = document.getElementById('cmd-backdrop');
+    var S = window.eeStore;
+
+    /* ---------- CR-12 两向规则 ----------
+       1) 本页没有自有账户菜单，外壳补的标准菜单里「实例管理」只与实例管理员有关：
+          普通用户不是禁用，是这一项根本不出现。
+       2) 「新建题库 / 导入」与所有成员都有关系（他们看得见题库、也要往里加题），
+          但成员与只读成员此刻做不了 → 保留为禁用命令，行内给中文可读原因，
+          点击只说明原因，不静默跳转、不用英文 banner 或错误码当唯一反馈。 */
+    var GATED = { '新建题库': 'bank.create', '导入': 'bank.import' };
+    /* 原因一律走共享 store.denyReason：全产品同一套可读中文，不在各屏另写一份 */
+    function whyFor(action) {
+      return S && S.denyReason ? S.denyReason(action) : '当前角色没有该操作权限';
+    }
+    function gateOf(action) {
+      var can = S && S.can ? S.can(action) : true;
+      var rel = S && S.relevant ? S.relevant(action) : true;
+      return { relevant: rel, can: can, why: can ? '' : whyFor(action) };
+    }
+    function applyPermissionGates() {
+      if (!S) return;
+      Object.keys(GATED).forEach(function (name) {
+        var g = gateOf(GATED[name]);
+        if (!g.relevant) return;                 /* 完全无关：交给筛选自然不出现 */
+        document.querySelectorAll('.cmd-item[data-name="' + name + '"]').forEach(function (item) {
+          if (g.can) return;
+          item.classList.add('is-disabled');
+          item.setAttribute('aria-disabled', 'true');
+          var right = item.querySelector('.cmd-item-right');
+          if (right) {
+            /* 快捷键一并收起来：禁用的命令不对外承诺可用快捷键 */
+            var kbd = right.querySelector('.kbd');
+            if (kbd) kbd.hidden = true;
+          }
+          /* 原因落在标题下一行，与题库行的 desc 同一层级，不挤在右侧 */
+          var host = item.querySelector('.cmd-item-info') || item.querySelector('.cmd-item-left');
+          if (host && !host.querySelector('.cmd-perm-why')) {
+            var tag = document.createElement('span');
+            tag.className = 'cmd-item-desc cmd-perm-why';
+            tag.textContent = g.why || '当前角色没有该操作权限';
+            host.appendChild(tag);
+          }
+        });
+      });
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+      /* 1) 外壳补的标准账户菜单：实例管理只与实例管理员有关，普通用户不出现 */
+      if (S && S.relevant && !S.relevant('instance.manage')) {
+        document.querySelectorAll('.menu a[href$="instance.html"], .menu [data-i18n="shell.menu.instance"]').forEach(function (el) {
+          el.hidden = true;
+          var sep = el.nextElementSibling;
+          if (sep && sep.classList.contains('menu-sep')) sep.hidden = true;
+        });
+      }
+      /* 2) ⌘K 命令面板的页面清单（spec-boot 每次打开都从 eeNav.routes 重建） */
+      var nav = window.eeNav;
+      if (nav && nav.routes && S && S.relevant && !S.relevant('instance.manage')) {
+        var out = {};
+        Object.keys(nav.routes).forEach(function (k) {
+          if (nav.routes[k] === 'instance.html') return;
+          out[k] = nav.routes[k];
+        });
+        nav.routes = out;
+      }
+      applyPermissionGates();
+    });
     var input = document.getElementById('cmd-input');
     var list = document.getElementById('cmd-listbox');
     var empty = document.getElementById('cmd-empty');
@@ -527,6 +597,12 @@
     function execute(option) {
       var group = option.getAttribute('data-group');
       var name = option.getAttribute('data-name') || '';
+      /* 禁用命令：只说明原因，不跳转、不假装执行 */
+      if (option.getAttribute('aria-disabled') === 'true') {
+        var whyEl = option.querySelector('.cmd-perm-why');
+        eeToast(whyEl ? whyEl.textContent : '当前角色没有该操作权限', 'bad');
+        return;
+      }
       closePalette();
       if (group === 'banks') {
         var bid = option.getAttribute('data-bank') || 'b_acc';
