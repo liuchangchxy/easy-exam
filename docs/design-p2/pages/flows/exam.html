@@ -536,7 +536,7 @@
         : state.answers[q.id] === o.key;
       return '<button type="button" class="opt' + (sel ? ' is-selected' : '') + '" data-act="pick" data-key="' + o.key + '" aria-pressed="' + sel + '"' +
         (locked ? ' disabled' : '') + '><span class="opt-key">' + o.key + '</span><span class="opt-text">' + esc(o.content) + '</span></button>';
-    }).join('') || ('<label class="field"><span class="label">你的作答</span><textarea class="textarea" placeholder="输入文字作答；交卷后显示参考解析，不自动判分"' + (locked ? ' disabled' : '') + '>' + esc(state.answers[q.id] || '') + '</textarea><span class="hint">主观题保存作答与参考解析：作答状态「已作答」，判分状态「未判分」。</span></label>');
+    }).join('') || ('<label class="field"><span class="label">你的作答</span><textarea class="textarea" placeholder="输入文字作答；交卷后显示参考解析，不自动判分"' + (locked ? ' disabled' : '') + ' oninput="EEexam.typeAnswer(this.value)">' + esc(state.answers[q.id] || '') + '</textarea><span class="hint">主观题保存作答与参考解析：作答状态「已作答」，判分状态「未判分」。</span></label>');
 
     var cells = p.map(function (item, i) {
       var cls = 'sheet-cell';
@@ -606,7 +606,7 @@
       '  <span class="od-spacer"></span>' +
       '  <span class="phase-chip"><span class="tag plain">作答窗口</span>' +
       '    <span class="timer' + (state.remaining < 300 ? ' low' : '') + '" id="examTimer" aria-label="剩余时间">' + fmtTime(state.remaining) + '</span></span>' +
-      '  <button type="button" class="btn btn-primary btn-sm" data-act="to-submit"' + (locked ? ' disabled' : '') + '>交卷</button>' +
+      '  <button type="button" class="btn" data-act="to-submit"' + (locked ? ' disabled' : '') + '>交卷</button>' +
       '</div>' +
       '<div class="runner">' +
       '  <div class="runner-body">' +
@@ -617,10 +617,10 @@
       '    <div class="opt-list">' + opts + '</div>' +
       '    <p class="rail-note">模考不判定对错：选项只有选中态，交卷后才会显示答案与解析。</p>' +
       '    <div class="runner-foot">' +
-      '      <button type="button" class="btn btn-sm" data-act="prev-q"' + (state.qIndex === 0 || locked ? ' disabled' : '') + '>上一题</button>' +
-      '      <button type="button" class="btn btn-sm" data-act="next-q"' + (state.qIndex === p.length - 1 || locked ? ' disabled' : '') + '>下一题</button>' +
+      '      <button type="button" class="btn" data-act="prev-q"' + (state.qIndex === 0 || locked ? ' disabled' : '') + '>上一题</button>' +
+      '      <button type="button" class="btn" data-act="flag"' + (locked ? ' disabled' : '') + '>' + ico('flag', '13px') + (flagged ? '已标记待复查' : '待复查') + ' <span class="kbd">F</span></button>' +
       '      <span class="od-spacer"></span>' +
-      '      <button type="button" class="btn btn-sm' + (flagged ? ' btn-primary' : ' btn-quiet') + '" data-act="flag"' + (locked ? ' disabled' : '') + '>' + ico('flag', '13px') + (flagged ? '已标记待复查' : '待复查') + ' <span class="kbd">B</span></button>' +
+      '      <button type="button" class="btn btn-primary btn-hero" data-act="foot-next"' + (locked ? ' disabled' : '') + '>' + (state.qIndex === p.length - 1 ? '交卷' : '下一题') + '</button>' +
       '    </div>' +
       '  </div>' +
       '  <aside class="runner-rail">' +
@@ -637,11 +637,7 @@
         ? '本场不限时：没有硬截止、没有宽限、没有自动交卷；只有连续 30 天无活动会标记为失效并通知你，之后仍需你显式交卷或放弃，不会自动判成绩。'
         : '本场限时：到点进入 60 秒宽限，再由服务端收卷；不适用闲置失效。') + '</p>' +
       '    </div>' +
-      '    <div class="flow-stack-sm">' +
-      '      <span class="rail-title">快捷键</span>' +
-      '      <p class="keys-hint"><span class="kbd">A</span>–<span class="kbd">H</span> 选择 · <span class="kbd">B</span> 待复查 · <span class="kbd">←</span><span class="kbd">→</span> 换题；浮层打开时挂起。</p>' +
-      '    </div>' +
-      '  </aside>' +
+        '  </aside>' +
       '</div>' + exitDlg + submitDlg +
 
       '<dialog class="dlg narrow danger" id="dlgAbandon" aria-labelledby="dlgAbandonTitle">' +
@@ -676,7 +672,7 @@
       '  <span class="od-spacer"></span>' +
       '  <span class="phase-chip"><span class="tag brand">宽限中 · 已收卷待同步</span>' +
       '    <span class="timer" aria-label="宽限剩余时间">' + fmtTime(state.grace) + '</span></span>' +
-      '  <button type="button" class="btn btn-primary btn-sm" data-act="to-submit">交卷</button>' +
+      '  <button type="button" class="btn" data-act="to-submit">交卷</button>' +
       '</div>' +
       '<div class="runner">' +
       '  <div class="runner-body">' +
@@ -720,8 +716,8 @@
       '<div class="runner-foot">' +
       '  <span class="runner-mode">答案已停止收录</span>' +
       '  <span class="od-spacer"></span>' +
-      '  <button type="button" class="btn btn-sm" disabled>上一题</button>' +
-      '  <button type="button" class="btn btn-sm btn-primary" data-act="to-submit">交卷</button>' +
+      '  <button type="button" class="btn" disabled>上一题</button>' +
+      '  <button type="button" class="btn btn-primary btn-hero" data-act="to-submit">交卷</button>' +
       '</div>';
   }
 
@@ -979,7 +975,7 @@
           : '模板导入第 ' + (state.tplStep + 1) + ' / 3 步：' + ['选择模板', '预览与校验', '导入结果'][state.tplStep] + '。也可以直接点模板卡片跳到某一步。';
       } },
     { id: 'setup', name: '组卷确认', render: renderSetup, nextLabel: '开始模考', note: '开始前确认七项；题库不足或题目已归档时给出可读的拒绝态。', nextDisabled: function () { return state.setup.total < 1 || state.setup.total > bankMax(state.setup.bankId); } },
-    { id: 'runner', name: '考试会话', render: renderRunner, nextLabel: '到点 · 宽限 60 秒', note: '倒计时常显；答题卡跳题；B 标记待复查；选项只记录选中，不判对错。点「交卷」打开交卷确认。' },
+    { id: 'runner', name: '考试会话', render: renderRunner, nextLabel: '到点 · 宽限 60 秒', note: '倒计时常显；答题卡跳题；F 标记待复查；选项键只绑这道题拥有的选项，判断题用 T / F。点「交卷」打开交卷确认。' },
     { id: 'grace', name: '宽限 60 秒', render: renderGrace, nextLabel: '服务端收卷', note: '只同步截止前已经产生的答案，不能用来继续答题；这是正常状态，不是故障。' },
     { id: 'collected', name: '服务端收卷', render: renderCollected, nextLabel: '看成绩报告', note: '由服务端完成交卷并生成报告，不需要你一直开着这个页面。' },
     { id: 'report', name: '成绩报告', render: renderReport, nextLabel: '看历史报告', note: '得分、客观题满分、得分率、已答客观题正确率分别标注，分母不同，不要混用。' },
@@ -1262,6 +1258,10 @@
     },
     'goto-q': function (el) { state.qIndex = parseInt(el.getAttribute('data-i'), 10); persist(); render(); },
     'prev-q': function () { if (state.qIndex > 0) { state.qIndex--; persist(); render(); } },
+    'foot-next': function () {
+      if (state.qIndex < paper().length - 1) { state.qIndex++; persist(); render(); }
+      else ACTIONS['to-submit']();
+    },
     'next-q': function () { if (state.qIndex < paper().length - 1) { state.qIndex++; persist(); render(); } },
     'flag': function () {
       var q = paper()[state.qIndex];
@@ -1392,23 +1392,71 @@
     d.addEventListener('close', function () { state.viewing = null; });
   };
 
+  /* 主见题作答区与底部主操作需要被 HTML 的 oninput / onclick 调用 */
+  window.EEexam = {
+    typeAnswer: function (v) {
+      var q = paper()[state.qIndex];
+      if (!q) return;
+      if (v && v.trim()) state.answers[q.id] = v.trim(); else delete state.answers[q.id];
+      persist();
+    },
+    footNext: function () {
+      if (state.qIndex < paper().length - 1) { state.qIndex++; persist(); render(); }
+      else ACTIONS['to-submit']();
+    }
+  };
+
   /* ---------- 快捷键：A–H 选择 / ←→ 换题 / B 待复查；浮层打开时挂起 ---------- */
+  /* ---------- 快捷键：与产品会话同一套规则 ----------
+     选项键只绑当前这道题真正拥有的选项（单选 / 多选 A–E，判断题 T / F）；
+     带修饰键的组合不拦；输入法合成中与焦点在表单上时不拦；主见题不拦任何字符键。 */
+  function editableTarget(t) {
+    if (!t) return false;
+    if (t.isContentEditable) return true;
+    var tag = t.tagName;
+    return tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || tag === 'OPTION';
+  }
+  function controlTarget(t) {
+    if (!t || !t.closest) return false;
+    return !!t.closest('button, a[href], summary, details, label, input, select, textarea, [role="button"], [role="link"], [role="tab"], [role="menuitem"]');
+  }
+  function optionKeys(q) {
+    var keys = [];
+    (q.options || []).forEach(function (o) { if (keys.indexOf(o.key) < 0) keys.push(o.key); });
+    return keys;
+  }
+  function isJudge(q) {
+    return q.type === '判断题' || (q.options.length === 2 && q.options[0].content === '正确');
+  }
   document.addEventListener('keydown', function (e) {
+    if (e.isComposing) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === 'Escape') return;
     if (document.querySelector('dialog[open]')) return;
     if (state.step !== 3 || state.submitted || state.phase !== 'answer') return;
-    var t = e.target;
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-    var key = e.key.toUpperCase();
     var q = paper()[state.qIndex];
-    if (key >= 'A' && key <= 'H') {
-      var o = q.options[key.charCodeAt(0) - 65];
-      if (o) { e.preventDefault(); ACTIONS.pick({ getAttribute: function () { return o.key; } }); }
-    } else if (e.key === 'ArrowRight' && state.qIndex < paper().length - 1) {
+    var t = e.target;
+    if (editableTarget(t)) return;
+    if (!q.options.length) {
+      if (!controlTarget(t) && e.key === 'ArrowRight' && state.qIndex < paper().length - 1) { e.preventDefault(); state.qIndex++; persist(); render(); }
+      else if (!controlTarget(t) && e.key === 'ArrowLeft' && state.qIndex > 0) { e.preventDefault(); state.qIndex--; persist(); render(); }
+      return;
+    }
+    var key = e.key.toUpperCase();
+    var keys = optionKeys(q);
+    if (isJudge(q)) {
+      if (key === 'T') { e.preventDefault(); ACTIONS.pick({ getAttribute: function () { return q.options[0].key; } }); }
+      else if (key === 'F') { e.preventDefault(); ACTIONS.pick({ getAttribute: function () { return q.options[1].key; } }); }
+      return;
+    }
+    if (key.length === 1 && key >= 'A' && key <= 'H' && keys.indexOf(key) > -1) {
+      e.preventDefault();
+      ACTIONS.pick({ getAttribute: function () { return key; } });
+    } else if (!controlTarget(t) && e.key === 'ArrowRight' && state.qIndex < paper().length - 1) {
       e.preventDefault(); state.qIndex++; persist(); render();
-    } else if (e.key === 'ArrowLeft' && state.qIndex > 0) {
+    } else if (!controlTarget(t) && e.key === 'ArrowLeft' && state.qIndex > 0) {
       e.preventDefault(); state.qIndex--; persist(); render();
-    } else if (key === 'B') {
+    } else if (key === 'F' && keys.indexOf('F') < 0) {
       e.preventDefault(); ACTIONS.flag();
     }
   });

@@ -587,6 +587,31 @@
   }
 
   /* ---------- 菜单开闭：页面没接的，这里统一接（Escape/外点由上方通用逻辑管） ---------- */
+  /* 菜单按可用空间展开：默认落在触发器的静态位置（CSS 绝对定位 + left/top:auto），
+     超出视口时用位移把它推回可见区——用 transform 而不是改 left/bottom，
+     因为后两者会改变绝对定位的原点，反而把菜单甩到别处。
+     原来菜单是纯 CSS 绝对定位，嵌在滚动容器或贴近视口边缘时会被容器裁掉一半，
+     用户看不到后面的项。 */
+  function placeMenu(menu, trig) {
+    menu.style.transform = '';
+    menu.style.maxHeight = '';
+    menu.style.overflowY = '';
+    var tr = trig.getBoundingClientRect();
+    var mr = menu.getBoundingClientRect();
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var pad = 8, gap = 6, dx = 0, dy = 0;
+    if (mr.bottom > vh - pad) dy = (vh - pad) - mr.bottom;   /* 下溢出 → 上移 */
+    if (mr.top + dy < pad) dy = pad - mr.top;                /* 上溢出 → 下移（放不下时下面限高） */
+    if (mr.right > vw - pad) dx = (vw - pad) - mr.right;     /* 右溢出 → 左移 */
+    if (mr.left + dx < pad) dx = pad - mr.left;              /* 左溢出 → 右移 */
+    if (dx || dy) menu.style.transform = 'translate(' + Math.round(dx) + 'px,' + Math.round(dy) + 'px)';
+    /* 仍比视口高（选项特别多）→ 限高自滚，不裁内容 */
+    var after = menu.getBoundingClientRect();
+    if (after.height > vh - pad * 2) {
+      menu.style.maxHeight = (vh - pad * 2) + 'px';
+      menu.style.overflowY = 'auto';
+    }
+  }
   document.addEventListener('click', function (e) {
     var trig = e.target.closest ? e.target.closest('[data-menu-trigger]') : null;
     if (!trig) return;
@@ -602,6 +627,7 @@
       menu.hidden = false;
       menu._trigger = trig;
       trig.setAttribute('aria-expanded', 'true');
+      placeMenu(menu, trig);
       var first = menu.querySelector('.menu-item:not(:disabled)');
       if (first) first.focus();
     }
@@ -658,6 +684,33 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wireShell);
   else wireShell();
+
+  /* ======================================================================
+     软键盘占位（手机端输入不被遮挡的唯一机制）
+     ----------------------------------------------------------------------
+     原生 --kb-inset 只有声明没有更新方，输入框聚焦弹出软键盘后，
+     .focus-foot 仍按 bottom:0 贴在被键盘盖住的位置，主操作点不到。
+     这里用 visualViewport 的视口差实时写 --kb-inset，键盘收起归零。
+     同时给 <html> 打 data-kb，让页面可按需收起源码里的次要区域。
+     ====================================================================== */
+  (function wireKeyboardInset() {
+    var root = document.documentElement;
+    function apply() {
+      var vv = window.visualViewport;
+      if (!vv) return;
+      var inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      if (inset < 40) inset = 0;              /* 地址栏收缩一类的小抖动不算键盘 */
+      root.style.setProperty('--kb-inset', inset + 'px');
+      if (inset > 0) root.setAttribute('data-kb', '1');
+      else root.removeAttribute('data-kb');
+    }
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', apply);
+      window.visualViewport.addEventListener('scroll', apply);
+    }
+    window.addEventListener('orientationchange', function () { setTimeout(apply, 250); });
+    apply();
+  })();
   /* 其他页改了设置（storage 事件）→ 同步外壳 */
   window.addEventListener('storage', function (e) {
     if (e.key && e.key.indexOf('eeStore') === 0) { setTimeout(function () { applyI18n(); syncThemeButtons(); syncAccountMenus(); }, 30); }

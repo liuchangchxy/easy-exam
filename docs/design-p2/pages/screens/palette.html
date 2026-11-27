@@ -43,12 +43,18 @@
 .cmd-foot{  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-2) var(--sp-4); border-top: 1px solid var(--line); background: var(--surface-2); font-size: var(--text-xs); color: var(--ink-3);  }
 .cmd-hints{  display: flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap;  }
 .cmd-footer-tag{  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-4);  }
+.cmd-scope{  padding: var(--sp-2) var(--sp-4) 0; font-size: var(--text-xs); color: var(--ink-4);  }
 .tb-search{  max-width: 220px;  }
 .visually-hidden{  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;  }
 @media (max-width: 640px){
     .cmd-palette-backdrop { padding-top: var(--sp-6); }
     .cmd-footer-tag { display: none; }
     .cmd-count { display: none; }
+    /* 触控目标：输入框与每一行都够到 44px，单手也能点中 */
+    .cmd-search-row { padding: var(--sp-3) var(--sp-4); }
+    .cmd-input { min-height: var(--ctl-h-lg); font-size: var(--text-base); }
+    .cmd-item { padding: var(--sp-3); min-height: 44px; }
+    .cmd-item .btn { min-height: var(--ctl-h-sm); }
   }</style>
 </head>
 <body>
@@ -92,7 +98,7 @@
       <span class="spacer"></span>
       <div class="search-box tb-search">
         <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
-        <input class="input" type="search" placeholder="搜索题库" aria-label="搜索题库">
+        <input class="input" type="search" placeholder="快速跳转" aria-label="快速跳转">
       </div>
       <button type="button" class="btn btn-sm" onclick="openPalette()"><svg class="od-icon" aria-hidden="true"><use href="#i-command"/></svg>命令面板 <span class="kbd">⌘K</span></button>
       <button type="button" class="icon-btn" aria-label="切换主题" onclick="eeToggleTheme(this)"><svg class="od-icon" aria-hidden="true"><use href="#i-sun"/></svg></button>
@@ -269,20 +275,20 @@
   <button type="button" class="bn-item"><svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg>复习</button>
   <button type="button" class="bn-item"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>模考</button>
   <button type="button" class="bn-item"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>资料</button>
-  <button type="button" class="bn-item"><svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg>更多</button>
 </nav>
 
 <!-- ============ 命令面板（Ctrl/⌘+K） ============ -->
 <div class="cmd-palette-backdrop" id="cmd-backdrop" hidden>
   <div class="cmd-palette" role="dialog" aria-modal="true" aria-labelledby="cmd-palette-title">
-    <h2 id="cmd-palette-title" class="visually-hidden">命令面板</h2>
+    <h2 id="cmd-palette-title" class="visually-hidden">快速跳转</h2>
     <div class="cmd-search-row">
       <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
       <input id="cmd-input" class="cmd-input" type="text" role="combobox" aria-autocomplete="list"
              aria-expanded="true" aria-controls="cmd-listbox" aria-activedescendant="cmd-opt-b0"
-             placeholder="搜索题库、页面与命令" aria-label="搜索题库、页面与命令" autocomplete="off">
+             placeholder="跳转到页面或题库" aria-label="快速跳转" autocomplete="off">
       <span class="kbd">Esc</span>
     </div>
+    <p class="cmd-scope">在页面与题库之间跳转；题目内容请在题库页里检索。</p>
 
     <div class="cmd-list" id="cmd-listbox" role="listbox" aria-label="搜索结果">
       <div class="cmd-group" data-group="banks" role="presentation">题库</div>
@@ -353,29 +359,33 @@
       </div>
 
       <div class="cmd-group" data-group="actions" role="presentation">命令</div>
-      <div class="cmd-item" role="option" id="cmd-opt-a0" aria-selected="false" data-group="actions" data-name="今天" data-search="今天 首页 home">
-        <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg><span class="cmd-item-title">今天</span></div>
-        <div class="cmd-item-right"><span class="kbd">⌘1</span></div>
-      </div>
-      <div class="cmd-item" role="option" id="cmd-opt-a1" aria-selected="false" data-group="actions" data-name="题库" data-search="题库 列表 banks">
-        <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg><span class="cmd-item-title">题库</span></div>
-        <div class="cmd-item-right"><span class="kbd">⌘2</span></div>
-      </div>
-      <div class="cmd-item" role="option" id="cmd-opt-a2" aria-selected="false" data-group="actions" data-name="复习" data-search="复习 到期 队列 review">
-        <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg><span class="cmd-item-title">复习</span></div>
-        <div class="cmd-item-right"><span class="kbd">⌘3</span></div>
-      </div>
-      <div class="cmd-item" role="option" id="cmd-opt-a3" aria-selected="false" data-group="actions" data-name="模考" data-search="模考 考试 exam">
-        <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg><span class="cmd-item-title">模考</span></div>
-        <div class="cmd-item-right"><span class="kbd">⌘4</span></div>
-      </div>
-      <div class="cmd-item" role="option" id="cmd-opt-a4" aria-selected="false" data-group="actions" data-name="资料" data-search="资料 笔记 文件 notes">
-        <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg><span class="cmd-item-title">资料</span></div>
-        <div class="cmd-item-right"><span class="kbd">⌘5</span></div>
-      </div>
-      <div class="cmd-item" role="option" id="cmd-opt-a5" aria-selected="false" data-group="actions" data-name="设置" data-search="设置 外观 账号 settings">
-        <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg><span class="cmd-item-title">设置</span></div>
-        <div class="cmd-item-right"><span class="kbd">⌘,</span></div>
+      <!-- 页面命令由脚本按 assets/nav.js 的唯一导航契约生成（只列与当前用户相关的入口），
+           这里保留静态兜底：nav.js 未就绪时也看得到五个主要功能入口。 -->
+      <div id="cmd-page-cmds">
+        <div class="cmd-item" role="option" id="cmd-opt-a0" aria-selected="false" data-group="actions" data-name="今天" data-search="今天 首页 home">
+          <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg><span class="cmd-item-title">今天</span></div>
+          <div class="cmd-item-right"><span class="kbd">⌘1</span></div>
+        </div>
+        <div class="cmd-item" role="option" id="cmd-opt-a1" aria-selected="false" data-group="actions" data-name="题库" data-search="题库 列表 banks">
+          <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg><span class="cmd-item-title">题库</span></div>
+          <div class="cmd-item-right"><span class="kbd">⌘2</span></div>
+        </div>
+        <div class="cmd-item" role="option" id="cmd-opt-a2" aria-selected="false" data-group="actions" data-name="复习" data-search="复习 到期 队列 review">
+          <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg><span class="cmd-item-title">复习</span></div>
+          <div class="cmd-item-right"><span class="kbd">⌘3</span></div>
+        </div>
+        <div class="cmd-item" role="option" id="cmd-opt-a3" aria-selected="false" data-group="actions" data-name="模考" data-search="模考 考试 exam">
+          <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg><span class="cmd-item-title">模考</span></div>
+          <div class="cmd-item-right"><span class="kbd">⌘4</span></div>
+        </div>
+        <div class="cmd-item" role="option" id="cmd-opt-a4" aria-selected="false" data-group="actions" data-name="资料" data-search="资料 笔记 文件 notes">
+          <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg><span class="cmd-item-title">资料</span></div>
+          <div class="cmd-item-right"><span class="kbd">⌘5</span></div>
+        </div>
+        <div class="cmd-item" role="option" id="cmd-opt-a5" aria-selected="false" data-group="actions" data-name="设置" data-search="设置 外观 账号 settings">
+          <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg><span class="cmd-item-title">设置</span></div>
+          <div class="cmd-item-right"><span class="kbd">⌘,</span></div>
+        </div>
       </div>
       <div class="cmd-item" role="option" id="cmd-opt-a6" aria-selected="false" data-group="actions" data-name="新建题库" data-search="新建题库 创建 bank">
         <div class="cmd-item-left"><svg class="od-icon" aria-hidden="true"><use href="#i-plus"/></svg><span class="cmd-item-title">新建题库</span></div>
@@ -418,7 +428,7 @@
         <span class="kbd">↵</span><span>执行</span>
         <span class="kbd">Esc</span><span>关闭</span>
       </div>
-      <span class="cmd-footer-tag">EasyExam · ⌘K</span>
+      <span class="cmd-footer-tag">只在页面与题库之间跳转</span>
     </div>
   </div>
 </div>
@@ -587,13 +597,38 @@
       lastFocus = null;
     };
     /* 命令目标：页面命令真实跳转；设置命令真实改共享状态并即时生效 */
-    var PAGE_CMD = {
-      '今天': 'home.html', '题库': 'banks.html', '复习': 'review.html',
-      '模考': 'exams.html', '资料': 'notes.html', '设置': 'settings.html',
-      '新建题库': 'banks.html?new=1', '导入': 'import.html?new=1',
-      '开始到期复习': 'review.html', '查看错题': 'review.html?chip=mistakes',
-      '退出': 'login.html'
+    /* 页面命令的目标只从 nav.js 的唯一导航契约来，本页不另存一份路由表 */
+    var PAGE_ICON = {
+      '今天': 'home', '题库': 'library', '复习': 'review', '模考': 'exam',
+      '资料': 'note', '设置': 'settings'
     };
+    var PAGE_ALIAS = {
+      '今天': '今天 首页 home', '题库': '题库 列表 banks', '复习': '复习 到期 队列 review',
+      '模考': '模考 考试 exam', '资料': '资料 笔记 文件 notes', '设置': '设置 外观 账号 settings'
+    };
+    /* 全局快捷键（桌面）：与 states.html 的快捷键表同一套，移动端不显示 */
+    var PAGE_KEY = {
+      '今天': '⌘1', '题库': '⌘2', '复习': '⌘3', '模考': '⌘4', '资料': '⌘5', '设置': '⌘,'
+    };
+    function buildPageCommands() {
+      var host = document.getElementById('cmd-page-cmds');
+      var nav = window.eeNav;
+      if (!host || !nav || !nav.routes) return;
+      var routes = nav.visibleRoutes ? nav.visibleRoutes() : nav.routes;
+      var order = ['今天', '题库', '复习', '模考', '资料', '设置', '实例管理'];
+      var html = '';
+      order.forEach(function (label) {
+        /* 只列与当前用户相关的入口：实例管理对普通用户整项不出现 */
+        if (!routes[label]) return;
+        var key = PAGE_KEY[label];
+        html += '<div class="cmd-item" role="option" aria-selected="false" data-group="actions" data-name="' + label + '" data-search="' + (PAGE_ALIAS[label] || label) + '">' +
+          '<div class="cmd-item-left">' + (window.eeIcon ? window.eeIcon(PAGE_ICON[label] || 'arrow-right', '15px') : '') +
+          '<span class="cmd-item-title">' + label + '</span></div>' +
+          '<div class="cmd-item-right">' + (key ? '<span class="kbd">' + key + '</span>' : '') + '</div></div>';
+      });
+      if (html) host.innerHTML = html;
+    }
+    buildPageCommands();
     function execute(option) {
       var group = option.getAttribute('data-group');
       var name = option.getAttribute('data-name') || '';
@@ -619,13 +654,21 @@
         setTimeout(function () { eeGo('login.html?next=home.html'); }, 300);
         return;
       }
-      var target = PAGE_CMD[name];
+      /* 页面命令与深链动作：目标按 nav.js 契约或页面自己的参数入口走 */
+      var DEEP = {
+        '新建题库': 'banks.html?new=1', '导入': 'import.html?new=1',
+        '开始到期复习': 'review.html', '查看错题': 'review.html?chip=mistakes'
+      };
+      var routes = (window.eeNav && window.eeNav.routes) || {};
+      var target = routes[name] || DEEP[name];
       if (target) { eeGo(target); return; }
       eeToast('执行：' + name);
     }
 
     input.addEventListener('input', function () { filter(input.value); });
     input.addEventListener('keydown', function (e) {
+      /* 输入法组合中（拼音候选、日文转换）不拦截任何按键，正常上屏 */
+      if (e.isComposing || e.keyCode === 229) return;
       if (e.key === 'ArrowDown') { e.preventDefault(); setActive(activeIndex + 1); }
       else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(activeIndex - 1); }
       else if (e.key === 'Enter') {
@@ -662,6 +705,7 @@
     });
 
     document.addEventListener('keydown', function (e) {
+      if (e.isComposing || e.keyCode === 229) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         if (backdrop.hidden) openPalette(); else closePalette();

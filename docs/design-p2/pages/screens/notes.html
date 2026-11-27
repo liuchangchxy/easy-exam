@@ -7,7 +7,8 @@
 <link rel="stylesheet" href="../../assets/ee.css">
 <style>/* ============ 本屏特有微调（ee.css 未覆盖的部分）============
      仅：长文限宽（.measure / .reading-w 令牌已有类名，本屏先落地，建议提升）、
-         状态格栅格、阅读器纸面排版、引用高亮、AI 抽屉版本行、移动端抽屉几何。
+         状态格栅格、阅读器纸面排版、引用高亮、AI 抽屉版本行、移动端抽屉几何、
+         题目选择器（可搜索、限量渲染）。
      不重新定义令牌，不新建控件形态。                                */
 
   /* ---- 长文限宽：纸面阅读的度量上限（对应 --measure / --reading-w）---- */
@@ -67,6 +68,28 @@
 .note-star.is-on{  color: var(--warn);  }
 /* 元信息行里的文字链不折行（「看引用」「展开证据」等短动作） */
   .list-meta .link-btn{  white-space: nowrap;  }
+/* ---- 题目选择器：可搜索，限量渲染（题库有几百道题也不一次铺开）---- */
+  .qpick-row{  display: flex; align-items: center; gap: var(--sp-2);  }
+.qpick-row .input{  flex: 1 1 auto; min-width: 0;  }
+.qpick-clear{  flex: none;  }
+.qpick-pop{
+    margin-top: var(--sp-2); border: 1px solid var(--line-strong);
+    border-radius: var(--r-sm); background: var(--surface); overflow: hidden;  }
+.qpick-list{  margin: 0; padding: var(--sp-1); list-style: none; max-height: 232px; overflow-y: auto;  }
+.qpick-opt{
+    display: flex; align-items: baseline; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3);
+    border-radius: var(--r-xs); cursor: pointer; font-size: var(--text-sm); color: var(--ink-2);
+    line-height: var(--text-sm-lh);  }
+.qpick-opt:hover{  background: var(--surface-2);  }
+.qpick-opt.is-on{  background: var(--brand-soft); color: var(--brand-ink);  }
+.qpick-opt-id{  flex: none; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-4);  }
+.qpick-opt.is-on .qpick-opt-id{  color: var(--brand-ink);  }
+.qpick-opt-txt{  flex: 1 1 auto; min-width: 0;  }
+.qpick-opt-bank{  flex: none; font-size: var(--text-xs); color: var(--ink-4);  }
+.qpick-opt.is-on .qpick-opt-bank{  color: var(--brand-ink);  }
+.qpick-more{
+    margin: 0; padding: var(--sp-2) var(--sp-3); border-top: 1px solid var(--line);
+    background: var(--surface-2); font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh);  }
 @media (min-width: 769px){
     /* 阅读器为常开抽屉：桌面让出右侧 460px，列表不被遮盖 */
     .content.ee-reader-open { padding-right: 476px; }
@@ -79,6 +102,18 @@
     .ee-reader-file-actions { margin-left: 0; }
     /* 窄屏分段允许横向滚动，不让四个类型挤出纸面 */
     .ee-filter { max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
+    /* 阅读态占满整屏（长篇阅读用页面）；编辑态收成底部弹层，单手可达 */
+    .drawer.ee-sheet { top: 0; bottom: 0; max-height: none; border-radius: 0; }
+    .drawer.ee-sheet.is-editing {
+      top: auto; bottom: 0; max-height: 88dvh;
+      border-radius: var(--r-lg) var(--r-lg) 0 0;
+    }
+    .drawer.ee-sheet .drawer-body { padding: var(--sp-5) var(--sp-4); }
+    .drawer.ee-sheet .drawer-foot { flex-wrap: wrap; }
+    /* 软键盘在境：抽屉坐在键盘之上，保存键不被遮 */
+    [data-kb] .drawer { max-height: calc(100dvh - var(--kb-inset, 0px)); }
+    [data-kb] .drawer-foot { padding-bottom: calc(var(--sp-4) + var(--kb-inset, 0px)); }
+    [data-kb] .drawer.ee-sheet { top: var(--kb-inset, 0px); }
   }</style>
 </head>
 <body>
@@ -116,7 +151,7 @@
         <span class="here" id="crumb-here">全部资料</span>
       </nav>
       <span class="spacer"></span>
-      <button class="icon-btn" type="button" title="搜索与跳转" data-ee-shell="search" aria-label="搜索与跳转"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></button>
+      <button class="icon-btn" type="button" title="快速跳转" data-ee-shell="search" aria-label="快速跳转"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></button>
       <button data-ee-shell="theme" class="icon-btn" type="button" title="切换明暗" aria-label="切换明暗"><svg class="od-icon" aria-hidden="true"><use href="#i-sun"/></svg></button>
       <button class="icon-btn" type="button" title="切换语言" data-ee-shell="lang" aria-label="切换语言"><svg class="od-icon" aria-hidden="true"><use href="#i-globe"/></svg></button>
       <button class="user-mini" type="button" title="账户菜单" aria-label="账户菜单">A</button>
@@ -125,7 +160,7 @@
     <header class="mobile-top">
       <button class="page-back" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>返回</button>
       <span class="mt-title">资料</span>
-      <button class="icon-btn" type="button" title="搜索与跳转" data-ee-shell="search" aria-label="搜索与跳转"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></button>
+      <button class="icon-btn" type="button" title="快速跳转" data-ee-shell="search" aria-label="快速跳转"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></button>
       <button class="user-mini" type="button" title="账户菜单" aria-label="账户菜单">A</button>
     </header>
 
@@ -435,12 +470,11 @@
   <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg>复习</button>
   <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>模考</button>
   <button class="bn-item is-active" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>资料</button>
-  <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg>更多</button>
 </nav>
 
-<!-- ============ 资料阅读器抽屉（桌面常开右侧；移动全屏 + 遮罩） ============ -->
+<!-- ============ 资料阅读器抽屉（桌面常开右侧；移动整屏阅读，编辑转底部弹层） ============ -->
 <div class="drawer-scrim" id="reader-scrim" hidden></div>
-<aside class="drawer" id="reader" hidden aria-label="资料阅读器">
+<aside class="drawer ee-sheet" id="reader" hidden aria-label="资料阅读器">
   <div class="drawer-head">
     <div class="ee-grow">
       <h2 class="drawer-title" id="reader-title">资料</h2>
@@ -453,7 +487,7 @@
     <div class="ee-reader-body measure" id="reader-body"></div>
     <div id="reader-edit" hidden>
       <textarea class="textarea ee-reader-area" id="reader-area" aria-label="正文"></textarea>
-      <p class="hint">编辑态下「编辑」变为「取消」；有未保存修改时关闭或切换资料会先询问。</p>
+      <p class="hint" id="reader-dirty-hint">有未保存的修改。取消、关闭或切换资料前会先询问。</p>
     </div>
     <div id="reader-rel"></div>
     <div class="ee-reader-file" id="reader-file-row" hidden>
@@ -530,13 +564,23 @@
       <span class="field-err is-off" id="note-body-err">正文不能为空。</span>
     </label>
     <div class="od-grid g2">
-      <label class="field">
+      <div class="field">
         <span class="label">关联题目</span>
-        <select class="select" id="note-q">
-          <option value="">不关联</option>
-        </select>
-        <span class="hint">关联后，AI 检索会优先取用这条资料。</span>
-      </label>
+        <div class="qpick" id="note-q-pick">
+          <div class="qpick-row">
+            <input class="input" id="note-q-input" type="text" role="combobox" aria-expanded="false"
+                   aria-controls="note-q-list" aria-autocomplete="list" autocomplete="off"
+                   placeholder="输入题干关键词或题目 ID" aria-label="关联题目">
+            <button class="btn btn-sm btn-quiet qpick-clear" type="button" id="note-q-clear" hidden>不关联</button>
+          </div>
+          <div class="qpick-pop" id="note-q-pop" hidden>
+            <ul class="qpick-list" id="note-q-list" role="listbox" aria-label="题目搜索结果"></ul>
+            <p class="qpick-more" id="note-q-more" hidden></p>
+          </div>
+        </div>
+        <input type="hidden" id="note-q" value="">
+        <span class="hint">关联后，AI 检索会优先取用这条资料；不关联也不影响阅读与编辑。</span>
+      </div>
       <label class="field">
         <span class="label">关联知识点</span>
         <input class="input" id="note-tag" type="text" placeholder="例如：信息安全、挣值分析">
@@ -588,14 +632,19 @@
       <p class="dlg-eyebrow">资料</p>
       <h2 class="dlg-title" id="dlg-unsaved-title">有未保存的修改</h2>
     </div>
+    <button class="icon-btn" type="button" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
   </div>
   <div class="dlg-body">
-    <p class="hint">这条资料还有未保存的修改。离开前要保存吗？</p>
+    <p class="dlg-p" id="dlg-unsaved-desc">这条资料还有未保存的修改。离开前要保存吗？</p>
+    <div class="kv">
+      <span class="kv-key">资料</span><span class="kv-val" id="dlg-unsaved-name">—</span>
+      <span class="kv-key">改动</span><span class="kv-val" id="dlg-unsaved-diff">正文已修改，尚未保存</span>
+    </div>
   </div>
   <div class="dlg-foot">
-    <button class="btn btn-quiet" type="button" data-dlg-close>取消</button>
-    <button class="btn btn-danger-solid" type="button" data-dlg-close onclick="eeNotes.cancelEdit(); eeNotes.closeNow();">放弃</button>
-    <button class="btn btn-primary" type="button" onclick="eeNotes.save(); eeNotes.closeNow(); eeDialog.close(this.closest('dialog'));">保存并继续</button>
+    <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>继续编辑</button>
+    <button class="btn btn-danger-solid" type="button" id="dlg-unsaved-discard">放弃修改</button>
+    <button class="btn btn-primary" type="button" id="dlg-unsaved-save">保存并继续</button>
   </div>
 </dialog>
 
@@ -807,6 +856,8 @@
 
     function isDesktop() { return window.matchMedia('(min-width: 769px)').matches; }
     function syncChrome() {
+      /* 移动端：阅读态占满整屏，编辑态收成底部弹层（.ee-sheet / .is-editing 只在 ≤640 生效） */
+      reader.classList.toggle('is-editing', editing());
       if (reader.hidden) {
         content.classList.remove('ee-reader-open');
         readerScrim.hidden = true;
@@ -833,7 +884,35 @@
     }
     function editing() { return !edit.hidden; }
     function dirty() { return editing() && area.value !== original; }
-    function syncSave() { saveBtn.disabled = !area.value.trim(); }
+    function syncSave() {
+      saveBtn.disabled = !area.value.trim();
+      var hint = document.getElementById('reader-dirty-hint');
+      if (hint) hint.textContent = dirty()
+        ? '有未保存的修改。取消、关闭或切换资料前会先询问。'
+        : '还没有修改。改完点「保存」写回这一条。';
+    }
+
+    /* ---------- 未保存保护：取消编辑 / 切换资料 / 关闭 / 删除都走同一条确认 ---------- */
+    var pendingAction = null;
+    var dlgUnsaved = document.getElementById('dlg-unsaved');
+    function guard(action) {
+      if (!dirty()) { action(); return; }
+      pendingAction = action;
+      var n = currentId ? S.note(currentId) : null;
+      document.getElementById('dlg-unsaved-name').textContent = n ? n.title : '—';
+      window.eeDialog.open('dlg-unsaved', document.getElementById('reader-edit-btn'));
+    }
+    function resolveUnsaved(mode) {
+      var a = pendingAction;
+      pendingAction = null;
+      window.eeDialog.close(dlgUnsaved);
+      if (mode === 'save') { save(a); return; }
+      cancelEdit();
+      if (a) a();
+    }
+    document.getElementById('dlg-unsaved-save').addEventListener('click', function () { resolveUnsaved('save'); });
+    document.getElementById('dlg-unsaved-discard').addEventListener('click', function () { resolveUnsaved('discard'); });
+    area.addEventListener('input', syncSave);
 
     function startEdit() {
       if (!currentId) return;
@@ -842,8 +921,9 @@
       body.hidden = true;
       edit.hidden = false;
       editBtn.textContent = '取消';
-      editBtn.onclick = cancelEdit;
+      editBtn.onclick = function () { guard(function () { window.eeToast('已放弃这次修改'); }); };
       syncSave();
+      syncChrome();
       area.focus();
     }
     function cancelEdit() {
@@ -852,19 +932,20 @@
       editBtn.textContent = '编辑';
       editBtn.onclick = startEdit;
       saveBtn.disabled = true;
+      syncChrome();
     }
-    function save() {
+    function save(after) {
       if (!currentId || !area.value.trim()) return;
       S.updateNote(currentId, { body: area.value.trim() });
       BODY[currentId] = area.value.trim();
       cancelEdit();
-      window.eeToast('已保存');
+      window.eeToast('资料已保存');
       render();
       renderReader();
+      if (typeof after === 'function') after();
     }
     function requestClose() {
-      if (dirty()) { window.eeDialog.open('dlg-unsaved', document.getElementById('reader-close')); return; }
-      closeNow();
+      guard(closeNow);
     }
     function closeNow() {
       cancelEdit();
@@ -937,6 +1018,11 @@
     }
 
     function selectNote(id, keepOpen, trigger) {
+      /* 切换资料 = 离开当前这一条：有未保存修改时先确认，不静默丢弃 */
+      if (id !== currentId) { guard(function () { doSelect(id, keepOpen, trigger); }); return; }
+      doSelect(id, keepOpen, trigger);
+    }
+    function doSelect(id, keepOpen, trigger) {
       st.selected = id || null;
       currentId = id || null;
       saveView();
@@ -948,6 +1034,10 @@
 
     /* ---------- AI 解释抽屉（FN-505 / 506 / 507 + FN-504 引用） ---------- */
     function openAI(id) {
+      /* 进 AI 抽屉会收起阅读器：有未保存修改时先确认，不静默丢掉 */
+      guard(function () { openAINow(id); });
+    }
+    function openAINow(id) {
       var nid = id || currentId;
       if (!nid) { window.eeToast('先选一条资料', 'bad'); return; }
       if (!reader.hidden) { reader.hidden = true; }
@@ -1361,19 +1451,20 @@
     /* ---------- 面包屑父级 ---------- */
     if (crumbParent) {
       crumbParent.addEventListener('click', function () {
-        closeNow();
-        if (!aiDrawer.hidden) closeAI();
-        st.selected = null; currentId = null; saveView();
-        renderReader();
-        render();
-        if (crumbHere) crumbHere.textContent = '全部资料';
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        guard(function () {
+          closeNow();
+          if (!aiDrawer.hidden) closeAI();
+          st.selected = null; currentId = null; saveView();
+          renderReader();
+          render();
+          if (crumbHere) crumbHere.textContent = '全部资料';
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
       });
     }
 
     /* ---------- 新建笔记 ---------- */
     var bankSel = document.getElementById('note-bank');
-    var qSel = document.getElementById('note-q');
     function fillBanks() {
       if (!bankSel) return;
       var live = S.banks({ archived: false });
@@ -1381,12 +1472,126 @@
         return '<option value="' + esc(b.id) + '"' + (b.id === 'b_acc' ? ' selected' : '') + '>' + esc(b.name) + ' · ' + b.count + ' 题</option>';
       }).join('');
     }
-    function fillQuestions() {
-      if (!qSel) return;
-      qSel.innerHTML = '<option value="">不关联</option>' + S.questions(undefined, { archived: false }).map(function (q) {
-        return '<option value="' + esc(q.id) + '">' + esc(q.stem) + '</option>';
-      }).join('');
+
+    /* ---------- 关联题目：可搜索选择器 ----------
+       题库可能有几百道题。一次渲染全部选项会让对话框卡住，用户也无从找起；
+       改成「输入即筛 + 限量渲染」：只画前 Q_CAP 条，并说明还剩多少条匹配。 */
+    var Q_CAP = 30;
+    var Q_ALL = [];
+    var Q_SIG = '';
+    function loadQuestions() {
+      Q_ALL = S.questions(undefined, { archived: false }).map(function (q) {
+        return { id: q.id, stem: q.stem, bank: S.bankName(q.bankId) };
+      });
+      Q_SIG = String(Q_ALL.length);
     }
+    /* 题库可能在别的标签页或导入后变过：条数变了就重取，选择器永远对着当前题库 */
+    function syncQuestions() {
+      if (String(S.questions(undefined, { archived: false }).length) !== Q_SIG) loadQuestions();
+    }
+    var qInput = document.getElementById('note-q-input');
+    var qPop = document.getElementById('note-q-pop');
+    var qList = document.getElementById('note-q-list');
+    var qMore = document.getElementById('note-q-more');
+    var qClear = document.getElementById('note-q-clear');
+    var qHidden = document.getElementById('note-q');
+    var qIdx = -1;
+    function pickMatches(term) {
+      syncQuestions();
+      term = (term || '').trim().toLowerCase();
+      if (!term) return Q_ALL;
+      return Q_ALL.filter(function (x) {
+        return x.stem.toLowerCase().indexOf(term) > -1 || x.id.toLowerCase().indexOf(term) > -1;
+      });
+    }
+    function markPick() {
+      Array.prototype.forEach.call(qList.children, function (li, i) {
+        var on = i === qIdx;
+        li.classList.toggle('is-on', on);
+        li.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+      var on = qList.children[qIdx];
+      if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest' });
+    }
+    function renderPick(term) {
+      var all = pickMatches(term);
+      var shown = all.slice(0, Q_CAP);
+      var html = '<li class="qpick-opt" role="option" aria-selected="false" data-qid="" data-txt="">不关联题目</li>';
+      html += shown.map(function (x) {
+        return '<li class="qpick-opt" role="option" aria-selected="false" data-qid="' + esc(x.id) + '" data-txt="' + esc(x.stem) + '">' +
+          '<span class="qpick-opt-id">' + esc(x.id) + '</span>' +
+          '<span class="qpick-opt-txt">' + esc(x.stem) + '</span>' +
+          '<span class="qpick-opt-bank">' + esc(x.bank) + '</span></li>';
+      }).join('');
+      qList.innerHTML = html;
+      var rest = all.length - shown.length;
+      qMore.hidden = rest <= 0;
+      qMore.textContent = '还有 ' + rest + ' 道题匹配，继续输入关键词缩小范围。';
+      qIdx = -1;
+      markPick();
+    }
+    function openPick(term) {
+      renderPick(term);
+      qPop.hidden = false;
+      qInput.setAttribute('aria-expanded', 'true');
+    }
+    function closePick() {
+      qPop.hidden = true;
+      qInput.setAttribute('aria-expanded', 'false');
+      qIdx = -1;
+    }
+    function choosePick(li) {
+      var qid = li.getAttribute('data-qid') || '';
+      var txt = li.getAttribute('data-txt') || '';
+      qHidden.value = qid;
+      qInput.value = txt;
+      qInput.setAttribute('title', txt);
+      qClear.hidden = !qid;
+      closePick();
+    }
+    function setPickValue(qid) {
+      syncQuestions();
+      var hit = null;
+      Q_ALL.forEach(function (x) { if (x.id === qid) hit = x; });
+      qHidden.value = hit ? hit.id : '';
+      qInput.value = hit ? hit.stem : '';
+      qInput.setAttribute('title', hit ? hit.stem : '');
+      qClear.hidden = !hit;
+      closePick();
+    }
+    /* 聚焦时展开：已选中的题把输入框当搜索框用，先清掉显示文本再筛 */
+    qInput.addEventListener('focus', function () {
+      syncQuestions();
+      var sel = Q_ALL.filter(function (x) { return x.id === qHidden.value; })[0];
+      openPick(sel ? qInput.value : '');
+    });
+    qInput.addEventListener('input', function () { openPick(qInput.value); });
+    qInput.addEventListener('keydown', function (e) {
+      if (e.isComposing) return;                 /* 输入法组合中不拦截按键 */
+      var n = qList.children.length;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (qPop.hidden) openPick(qInput.value);
+        qIdx = Math.min(qIdx + 1, n - 1);
+        markPick();
+      } else if (e.key === 'ArrowUp') { e.preventDefault(); qIdx = Math.max(qIdx - 1, -1); markPick(); }
+      else if (e.key === 'Enter') {
+        e.preventDefault();
+        var li = qList.children[qIdx];
+        if (li) choosePick(li);
+      }
+      else if (e.key === 'Escape') { e.preventDefault(); closePick(); }
+    });
+    qList.addEventListener('click', function (e) {
+      var li = e.target.closest ? e.target.closest('.qpick-opt') : null;
+      if (li) choosePick(li);
+    });
+    qClear.addEventListener('click', function () { setPickValue(''); qInput.focus(); openPick(''); });
+    document.addEventListener('click', function (e) {
+      if (qPop.hidden) return;
+      if (e.target.closest && e.target.closest('.qpick')) return;
+      closePick();
+    });
     var noteTitle = document.getElementById('note-title');
     var noteType = document.getElementById('note-type');
     var noteBody = document.getElementById('note-body');
@@ -1402,7 +1607,7 @@
       noteDlgTitle.textContent = '新建笔记';
       noteSaveBtn.textContent = '保存';
       noteTitle.value = ''; noteBody.value = ''; document.getElementById('note-tag').value = '';
-      qSel.value = '';
+      setPickValue('');
       noteTitleErr.classList.add('is-off');
       noteBodyErr.classList.add('is-off');
     }
@@ -1423,7 +1628,7 @@
         S.updateNote(n.id, { body: text });
         BODY[n.id] = text;
       }
-      var qid = qSel.value;
+      var qid = qHidden.value;
       var tagText = document.getElementById('note-tag').value.trim();
       REL[n.id] = {
         qid: qid,
@@ -1431,7 +1636,7 @@
       };
       resetNoteDialog();
       window.eeDialog.close(document.getElementById('dlg-note'));
-      window.eeToast(editingId ? '资料已保存' : '笔记已保存');
+      window.eeToast('资料已保存');
       editingId = null;
       var kind = TYPE_TAGS[type] || 'note';
       var segBtn = document.querySelector('.segmented .segment[data-panel="' + kind + '"]');
@@ -1473,6 +1678,8 @@
       var km = KIND_META[kindOf(n)];
       delName.textContent = n.title;
       delType.textContent = km.label + ' · ' + bankName(n.bankId) + (n.file ? ' · 有上传文件 ' + n.file : '');
+      /* 删除会一并丢掉未保存的修改：先问，再进删除确认 */
+      guard(function () { window.eeDialog.open('dlg-delete', document.getElementById('reader-delete')); });
     });
     document.getElementById('dlg-delete-go').addEventListener('click', function () {
       var id = currentId;
@@ -1528,6 +1735,24 @@
     window.addEventListener('resize', syncChrome);
 
     /* ---------- 对外接口（状态格按钮用） ---------- */
+    function editCurrentNow() {
+        resetNoteDialog();
+        var n = S.note(currentId);
+        editingId = currentId;
+        if (n) {
+          noteTitle.value = n.title;
+          noteBody.value = bodyOf(n);
+          var rel = REL[n.id] || { qid: '', tags: [] };
+          setPickValue(rel.qid || '');
+          document.getElementById('note-tag').value = (rel.tags || []).join('、');
+          var kind = kindOf(n);
+          var typeLabel = KIND_META[kind].label;
+          Array.prototype.forEach.call(noteType.options, function (o) { if (o.text === typeLabel) noteType.value = o.value; });
+          noteDlgTitle.textContent = '编辑资料';
+          noteSaveBtn.textContent = '保存修改';
+        }
+        window.eeDialog.open('dlg-note', document.getElementById('reader-ai'));
+    }
     window.eeNotes = {
       newNote: function (trigger) {
         resetNoteDialog();
@@ -1545,32 +1770,17 @@
       cancelEdit: cancelEdit,
       editCurrent: function () {
         if (!currentId) { window.eeToast('先选一条资料', 'bad'); return; }
-        resetNoteDialog();
-        var n = S.note(currentId);
-        editingId = currentId;
-        if (n) {
-          noteTitle.value = n.title;
-          noteBody.value = bodyOf(n);
-          var rel = REL[n.id] || { qid: '', tags: [] };
-          qSel.value = rel.qid || '';
-          document.getElementById('note-tag').value = (rel.tags || []).join('、');
-          var kind = kindOf(n);
-          var typeLabel = KIND_META[kind].label;
-          Array.prototype.forEach.call(noteType.options, function (o) { if (o.text === typeLabel) noteType.value = o.value; });
-          noteDlgTitle.textContent = '编辑资料';
-          noteSaveBtn.textContent = '保存修改';
-        }
-        window.eeDialog.open('dlg-note', document.getElementById('reader-ai'));
+        guard(editCurrentNow);
       },
       renderReaderWithHit: renderReaderWithHit
     };
 
     /* ---------- 初始化 ----------
        桌面阅读器是常开抽屉（`.content.ee-reader-open` 让出右栏 476px）：进页面就选中
-       第一条并展开，面包屑说的就是眼前这一条。移动端阅读器是浮层：不预选、不自动展开，
+       第一条并展开，面包屑说的就是眼前这一条。移动端阅读器是整屏页面：不预选、不自动展开，
        面包屑保持「全部资料」；已保存的选中只用于高亮列表行，不改面包屑。 */
     fillBanks();
-    fillQuestions();
+    loadQuestions();
     render();
     showPanel(st.tab || 'all');
     syncUrl();
@@ -1582,8 +1792,8 @@
     syncChrome();
 
     if (S.subscribe) S.subscribe(function (state, evt) {
-      if (!evt || evt.type === 'external') { fillBanks(); fillQuestions(); render(); }
-      else if (evt.type.indexOf('note:') === 0 || evt.type === 'reset') { fillBanks(); fillQuestions(); render(); }
+      if (!evt || evt.type === 'external') { fillBanks(); loadQuestions(); render(); }
+      else if (evt.type.indexOf('note:') === 0 || evt.type === 'reset') { fillBanks(); loadQuestions(); render(); }
     });
   })();
 </script>

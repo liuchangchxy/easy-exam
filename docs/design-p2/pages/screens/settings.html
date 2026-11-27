@@ -75,6 +75,36 @@
 .account-name{  font-size: var(--text-md); color: var(--ink);  }
 .account-role{  font-size: var(--text-xs); color: var(--ink-3);  }
 .field-row{  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;  }
+/* ---- 保存状态：已保存 / 保存中 / 保存失败（可重试）---- */
+  .save-state{
+    display: inline-flex; align-items: center; gap: var(--sp-1);
+    font-size: var(--text-xs); line-height: var(--text-xs-lh); color: var(--ink-3);  }
+.save-state::before{
+    content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none;  }
+.save-state.is-ok{  color: var(--ok);  }
+.save-state.is-busy{  color: var(--ink-3);  }
+.save-state.is-bad{  color: var(--bad);  }
+.save-state .btn{  margin-left: var(--sp-1);  }
+/* 当前生效值：继承关系的落地表达 */
+  .effective{
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2);
+    padding: var(--sp-3) var(--sp-4); border-left: 3px solid var(--brand);
+    background: var(--brand-soft); border-radius: 0 var(--r-sm) var(--r-sm) 0;  }
+.effective-key{  font-size: var(--text-xs); color: var(--ink-3);  }
+.effective-val{  font-size: var(--text-sm); color: var(--ink);  }
+/* ---- 渐进式呈现：低频配置收在原生 details 里 ---- */
+  details.disc{  margin-top: var(--sp-4); border-top: 1px solid var(--line);  }
+details.disc > summary{
+    display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) 0;
+    cursor: pointer; list-style: none; font-size: var(--text-sm); color: var(--ink-2);  }
+details.disc > summary::-webkit-details-marker{  display: none;  }
+details.disc > summary:hover{  color: var(--ink);  }
+details.disc > summary .disc-hint{  font-size: var(--text-xs); color: var(--ink-4);  }
+details.disc > summary .od-icon{
+    --od-icon-size: 14px; margin-left: auto; color: var(--ink-4); flex: none;
+    transition: transform var(--dur-fast) var(--ease-out);  }
+details.disc[open] > summary .od-icon{  transform: rotate(180deg);  }
+details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
 /* 外观预览：密度与主题真实作用在本屏的一段示例上 */
   .preview-box{  border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--sp-4); background: var(--surface-2);  }
 .preview-box .list-row{  border-bottom: 1px solid var(--line);  }
@@ -183,7 +213,7 @@
         <span class="here" id="crumb-here">账号与安全</span>
       </nav>
       <span class="spacer"></span>
-      <button class="icon-btn" type="button" aria-label="搜索与跳转" title="搜索与跳转" data-ee-shell="search">
+      <button class="icon-btn" type="button" aria-label="快速跳转" title="快速跳转" data-ee-shell="search">
         <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
       </button>
       <button data-ee-shell="theme" class="icon-btn" type="button" id="tb-theme" aria-label="切换明暗" title="切换明暗">
@@ -215,10 +245,20 @@
         <svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg><span>今天</span>
       </a>
       <span class="mt-title">设置</span>
-      <button class="icon-btn" type="button" title="搜索与跳转" data-ee-shell="search" aria-label="搜索与跳转">
+      <button class="icon-btn" type="button" title="快速跳转" data-ee-shell="search" aria-label="快速跳转">
         <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
       </button>
-      <span class="user-mini" aria-hidden="true">A</span>
+      <div class="menu-anchor">
+        <button class="user-mini" type="button" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单">A</button>
+        <div class="menu" role="menu" hidden>
+          <a class="menu-item" role="menuitem" href="settings.html#account">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg><span>设置</span>
+          </a>
+          <button class="menu-item is-danger" type="button" role="menuitem" onclick="eeDialog.open('dlg-logout', this)">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-logout"/></svg><span>退出登录</span>
+          </button>
+        </div>
+      </div>
     </header>
 
     <!-- ================= 主体 ================= -->
@@ -257,9 +297,9 @@
 
       <div class="set-layout">
 
-        <!-- ================= 左轨：两组（个人 / 关于），分组标题对辅助技术可读 ================= -->
+        <!-- ================= 左轨：两组（常用 / 高级），按使用频率与相关性分组 ================= -->
         <nav class="set-rail" aria-label="设置分区">
-          <div class="set-group" data-i18n="rail.personal">个人</div>
+          <div class="set-group">常用</div>
           <a class="set-item is-active" href="#account" aria-current="true">
             <svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg><span data-i18n="sec.account">账号与安全</span>
           </a>
@@ -269,11 +309,11 @@
           <a class="set-item" href="#practice">
             <svg class="od-icon" aria-hidden="true"><use href="#i-target"/></svg><span data-i18n="sec.practice">练习偏好</span>
           </a>
+
+          <div class="set-group">高级</div>
           <a class="set-item" href="#ai">
             <svg class="od-icon" aria-hidden="true"><use href="#i-cpu"/></svg><span data-i18n="sec.ai">AI 与联网检索</span>
           </a>
-
-          <div class="set-group" data-i18n="rail.about">关于</div>
           <a class="set-item" href="#about">
             <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg><span data-i18n="sec.about">关于与数据</span>
           </a>
@@ -434,11 +474,21 @@
                     <button class="segment" type="button" role="radio" aria-checked="false" data-v="en"><span>English</span></button>
                   </div>
                 </div>
+              </div>
+            </div>
 
+            <!-- 低频显示项收在渐进式呈现里，不和一屏常用项平铺 -->
+            <details class="disc">
+              <summary>
+                <span>更多显示选项</span>
+                <span class="disc-hint">信息密度</span>
+                <svg class="od-icon" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+              </summary>
+              <div class="disc-body">
                 <div class="setting-row">
                   <div class="setting-label">
                     <div class="setting-name">信息密度</div>
-                    <div class="setting-desc">宽松适合阅读，紧凑适合管理与批量校对；练习与模考的专注布局不受影响。</div>
+                    <div class="setting-desc">宽松适合阅读，紧凑适合管理与批量校对；切换后全产品的行高与间距一起收紧，练习与模考的专注布局不受影响。</div>
                   </div>
                   <div class="segmented setting-control" role="radiogroup" aria-label="信息密度" data-seg="density">
                     <button class="segment" type="button" role="radio" aria-checked="true" data-v="cozy"><span>宽松</span></button>
@@ -446,7 +496,7 @@
                   </div>
                 </div>
               </div>
-            </div>
+            </details>
 
             <!-- 预览：主题 / 语言 / 密度的切换真实反映在本屏这段示例上 -->
             <div class="preview-box mt-4">
@@ -520,13 +570,32 @@
               <span class="section-note">AI 是可选能力。未配置时，练习、模考、错题与复习仍然完整可用。</span>
             </div>
 
-            <!-- 谁配置：实例级与个人级的归属分层（FN-511） -->
-            <div class="rule-label">谁配置</div>
-            <div class="kv mt-3">
-              <span class="kv-key">实例级</span><span class="kv-val">实例默认值由部署时设定，本页不能改；个人留空即继承它。</span>
-              <span class="kv-key">个人级</span><span class="kv-val">本页改的就是个人配置：改完一个字段立刻保存，不会冲掉另一个字段。</span>
-              <!-- 对非实例管理员，这一行说的是他进不去的页面，整个不渲染 -->
-              <span class="kv-key" id="ai-config-owner">实例管理</span><span class="kv-val" id="ai-config-owner-val">账号与注册开关在「实例管理」页，和题库角色、实例角色都无关。</span>
+            <!-- 谁配置：实例级与个人级的归属分层（低频说明，收在渐进式呈现里） -->
+            <details class="disc">
+              <summary>
+                <span>配置怎么继承</span>
+                <span class="disc-hint">实例级 / 个人级</span>
+                <svg class="od-icon" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+              </summary>
+              <div class="disc-body">
+                <div class="kv">
+                  <span class="kv-key">实例级</span><span class="kv-val">实例默认值由部署时设定，本页不能改；个人留空即继承它。</span>
+                  <span class="kv-key">个人级</span><span class="kv-val">本页改的就是个人配置：改完一个字段立刻保存，不会冲掉另一个字段。</span>
+                  <!-- 对非实例管理员，这一行说的是他进不去的页面，整个不渲染 -->
+                  <span class="kv-key" id="ai-config-owner">实例管理</span><span class="kv-val" id="ai-config-owner-val">账号与注册开关在「实例管理」页，和题库角色、实例角色都无关。</span>
+                </div>
+              </div>
+            </details>
+
+            <!-- 当前生效值：说的是「现在真正在用的那一套」，不是「你填过什么」 -->
+            <div class="rule-label mt-6">当前生效</div>
+            <div class="effective mt-3" id="ai-effective" role="status">
+              <span class="effective-key">AI 解释</span>
+              <span class="effective-val" id="ai-effective-val">实例默认 · 尚未填写个人配置</span>
+            </div>
+            <div class="effective mt-3" id="net-effective" role="status">
+              <span class="effective-key">联网核查</span>
+              <span class="effective-val" id="net-effective-val">联网检索 · 使用实例默认接口</span>
             </div>
 
             <!-- 当前状态：四态（R14 / ST-505 / BR-527） -->
@@ -601,7 +670,7 @@
                   </label>
                   <span class="od-spacer"></span>
                   <span class="hint">更改后自动保存。</span>
-                  <button class="btn btn-sm" type="button" data-test-conn>
+                  <button class="btn btn-sm" type="button" data-test-conn data-tc-for="AI 解释服务">
                     <svg class="od-icon" aria-hidden="true"><use href="#i-zap"/></svg><span class="tc-label">测试连接</span>
                   </button>
                   <span class="field-ok" role="status" id="ai-test-ok" hidden>连接成功</span>
@@ -653,7 +722,7 @@
                 <div class="field-row mt-4">
                   <button class="btn btn-sm" type="button" id="net-clear-key">清除检索密钥</button>
                   <span class="od-spacer"></span>
-                  <button class="btn btn-sm" type="button" data-test-conn>
+                  <button class="btn btn-sm" type="button" data-test-conn data-tc-for="联网核查服务">
                     <svg class="od-icon" aria-hidden="true"><use href="#i-zap"/></svg><span class="tc-label">测试连接</span>
                   </button>
                   <span class="field-ok" role="status" id="net-state">已保存</span>
@@ -671,14 +740,23 @@
             </div>
             <div class="panel">
               <div class="panel-body">
-                <div class="kv">
-                  <span class="kv-key">部署方式</span><span class="kv-val">私有云 · 数据保存在你的实例</span>
-                  <span class="kv-key">存储</span><span class="kv-val">题库内容共享，学习记录私有</span>
-                  <span class="kv-key">语言</span><span class="kv-val">简体中文 / English</span>
-                  <span class="kv-key">同步</span><span class="kv-val">多设备同步学习记录</span>
-                  <span class="kv-key">版本</span><span class="kv-val mono">v1.0.24</span>
-                  <span class="kv-key">构建</span><span class="kv-val mono">ae40fd1</span>
-                </div>
+                <details class="disc" style="margin-top:0;border-top:0">
+                  <summary>
+                    <span>版本与存储详情</span>
+                    <span class="disc-hint">部署方式 · 同步 · 版本号</span>
+                    <svg class="od-icon" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                  </summary>
+                  <div class="disc-body">
+                    <div class="kv">
+                      <span class="kv-key">部署方式</span><span class="kv-val">私有云 · 数据保存在你的实例</span>
+                      <span class="kv-key">存储</span><span class="kv-val">题库内容共享，学习记录私有</span>
+                      <span class="kv-key">语言</span><span class="kv-val">简体中文 / English</span>
+                      <span class="kv-key">同步</span><span class="kv-val">多设备同步学习记录</span>
+                      <span class="kv-key">版本</span><span class="kv-val mono">v1.0.24</span>
+                      <span class="kv-key">构建</span><span class="kv-val mono">ae40fd1</span>
+                    </div>
+                  </div>
+                </details>
                 <div class="notice info mt-4">
                   <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
                   <div class="notice-body">外观（主题 / 配色 / 密度）与语言只保存在这台设备；题库内容、资料与解释版本跟随账号，在任何设备上都一样。</div>
@@ -699,7 +777,7 @@
           <!-- ========== 英文规格段 ============ -->
           <section class="section spec-block" id="en-appearance" lang="en-US" data-spec>
             <div class="section-head">
-              <h2 class="section-title">Appearance <span class="section-note">English specification</span></h2>
+              <h2 class="section-title">Appearance</h2>
               <span class="section-note">Light and dark apply immediately and are stored on this device.</span>
             </div>
 
@@ -756,8 +834,28 @@
 
                 <div class="setting-row">
                   <div class="setting-label">
+                    <div class="setting-name">Interface language</div>
+                    <div class="setting-desc">Bank content, anything you type and stored explanations keep their original language.</div>
+                  </div>
+                  <div class="segmented setting-control" role="radiogroup" aria-label="Interface language" data-seg="lang">
+                    <button class="segment" type="button" role="radio" aria-checked="true" data-v="zh"><span>简体中文</span></button>
+                    <button class="segment" type="button" role="radio" aria-checked="false" data-v="en"><span>English</span></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <details class="disc">
+              <summary>
+                <span>More display options</span>
+                <span class="disc-hint">Density</span>
+                <svg class="od-icon" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+              </summary>
+              <div class="disc-body">
+                <div class="setting-row">
+                  <div class="setting-label">
                     <div class="setting-name">Density</div>
-                    <div class="setting-desc">Balanced for reading; dense for management and bulk review. Practice always uses the focused layout.</div>
+                    <div class="setting-desc">Balanced for reading; dense for management and bulk review. Dense tightens line height and spacing across the product; practice always uses the focused layout.</div>
                   </div>
                   <div class="segmented setting-control" role="radiogroup" aria-label="Density" data-seg="density">
                     <button class="segment" type="button" role="radio" aria-checked="true" data-v="cozy">Balanced</button>
@@ -765,7 +863,7 @@
                   </div>
                 </div>
               </div>
-            </div>
+            </details>
           </section>
 
           <!-- ========== 状态格（规格演示：成品模式隐藏） ============ -->
@@ -913,7 +1011,8 @@
   </div>
 </div>
 
-<!-- ================= 底部导航（≤768；nav.js 统一转为真实链接）================= -->
+<!-- ================= 底部导航（≤768；nav.js 统一转为真实链接） ================= -->
+<!-- 只保留五个主要功能入口；设置等低频功能走侧栏底部与账户菜单（brief 第六节） -->
 <nav class="bottomnav" aria-label="底部导航">
   <button class="bn-item" type="button">
     <svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg><span>今天</span>
@@ -929,9 +1028,6 @@
   </button>
   <button class="bn-item" type="button">
     <svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg><span>资料</span>
-  </button>
-  <button class="bn-item" type="button">
-    <svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg><span>更多</span>
   </button>
 </nav>
 
@@ -1318,7 +1414,7 @@
         : '只以密文落库；输入框里永远是你要写入的新值。';
     }
   }
-  if (aiProvider) aiProvider.addEventListener('change', syncProvider);
+  if (aiProvider) aiProvider.addEventListener('change', function () { syncProvider(); syncEffective(); });
 
   /* 检索方式：关闭联网后隐藏接口与密钥 */
   var netMode = document.getElementById('net-mode');
@@ -1327,6 +1423,7 @@
     document.querySelectorAll('[data-net-only]').forEach(function (f) { f.hidden = off; });
     var state = document.getElementById('net-state');
     if (state) state.textContent = off ? '已关闭联网' : '已保存';
+    syncEffective();
   }
   if (netMode) {
     netMode.value = (store && store.settings().online === false) ? 'off' : 'on';
@@ -1337,10 +1434,86 @@
     syncNet();
   }
 
-  /* 字段失焦即保存（PATCH 只写改过的键） */
+  /* ---------- 字段失焦即保存（PATCH 只写改过的键）----------
+     保存状态三态都必须在界面上看得见：保存中 / 已保存 / 保存失败（可重试）。
+     失败不是假造的网络错误，而是这条字段自己的校验结论（如接口地址不是合法 URL），
+     所以「重试」指向的是一次真实的重新提交。 */
+  var SAVE_MSG = {
+    busy: '保存中…',
+    ok: '已保存',
+    bad: '保存失败'
+  };
+  function saveStateNode(field) {
+    if (field._saveState) return field._saveState;
+    var st = document.createElement('span');
+    st.className = 'save-state';
+    st.setAttribute('role', 'status');
+    st.hidden = true;
+    field.parentNode.appendChild(st);
+    field._saveState = st;
+    return st;
+  }
+  function paintSave(field, state, retry) {
+    var st = saveStateNode(field);
+    st.hidden = false;
+    st.className = 'save-state is-' + state;
+    st.textContent = SAVE_MSG[state];
+    var old = st.querySelector('.btn');
+    if (old) old.remove();
+    if (state === 'bad') {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn btn-sm btn-quiet';
+      b.textContent = '重试';
+      b.addEventListener('click', function () { field.focus(); });
+      st.appendChild(b);
+    }
+    if (retry) field._retry = retry;
+  }
+  /* 接口地址：合法性可本地判定，填错时保存状态必须是「失败」而不是静默回退 */
+  function badUrl(v) {
+    if (!v.trim()) return false;
+    return !/^https?:\/\/\S+$/i.test(v.trim());
+  }
   document.querySelectorAll('[data-autosave]').forEach(function (el) {
-    el.addEventListener('change', function () { window.eeToast('已保存'); });
+    el.addEventListener('change', function () {
+      var raw = (el.value || '').trim();
+      if (badUrl(raw)) {
+        paintSave(el, 'bad');
+        window.eeToast('保存失败：接口地址需要以 http:// 或 https:// 开头');
+        return;
+      }
+      paintSave(el, 'busy');
+      clearTimeout(el._saveTimer);
+      el._saveTimer = setTimeout(function () {
+        paintSave(el, 'ok');
+        window.eeToast('已保存');
+        syncEffective();
+      }, 420);
+    });
   });
+
+  /* ---------- 当前生效值：跟着字段实时重算 ---------- */
+  function val(id) { var el = document.getElementById(id); return el ? (el.value || '').trim() : ''; }
+  function syncEffective() {
+    var aiBase = val('ai-base');
+    var aiKey = document.getElementById('ai-key');
+    var aiVal = document.getElementById('ai-effective-val');
+    if (aiVal) {
+      var bits = [];
+      bits.push(val('ai-provider') || '兼容 OpenAI 接口');
+      bits.push(aiBase ? aiBase : '实例默认地址');
+      bits.push(aiKey && aiKey.value.trim() ? '个人密钥' : '实例默认密钥');
+      aiVal.textContent = (aiBase || (aiKey && aiKey.value.trim()) ? '个人配置' : '实例默认') + ' · ' + bits.join(' · ');
+    }
+    var netMode = document.getElementById('net-mode');
+    var netVal = document.getElementById('net-effective-val');
+    if (netVal && netMode) {
+      netVal.textContent = netMode.value === 'off'
+        ? '已关闭联网 · 核查直接返回未取得外部证据'
+        : '联网检索 · ' + (document.querySelector('[data-net-only] .input') && document.querySelector('[data-net-only] .input').value.trim() ? '个人接口' : '实例默认接口');
+    }
+  }
   /* 清除密钥：独立按钮，清除后该字段回到「未配置」语义 */
   ['ai-clear-key', 'net-clear-key'].forEach(function (id) {
     var b = document.getElementById(id);
@@ -1349,23 +1522,31 @@
       var input = id === 'ai-clear-key' ? document.getElementById('ai-key') : null;
       if (input) input.value = '';
       window.eeToast('已清除密钥，该字段回到未配置');
+      syncEffective();
     });
   });
+  var aiOff = document.getElementById('ai-off');
+  if (aiOff) aiOff.addEventListener('change', syncEffective);
   /* 测试连接：进行态禁用 + 结果反馈（只含状态码或异常类名） */
   document.querySelectorAll('[data-test-conn]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       if (btn.disabled) return;
       var label = btn.querySelector('.tc-label');
       var old = label.textContent;
-      var ok = document.getElementById('ai-test-ok');
+      /* 测的是哪一个对象必须写在按钮与结果里，不能只写「测试连接」 */
+      var what = btn.getAttribute('data-tc-for') || '当前配置';
+      var ok = btn.parentNode.querySelector('.field-ok');
       btn.disabled = true;
       label.textContent = '连接中…';
       if (ok) ok.hidden = true;
       setTimeout(function () {
         btn.disabled = false;
         label.textContent = old;
-        window.eeToast('连接成功');
-        if (ok) ok.hidden = false;
+        var detail = what === '联网核查服务'
+          ? (val('net-mode') === 'off' ? '已关闭联网' : '联网检索')
+          : (val('ai-provider') || '当前服务');
+        window.eeToast('连接成功 · ' + what + '（' + detail + '）');
+        if (ok) { ok.hidden = false; ok.textContent = '连接成功 · ' + what; }
       }, 900);
     });
   });
@@ -1484,6 +1665,7 @@
   syncPracticeUI();
   syncProvider();
   syncAccount();
+  syncEffective();
   syncInstanceEntry();
   var startSection = new URLSearchParams(location.search).get('section');
   var deepLink = ORDER.indexOf(startSection) >= 0;

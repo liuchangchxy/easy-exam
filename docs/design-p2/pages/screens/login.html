@@ -43,8 +43,7 @@
 .variant-head{  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-3); margin-bottom: var(--sp-4);  }
 .variant-fn{  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-3);  }
 .blocked-list{  margin: 0;  }
-.blocked-list .kv-key{  width: 8.5em;  }
-@media (max-width: 1024px){
+.blocked-list .kv-key{  width: 8.5em;  }@media (max-width: 1024px){
     .auth-layout { grid-template-columns: 1fr; }
     .auth-brand-pane { padding: var(--sp-7) var(--sp-5) var(--sp-5); gap: var(--sp-5); }
     .auth-points, .auth-colophon { display: none; }
@@ -54,13 +53,19 @@
 @media (max-width: 640px){
     .auth-headline { font-size: var(--text-3xl); }
     .auth-form-title { font-size: var(--text-3xl); }
-    /* 软键盘：主操作贴在可视区底部，输入框不被遮、也不用翻页才能点到「登录」。
+    /* 软键盘：主操作贴在可视区底部、坐在键盘之上，输入框不被遮、也不用翻页才能点到「登录」。
        整屏表单由浏览器自行处理聚焦滚动，这里只保证主按钮始终可达。 */
-    .auth-submit { position: sticky; bottom: var(--sp-2); z-index: 5; box-shadow: var(--shadow-1); }
+    .auth-form .btn-primary.auth-submit {
+      position: sticky;
+      bottom: calc(var(--sp-2) + var(--kb-inset, 0px));
+      z-index: 5; box-shadow: var(--shadow-1);
+    }
     .auth-form { padding-bottom: var(--sp-3); }
     /* 引导步骤条窄屏只留序号（与流程页步骤条同一处理） */
     .steps .step-name { display: none; }
     .steps { gap: var(--sp-2); }
+    /* 屏幕变体页签：窄屏折行，五个变体都不被裁掉 */
+    .tabs { flex-wrap: wrap; gap: var(--sp-2) var(--sp-5); }
   }</style>
 </head>
 <body>
@@ -118,14 +123,6 @@
 
   <!-- ============ 右：表单卡 ============ -->
   <section class="auth-form-pane" id="main-content" aria-labelledby="auth-form-title">
-    <div class="auth-toggles">
-      <button type="button" class="icon-btn" title="切换语言" data-ee-shell="lang" aria-label="切换语言">
-        <svg class="od-icon" aria-hidden="true"><use href="#i-globe"/></svg>
-      </button>
-      <button data-ee-shell="theme" type="button" class="icon-btn" title="切换明暗" aria-label="切换明暗">
-        <svg class="od-icon" aria-hidden="true"><use href="#i-moon"/></svg>
-      </button>
-    </div>
 
     <!-- ===== 登录 / 注册（默认态）===== -->
     <div class="auth-form-wrap" id="auth-signin">
@@ -230,6 +227,16 @@
         <button type="button" class="btn btn-quiet auth-submit" disabled aria-describedby="boot-skip-reason">稍后再说</button>
         <p class="hint" id="boot-skip-reason">引导完成前不能跳过：实例必须至少有一位管理员，否则没有人能管理用户与注册开关。</p>
       </form>
+    </div>
+
+    <!-- 语言与明暗：视觉上在右上角，Tab 顺序排在表单之后，不插在用户名前面 -->
+    <div class="auth-toggles">
+      <button type="button" class="icon-btn" title="切换语言" data-ee-shell="lang" aria-label="切换语言">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-globe"/></svg>
+      </button>
+      <button data-ee-shell="theme" type="button" class="icon-btn" title="切换明暗" aria-label="切换明暗">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-moon"/></svg>
+      </button>
     </div>
   </section>
 </div>
@@ -662,7 +669,7 @@
   <section class="section" lang="en-US" dir="ltr" aria-labelledby="en-auth-title" data-spec>
     <div class="section-head">
       <h2 class="section-title" id="en-auth-title">Sign in</h2>
-      <span class="section-note">English specification · same keys as the en-US dictionary</span>
+      <span class="section-note">Sign-in, registration and the password-change gate, in English.</span>
     </div>
 
     <div class="state-grid">

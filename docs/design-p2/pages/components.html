@@ -1164,6 +1164,62 @@
       </div>
     </div>
 
+    <h3 class="doc-h3">纸内布局模式（<code class="mono">.lay-*</code>，v4 新增）</h3>
+    <p class="doc-rule">统一纸面之外，纸<b>内部</b>也要有统一的布局词汇，否则每个页面各写一套网格，页面之间的节奏就散了。<b>页面按任务选模式，不要为「不一样」而发明新模式</b>；确需新形态先在评审里说明理由。这八种定义在 <code class="mono">ee.css §15.0</code>，屏幕的 <code class="mono">&lt;style&gt;</code> 块里不得再写一遍。</p>
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <caption>八种纸内布局模式</caption>
+        <thead><tr><th scope="col">模式</th><th scope="col">用于</th><th scope="col">断点行为</th></tr></thead>
+        <tbody>
+          <tr><td data-label="模式"><code class="mono">.lay-stack</code> / <code class="mono">.lay-stack-sm</code></td><td data-label="用于">单栏纵向节奏：阅读、表单、报告</td><td data-label="断点行为">不变</td></tr>
+          <tr><td data-label="模式"><code class="mono">.lay-main-side</code>（+<code class="mono">.wide-rail</code>）</td><td data-label="用于">主辅栏：题库工作区、设置、会话右栏</td><td data-label="断点行为">≤1024 收成单栏</td></tr>
+          <tr><td data-label="模式"><code class="mono">.lay-side-main</code></td><td data-label="用于">辅栏 + 主：筛选项在左、结果在右</td><td data-label="断点行为">≤1024 收成单栏</td></tr>
+          <tr><td data-label="模式"><code class="mono">.lay-two</code> / <code class="mono">.lay-three</code> / <code class="mono">.lay-four</code></td><td data-label="用于">等分多栏：卡片组、指标组；<code class="mono">.span-2</code> 可跨满</td><td data-label="断点行为">≤1024 四栏转二栏，≤768 全部单栏</td></tr>
+          <tr><td data-label="模式"><code class="mono">.lay-read</code></td><td data-label="用于">阅读单栏：题干 / 解析 / 长资料，行宽受 <code class="mono">--measure</code> 约束</td><td data-label="断点行为">不变</td></tr>
+          <tr><td data-label="模式"><code class="mono">.lay-toolbar</code></td><td data-label="用于">筛选项与主操作同一行，主操作靠右；消灭同屏重复平铺的操作入口</td><td data-label="断点行为">≤640 主操作单独占一行并撑满</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="doc-h3">文字层级（v4：六维组合，不只靠加粗）</h3>
+    <p class="doc-rule">页面标题 / 章节标题 / 次级标题 / 正文 / 辅助信息五级，每一级在 <b>字号 × 字重 × 字体 × 颜色 × 行高 × 留白</b> 上至少三维不同。只用 <code class="mono">font-weight</code> 区分的标题算不达标。衬线只给长文阅读位（页面标题、章节标题、题干、解析、资料正文），控件与界面 chrome 用无衬线，等宽只给数字与编号。</p>
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <caption>字号阶梯 v4（全站唯一来源，<code class="mono">ee.css §1</code>）</caption>
+        <thead><tr><th scope="col">层级</th><th scope="col">字号 / 行高</th><th scope="col">字体 × 字重</th><th scope="col">用途</th></tr></thead>
+        <tbody>
+          <tr><td data-label="层级">页面标题</td><td data-label="字号">30px / 1.22</td><td data-label="字体">衬线 500</td><td data-label="用途"><code class="mono">.page-title</code> <code class="mono">.flow-title</code></td></tr>
+          <tr><td data-label="层级">首页大标题</td><td data-label="字号">36–44px / 1.14–1.18</td><td data-label="字体">衬线 500</td><td data-label="用途"><code class="mono">.masthead-title</code></td></tr>
+          <tr><td data-label="层级">区块标题</td><td data-label="字号">25px / 1.3</td><td data-label="字体">衬线 500</td><td data-label="用途">统计数字 <code class="mono">.stat-num</code></td></tr>
+          <tr><td data-label="层级">题干 / 抽屉标题</td><td data-label="字号">21px / 1.45</td><td data-label="字体">衬线 500</td><td data-label="用途"><code class="mono">.q-stem</code> <code class="mono">.dlg-title</code> <code class="mono">.drawer-title</code></td></tr>
+          <tr><td data-label="层级">小节标题</td><td data-label="字号">18.5px / 1.5</td><td data-label="字体">衬线 500</td><td data-label="用途"><code class="mono">.section-title</code> <code class="mono">.empty-title</code></td></tr>
+          <tr><td data-label="层级">面板标题</td><td data-label="字号">16.5px</td><td data-label="字体">无衬线 600</td><td data-label="用途"><code class="mono">.panel-title</code>（与章节标题在字体维度分开）</td></tr>
+          <tr><td data-label="层级">阅读性正文</td><td data-label="字号">16.5px / 1.75</td><td data-label="字体">无衬线 400</td><td data-label="用途"><code class="mono">--text-md</code>，长题干辅助、资料长文</td></tr>
+          <tr><td data-label="层级">正文</td><td data-label="字号">14.5px / 1.7</td><td data-label="字体">无衬线 400</td><td data-label="用途"><code class="mono">--text-base</code></td></tr>
+          <tr><td data-label="层级">控件 / 表格</td><td data-label="字号">13.5px / 1.55</td><td data-label="字体">无衬线 400</td><td data-label="用途"><code class="mono">--text-sm</code>，按钮、输入、表格、列表标题</td></tr>
+          <tr><td data-label="层级">辅助信息</td><td data-label="字号">12.5px / 1.5</td><td data-label="字体">无衬线 400，墨色 <code class="mono">--ink-3</code></td><td data-label="用途"><code class="mono">--text-xs</code>，说明、图例、元信息脚注</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="state-note">控件高度同理论证：<code class="mono">--ctl-h 36</code>（按钮 / 输入 / 菜单项）、<code class="mono">--ctl-h-sm 32</code>、<code class="mono">--ctl-h-lg 42</code>（页面主操作），<code class="mono">pointer:coarse</code> 兜底仍为 44。</p>
+
+    <h3 class="doc-h3">细分隔线（v4：必须承担结构意义）</h3>
+    <p class="doc-rule">新增每一条线都要能说出它分开了什么；能靠留白、对齐、字重替代的一律不加。删过的重复线不要加回来。</p>
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <caption>分隔线取舍</caption>
+        <thead><tr><th scope="col">处置</th><th scope="col">线</th><th scope="col">理由</th></tr></thead>
+        <tbody>
+          <tr><td data-label="处置">已删</td><td data-label="线">面板四周边框</td><td data-label="理由">head 的下边线已分开标题区与内容区，外框是第二道重复线，还与内部表格/列表的线叠成三层</td></tr>
+          <tr><td data-label="处置">已删</td><td data-label="线">表格容器外框</td><td data-label="理由">表头下边线才是结构线；去框后表格嵌在面板里不再「盒子套盒子」</td></tr>
+          <tr><td data-label="处置">已删</td><td data-label="线">统计带下边线</td><td data-label="理由">上沿重线 + 项间竖线已构成数字带，下边线与下一节留白功能重复</td></tr>
+          <tr><td data-label="处置">已删</td><td data-label="线">通知四周边框</td><td data-label="理由">提示的价值在语义色与文字，不在盒子；只留左侧 3px 语义条</td></tr>
+          <tr><td data-label="处置">已删</td><td data-label="线">报告列表上沿线</td><td data-label="理由">与首项自己的上边线重合；同时补 <code class="mono">:last-child</code> 去线，末行底下不再有悬空线</td></tr>
+          <tr><td data-label="处置">保留</td><td data-label="线">页签基线、章节标题下沿线、表头下沿线、列表行间线、列间竖线、列分线</td><td data-label="理由">这些真的在分结构：切换域、分区、表头与数据、行与行、列与列、栏与栏</td></tr>
+        </tbody>
+      </table>
+    </div>
+
     <h3 class="doc-h3">工具类</h3>
     <div class="dtable-wrap">
       <table class="dtable">

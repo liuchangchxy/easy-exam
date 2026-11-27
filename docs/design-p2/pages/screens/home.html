@@ -17,7 +17,7 @@
 .masthead-figures{  display: flex; align-items: flex-end; gap: 0; flex: 0 0 auto; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 13px 0 11px;  }
 .mf{  padding: 0 var(--sp-4); border-left: 1px solid var(--line); min-width: 0;  }
 .mf:first-child{  border-left: 0;  }
-.mf-n{  font-family: var(--font-mono); font-size: 26px; font-weight: 500; line-height: 1.1; letter-spacing: -.03em; font-variant-numeric: tabular-nums;  }
+.mf-n{  font-family: var(--font-mono); font-size: var(--text-2xl); font-weight: 500; line-height: 1.1; letter-spacing: -.03em; font-variant-numeric: tabular-nums;  }
 .mf-c{  font-size: var(--text-sm); letter-spacing: .03em; color: var(--ink-3); margin-top: var(--sp-1);  }
 /* 纸内两栏：主栏 + 一条竖线分隔的右栏，不用卡片 */
   .today-grid{  display: grid; grid-template-columns: minmax(0, 1fr) 296px; gap: var(--sp-8); margin-top: var(--sp-6); align-items: start;  }
@@ -25,10 +25,6 @@
 .today-rail{  border-left: 1px solid var(--line); padding-left: var(--sp-5); min-width: 0;  }
 .rail-block + .rail-block{  margin-top: var(--sp-7);  }
 .rail-title{  font-size: var(--text-sm); font-weight: 600; letter-spacing: .1em; color: var(--ink-3); margin: 0 0 var(--sp-2);  }
-.rail-link{  display: flex; align-items: center; gap: var(--sp-3); width: 100%; background: none; border: none; border-top: 1px solid var(--line); font: inherit; text-align: left; padding: var(--sp-3) 0; cursor: pointer; color: inherit;  }
-.rail-link:first-of-type{  border-top: 0;  }
-.rail-link:hover .list-title{  color: var(--brand-ink);  }
-.rail-link-n{  margin-left: auto; color: var(--ink-4); flex: none;  }
 /* 未完成会话：上沿一条墨色重线的编辑块，不是卡片 */
   .resume-card{  border-top: 1px solid var(--ink); padding: var(--sp-4) 0 var(--sp-5);  }
 .resume-card + .resume-card{  border-top: 1px solid var(--line);  }
@@ -37,10 +33,16 @@
 .session-meta{  font-size: var(--text-sm); color: var(--ink-3); margin: var(--sp-1) 0 var(--sp-3);  }
 .session-progress-meta{  justify-content: space-between; margin-top: var(--sp-2); font-size: var(--text-xs); color: var(--ink-3);  }
 .session-actions{  margin-top: var(--sp-4); flex-wrap: wrap;  }
-.week-bars{  display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--sp-2); align-items: end; height: var(--sp-10);  }
-.week-bar{  display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; gap: var(--sp-1); height: 100%; min-width: 0;  }
-.week-bar i{  display: block; width: 100%; min-height: var(--sp-1); background: var(--brand); border-radius: var(--r-xs);  }
-.week-bar em{  font-size: var(--text-xs); color: var(--ink-3); font-style: normal; text-align: center;  }
+/* 7 日计划：一行一天，日期 + 到期题数都是真实数据；不用比例失真的柱状图 */
+  .plan-days{  display: flex; flex-direction: column;  }
+.plan-day{  display: flex; align-items: baseline; gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom: 1px solid var(--line);  }
+.plan-day:last-child{  border-bottom: 0;  }
+.plan-day-d{  flex: 1 1 auto; min-width: 0; font-size: var(--text-sm); color: var(--ink-2);  }
+.plan-day-d b{  font-weight: 500; color: var(--ink);  }
+.plan-day-n{  flex: none; font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink-3); font-variant-numeric: tabular-nums;  }
+.plan-day.is-over .plan-day-d b{  color: var(--warn);  }
+.plan-day.is-over .plan-day-n{  color: var(--warn);  }
+.plan-day.is-none .plan-day-n{  color: var(--ink-4);  }
 .rail-note{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); margin: var(--sp-3) 0 0;  }
 .list-title{  overflow-wrap: anywhere;  }
 .plan-disabled{  cursor: default;  }
@@ -93,6 +95,9 @@
     .list-main { flex: 1 1 100%; }
     .list-side { flex: 1 1 100%; justify-content: flex-end; }
     .masthead-title { font-size: var(--text-3xl); }
+    /* 手机上主操作与次级操作各占一半宽度，不挤成一团也不换行成三排 */
+    .masthead-actions { width: 100%; }
+    .masthead-actions > .btn { flex: 1 1 auto; }
   }</style>
 </head>
 <body>
@@ -178,9 +183,9 @@
     <main class="content has-bottomnav" id="main-content">
       <header class="masthead">
         <p class="masthead-meta">
-          <span>2026年11月13日</span>
+          <span id="masthead-date">今天</span>
           <span class="sep" aria-hidden="true">·</span>
-          <span>第 46 周</span>
+          <span id="masthead-week">本周</span>
           <span class="sep" aria-hidden="true">·</span>
           <span class="byline" id="masthead-user">accept_admin_1794570360969 · 私人学习档案</span>
         </p>
@@ -227,8 +232,7 @@
             </div>
             <div id="banks-host"></div>
             <p class="ee-rule">
-              <b>两个数分开看</b>：题库内容量 = 该库未归档题目（公共语义，斩杀不影响它）；我的可练题量 = 内容量 − 我斩杀的题（个人语义）。
-              只有可练题量为 0 时「开始练习」才禁用并说明原因。
+              <b>两个数分开看</b>：内容量 = 未归档题目；可练量 = 内容量 − 我斩杀的题。可练量为 0 时才不能开始练习。
             </p>
           </section>
 
@@ -248,13 +252,8 @@
         <aside class="today-rail" aria-label="计划与接下来">
           <div class="rail-block">
             <h2 class="rail-title">7 日计划</h2>
-            <div class="week-bars" aria-hidden="true" id="week-bars"></div>
-            <p class="rail-note" id="week-note">3 题 · 6 分钟</p>
-          </div>
-
-          <div class="rail-block">
-            <h2 class="rail-title">接下来</h2>
-            <div id="next-host"></div>
+            <div class="plan-days" id="week-bars"></div>
+            <p class="rail-note" id="week-note"></p>
           </div>
 
           <div class="rail-block">
@@ -747,7 +746,9 @@ window.EEHome = (function () {
     return { kind: 'practice', bankId: 'b_acc', mode: '顺序练习', total: 0, scope: '还没有可练习的题库' };
   }
 
-  /* ---------- 主操作区 ---------- */
+  /* ---------- 主操作区 ----------
+     一屏至多一颗主操作：有未完成会话时它是「继续」，没有时它是「开始今天的第一件事」。
+     次级操作只留一颗，措辞短，后果说明放进开始决策对话框里说。 */
   function renderActions() {
     var host = document.getElementById('masthead-actions');
     var list = sessions();
@@ -755,22 +756,22 @@ window.EEHome = (function () {
     if (list.length) {
       var last = list[list.length - 1];
       host.innerHTML =
-        '<button type="button" class="btn btn-primary" onclick="EEHome.resume(\'' + esc(last.id) + '\')">' +
+        '<button type="button" class="btn btn-primary btn-hero" onclick="EEHome.resume(\'' + esc(last.id) + '\')">' +
         '<svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>继续' + esc(KIND_LABEL[last.kind] || '练习') + '</button>' +
-        '<button type="button" class="btn" onclick="EEHome.openStart(EEHome.planCtx(2), this)">结束并新建（只结束同模式会话）</button>';
+        '<button type="button" class="btn" onclick="EEHome.openStart(EEHome.planCtx(2), this)">结束并新建</button>';
       return;
     }
     if (dueRows().length) {
-      host.innerHTML = '<button type="button" class="btn btn-primary" onclick="EEHome.openStart(EEHome.planCtx(0), this)">' +
+      host.innerHTML = '<button type="button" class="btn btn-primary btn-hero" onclick="EEHome.openStart(EEHome.planCtx(0), this)">' +
         '<svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>开始今日计划（' + dueRows().length + ' 题）</button>';
       return;
     }
     if (pb) {
-      host.innerHTML = '<button type="button" class="btn btn-primary" onclick="EEHome.openStart(EEHome.bankCtx(\'' + esc(pb.id) + '\'), this)">' +
+      host.innerHTML = '<button type="button" class="btn btn-primary btn-hero" onclick="EEHome.openStart(EEHome.bankCtx(\'' + esc(pb.id) + '\'), this)">' +
         '<svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>开始练习（20 题）</button>';
       return;
     }
-    host.innerHTML = '<button type="button" class="btn btn-primary" data-act="new-bank" onclick="eeDialog.open(\'dlg-new-bank\', this)">' +
+    host.innerHTML = '<button type="button" class="btn btn-primary btn-hero" data-act="new-bank" onclick="eeDialog.open(\'dlg-new-bank\', this)">' +
       '<svg class="od-icon" aria-hidden="true"><use href="#i-plus"/></svg>新建题库</button>' +
       '<a class="btn" href="import.html">去导入</a>';
   }
@@ -834,8 +835,7 @@ window.EEHome = (function () {
         (p.off ? '<p class="hint" id="plan-why-' + i + '">' + esc(p.why) + '</p>' : '');
     }).join('');
     document.getElementById('plan-rule').innerHTML =
-      '<b>完成度按真实学习记录计算</b>：同一道题无论从今天页、复习页、题库页还是计划入口做，完成判定一致；' +
-      '未完成的天可以补做，补做后该日标记完成，剩余任务按「补做日之后顺延」重排。完整计划与参数在学习档案。';
+      '<b>完成度按真实学习记录计算</b>：同一道题无论从今天页、复习页还是题库页做，判定一致；未完成的天可以补做。';
   }
 
   /* ---------- 题库进度 ---------- */
@@ -909,7 +909,7 @@ window.EEHome = (function () {
         '<span class="list-meta">' + meta.join('') + '</span></span>' +
         '<span class="list-side">' + act + '</span></div>';
     }).join('') + '</div>' +
-      '<p class="ee-rule">提分推荐是纯确定性规则，不依赖 AI；完整筛选（题型、标签、数量、难度、新题比例）在<a class="link-btn" href="diagnosis.html">学习档案</a>。</p>';
+      '<p class="ee-rule">推荐按「错题待复习 &gt; 薄弱 &gt; 复习到期 &gt; 新题覆盖」排序，纯确定性规则，不依赖 AI；完整筛选在<a class="link-btn" href="diagnosis.html">学习档案</a>。</p>';
   }
   function rowCtx(rowId) {
     var row = S.reviewRow(rowId);
@@ -919,38 +919,36 @@ window.EEHome = (function () {
   }
 
   /* ---------- 右栏 ---------- */
+  var WEEK_CN = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  function startOfDay(d) { var x = new Date(d.getTime()); x.setHours(0, 0, 0, 0); return x; }
+  /* 7 日计划：按复习队列里每道题真实的到期日分组。
+     已逾期的排在最前面并说明「先做这些」；没有题的那天照常列出，不为了好看而省略。 */
   function renderRail() {
-    /* 7 日分布：把四类任务按每日预算摊到 7 天，前两天重（到期 + 错题），之后递减 */
-    var due = dueRows().length, mis = mistakeRows().length, wk = weakRows().length, fresh = freshQuestions().length;
-    var perDay = [0, 0, 0, 0, 0, 0, 0];
-    var spread = function (n, weight) {
-      var total = weight.reduce(function (a, b) { return a + b; }, 0);
-      var left = n;
-      for (var i = 0; i < 7 && left > 0; i++) {
-        var take = Math.min(left, Math.max(1, Math.round(n * weight[i] / total)));
-        perDay[i] += take; left -= take;
-      }
-      if (left > 0) perDay[0] += left;
-    };
-    spread(due, [2, 1, 1, 1, 1, 0, 0]);
-    spread(mis, [1, 1, 1, 1, 0, 0, 0]);
-    spread(wk, [0, 1, 1, 1, 0, 0, 0]);
-    spread(Math.min(fresh, 6), [0, 0, 1, 1, 1, 1, 1]);
-    var max = Math.max.apply(null, perDay.concat([1]));
-    document.getElementById('week-bars').innerHTML = perDay.map(function (n, i) {
-      return '<span class="week-bar"><i style="height:' + Math.round(n / max * 100) + '%"></i><em>' + (i + 1) + '</em></span>';
-    }).join('');
-    var total = perDay.reduce(function (a, b) { return a + b; }, 0);
-    document.getElementById('week-note').textContent = total + ' 题 · 约 ' + Math.max(1, Math.round(total * 1.2)) + ' 分钟 · 每日预算 30 分钟';
-    var pb = primaryBank();
-    var host = document.getElementById('next-host');
-    if (!pb) {
-      host.innerHTML = '<p class="rail-note">还没有可练习的题库，先去导入题目。</p>';
-    } else {
-      host.innerHTML = '<button type="button" class="rail-link" onclick="EEHome.openStart(EEHome.bankCtx(\'' + esc(pb.id) + '\'), this)">' +
-        '<span class="list-main"><span class="list-title">' + esc(pb.name) + '</span>' +
-        '<span class="list-meta"><span>我可练 ' + practiceCount(pb.id) + ' 题</span></span></span>' +
-        '<span class="rail-link-n">→</span></button>';
+    var now = startOfDay(new Date());
+    var buckets = [], overdue = 0, total = 0;
+    for (var i = 0; i < 7; i++) buckets.push(0);
+    S.reviewQueue().forEach(function (r) {
+      if (r.killed_at) return;
+      var d = new Date(String(r.due_at || '').replace(' ', 'T'));
+      if (isNaN(d.getTime())) return;
+      var diff = Math.round((startOfDay(d).getTime() - now.getTime()) / 86400000);
+      if (diff < 0) { overdue++; total++; }
+      else if (diff < 7) { buckets[diff]++; total++; }
+    });
+    var rows = '';
+    if (overdue) rows += dayRow('已逾期', overdue, 'is-over');
+    for (var j = 0; j < 7; j++) {
+      var d = new Date(now.getTime() + j * 86400000);
+      var label = j === 0 ? '今天' : (j === 1 ? '明天' : WEEK_CN[d.getDay()]);
+      rows += dayRow(label + ' · ' + (d.getMonth() + 1) + '/' + d.getDate(), buckets[j], buckets[j] ? '' : 'is-none');
+    }
+    document.getElementById('week-bars').innerHTML = rows;
+    document.getElementById('week-note').textContent = total
+      ? '共 ' + total + ' 题 · 预计 ' + Math.max(5, Math.round(total * 1.5 / 5) * 5) + ' 分钟'
+      : '接下来 7 天没有到期的题';
+    function dayRow(dateText, n, cls) {
+      return '<div class="plan-day ' + cls + '"><span class="plan-day-d"><b>' + esc(dateText) + '</b></span>' +
+        '<span class="plan-day-n">' + (n ? n + ' 题' : '—') + '</span></div>';
     }
     var sel = document.getElementById('exam-bank');
     var banks = ownBanks().filter(function (b) { return contentCount(b.id) > 0; });
@@ -963,13 +961,31 @@ window.EEHome = (function () {
   }
 
   /* ---------- 统计 ---------- */
+  /* 近 7 天正确率真的按时间过滤：只取落库时间在最近 7 天内的报告，
+     分母是这些报告里已作答的客观题（已答 − 未判分），答对的题是分子。
+     7 天内没有客观题作答时显示「暂无数据」，不用 0% 或历史全量数据冒充。 */
+  function recentAccuracy() {
+    var cutoff = Date.now() - 7 * 86400000;
+    var answered = 0, correct = 0, reports = 0;
+    S.reports().forEach(function (r) {
+      var at = new Date(String(r.at || '').replace(' ', 'T'));
+      if (isNaN(at.getTime()) || at.getTime() < cutoff) return;
+      reports++;
+      var objAnswered = (r.answered || 0) - (r.ungraded || 0);
+      answered += objAnswered;
+      correct += (r.correct == null ? 0 : r.correct);
+    });
+    return { answered: answered, correct: correct, reports: reports, rate: answered ? Math.round(correct / answered * 100) : null };
+  }
   function renderStats() {
-    var due = dueRows().length, mis = mistakeRows().length;
+    var due = dueRows().length;
     var reports = S.reports();
     var answered = 0, correct = 0;
     reports.forEach(function (r) { answered += r.total || 0; correct += r.correct || 0; });
     sessions().forEach(function (s) { answered += s.done || 0; });
     var acc = answered ? Math.round(correct / answered * 100) + '%' : '—';
+    var week = recentAccuracy();
+    var weekTxt = week.rate == null ? '暂无数据' : week.rate + '%';
     var available = 0, studied = 0;
     allBanks().forEach(function (b) { available += contentCount(b.id); studied += studiedInBank(b.id); });
     var coverage = available ? Math.round(studied / available * 100) + '%' : '—';
@@ -977,11 +993,23 @@ window.EEHome = (function () {
       '<div class="mf"><div class="mf-n">' + answered + '</div><div class="mf-c">累计作答</div></div>' +
       '<div class="mf"><div class="mf-n">' + due + '</div><div class="mf-c">今日待复习</div></div>' +
       '<div class="mf"><div class="mf-n">' + coverage + '</div><div class="mf-c">题库覆盖率</div></div>' +
-      '<div class="mf"><div class="mf-n">' + acc + '</div><div class="mf-c">近 7 天正确率</div></div>';
+      '<div class="mf"><div class="mf-n">' + weekTxt + '</div><div class="mf-c">近 7 天正确率' +
+      (week.answered ? '（' + week.answered + ' 题）' : '') + '</div></div>';
     document.getElementById('side-due').textContent = String(due);
     document.getElementById('side-coverage').textContent = coverage;
-    document.getElementById('side-acc').textContent = acc;
+    document.getElementById('side-acc').textContent = week.rate == null ? '—' : week.rate + '%';
     document.getElementById('masthead-user').textContent = S.user() + ' · 私人学习档案';
+    var d = new Date();
+    document.getElementById('masthead-date').textContent =
+      d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    document.getElementById('masthead-week').textContent = '第 ' + isoWeek(d) + ' 周';
+  }
+  function isoWeek(d) {
+    var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    var day = (t.getUTCDay() + 6) % 7;
+    t.setUTCDate(t.getUTCDate() - day + 3);
+    var first = new Date(Date.UTC(t.getUTCFullYear(), 0, 4));
+    return 1 + Math.round((t.getTime() - first.getTime()) / 604800000);
   }
 
   function renderAll() {

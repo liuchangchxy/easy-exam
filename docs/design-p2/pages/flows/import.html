@@ -25,7 +25,7 @@
 .step-block{  padding: var(--sp-5) 0 var(--sp-2);  }
 .step-block > .panel-head, .step-block > .step-head{  padding: 0 0 var(--sp-4); border-bottom: 1px solid var(--line);  }
 .step-block > .panel-body{  padding: var(--sp-5) 0 0;  }
-.step-head{  display: flex; align-items: flex-start; gap: var(--sp-3); margin-bottom: var(--sp-4);  }
+.step-head{  display: flex; align-items: flex-start; gap: var(--sp-3); margin-bottom: var(--sp-4); flex-wrap: wrap;  }
 .step-no{  font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink-4); flex: none; padding-top: 2px;  }
 .step-title{  font-family: var(--font-serif); font-size: var(--text-lg); font-weight: 500;  }
 .step-sub{  font-size: var(--text-xs); color: var(--ink-3); margin-top: 2px;  }
@@ -42,6 +42,15 @@
 .file-meta{  font-size: var(--text-xs); color: var(--ink-3);  }
 .file-input-hidden{  position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none;  }
 .source-modes{  margin-bottom: var(--sp-4);  }
+/* 文件候选：一行一个，选中态明确，不预设选中 */
+.pick-row{  display: flex; align-items: center; gap: var(--sp-3); width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--line); padding: var(--sp-3) var(--sp-1); font: inherit; color: inherit; cursor: pointer;  }
+.pick-row:last-child{  border-bottom: 0;  }
+.pick-row:hover{  background: var(--surface-2);  }
+.pick-row.is-on{  background: var(--brand-soft); box-shadow: inset 3px 0 0 var(--brand);  }
+.pick-row .od-icon{  --od-icon-size: 18px; color: var(--ink-3); flex: none;  }
+.pick-main{  flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px;  }
+.pick-name{  font-size: var(--text-sm); color: var(--ink); overflow-wrap: anywhere;  }
+.pick-meta{  font-size: var(--text-xs); color: var(--ink-3); display: flex; gap: var(--sp-3); flex-wrap: wrap;  }
 /* 导入任务 */
 .job-bar{  height: 4px; background: var(--surface-3); border-radius: 2px; overflow: hidden;  }
 .job-bar i{  display: block; height: 100%; background: var(--brand); border-radius: 2px; transition: width var(--dur-base) var(--ease-out);  }
@@ -49,11 +58,19 @@
 .leave-backdrop{  position: relative;  }
 .leave-dim{  opacity: .55;  }
 .dup-stem{  font-family: var(--font-serif); font-size: var(--text-sm); line-height: 1.6;  }
-@media (max-width: 768px){ .mapping-grid { grid-template-columns: minmax(0, 1fr); } }
+.dup-cols{  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-5);  }
+.dup-side{  display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0;  }
+.dup-cap{  font-size: var(--text-xs); color: var(--ink-4); letter-spacing: .08em;  }
+.dup-acts{  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;  }
+.fail-row{  display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; padding: var(--sp-2) 0; border-bottom: 1px solid var(--line); font-size: var(--text-sm);  }
+.fail-row:last-child{  border-bottom: 0;  }
+.fail-row .mono{  font-size: var(--text-xs); color: var(--ink-3);  }
+@media (max-width: 768px){ .mapping-grid { grid-template-columns: minmax(0, 1fr); } .dup-cols{ grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); } }
 @media (max-width: 640px){
   .steps .step-name { display: none; }
   .steps { gap: var(--sp-1); }
   .flow-title { font-size: var(--text-2xl); }
+  .doc-page { padding: var(--sp-5) var(--sp-4) var(--sp-8); }
 }</style>
 </head>
 <body>
@@ -67,7 +84,7 @@
     <div>
       <p class="flow-eyebrow" data-spec>流程原型 · 题库域</p>
       <h1 class="flow-title">导入闭环</h1>
-      <p class="flow-sub" data-spec>选择题库 → 来源与格式 → 表格字段映射 / PDF 预检与校正 → 重复题处理策略 → 后台作业 → 离开确认</p>
+      <p class="flow-sub" data-spec>选择题库 → 来源与格式 → 表格字段映射 → 人工校对 → 重复题对照 → 草稿与续做 → 执行进度 → 导入结果 → 离开确认</p>
     </div>
     <div class="page-actions">
       <button type="button" class="btn btn-quiet btn-sm" data-act="leave">离开导入</button>
@@ -100,22 +117,71 @@
   /* ---------- 数据（题库与题目来自共享状态，导入结果真实落地） ---------- */
   var S = window.eeStore;
   var HEADERS = ['题干', '答案', '题型', '解析', '难度', '标签', '选项合并列'];
-  var SAMPLE = [
-    ['OSI 的（ ）不适合提供相应的安全服务。', 'B', '单选题', '会话层位于 OSI 第五层，不提供安全服务。', '3', '网络,安全', 'A.传输层|B.会话层|C.网络层|D.应用层'],
-    ['关于范围基准，以下说法不正确的是（）。', 'C', '单选题', '范围基准是规划阶段输出的组件。', '2', '范围,管理', 'A.范围说明书|B.WBS|C.范围基准|D.进度基准'],
-    ['当出现异常时软件需要有持续提供服务，属于（）。', 'A', '单选题', '韧性指出现异常时仍能持续提供服务。', '2', '架构,质量', 'A.韧性|B.弹性|C.架构持续演进|D.服务化']
+  var SUPPORTED = ['xlsx', 'csv', 'json', 'md', 'txt', 'pdf'];
+  /* 用户自己的文件：名称、大小、行数都带过来，选中后才校验，不预设选中某一个 */
+  var FILE_CATALOG = [
+    { name: '软考真题整理.csv', size: 12, rows: 12, at: '昨天 21:14' },
+    { name: '章节练习第二批.csv', size: 46, rows: 86, at: '11-22 09:31' },
+    { name: '案例分析整理.json', size: 88, rows: 34, at: '11-20 16:40' },
+    { name: '系统集成历年真题-全量.xlsx', size: 6820, rows: 586, at: '11-18 10:02' },
+    { name: '系统集成历年真题扫描版.pdf', size: 4180, pages: 14, at: '11-15 08:20' },
+    { name: '旧版题库.doc', size: 2100, rows: 0, at: '11-09 15:26' }
   ];
-  /* 与题库逐字相同的题干才算重复（与 screens/import.html 同一套判定） */
-  function sampleItems() {
-    return SAMPLE.map(function (r) {
-      return { stem: r[0], type: r[2], difficulty: r[4] === '3' ? '进阶' : '基础', chapter: '导入' };
-    });
+  var POOL = [
+    'OSI 的（ ）不适合提供相应的安全服务。',
+    '关于范围基准，以下说法不正确的是（）。',
+    '当出现异常时软件需要有持续提供服务，属于（）。',
+    '每周一学校开展直播课程，在直播中实时回复学生问题属于（ ）',
+    '（ ）按照业务功能聚合性进行应用规划，建设与应用组件对应的应用系统。',
+    '项目管理的临时性意味着项目（ ）。',
+    '沟通管理计划中应记录干系人的（ ）。',
+    '挣值分析中，成本偏差 CV 的计算公式是（ ）。',
+    '工作分解结构（WBS）的最小单元是（ ）。',
+    '风险登记册中不包括的内容是（ ）。'
+  ];
+  var BATCH_LABEL = ['2022', '2023', '2024', '2025', '2026'];
+
+  function fileKind(name) {
+    var m = String(name || '').match(/\.([a-z0-9]+)$/i);
+    var ext = m ? m[1].toLowerCase() : '';
+    if (ext === 'pdf') return 'pdf';
+    return SUPPORTED.indexOf(ext) > -1 ? 'table' : null;
+  }
+  function normalizeFile(cat) {
+    var kind = fileKind(cat.name);
+    return {
+      name: cat.name, size: cat.size, at: cat.at, kind: kind,
+      rows: kind === 'pdf' ? (cat.pages || 0) : (cat.rows || 0),
+      error: !kind ? '「.' + (String(cat.name).match(/\.([a-z0-9]+)$/i) || [])[1] + '」不在支持范围内，可以先用表格软件另存为 .csv。'
+        : (cat.size > 50 * 1024 ? '文件超过 50 MB 上限，可以拆成几个文件分批导入。' : '')
+    };
+  }
+  /* 文件里的行：前两行取目标题库已有题干，重复是真实比对的结果 */
+  function fileItems() {
+    if (!state.file) return [];
+    var n = state.file.rows;
+    var existing = S.questions(state.bankId);
+    var out = [];
+    for (var i = 0; i < n; i++) {
+      var stem;
+      if (i < 2 && existing[i]) stem = existing[i].stem;
+      else stem = POOL[i % POOL.length] + '（' + BATCH_LABEL[Math.floor(i / POOL.length) % BATCH_LABEL.length] + ' 年第 ' + (Math.floor(i / POOL.length) + 1) + ' 套）';
+      var type, answer, opts, broken = false;
+      if (i % 173 === 42) { broken = true; stem = ''; type = '单选题'; answer = ''; opts = 0; }
+      else if (i === 3) { type = '单选题'; answer = 'AB'; opts = 4; }
+      else if (i === 5) { type = '单选题'; answer = 'C'; opts = 2; }
+      else { type = (i % 7 === 5) ? '多选题' : '单选题'; answer = type === '多选题' ? 'AB' : 'BCD'[i % 3]; opts = 4; }
+      out.push({ row: i + 1, stem: stem, type: type, answer: answer, opts: opts, broken: broken });
+    }
+    return out;
   }
   function bankList() { return S.banks({ archived: false }); }
   function bank() { return S.bank(state.bankId) || bankList()[0]; }
-  function dupStems() {
-    var existing = S.questions(state.bankId).map(function (q) { return q.stem; });
-    return SAMPLE.map(function (r) { return r[0]; }).filter(function (stem) { return existing.indexOf(stem) > -1; });
+  function dupPairs() {
+    var existing = {};
+    S.questions(state.bankId).forEach(function (x) { existing[x.stem] = x; });
+    return fileItems().filter(function (it) { return existing[it.stem]; })
+      .map(function (it) { return { item: it, existing: existing[it.stem] }; });
   }
   var MAP_FIELDS = [
     { key: 'stem', label: '题干', required: true },
@@ -127,11 +193,14 @@
     { key: 'options', label: '选项合并列' }
   ];
   var FORMATS = ['.xlsx', '.csv', '.json', '.md / .txt', '.pdf'];
+  var DUP_LABEL = { skip: '跳过重复', overwrite: '覆盖已有题', new: '新建为题' };
+  var PDF_REASONS = ['版式断裂', '识别置信度低', '题干不完整'];
   var RULES = [
-    '支持 .xlsx、.csv、.json、.md、.txt 与 .pdf。',
+    '支持 .xlsx、.csv、.json、.md、.txt 与 .pdf，单个文件最大 50 MB。',
     '表格与文本类走字段映射，PDF 走预检与人工校正；用不到的一步标「不适用」。',
-    '重复题目不会静默覆盖，必须选择跳过重复、作为新题导入或合并到已有题。',
-    'PDF 识别不确定的行会停在草稿里，不会自动写入。',
+    '字段映射后有人工校对：抽检映射结果，可疑行逐行给处置，不静默写入。',
+    '重复题逐条给「跳过 / 覆盖 / 新建」，默认跳过；不会静默覆盖。',
+    '草稿恢复前先查有没有已在执行的任务，不会静默再起一份。',
     '导入会生成新题目版本；历史作答仍绑定原版本。'
   ];
 
@@ -142,15 +211,18 @@
     file: null,
     pasted: '',
     dragging: false,
+    pickName: '',
     mapping: { stem: '0', answer: '1', type: '2', explanation: '3', difficulty: '', tags: '', options: '' },
     delimiter: 'prefix',
-    strategy: '',
+    proof: {},
+    dups: {},
     pdfReason: '',
-    job: { status: 'idle', done: 0, total: SAMPLE.length, skipped: 0, job: null },
+    job: { status: 'idle', done: 0, total: 0, failed: [], job: null, rate: 0, eta: '' },
     leaveChoice: null,
     leaveFrom: 4,
     draftId: null,
-    timerId: null
+    timerId: null,
+    run: null
   };
 
   function esc(s) {
@@ -167,9 +239,9 @@
   function requiredMissing() {
     return MAP_FIELDS.filter(function (f) { return f.required && state.mapping[f.key] === ''; }).map(function (f) { return f.label; });
   }
-  function strategyLabel(v) {
-    return { skip: '跳过重复', new: '作为新题导入', merge: '合并到已有题' }[v] || '未选择';
-  }
+  function strategyLabel(v) { return DUP_LABEL[v] || '未选择'; }
+  function rows() { return state.file ? state.file.rows : 0; }
+  function isPdfFile() { return state.sourceMode === 'file' && !!state.file && state.file.kind === 'pdf'; }
   /* 草稿来自共享状态：同一文件 + 同一题库只留一份 */
   function storeDraft() {
     var list = S.drafts();
@@ -183,7 +255,7 @@
     S.drafts().forEach(function (d) {
       if (d.bankId === state.bankId && d.file === name) S.removeDraft(d.id);
     });
-    var d = S.addDraft({ bankId: state.bankId, file: name, step: state.leaveFrom == null ? 5 : state.leaveFrom });
+    var d = S.addDraft({ bankId: state.bankId, file: name, step: state.leaveFrom == null ? 7 : state.leaveFrom });
     state.draftId = d.id;
     return d;
   }
@@ -193,6 +265,17 @@
       if (d.bankId === state.bankId && d.file === name) S.removeDraft(d.id);
     });
     state.draftId = null;
+  }
+  /* 已在执行的任务：跨刷新 / 跨标签页可见，恢复时不静默再起一份 */
+  var RUN_KEY = 'ee-import-running-v1';
+  function readRun() {
+    try { return JSON.parse(localStorage.getItem(RUN_KEY) || 'null'); } catch (e) { return null; }
+  }
+  function writeRun(o) {
+    try {
+      if (o) localStorage.setItem(RUN_KEY, JSON.stringify(o));
+      else localStorage.removeItem(RUN_KEY);
+    } catch (e) {}
   }
 
   /* ---------- 步骤 0：选择题库 ---------- */
@@ -242,7 +325,7 @@
       '</section>';
   }
 
-  /* ---------- 步骤 1：来源 ---------- */
+  /* ---------- 步骤 1：来源与格式 ---------- */
   function renderSource() {
     var modeSeg = '' +
       '<div class="segmented source-modes" role="radiogroup" aria-label="来源方式">' +
@@ -252,39 +335,64 @@
 
     var fileZone;
     if (state.sourceMode === 'file') {
+      var picked = state.file;
       fileZone = '' +
-        '<div class="file-drop' + (state.dragging ? ' is-dragging' : '') + (state.file ? ' has-file' : '') + '" data-act="dz-over" role="button" tabindex="0" aria-label="拖入文件，或选择本地文件">' +
-        '  ' + ico(state.file ? 'file-text' : 'inbox', '20px') +
+        '<div class="file-drop' + (state.dragging ? ' is-dragging' : '') + (picked ? ' has-file' : '') + '" data-act="dz-over" role="button" tabindex="0" aria-label="拖入文件，或从你的文件里选一个">' +
+        '  ' + ico(picked ? 'file-text' : 'inbox', '20px') +
         '  <span class="file-main">' +
-        '    <span class="file-name">' + (state.file ? esc(state.file.name) : '拖入文件，或选择本地文件') + '</span>' +
-        '    <span class="file-meta">' + (state.file ? '已选择 · ' + state.file.size + ' KB · 12 行' : '表格、文本与 PDF 题集') + '</span>' +
+        '    <span class="file-name">' + (picked ? esc(picked.name) : '拖入文件，或从你的文件里选一个') + '</span>' +
+        '    <span class="file-meta">' + (picked
+          ? (esc(picked.at) + ' · ' + fmtSize(picked.size) + ' · ' + (picked.kind === 'pdf' ? picked.rows + ' 页' : picked.rows + ' 行'))
+          : '表格、文本与 PDF 题集') + '</span>' +
         '  </span>' +
-        '  <button type="button" class="btn btn-sm" data-act="pick-file">' + (state.file ? '更换' : '选择文件') + '</button>' +
+        '  <button type="button" class="btn btn-sm" data-act="pick-file">' + (picked ? '更换' : '选择文件') + '</button>' +
         '  <input class="file-input-hidden" type="file" accept=".xlsx,.csv,.json,.md,.markdown,.txt,.pdf" data-act="file-input" aria-hidden="true" tabindex="-1">' +
         '</div>' +
         '<div class="format-row">' + FORMATS.map(function (f) { return '<span class="tag mono">' + f + '</span>'; }).join('') + '</div>' +
-        '<p class="hint">演示用：<button type="button" class="link-btn" data-act="demo-file">使用示例文件「软考真题整理.csv」</button>，或 <button type="button" class="link-btn" data-act="demo-pdf">「系统集成历年真题扫描版.pdf」</button>，也可以直接把文件拖到上面的区域。</p>';
+        (picked
+          ? (picked.error
+            ? '<div class="notice bad mt-3">' + ico('alert-triangle', '15px') + '<div class="notice-body"><span class="notice-title">这个文件读不出题目</span><br>' + esc(picked.error) + '</div></div>'
+            : '<div class="notice ok mt-3">' + ico('check', '15px') + '<div class="notice-body">格式与大小校验通过：' + (picked.kind === 'pdf' ? 'PDF 没有表格列，直接做预检与人工校正' : '列名可自动对应，进入字段映射') + '。</div></div>')
+          : '') +
+        '<div class="mt-4">' +
+        '  <div class="section-head"><h3 class="section-title">你的最近文件</h3><span class="section-note">选中一个后才进入下一步，不会自动代选</span></div>' +
+        '  <div class="list mt-3">' + FILE_CATALOG.map(function (c) {
+            var f = normalizeFile(c);
+            var on = state.pickName === c.name;
+            return '<button type="button" class="pick-row' + (on ? ' is-on' : '') + '" data-act="pick" data-name="' + esc(c.name) + '" aria-pressed="' + on + '">' +
+              ico(f.error ? 'alert-triangle' : 'file-text', '18px') +
+              '<span class="pick-main">' +
+              '  <span class="pick-name">' + esc(c.name) + '</span>' +
+              '  <span class="pick-meta"><span>' + esc(c.at) + '</span><span>' + fmtSize(f.size) + '</span><span>' + (f.kind === 'pdf' ? f.rows + ' 页' : f.rows + ' 行') + '</span>' +
+              (f.error ? '<span class="tag bad">不支持</span>' : '<span class="tag ok">可导入</span>') + '</span>' +
+              '</span>' + (on ? '<span class="tag brand">已选择</span>' : '') + '</button>';
+          }).join('') + '</div>' +
+        '</div>';
     } else {
       fileZone = '' +
-        '<p class="hint">直接粘贴 Markdown、纯文本或 JSON 题目，预览后再导入。</p>' +
+        '<p class="hint">直接粘贴 Markdown、纯文本或 JSON 题目，读取后同样要过字段映射与人工校对。</p>' +
         '<label class="field"><span class="label">粘贴文本</span>' +
         '  <textarea class="textarea" rows="9" placeholder="在此粘贴题目…" data-act="paste">' + esc(state.pasted) + '</textarea>' +
         '</label>' +
-        '<span id="pasteStatus">' + (state.pasted.trim() ? '<div class="notice ok">' + ico('check', '15px') + '<div class="notice-body">文本预检通过：识别到 12 行。</div></div>' : '') + '</span>';
+        '<span id="pasteStatus">' + (state.pasted.trim() ? '<div class="notice ok">' + ico('check', '15px') + '<div class="notice-body">文本预检通过：识别到 ' + rows() + ' 行。</div></div>' : '') + '</span>';
     }
 
     return '' +
       '<div class="step-block">' +
       '  <div class="step-head"><span class="step-no">02</span>' +
-      '    <div><div class="step-title">来源</div>' +
+      '    <div><div class="step-title">来源与格式</div>' +
       '    <div class="step-sub">' + esc(bank().name) + ' · ' + bank().count + ' 题</div></div>' +
-      '    <button type="button" class="btn btn-sm btn-quiet" data-act="to-bank">更换来源</button>' +
+      '    <button type="button" class="btn btn-sm btn-quiet" data-act="to-bank">更换题库</button>' +
       '  </div>' +
       '  <div class="flow-stack">' + modeSeg + fileZone + '</div>' +
       '</div>';
   }
+  function fmtSize(kb) {
+    if (kb == null) return '—';
+    return kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb + ' KB';
+  }
 
-  /* ---------- 步骤 2：校对 ---------- */
+  /* ---------- 步骤 2：字段映射 ---------- */
   function renderCheck() {
     var selects = MAP_FIELDS.map(function (f) {
       var val = state.mapping[f.key];
@@ -309,18 +417,21 @@
     var missing = missingFields();
     var table = '' +
       '<div class="dtable-wrap"><table class="dtable">' +
-      '  <thead><tr>' + HEADERS.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead>' +
-      '  <tbody>' + SAMPLE.map(function (row) {
-        return '<tr>' + row.map(function (cell, i) {
-          return '<td data-label="' + esc(HEADERS[i]) + '">' + esc(cell) + '</td>';
-        }).join('') + '</tr>';
+      '  <thead><tr><th>行号</th>' + HEADERS.slice(0, 4).map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '<th>与题库重复</th></tr></thead>' +
+      '  <tbody>' + fileItems().slice(0, 6).map(function (row) {
+        var dup = dupPairs().some(function (d) { return d.item.row === row.row; });
+        return '<tr><td data-label="行号">' + row.row + '</td>' +
+          '<td data-label="题干">' + esc(row.stem) + '</td>' +
+          '<td data-label="答案">' + esc(row.answer) + '</td>' +
+          '<td data-label="题型">' + esc(row.type) + '</td>' +
+          '<td data-label="与题库重复">' + (dup ? '<span class="tag warn">重复</span>' : '<span class="tag ok">新题</span>') + '</td></tr>';
       }).join('') + '</tbody>' +
       '</table></div>';
 
     return '' +
       '<div class="step-block">' +
       '  <div class="step-head"><span class="step-no">03</span>' +
-      '    <div><div class="step-title">字段对应</div>' +
+      '    <div><div class="step-title">表格字段映射</div>' +
       '    <div class="step-sub">自动识别的列可以逐项调整。题干与答案是必填。</div></div>' +
       '  </div>' +
       '  <div class="mapping-grid">' + selects + delimiter + '</div>' +
@@ -329,46 +440,199 @@
           '    <div class="notice-body">还没有对应：' + esc(missing.join('、')) + '</div></div>'
         : '') +
       '  <div class="flow-stack-sm mt-5">' +
-      '    <span class="rule-label">样例行 · 3 行</span>' + table +
+      '    <span class="rule-label">样例行 · 预览前 6 行</span>' + table +
       '  </div>' +
       '</div>';
   }
 
-  /* ---------- 步骤 3：重复项 ---------- */
+  /* ---------- 步骤 3：人工校对 ---------- */
+  function proofRows() {
+    return fileItems().slice(0, 6).map(function (it) {
+      var verdict = 'ok', why = '';
+      if (!it.stem || it.stem.replace(/[（(].*$/, '').trim().length < 6) {
+        verdict = 'bad'; why = '题干不完整：映射后这一行没有可读的题干，写进去也是一道空题';
+      } else if (it.type === '单选题' && it.answer.length > 1) {
+        verdict = 'warn'; why = '答案是多选写法（' + it.answer + '），题型列写的是「单选题」';
+      } else if (it.opts < 3) {
+        verdict = 'warn'; why = '只有 ' + it.opts + ' 个选项，选择题至少需要 3 个';
+      } else if (!/^[A-D]{1,4}$/.test(it.answer)) {
+        verdict = 'warn'; why = '答案列不是选项字母，导入后无法判分';
+      }
+      return { item: it, verdict: verdict, why: why };
+    });
+  }
+  function ensureProofDefaults() {
+    proofRows().forEach(function (r) {
+      if (r.verdict === 'ok') return;
+      var a = state.proof[r.item.row];
+      if (!a || !a.action) state.proof[r.item.row] = { action: r.verdict === 'bad' ? 'drop' : 'keep', reason: '' };
+    });
+  }
+  function proofPending() {
+    return proofRows().filter(function (r) {
+      if (r.verdict === 'ok') return false;
+      var a = state.proof[r.item.row];
+      if (!a || !a.action) return true;
+      return a.action === 'unsure' && !a.reason;
+    }).length;
+  }
+  function renderProof() {
+    ensureProofDefaults();
+    var rows = proofRows();
+    var bad = rows.filter(function (r) { return r.verdict === 'bad'; }).length;
+    var warn = rows.filter(function (r) { return r.verdict === 'warn'; }).length;
+    var ok = rows.length - bad - warn;
+    var dropped = rows.filter(function (r) { var a = state.proof[r.item.row]; return a && a.action === 'drop'; }).length;
+
+    var table = '' +
+      '<div class="dtable-wrap"><table class="dtable">' +
+      '  <thead><tr><th>行号</th><th>题干（映射后）</th><th>答案</th><th>选项数</th><th>判定</th><th>处置</th></tr></thead>' +
+      '  <tbody>' + rows.map(function (r) {
+        var it = r.item, a = state.proof[it.row] || {};
+        var verdictTag = r.verdict === 'ok'
+          ? '<span class="tag ok">对得上</span>'
+          : '<span class="tag ' + (r.verdict === 'bad' ? 'bad' : 'warn') + '">可疑</span>';
+        var act = r.verdict === 'ok'
+          ? '<span class="hint">不需要处置</span>'
+          : '<select class="select" data-act="proof-act" data-row="' + it.row + '" aria-label="第 ' + it.row + ' 行的处置">' +
+            '<option value="keep"' + (a.action === 'keep' ? ' selected' : '') + (r.verdict === 'bad' ? ' disabled' : '') + '>仍要导入</option>' +
+            '<option value="drop"' + (a.action === 'drop' ? ' selected' : '') + '>排除这一行</option>' +
+            '<option value="unsure"' + (a.action === 'unsure' ? ' selected' : '') + '>标记为不确定并说明原因</option>' +
+            '</select>' +
+            (a.action === 'unsure'
+              ? '<select class="select" data-act="proof-reason" data-row="' + it.row + '" aria-label="第 ' + it.row + ' 行标记为不确定的原因">' +
+                '<option value="">选择原因</option>' +
+                PDF_REASONS.map(function (x) { return '<option' + (a.reason === x ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('') +
+                '</select>'
+              : '');
+        return '<tr><td data-label="行号">' + it.row + '</td>' +
+          '<td data-label="题干（映射后）">' + esc(it.stem) + '</td>' +
+          '<td data-label="答案">' + esc(it.answer) + '</td>' +
+          '<td data-label="选项数">' + it.opts + '</td>' +
+          '<td data-label="判定">' + verdictTag + (r.why ? '<div class="hint">' + esc(r.why) + '</div>' : '') + '</td>' +
+          '<td data-label="处置" class="col-actions">' + act + '</td></tr>';
+      }).join('') + '</tbody>' +
+      '</table></div>';
+
+    return '' +
+      '<div class="step-block">' +
+      '  <div class="step-head"><span class="step-no">04</span>' +
+      '    <div><div class="step-title">人工校对</div>' +
+      '    <div class="step-sub">列名对得上不代表每一行都对，抽检看的是映射之后的结果</div></div>' +
+      '    <span class="tag ' + ((bad + warn) ? 'warn' : 'ok') + '">' + ((bad + warn) ? (bad + warn) + ' 行可疑' : '全部对得上') + '</span>' +
+      '  </div>' +
+      '  <div class="flow-stack">' +
+      '    <div class="notice info">' + ico('info', '15px') +
+      '      <div class="notice-body">抽检前 ' + rows.length + ' 行：对得上 ' + ok + ' 行，可疑 ' + (bad + warn) + ' 行' + (dropped ? '，已排除 ' + dropped + ' 行' : '') +
+      '。可疑行不会静默写入，每一行都要选一个处置。</div></div>' +
+      '    ' + table +
+      '  </div>' +
+      '</div>';
+  }
+
+  /* ---------- 步骤 4：重复题对照 ---------- */
   function renderDup() {
-    var dups = dupStems();
-    var list = dups.map(function (s, i) {
-      return '<div class="list-row static">' +
+    var dups = dupPairs();
+    dups.forEach(function (d) { if (!state.dups[d.item.row]) state.dups[d.item.row] = 'skip'; });
+    var list = dups.map(function (d, i) {
+      var it = d.item, ex = d.existing, cur = state.dups[it.row];
+      var q = S.question(ex.id) || ex;
+      return '<div class="list-row static" style="display:block">' +
         '  <span class="dup-index">' + String(i + 1).padStart(2, '0') + '</span>' +
-        '  <span class="list-main"><span class="dup-stem">' + esc(s) + '</span>' +
-        '  <span class="list-meta"><span>与题库中已有题目题干相同</span></span></span>' +
+        '  <div class="dup-cols mt-2">' +
+        '    <div class="dup-side"><span class="dup-cap">文件第 ' + it.row + ' 行</span>' +
+        '      <span class="dup-stem">' + esc(it.stem) + '</span>' +
+        '      <span class="hint">' + esc(it.type) + ' · 答案 ' + esc(it.answer) + '</span></div>' +
+        '    <div class="dup-side"><span class="dup-cap">题库里已有</span>' +
+        '      <span class="dup-stem">' + esc(q.stem) + '</span>' +
+        '      <span class="hint">' + esc(q.type) + ' · ' + esc(q.chapter || '未分章') + ' · 版本 ' + esc(q.version || 'v1') + '</span></div>' +
+        '  </div>' +
+        '  <div class="dup-acts mt-3">' +
+        '    <div class="segmented" role="radiogroup" aria-label="第 ' + it.row + ' 行重复题的处置">' +
+        ['skip', 'overwrite', 'new'].map(function (k) {
+          return '<button type="button" class="segment" role="radio" aria-checked="' + (cur === k) + '" data-act="dup" data-row="' + it.row + '" data-val="' + k + '">' + DUP_LABEL[k] + '</button>';
+        }).join('') + '</div>' +
+        '    <span class="hint">' + (cur === 'skip' ? '不写入，题库里的原题保持不变。'
+        : (cur === 'overwrite' ? '用文件里的内容更新这道题，会生成新版本；历史作答仍绑定旧版本。'
+        : '在题库里另存一道题，与原题并存。')) + '</span>' +
+        '  </div>' +
+        '</div>';
+    }).join('');
+
+    var bulk = dups.length
+      ? '<div class="lay-toolbar"><span class="hint">批量设定：</span><div class="acts">' +
+        '<button type="button" class="btn btn-sm btn-quiet" data-act="dup-all" data-val="skip">全部跳过</button>' +
+        '<button type="button" class="btn btn-sm btn-quiet" data-act="dup-all" data-val="overwrite">全部覆盖</button>' +
+        '<button type="button" class="btn btn-sm btn-quiet" data-act="dup-all" data-val="new">全部新建</button>' +
+        '</div></div>'
+      : '';
+
+    return '' +
+      '<div class="step-block">' +
+      '  <div class="step-head"><span class="step-no">05</span>' +
+      '    <div><div class="step-title">重复题对照</div>' +
+      '    <div class="step-sub">与「' + esc(bank().name) + '」里的题目按题干逐字比对，命中 ' + dups.length + ' 条</div></div>' +
+      '    <span class="tag ' + (dups.length ? 'warn' : 'ok') + '">' + dups.length + ' 条重复</span>' +
+      '  </div>' +
+      (dups.length
+        ? '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body">逐条选一个处置，默认跳过——重复题不会静默覆盖。</div></div>' + bulk + '<div class="list">' + list + '</div>'
+        : '<div class="notice ok">' + ico('check', '15px') + '<div class="notice-body">这个题库里没有与本次文件题干相同的题，可以直接导入。</div></div>') +
+      '</div>';
+  }
+
+  /* ---------- 步骤 5：草稿与续做 ---------- */
+  function renderDraftStep() {
+    var run = readRun();
+    var dups = dupPairs();
+    var counts = { skip: 0, overwrite: 0, new: 0 };
+    dups.forEach(function (d) { counts[state.dups[d.item.row] || 'skip']++; });
+    var proofOk = proofRows().filter(function (r) { return r.verdict === 'ok'; }).length;
+
+    var plan = '<div class="kv">' +
+      '<span class="kv-key">目标题库</span><span class="kv-val">' + esc(bank().name) + '（现有 ' + S.questions(state.bankId).length + ' 题）</span>' +
+      '<span class="kv-key">来源</span><span class="kv-val">' + esc(state.file ? state.file.name : '粘贴的文本') + '</span>' +
+      '<span class="kv-key">读取行数</span><span class="kv-val mono">' + rows() + ' 行</span>' +
+      '<span class="kv-key">字段映射</span><span class="kv-val">题干 ← ' + esc(HEADERS[+state.mapping.stem] || '未对应') + '，答案 ← ' + esc(HEADERS[+state.mapping.answer] || '未对应') + '</span>' +
+      '<span class="kv-key">人工校对</span><span class="kv-val">抽检 ' + proofRows().length + ' 行 · 对得上 ' + proofOk + ' · 可疑 ' + (proofRows().length - proofOk) + '</span>' +
+      '<span class="kv-key">重复题</span><span class="kv-val">' + (dups.length ? ('跳过 ' + counts.skip + ' · 覆盖 ' + counts.overwrite + ' · 新建 ' + counts.new) : '没有重复') + '</span>' +
+      '</div>';
+
+    var runNotice = run
+      ? '<div class="notice warn" role="alert">' + ico('alert-triangle', '15px') +
+        '<div class="notice-body"><span class="notice-title">已有一个导入任务在进行中</span><br>' +
+        '「' + esc(run.file) + '」正在写入「' + esc(S.bankName(run.bankId)) + '」，已写入 ' + run.done + ' / ' + run.total + ' 行。' +
+        '同一个题库同时跑两个写入任务会让计数对不上，所以这里不会直接再起一份。' +
+        '<div class="notice-actions">' +
+        '<button type="button" class="btn btn-sm btn-primary" data-act="run-wait">继续等待它完成</button>' +
+        '<button type="button" class="btn btn-sm btn-danger" data-act="run-cancel">取消它，用当前配置重新开始</button>' +
+        '</div></div></div>'
+      : '';
+
+    var drafts = S.drafts().map(function (d) {
+      return '<div class="list-row static">' +
+        '  <span class="list-main"><span class="list-title">' + esc(d.file) + '</span>' +
+        '    <span class="list-meta"><span class="tag warn">草稿</span><span>停在「' + esc(STEPS[d.step] ? STEPS[d.step].name : '来源') + '」</span><span>' + esc(S.bankName(d.bankId)) + '</span><span>' + esc(d.at || '') + '</span></span></span>' +
+        '  <span class="list-side"><button type="button" class="btn btn-sm btn-primary" data-act="resume-draft">继续</button>' +
+        '    <button type="button" class="btn btn-sm btn-danger" data-act="delete-draft">删除</button></span>' +
         '</div>';
     }).join('');
 
     return '' +
       '<div class="step-block">' +
-      '  <div class="step-head"><span class="step-no">05</span>' +
-      '    <div><div class="step-title">重复题处理策略</div>' +
-      '    <div class="step-sub">同一题库中已有 ' + dups.length + ' 道题干相同的题。选择处理方式后再次导入。</div></div>' +
+      '  <div class="step-head"><span class="step-no">06</span>' +
+      '    <div><div class="step-title">草稿与续做</div>' +
+      '    <div class="step-sub">写入前最后确认一遍；已有任务时先决定继续还是重新开始</div></div>' +
       '  </div>' +
-      (dups.length ? '<div class="list">' + list + '</div>' :
-        '<div class="notice ok">' + ico('check', '15px') + '<div class="notice-body">这个题库里没有与本次文件题干相同的题，可以直接导入。</div></div>') +
-      '  <div class="flow-stack mt-4">' +
-      '    <label class="field max-320">' +
-      '      <span class="label">处理方式<span class="req">*</span></span>' +
-      '      <select class="select' + (state.strategy === '' ? ' is-error' : '') + '" data-act="set-strategy">' +
-      '        <option value="" disabled' + (state.strategy === '' ? ' selected' : '') + '>先选择处理方式</option>' +
-      '        <option value="skip"' + (state.strategy === 'skip' ? ' selected' : '') + '>跳过重复</option>' +
-      '        <option value="new"' + (state.strategy === 'new' ? ' selected' : '') + '>作为新题导入</option>' +
-      '        <option value="merge"' + (state.strategy === 'merge' ? ' selected' : '') + '>合并到已有题</option>' +
-      '      </select>' +
-      (state.strategy === '' ? '<span class="field-err">先选择重复题的处理方式。</span>' : '<span class="hint">重复题目不会静默覆盖。</span>') +
-      '    </label>' +
+      '  <div class="flow-stack">' +
+      '    <div><div class="section-head"><h3 class="section-title">导入计划</h3><span class="section-note">确认后写入</span></div>' + plan + '</div>' +
+      '    ' + runNotice +
+      '    <div><div class="section-head"><h3 class="section-title">未完成的导入</h3><span class="section-note">' + (S.drafts().length ? S.drafts().length + ' 份草稿' : '没有草稿') + '</span></div>' +
+      '      <div class="list">' + (drafts || '<div class="dtable-empty">还没有未完成的导入草稿。</div>') + '</div></div>' +
       '  </div>' +
       '</div>';
   }
 
-  /* ---------- 步骤 4：结果 ---------- */
+  /* ---------- 步骤 6：执行进度 ---------- */
   function renderResult() {
     var job = state.job;
     var pct = job.total ? Math.round(job.done / job.total * 100) : 0;
@@ -378,9 +642,9 @@
       body = '' +
         '  <div class="flow-stack">' +
         '    <div class="job-bar"><i style="width:' + pct + '%"></i></div>' +
-        '    <div class="job-meta">已导入 ' + job.done + ' / ' + job.total + (dupStems().length ? '（其中 ' + dupStems().length + ' 道与题库重复）' : '') + '</div>' +
+        '    <div class="job-meta">已写入 ' + job.done + ' / ' + job.total + ' 行 · ' + pct + '%' + (job.rate ? ' · ' + job.rate + ' 行/秒' : '') + (job.eta ? ' · 预计还剩 ' + job.eta : '') + '</div>' +
         '    <div class="notice info">' + ico('info', '15px') +
-        '      <div class="notice-body">任务进行中，可以离开本页；任务会继续，并显示在题库的导入记录里。</div></div>' +
+        '      <div class="notice-body">任务进行中，可以离开本页；任务会继续，并显示在题库的导入记录里。行数多的时候进度按真实行数推进。</div></div>' +
         '    <div class="flow-actions">' +
         '      <button type="button" class="btn btn-danger" data-act="cancel-job">' + ico('x', '14px') + '取消导入</button>' +
         '    </div>' +
@@ -389,31 +653,53 @@
       body = '' +
         '  <div class="flow-stack">' +
         '    <div class="notice bad">' + ico('alert-triangle', '15px') +
-        '      <div class="notice-body">已取消导入。已写入的 ' + job.done + ' 道题保留在题库中。</div></div>' +
+        '      <div class="notice-body">已取消导入。已写入的 ' + job.done + ' 行保留在题库中。</div></div>' +
         '    <div class="job-bar"><i style="width:' + pct + '%"></i></div>' +
         '    <div class="job-meta">已导入 ' + job.done + ' / ' + job.total + '</div>' +
         '    <div class="flow-actions">' +
         '      <button type="button" class="btn btn-primary" data-act="retry-job">重试</button>' +
         '    </div>' +
         '  </div>';
-    } else if (job.status === 'done') {
-      /* 收据如实呈现字段映射 / 重复策略的选择：处理方式决定写入数与跳过重复 / 合并数 */
-      var r = job.job;
-      var dupLine = state.strategy === 'new'
-        ? '<span class="kv-key">重复题目</span><span class="kv-val">作为新题导入，未跳过</span>'
-        : '<span class="kv-key">' + (state.strategy === 'merge' ? '已合并' : '跳过重复') + '</span><span class="kv-val">' + (state.strategy === 'merge' ? r.merged : r.skipped) + ' 道与题库重复</span>';
+    } else if (job.status === 'failed') {
       body = '' +
         '  <div class="flow-stack">' +
-        '    <div class="notice ok">' + ico('check', '15px') + '<div class="notice-body">已写入 ' + r.written + ' 道题。</div></div>' +
+        '    <div class="notice bad">' + ico('alert-triangle', '15px') +
+        '      <div class="notice-body"><span class="notice-title">写入失败：' + esc(job.reason || '网络中断') + '</span><br>' + esc(job.detail || '') +
+        '      <div class="notice-actions"><button type="button" class="btn btn-sm btn-primary" data-act="retry-job">' + ico('refresh', '14px') + '重试</button></div></div></div>' +
+        '  </div>';
+    } else if (job.status === 'partial' || job.status === 'done') {
+      /* 收据如实呈现字段映射 / 重复策略的选择与失败行 */
+      var r = job.job;
+      var failBlock = job.failed.length
+        ? '<div><div class="section-head"><h3 class="section-title">失败的行</h3><span class="section-note">带行号与原因，可重试或排除</span></div>' +
+          '<div>' + job.failed.map(function (f) {
+            return '<div class="fail-row"><span class="mono">第 ' + f.row + ' 行</span><span>' + esc(f.reason) + '</span></div>';
+          }).join('') + '</div>' +
+          '<div class="notice-actions mt-3">' +
+          '<button type="button" class="btn btn-sm" data-act="retry-failed">' + ico('refresh', '14px') + '重试这些行</button>' +
+          '<button type="button" class="btn btn-sm btn-quiet" data-act="skip-failed">排除这些行，按现有结果收尾</button>' +
+          '</div></div>'
+        : '';
+      body = '' +
+        '  <div class="flow-stack">' +
+        '    <div class="notice ' + (job.status === 'done' ? 'ok' : 'warn') + '">' + ico(job.status === 'done' ? 'check' : 'alert-triangle', '15px') +
+        '      <div class="notice-body">' + (job.status === 'done'
+          ? ('已写入 ' + r.written + ' 道题。')
+          : ('已写入 ' + r.written + ' 道题，' + job.failed.length + ' 行失败。')) + '</div></div>' +
+        '    <div class="stat-row">' +
+        '      <div class="stat"><span class="stat-num">' + r.total + '</span><span class="stat-cap">读取行数</span></div>' +
+        '      <div class="stat"><span class="stat-num">' + r.written + '</span><span class="stat-cap">已写入</span></div>' +
+        '      <div class="stat"><span class="stat-num">' + r.skipped + '</span><span class="stat-cap">重复跳过</span></div>' +
+        '      <div class="stat"><span class="stat-num">' + r.merged + '</span><span class="stat-cap">已更新</span></div>' +
+        '      <div class="stat"><span class="stat-num">' + job.failed.length + '</span><span class="stat-cap">失败行</span></div>' +
+        '    </div>' +
         '    <div class="kv">' +
         '      <span class="kv-key">任务</span><span class="kv-val mono">' + esc(r.id) + '</span>' +
         '      <span class="kv-key">导入到</span><span class="kv-val">' + esc(bank().name) + '</span>' +
-        '      <span class="kv-key">来源</span><span class="kv-val">' + (state.file ? esc(state.file.name) : '粘贴的文本') + '</span>' +
-        '      <span class="kv-key">处理方式</span><span class="kv-val">' + esc(strategyLabel(state.strategy)) + '</span>' +
-        '      <span class="kv-key">读取</span><span class="kv-val mono">' + r.total + ' 行</span>' +
-        '      <span class="kv-key">已写入</span><span class="kv-val mono">' + r.written + ' 道题</span>' +
-        dupLine +
+        '      <span class="kv-key">来源</span><span class="kv-val">' + esc(state.file ? state.file.name : '粘贴的文本') + '</span>' +
+        '      <span class="kv-key">重复处理</span><span class="kv-val">' + esc(strategyLabel(r.strategy)) + '</span>' +
         '    </div>' +
+        '    ' + failBlock +
         '    <div class="flow-actions">' +
         '      <a class="btn btn-primary" href="../screens/workspace.html?bank=' + encodeURIComponent(state.bankId) + '">查看题库</a>' +
         '      <button type="button" class="btn" data-act="again">再导入一批</button>' +
@@ -424,23 +710,25 @@
       body = '<div class="flow-stack"><div class="skeleton sk-block"></div><div class="skeleton sk-line"></div></div>';
     }
 
-    var title = job.status === 'done' ? '导入完成' : (job.status === 'cancelled' ? '已取消导入' : '正在导入');
-    var sub = job.status === 'done' ? '已写入 ' + job.done + ' 道题。' : '已导入 ' + job.done + ' / ' + job.total;
+    var title = job.status === 'done' ? '导入结果' : (job.status === 'partial' ? '导入结果' : (job.status === 'cancelled' ? '已取消导入' : (job.status === 'failed' ? '导入失败' : '正在导入')));
+    var sub = (job.status === 'done' || job.status === 'partial')
+      ? ('读取 ' + job.total + ' 行 · 已写入 ' + (job.job ? job.job.written : 0) + ' 道' + (job.failed.length ? ' · 失败 ' + job.failed.length + ' 行' : ''))
+      : ('已导入 ' + job.done + ' / ' + job.total);
+    var tagCls = job.status === 'done' ? 'ok' : (job.status === 'partial' ? 'warn' : (job.status === 'running' ? 'warn' : 'bad'));
 
     return '' +
       '<div class="step-block">' +
-      '  <div class="step-head"><span class="step-no">06</span>' +
+      '  <div class="step-head"><span class="step-no">' + (job.status === 'running' ? '07' : '08') + '</span>' +
       '    <div><div class="step-title">' + title + '</div><div class="step-sub">' + sub + '</div></div>' +
-      '    <span class="tag ' + (job.status === 'done' ? 'ok' : (job.status === 'running' ? 'warn' : 'bad')) + '">' +
-      (job.status === 'done' ? '已导入' : (job.status === 'running' ? '导入中' : '已取消')) + '</span>' +
+      '    <span class="tag ' + tagCls + '">' + (job.status === 'done' ? '已完成' : (job.status === 'partial' ? '有失败行' : (job.status === 'running' ? '导入中' : '未完成'))) + '</span>' +
       '  </div>' + body +
       '</div>';
   }
 
-  /* ---------- 步骤 5：离开确认 ---------- */
+  /* ---------- 步骤 9：离开确认 ---------- */
   function renderLeave() {
     /* 背后按用户离开时所处的步骤呈现，而不是写死「导入完成」 */
-    var fromIdx = Math.max(0, Math.min(STEPS.length - 1, state.leaveFrom == null ? 5 : state.leaveFrom));
+    var fromIdx = Math.max(0, Math.min(STEPS.length - 1, state.leaveFrom == null ? 7 : state.leaveFrom));
     var behind = '' +
       '<div class="step-block leave-dim">' +
       STEPS[fromIdx].render() +
@@ -457,6 +745,11 @@
       '  </div>' +
       '  <div class="dlg-body">' +
       '    <p class="hint">当前进度会保存为草稿，可以稍后从导入记录继续。</p>' +
+      '    <div class="kv">' +
+      '      <span class="kv-key">当前进度</span><span class="kv-val">' + esc(STEPS[fromIdx].name) + '</span>' +
+      '      <span class="kv-key">文件</span><span class="kv-val">' + (state.file ? esc(state.file.name) : '还没有选择文件') + '</span>' +
+      '      <span class="kv-key">目标题库</span><span class="kv-val">' + esc(bank().name) + '</span>' +
+      '    </div>' +
       '  </div>' +
       '  <div class="dlg-foot">' +
       '    <button type="button" class="btn btn-quiet" data-dlg-close>继续编辑</button>' +
@@ -474,7 +767,7 @@
     return '' +
       '<div class="flow-stack leave-backdrop">' + behind +
       '  <div class="step-block">' +
-      '    <div class="step-head"><span class="step-no">07</span>' +
+      '    <div class="step-head"><span class="step-no">09</span>' +
       '      <div><div class="step-title">离开确认</div><div class="step-sub">三选：继续编辑 / 稍后继续 / 放弃并离开</div></div>' +
       '    </div>' +
       '    <div class="flow-stack">' + outcome +
@@ -487,7 +780,7 @@
       '</div>' + dlg;
   }
 
-  /* ---------- 步骤 3：PDF 预检与人工校正 ---------- */
+  /* ---------- PDF 预检与人工校正 ---------- */
   var PDF_CANDS = [
     { stem: '项目管理的临时性意味着项目（ ）。', opts: ['A. 持续时间一定很短', 'B. 有明确的起点与终点', 'C. 成果不具备唯一性', 'D. 不需要逐步完善'], conf: '高' },
     { stem: '（此处为页眉残留：系统集成项目管理工程师 · 历年真题）项目的范围基准是规划阶段输出的组合，包括（ ）。', opts: ['A. 范围说明书', 'B. WBS', 'C. WBS 词典'], conf: '低' }
@@ -495,12 +788,12 @@
   function renderPdf() {
     var cands = PDF_CANDS.map(function (c, i) {
       var flagged = c.conf === '低';
-      return '<div class="list-row static' + (flagged ? ' is-active' : '') + '">' +
+      return '<div class="list-row static' + (flagged ? ' is-active' : '') + '" style="display:block">' +
         '  <span class="dup-index">候选 ' + (i + 1) + '</span>' +
-        '  <span class="list-main"><span class="dup-stem">' + esc(c.stem) + '</span>' +
+        '  <span class="dup-stem">' + esc(c.stem) + '</span>' +
         '    <span class="list-meta"><span class="tag ' + (flagged ? 'warn' : 'plain') + '">置信度 ' + c.conf + '</span>' +
-        '      ' + c.opts.map(function (o) { return '<span>' + esc(o) + '</span>'; }).join(' · ') + '</span></span>' +
-        '  <span class="list-side">' +
+        '      ' + c.opts.map(function (o) { return '<span>' + esc(o) + '</span>'; }).join(' · ') + '</span>' +
+        '  <span class="list-side mt-2">' +
         '    <button type="button" class="btn btn-sm btn-quiet" data-act="pdf-merge">合并到上一条</button>' +
         '    <button type="button" class="btn btn-sm btn-quiet" data-act="pdf-split">拆分</button>' +
         '    <button type="button" class="btn btn-sm btn-danger" data-act="pdf-drop">删除</button>' +
@@ -530,25 +823,35 @@
   /* ---------- 步骤定义 ---------- */
   var STEPS = [
     { id: 'bank', name: '选择题库', render: renderBank, nextLabel: '下一步', nextDisabled: function () { return !canImport(); }, note: '只读库给出可读原因并禁用下一步。' },
-    { id: 'source', name: '来源与格式', render: renderSource, nextLabel: '下一步', nextDisabled: function () { return !hasSource(); }, note: '拖放或选择文件，也可切换到粘贴模式；格式决定下一步走字段映射还是 PDF 预检。' },
+    { id: 'source', name: '来源与格式', render: renderSource, nextLabel: '下一步', nextDisabled: function () { return !hasSource(); }, note: '从你自己的文件里选一个，或切换到粘贴模式；格式决定下一步走字段映射还是预检校正。' },
     { id: 'check', name: '表格字段映射', render: renderCheck, nextLabel: '下一步', nextDisabled: function () { return requiredMissing().length > 0; }, note: '列映射可逐项调整；缺失字段以 warn 呈现。' },
+    { id: 'proof', name: '人工校对', render: renderProof, nextLabel: '下一步', nextDisabled: function () { return proofPending() > 0; }, note: '抽检映射结果：哪几行对得上、哪几行可疑、为什么，可疑行逐行给处置。' },
     { id: 'pdf', name: 'PDF 预检与校正', render: renderPdf, nextLabel: '下一步', nextDisabled: function () { return !state.pdfReason; }, note: '预检只给候选；不确定项必须给原因才能继续。' },
-    { id: 'dup', name: '重复题处理策略', render: renderDup, nextLabel: '按此处理导入', nextDisabled: function () { return state.strategy === ''; }, note: '重复题必须显式选择处理方式。' },
-    { id: 'result', name: '后台作业', render: renderResult, nextLabel: '离开导入', note: '任务运行中：上一步被锁，可离开本页。', lockBack: function () { return state.job.status === 'running'; } },
-    { id: 'leave', name: '离开确认', render: renderLeave, nextLabel: '重新开始', note: '离开前三选；稍后继续会存草稿。' }
+    { id: 'dup', name: '重复题对照', render: renderDup, nextLabel: '按此处理继续', note: '重复题逐条给「跳过 / 覆盖 / 新建」，默认跳过，不会静默覆盖。' },
+    { id: 'draft', name: '草稿与续做', render: renderDraftStep, nextLabel: '开始导入', nextDisabled: function () { return !!readRun() || !canImport() || !rows(); }, note: '写入前确认计划；已有任务时先决定继续等待还是取消重来，不静默再起一份。' },
+    { id: 'result', name: '执行进度', render: renderResult, nextLabel: '查看结果', note: function () {
+        return state.job.status === 'running'
+          ? '任务进行中，上一步已锁；可以离开本页，任务会继续。'
+          : '任务跑完后看结果汇总；失败的行带行号，可重试或排除。';
+      }, lockBack: function () { return state.job.status === 'running'; } },
+    { id: 'leave', name: '导入结果', render: renderResult, nextLabel: '再导入一批', note: '结果收据：读取 / 写入 / 重复跳过 / 已更新 / 失败，失败行可重试或排除。' },
+    { id: 'leaveconfirm', name: '离开确认', render: renderLeave, nextLabel: '重新开始', note: '离开前三选；稍后继续会存草稿。' }
   ];
-  /* 来源格式决定第 3 / 4 步哪一个适用：表格与文本走字段映射，PDF 走预检校正 */
-  function isPdfFile() { return /\.pdf$/i.test(state.file ? state.file.name : ''); }
+  /* 来源格式决定第 3 / 5 步哪一个适用：表格与文本走字段映射，PDF 走预检校正 */
+  function isPdfFile() { return state.sourceMode === 'file' && !!state.file && state.file.kind === 'pdf'; }
   function stepApplies(id) {
-    if (id === 'check') return !isPdfFile();
+    if (id === 'check' || id === 'proof') return !isPdfFile();
     if (id === 'pdf') return isPdfFile();
     return true;
   }
   /* 来源步的下一步：落到本次适用的那一步 */
-  function mapStepIndex() { return isPdfFile() ? 3 : 2; }
+  function mapStepIndex() { return isPdfFile() ? 4 : 2; }
+  /* 完成人工校对后：表格类走重复对照，PDF 类也走重复对照 */
+  function proofNextIndex() { return 5; }
 
   function hasSource() {
-    return state.sourceMode === 'file' ? !!state.file : state.pasted.trim().length > 0;
+    if (state.sourceMode === 'file') return !!state.file && !state.file.error;
+    return state.pasted.trim().length > 0;
   }
 
   /* ---------- 状态机 ---------- */
@@ -562,9 +865,9 @@
   function render() {
     var step = STEPS[state.step];
     var lockBack = typeof step.lockBack === 'function' ? step.lockBack() : false;
-    /* 结果步的前置条件：有来源、必填列已对应、重复策略已选——
+    /* 结果步的前置条件：有来源、必填列已对应、校对与重复都已处置——
        步骤条不能绕过这些校验直接跳进结果 */
-    var resultReady = hasSource() && requiredMissing().length === 0 && state.strategy !== '';
+    var resultReady = hasSource() && requiredMissing().length === 0 && !proofPending();
     var html = '';
     for (var i = 0; i < STEPS.length; i++) {
       var s = STEPS[i];
@@ -572,13 +875,13 @@
       if (i === state.step) cls += ' is-active';
       if (i < state.step) cls += ' is-done';
       var locked = lockBack && i < state.step;
-      var blockedResult = i === 5 && !resultReady && state.step !== 5;
+      var blockedResult = (i === 7 || i === 8) && !resultReady && state.step !== 7 && state.step !== 8;
       /* 本次来源格式用不到的步骤：标「不适用」并禁用，不假装走过 */
       var notApplies = !stepApplies(s.id);
       if (notApplies) cls += ' is-skip';
       var disabled = locked || blockedResult || notApplies;
       var title = locked ? '任务进行中，先取消或等待完成'
-        : (blockedResult ? '先选好来源、必填列与重复题处理方式，才能进入后台作业'
+        : (blockedResult ? '先选好来源、必填列与人工校对，才能进入执行'
           : (notApplies ? '本次来源格式不适用这一步' : ''));
       html += '<button type="button" class="' + cls + '" data-goto="' + i + '"' + (i === state.step ? ' aria-current="step"' : '') + (disabled ? ' disabled title="' + esc(title) + '"' : '') + '>' +
         '<span class="step-n">' + (i < state.step ? ico('check', '11px') : (i + 1)) + '</span>' +
@@ -593,9 +896,9 @@
     prevBtn.disabled = state.step === 0 || lockBack;
     nextBtn.textContent = typeof step.nextLabel === 'function' ? step.nextLabel() : step.nextLabel;
     nextBtn.disabled = typeof step.nextDisabled === 'function' ? step.nextDisabled() : !!step.nextDisabled;
-    noteEl.textContent = lockBack
-      ? '任务进行中，上一步已锁；可以离开本页，任务会继续。'
-      : (typeof step.note === 'function' ? step.note() : (step.note || ''));
+    /* 页脚同时给当前步名与这一步的说明，步骤条横滚后不缺上下文 */
+    noteEl.innerHTML = '<b>第 ' + (state.step + 1) + ' 步 · ' + esc(step.name) + '</b>' +
+      (typeof step.note === 'function' ? ' — ' + esc(step.note()) : (step.note ? ' — ' + esc(step.note) : ''));
 
     if (step.afterRender) step.afterRender();
   }
@@ -603,13 +906,12 @@
   function go(n) {
     var prev = state.step;
     state.step = Math.max(0, Math.min(STEPS.length - 1, n));
-    if (state.step === 6) state.leaveFrom = prev;
-    /* 先启动任务再渲染：进入结果步的第一帧就是运行态，导航同步锁定 */
-    if (state.step === 5 && prev !== 5) startJob();
+    if (state.step === 9) state.leaveFrom = prev;
+    /* 先启动任务再渲染：进入执行步的第一帧就是运行态，导航同步锁定 */
+    if (state.step === 7 && prev !== 7) startJob();
     render();
-    /* 进入离开确认步就打开三选对话框：点「离开导入」应当直接看到选择，
-       而不是再让用户点一次「重新打开离开确认」 */
-    if (state.step === 6 && prev !== 6) {
+    /* 进入离开确认步就打开三选对话框：点「离开导入」应当直接看到选择 */
+    if (state.step === 9 && prev !== 9) {
       var dlg = document.getElementById('dlgLeave');
       if (dlg && !dlg.open) window.eeDialog.open('dlgLeave');
     }
@@ -623,32 +925,78 @@
     if (t && !t.disabled) go(parseInt(t.getAttribute('data-goto'), 10));
   });
 
-  /* ---------- 导入任务：进度可见，完成时按策略真实写入 ---------- */
+  /* ---------- 导入任务：进度可见，完成时按逐条重复处置真实写入 ---------- */
   function startJob() {
-    if (state.job.status !== 'idle') return;
-    state.job.status = 'running';
-    state.job.done = 0;
-    state.job.total = sampleItems().length;
+    if (state.job.status === 'running') return;
+    var total = rows();
+    state.job = { status: 'running', done: 0, total: total, failed: [], job: null, rate: 0, eta: '' };
+    writeRun({ bankId: state.bankId, file: state.file ? state.file.name : '粘贴的文本', total: total, done: 0, at: Date.now() });
+    render();
+    var started = Date.now();
+    var stepSize = Math.max(1, Math.ceil(total / 26));
     stopJob();
     state.timerId = setInterval(function () {
-      state.job.done = Math.min(state.job.total, state.job.done + 1);
-      if (state.job.done >= state.job.total) {
-        /* 真实落地：按策略写入题目与题库计数，收据数字来自 store 的返回值 */
-        var r = S.applyImport({
-          bankId: state.bankId,
-          file: state.file ? state.file.name : '粘贴的文本',
-          strategy: state.strategy || 'skip',
-          items: sampleItems()
-        });
-        state.job.status = 'done';
-        state.job.job = r;
-        clearDraft();   /* 导入完成，草稿闭环 */
-        stopJob();
+      state.job.done = Math.min(total, state.job.done + stepSize);
+      var el = (Date.now() - started) / 1000;
+      if (el > 0.4) {
+        state.job.rate = Math.round(state.job.done / el);
+        var remain = Math.max(0, Math.ceil((total - state.job.done) / Math.max(1, state.job.rate)));
+        state.job.eta = remain >= 60 ? Math.ceil(remain / 60) + ' 分钟' : remain + ' 秒';
       }
-      if (state.step === 5) render();
-    }, 500);
+      var run = readRun();
+      if (run) { run.done = state.job.done; writeRun(run); }
+      var b = S.bank(state.bankId);
+      if (!b || b.archived) {
+        stopJob(); writeRun(null);
+        state.job = { status: 'failed', done: state.job.done, total: total, failed: [], job: null, reason: '目标题库已被归档', detail: '写入期间「' + (b ? b.name : '目标题库') + '」被归档，导入中止。已写入 ' + state.job.done + ' 行，题库内容不变；恢复题库后可以重试。', rate: 0, eta: '' };
+        render();
+        window.eeToast('写入失败：目标题库已被归档', 'bad');
+        return;
+      }
+      if (state.job.done >= total) {
+        /* 真实落地：按逐条重复处置写入题目与题库计数，收据数字来自 store 的返回值 */
+        var r = commitImport();
+        state.job = {
+          status: r.failed.length ? 'partial' : 'done',
+          done: total, total: total, failed: r.failed, job: r.job, rate: 0, eta: ''
+        };
+        writeRun(null);
+        clearDraft();
+        stopJob();
+        window.eeToast(r.failed.length
+          ? ('已写入 ' + r.job.written + ' 道题，' + r.failed.length + ' 行失败')
+          : ('已写入 ' + r.job.written + ' 道题'));
+      }
+      if (state.step === 7 || state.step === 8) render();
+    }, 70);
   }
   function stopJob() { if (state.timerId) { clearInterval(state.timerId); state.timerId = null; } }
+
+  /* 按逐条重复处置写入：跳过不写 / 覆盖更新原题 / 新建另存 */
+  function commitImport() {
+    var list = fileItems();
+    var written = 0, skipped = 0, merged = 0, failed = [];
+    var existing = {};
+    S.questions(state.bankId).forEach(function (x) { existing[x.stem] = x; });
+    list.forEach(function (it) {
+      if (it.broken) { failed.push({ row: it.row, reason: '源文件里这一行没有题干，读不出题目内容' }); return; }
+      var ex = existing[it.stem];
+      if (ex) {
+        var d = state.dups[it.row] || 'skip';
+        if (d === 'skip') { skipped++; return; }
+        if (d === 'overwrite') { S.updateQuestion(ex.id, { type: it.type }); merged++; return; }
+      }
+      S.addQuestion({ bankId: state.bankId, stem: it.stem, type: it.type, difficulty: '基础', chapter: '导入' });
+      written++;
+    });
+    var anyNew = Object.keys(state.dups).some(function (k) { return state.dups[k] !== 'skip'; });
+    var job = S.addImportJob({
+      bankId: state.bankId, file: state.file ? state.file.name : '粘贴的文本', status: 'done',
+      strategy: anyNew ? 'new' : 'skip', total: list.length,
+      written: written, skipped: skipped, merged: merged, failed: failed.length
+    });
+    return { job: job, failed: failed };
+  }
 
   /* ---------- 取消导入确认（一次性创建，挂 body） ---------- */
   var cancelDlg = document.createElement('dialog');
@@ -674,12 +1022,17 @@
   var ACTIONS = {
     'bank:next': function () { go(1); },
     'source:next': function () { go(mapStepIndex()); },
-    'check:next': function () { go(4); },
-    'dup:next': function () { go(5); },
-    'result:next': function () { go(5); },
+    'check:next': function () { go(3); },
+    'proof:next': function () { go(5); },
+    'pdf:next': function () { go(5); },
+    'dup:next': function () { go(6); },
+    'draft:next': function () { go(7); },
+    'result:next': function () { go(8); },
     'leave:next': function () { restart(); },
 
-    'set-bank': function (el) { state.bankId = el.value; render(); },
+    'set-bank': function (el) {
+      state.bankId = el.value; state.dups = {}; state.proof = {}; render();
+    },
     'pdf-reason': function (el) { state.pdfReason = el.value; render(); },
     'pdf-merge': function (el) {
       var note = el.closest('.list-row').querySelector('.list-meta');
@@ -721,8 +1074,7 @@
         e.preventDefault();
         el.classList.remove('is-dragging');
         var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-        if (f) setFile(f.name, f.size);
-        else setFile('软考真题整理.csv', 12697);
+        setFile(f ? f.name : '软考真题整理.csv', f ? f.size : 12697);
       } else {
         el.classList.remove('is-dragging');
       }
@@ -730,48 +1082,88 @@
     'file-input': function (el) {
       if (el.files && el.files[0]) setFile(el.files[0].name, el.files[0].size);
     },
-    'demo-file': function () { setFile('软考真题整理.csv', 12697); },
-    'demo-pdf': function () { setFile('系统集成历年真题扫描版.pdf', 4194304); },
+    'pick': function (el) {
+      state.pickName = el.getAttribute('data-name');
+      var cat = FILE_CATALOG.filter(function (c) { return c.name === state.pickName; })[0];
+      if (cat) setFile(cat.name, cat.size * 1024);
+    },
     'paste': function (el) {
       state.pasted = el.value;
       if (state.pasted.trim()) clearDraft();   /* 输入新内容＝开始新导入 */
       var host = document.getElementById('pasteStatus');
       if (host) {
         host.innerHTML = state.pasted.trim()
-          ? '<div class="notice ok">' + ico('check', '15px') + '<div class="notice-body">文本预检通过：识别到 ' + sampleItems().length + ' 行。</div></div>'
+          ? '<div class="notice ok">' + ico('check', '15px') + '<div class="notice-body">文本预检通过：识别到 ' + rows() + ' 行。</div></div>'
           : '';
       }
     },
     'to-bank': function () { go(0); },
     'map': function (el) { state.mapping[el.getAttribute('data-key')] = el.value; render(); },
     'set-delimiter': function (el) { state.delimiter = el.value; render(); },
-    'set-strategy': function (el) { state.strategy = el.value; render(); },
-    'cancel-job': function () {
-      window.eeDialog.open('dlgCancelJob');
+    'proof-act': function (el) {
+      var row = el.getAttribute('data-row');
+      state.proof[row] = state.proof[row] || {};
+      state.proof[row].action = el.value;
+      if (el.value !== 'unsure') state.proof[row].reason = '';
+      render();
     },
+    'proof-reason': function (el) {
+      var row = el.getAttribute('data-row');
+      state.proof[row] = state.proof[row] || {};
+      state.proof[row].reason = el.value;
+      render();
+    },
+    'dup': function (el) {
+      state.dups[el.getAttribute('data-row')] = el.getAttribute('data-val');
+      render();
+    },
+    'dup-all': function (el) {
+      var v = el.getAttribute('data-val');
+      dupPairs().forEach(function (d) { state.dups[d.item.row] = v; });
+      render();
+      window.eeToast('已把全部重复题设为「' + DUP_LABEL[v] + '」');
+    },
+    'cancel-job': function () { window.eeDialog.open('dlgCancelJob'); },
     'cancel-job-confirm': function () {
-      stopJob();
-      state.job.status = 'cancelled';
+      stopJob(); writeRun(null);
+      state.job = { status: 'cancelled', done: state.job.done, total: state.job.total, failed: [], job: null, rate: 0, eta: '' };
       render();
       window.eeToast('已取消导入', 'bad');
     },
     'retry-job': function () {
-      state.job = { status: 'idle', done: 0, total: sampleItems().length, skipped: 0, job: null };
+      state.job = { status: 'running', done: 0, total: rows(), failed: [], job: null, rate: 0, eta: '' };
       startJob();
       render();
       window.eeToast('已重新开始导入');
+    },
+    'retry-failed': function () {
+      var still = state.job.failed.filter(function (f) {
+        return fileItems().some(function (it) { return it.row === f.row && it.broken; });
+      });
+      state.job.failed = still;
+      state.job.status = still.length ? 'partial' : 'done';
+      render();
+      window.eeToast(still.length
+        ? '重试后仍有 ' + still.length + ' 行失败：这几行在源文件里就没有题干'
+        : '失败的行都已处理', still.length ? 'bad' : undefined);
+    },
+    'skip-failed': function () {
+      state.job.failed = [];
+      state.job.status = 'done';
+      render();
+      window.eeToast('已排除失败的行');
     },
     'view-bank': function () {
       window.location.href = '../screens/workspace.html?bank=' + encodeURIComponent(state.bankId);
     },
     'again': function () { resetImport(); window.eeToast('已重置，可再导入一批'); },
-    'leave': function () { go(6); },
+    'leave': function () { go(9); },
     'reopen-leave': function () {
       state.leaveChoice = null;
       render();
       window.eeDialog.open('dlgLeave');
     },
-    'back-result': function () { go(5); },
+    'back-result': function () { go(8); },
     'leave-later': function () {
       state.leaveChoice = 'later';
       saveDraft();               /* 真实写进共享草稿 */
@@ -794,32 +1186,55 @@
       clearDraft();
       render();
       window.eeToast('草稿已删除', 'bad');
+    },
+    'run-wait': function () {
+      var run = readRun();
+      state.job = { status: 'running', done: run ? run.done : 0, total: run ? run.total : rows(), failed: [], job: null, rate: 0, eta: '' };
+      go(7);
+      render();
+      window.eeToast('已切到那个任务的进度');
+    },
+    'run-cancel': function () {
+      writeRun(null);
+      render();
+      window.eeToast('已取消上一个任务，可以用当前配置重新开始', 'bad');
     }
   };
 
   function setFile(name, size) {
-    state.file = { name: name, size: (size / 1024).toFixed(1) };
+    var cat = FILE_CATALOG.filter(function (c) { return c.name === name; })[0];
+    if (!cat) {
+      /* 用户自己拖进来 / 选进来的文件：按扩展名与大小判定 */
+      var kind = fileKind(name);
+      cat = { name: name, size: Math.round((size || 0) / 1024), rows: kind === 'pdf' ? 0 : 12, at: '刚刚选择', kind: kind };
+    }
+    state.sourceMode = 'file';
+    state.file = normalizeFile(cat);
+    state.pickName = cat.name;
+    state.proof = {};
+    state.dups = {};
     /* 选了新文件＝开始一次新导入，旧草稿被取代 */
     clearDraft();
     render();
-    window.eeToast('已选择 ' + name);
+    window.eeToast(state.file.error ? ('这个文件读不出题目：' + state.file.error) : ('已选择 ' + name), state.file.error ? 'bad' : undefined);
   }
 
   function resetImport() {
     stopJob();
+    writeRun(null);
     state.file = null;
     state.pasted = '';
-    state.strategy = '';
+    state.pickName = '';
+    state.proof = {};
+    state.dups = {};
     state.leaveChoice = null;
-    state.leaveFrom = 4;
+    state.leaveFrom = 6;
     /* 草稿不清空：回到步骤 0 时仍能看到「继续上次导入」，直到被新来源取代或显式删除 */
-    state.job = { status: 'idle', done: 0, total: sampleItems().length, skipped: 0, job: null };
+    state.job = { status: 'idle', done: 0, total: 0, failed: [], job: null, rate: 0, eta: '' };
     go(0);
   }
 
-  function restart() {
-    resetImport();
-  }
+  function restart() { resetImport(); }
 
   /* ---------- 事件委托 ---------- */
   ['click', 'change', 'input', 'dragover', 'dragleave', 'drop'].forEach(function (type) {
@@ -842,7 +1257,7 @@
     });
   }
 
-  STEPS[5].afterRender = function () {
+  STEPS[9].afterRender = function () {
     if (state.leaveChoice == null) window.eeDialog.open('dlgLeave');
   };
 

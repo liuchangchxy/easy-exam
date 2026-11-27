@@ -366,6 +366,7 @@
   <section class="section" aria-labelledby="h-keys">
     <h2 class="doc-h2" id="h-keys"><span class="no">03</span>全局快捷键（FN-612）</h2>
     <p class="doc-rule">快捷键只覆盖两类：跨页导航与 runner 内的作答操作。每个快捷键在命令面板里都能用文字搜到，不强迫记忆。</p>
+    <p class="doc-rule"><b>快捷键不得拦截正常输入</b>：焦点在输入框 / 文本域 / 可编辑元素里时，字符类快捷键一律不触发（输入法组合输入同样不触发）；带 <span class="kbd">Ctrl</span>/<span class="kbd">⌘</span> 的组合键让给系统与浏览器。<b>快捷键按题型动态适配</b>——单选题按 <span class="kbd">A</span>–<span class="kbd">E</span> 选对应选项，多选题同键切换选中，判断题按 <span class="kbd">T</span>/<span class="kbd">F</span>，填空题聚焦输入框时不拦字符键，主观题不启用字符类快捷键。<b>不为了增加高级感堆砌低价值快捷键</b>：帮不上高频路径的一律不加。</p>
 
     <div class="demo">
       <div class="demo-cell">
@@ -582,7 +583,7 @@
       </div>
       <div class="state-card">
         <p class="rule-label">表单与软键盘</p>
-        <p class="hint">软键盘弹出时，页面滚动到当前输入框，提交按钮跟随键盘上浮（<code class="mono">padding-bottom: env(safe-area-inset-bottom)</code> 已全局处理）。不在软键盘上方再放一层浮层。</p>
+        <p class="hint">软键盘弹出时，页面滚动到当前输入框，提交按钮跟随键盘上浮。占位高度由 <code class="mono">assets/spec-boot.js</code> 用 <code class="mono">visualViewport</code> 实时写进 <code class="mono">--kb-inset</code>（键盘收起归零，地址栏收缩一类的小抖动不算键盘），底部操作条的 <code class="mono">bottom</code> 直接吃这个变量；需要收起的次要区域加 <code class="mono">.kb-hide</code>，需要收缩的加 <code class="mono">.kb-shrink</code>。不在软键盘上方再放一层浮层。</p>
       </div>
       <div class="state-card">
         <p class="rule-label">对话框 / 抽屉 / 长文</p>

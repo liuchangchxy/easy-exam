@@ -79,9 +79,10 @@
 .sheet-dot.is-answered{  background: var(--brand); border-color: var(--brand);  }
 .sheet-dot.is-current{  outline: 2px solid var(--focus); outline-offset: 1px;  }
 .sheet-dot.is-flagged{  border-color: var(--flag); box-shadow: inset 0 -3px 0 var(--flag);  }
-.rail-keys{  display: flex; flex-direction: column; gap: var(--sp-2); font-size: var(--text-xs); color: var(--ink-2);  }
-.rail-keys span{  display: inline-flex; align-items: center; gap: var(--sp-2);  }
 .rail-tools{  flex-direction: row; flex-wrap: wrap;  }
+/* 底部操作条：一屏至多一颗主操作（.btn-hero），次级操作一律 quiet。
+   软键盘弹起时次要操作收起来，只留主操作，且整条抬到键盘之上（--kb-inset）。 */
+  .focus-foot .foot-submit{  flex: 0 0 auto;  }
 /* 离线 / 同步 / 冲突：常驻条 + 队列列表 */
   .offline-banner{  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; padding: var(--sp-3) var(--sp-5); background: var(--warn-soft); border-bottom: 1px solid var(--warn-line); font-size: var(--text-sm); color: var(--ink-2);  }
 .queue-item{  display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom: 1px solid var(--line); font-size: var(--text-sm);  }
@@ -114,6 +115,10 @@
     #run-live .keys-paper { display: block; margin-top: var(--sp-6); border-top: 1px solid var(--line); padding-top: var(--sp-4); }
     .sheet-trigger { display: inline-flex !important; }
     .focus-foot { flex-wrap: wrap; row-gap: var(--sp-2); }
+  }
+/* 手机顶栏放不下同步态徽章：它在离线态另有常驻条说明，这里不占位置 */
+  @media (max-width: 640px){
+    .ft-sync { display: none; }
   }</style>
 </head>
 <body>
@@ -258,21 +263,19 @@
           </span>
         </div>
         <div class="ft-right">
-          <span class="tag plain" id="run-sync" title="跨设备同步状态">已同步</span>
-          <button type="button" class="icon-btn" aria-label="作答卡" onclick="EErun.openDrawer('sheet')"><svg class="od-icon" aria-hidden="true"><use href="#i-grid"/></svg></button>
+          <span class="tag plain ft-sync" id="run-sync" title="跨设备同步状态">已同步</span>
           <span class="ft-counter mono" id="run-counter">1 / 3</span>
           <button type="button" class="icon-btn" id="run-flag-btn" aria-label="标记薄弱" onclick="EErun.toggleFlag()"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg></button>
-          <button type="button" class="icon-btn" aria-label="快捷键" onclick="eeDialog.open('dlg-keys', this)"><svg class="od-icon" aria-hidden="true"><use href="#i-command"/></svg></button>
           <div class="ft-more">
             <button type="button" class="icon-btn" data-menu-trigger aria-label="更多" aria-haspopup="true" aria-expanded="false" onclick="EErun.toggleMenu(this)"><svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg></button>
             <div class="menu ft-menu" hidden>
-              <button type="button" class="menu-item" onclick="EErun.closeMenu(); EErun.toggleFlag()"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>标记薄弱</button>
-              <button type="button" class="menu-item" id="run-menu-kill" onclick="EErun.closeMenu(); EErun.askKill()"><svg class="od-icon" aria-hidden="true"><use href="#i-trash"/></svg>不再练这道题</button>
-              <span class="menu-sep"></span>
+              <button type="button" class="menu-item" onclick="EErun.closeMenu(); EErun.askKill()"><svg class="od-icon" aria-hidden="true"><use href="#i-trash"/></svg>不再练这道题</button>
               <button type="button" class="menu-item" onclick="EErun.closeMenu(); EErun.jumpToUnanswered()"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-right"/></svg>跳到下一道未答</button>
+              <span class="menu-sep"></span>
+              <button type="button" class="menu-item" onclick="EErun.closeMenu(); eeDialog.open('dlg-keys', this)"><svg class="od-icon" aria-hidden="true"><use href="#i-command"/></svg>快捷键说明</button>
             </div>
           </div>
-          <button type="button" class="btn btn-sm btn-quiet" onclick="EErun.openCompleteBtn(this)">完成练习</button>
+          <button type="button" class="btn" onclick="EErun.openCompleteBtn(this)">完成练习</button>
         </div>
       </header>
 
@@ -282,21 +285,13 @@
           <h1 class="q-stem" id="run-stem" tabindex="-1"></h1>
 
           <p class="answer-hint" id="run-hint">选择答案后提交；提交前可以改，提交后进入判定反馈。</p>
-
           <div class="opt-list" id="run-options" role="group" aria-label="选项"></div>
 
           <div class="verdict-block" id="run-verdict" hidden></div>
 
-          <!-- ≤768：右栏整体收进抽屉，快捷键留在纸上 -->
+          <!-- ≤768：右栏整体收进抽屉，这里只留本场设置 -->
           <div class="rail-block keys-paper">
-            <div class="rule-label">快捷键</div>
-            <div class="rail-keys">
-              <span><span class="kbd">A</span>–<span class="kbd">D</span> 选择选项</span>
-              <span><span class="kbd">Enter</span> 提交答案</span>
-              <span><span class="kbd">Space</span> 下一题</span>
-              <span><span class="kbd">W</span> 标记薄弱</span>
-              <span><span class="kbd">B</span> 待复查旗</span>
-            </div>
+            <div class="rule-label">本场</div>
             <div class="rail-tools">
               <button type="button" class="btn btn-sm" onclick="EErun.toggleTimerSetting(this)"><svg class="od-icon" aria-hidden="true"><use href="#i-clock"/></svg><span class="timer-btn-label">计时器关</span></button>
               <a class="btn btn-sm" href="settings.html"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>设置</a>
@@ -317,7 +312,6 @@
           <div class="rail-block">
             <div class="rail-head">
               <span class="rule-label">答题卡</span>
-              <button type="button" class="btn btn-sm" onclick="EErun.toggleFlag()"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>标记</button>
             </div>
             <div class="sheet-grid" id="run-sheet"></div>
             <div class="sheet-legend">
@@ -329,37 +323,26 @@
           </div>
 
           <div class="rail-block">
-            <button type="button" class="btn btn-sm btn-block" onclick="EErun.toggleFlag()"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>标记薄弱</button>
-            <button type="button" class="btn btn-sm btn-block btn-quiet" onclick="EErun.openCompleteBtn(this)">完成练习</button>
-          </div>
-
-          <div class="rail-block">
-            <div class="rule-label">快捷键</div>
-            <div class="rail-keys">
-              <span><span class="kbd">A</span>–<span class="kbd">D</span> 选择选项</span>
-              <span><span class="kbd">Enter</span> 提交答案</span>
-              <span><span class="kbd">Space</span> 下一题</span>
-              <span><span class="kbd">W</span> 标记薄弱</span>
-              <span><span class="kbd">B</span> 待复查旗</span>
-            </div>
+            <div class="rule-label">本场</div>
             <div class="rail-tools">
               <button type="button" class="btn btn-sm" onclick="EErun.toggleTimerSetting(this)"><svg class="od-icon" aria-hidden="true"><use href="#i-clock"/></svg><span class="timer-btn-label" id="run-timer-btn-label">计时器关</span></button>
               <a class="btn btn-sm" href="settings.html"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>设置</a>
             </div>
+            <p class="rail-note">快捷键随题型变化：选项键只绑这道题有的选项，判断题为 <span class="kbd">T</span>/<span class="kbd">F</span>；浮层打开时只保留 <span class="kbd">Esc</span>。</p>
           </div>
         </aside>
       </main>
 
       <footer class="focus-foot" id="run-foot">
-        <button type="button" class="btn btn-sm sheet-trigger" onclick="EErun.openDrawer('sheet')"><svg class="od-icon" aria-hidden="true"><use href="#i-grid"/></svg>移动作答卡</button>
-        <button type="button" class="btn btn-sm" id="run-prev" onclick="EErun.prev()"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>上一题</button>
+        <button type="button" class="btn btn-sm sheet-trigger kb-hide" onclick="EErun.openDrawer('sheet')"><svg class="od-icon" aria-hidden="true"><use href="#i-grid"/></svg>移动作答卡</button>
+        <button type="button" class="btn kb-hide" id="run-prev" onclick="EErun.prev()"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>上一题</button>
         <span class="spacer"></span>
-        <span class="ft-count mono" id="run-foot-count">1 / 3</span>
+        <span class="ft-count mono kb-hide" id="run-foot-count">1 / 3</span>
         <span class="spacer"></span>
-        <button type="button" class="btn btn-sm btn-quiet" id="run-skip" onclick="EErun.footAction()">跳过</button>
+        <button type="button" class="btn btn-quiet kb-hide" id="run-skip" onclick="EErun.footAction()">跳过</button>
         <span class="foot-submit">
-          <button type="button" class="btn btn-primary" id="run-submit" disabled aria-describedby="run-submit-reason" onclick="EErun.submit()">提交答案</button>
-          <span class="submit-reason" id="run-submit-reason">请先选择一个答案</span>
+          <button type="button" class="btn btn-primary btn-hero" id="run-submit" disabled aria-describedby="run-submit-reason" onclick="EErun.submit()">提交答案</button>
+          <span class="submit-reason kb-hide" id="run-submit-reason">请先选择一个答案</span>
         </span>
       </footer>
     </div>
@@ -456,11 +439,11 @@
       </main>
 
       <footer class="focus-foot">
-        <button type="button" class="btn btn-sm" onclick="EErun.prev()"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>上一题</button>
+        <button type="button" class="btn" onclick="EErun.prev()"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>上一题</button>
         <span class="spacer"></span>
         <span class="ft-count mono">2 / 4</span>
         <span class="spacer"></span>
-        <button type="button" class="btn btn-primary" onclick="EErun.next()">下一题</button>
+        <button type="button" class="btn btn-primary btn-hero" onclick="EErun.next()">下一题</button>
       </footer>
     </div>
 
@@ -508,11 +491,11 @@
         </article>
       </main>
       <footer class="focus-foot">
-        <button type="button" class="btn btn-sm" onclick="EErun.prev()"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>上一题</button>
+        <button type="button" class="btn" onclick="EErun.prev()"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>上一题</button>
         <span class="spacer"></span>
         <span class="ft-count mono">3 / 4</span>
         <span class="spacer"></span>
-        <button type="button" class="btn btn-primary" onclick="EErun.next()">下一题</button>
+        <button type="button" class="btn btn-primary btn-hero" onclick="EErun.next()">下一题</button>
       </footer>
     </div>
   </div>
@@ -597,7 +580,7 @@
       <footer class="focus-foot">
         <span class="ft-count mono">1 / 4</span>
         <span class="spacer"></span>
-        <button type="button" class="btn btn-primary" onclick="EErun.next()">下一题</button>
+        <button type="button" class="btn btn-primary btn-hero" onclick="EErun.next()">下一题</button>
       </footer>
     </div>
   </div>
@@ -691,11 +674,11 @@
       </main>
 
       <footer class="focus-foot">
-        <button type="button" class="btn btn-sm" onclick="EErun.prev()"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>上一题</button>
+        <button type="button" class="btn" onclick="EErun.prev()"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>上一题</button>
         <span class="spacer"></span>
         <span class="ft-count mono">2 / 4</span>
         <span class="spacer"></span>
-        <button type="button" class="btn btn-primary" onclick="EErun.openCompleteBtn(this)">交卷（会被未同步条目拦住）</button>
+        <button type="button" class="btn btn-primary btn-hero" onclick="EErun.openCompleteBtn(this)">交卷</button>
       </footer>
     </div>
   </div>
@@ -940,7 +923,7 @@
                 <div class="list-row static">
                   <div class="list-main">
                     <div class="list-title">快捷键浮层</div>
-                    <div class="list-meta">A–D 选项 · Enter 提交 · Space 下一题 · W 标记薄弱 · B 待复查旗</div>
+                    <div class="list-meta">选项键随题型变化 · Enter 提交 · Space 下一题 · F 标记薄弱 · Esc 关浮层</div>
                   </div>
                   <div class="list-side"><button type="button" class="btn btn-sm" onclick="eeDialog.open('dlg-keys', this)">打开</button></div>
                 </div>
@@ -1036,19 +1019,19 @@
     <div>
       <div class="rule-label">作答与移动</div>
       <div class="keys-grid" style="margin-top: var(--sp-2)">
-        <span><span class="kbd">A</span>–<span class="kbd">D</span> 选择选项</span>
+        <span><span class="kbd">A</span>–<span class="kbd">E</span> 选择选项（只绑这道题有的选项）</span>
+        <span><span class="kbd">T</span><span class="kbd">F</span> 判断题：正确 / 错误</span>
         <span><span class="kbd">Enter</span> 提交答案</span>
-        <span><span class="kbd">Space</span> <span class="kbd">→</span> 下一题</span>
-        <span><span class="kbd">←</span> 上一题</span>
+        <span><span class="kbd">Space</span> 下一题</span>
+        <span><span class="kbd">←</span><span class="kbd">→</span> 上一题 / 下一题</span>
         <span><span class="kbd">1</span>–<span class="kbd">4</span> FSRS 评级</span>
-        <span><span class="kbd">W</span> 标记薄弱（仅练习）</span>
-        <span><span class="kbd">B</span> 待复查旗</span>
+        <span><span class="kbd">F</span> 标记薄弱（这道题没有 F 选项时才生效）</span>
         <span><span class="kbd">Esc</span> 关闭浮层</span>
       </div>
     </div>
     <div class="notice info">
       <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
-      <div class="notice-body"><span class="kbd">W</span> = 标记薄弱（仅练习 runner）；<span class="kbd">B</span> = 标记 / 取消待复查旗（两个 runner 同键同义）；<span class="kbd">F</span> 不再绑定任何动作。作答卡抽屉、本浮层或「更多」菜单打开时，选择 / 提交 / 翻题 / 标记快捷键一律挂起，只响应 <span class="kbd">Esc</span>。</div>
+      <div class="notice-body">快捷键跟着当前题型走：选项键只绑定这道题真实存在的选项，所以不会占用别的字母；判断题用 <span class="kbd">T</span>/<span class="kbd">F</span> 作答；主观题没有选项，打字与输入法完全不受影响。答题卡抽屉、本浮层或「更多」菜单打开时，除 <span class="kbd">Esc</span> 外快捷键一律挂起；带着 Ctrl / Cmd / Alt 的组合键一律不拦。</div>
     </div>
   </div>
   <div class="dlg-foot">
@@ -1192,7 +1175,7 @@ window.EErun = (function () {
     return { stem: stem, type: '单选题', options: [['A', '选项 A'], ['B', '选项 B'], ['C', '选项 C'], ['D', '选项 D']], answer: 'A', explain: '这道题暂未收录选项，以下按占位选项展示。' };
   }
 
-  var R = { s: null, paper: [], index: 0, answers: {}, ratings: {}, flags: {}, marks: {}, selected: null, submitted: false, rating: null, elapsed: 0, report: null, done: false };
+  var R = { s: null, paper: [], index: 0, answers: {}, ratings: {}, flags: {}, selected: null, submitted: false, rating: null, elapsed: 0, report: null, done: false };
   var timerId = null;
 
   function esc(s) {
@@ -1301,7 +1284,7 @@ window.EErun = (function () {
   }
   function persist(extra) {
     if (!R.s) return;
-    var patch = Object.assign({ answers: R.answers, ratings: R.ratings, flags: R.flags, marks: R.marks, index: R.index, done: answeredCount(), elapsed: R.elapsed }, extra || {});
+    var patch = Object.assign({ answers: R.answers, ratings: R.ratings, flags: R.flags, index: R.index, done: answeredCount(), elapsed: R.elapsed }, extra || {});
     S.updateSession(R.s.id, patch);
   }
 
@@ -1318,11 +1301,10 @@ window.EErun = (function () {
     R.s = s;
     R.paper = buildPaper(s);
     if (!R.paper.length) { showNone(); return; }
-    R.answers = {}; R.ratings = {}; R.flags = {}; R.marks = {};
+    R.answers = {}; R.ratings = {}; R.flags = {};
     Object.keys(s.answers || {}).forEach(function (k) { R.answers[k] = s.answers[k]; });
     Object.keys(s.ratings || {}).forEach(function (k) { R.ratings[k] = s.ratings[k]; });
     Object.keys(s.flags || {}).forEach(function (k) { R.flags[k] = s.flags[k]; });
-    Object.keys(s.marks || {}).forEach(function (k) { R.marks[k] = s.marks[k]; });
     var idx = s.index != null ? parseInt(s.index, 10) : answeredCount();
     if (isNaN(idx) || idx < 0 || idx >= R.paper.length) idx = answeredCount() >= R.paper.length ? R.paper.length - 1 : answeredCount();
     R.index = idx;
@@ -1384,7 +1366,6 @@ window.EErun = (function () {
     var q = R.paper[R.index];
     var total = R.paper.length;
     var flagged = !!R.flags[R.index];
-    var marked = !!R.marks[R.index];
     var g = grade(R.index);
 
     document.getElementById('run-mode').textContent = R.s.mode || '顺序练习';
@@ -1392,8 +1373,7 @@ window.EErun = (function () {
     document.getElementById('run-counter').textContent = (R.index + 1) + ' / ' + total;
     document.getElementById('run-meta').innerHTML =
       '<span>第 ' + (R.index + 1) + ' 题 · 共 ' + total + ' 题</span><span>' + esc(q.type) + '</span>' +
-      (flagged ? '<span class="tag brand"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>薄弱</span>' : '') +
-      (marked ? '<span class="tag plain"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>待复查</span>' : '');
+      (flagged ? '<span class="tag brand"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>薄弱</span>' : '');
     document.getElementById('run-stem').textContent = q.stem;
     document.getElementById('run-bank-note').textContent = (R.s.kind === 'review' ? '本次复习 · ' : '本次练习 · ') + bankName(R.s.bankId);
 
@@ -1497,7 +1477,7 @@ window.EErun = (function () {
       if (R.answers[i]) c += ' is-answered';
       if (i === R.index) c += ' is-current';
       if (R.flags[i]) c += ' is-flagged';
-      cells += '<button type="button" class="' + c + '" aria-current="' + (i === R.index) + '" aria-label="第 ' + (i + 1) + ' 题" onclick="EErun.jumpTo(' + i + ')">' + (i + 1) + '</button>';
+      cells += '<button type="button" class="' + c + '" aria-current="' + (i === R.index) + '" aria-label="第 ' + (i + 1) + ' 题' + (R.flags[i] ? ' · 已标记薄弱' : '') + '" onclick="EErun.jumpTo(' + i + ')">' + (i + 1) + '</button>';
     }
     document.getElementById('run-sheet').innerHTML = cells;
     document.getElementById('sheet-grid-live').innerHTML = cells;
@@ -1536,25 +1516,33 @@ window.EErun = (function () {
     return R.selected === key;
   }
 
-  /* 底栏提交态：主观题边写边刷新，不能等一次 render（会重建输入框、丢光标） */
+  /* 底栏主次：未提交时主操作是「提交答案」，已提交后主操作顺延为「下一题」
+     （最后一题是「交卷」），原提交按钮退成不可点的状态说明——同一时刻只有一颗主操作。 */
   function paintFoot(q) {
     document.getElementById('run-prev').disabled = R.index === 0;
     var submit = document.getElementById('run-submit');
     var reason = document.getElementById('run-submit-reason');
+    var skip = document.getElementById('run-skip');
+    var last = R.index + 1 >= R.paper.length;
     if (R.submitted) {
       submit.disabled = true;
+      submit.classList.remove('btn-primary', 'btn-hero');
+      submit.classList.add('btn-quiet');
       submit.textContent = '已提交';
-      reason.textContent = '本题已提交，判定与评级在下方反馈里';
+      reason.textContent = '判定与评级在下方反馈里';
+      skip.textContent = last ? '交卷' : '下一题';
+      skip.classList.add('btn-primary', 'btn-hero');
+      skip.classList.remove('btn-quiet');
     } else {
       submit.disabled = !hasAnswer();
+      submit.classList.add('btn-primary', 'btn-hero');
+      submit.classList.remove('btn-quiet');
       submit.textContent = '提交答案';
-      reason.textContent = hasAnswer() ? '已作答，按 Enter 也可提交' : (q.subjective ? '请先写下答案' : '请先选择一个答案');
+      reason.textContent = hasAnswer() ? '按 Enter 也可提交' : (q.subjective ? '请先写下答案' : '请先选择一个答案');
+      skip.textContent = '跳过';
+      skip.classList.remove('btn-primary', 'btn-hero');
+      skip.classList.add('btn-quiet');
     }
-    var skip = document.getElementById('run-skip');
-    skip.disabled = false;
-    skip.textContent = R.submitted ? (R.index + 1 >= R.paper.length ? '交卷' : '下一题') : '跳过';
-    skip.classList.toggle('btn-primary', R.submitted);
-    skip.classList.toggle('btn-quiet', !R.submitted);
   }
 
   /* ---------- 动作 ---------- */
@@ -1592,10 +1580,7 @@ window.EErun = (function () {
     }
     persist();
     render();
-    if (!g.graded) eeToast('已保存，本题不自动判分');
-    else if (g.correctness === 'CORRECT') eeToast('回答正确');
-    else if (g.correctness === 'PARTIAL') eeToast('部分正确，已按「重来」记录');
-    else eeToast('回答错误，已按「重来」记录');
+    /* 判分结果已经由选项自身的对/错/漏选标记和下方判定区表达，不再弹一条重复的 toast */
   }
   function rate(r) {
     if (!R.submitted) return;
@@ -1611,7 +1596,7 @@ window.EErun = (function () {
     }
     persist();
     render();
-    eeToast('已按「' + RATING_NAME[r] + '」记录，下次到期 ' + (dueDateFor(R.index, r) || '未调度'));
+    /* 评级结果已写进下方「已按『X』记录，下次到期 …」，不再重复弹 toast */
   }
   function stabilityFor(r) { return { 1: 1.2, 2: 1.8, 3: 2.4, 4: 3.1 }[r]; }
   function dueLater(rating) {
@@ -1636,7 +1621,6 @@ window.EErun = (function () {
     if (R.index + 1 >= R.paper.length) { openComplete(); return; }
     R.index++;
     restoreQuestion();
-    eeToast('已跳过本题，按未答计');
   }
   function footAction() {
     if (R.submitted) {
@@ -1659,8 +1643,6 @@ window.EErun = (function () {
     closeDrawer('sheet');
     R.index = i;
     restoreQuestion();
-    render();
-    eeToast('跳到第 ' + (i + 1) + ' 题');
   }
   function jumpToUnanswered() {
     for (var i = 0; i < R.paper.length; i++) {
@@ -1675,15 +1657,7 @@ window.EErun = (function () {
     if (on) R.flags[R.index] = true; else delete R.flags[R.index];
     persist();
     render();
-    eeToast(on ? '已标记薄弱' : '已取消薄弱');
-  }
-  function toggleMark() {
-    if (!R.s) return;
-    var on = !R.marks[R.index];
-    if (on) R.marks[R.index] = true; else delete R.marks[R.index];
-    persist();
-    render();
-    eeToast(on ? '已标记待复查' : '已取消待复查');
+    /* 顶栏旗标按钮的选中态与题干区的「薄弱」标签已经说明结果，不再弹 toast */
   }
   function askKill() {
     if (!R.s || !R.paper.length) return;
@@ -1791,7 +1765,7 @@ window.EErun = (function () {
     eeDialog.close(document.getElementById('dlg-complete'));
     switchTab('st-report');
     renderReport();
-    eeToast('已交卷，报告已保存');
+    /* 交卷后直接跳到报告页，页面自身就是结论，不再弹 toast */
   }
   /* 演示报告：规格态里也要能看到完整的报告形态（真实交卷后用 R.report 覆盖） */
   var REPORT_DEMO = {
@@ -1967,7 +1941,7 @@ window.EErun = (function () {
     var s = R.s || {};
     var ns = S.startSession({
       kind: s.kind || 'practice', bankId: s.bankId, mode: s.mode || '顺序练习', title: s.title || '',
-      total: R.paper.length, rowIds: s.rowIds || [], index: 0, done: 0, answers: {}, ratings: {}, flags: {}, marks: {}, elapsed: 0
+      total: R.paper.length, rowIds: s.rowIds || [], index: 0, done: 0, answers: {}, ratings: {}, flags: {}, elapsed: 0
     });
     location.href = 'practice.html?sid=' + encodeURIComponent(ns.id);
   }
@@ -2052,7 +2026,7 @@ window.EErun = (function () {
     S.setSetting('practiceTimer', on);
     paintTimer();
     render();
-    eeToast(on ? '已开启本次练习计时（设置页同步生效）' : '已关闭练习计时');
+    /* 计时器开关的结果已经写在顶栏与按钮标签上，不再弹 toast */
   }
   S.subscribe(function (state, evt) {
     if (evt && evt.type === 'settings') { paintTimer(); render(); }
@@ -2068,7 +2042,6 @@ window.EErun = (function () {
   };
   function specRate(btn, r) {
     window.rate(btn);
-    eeToast('已按「' + RATING_NAME[r] + '」记录');
   }
 
   /* ---------- 快捷键 ---------- */
@@ -2089,33 +2062,74 @@ window.EErun = (function () {
     var tab = document.querySelector('.tab[data-panel="' + panel + '"]');
     if (tab) tab.click();
   }
+  /* ---------- 快捷键 ----------
+     规则（与模考会话同一套）：
+     1. 只绑当前题型真正拥有的选项键：单选 / 多选 A–E，判断题 T / F；
+        题目没有 F 这个选项时，F 才是“标记薄弱”。
+     2. 任何修饰键（Ctrl / Cmd / Alt）一律不拦——那是系统快捷键与输入法组合键。
+     3. 输入法合成中、焦点在表单或任何可激活控件上时一律不拦。
+     4. 浮层（对话框 / 抽屉 / 菜单）打开时只保留 Esc。
+     5. 主观题没有选项，不拦任何字符键。 */
+  function editableTarget(t) {
+    if (!t) return false;
+    if (t.isContentEditable) return true;
+    var tag = t.tagName;
+    return tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || tag === 'OPTION';
+  }
+  /* 焦点落在可激活控件上时，Enter / Space 属于那个控件，不抢 */
+  function controlTarget(t) {
+    if (!t || !t.closest) return false;
+    return !!t.closest('button, a[href], summary, details, label, input, select, textarea, [role="button"], [role="link"], [role="option"], [role="radio"], [role="tab"], [role="menuitem"]');
+  }
+  function optionKeys(q) {
+    var keys = [];
+    (q.options || []).forEach(function (o) { if (keys.indexOf(o[0]) < 0) keys.push(o[0]); });
+    return keys;
+  }
+  function isJudge(q) {
+    return q.type === '判断题' || (q.options.length === 2 && q.options[0][1] === '正确');
+  }
   document.addEventListener('keydown', function (e) {
+    if (e.isComposing) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === 'Escape') return;
     if (overlayOpen()) return;
     if (activePanel() !== 'st-run') return;
-    if (R.done || !R.s) return;
+    if (R.done || !R.s || !R.paper.length) return;
+    var q = R.paper[R.index];
     var t = e.target;
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    if (editableTarget(t)) return;
     var key = e.key.toUpperCase();
-    if (key >= 'A' && key <= 'D' && !R.paper[R.index].subjective) {
+    if (q.subjective) {
+      if (!controlTarget(t) && e.key === 'ArrowRight') { e.preventDefault(); next(); }
+      else if (!controlTarget(t) && e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+      return;
+    }
+    var keys = optionKeys(q);
+    if (isJudge(q)) {
+      if (key === 'T') { e.preventDefault(); select(q.options[0][0]); return; }
+      if (key === 'F') { e.preventDefault(); select(q.options[1][0]); return; }
+    } else if (key.length === 1 && key >= 'A' && key <= 'E' && keys.indexOf(key) > -1) {
       e.preventDefault();
       select(key);
-    } else if (e.key === 'Enter') {
+      return;
+    }
+    if (!controlTarget(t) && e.key === 'Enter') {
       e.preventDefault();
       if (R.submitted) next(); else submit();
-    } else if (e.key === ' ') {
+    } else if (!controlTarget(t) && e.key === ' ') {
       e.preventDefault();
       next();
-    } else if (e.key === 'ArrowLeft') {
+    } else if (!controlTarget(t) && e.key === 'ArrowRight') {
+      e.preventDefault();
+      next();
+    } else if (!controlTarget(t) && e.key === 'ArrowLeft') {
       e.preventDefault();
       prev();
-    } else if (key === 'W') {
+    } else if (key === 'F' && keys.indexOf('F') < 0) {
       e.preventDefault();
       toggleFlag();
-    } else if (key === 'B') {
-      e.preventDefault();
-      toggleMark();
-    } else if (key >= '1' && key <= '4' && R.submitted) {
+    } else if (key >= '1' && key <= '4' && R.submitted && canRate()) {
       e.preventDefault();
       rate(parseInt(key, 10));
     }
@@ -2146,7 +2160,7 @@ window.EErun = (function () {
   return {
     init: init, openPersistedReport: openPersistedReport, select: select, submit: submit, rate: rate, specRate: specRate, next: next, prev: prev, skip: skip,
     footAction: footAction, jumpTo: jumpTo, jumpToUnanswered: jumpToUnanswered, toggleFlag: toggleFlag,
-    toggleMark: toggleMark, askKill: askKill, confirmKill: confirmKill,
+    askKill: askKill, confirmKill: confirmKill,
     exit: exit, confirmEnd: confirmEnd, backToRate: backToRate, reload: reload,
     openComplete: openComplete, openCompleteBtn: openCompleteBtn, confirmComplete: confirmComplete,
     again: again, openDrawer: openDrawer, closeDrawer: closeDrawer, toggleMenu: toggleMenu,

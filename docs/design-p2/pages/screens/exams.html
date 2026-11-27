@@ -45,6 +45,19 @@
 .ee-confirm{  border-top: 1px solid var(--line-strong); padding-top: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3);  }
 .ee-kv-note{  font-size: var(--text-xs); color: var(--ink-3);  }
 .ee-section{  margin-top: var(--sp-8);  }
+/* 成绩报告：桌面宽表自滚并明示可滚；≤640 换一场一张的专用列表 */
+  #reports-mobile{  display: none;  }
+.ee-rep-group-row td{  padding: var(--sp-5) var(--sp-4) var(--sp-2); border-bottom: none; background: var(--surface);  }
+.ee-rep-group-date{  font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink); margin-right: var(--sp-3);  }
+.ee-rep-group-n{  font-size: var(--text-xs); color: var(--ink-3);  }
+.ee-rep-group{  display: flex; align-items: baseline; gap: var(--sp-3); padding: var(--sp-4) 0 var(--sp-2); border-bottom: 1px solid var(--line);  }
+.ee-rep-group:first-child{  border-top: 1px solid var(--ink);  }
+@media (max-width: 640px){
+  #reports-table, #reports-scroll-hint { display: none; }
+  #reports-mobile { display: flex; flex-direction: column; }
+  #reports-mobile > .list-row { padding-left: 0; padding-right: 0; }
+  #reports-mobile > .list-row:first-child { border-top: 1px solid var(--ink); }
+ }
 .ee-tpl-grid{  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3);  }
 .ee-tpl{  display: flex; flex-direction: column; gap: var(--sp-1); text-align: left; padding: var(--sp-3) var(--sp-4); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); cursor: pointer; font: inherit; color: inherit;  }
 .ee-tpl:hover{  border-color: var(--ink-3);  }
@@ -194,7 +207,23 @@
               <h2 class="section-title">成绩报告</h2>
               <span class="section-note">报告在交卷时一次性生成，落库后不可变、不重算</span>
             </div>
-            <div class="dtable-wrap">
+
+            <!-- 定位手段：时间范围 / 考试档案 / 交卷来源。记录多的时候靠条件收窄，不靠翻页 -->
+            <div class="lay-toolbar" role="group" aria-label="报告筛选">
+              <div class="segmented" role="radiogroup" aria-label="时间范围" id="report-range">
+                <button type="button" class="segment" role="radio" aria-checked="true" data-range="all">全部</button>
+                <button type="button" class="segment" role="radio" aria-checked="false" data-range="30">近 30 天</button>
+                <button type="button" class="segment" role="radio" aria-checked="false" data-range="90">近 90 天</button>
+                <button type="button" class="segment" role="radio" aria-checked="false" data-range="older">更早</button>
+              </div>
+              <select class="select" aria-label="考试档案" id="report-profile"></select>
+              <select class="select" aria-label="交卷来源" id="report-via"></select>
+              <span class="grow"></span>
+              <span class="panel-sub" id="reports-count"></span>
+            </div>
+
+            <!-- 桌面：宽表自滚，放不下时明确提示 -->
+            <div class="dtable-wrap" id="reports-table">
               <table class="dtable">
                 <thead>
                   <tr>
@@ -210,6 +239,11 @@
                 <tbody id="exam-reports-host"></tbody>
               </table>
             </div>
+            <p class="hint ee-mt-3" id="reports-scroll-hint" hidden></p>
+
+            <!-- 手机：一场一张的专用列表，不把 8 列塞进横向滚动 -->
+            <div class="ee-list" id="reports-mobile"></div>
+
             <p class="hint ee-mt-4">
               考试得分率 = 客观题得分 ÷ 客观题满分（分母含未作答）；已答客观题正确率 = 答对的已答客观题 ÷ 已答客观题（分母只含已作答）。两个率分母不同，不得混用。
             </p>
@@ -826,7 +860,7 @@ window.EEexams = (function () {
      判分版本快照随作答记录落库，不随后续改题变化。 */
   var DEMO_REPORTS = [
     { id: 'rd1', at: '2026-11-24 22:05', title: '系统集成项目管理工程师 · 综合卷', bankId: 'b_rk',
-      score: 11, full: 24, rate: 46, accObj: 56, answered: 10, objTotal: 11, total: 12, correct: 5, ungraded: 1,
+      score: 11, full: 24, rate: 46, accObj: 56, answered: 9, objTotal: 11, total: 12, correct: 5, ungraded: 1,
       minutes: 47, wall: 52, via: 'manual',
       items: [
         { qid: 'q_rk_01', bankId: 'b_rk', type: '单选题', answered: true, ratio: 1, correctness: 'CORRECT',
@@ -950,6 +984,89 @@ window.EEexams = (function () {
     { id: 't3', name: '科目一 · 判断题强化', meta: '1 个配额段 · 30 题 · 负分 1', rows: [['判断', '不限', 30, 1]] },
     { id: 't4', name: '案例分析 · 主观专项', meta: '1 个配额段 · 6 题 · 不自动判分', rows: [['问答', '不限', 6, 0]] }
   ];
+
+  /* ---- 历史归档报告的逐题明细池 ----
+     汇总数一律由 items 反算，不手写：得分率、已答客观题正确率、已答/未答
+     三个分母口径（客观题满分含未作答 / 已答客观题 / 客观题总数）必须自洽，
+     列表行与详情对话框读同一份对象，不可能给出两个值。 */
+  var ARCHIVE_ITEMS = [
+    { type: '单选题', stem: '每周一学校开展直播课程，在直播中实时回复学生问题属于（ ）', answer: 'A', explain: '直播中实时回复学生问题，信息按需推送、学生自行获取，属于拉式沟通。' },
+    { type: '单选题', stem: 'OSI 的（ ）不适合提供相应的安全服务。', answer: 'B', explain: '传输层、网络层、应用层都可以提供相应安全服务，会话层不适合。' },
+    { type: '单选题', stem: '关于范围基准，以下说法不正确的是（ ）。', answer: 'D', explain: '范围基准是创建 WBS 过程的输出，不是制定预算的输出。' },
+    { type: '单选题', stem: '当出现异常时软件需要有持续提供服务，属于（ ）。', answer: 'A', explain: '韧性指系统在出现异常时仍能持续提供服务的能力。' },
+    { type: '单选题', stem: '（ ）按照业务功能聚合性进行应用规划，建设与应用组件对应的应用系统，实现专业化发展。', answer: 'A', explain: '按业务功能聚合性进行应用规划，体现的是功能专业化原则。' },
+    { type: '单选题', stem: '以下不属于“临时性”的是（ ）', answer: 'D', explain: '“结束阶段”是项目阶段名称，不属于临时性这一特征。' },
+    { type: '单选题', stem: '监控各项续航参数是否保持在预期区间（ ）', answer: 'A', explain: '控制图用于判断过程是否处于受控状态，即参数是否保持在预期区间。' },
+    { type: '单选题', stem: '大型不适合用（ ）架构模型。', answer: 'A', explain: '大型系统不适合单机应用模式，需要分布式架构支撑。' },
+    { type: '多选题', stem: '以下属于项目临时性特征的有（ ）。', answer: 'A · B · D', explain: '临时性的特征是：有明确的开始时间和结束时间、可交付成果在项目结束后依然存在、独特性；「结束阶段」是阶段名称，不属于特征。' },
+    { type: '多选题', stem: '关于项目沟通管理，下列说法正确的有（ ）。', answer: 'A · B · D', explain: '沟通管理计划描述干系人的信息需求与分发方式；会议管理属于执行沟通；沟通需求分析是规划沟通的输入。' },
+    { type: '多选题', stem: '以下属于可观测性三支柱的有（ ）。', answer: 'A · C · D', explain: '指标、日志、追踪构成三支柱；告警是消费侧能力，不属于被观测信号本身。' },
+    { type: '多选题', stem: '以下属于分布式事务方案的有（ ）。', answer: 'B · C · D', explain: '2PC、TCC、Saga 与本地消息表都是常见方案；隔离级别属于单库并发控制，不是分布式事务方案。' },
+    { type: '问答题', stem: '结合本项目，说明范围基准失控的主要原因，并给出纠正措施。', answer: '主观题不自动判分', explain: '范围基准失控的根因通常是变更绕过整体变更控制；纠正要落在「变更请求 → 影响评估 → CCB 审批 → 更新基准」这条闭环上，并且基准更新后要通知所有干系人。' }
+  ];
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function ymd(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  function archiveReport(i) {
+    var profile = PROFILES[i % PROFILES.length];
+    var bankId = ['b_rk', 'b_acc', 'b_en'][i % 3];
+    var objN = 8 + (i % 5);                       /* 客观题 8–12 道 */
+    var single = Math.max(1, objN - 2);
+    var items = [];
+    for (var k = 0; k < objN; k++) {
+      var multi = k >= single;
+      var blank = (k % 5 === 3);
+      var right = !blank && (k % 3 !== 2);
+      var base = ARCHIVE_ITEMS[(i + k) % ARCHIVE_ITEMS.length];
+      var it = {
+        qid: 'q_ar_' + i + '_' + k, bankId: bankId,
+        type: multi ? '多选题' : '单选题', multi: multi,
+        answered: !blank, ratio: blank ? null : (right ? 1 : 0),
+        correctness: blank ? 'BLANK' : (right ? 'CORRECT' : 'INCORRECT'),
+        stem: base.stem,
+        mine: blank ? '未作答' : (multi ? 'A · B · D' : (right ? base.answer : 'B')),
+        answer: base.answer, explain: base.explain,
+        rating: blank ? null : (right ? '良好' : '重来'),
+        ratingDue: blank ? null : '12 月 ' + (2 + ((i + k) % 20)) + ' 日',
+        ver: 'v' + (1 + ((i + k) % 3)), verAt: '2026-11-' + pad2(2 + ((i + k) % 25)) + ' 09:10'
+      };
+      /* 一部分题的判分版本之后被改过：报告仍按当时的版本，条目上标「有新版」 */
+      if ((i + k) % 7 === 0) {
+        it.cur = 'v' + (2 + ((i + k) % 3));
+        it.curAt = '2026-11-' + pad2(10 + ((i + k) % 15)) + ' 14:20';
+        it.curNote = '选项表述调整，答案与判定依据未变。';
+      }
+      items.push(it);
+    }
+    if (i % 4 === 0) {
+      var sub = ARCHIVE_ITEMS[12];
+      items.push({
+        qid: 'q_ar_' + i + '_s', bankId: bankId, type: '问答题', subjective: true, answered: true,
+        ratio: null, correctness: 'UNGRADED', stem: sub.stem,
+        mine: '范围基准失控主要因为变更未经整体变更控制就进入了执行：客户口头追加需求，直接由开发修改，没有更新 WBS 与 WBS 字典，也没有走变更流程。',
+        answer: sub.answer, explain: sub.explain, rating: null,
+        ver: 'v2', verAt: '2026-11-15 19:02'
+      });
+    }
+    var obj = items.filter(function (x) { return !x.subjective; });
+    var answeredN = obj.filter(function (x) { return x.answered; }).length;
+    var correctN = obj.filter(function (x) { return x.correctness === 'CORRECT'; }).length;
+    var full = obj.reduce(function (a, x) { return a + (x.multi ? 3 : 2); }, 0);
+    var score = obj.reduce(function (a, x) { return a + (x.ratio || 0) * (x.multi ? 3 : 2); }, 0);
+    var d = new Date();
+    d.setDate(d.getDate() - Math.round(i * 1.7));
+    var via = i % 6 === 0 ? 'auto_deadline' : (i % 11 === 0 ? 'expired_server_answers' : 'manual');
+    return {
+      id: 'ar' + i, at: ymd(d) + ' ' + pad2(8 + ((i * 7) % 12)) + ':' + pad2((i * 13) % 60),
+      title: profile.name, bankId: bankId,
+      score: score, full: full, rate: full ? Math.round(score / full * 100) : 0,
+      accObj: answeredN ? Math.round(correctN / answeredN * 100) : null,
+      answered: answeredN, objTotal: obj.length, total: items.length, correct: correctN,
+      ungraded: items.filter(function (x) { return x.subjective; }).length,
+      minutes: 18 + (i % 70), wall: 20 + (i % 74), via: via, items: items
+    };
+  }
+  var ARCHIVE_REPORTS = [];
+  for (var ai = 0; ai < 47; ai++) ARCHIVE_REPORTS.push(archiveReport(ai));
 
   var bpCtx = { profileId: 'p1', baseline: '' };
   var setupCtx = { profileId: 'p1', bankId: 'b_rk' };
@@ -1096,36 +1213,133 @@ window.EEexams = (function () {
         items: r.items || []
       };
     });
-    /* 旧版报告（落库时未记录分值口径）：按 CR-25 不重算，满分与两个率显示「—」 */
-    store.forEach(function (r) {
-      if (r.full == null) { r.legacy = true; }
+    /* 旧版报告（落库时未记录分值口径）：不重算，满分与两个率显示「—」 */
+    store.forEach(function (r) { if (r.full == null) r.legacy = true; });
+    var demo = store.length < 3 ? DEMO_REPORTS.slice(0, 3 - store.length) : [];
+    return store.concat(demo, ARCHIVE_REPORTS);
+  }
+  /* 定位手段：时间范围 + 考试档案 + 交卷来源。50+ 场不靠翻页，靠这三个条件收窄。 */
+  var reportFilter = { range: 'all', profile: '', via: '' };
+  function inRange(r) {
+    if (reportFilter.range === 'all') return true;
+    var days = (Date.now() - new Date(String(r.at || '').replace(' ', 'T')).getTime()) / 86400000;
+    if (isNaN(days)) return false;
+    if (reportFilter.range === 'older') return days > 90;
+    return days <= parseInt(reportFilter.range, 10);
+  }
+  function filteredReports() {
+    return allReports().filter(function (r) {
+      if (!inRange(r)) return false;
+      if (reportFilter.profile && r.title !== reportFilter.profile) return false;
+      if (reportFilter.via && (r.via || 'manual') !== reportFilter.via) return false;
+      return true;
+    }).sort(function (a, b) { return String(b.at).localeCompare(String(a.at)); });
+  }
+  function reportRowHtml(r) {
+    var legacy = !!r.legacy;
+    var full = legacy ? '—' : (r.full + ' 分');
+    var rate = legacy ? '—' : (r.rate + '%');
+    /* 与报告详情同一把尺子：早期报告没有已答客观题分母，两边都显示「—」，
+       不允许列表行用「答对数 ÷ 客观题总数」凑一个看起来像正确率的数。 */
+    var acc = legacy ? '—' : (r.accObj == null ? '暂无数据' : r.accObj + '%');
+    var changed = (r.items || []).filter(function (it) { return it.cur; }).length;
+    return '<tr data-report="' + esc(r.id) + '">' +
+      '<td data-label="交卷时间" class="mono">' + esc(r.at || '—') + '</td>' +
+      '<td data-label="考试档案">' + esc(r.title) +
+      (changed ? ' <span class="tag warn">' + changed + ' 题有新版</span>' : '') +
+      (legacy ? ' <span class="tag plain">早期报告</span>' : '') + '</td>' +
+      '<td data-label="得分 / 客观题满分" class="num">' + (r.score == null ? '待判分' : r.score + ' / ' + full) + '</td>' +
+      '<td data-label="考试得分率" class="num">' + rate + '</td>' +
+      '<td data-label="已答客观题正确率" class="num">' + acc + '</td>' +
+      '<td data-label="用时" class="num">' + (r.minutes == null ? '—' : r.minutes + ' 分钟') + '</td>' +
+      '<td data-label="交卷来源">' + (r.via === 'manual' ? '<span class="tag plain">手动交卷</span>' : '<span class="tag warn">' + esc(viaLabel(r.via)) + '</span>') + '</td>' +
+      '<td data-label="回看" class="col-actions"><button class="link-btn" type="button" onclick="EEexams.openReport(\'' + esc(r.id) + '\', this)">回看</button></td>' +
+      '</tr>';
+  }
+  /* 手机专用列表：一场一张，标题 / 时间 / 得分与两个率 / 题数 / 版本提示，
+     不把 8 列塞进横向滚动里。 */
+  function reportCardHtml(r) {
+    var legacy = !!r.legacy;
+    var changed = (r.items || []).filter(function (it) { return it.cur; }).length;
+    return '<div class="list-row ee-row-top" data-report="' + esc(r.id) + '">' +
+      '<span class="list-main"><span class="list-title ee-paper-title">' + esc(r.title) + '</span>' +
+      '<span class="list-meta"><span class="mono">' + esc(r.at || '—') + '</span>' +
+      (changed ? '<span class="tag warn">' + changed + ' 题有新版</span>' : '') +
+      (legacy ? '<span class="tag plain">早期报告</span>' : '') +
+      '<span>' + (r.via === 'manual' ? '手动交卷' : esc(viaLabel(r.via))) + '</span></span>' +
+      '<span class="list-meta"><span>得分 ' + (r.score == null ? '待判分' : r.score + ' / ' + (legacy ? '—' : r.full + ' 分')) + '</span>' +
+      '<span>得分率 ' + (legacy ? '—' : r.rate + '%') + '</span>' +
+      '<span>已答正确率 ' + (legacy ? '—' : (r.accObj == null ? '暂无数据' : r.accObj + '%')) + '</span>' +
+      '<span>' + r.total + ' 题</span></span></span>' +
+      '<span class="list-side"><button class="btn btn-sm btn-quiet" type="button" onclick="EEexams.openReport(\'' + esc(r.id) + '\', this)">回看</button></span>' +
+      '</div>';
+  }
+  function monthKey(r) { return String(r.at || '').slice(0, 7); }
+  function monthLabel(k) {
+    var p = k.split('-');
+    return p.length === 2 ? (p[0] + ' 年 ' + parseInt(p[1], 10) + ' 月') : '时间不详';
+  }
+  function groupByMonth(list) {
+    var groups = {};
+    list.forEach(function (r) { (groups[monthKey(r)] = groups[monthKey(r)] || []).push(r); });
+    return Object.keys(groups).sort().reverse().map(function (k) {
+      return { key: k, label: monthLabel(k), rows: groups[k] };
     });
-    return store.concat(store.length < 3 ? DEMO_REPORTS.slice(0, 3 - store.length) : []);
+  }
+  function reportsEmpty(cols) {
+    return '<tr><td data-label="交卷时间" colspan="' + cols + '">' +
+      '没有符合条件的报告。放宽时间范围或换一个考试档案；已放弃的考试不生成报告。</td></tr>';
   }
   function renderReports() {
-    var list = allReports();
-    var host = document.getElementById('exam-reports-host');
+    var list = filteredReports();
+    var total = allReports().length;
+    document.getElementById('reports-count').textContent = list.length + ' / ' + total + ' 场';
+    var table = document.getElementById('exam-reports-host');
+    var mobile = document.getElementById('reports-mobile');
     if (!list.length) {
-      host.innerHTML = '<tr><td data-label="交卷时间" colspan="8">还没有交卷记录。模考交卷后这里会出现可回看的报告；已放弃的考试不生成报告。</td></tr>';
+      table.innerHTML = reportsEmpty(8);
+      mobile.innerHTML = '<div class="empty"><div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg></div>' +
+        '<div class="empty-title">没有符合条件的报告</div>' +
+        '<div class="empty-desc">放宽时间范围或换一个考试档案；已放弃的考试不生成报告。</div></div>';
       return;
     }
-    host.innerHTML = list.map(function (r) {
-      var full = r.legacy ? '—' : (r.full + ' 分');
-      var rate = r.legacy ? '—' : (r.rate + '%');
-      /* 与报告详情同一把尺子：早期报告没有已答客观题分母，两边都显示「—」，
-         不允许列表行用「答对数 ÷ 客观题总数」凑一个看起来像正确率的数。 */
-      var acc = r.legacy ? '—' : (r.accObj == null ? '暂无数据' : r.accObj + '%');
-      return '<tr>' +
-        '<td data-label="交卷时间" class="mono">' + esc(r.at || '—') + '</td>' +
-        '<td data-label="考试档案">' + esc(r.title) + (r.legacy ? ' <span class="tag plain">早期报告</span>' : '') + '</td>' +
-        '<td data-label="得分 / 客观题满分" class="num">' + (r.score == null ? '待判分' : r.score + ' / ' + full) + '</td>' +
-        '<td data-label="考试得分率" class="num">' + rate + '</td>' +
-        '<td data-label="已答客观题正确率" class="num">' + acc + '</td>' +
-        '<td data-label="用时" class="num">' + (r.minutes == null ? '—' : r.minutes + ' 分钟') + '</td>' +
-        '<td data-label="交卷来源">' + (r.via === 'manual' ? '<span class="tag plain">手动交卷</span>' : '<span class="tag warn">' + esc(viaLabel(r.via)) + '</span>') + '</td>' +
-        '<td data-label="回看" class="col-actions"><button class="link-btn" type="button" onclick="EEexams.openReport(\'' + esc(r.id) + '\', this)">回看</button></td>' +
-        '</tr>';
+    var groups = groupByMonth(list);
+    table.innerHTML = groups.map(function (g) {
+      return '<tr class="ee-rep-group-row"><td colspan="8"><span class="ee-rep-group-date">' + esc(g.label) + '</span>' +
+        '<span class="ee-rep-group-n">' + g.rows.length + ' 场</span></td></tr>' +
+        g.rows.map(reportRowHtml).join('');
     }).join('');
+    mobile.innerHTML = groups.map(function (g) {
+      return '<div class="ee-rep-group"><span class="ee-rep-group-date">' + esc(g.label) + '</span>' +
+        '<span class="ee-rep-group-n">' + g.rows.length + ' 场</span></div>' +
+        g.rows.map(reportCardHtml).join('');
+    }).join('');
+    syncTableScrollHint();
+  }
+  /* 表格列多于纸面放得下时，明确告诉用户可以横向滚，不静默裁掉 */
+  function syncTableScrollHint() {
+    var wrap = document.getElementById('reports-table');
+    var hint = document.getElementById('reports-scroll-hint');
+    if (!wrap || !hint) return;
+    var over = wrap.scrollWidth > wrap.clientWidth + 1;
+    hint.hidden = !over;
+    if (over) hint.textContent = '这一屏放不下全部 ' + wrap.querySelectorAll('thead th').length + ' 列，左右滑动查看其余列。';
+  }
+  function renderReportFilters() {
+    var sel = document.getElementById('report-profile');
+    var names = {};
+    allReports().forEach(function (r) { names[r.title] = 1; });
+    var keep = sel.value;
+    sel.innerHTML = '<option value="">全部考试档案</option>' + Object.keys(names).sort().map(function (n) {
+      return '<option' + (n === keep ? ' selected' : '') + '>' + esc(n) + '</option>';
+    }).join('');
+    var via = document.getElementById('report-via');
+    var keepVia = via.value;
+    via.innerHTML = '<option value="">全部交卷来源</option>' +
+      '<option value="manual">手动交卷</option>' +
+      '<option value="auto_deadline">到点自动交卷</option>' +
+      '<option value="expired_server_answers">超时后以服务器答案交卷</option>';
+    via.value = keepVia;
   }
 
   /* ---------- 右栏蓝图 ---------- */
@@ -1542,7 +1756,10 @@ window.EEexams = (function () {
         ? '<div class="notice info"><svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg><div class="notice-body">这是一份早期交卷的报告：落库时未记录客观题满分口径。报告落库后不可变、不重算，因此满分与两个率显示「—」，这一场也没有逐题明细可回看。</div></div>'
         : '<div class="notice info"><svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg><div class="notice-body"><span class="notice-title">两个率的分母不同，不得混用</span><br>考试得分率的分母是本场<strong>全部</strong>客观题（未作答按 0 分计入得分，但仍占满分）；已答客观题正确率的分母只是你实际作答过的客观题。例：100 道每题 1 分的客观题只答对 1 道、其余未答 → 得分 1 / 满分 100 / 得分率 1% / 已答客观题正确率 100%。</div></div>') +
       '<div class="kv">' +
-      '<span class="kv-key">已答 / 未答</span><span class="kv-val mono">' + (r.answered == null ? '—' : r.answered + ' / ' + (r.total == null ? '—' : (r.total - r.answered))) + '</span>' +
+      /* 已答/未答都按客观题口径：未答客观题 = 客观题总数 − 已答客观题，
+         与「已答客观题正确率」同一个分母，不把主观题混进来说不清的数 */
+      '<span class="kv-key">已答 / 未答客观题</span><span class="kv-val mono">' +
+      (r.answered == null || r.objTotal == null ? '—' : r.answered + ' / ' + (r.objTotal - r.answered)) + '</span>' +
       '<span class="kv-key">未判分（主观题）</span><span class="kv-val mono">' + (r.ungraded == null ? '—' : r.ungraded) + '</span>' +
       '<span class="kv-key">用时（服务端在线 / 墙钟）</span><span class="kv-val mono">' + (r.minutes == null ? '—' : r.minutes + ' / ' + (r.wall == null ? '—' : r.wall) + ' 分钟') + '</span>' +
       '<span class="kv-key">交卷来源</span><span class="kv-val">' + esc(viaLabel(r.via)) + '</span>' +
@@ -1576,7 +1793,28 @@ window.EEexams = (function () {
     renderBanks();
     renderReports();
     renderRail();
+    renderReportFilters();
   }
+
+  /* ---------- 报告筛选 ---------- */
+  document.getElementById('report-range').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-range]') : null;
+    if (!b) return;
+    reportFilter.range = b.getAttribute('data-range');
+    document.querySelectorAll('#report-range [data-range]').forEach(function (x) {
+      x.setAttribute('aria-checked', x === b ? 'true' : 'false');
+    });
+    renderReports();
+  });
+  document.getElementById('report-profile').addEventListener('change', function (e) {
+    reportFilter.profile = e.target.value;
+    renderReports();
+  });
+  document.getElementById('report-via').addEventListener('change', function (e) {
+    reportFilter.via = e.target.value;
+    renderReports();
+  });
+  window.addEventListener('resize', syncTableScrollHint);
 
   document.getElementById('setup-bank').addEventListener('change', syncSetup);
   document.getElementById('setup-profile').addEventListener('change', syncSetup);
@@ -1607,6 +1845,17 @@ window.EEexams = (function () {
 
   S.subscribe(function () { renderAll(); });
   renderAll();
+
+  /* 深链：?report=ar12 —— 从学习档案的「回看」点具体某一场时直接打开那份报告，
+     不停在列表页让用户自己找。 */
+  (function () {
+    var rid = new URLSearchParams(location.search).get('report');
+    if (rid) {
+      var hit = allReports().filter(function (r) { return r.id === rid; })[0];
+      if (hit) openReport(rid, document.activeElement);
+      else eeToast('这份报告已经不在了');
+    }
+  })();
 
   return {
     openProfile: openProfile, createProfile: createProfile, renameProfile: renameProfile,

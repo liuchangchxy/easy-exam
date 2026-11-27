@@ -42,9 +42,12 @@
 .focus-rail .rail-block:last-child{  padding-bottom: 0;  }
 .focus-rail .rail-block + .rail-block{  border-top: 1px solid var(--line);  }
 .exam-topbar, .exam-foot{  background: color-mix(in srgb, var(--paper) 94%, transparent);  }
-.exam-foot{  position: sticky; bottom: 0; display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; padding: var(--sp-3) var(--sp-6); border-top: 1px solid var(--line);  }
+.exam-foot{  position: sticky; bottom: var(--kb-inset, 0px); display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; padding: var(--sp-3) var(--sp-6); border-top: 1px solid var(--line);  }
 .exam-foot .spacer{  flex: 1 1 auto;  }
 .exam-foot .mono{  font-size: var(--text-sm); color: var(--ink-2);  }
+/* 一屏至多一颗主操作：底部主操作是「下一题 / 交卷」，顶栏「交卷」是次级入口。
+   软键盘弹起时次要操作收起，主操作留在键盘之上（--kb-inset 已由 spec-boot 实时更新）。 */
+  .exam-foot #ex-next{  flex: 0 0 auto;  }
 /* 已答 / 未答 / 待复查：三项一行的 plain 事实行，右栏不放统计框 */
   #ex-stats, #ex-drawer-stats{  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 var(--sp-3); border: none; border-radius: 0; background: transparent;  }
 #ex-stats .stat, #ex-drawer-stats .stat{  padding: var(--sp-1) 0; border-right: none;  }
@@ -87,8 +90,6 @@
 .sheet-cell.is-wrong-cell{  background: var(--bad-soft); border-color: var(--bad-line); color: var(--bad);  }
 .sheet-dot.is-wrong-cell{  background: var(--bad-soft); border-color: var(--bad-line);  }
 .rail-note{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh);  }
-.rail-keys{  display: flex; flex-direction: column; gap: var(--sp-2); font-size: var(--text-xs); color: var(--ink-2);  }
-.rail-keys span{  display: inline-flex; align-items: center; gap: var(--sp-2);  }
 .q-note{  font-size: var(--text-xs); color: var(--ink-3); margin: var(--sp-4) 0 0;  }
 .drawer-demo-note{  font-size: var(--text-xs); color: var(--ink-3);  }
 /* 布局助手：替代散落的内联间距 */
@@ -185,7 +186,8 @@
           <span class="q-note" id="ex-deadline-note">服务端硬截止 22:14 · 宽限 60 秒</span>
         </div>
         <div class="exam-right">
-          <button type="button" class="btn btn-sm btn-primary" id="ex-submit-btn" onclick="EEexam.openSubmit(this)">交卷</button>
+          <button type="button" class="icon-btn" aria-label="快捷键说明" onclick="eeDialog.open('ex-dlg-keys', this)"><svg class="od-icon" aria-hidden="true"><use href="#i-command"/></svg></button>
+          <button type="button" class="btn" id="ex-submit-btn" onclick="EEexam.openSubmit(this)">交卷</button>
         </div>
       </header>
 
@@ -197,11 +199,13 @@
           <div class="opt-list" id="ex-options" role="group" aria-label="选项"></div>
           <p class="q-note">模考不判定对错：选项只有选中态，交卷后才会显示答案与解析。</p>
 
-          <div class="notice info" id="ex-content-changed">
+          <!-- 内容已变更提示（FN-312）：只在开考快照与当前题目版本真的不一致时出现，
+               正常进行的考试不挂这条告警。 -->
+          <div class="notice info" id="ex-content-changed" hidden>
             <svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>
             <div class="notice-body">
               <span class="notice-title">这场考试的题目内容在考试期间已变更</span><br>
-              本场按开考时的题目快照作答：第 12 题的题干在考试期间被改成新版本，这里仍显示开考那一版；判分也按交卷时保存的快照。题库侧不做任何锁定，编辑者可以照常改题。
+              本场按开考时的题目快照作答：第 <span id="ex-changed-no">12</span> 题的题干在考试期间被改成新版本，这里仍显示开考那一版；判分也按交卷时保存的快照。题库侧不做任何锁定，编辑者可以照常改题。
             </div>
           </div>
         </article>
@@ -234,29 +238,19 @@
               <span class="kv-key">负分</span><span class="kv-val mono">答错扣 0.5 分，无 0 分下限</span>
               <span class="kv-key">学习记录</span><span class="kv-val mono">纳入</span>
             </div>
-          </div>
-
-          <div class="rail-block">
-            <div class="rule-label">快捷键</div>
-            <div class="rail-keys">
-              <span><span class="kbd">A</span>–<span class="kbd">H</span> 选择选项</span>
-              <span><span class="kbd">B</span> 标记待复查</span>
-              <span><span class="kbd">←</span><span class="kbd">→</span> 上一题 / 下一题</span>
-              <span><span class="kbd">Esc</span> 关闭浮层</span>
-            </div>
-            <p class="rail-note">浮层打开时，除 Esc 外快捷键一律挂起。</p>
+            <p class="rail-note">快捷键随题型变化：选项键只绑这道题有的选项，判断题为 <span class="kbd">T</span>/<span class="kbd">F</span>；浮层打开时只保留 <span class="kbd">Esc</span>。</p>
           </div>
         </aside>
       </main>
 
       <footer class="exam-foot" id="ex-foot">
-        <button type="button" class="btn btn-sm sheet-trigger" onclick="EEexam.openDrawer('ex-sheet')"><svg class="od-icon" aria-hidden="true"><use href="#i-grid"/></svg>移动作答卡</button>
-        <button type="button" class="btn btn-sm btn-quiet" id="ex-flag-btn" onclick="EEexam.toggleFlag()"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>待复查 <span class="kbd">B</span></button>
+        <button type="button" class="btn btn-sm sheet-trigger kb-hide" onclick="EEexam.openDrawer('ex-sheet')"><svg class="od-icon" aria-hidden="true"><use href="#i-grid"/></svg>移动作答卡</button>
+        <button type="button" class="btn kb-hide" id="ex-flag-btn" onclick="EEexam.toggleFlag()"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>待复查 <span class="kbd">F</span></button>
         <span class="spacer"></span>
-        <span class="mono" id="ex-count">1 / 12</span>
+        <span class="mono kb-hide" id="ex-count">1 / 12</span>
         <span class="spacer"></span>
-        <button type="button" class="btn btn-sm" id="ex-prev" onclick="EEexam.prev()"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>上一题</button>
-        <button type="button" class="btn btn-primary" id="ex-next" onclick="EEexam.next()">下一题<svg class="od-icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></button>
+        <button type="button" class="btn kb-hide" id="ex-prev" onclick="EEexam.prev()"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>上一题</button>
+        <button type="button" class="btn btn-primary btn-hero" id="ex-next" onclick="EEexam.footNext()">下一题<svg class="od-icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></button>
       </footer>
     </div>
   </div>
@@ -349,11 +343,11 @@
       </main>
 
       <footer class="exam-foot">
-        <button type="button" class="btn btn-sm sheet-trigger" onclick="EEexam.openDrawer('ex-sheet')"><svg class="od-icon" aria-hidden="true"><use href="#i-grid"/></svg>移动作答卡</button>
-        <span class="mono">答案已停止收录</span>
+        <button type="button" class="btn btn-sm sheet-trigger kb-hide" onclick="EEexam.openDrawer('ex-sheet')"><svg class="od-icon" aria-hidden="true"><use href="#i-grid"/></svg>移动作答卡</button>
+        <span class="mono kb-hide">答案已停止收录</span>
         <span class="spacer"></span>
-        <button type="button" class="btn btn-sm" disabled>上一题</button>
-        <button type="button" class="btn btn-sm btn-primary" onclick="eeDialog.open('ex-dlg-submit', this)">交卷</button>
+        <button type="button" class="btn kb-hide" disabled>上一题</button>
+        <button type="button" class="btn btn-primary btn-hero" onclick="eeDialog.open('ex-dlg-submit', this)">交卷</button>
       </footer>
     </div>
   </div>
@@ -827,6 +821,16 @@
                 <div class="notice-actions"><button type="button" class="btn btn-sm" onclick="eeToast('已重试同步')">重试同步</button></div>
               </div>
             </div>
+
+            <!-- 内容已变更（FN-312）：考试期间题目被编辑过时的提示形态。
+                 正常进行的考试不出现这条；真出现时给出题号与本场的作答口径。 -->
+            <div class="notice info" role="status">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>
+              <div class="notice-body">
+                <span class="notice-title">这场考试的题目内容在考试期间已变更</span><br>
+                第 12 题的题干在考试期间被改成新版本。本场按<strong>开考时的题目快照</strong>作答与判分，这里仍显示开考那一版；题库侧不做任何锁定，编辑者可以照常改题。想知道题目现在长什么样，交卷后在报告里用「查看该题当前版本」对照。
+              </div>
+            </div>
           </div>
         </article>
         <aside class="focus-rail" aria-label="作答卡">
@@ -996,17 +1000,10 @@
                 </div>
                 <div class="list-row static">
                   <div class="list-main">
-                    <div class="list-title">快捷键</div>
-                    <div class="list-meta">A–H 选项 · B 待复查 · ←→ 换题 · Esc 关浮层</div>
+                    <div class="list-title">快捷键说明</div>
+                    <div class="list-meta">选项键随题型变化 · F 待复查 · ←→ 换题 · Esc 关浮层；由会话顶栏的快捷键按钮触发</div>
                   </div>
                   <div class="list-side"><button type="button" class="btn btn-sm" onclick="eeDialog.open('ex-dlg-keys', this)">打开</button></div>
-                </div>
-                <div class="list-row static">
-                  <div class="list-main">
-                    <div class="list-title">更多菜单</div>
-                    <div class="list-meta">待复查 / 跳到未答 / 退出；由会话内「更多」触发</div>
-                  </div>
-                  <div class="list-side"><span class="state-note">见「作答窗口」状态</span></div>
                 </div>
               </div>
             </div>
@@ -1168,15 +1165,16 @@
     <div>
       <div class="rule-label">作答与移动</div>
       <div class="rail-keys mt-2">
-        <span><span class="kbd">A</span>–<span class="kbd">H</span> 选择选项</span>
-        <span><span class="kbd">B</span> 标记本题待复查</span>
+        <span><span class="kbd">A</span>–<span class="kbd">E</span> 选择选项（只绑这道题有的选项）</span>
+        <span><span class="kbd">T</span><span class="kbd">F</span> 判断题：正确 / 错误</span>
         <span><span class="kbd">←</span><span class="kbd">→</span> 上一题 / 下一题</span>
+        <span><span class="kbd">F</span> 标记待复查（这道题没有 F 选项时才生效）</span>
         <span><span class="kbd">Esc</span> 关闭浮层</span>
       </div>
     </div>
     <div class="notice info">
       <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
-      <div class="notice-body"><span class="kbd">B</span> 在模考里是「待复查」，与练习会话的「标记薄弱」明确区分。作答卡抽屉、本浮层或「更多」菜单打开时，除 <span class="kbd">Esc</span> 外快捷键一律挂起。</div>
+      <div class="notice-body">模考里 <span class="kbd">F</span> 是「待复查」，与练习会话的「标记薄弱」用同一个键、同一套判定：选项键永远优先，只有这道题没有 F 选项时 F 才是标记。作答卡抽屉、本浮层或「更多」菜单打开时，除 <span class="kbd">Esc</span> 外快捷键一律挂起；带着 Ctrl / Cmd / Alt 的组合键一律不拦。</div>
     </div>
   </div>
   <div class="dlg-foot">
@@ -1313,6 +1311,15 @@ window.EEexam = (function () {
       return { id: q.id, stem: q.stem, type: p.type || q.type || '单选题', chapter: q.chapter || '未分章', version: q.version || 'v3', options: p.options, answer: p.answer, explain: p.explain, score: SCORE[p.type || q.type] == null ? 2 : SCORE[p.type || q.type] };
     });
   }
+  /* 开考快照：会话开始时记录的题目版本。之后题目被改过，才提示「内容已变更」。 */
+  function snapshotVersion() { return (R.s && R.s.verSnap) || 'v3'; }
+  function changedQuestions() {
+    var out = [];
+    R.paper.forEach(function (q, i) {
+      if (q.version && q.version !== snapshotVersion()) out.push({ no: i + 1, stem: q.stem });
+    });
+    return out;
+  }
   function persist(extra) {
     if (!R.s) return;
     S.updateSession(R.s.id, Object.assign({
@@ -1371,23 +1378,38 @@ window.EEexam = (function () {
     var total = R.paper.length;
     var flagged = !!R.flags[R.index];
     var locked = R.phase !== 'answer';
-
     document.getElementById('ex-meta').innerHTML =
       '<span>第 ' + (R.index + 1) + ' 题 · 共 ' + total + ' 题</span><span>' + esc(q.type) + '</span>' +
       (OBJECTIVE[q.type] ? '<span>' + esc(q.chapter) + '</span>' : '<span class="tag plain">主观题 · 不判分</span>') +
       (flagged ? '<span class="tag warn"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>待复查</span>' : '');
     document.getElementById('ex-stem').textContent = q.stem;
+    /* 内容已变更：只在快照版本与当前版本不一致时提示，并说明本场仍按开考那一版作答 */
+    var changed = changedQuestions();
+    var box = document.getElementById('ex-content-changed');
+    if (box) {
+      box.hidden = !changed.length;
+      if (changed.length) document.getElementById('ex-changed-no').textContent = changed.map(function (c) { return c.no; }).join('、');
+    }
 
     if (!q.options.length) {
-      /* 问答题：作答区随栏高生长（.field-grow），不在纸面尾部留空洞 */
+      /* 问答题：作答区随栏高生长（.field-grow），不在纸面尾部留空洞。
+         输入时只更新计数与答题卡，绝不重建 DOM——重建会让输入框失焦，打不了长答案。 */
       var optHost = document.getElementById('ex-options');
       optHost.classList.add('field-grow');
-      optHost.innerHTML =
-        '<label class="field"><span class="label">你的作答</span>' +
-        '<textarea class="textarea" placeholder="输入文字作答；交卷后显示参考解析，不自动判分"' + (locked ? ' disabled' : ' oninput="EEexam.typeAnswer(this.value)"') + '>' + esc(R.answers[R.index] || '') + '</textarea>' +
-        '<span class="hint">主观题保存作答与参考解析：作答状态「已作答」，判分状态「未判分」。</span></label>';
+      if (!optHost.getAttribute('data-essay')) {
+        optHost.setAttribute('data-essay', '1');
+        optHost.innerHTML =
+          '<label class="field"><span class="label">你的作答</span>' +
+          '<textarea class="textarea" id="ex-essay" placeholder="输入文字作答；交卷后显示参考解析，不自动判分"' + (locked ? ' disabled' : ' oninput="EEexam.typeAnswer(this.value)"') + '>' + esc(R.answers[R.index] || '') + '</textarea>' +
+          '<span class="hint">主观题保存作答与参考解析：作答状态「已作答」，判分状态「未判分」。</span></label>';
+      } else {
+        var ta = document.getElementById('ex-essay');
+        if (ta && ta.value !== (R.answers[R.index] || '')) ta.value = R.answers[R.index] || '';
+        if (ta) ta.disabled = !!locked;
+      }
     } else {
       document.getElementById('ex-options').classList.remove('field-grow');
+      document.getElementById('ex-options').removeAttribute('data-essay');
       var opts = '';
       q.options.forEach(function (o) {
         var on = q.type === '多选题'
@@ -1416,14 +1438,37 @@ window.EEexam = (function () {
     document.getElementById('ex-sheet-grid-live').innerHTML = cells;
 
     document.getElementById('ex-prev').disabled = R.index === 0 || locked;
-    document.getElementById('ex-next').disabled = R.index === total - 1 || locked;
+    /* 最后一题的主操作就是「交卷」：不再给一颗点不动的「下一题」 */
+    var last = R.index === total - 1;
+    var nextBtn = document.getElementById('ex-next');
+    nextBtn.disabled = locked;
+    nextBtn.innerHTML = (last ? '交卷' : '下一题') + '<svg class="od-icon" aria-hidden="true"><use href="#i-arrow-right"/></svg>';
     document.getElementById('ex-flag-btn').disabled = locked;
     document.getElementById('ex-submit-btn').disabled = false; /* 超时禁止的只是继续作答，交卷始终放行 */
     var flagBtn = document.getElementById('ex-flag-btn');
-    flagBtn.innerHTML = '<svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>' + (flagged ? '已标记待复查' : '待复查') + ' <span class="kbd">B</span>';
-    flagBtn.classList.toggle('btn-primary', flagged);
-    flagBtn.classList.toggle('btn-quiet', !flagged);
+    flagBtn.innerHTML = '<svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>' + (flagged ? '已标记待复查' : '待复查') + ' <span class="kbd">F</span>';
+    /* 已标记态只靠文字与题干区的标签表达，不再把按钮染成主色——一屏至多一颗主操作 */
     paintPhase();
+    syncToastInset();
+  }
+  /* 只刷新计数与答题卡：主观题边写边调它，不重建题干与作答区（否则输入框失焦） */
+  function renderCounts() {
+    if (!R.s || !R.paper.length) return;
+    var total = R.paper.length;
+    var locked = R.phase !== 'answer';
+    var done = answeredCount(), flaggedN = Object.keys(R.flags).length;
+    var pct = total ? Math.round(done / total * 100) : 0;
+    document.getElementById('ex-stats').innerHTML =
+      '<div class="stat"><div class="stat-num">' + done + '</div><div class="stat-cap">已答</div></div>' +
+      '<div class="stat"><div class="stat-num">' + (total - done) + '</div><div class="stat-cap">未答</div></div>' +
+      '<div class="stat"><div class="stat-num">' + flaggedN + '</div><div class="stat-cap">待复查</div></div>';
+    document.getElementById('ex-drawer-stats').innerHTML = document.getElementById('ex-stats').innerHTML;
+    document.getElementById('ex-progress-fill').style.width = pct + '%';
+    document.getElementById('ex-count').textContent = (R.index + 1) + ' / ' + total;
+    document.getElementById('ex-sheet-count').textContent = done + ' / ' + total;
+    var cells = sheetCells({ locked: locked, showFlag: true });
+    document.getElementById('ex-sheet').innerHTML = cells;
+    document.getElementById('ex-sheet-grid-live').innerHTML = cells;
     syncToastInset();
   }
 
@@ -1497,9 +1542,14 @@ window.EEexam = (function () {
     if (R.phase !== 'answer') return;
     if (text && text.trim()) R.answers[R.index] = text.trim(); else delete R.answers[R.index];
     persist();
-    render();
+    renderCounts();
   }
   function next() { if (R.index + 1 < R.paper.length) { R.index++; persist(); render(); focusStem(); } }
+  /* 底部主操作：还有题就下一题，已经是最后一题就交卷 */
+  function footNext() {
+    if (R.index + 1 < R.paper.length) next();
+    else openSubmit(document.getElementById('ex-next'));
+  }
   function prev() { if (R.index > 0) { R.index--; persist(); render(); focusStem(); } }
   function jumpTo(i) {
     if (i < 0 || i >= R.paper.length) return;
@@ -1807,21 +1857,56 @@ window.EEexam = (function () {
     var tab = document.querySelector('.tab[data-panel="' + panel + '"]');
     if (tab) tab.click();
   }
+  /* ---------- 快捷键 ----------
+     与练习会话同一套规则：选项键只绑这道题真正拥有的选项（单选 / 多选 A–E，判断题 T / F）；
+     带修饰键的组合不拦；输入法合成中与焦点在表单上时不拦；主观题不拦任何字符键。 */
+  function editableTarget(t) {
+    if (!t) return false;
+    if (t.isContentEditable) return true;
+    var tag = t.tagName;
+    return tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || tag === 'OPTION';
+  }
+  function controlTarget(t) {
+    if (!t || !t.closest) return false;
+    return !!t.closest('button, a[href], summary, details, label, input, select, textarea, [role="button"], [role="link"], [role="option"], [role="radio"], [role="tab"], [role="menuitem"]');
+  }
+  function optionKeys(q) {
+    var keys = [];
+    (q.options || []).forEach(function (o) { if (keys.indexOf(o[0]) < 0) keys.push(o[0]); });
+    return keys;
+  }
+  function isJudge(q) {
+    return q.type === '判断题' || (q.options.length === 2 && q.options[0][1] === '正确');
+  }
   document.addEventListener('keydown', function (e) {
+    if (e.isComposing) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === 'Escape') return;
     if (overlayOpen()) return;
     if (R.phase !== 'answer' || R.done || !R.s) return;
     if (activePanel() !== 'ex-run') return;
-    var t = e.target;
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-    var key = e.key.toUpperCase();
     var q = R.paper[R.index];
-    if (key >= 'A' && key <= 'H') {
-      var opt = q.options[key.charCodeAt(0) - 65];
-      if (opt) { e.preventDefault(); select(opt[0]); }
-    } else if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
-    else if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
-    else if (key === 'B') { e.preventDefault(); toggleFlag(); }
+    var t = e.target;
+    if (editableTarget(t)) return;
+    if (!q.options.length) {
+      /* 主见题：不拦字符键，只留方向键换题 */
+      if (!controlTarget(t) && e.key === 'ArrowRight') { e.preventDefault(); next(); }
+      else if (!controlTarget(t) && e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+      return;
+    }
+    var key = e.key.toUpperCase();
+    var keys = optionKeys(q);
+    if (isJudge(q)) {
+      if (key === 'T') { e.preventDefault(); select(q.options[0][0]); return; }
+      if (key === 'F') { e.preventDefault(); select(q.options[1][0]); return; }
+    } else if (key.length === 1 && key >= 'A' && key <= 'H' && keys.indexOf(key) > -1) {
+      e.preventDefault();
+      select(key);
+      return;
+    }
+    if (!controlTarget(t) && e.key === 'ArrowRight') { e.preventDefault(); next(); }
+    else if (!controlTarget(t) && e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+    else if (key === 'F' && keys.indexOf('F') < 0) { e.preventDefault(); toggleFlag(); }
   });
 
   /* ---------- toast 位置：抬到底部操作条之上 ---------- */
@@ -1839,10 +1924,10 @@ window.EEexam = (function () {
   init();
 
   return {
-    init: init, select: select, next: next, prev: prev, jumpTo: jumpTo, toggleFlag: toggleFlag,
+    init: init, select: select, next: next, footNext: footNext, prev: prev, jumpTo: jumpTo, toggleFlag: toggleFlag,
     exit: exit, abandon: abandon, openSubmit: openSubmit, jumpToBlank: jumpToBlank,
     confirmSubmit: confirmSubmit, renderReport: renderReport, openPaper: openPaper, again: again,
-    openDrawer: openDrawer, closeDrawer: closeDrawer, switchPanel: switchPanel
+    openDrawer: openDrawer, closeDrawer: closeDrawer, switchPanel: switchPanel, typeAnswer: typeAnswer
   };
 })();
 </script>

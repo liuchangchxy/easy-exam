@@ -316,11 +316,11 @@
   <!-- ==================== 04 全局规则 ==================== -->
   <section class="section" aria-labelledby="h-rules">
     <h2 class="doc-h2" id="h-rules"><span class="no">04</span>全产品统一规则</h2>
-    <p class="doc-rule">这五条是跨域裁决的直接落地，任何一个屏违反都算设计缺陷。完整八态与外壳规则见<a class="link-btn" href="pages/states.html">状态与外壳</a>。</p>
+    <p class="doc-rule">这九条是跨域裁决的直接落地，任何一个屏违反都算设计缺陷。完整八态与外壳规则见<a class="link-btn" href="pages/states.html">状态与外壳</a>。</p>
 
     <div class="dtable-wrap">
       <table class="dtable">
-        <caption>五条硬规则</caption>
+        <caption>九条硬规则</caption>
         <thead><tr><th scope="col">规则</th><th scope="col">依据</th><th scope="col">设计落地</th></tr></thead>
         <tbody>
           <tr>
@@ -357,6 +357,31 @@
             <td data-label="规则">报告只有一套逐题明细</td>
             <td data-label="依据">BR-109 / CR-25 / CR-06</td>
             <td data-label="设计落地">练习交卷态、模考交卷态、模考归档回看共用 `assets/report.js` 的同一套 `.rep-*` 渲染。归档报告不得只给汇总计数；每题标注判分时保存的题目版本，与当前版本不同时说明改了什么。列表行与详情对同一指标给同一个值。</td>
+          </tr>
+          <tr>
+            <td data-label="规则">文字层级六维，不只靠加粗</td>
+            <td data-label="依据">成品级打磨</td>
+            <td data-label="设计落地">页面标题 / 章节标题 / 次级标题 / 正文 / 辅助信息五级，每级在 字号 × 字重 × 字体 × 颜色 × 行高 × 留白 至少三维不同。衬线只给长文阅读位，控件用无衬线，等宽只给数字与编号。字号阶梯 v4 整体上移一档。</td>
+          </tr>
+          <tr>
+            <td data-label="规则">细分隔线承担结构意义</td>
+            <td data-label="依据">成品级打磨</td>
+            <td data-label="设计落地">能靠留白、对齐、字重替代的线一律不加。已删：面板外框、表格外框、统计带下边线、通知四边框、报告列表上沿线。保留：页签基线、章节标题下沿线、表头下沿线、列表行间线、列间竖线、列分线。</td>
+          </tr>
+          <tr>
+            <td data-label="规则">纸内布局用既定模式</td>
+            <td data-label="依据">成品级打磨</td>
+            <td data-label="设计落地">`.lay-stack` / `.lay-main-side` / `.lay-side-main` / `.lay-two` / `.lay-three` / `.lay-four` / `.lay-read` / `.lay-toolbar` 八种，按任务选，不各写网格。不得用统一 CSS 数值代替真正的视觉设计。</td>
+          </tr>
+          <tr>
+            <td data-label="规则">桌面与手机各为自己的输入方式设计</td>
+            <td data-label="依据">成品级打磨</td>
+            <td data-label="设计落地">手机不是桌面缩窄：底导五个主入口、顶栏不与正文重复标题、专用移动列表、筛选用底部弹层、软键盘不遮主操作。桌面：快捷键按题型适配且不拦截系统快捷键与输入法组合、浮层按可用空间展开。平板只做过渡，不建第三套界面。</td>
+          </tr>
+          <tr>
+            <td data-label="规则">文案是产品语言</td>
+            <td data-label="依据">成品级打磨</td>
+            <td data-label="设计落地">界面能表达的不重复、短句能表达的不长段、只在要决策时才给规则说明。不解释功能为何没做，不暴露规格编号与实现细节。按钮命名、状态名、反馈文案全产品统一。</td>
           </tr>
         </tbody>
       </table>
@@ -409,6 +434,12 @@
           <tr><td data-label="#">19</td><td data-label="修正">协作流程改角色确认对话框少一个 `</div>`，`.dlg-body`/`.dlg-foot` 沦为 `.dlg-head` 子元素，权限差说明被排成 30px 宽竖列</td><td data-label="依据">独立视觉复查</td></tr>
           <tr><td data-label="#">20</td><td data-label="修正">练习交卷态报告丢判分版本条（`withVer:false`）而归档态有，两个「交卷当次」口径不一致；判分版本条在窄屏退化成标签堆、桌面说明被挤成窄栏</td><td data-label="依据">独立视觉复查</td></tr>
           <tr><td data-label="#">21</td><td data-label="修正">11 步步骤条把后两步裁在视口外且无可发现性（该页把滚动条藏了）；成绩报告屏 `11 / 24` 同屏出现四次；`workspace.html` 残留可见规格号</td><td data-label="依据">独立视觉复查</td></tr>
+          <tr><td data-label="#">22</td><td data-label="修正">字号阶梯整体上移一档（正文 13.5→14.5、控件与表格 12.5→13.5、页面标题 26→30），并新增 `--ctl-h` 控件高度三档；长时间读题干、解析、资料不再字偏小、层级糊</td><td data-label="依据">成品级打磨</td></tr>
+          <tr><td data-label="#">23</td><td data-label="修正">细分隔线治理：删面板外框、表格外框、统计带下边线、通知四边框、报告列表上沿线五类重复线；面板标题改无衬线 600、新增 `.sub-title` 三级标题，层级不再只靠加粗</td><td data-label="依据">成品级打磨</td></tr>
+          <tr><td data-label="#">24</td><td data-label="修正">新增八种纸内布局模式（`.lay-stack` / `.lay-main-side` / `.lay-side-main` / `.lay-two` / `.lay-three` / `.lay-four` / `.lay-read` / `.lay-toolbar`）与 `.lay-toolbar` 手机端主操作独占一行</td><td data-label="依据">成品级打磨</td></tr>
+          <tr><td data-label="#">25</td><td data-label="修正">表格 ≤640 不再机械逐字段转卡片（改由页面显式选 `.dtable-cards`）；底部操作条手机端不再折成多行；`--kb-inset` 改由 visualViewport 实时写入，软键盘不再压住主操作；菜单按可用空间翻转/限高不再被容器裁切</td><td data-label="依据">成品级打磨</td></tr>
+          <tr><td data-label="#">26</td><td data-label="修正">顶栏搜索明确定位为「页面间快速跳转」，占位与页脚不再暗示能检索题目内容；底部导航收敛为五个主入口 + 「更多」，设置下沉次级入口</td><td data-label="依据">成品级打磨</td></tr>
+          <tr><td data-label="#">27</td><td data-label="修正">`product.html` 演示脚手架（角色切换、覆盖范围清单、重置数据、规范入口）改用 `data-spec` 包裹，产品模式只见产品；文案从「原型 / 演示」框架改写为产品语言</td><td data-label="依据">成品级打磨</td></tr>
         </tbody>
       </table>
     </div>
@@ -426,6 +457,7 @@
         <p>没有实现完整业务交互（不模拟网络请求、不做真实数据流转）、没有写生产代码、没有为了凑数量添加页面。P2 的验证标准是「设计是否完整、统一、可实现」，不是「能不能跑通一个业务流程」。</p>
       </div>
     </div>
+    <p class="doc-rule mt-5">在线 Chat 发现的 15 项源码问题已逐项归属：14 项本轮处理（与 P1 冲突、界面必须表达的状态），1 项整体归 P3；另有草稿恢复的幂等实现归 P3。逐项裁定见 <a class="link-btn" href="review/P3-HANDOFF.md">P3 归属清单</a>。</p>
   </section>
 
 </main>

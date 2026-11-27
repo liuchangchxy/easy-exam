@@ -44,6 +44,41 @@
       font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh);
       margin-top: var(--sp-1); white-space: normal; text-align: left; }
   }
+/* ============ 手机端专用用户列表（≤768）============
+   7 列表格在 375 宽下要横滚 198px，读不了。这里按手机阅读顺序重排，
+   不是把表格字段竖排成 label:value。卡片由 JS 从同一张表构建。 */
+  .admin-mobile{  display: flex; flex-direction: column; gap: var(--sp-3);  }
+.admin-card{
+    display: flex; flex-direction: column; gap: var(--sp-3);
+    padding: var(--sp-4); background: var(--surface);
+    border: 1px solid var(--line); border-radius: var(--r-md);
+  }
+.admin-card.is-hidden{  display: none;  }
+.admin-card-top{  display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap; min-width: 0;  }
+.admin-card-name{  font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink);
+    overflow-wrap: anywhere; min-width: 0; flex: 1 1 auto;  }
+.admin-card-meta{  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; min-width: 0;  }
+.admin-card-meta .num{  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-3);  }
+.admin-card-acts{  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;  }
+/* 手机端图标按钮给文字标签：图标 alone 在触屏上不可辨，且这里空间够 */
+  .admin-card-acts .icon-btn{  width: auto; min-height: 36px; padding: 0 var(--sp-3);
+    gap: var(--sp-2); font-size: var(--text-sm); color: var(--ink-2);
+    border-color: var(--line-strong); background: var(--surface);  }
+.admin-card-acts .icon-btn:disabled{  opacity: .5;  }
+.admin-card-acts .icon-btn .od-icon{  --od-icon-size: 15px;  }
+.admin-card-lock{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); margin: 0;  }
+@media (min-width: 769px){
+    .admin-mobile{  display: none !important;  }
+  }
+@media (max-width: 768px){
+    #admin-table-wrap{  display: none;  }
+    /* 手机端锁定原因只出现在卡片里一次。页面级那两段是桌面表格按钮的
+       aria-describedby 目标，仍要留在 DOM 里供读屏，但不能视觉重复。 */
+    #lock-self, #lock-self-reset{
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+    }
+  }
 /* 实例设置行 */
   .setting-row{  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4);
     flex-wrap: wrap; padding: var(--sp-5) 0;  }
@@ -221,7 +256,7 @@
             <button class="chip" type="button" data-filter="pending" aria-pressed="false">待改密<span class="count">1</span></button>
           </div>
 
-          <div class="dtable-wrap">
+          <div class="dtable-wrap" id="admin-table-wrap">
             <table class="dtable admin-table" id="admin-table">
               <thead>
                 <tr>
@@ -373,8 +408,15 @@
             </table>
           </div>
 
+          <!-- 手机端专用列表：7 列在 375 宽下横滚 198px，不可能可读。
+               这里不是把表格逐字段竖排成卡片（那比原表更难扫），而是按手机阅读顺序
+               重排：用户名 → 角色/状态/元信息一行 → 操作 → 锁定原因。
+               卡片由 JS 从同一张表构建（单一数据源，不会与表格分叉）；
+               表格在 ≤768 隐藏，桌面仍看表。 -->
+          <div class="admin-mobile" id="admin-mobile" hidden></div>
+
           <!-- 控件旁的可读原因：与禁用按钮通过 aria-describedby 关联，触屏与读屏都看得到。
-               按 FN-421「禁用不隐藏 + 可读原因」，这些必须留在产品里。 -->
+               按「禁用不隐藏 + 可读原因」，这些必须留在产品里。 -->
           <p class="lock-reason mt-3" id="lock-self">你不能在这里修改自己的角色或状态。要改自己的密码，请到「设置 → 账户与安全 → 修改密码」。</p>
           <p class="lock-reason mt-1" id="lock-self-reset">重置自己的密码会让你也进入「待改密」，并踢出当前这台设备的会话，所以请改用设置里的「修改密码」。</p>
           <!-- 纯规则说明（不挂在具体控件上）进规格段，产品模式下自动隐藏 -->
@@ -904,6 +946,57 @@
     /* ---------- 状态筛选（按状态筛选，不是视图页签） ---------- */
     var chips = document.querySelectorAll('.chip-row .chip');
     var rows = document.querySelectorAll('#admin-table tbody tr');
+
+    /* ---------- 手机端专用列表：从同一张表构建，不与表格分叉 ----------
+       7 列在 375 宽下横滚 198px 读不了。手机端按阅读顺序重排成卡片，
+       桌面仍看表。构建一次，筛选时与表格同步显隐。 */
+    (function buildMobileList() {
+      var host = document.getElementById('admin-mobile');
+      if (!host) return;
+      var html = [];
+      Array.prototype.forEach.call(rows, function (tr, i) {
+        var td = tr.querySelectorAll('td');
+        var name = td[0] ? td[0].textContent.trim() : '';
+        var role = td[1] ? td[1].innerHTML.trim() : '';
+        var status = td[2] ? td[2].innerHTML.trim() : '';
+        var banks = td[4] ? td[4].textContent.trim() : '';
+        var last = td[5] ? td[5].textContent.trim() : '';
+        var acts = td[6] ? td[6].innerHTML.trim() : '';
+        var lock = tr.querySelector('.lock-inline');
+        /* .lock-inline 本来就藏在操作列里；卡片里它单独占一行（.admin-card-lock），
+           所以先从操作区里摘掉，否则同一句原因在卡片里出现两次。 */
+        if (lock) acts = acts.replace(lock.outerHTML, '');
+        /* 图标按钮在手机上补文字标签：触屏上图标 alone 不可辨 */
+        acts = acts.replace(/<button([^>]*?)aria-label="([^"]+)"([^>]*)>/g,
+          function (m, a, label, b) { return '<button' + a + 'aria-label="' + label + '"' + b + '>' + label; });
+        html.push(
+          '<div class="admin-card" data-mobile-row="' + i + '">' +
+            '<div class="admin-card-top"><span class="admin-card-name">' + name + '</span></div>' +
+            '<div class="admin-card-meta">' + role + status +
+              '<span class="num">' + banks + ' 题库</span>' +
+              '<span class="num">活跃 ' + last + '</span>' +
+            '</div>' +
+            (lock ? '<p class="admin-card-lock">' + lock.textContent.trim() + '</p>' : '') +
+            '<div class="admin-card-acts">' + acts + '</div>' +
+          '</div>');
+      });
+      host.innerHTML = html.join('');
+      /* 去掉 hidden：全局 [hidden]{display:none!important} 会压过 .admin-mobile 的 display:flex，
+         桌面端的隐藏由 @media (min-width:769px) 那条负责，不依赖 hidden 属性。 */
+      host.hidden = false;
+    })();
+    function syncMobile(filter) {
+      var host = document.getElementById('admin-mobile');
+      if (!host) return;
+      Array.prototype.forEach.call(rows, function (tr, i) {
+        var ok = filter === 'all'
+          || (filter === 'active' && tr.getAttribute('data-status') === 'active')
+          || (filter === 'disabled' && tr.getAttribute('data-status') === 'disabled')
+          || (filter === 'pending' && tr.getAttribute('data-pending') === '1');
+        var card = host.querySelector('[data-mobile-row="' + i + '"]');
+        if (card) card.classList.toggle('is-hidden', !ok);
+      });
+    }
     function countVisible(filter) {
       var n = 0;
       rows.forEach(function (tr) {
@@ -928,8 +1021,10 @@
             || (f === 'pending' && tr.getAttribute('data-pending') === '1');
           tr.hidden = !ok;
         });
+        syncMobile(f);
       });
     });
+    syncMobile('all');
 
     /* ---------- 行内操作：对话框跟随所在行的用户 ---------- */
     var targetRow = null;

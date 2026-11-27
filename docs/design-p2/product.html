@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>易考宝 · 完整产品原型</title>
+<title>易考宝 · 产品总览</title>
 <link rel="stylesheet" href="assets/ee.css">
 </head>
 <body>
@@ -15,7 +15,7 @@
       <span class="brand-text">易考宝<small>私人学习档案</small></span>
     </div>
     <nav class="side-nav" aria-label="产品导航">
-      <p class="side-group-label">产品原型</p>
+      <p class="side-group-label">学习</p>
       <a class="nav-item" href="pages/screens/home.html"><svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg><span class="nav-label">今天</span></a>
       <a class="nav-item" href="pages/screens/banks.html"><svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg><span class="nav-label">题库</span><span class="nav-count" id="nav-bank-count">3</span></a>
       <a class="nav-item" href="pages/screens/review.html"><svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg><span class="nav-label">复习</span><span class="nav-count">5</span></a>
@@ -25,12 +25,12 @@
       <a class="nav-item" href="pages/screens/import.html"><svg class="od-icon" aria-hidden="true"><use href="#i-import"/></svg><span class="nav-label">导入向导</span></a>
       <a class="nav-item" id="nav-instance" href="pages/screens/instance.html"><svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg><span class="nav-label">实例管理</span></a>
       <a class="nav-item" href="pages/screens/settings.html"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg><span class="nav-label">设置</span></a>
-      <p class="side-group-label">设计规范</p>
-      <a class="nav-item" href="index.html"><svg class="od-icon" aria-hidden="true"><use href="#i-book"/></svg><span class="nav-label">规范与决策清单</span></a>
-      <a class="nav-item" href="pages/tokens.html"><svg class="od-icon" aria-hidden="true"><use href="#i-sparkles"/></svg><span class="nav-label">设计令牌</span></a>
-      <a class="nav-item" href="pages/components.html"><svg class="od-icon" aria-hidden="true"><use href="#i-columns"/></svg><span class="nav-label">控件库</span></a>
+      <p class="side-group-label" data-spec>设计规范</p>
+      <a class="nav-item" href="index.html" data-spec><svg class="od-icon" aria-hidden="true"><use href="#i-book"/></svg><span class="nav-label">规范与决策清单</span></a>
+      <a class="nav-item" href="pages/tokens.html" data-spec><svg class="od-icon" aria-hidden="true"><use href="#i-sparkles"/></svg><span class="nav-label">设计令牌</span></a>
+      <a class="nav-item" href="pages/components.html" data-spec><svg class="od-icon" aria-hidden="true"><use href="#i-columns"/></svg><span class="nav-label">控件库</span></a>
     </nav>
-    <div class="side-foot">
+    <div class="side-foot" data-spec>
       <button class="nav-item" type="button" id="btn-reset"><svg class="od-icon" aria-hidden="true"><use href="#i-restore"/></svg><span class="nav-label">重置演示数据</span></button>
     </div>
   </aside>
@@ -38,9 +38,9 @@
   <div class="app-main">
   <div class="topbar">
     <div class="mobile-top">
-      <span class="mt-title">易考宝 · 产品原型</span>
+      <span class="mt-title">易考宝</span>
     </div>
-    <span class="topbar-title">完整产品原型入口</span>
+    <span class="topbar-title" data-spec>产品总览</span>
     <span class="od-spacer"></span>
     <span class="tag plain" id="state-user">accept_admin_1794570360969</span>
     <span class="tag brand" id="state-role">所有者</span>
@@ -49,33 +49,33 @@
 
   <main class="content has-bottomnav" id="main-content">
     <header class="page-head">
-      <p class="page-eyebrow">EasyExam · 可连续操作的产品原型</p>
-      <h1 class="page-title">从这里开始，像用真实产品一样走完整流程</h1>
-      <p class="page-sub">题库管理、题目工作区、练习、复习、模考、资料、导入、设置与实例管理已连成一个整体：同一份数据、同一套权限、同一套反馈。左侧每一项都真实可达。</p>
+      <p class="page-eyebrow">易考宝</p>
+      <h1 class="page-title">今天学什么，从这儿开始</h1>
+      <p class="page-sub">题库、练习、复习、模考、资料都在同一份数据上：练过的题会进复习，错题会标薄弱，导入的题直接可练。左侧每一项都真实可达。</p>
     </header>
 
     <!-- ============ 入口 ============ -->
     <section class="section" aria-labelledby="entry-title">
       <div class="section-head">
         <h2 class="section-title" id="entry-title">进入产品</h2>
-        <span class="section-note">未登录会先到登录页；登录后回到今天页</span>
+        <span class="section-note">未登录会先到登录页</span>
       </div>
       <div class="panel">
         <div class="panel-body">
           <div class="flow-actions">
-            <a class="btn btn-primary" href="pages/screens/login.html?next=pages/screens/home.html" id="btn-enter">
+            <a class="btn btn-primary btn-hero" href="pages/screens/login.html?next=pages/screens/home.html" id="btn-enter">
               <svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>进入产品
             </a>
             <a class="btn" href="pages/screens/home.html">直接进入今天页</a>
-            <a class="btn btn-quiet" href="index.html">查看设计规范</a>
+            <a class="btn btn-quiet" href="index.html" data-spec>查看设计规范</a>
           </div>
-          <p class="hint mt-4" id="entry-hint">提示：改完设置、建完题库、导入完题目后，去其他页面看看数据是否跟上了——这正是本轮要验收的部分。</p>
+          <p class="hint mt-4" id="entry-hint">未登录时任何页面都会先到登录页，登录后回到你原本要去的页面。</p>
         </div>
       </div>
     </section>
 
-    <!-- ============ 演示状态 ============ -->
-    <section class="section" aria-labelledby="state-title">
+    <!-- ============ 演示状态（产品模式隐藏） ============ -->
+    <section class="section" aria-labelledby="state-title" data-spec>
       <div class="section-head">
         <h2 class="section-title" id="state-title">演示状态</h2>
         <span class="section-note">切换角色可以验证权限与异常状态在全产品是否一致</span>
@@ -130,11 +130,11 @@
       </div>
     </section>
 
-    <!-- ============ 覆盖范围 ============ -->
-    <section class="section" aria-labelledby="map-title">
+    <!-- ============ 覆盖范围（产品模式隐藏） ============ -->
+    <section class="section" aria-labelledby="map-title" data-spec>
       <div class="section-head">
-        <h2 class="section-title" id="map-title">原型覆盖范围</h2>
-        <span class="section-note">15 个屏幕 + 5 条核心流程，均带五态与三档视口</span>
+        <h2 class="section-title" id="map-title">覆盖范围</h2>
+        <span class="section-note">16 个屏幕 + 5 条核心流程，均带八态与四档视口</span>
       </div>
       <div class="panel">
         <div class="panel-body">
@@ -170,7 +170,7 @@
     <a class="bn-item" href="pages/screens/review.html"><svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>复习</a>
     <a class="bn-item" href="pages/screens/exams.html"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>模考</a>
     <a class="bn-item" href="pages/screens/notes.html"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>资料</a>
-    <a class="bn-item" href="pages/screens/settings.html"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>设置</a>
+    <a class="bn-item" href="pages/screens/settings.html"><svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg>更多</a>
   </nav>
   </div>
 </div>
@@ -218,7 +218,7 @@
     } else {
       enter.setAttribute('href', 'pages/screens/login.html?next=pages/screens/home.html');
       enter.innerHTML = '<svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>进入产品';
-      hint.textContent = '提示：改完设置、建完题库、导入完题目后，去其他页面看看数据是否跟上了——这正是本轮要验收的部分。';
+      hint.textContent = '未登录时任何页面都会先到登录页，登录后回到你原本要去的页面。';
     }
   }
 
@@ -226,14 +226,14 @@
     var b = e.target.closest('.segment');
     if (!b) return;
     window.eeStore.setRole(b.getAttribute('data-v'));
-    window.eeToast('已切换为' + (ROLE_NAMES[b.getAttribute('data-v')] || b.getAttribute('data-v')) + '视角：相关但不能做的入口会禁用并说明，无关的管理入口会消失');
+    window.eeToast('已切换为' + (ROLE_NAMES[b.getAttribute('data-v')] || b.getAttribute('data-v')) + '视角');
     sync();
   });
   document.getElementById('instance-role-seg').addEventListener('click', function (e) {
     var b = e.target.closest('.segment');
     if (!b) return;
     window.eeStore.setInstanceRole(b.getAttribute('data-v'));
-    window.eeToast(b.getAttribute('data-v') === 'admin' ? '已切换为实例管理员视角' : '已切换为普通用户视角：侧栏的「实例管理」整项消失');
+    window.eeToast(b.getAttribute('data-v') === 'admin' ? '已切换为实例管理员视角' : '已切换为普通用户视角');
     sync();
   });
   Array.prototype.forEach.call(document.querySelectorAll('[data-seg="theme"] .segment'), function (b) {
@@ -241,7 +241,7 @@
   });
   document.getElementById('btn-reset').addEventListener('click', function () {
     window.eeStore.reset();
-    window.eeToast('演示数据已重置为初始状态');
+    window.eeToast('数据已重置');
     sync();
   });
 
