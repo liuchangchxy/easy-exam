@@ -42,9 +42,11 @@
 .focus-rail .rail-block:last-child{  padding-bottom: 0;  }
 .focus-rail .rail-block + .rail-block{  border-top: 1px solid var(--line);  }
 .exam-topbar, .exam-foot{  background: color-mix(in srgb, var(--paper) 94%, transparent);  }
-.exam-foot{  position: sticky; bottom: var(--kb-inset, 0px); display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; padding: var(--sp-3) var(--sp-6); border-top: 1px solid var(--line);  }
-.exam-foot .spacer{  flex: 1 1 auto;  }
-.exam-foot .mono{  font-size: var(--text-sm); color: var(--ink-2);  }
+.exam-foot{  position: sticky; bottom: var(--kb-inset, 0px); display: flex; align-items: center; gap: var(--sp-3); flex-wrap: nowrap; padding: var(--sp-3) var(--sp-6); border-top: 1px solid var(--line);  }
+.exam-foot > .btn{  flex: 0 0 auto;  }
+.exam-foot .spacer{  flex: 1 1 auto; min-width: var(--sp-2);  }
+.exam-foot .mono{  flex: 0 1 auto; min-width: 0; font-size: var(--text-sm); color: var(--ink-2);  }
+.exam-foot #ex-next, .exam-foot .btn-hero{  flex: 1 1 auto; min-width: 120px; max-width: 280px;  }
 /* 一屏至多一颗主操作：底部主操作是「下一题 / 交卷」，顶栏「交卷」是次级入口。
    软键盘弹起时次要操作收起，主操作留在键盘之上（--kb-inset 已由 spec-boot 实时更新）。 */
   .exam-foot #ex-next{  flex: 0 0 auto;  }
@@ -205,7 +207,7 @@
             <svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>
             <div class="notice-body">
               <span class="notice-title">这场考试的题目内容在考试期间已变更</span><br>
-              本场按开考时的题目快照作答：第 <span id="ex-changed-no">12</span> 题的题干在考试期间被改成新版本，这里仍显示开考那一版；判分也按交卷时保存的快照。题库侧不做任何锁定，编辑者可以照常改题。
+              本场按开考时的题目作答：第 <span id="ex-changed-no">12</span> 题的题干在考试期间被改成新版本，这里仍显示开考那一版；判分也按交卷当时保存的题目。题库侧不做任何锁定，编辑者可以照常改题。
             </div>
           </div>
         </article>
@@ -382,7 +384,7 @@
             <svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg>
             <div class="notice-body">
               <span class="notice-title">服务端已完成交卷，成绩报告已生成</span><br>
-              收卷由服务端在宽限结束时完成，不依赖你是否保持页面打开。本场为<strong>到点自动交卷</strong>；报告落库后永久不可变、不重算、不覆盖。
+              收卷由服务端在宽限结束时完成，不依赖你是否保持页面打开。本场为<strong>到点自动交卷</strong>；报告按交卷当时的题目与答案保存，之后不会变。
               <div class="notice-actions">
                 <button type="button" class="btn btn-sm btn-primary" onclick="EEexam.switchPanel('ex-report')">查看成绩报告</button>
                 <a class="btn btn-sm btn-quiet" href="exams.html">回模考中心回看</a>
@@ -397,7 +399,7 @@
             <textarea class="textarea" readonly>范围基准失控主要因为需求没有基线化……</textarea>
             <span class="hint">主观题保存作答与参考解析：作答状态「已作答」，判分状态「未判分」；不计入得分与客观题满分。</span>
           </label>
-          <p class="q-note">整张纸面只读。答案与解析在成绩报告里给出；本机未同步成功的答案会在报告里单独列出，不计入本场成绩。</p>
+          <p class="q-note">整张纸面只读。答案与解析在成绩报告里给出。</p>
         </article>
 
         <aside class="focus-rail" aria-label="作答卡">
@@ -469,11 +471,11 @@
             <div class="stat-row mt-5">
               <div class="stat">
                 <div class="stat-num">46%</div>
-                <div class="stat-cap">考试得分率<br>客观题得分 11 ÷ 客观题满分 24</div>
+                <div class="stat-cap">考试得分率 · 分母含未作答<br>客观题得分 11 ÷ 客观题满分 24</div>
               </div>
               <div class="stat">
                 <div class="stat-num">56%</div>
-                <div class="stat-cap">已答客观题正确率<br>答对 5 ÷ 已答 9</div>
+                <div class="stat-cap">已答客观题正确率 · 仅统计已答<br>答对 5 ÷ 已答 9</div>
               </div>
               <div class="stat">
                 <div class="stat-num">9 / 11</div>
@@ -485,13 +487,12 @@
               </div>
             </div>
 
-            <div class="notice info mt-5">
-              <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
-              <div class="notice-body">
-                <span class="notice-title">两个率的分母不同，不得混用</span><br>
-                考试得分率的分母是本场<strong>全部</strong>客观题——未作答按 0 分计入得分，但仍占满分；已答客观题正确率的分母只是你实际作答过的客观题。例：100 道每题 1 分的客观题只答对 1 道、其余未答 → 得分 1 / 满分 100 / 得分率 1% / 已答客观题正确率 100%。两个率不同是正确结果。
+            <details class="rep-help mt-5">
+              <summary><svg class="od-icon rep-help-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 9.5 12 15l5.5-5.5"/></svg>两个率的分母不一样，点此看口径</summary>
+              <div class="rep-help-body">
+                <p>考试得分率的分母含未作答：未答的客观题按 0 分计入得分，但仍占满分。已答客观题正确率只统计你实际答过的客观题。两者分母不同，数值不同是正常结果。</p>
               </div>
-            </div>
+            </details>
 
             <div class="report-counts">
               <div class="report-count"><b>10</b><span>已答（含 1 题已作答·未判分）</span></div>
@@ -503,7 +504,8 @@
             <div class="kv ee-mt-4">
               <span class="kv-key">负分规则</span><span class="kv-val">答错扣 0.5 分；未设 0 分下限，总分可为负</span>
               <span class="kv-key">纳入学习记录</span><span class="kv-val">纳入：答错的题已进入错题，FSRS 已调度</span>
-              <span class="kv-key">本机未同步成功</span><span class="kv-val">0 题（有未同步答案时会在此列出，且不计入本场成绩）</span>
+              <!-- 本机未同步成功的答案：真的有未同步答案时才出现，不计入本场成绩 -->
+              <span class="kv-key" id="ex-unsynced" hidden>本机未同步成功</span><span class="kv-val" id="ex-unsynced-val" hidden></span>
             </div>
           </section>
 
@@ -546,67 +548,10 @@
 
           <section class="section mt-7">
             <div class="section-head">
-              <h3 class="section-title">错题与未答</h3>
-              <span class="section-note" id="ex-wrong-count">7 题 · 含未答与未判分</span>
+              <h3 class="section-title">逐题明细</h3>
+              <span class="section-note" id="ex-wrong-count">共 12 题 · 答错与未答 7 题 · 点开看作答、判定、解析与判分版本</span>
             </div>
-            <div class="wrong-list">
-              <article class="wrong-row">
-                <span class="wrong-no">第 2 题</span>
-                <div class="wrong-main">
-                  <p class="wrong-stem">OSI的（  ）不适合提供相应的安全服务。</p>
-                  <div class="wrong-answers"><span class="muted">你的答案 <span class="mono">C</span></span><span>标准答案 <span class="mono">B</span></span><span class="tag bad">错误</span></div>
-                  <p class="hint">解析：本题为反向选择题：传输层、网络层、应用层都可以提供相应安全服务，会话层不适合。</p>
-                </div>
-              </article>
-              <article class="wrong-row">
-                <span class="wrong-no">第 4 题</span>
-                <div class="wrong-main">
-                  <p class="wrong-stem">关于范围基准，以下说法不正确的是（）。</p>
-                  <div class="wrong-answers"><span class="muted">你的答案 <span class="mono">A</span></span><span>标准答案 <span class="mono">D</span></span><span class="tag bad">错误</span></div>
-                  <p class="hint">解析：范围基准是创建 WBS 过程的输出，不是制定预算的输出。</p>
-                </div>
-              </article>
-              <article class="wrong-row">
-                <span class="wrong-no">第 6 题</span>
-                <div class="wrong-main">
-                  <p class="wrong-stem">监控各项续航参数是否保持在预期区间（   ）</p>
-                  <div class="wrong-answers"><span class="muted">你的答案 <span class="mono">B</span></span><span>标准答案 <span class="mono">A</span></span><span class="tag bad">错误</span></div>
-                  <p class="hint">解析：控制图用于判断过程是否处于受控状态，即参数是否保持在预期区间。</p>
-                </div>
-              </article>
-              <article class="wrong-row">
-                <span class="wrong-no">第 8 题</span>
-                <div class="wrong-main">
-                  <p class="wrong-stem">大型不适合用（）架构模型。</p>
-                  <div class="wrong-answers"><span class="muted">你的答案 <span class="mono">B</span></span><span>标准答案 <span class="mono">A</span></span><span class="tag bad">错误</span></div>
-                  <p class="hint">解析：大型系统不适合单机应用模式，需要分布式架构支撑。</p>
-                </div>
-              </article>
-              <article class="wrong-row">
-                <span class="wrong-no">第 10 题</span>
-                <div class="wrong-main">
-                  <p class="wrong-stem">以下（   ）不是定义活动的输出。</p>
-                  <div class="wrong-answers"><span class="muted">你的答案 <span class="mono">未答</span></span><span>标准答案 <span class="mono">C</span></span><span class="tag plain">未答</span></div>
-                  <p class="hint">未作答的客观题按 0 分计入得分，但仍占满分——这也是得分率低于已答正确率的原因。</p>
-                </div>
-              </article>
-              <article class="wrong-row">
-                <span class="wrong-no">第 11 题</span>
-                <div class="wrong-main">
-                  <p class="wrong-stem">项目具有临时性，因此（  ）。</p>
-                  <div class="wrong-answers"><span class="muted">你的答案 <span class="mono">未答</span></span><span>标准答案 <span class="mono">A</span></span><span class="tag plain">未答</span></div>
-                  <p class="hint">解析：临时性是项目的基本特征之一：有明确的开始与结束。</p>
-                </div>
-              </article>
-              <article class="wrong-row">
-                <span class="wrong-no">第 12 题</span>
-                <div class="wrong-main">
-                  <p class="wrong-stem">结合本项目，说明范围基准失控的主要原因，并给出纠正措施。</p>
-                  <div class="wrong-answers"><span class="muted">你的答案 <span class="mono">已提交文字作答</span></span><span class="tag brand">已作答 · 未判分</span></div>
-                  <p class="hint">主观题不自动判分：作答状态是「已作答」，判分状态恒为「未判分」，不计入客观题得分与满分，也不显示成「未作答」。</p>
-                </div>
-              </article>
-            </div>
+            <div id="ex-report-items"></div>
             <div class="report-actions">
               <button type="button" class="btn" onclick="EEexam.openPaper()"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>整卷回看</button>
               <a class="btn btn-quiet" href="review.html"><svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg>打开复习队列</a>
@@ -828,7 +773,7 @@
               <svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>
               <div class="notice-body">
                 <span class="notice-title">这场考试的题目内容在考试期间已变更</span><br>
-                第 12 题的题干在考试期间被改成新版本。本场按<strong>开考时的题目快照</strong>作答与判分，这里仍显示开考那一版；题库侧不做任何锁定，编辑者可以照常改题。想知道题目现在长什么样，交卷后在报告里用「查看该题当前版本」对照。
+                第 12 题的题干在考试期间被改成新版本。本场按<strong>开考时的题目</strong>作答与判分，这里仍显示开考那一版；题库侧不做任何锁定，编辑者可以照常改题。想知道题目现在长什么样，交卷后在报告里用「查看该题当前版本」对照。
               </div>
             </div>
           </div>
@@ -1208,6 +1153,7 @@
 <script src="../../assets/i18n.js"></script>
 <script src="../../assets/nav.js"></script>
 <script src="../../assets/spec-boot.js"></script>
+<script src="../../assets/report.js"></script>
 <script>
 /* ==========================================================================
    模考会话 runner · P2
@@ -1258,7 +1204,8 @@ window.EEexam = (function () {
   var DEMO_REPORT = {
     title: '系统集成项目管理工程师 · 综合卷', at: '2026-11-24 22:05', deadline: '2026-11-24 22:14',
     via: 'manual', score: 11, full: 24, rate: 46, accObj: 56, answered: 10, objTotal: 11,
-    correct: 5, unanswered: 2, ungraded: 1, minutes: 47, wall: 52, version: 'v3', unsynced: 0
+    correct: 5, unanswered: 2, ungraded: 1, minutes: 47, wall: 52, version: 'v3', unsynced: 0,
+    total: 12, items: []
   };
 
   /* 演示会话的脚本化作答：前 9 题客观题已答，第 12 题文字作答；第 5、12 题待复查 */
@@ -1304,11 +1251,16 @@ window.EEexam = (function () {
   }
   function buildPaper(s) {
     var qs = S.questions(s.bankId);
-    if (!qs.length) qs = QBANK.map(function (q, i) { return { id: 'qb' + i, stem: q.stem, type: q.type, chapter: '未分章', version: 'v3' }; });
+    /* 题库里没有真实题目时用演示卷兜底。兜底卷的 id 是合成出来的（qb0…），
+       store 里并不存在这些题——所以标记 synth，报告里据此不生成「查看该题当前版本」，
+       否则每一题的入口都会跳到 question.html 的「这道题不存在」状态。
+       以题干为身份判据仍有效：报告与复习队列之间的定位不依赖这里合成的 id。 */
+    var synth = !qs.length;
+    if (synth) qs = QBANK.map(function (q, i) { return { id: 'qb' + i, stem: q.stem, type: q.type, chapter: '未分章', version: 'v3' }; });
     var total = s.total || qs.length;
     return qs.slice(0, total).map(function (q, i) {
       var p = paperFor(q.stem);
-      return { id: q.id, stem: q.stem, type: p.type || q.type || '单选题', chapter: q.chapter || '未分章', version: q.version || 'v3', options: p.options, answer: p.answer, explain: p.explain, score: SCORE[p.type || q.type] == null ? 2 : SCORE[p.type || q.type] };
+      return { id: q.id, synth: synth, stem: q.stem, type: p.type || q.type || '单选题', chapter: q.chapter || '未分章', version: q.version || 'v3', options: p.options, answer: p.answer, explain: p.explain, score: SCORE[p.type || q.type] == null ? 2 : SCORE[p.type || q.type] };
     });
   }
   /* 开考快照：会话开始时记录的题目版本。之后题目被改过，才提示「内容已变更」。 */
@@ -1364,6 +1316,12 @@ window.EEexam = (function () {
     render();
     startTicker();
     paintStaticSheets();
+    /* 「成绩报告」这一态也要有内容：直接用本场演示会话算一份，汇总数字与逐题明细
+       因此永远对得上，不会出现静态壳子与真实交卷后两套数。 */
+    var demo = computeReport('manual');
+    demo.at = '2026-11-24 22:05';
+    demo.deadline = '2026-11-24 22:14';
+    renderReport(demo);
   }
   function showNone() {
     document.getElementById('ex-live').hidden = true;
@@ -1606,6 +1564,45 @@ window.EEexam = (function () {
   }
 
   /* ---------- 报告计算（CR-06） ---------- */
+  /* 逐题判定：与 computeReport 的计分口径完全一致——同一段比较、同一个 0.5 分支，
+     不许报告汇总与逐题明细各算一套。 */
+  function gradeQuestion(q, a) {
+    var isObj = !!OBJECTIVE[q.type];
+    if (!a) return { isObj: isObj, answered: false, correctness: 'BLANK', ratio: null, partial: false };
+    if (!isObj) return { isObj: isObj, answered: true, correctness: 'UNGRADED', ratio: null, partial: false };
+    var sel = String(a).split('').sort().join('');
+    var ans = String(q.answer).split('').sort().join('');
+    if (sel === ans) return { isObj: true, answered: true, correctness: 'CORRECT', ratio: 1, partial: false };
+    var partial = !!(sel.length && ans.indexOf(sel[0]) > -1 && sel.length < ans.length);
+    return { isObj: true, answered: true, correctness: partial ? 'PARTIAL' : 'INCORRECT', ratio: partial ? 0.5 : 0, partial: partial };
+  }
+  /* 判分版本快照：会话开考时记下的那一版。之后题目被改过的题，报告里标出当前版本，
+     但判定仍按交卷当时保存的题目与答案。 */
+  function itemVersion(q) {
+    var ver = snapshotVersion();
+    var cur = (q.version && q.version !== ver) ? q.version : null;
+    return { ver: ver, verAt: '2026-11-20 11:41', cur: cur, curAt: cur ? '2026-11-26 09:12' : null, curNote: cur ? '题干与参考答案做了修订。' : null };
+  }
+  /* items 字段与 assets/report.js 头部约定一致，三处报告的逐题明细因此完全同构。 */
+  function reportItems() {
+    return R.paper.map(function (q, i) {
+      var a = R.answers[i];
+      var g = gradeQuestion(q, a);
+      var snap = itemVersion(q);
+      var isObj = g.isObj;
+      return {
+        /* qid 只在题目真实存在于 store 时才带：演示卷的 qb0… 是合成的，带出去会生成一条
+           指向「这道题不存在」的死链接。题干照旧带上，定位不依赖 id。 */
+        qid: q.synth ? null : q.id, bankId: R.s.bankId, type: q.type, subjective: !isObj, answered: g.answered,
+        ratio: g.ratio, correctness: g.correctness,
+        stem: q.stem,
+        mine: g.answered ? String(a) : '未作答',
+        answer: isObj ? String(q.answer) : '主观题不自动判分',
+        explain: q.explain,
+        ver: snap.ver, verAt: snap.verAt, cur: snap.cur, curAt: snap.curAt, curNote: snap.curNote
+      };
+    });
+  }
   function computeReport(via) {
     var objFull = 0, objScore = 0, answeredObj = 0, correctObj = 0, ungraded = 0, unanswered = 0, answered = 0;
     R.paper.forEach(function (q, i) {
@@ -1630,7 +1627,8 @@ window.EEexam = (function () {
       correct: correctObj, unanswered: unanswered, ungraded: ungraded,
       minutes: Math.max(1, Math.round((Math.max(60, (R.s.minutes || 120) * 60) - R.remaining) / 60)),
       wall: Math.max(1, Math.round((Math.max(60, (R.s.minutes || 120) * 60) - R.remaining) / 60) + 5),
-      via: via, at: '2026-11-26 09:20', version: 'v3', unsynced: 0
+      via: via, at: '2026-11-26 09:20', version: 'v3', unsynced: 0,
+      total: R.paper.length, items: reportItems()
     };
   }
   function confirmSubmit(via) {
@@ -1651,39 +1649,58 @@ window.EEexam = (function () {
   /* ---------- 报告渲染 ---------- */
   function renderReport(rep) {
     rep = rep || DEMO_REPORT;
+    /* 报告面板是 data-tab-panel="ex-report"，没有 id——按属性取，别按 #ex-report 取
+       （那会拿到 null，后半段全部不执行，真实交卷后只看到静态壳子）。 */
+    var panel = document.querySelector('[data-tab-panel="ex-report"]');
+    if (!panel) return;
     document.getElementById('ex-report-title').textContent = rep.title;
-    var scoreEl = document.querySelector('#ex-report .report-score');
-    var capEl = document.querySelectorAll('#ex-report .report-score-cap');
-    scoreEl.textContent = rep.score == null ? '待判分' : rep.score;
-    capEl[0].textContent = '客观题得分';
-    capEl[1].textContent = '客观题满分 ' + rep.full + ' 分（含未作答的 ' + (rep.unanswered == null ? 0 : rep.unanswered) + ' 题）';
-    var stats = document.querySelectorAll('#ex-report .stat-row .stat');
-    stats[0].querySelector('.stat-num').textContent = (rep.rate == null ? '暂无数据' : rep.rate + '%');
-    stats[0].querySelector('.stat-cap').innerHTML = '考试得分率<br>客观题得分 ' + rep.score + ' ÷ 客观题满分 ' + rep.full;
-    stats[1].querySelector('.stat-num').textContent = (rep.accObj == null ? '暂无数据' : rep.accObj + '%');
-    stats[1].querySelector('.stat-cap').innerHTML = '已答客观题正确率<br>答对 ' + rep.correct + ' ÷ 已答 ' + (rep.answered - rep.ungraded);
-    stats[2].querySelector('.stat-num').textContent = (rep.answered - rep.ungraded) + ' / ' + rep.objTotal;
-    stats[2].querySelector('.stat-cap').textContent = '已答客观题 / 客观题总数';
-    stats[3].querySelector('.stat-num').textContent = rep.unanswered == null ? '—' : rep.unanswered;
-    stats[3].querySelector('.stat-cap').textContent = '未答客观题（按 0 分计入得分，仍占满分）';
-    var counts = document.querySelectorAll('#ex-report .report-count');
+    var scoreEl = panel.querySelector('.report-score');
+    var capEl = panel.querySelectorAll('.report-score-cap');
+    var answeredObj = (rep.answered == null ? 0 : rep.answered) - (rep.ungraded == null ? 0 : rep.ungraded);
+    if (scoreEl) scoreEl.textContent = rep.score == null ? '待判分' : rep.score;
+    if (capEl.length) {
+      capEl[0].textContent = '客观题得分';
+      capEl[1].textContent = '客观题满分 ' + rep.full + ' 分（含未作答的 ' + (rep.unanswered == null ? 0 : rep.unanswered) + ' 题）';
+    }
+    var stats = panel.querySelectorAll('.stat-row .stat');
+    if (stats.length) {
+      stats[0].querySelector('.stat-num').textContent = (rep.rate == null ? '暂无数据' : rep.rate + '%');
+      stats[0].querySelector('.stat-cap').innerHTML = '考试得分率 · 分母含未作答<br>客观题得分 ' + rep.score + ' ÷ 客观题满分 ' + rep.full;
+      stats[1].querySelector('.stat-num').textContent = (rep.accObj == null ? '暂无数据' : rep.accObj + '%');
+      stats[1].querySelector('.stat-cap').innerHTML = '已答客观题正确率 · 仅统计已答<br>答对 ' + rep.correct + ' ÷ 已答 ' + answeredObj;
+      stats[2].querySelector('.stat-num').textContent = answeredObj + ' / ' + rep.objTotal;
+      stats[2].querySelector('.stat-cap').textContent = '已答客观题 / 客观题总数';
+      stats[3].querySelector('.stat-num').textContent = rep.unanswered == null ? '—' : rep.unanswered;
+      stats[3].querySelector('.stat-cap').textContent = '未答客观题（按 0 分计入得分，仍占满分）';
+    }
+    var counts = panel.querySelectorAll('.report-count');
     if (counts.length) {
       counts[0].querySelector('b').textContent = rep.answered;
       counts[0].querySelector('span').textContent = '已答（含 ' + rep.ungraded + ' 题已作答·未判分）';
       counts[1].querySelector('b').textContent = rep.unanswered;
       counts[2].querySelector('b').textContent = rep.ungraded;
       counts[3].querySelector('b').textContent = rep.score + ' / ' + rep.full;
-      counts[4].querySelector('b').textContent = rep.score + ' / ' + rep.full;
     }
-    var facts = document.querySelectorAll('#ex-report .report-facts dd');
-    facts[0].textContent = rep.at;
-    facts[1].textContent = rep.deadline || '—';
-    facts[2].textContent = rep.via === 'auto_deadline' ? '到点自动交卷' : (rep.via === 'expired_server_answers' ? '超时后以服务器答案交卷' : '手动交卷');
-    facts[3].textContent = rep.minutes + ' 分钟';
-    facts[4].textContent = rep.wall + ' 分钟';
-    facts[5].textContent = '题目版本 ' + rep.version;
-    document.querySelector('#ex-report .rule-label').textContent =
-      '成绩报告 · ' + (rep.via === 'manual' ? '手动交卷' : (rep.via === 'auto_deadline' ? '到点自动交卷' : '超时后以服务器答案交卷'));
+    var facts = panel.querySelectorAll('.report-facts dd');
+    if (facts.length) {
+      facts[0].textContent = rep.at;
+      facts[1].textContent = rep.deadline || '—';
+      facts[2].textContent = viaText(rep.via);
+      facts[3].textContent = rep.minutes + ' 分钟';
+      facts[4].textContent = rep.wall + ' 分钟';
+      facts[5].textContent = '题目版本 ' + rep.version;
+    }
+    var label = panel.querySelector('.rule-label');
+    if (label) label.textContent = '成绩报告 · ' + viaText(rep.via);
+
+    /* 本机未同步成功的答案：真的有才出一行，没有就不占位置 */
+    var unsynced = panel.querySelector('#ex-unsynced');
+    var unsyncedVal = panel.querySelector('#ex-unsynced-val');
+    if (unsynced) unsynced.hidden = !(rep.unsynced > 0);
+    if (unsyncedVal) {
+      unsyncedVal.hidden = !(rep.unsynced > 0);
+      unsyncedVal.textContent = rep.unsynced + ' 题（不计入本场成绩）';
+    }
 
     /* 答题卡（只读）：已答 / 错误 / 待复查 */
     var cells = '';
@@ -1696,7 +1713,23 @@ window.EEexam = (function () {
     }
     var host = document.getElementById('ex-report-sheet');
     if (host) host.innerHTML = cells;
+
+    /* 逐题明细：与模考归档报告、练习报告共用 assets/report.js 的同一套组件 */
+    var items = rep.items && rep.items.length ? rep.items : (R.paper.length ? reportItems() : []);
+    var list = document.getElementById('ex-report-items');
+    if (list) {
+      list.innerHTML = window.eeReport.blockHtml(items, true, { scope: 'ex', bankId: rep.bankId, qPrefix: '', rPrefix: '' });
+      window.eeReport.bind(list.querySelector('.rep-block'));
+    }
+    var wrongNote = document.getElementById('ex-wrong-count');
+    if (wrongNote) {
+      var bad = items.filter(function (it) { return it.correctness === 'INCORRECT' || it.correctness === 'PARTIAL' || it.correctness === 'BLANK'; }).length;
+      wrongNote.textContent = '共 ' + items.length + ' 题 · 答错与未答 ' + bad + ' 题 · 点开看作答、判定、解析与判分版本';
+    }
     syncToastInset();
+  }
+  function viaText(via) {
+    return via === 'manual' ? '手动交卷' : (via === 'auto_deadline' ? '到点自动交卷' : (via === 'expired_server_answers' ? '超时后以服务器答案交卷' : '手动交卷'));
   }
   function openPaper() {
     var host = document.getElementById('ex-paper-host');

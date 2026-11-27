@@ -101,6 +101,7 @@
 <script src="../../assets/i18n.js"></script>
 <script src="../../assets/nav.js"></script>
 <script src="../../assets/spec-boot.js"></script>
+<script src="../../assets/report.js"></script>
 <script>
 (function () {
   'use strict';
@@ -146,6 +147,7 @@
   ];
 
   var BANK = '验收题库 1794570360969';
+  var BANK_ID = 'b_acc';   /* 上面的显示名对应的题库 id：报告里「在错题里打开」要带它 */
 
   /* ---------- 状态 ---------- */
   var state = {
@@ -479,7 +481,7 @@
     var ai = '' +
       '<div class="flow-stack-sm">' +
       '  <span class="rail-title">AI 解释（可选增强）</span>' +
-      '  <div class="notice info">' + ico('cpu', '15px') + '<div class="notice-body">未配置 AI 助教：判分、标准答案、官方解析、评级、错题与 FSRS 全部不受影响。<a class="link-btn" href="settings.html">去配置</a></div></div>' +
+      '  <div class="notice info">' + ico('cpu', '15px') + '<div class="notice-body">未配置 AI 助教：判分、标准答案、官方解析、评级、错题与 FSRS 全部不受影响。<a class="link-btn" href="../screens/settings.html">去配置</a></div></div>' +
       '</div>';
 
     var foot = '<button type="button" class="btn btn-primary btn-hero" data-act="next-question">下一题</button>' +
@@ -551,6 +553,35 @@
     return behind + dlg;
   }
 
+  /* 判分版本快照（BR-109）：交卷时保存，报告不随后续改题变化。
+     真实数据随作答记录落库（question_version_id），P3 回填；这里给示例值。 */
+  var PRACTICE_VER_SNAP = {
+    q2: { ver: 'v1', verAt: '2026-11-18 14:02', cur: 'v2', curAt: '2026-11-25 10:31', curNote: '选项表述做了校对。' }
+  };
+  /* 逐题明细：与模考交卷态、模考归档成绩报告共用 assets/report.js 的同一套渲染，
+     字段顺序、展开交互、版本提示与回看入口完全一致。 */
+  function reportItems() {
+    return QS.map(function (q, i) {
+      var res = state.results[i] || null;
+      var answered = !!res;
+      var ok = answered && !!res.correct;
+      var r = res && res.rating ? res.rating : null;
+      var snap = PRACTICE_VER_SNAP[q.id] || { ver: 'v1', verAt: '2026-11-18 14:02' };
+      return {
+        qid: q.id, bankId: BANK_ID, type: q.type, subjective: false, answered: answered,
+        ratio: answered ? (ok ? 1 : 0) : null,
+        correctness: answered ? (ok ? 'CORRECT' : 'INCORRECT') : 'BLANK',
+        stem: q.stem,
+        mine: answered ? res.answer : '未作答',
+        answer: q.answer,
+        explain: q.explanation,
+        rating: r ? ratingName(r) : null,
+        ratingDue: r ? dueText(r) : null,
+        ver: snap.ver, verAt: snap.verAt, cur: snap.cur, curAt: snap.curAt, curNote: snap.curNote
+      };
+    });
+  }
+
   function renderReport() {
     var score = Math.round(correctCount() / QS.length * 100);
     var acc = answeredCount() ? Math.round(correctCount() / answeredCount() * 100) : 0;
@@ -580,9 +611,13 @@
       '    <div class="stat"><div class="stat-num">' + wrongCount() + '</div><div class="stat-cap">值得再看</div></div>' +
       '  </div>' +
       '  <div class="report-tags">' + tags + '</div>' +
+      '  <div class="section-head"><h2 class="section-title">逐题明细</h2><span class="section-note">共 ' + QS.length + ' 题 · 点开看作答、判定、解析与判分版本</span></div>' +
+      '  <div id="practice-report-items">' + window.eeReport.blockHtml(reportItems(), true, { scope: 'fp', bankId: BANK_ID, qPrefix: '../screens/', rPrefix: '../screens/' }) + '</div>' +
+      '  <div class="notice plain">' + ico('info', '15px') + '<div class="notice-body">每道题都按交卷当时保存的题目与答案判分；题目后来改过的，条目上会标出并说明改了什么。</div></div>' +
       '  <div class="flow-actions">' +
       '    <button type="button" class="btn btn-primary btn-hero" data-act="again">再做一组</button>' +
-      '    <a class="btn btn-quiet" href="home.html">返回今天页</a>' +
+      '    <a class="btn btn-quiet" href="../screens/home.html">返回今天页</a>' +
+      '    <a class="btn btn-quiet" href="../screens/review.html?tab=mistakes">打开错题</a>' +
       '  </div>' +
       '</div></div>';
   }
@@ -646,7 +681,7 @@
     { id: 'session', name: '练习会话', render: renderSession, nextLabel: '提交答案', note: '选中选项后提交；键盘按选项字母即可，判断题用 T / F，浮层打开时快捷键挂起。', nextDisabled: function () { return !state.selected || state.submitted; } },
     { id: 'feedback', name: '判定反馈', render: renderFeedback, nextLabel: '下一题', note: '答错时「重来」预选；间隔按当前快照算出的实际到期日展示。' },
     { id: 'complete', name: '交卷确认', render: renderComplete, nextLabel: '确认交卷', note: '还有未作答题目时给出警告。' },
-    { id: 'report', name: '练习报告', render: renderReport, nextLabel: '重新开始', note: '报告已落库；可再做一组或返回今天页。' },
+    { id: 'report', name: '练习报告', render: renderReport, nextLabel: '重新开始', note: '本组结果已保存；答错与未答的题可在逐题明细里直接筛出来。' },
     { id: 'exit', name: '退出与暂存', render: renderExit, nextLabel: '暂存并退出', note: '退出统一二选一：暂存，稍后继续 / 结束本次。' }
   ];
 
@@ -675,6 +710,7 @@
 
     stage.innerHTML = step.render();
     caption.innerHTML = '当前第 <b>' + (state.step + 1) + '</b> 步 / 共 <b>' + STEPS.length + '</b> 步 · ' + esc(step.name);
+    if (window.eeReport) window.eeReport.bind(document.querySelector('#practice-report-items .rep-block'));
 
     prevBtn.disabled = state.step === 0;
     var label = typeof step.nextLabel === 'function' ? step.nextLabel() : step.nextLabel;
@@ -739,6 +775,8 @@
     'rate': function (el) {
       var r = parseInt(el.getAttribute('data-r'), 10);
       state.rating = r;
+      /* 评级按题记：交卷后的逐题明细要显示每一题自己的评级与到期日 */
+      if (state.results[state.qIndex]) state.results[state.qIndex].rating = r;
       render();
       window.eeToast('已记录评级：' + ratingName(r) + '，' + ratingHint(r));
     },
@@ -789,7 +827,7 @@
     if (S) S.sessions('practice').forEach(function (s) { S.finishSession(s.id); });
     resetState();
     if (S) {
-      var s = S.startSession({ kind: 'practice', bankId: 'b_acc', mode: '顺序练习', total: QS.length, index: 0, done: 0, answers: {}, ratings: {}, flags: {}, elapsed: 47 });
+      var s = S.startSession({ kind: 'practice', bankId: BANK_ID, mode: '顺序练习', total: QS.length, index: 0, done: 0, answers: {}, ratings: {}, flags: {}, elapsed: 47 });
       state.sid = s.id;
     }
     window.eeToast('已结束旧会话，开始新的练习');
@@ -799,7 +837,7 @@
     if (!state.selected || state.submitted) return;
     state.submitted = true;
     var ok = isCorrect();
-    state.results[state.qIndex] = { answer: state.selected, correct: ok };
+    state.results[state.qIndex] = { answer: state.selected, correct: ok, rating: ok ? null : 1 };
     state.rating = ok ? null : 1; // 答错时预选「重来」
     persistSession();
     go(3);

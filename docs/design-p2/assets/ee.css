@@ -819,7 +819,7 @@ dialog.dlg.danger .dlg-title { color: var(--bad); }
 
 .bottomnav {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
-  display: grid; grid-template-columns: repeat(6, 1fr);
+  display: grid; grid-template-columns: repeat(5, 1fr);
   height: calc(var(--bottomnav-h) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
   background: var(--surface); border-top: 1px solid var(--line);
 }
@@ -908,11 +908,20 @@ dialog.dlg.danger .dlg-title { color: var(--bad); }
   position: sticky; top: var(--topbar-h); align-self: start;
   max-height: calc(100dvh - var(--topbar-h)); overflow-y: auto;
 }
+/* 底部操作条：有宽度规划的单行，不靠缩小字号/内边距把控件硬挤进去。
+   主操作（提交答案 / 下一题 / 交卷）按剩余空间生长，但有最小宽度保底；
+   次级操作一律 flex:0 0 auto 不让位。窄屏与软键盘弹起时次级操作收起
+   （标记 .kb-hide，机制见 §17），主操作始终稳定、可达、不被输入法遮挡。 */
 .focus-foot {
   position: sticky; bottom: 0; display: flex; align-items: center; gap: var(--sp-4);
   padding: var(--sp-3) var(--sp-6); border-top: 1px solid var(--line); background: var(--surface);
   bottom: var(--kb-inset, 0px);
+  flex-wrap: nowrap;
 }
+.focus-foot > .btn { flex: 0 0 auto; }
+.focus-foot .spacer { flex: 1 1 auto; min-width: var(--sp-2); }
+.focus-foot .foot-submit, .focus-foot .btn-hero { flex: 1 1 auto; min-width: 120px; max-width: 280px; }
+.focus-foot .ft-count, .focus-foot .mono { flex: 0 1 auto; min-width: 0; }
 .q-stem { font-family: var(--font-serif); font-size: var(--text-xl); line-height: 1.6; margin: 0 0 var(--sp-5); }
 .q-meta { display: flex; align-items: center; gap: var(--sp-3); font-size: var(--text-xs); color: var(--ink-3); margin-bottom: var(--sp-3); }
 .opt {
@@ -1050,6 +1059,16 @@ dialog.dlg.danger .dlg-title { color: var(--bad); }
   .lay-two > .span-2 { grid-column: span 1; }
 }
 
+/* ==========================================================================
+   手机端筛选（CONTRACT §8-24：筛选用底部弹层）
+   --------------------------------------------------------------------------
+   桌面端工具条平铺全部筛选；≤640 只留搜索与高频筛选，高级筛选项组
+   （页面里的 [data-filter-adv]）由页面脚本移进 .drawer 的底部弹层变体，
+   不另造弹层组件。已应用条件用 .chip-row 表达，可逐项移除，也可一键清除。
+   ========================================================================== */
+.filter-trigger { display: none; }
+@media (max-width: 640px) { .filter-trigger { display: inline-flex; } }
+
 /* 纸内「工具栏」模式：筛选项与主操作同一行，主操作靠右。
    用来消灭同一屏里重复平铺的操作入口。 */
 .lay-toolbar { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; margin-bottom: var(--sp-5); }
@@ -1103,7 +1122,18 @@ dialog.dlg.danger .dlg-title { color: var(--bad); }
 /* ---- 报告逐题明细（P2 收口：交卷当次报告与历史归档报告共用同一组件，
        保证内容一致；历史报告额外标注判分版本与当前版本差异）----
    v4：去掉列表上沿的线——首项自己的上边线与它重合；补 :last-child 去线，
-   否则末行底下多一道悬空线。 */
+   否则末行底下多一道悬空线。
+   v5：折叠态补题干摘要（.rep-item-stem）与低权重版本指示（.rep-item-ver），
+   加快速筛选与批量展开的工具栏（.rep-tool / .rep-block）、零结果空状态
+   （.rep-empty）与按需口径帮助（.rep-help）。全部复用既有 chip / btn / tag，
+   不引入新控件。 */
+.rep-block { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
+.rep-tool { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.rep-tool .chip-row { flex: 1 1 auto; min-width: 0; }
+.rep-tool-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-left: auto; }
+.rep-tool-count { font-size: var(--text-xs); color: var(--ink-3); white-space: nowrap; }
+.rep-empty { display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); padding: var(--sp-7) var(--sp-2); text-align: center; }
+.rep-empty-txt { font-size: var(--text-sm); color: var(--ink-3); margin: 0; }
 .rep-list { display: flex; flex-direction: column; }
 .rep-item { border-bottom: 1px solid var(--line); }
 .rep-item:last-child { border-bottom: none; }
@@ -1116,6 +1146,16 @@ dialog.dlg.danger .dlg-title { color: var(--bad); }
 .rep-item-head:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
 .rep-item-n { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-4); flex: none; width: 2ch; }
 .rep-item-type { font-size: var(--text-sm); color: var(--ink-2); flex: 0 1 auto; min-width: 0; }
+/* 折叠态题干摘要：一行、省略号收尾，全文在 title 里。
+   不要只写 overflow:hidden——那会把题干切成看不出内容的碎片。 */
+.rep-item-stem {
+  flex: 1 1 8em; min-width: 0; font-size: var(--text-xs); color: var(--ink-3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* 行头版本指示：低权重一行小字。判分版本与当前版本真的不同时才提亮，
+   版本信息不该抢过判定标签。 */
+.rep-item-ver { flex: none; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-4); white-space: nowrap; }
+.rep-item-ver.is-diff { color: var(--warn); font-weight: 500; }
 .rep-item-spacer { flex: 1 1 auto; }
 .rep-item-caret { flex: none; color: var(--ink-4); transition: transform var(--dur-fast) ease; }
 .rep-item.is-open .rep-item-caret { transform: rotate(180deg); }
@@ -1135,9 +1175,27 @@ dialog.dlg.danger .dlg-title { color: var(--bad); }
 .rep-ver-tags { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); min-width: 0; }
 .rep-ver-note { font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); margin: 0; flex: 1 1 100%; min-width: 0; }
 .rep-item-acts { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+/* 按需口径帮助：完整说明默认收起，不占纸面；要看了才展开成一条。
+   用原生 details/summary，键盘可达、有可见焦点态。 */
+.rep-help { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); }
+.rep-help > summary {
+  display: flex; align-items: center; gap: var(--sp-2); min-height: 32px; padding: var(--sp-2) var(--sp-4);
+  font-size: var(--text-xs); color: var(--ink-3); cursor: pointer; list-style: none;
+}
+.rep-help > summary::-webkit-details-marker { display: none; }
+.rep-help > summary:hover { color: var(--ink); }
+.rep-help > summary:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.rep-help > summary .rep-help-caret { flex: none; transition: transform var(--dur-fast) ease; }
+.rep-help[open] > summary .rep-help-caret { transform: rotate(180deg); }
+.rep-help-body { padding: 0 var(--sp-4) var(--sp-3); font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); }
+.rep-help-body p { margin: 0; }
 @media (max-width: 640px) {
   .rep-item-head { flex-wrap: wrap; }
+  .rep-item-stem { flex: 1 1 100%; order: 5; }
   .rep-item-spacer { display: none; }
+  .rep-item-ver { order: 6; }
+  .rep-item-caret { order: 7; }
+  .rep-tool-acts { margin-left: 0; }
   .rep-kv { grid-template-columns: 1fr; gap: var(--sp-1); }
   .rep-kv dt { margin-top: var(--sp-2); }
 }
@@ -1229,9 +1287,15 @@ dialog.dlg.danger .dlg-title { color: var(--bad); }
   [data-kb] .flow-foot { position: sticky; bottom: var(--kb-inset, 0px); }
   [data-kb] .drawer { max-height: calc(100dvh - var(--kb-inset, 0px)); }
 }
+/* 底部操作条的次级收起不止在软键盘弹起时发生：窄屏一行放不下时同样收起
+   （.kb-hide 标记的即是次级操作），主操作始终保留。收起的是控件，不是字号
+   与内边距——触控目标保持既有最小尺寸。 */
+@media (max-width: 640px) {
+  .focus-foot .kb-hide, .exam-foot .kb-hide { display: none; }
+}
 
 /* ==========================================================================
-   15. 产品模式：只呈现最终用户内容
+   18. 产品模式：只呈现最终用户内容
    --------------------------------------------------------------------------
    页面被独立打开（真实产品入口）时，<html> 带 data-ee-product。
    此模式下隐藏一切非产品元素：设计规格区、状态格、浮层演示区、

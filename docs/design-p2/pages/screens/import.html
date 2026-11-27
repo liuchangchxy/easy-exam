@@ -161,8 +161,8 @@
       <span class="menu-anchor">
         <button type="button" class="user-mini" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单">A</button>
         <span class="menu" role="menu" hidden>
-          <a class="menu-item" role="menuitem" href="settings.html"><svg class="od-icon" aria-hidden="true"><use href="#i-user"/></svg>账户资料</a>
           <a class="menu-item" role="menuitem" href="settings.html"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>设置</a>
+          <a class="menu-item" role="menuitem" href="settings.html"><svg class="od-icon" aria-hidden="true"><use href="#i-user"/></svg>账户资料</a>
           <span class="menu-sep" role="separator"></span>
           <button class="menu-item is-danger" type="button" role="menuitem" id="tb-logout"><svg class="od-icon" aria-hidden="true"><use href="#i-logout"/></svg>退出登录</button>
         </span>
@@ -175,6 +175,7 @@
       <span class="menu-anchor">
         <button type="button" class="user-mini" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单">A</button>
         <span class="menu" role="menu" hidden>
+          <a class="menu-item" role="menuitem" href="settings.html"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>设置</a>
           <a class="menu-item" role="menuitem" href="settings.html"><svg class="od-icon" aria-hidden="true"><use href="#i-user"/></svg>账户资料</a>
           <span class="menu-sep" role="separator"></span>
           <button class="menu-item is-danger" type="button" role="menuitem" id="tb-logout-m"><svg class="od-icon" aria-hidden="true"><use href="#i-logout"/></svg>退出登录</button>
@@ -670,7 +671,6 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
   <button type="button" class="bn-item"><svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg><span data-i18n="shell.nav.review">复习</span></button>
   <button type="button" class="bn-item"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg><span data-i18n="shell.nav.exams">模考</span></button>
   <button type="button" class="bn-item"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg><span data-i18n="shell.nav.notes">资料</span></button>
-  <button type="button" class="bn-item"><svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg><span data-i18n="shell.nav.more">更多</span></button>
 </nav>
 
 <!-- ============ 对话框：选择文件 ============ -->
@@ -2173,7 +2173,8 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
     var live = S.banks({ archived: false });
     var badge = $('#nav-bank-count');
     if (badge) { badge.textContent = String(live.length); badge.hidden = live.length === 0; }
-    $('#side-due').textContent = String(S.reviewQueue().length);
+    /* 与侧栏、复习页、题库页同一口径（CR-05 可执行复习集合），不用 reviewQueue().length */
+    $('#side-due').textContent = String(S.executableReview().length);
     $('#side-sessions').textContent = String(S.sessions().length);
     $('#imp-view-bank').setAttribute('href', 'workspace.html?bank=' + encodeURIComponent(state.bankId) + '&tab=imports');
     /* 步骤流向随来源格式变化，按钮上的目标也如实更新，不只靠 JS 里判断 */

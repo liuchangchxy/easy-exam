@@ -174,6 +174,30 @@
     html.setAttribute('lang', s.lang === 'en' ? 'en' : 'zh-CN');
   }
 
+  /* ---------------- 复习集合判定（CR-05 · 全产品唯一） ----------------
+     可执行复习集合 = 到期（FSRS 卡片 due_at 已到）∧ 未斩杀 ∧ 题库未归档 ∧ 我对该题库仍有访问权。
+     它与「到期全集」「到期原因标签」都不是同一个集合：
+       · 到期与否只看 due_at，不看 reasons 里有没有 'due'（答完一次评级后 due_at 会被推到未来）；
+       · 斩杀同时认 killed_at 与 reasons 里的 'killed'（两条路径都写）；
+       · 错题未清除 / 薄弱 / 巩固是叠加在集合之上的原因标签，一道题可同时带多个。
+     侧栏角标、题库与题目页的侧栏计数、复习页待复习视图都走 executableReview。
+
+     已知缺口（未修，P3 开工前需先裁定额，见 review/P3-HANDOFF.md §三 C-1 / C-2）：
+       · 下面 bankReachable() 实际只判了「题库未归档」，访问权那一腿只有上面这句注释，
+         没有判定——题库对象上有 role（OWNER / VIEWER）与 shared / readonly 但没用。
+       · home.html 与 diagnosis.html 仍在本地重写到期 / 可执行口径，diagnosis 那份比这里还少一腿。 */
+  function reviewDueAt(row) {
+    var d = new Date(String((row && row.due_at) || '').replace(' ', 'T'));
+    return isNaN(d.getTime()) ? null : d.getTime();
+  }
+  function reviewKilled(row) {
+    return !!row && (!!row.killed_at || (row.reasons || []).indexOf('killed') > -1);
+  }
+  function bankReachable(bankId) {
+    var b = findBank(bankId);
+    return !!b && !b.archived;
+  }
+
   /* ---------------- 领域方法 ---------------- */
   var api = {
     VERSION: VERSION,
@@ -200,6 +224,9 @@
     setInstanceRole: function (r) { state.instanceRole = (r === 'admin') ? 'admin' : 'user'; commit({ type: 'instanceRole' }); },
     login: function (user) { state.session.loggedIn = true; if (user) state.session.user = user; commit({ type: 'login' }); },
     logout: function () { state.session.loggedIn = false; commit({ type: 'logout' }); },
+    /* 已知缺口（未修，见 review/P3-HANDOFF.md §三 C-3）：原型只有一份共享 state，login 只换
+       session.user，个人学习数据（会话 / 复习队列 / 错题 / 报告）不按账户隔离——切换账户会看到
+       上一个人的学习数据。隔离规则见该清单 C-3 与 §二 第 9 项。 */
 
     /* ---- 题库 ---- */
     banks: function (opts) {
@@ -252,6 +279,16 @@
     question: function (id) {
       for (var i = 0; i < state.questions.length; i++) if (state.questions[i].id === id) return state.questions[i];
       return null;
+    },
+    /* 题干归一化：报告与复习队列两端唯一的同一性判据。
+       报告存的是交卷当时的题目快照，复习队列有自己的行 id，两套编号对不上时
+       只能靠题干把两边架起来。归一化故意只做「去空白 + 忽略大小写」：
+       - 去空白：同一道题在报告里可能带折行 / 全角空格，队列里是单行，逐字符比对会漏
+       - 忽略大小写：英文题干大小写不影响是同一题
+       - 不动标点与用词：那会让「哪项不属于」和「哪项属于」撞成同一题。
+       调用方在跨页深链里带这个值（review.html?stem=<normStem>），本地比对同理。 */
+    normStem: function (s) {
+      return String(s == null ? '' : s).replace(/\s+/g, '').toLowerCase();
     },
     addQuestion: function (data) {
       var q = {
@@ -369,10 +406,11 @@
       return list.length ? list[list.length - 1] : null;
     },
     startSession: function (data) {
-      /* 同模式 + 同题库只保留一个进行中会话（避免开始决策反复出现） */
-      state.sessions = state.sessions.filter(function (s) {
-        return !(s.kind === data.kind && s.bankId === data.bankId);
-      });
+      /* CR-14：会话冲突只按 mode 判定——同一 mode 同时只保留一个进行中会话。
+         不同 mode（即使同 kind、同题库）互不牵连；同 mode 不同题库也算同一个模式。
+         页面层的开始决策早已按 mode 判冲突，这里必须同口径，否则 store 会悄悄留下
+         一个页面认为已经结束的会话。 */
+      state.sessions = state.sessions.filter(function (s) { return s.mode !== data.mode; });
       var s = Object.assign({ id: uid('s'), done: 0, answers: {}, startedAt: nowTime(), updatedAt: nowTime() }, data);
       state.sessions.push(s);
       commit({ type: 'session:start', id: s.id });
@@ -410,15 +448,36 @@
         return true;
       });
     },
-    /* 当前可执行复习集合（CR-05）：到期 ∧ 未斩杀 ∧ 未归档 ∧ 有访问权。
-       注意它与「到期全集」不是同一个集合，角标与待复习视图都用这个。 */
+    /* ---- 复习集合：CR-05 唯一判定（页面不再自己写一遍到期/斩杀/归档/访问权） ---- */
+    reviewDueAt: reviewDueAt,
+    reviewDue: function (row) { return reviewDueAt(row) != null && reviewDueAt(row) <= Date.now(); },
+    reviewKilled: reviewKilled,
+    reviewReachable: bankReachable,
+    /* 当前可执行复习集合。bankId 可选（不给就是全部题库）。
+       侧栏角标（nav.js）、题库与题目页侧栏计数、复习页待复习视图都用它。 */
     executableReview: function (bankId) {
-      var now = new Date();
       return state.reviewQueue.filter(function (r) {
-        if (r.killed_at) return false;
+        if (reviewKilled(r)) return false;
         if (bankId && r.bankId !== bankId) return false;
-        var d = new Date(String(r.due_at || '').replace(' ', 'T'));
-        return !isNaN(d.getTime()) && d <= now;
+        if (reviewDueAt(r) == null || reviewDueAt(r) > Date.now()) return false;
+        return bankReachable(r.bankId);
+      });
+    },
+    /* 已排期但还没到期（同口径反向，用来说清「为什么现在是空的」） */
+    scheduledReview: function (bankId) {
+      return state.reviewQueue.filter(function (r) {
+        if (reviewKilled(r)) return false;
+        if (bankId && r.bankId !== bankId) return false;
+        if (reviewDueAt(r) == null) return false;
+        return reviewDueAt(r) > Date.now() && bankReachable(r.bankId);
+      });
+    },
+    /* 到期但被归档或失去访问权挡在外面（同口径反向） */
+    blockedReview: function (bankId) {
+      return state.reviewQueue.filter(function (r) {
+        if (reviewKilled(r)) return false;
+        if (bankId && r.bankId !== bankId) return false;
+        return !bankReachable(r.bankId);
       });
     },
     reviewRow: function (id) {

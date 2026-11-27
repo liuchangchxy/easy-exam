@@ -85,6 +85,13 @@
 .q-select{  width: auto; flex: none;  }
 .q-select.is-sort{  min-width: 104px;  }
 .q-shown{  font-size: var(--text-xs); color: var(--ink-3);  }
+/* 高级筛选项组：桌面端就是工具条里的一段横排；窄屏整组移进底部弹层（见脚本 layoutFilters） */
+  .q-adv{  display: inline-flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;  }
+/* 已应用筛选条件：一行 chip，逐项可移除；无应用条件时不占纸面高度。
+   桌面端筛选本身平铺在工具条里，取值一眼可见，不重复第二套表达。 */
+  .q-applied{  margin: var(--sp-3) 0 0;  }
+.q-applied:empty{  display: none;  }
+@media (min-width: 641px){  .q-applied{  display: none;  }  }
 .q-stem{  text-align: left; text-decoration: none;  }
 .q-stem:hover{  color: var(--brand);  }
 .q-tags{  display: inline-flex; gap: var(--sp-1); margin-left: var(--sp-2); flex-wrap: wrap; vertical-align: middle;  }
@@ -249,10 +256,10 @@
         <button class="user-mini" type="button" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单">A</button>
         <div class="menu" role="menu" hidden>
           <a class="menu-item" role="menuitem" href="settings.html">
-            <svg class="od-icon" aria-hidden="true"><use href="#i-user"/></svg>账户资料
+            <svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>设置
           </a>
           <a class="menu-item" role="menuitem" href="settings.html">
-            <svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>设置
+            <svg class="od-icon" aria-hidden="true"><use href="#i-user"/></svg>账户资料
           </a>
           <div class="menu-sep" role="separator"></div>
           <button class="menu-item is-danger" type="button" role="menuitem" id="tb-logout">
@@ -271,7 +278,7 @@
       <button class="icon-btn" type="button" id="tb-search-m" aria-label="搜索题目">
         <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
       </button>
-      <span class="user-mini" aria-hidden="true">A</span>
+      <button class="user-mini" type="button" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单">A</button>
     </header>
 
     <!-- ================= 主体 ================= -->
@@ -360,33 +367,43 @@
               <option>填空题</option>
               <option>主观题</option>
             </select>
-            <select class="select q-select" aria-label="章节" id="q-chapter"></select>
-            <select class="select q-select" aria-label="标签" id="q-tag"></select>
-            <select class="select q-select" aria-label="难度" id="q-diff">
-              <option selected>全部难度</option>
-              <option>入门</option>
-              <option>基础</option>
-              <option>进阶</option>
-              <option>困难</option>
-              <option>挑战</option>
-            </select>
+            <!-- 高级筛选：桌面端平铺在工具条里；窄屏由脚本收进底部弹层（.drawer 的 ≤640 变体） -->
+            <span class="q-adv" id="q-adv" data-filter-adv>
+              <select class="select q-select" aria-label="章节" id="q-chapter"></select>
+              <select class="select q-select" aria-label="标签" id="q-tag"></select>
+              <select class="select q-select" aria-label="难度" id="q-diff">
+                <option selected>全部难度</option>
+                <option>入门</option>
+                <option>基础</option>
+                <option>进阶</option>
+                <option>困难</option>
+                <option>挑战</option>
+              </select>
+              <label class="check">
+                <input type="checkbox" id="q-show-archived">
+                <span>显示已归档</span>
+              </label>
+            </span>
             <select class="select q-select is-sort" aria-label="排序" id="q-sort">
               <option selected>默认顺序</option>
               <option>按编号</option>
               <option>按难度</option>
               <option>按更新时间</option>
             </select>
-            <label class="check">
-              <input type="checkbox" id="q-show-archived">
-              <span>显示已归档</span>
-            </label>
             <span class="od-spacer"></span>
             <label class="check">
               <input type="checkbox" id="q-select-all" aria-label="全选筛选结果">
               <span>全选筛选结果</span>
             </label>
             <span class="q-shown mono" id="q-shown">0 / 0</span>
+            <button class="btn btn-sm filter-trigger" type="button" id="q-filter-btn"
+                    aria-expanded="false" aria-controls="q-filter-drawer" aria-haspopup="dialog">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-filter"/></svg>筛选
+            </button>
           </div>
+
+          <!-- 已应用的筛选条件：逐项可移除，也可一键清除。条件收窄时结果就地更新，不翻页 -->
+          <div class="chip-row q-applied" id="q-applied" role="group" aria-label="已应用的筛选条件" hidden></div>
 
           <!-- 批量条：先选操作，再展示该操作必需的参数；空选中不占纸面高度 -->
           <div class="bulkbar mt-4" id="q-bulk" hidden>
@@ -942,6 +959,25 @@
   </div>
 </div>
 
+<!-- ================= 筛选弹层（窄屏：底部弹层；复用 .drawer，不另造弹层） ================= -->
+<div class="drawer-scrim" id="q-filter-scrim" hidden></div>
+<aside class="drawer" id="q-filter-drawer" role="dialog" aria-modal="true" aria-labelledby="q-filter-title" hidden>
+  <div class="drawer-head">
+    <h2 class="drawer-title" id="q-filter-title">筛选</h2>
+    <button class="icon-btn" type="button" id="q-filter-close" aria-label="关闭筛选">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body" id="q-filter-body">
+    <p class="hint">窄屏把章节、标签、难度与已归档收在这里；桌面端它们平铺在工具条上。</p>
+  </div>
+  <div class="drawer-foot">
+    <button class="btn btn-quiet" type="button" id="q-filter-clear">清除全部</button>
+    <span class="spacer"></span>
+    <button class="btn btn-primary" type="button" id="q-filter-done">看结果</button>
+  </div>
+</aside>
+
 <!-- ================= 底部导航（≤768）================= -->
 <nav class="bottomnav" aria-label="底部导航">
   <button class="bn-item" type="button">
@@ -958,9 +994,6 @@
   </button>
   <button class="bn-item" type="button">
     <svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>资料
-  </button>
-  <button class="bn-item" type="button">
-    <svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg>更多
   </button>
 </nav>
 
@@ -1645,9 +1678,12 @@
     var live = S.banks({ archived: false });
     var badge = $('#nav-bank-count');
     if (badge) { badge.textContent = String(live.length); badge.hidden = live.length === 0; }
-    $('#nav-review-count').textContent = String(S.reviewQueue().length);
+    /* 侧栏「复习」角标与「今日待复习」必须和 nav.js / 题库页同一口径：
+       CR-05 可执行复习集合。用 reviewQueue().length 会把已斩杀、未到期、
+       归档题库的行一起算进去，同一标签在两页显示不同的数。 */
+    $('#nav-review-count').textContent = String(S.executableReview().length);
     $('#nav-note-count').textContent = String(S.notes().length);
-    $('#side-due').textContent = String(S.reviewQueue().length);
+    $('#side-due').textContent = String(S.executableReview().length);
     $('#side-sessions').textContent = String(S.sessions().length);
   }
 
@@ -1813,6 +1849,7 @@
     /* 没有勾选时收起批量条：空条会把纸面撑高一截，且与行内操作重复同一批动作 */
     $('#q-bulk').hidden = total === 0;
     $('#q-shown').textContent = selVis + ' / ' + vis.length;
+    renderAppliedFilters();
     var all = $('#q-select-all');
     if (vis.length === 0) { all.checked = false; all.indeterminate = false; }
     else { all.checked = selVis === vis.length; all.indeterminate = selVis > 0 && selVis < vis.length; }
@@ -2615,6 +2652,109 @@
   $('#q-diff').addEventListener('change', function () { st.diff = this.value; st.page = 1; saveView(); renderQuestions(); });
   $('#q-sort').addEventListener('change', function () { st.sort = this.value; saveView(); renderQuestions(); });
   $('#q-show-archived').addEventListener('change', function () { st.showArchived = this.checked; st.page = 1; saveView(); renderQuestions(); });
+
+  /* ---------- 手机端筛选：高级筛选项组在工具条与底部弹层之间搬家 ----------
+     桌面端保持平铺（不破坏桌面体验）；≤640 收进 .drawer 的底部弹层变体，
+     与产品既有抽屉同一套开合方式。控件只有一个实例，没有重复 ID。 */
+  var filterAdv = $('#q-adv');
+  var filterBar = filterAdv ? filterAdv.parentNode : null;
+  var filterSlot = $('#q-filter-body');
+  var filterDrawer = $('#q-filter-drawer');
+  var filterScrim = $('#q-filter-scrim');
+  var filterBtn = $('#q-filter-btn');
+  var mqNarrow = window.matchMedia('(max-width: 640px)');
+  function layoutFilters() {
+    if (!filterAdv || !filterSlot) return;
+    var wantSheet = mqNarrow.matches;
+    var inSheet = filterAdv.parentNode === filterSlot;
+    if (wantSheet && !inSheet) filterSlot.appendChild(filterAdv);
+    else if (!wantSheet && inSheet && filterBar) {
+      var anchor = $('#q-sort');
+      if (anchor) filterBar.insertBefore(filterAdv, anchor);
+      else filterBar.appendChild(filterAdv);
+    }
+  }
+  function openFilter() {
+    if (!filterDrawer) return;
+    layoutFilters();
+    filterDrawer.hidden = false;
+    if (filterScrim) filterScrim.hidden = false;
+    filterBtn.setAttribute('aria-expanded', 'true');
+    var first = filterDrawer.querySelector('.drawer-body select, .drawer-body input');
+    if (first) first.focus();
+  }
+  function closeFilter() {
+    if (!filterDrawer) return;
+    filterDrawer.hidden = true;
+    if (filterScrim) filterScrim.hidden = true;
+    filterBtn.setAttribute('aria-expanded', 'false');
+    filterBtn.focus();
+  }
+  if (filterBtn) {
+    filterBtn.addEventListener('click', function () {
+      if (filterDrawer.hidden) openFilter(); else closeFilter();
+    });
+  }
+  if ($('#q-filter-close')) $('#q-filter-close').addEventListener('click', closeFilter);
+  if ($('#q-filter-done')) $('#q-filter-done').addEventListener('click', closeFilter);
+  if (filterScrim) filterScrim.addEventListener('click', closeFilter);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && filterDrawer && !filterDrawer.hidden) closeFilter();
+  });
+  if (mqNarrow.addEventListener) mqNarrow.addEventListener('change', layoutFilters);
+  else if (mqNarrow.addListener) mqNarrow.addListener(layoutFilters);
+  layoutFilters();
+
+  /* ---------- 已应用的筛选条件：逐项可移除，一键清除 ----------
+     条件收窄时结果就地更新、不翻页（与学习档案同一立场）；
+     这里只负责把「现在生效的条件」说清楚。 */
+  var FILTER_DEFS = [
+    { key: 'type', label: '题型', off: '全部题型' },
+    { key: 'chapter', label: '章节', off: '全部章节' },
+    { key: 'tag', label: '标签', off: '全部标签' },
+    { key: 'diff', label: '难度', off: '全部难度' }
+  ];
+  function renderAppliedFilters() {
+    var host = $('#q-applied');
+    if (!host) return;
+    var items = [];
+    FILTER_DEFS.forEach(function (d) {
+      if (st[d.key] && st[d.key] !== d.off) items.push({ key: d.key, label: d.label, value: st[d.key] });
+    });
+    if (st.showArchived) items.push({ key: 'showArchived', label: '范围', value: '含已归档' });
+    host.hidden = items.length === 0;
+    host.innerHTML = items.map(function (it) {
+      return '<button type="button" class="chip" data-clear="' + it.key + '">' +
+        '<span>' + it.label + '：' + esc(it.value) + '</span>' +
+        '<svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>' +
+        '<span class="vh">移除这个条件</span></button>';
+    }).join('') + (items.length > 1
+      ? '<button type="button" class="chip" data-clear="all">清除全部</button>' : '');
+    Array.prototype.forEach.call(host.querySelectorAll('[data-clear]'), function (b) {
+      b.addEventListener('click', function () {
+        var k = b.getAttribute('data-clear');
+        if (k === 'all') {
+          FILTER_DEFS.forEach(function (d) { st[d.key] = d.off; });
+          st.showArchived = false;
+        } else if (k === 'showArchived') st.showArchived = false;
+        else {
+          var def = FILTER_DEFS.filter(function (d) { return d.key === k; })[0];
+          st[k] = def ? def.off : '';
+        }
+        st.page = 1;
+        saveView(); renderAll();
+        b.focus();
+      });
+    });
+  }
+  if ($('#q-filter-clear')) {
+    $('#q-filter-clear').addEventListener('click', function () {
+      FILTER_DEFS.forEach(function (d) { st[d.key] = d.off; });
+      st.showArchived = false;
+      st.page = 1;
+      saveView(); renderAll();
+    });
+  }
   $('#q-pagesize').addEventListener('change', function () { st.pageSize = parseInt(this.value, 10) || 25; st.page = 1; saveView(); renderQuestions(); });
   $('#q-bulk-chapter').addEventListener('change', function () { st.bulkChapter = this.value; });
   $('#q-bulk-target').addEventListener('change', function () { st.bulkTarget = this.value; });

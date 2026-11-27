@@ -75,7 +75,7 @@
 .account-name{  font-size: var(--text-md); color: var(--ink);  }
 .account-role{  font-size: var(--text-xs); color: var(--ink-3);  }
 .field-row{  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;  }
-/* ---- 保存状态：已保存 / 保存中 / 保存失败（可重试）---- */
+/* ---- 保存状态：保存中 / 已在本机保存 / 保存失败（带原因与重试）---- */
   .save-state{
     display: inline-flex; align-items: center; gap: var(--sp-1);
     font-size: var(--text-xs); line-height: var(--text-xs-lh); color: var(--ink-3);  }
@@ -638,7 +638,7 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
                 <div class="od-grid g2 gap-4">
                   <label class="field">
                     <span class="label">服务类型</span>
-                    <select class="select" id="ai-provider" data-autosave>
+                    <select class="select" id="ai-provider" data-autosave data-key="aiProvider" data-validate="none">
                       <option selected>兼容 OpenAI 接口</option>
                       <option>本地 Ollama</option>
                       <option>自建网关 / 内网推理</option>
@@ -647,17 +647,17 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
                   </label>
                   <label class="field">
                     <span class="label">模型</span>
-                    <input class="input" type="text" placeholder="例如：gpt-4o-mini" data-autosave>
+                    <input class="input" type="text" id="ai-model" placeholder="例如：gpt-4o-mini" data-autosave data-key="aiModel" data-validate="none">
                     <span class="hint">留空则使用实例默认值。</span>
                   </label>
                   <label class="field">
                     <span class="label">接口地址</span>
-                    <input class="input" type="text" id="ai-base" placeholder="https://api.openai.com/v1" data-autosave>
+                    <input class="input" type="text" id="ai-base" placeholder="https://api.openai.com/v1" data-autosave data-key="aiBase" data-validate="url">
                     <span class="hint">留空则使用实例默认值。填了地址就按这个地址走，不会被换成实例默认。</span>
                   </label>
                   <label class="field">
                     <span class="label">API Key</span>
-                    <input class="input" type="password" id="ai-key" placeholder="已保存的 Key 不回显；输入新值即替换" data-autosave>
+                    <input class="input" type="password" id="ai-key" placeholder="已保存的 Key 不回显；输入新值即替换" data-autosave data-key="aiKey" data-secret data-validate="none">
                     <span class="hint" id="ai-key-hint">只以密文落库；输入框里永远是你要写入的新值。</span>
                   </label>
                 </div>
@@ -702,7 +702,7 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
                 <div class="od-grid g2 gap-4">
                   <label class="field">
                     <span class="label">检索方式</span>
-                    <select class="select" id="net-mode" data-autosave>
+                    <select class="select" id="net-mode" data-autosave data-key="netMode" data-validate="none">
                       <option value="on" selected>联网检索</option>
                       <option value="off">关闭联网</option>
                     </select>
@@ -710,12 +710,12 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
                   </label>
                   <label class="field" data-net-only>
                     <span class="label">检索接口</span>
-                    <input class="input" type="text" placeholder="http://localhost:8000/v1/search" data-autosave>
+                    <input class="input" type="text" id="net-base" placeholder="http://localhost:8000/v1/search" data-autosave data-key="netBase" data-validate="url">
                     <span class="hint">留空则使用实例默认值。</span>
                   </label>
                   <label class="field" data-net-only>
                     <span class="label">检索 Key</span>
-                    <input class="input" type="password" placeholder="已保存的 Key 不回显；输入新值即替换" data-autosave>
+                    <input class="input" type="password" id="net-key" placeholder="已保存的 Key 不回显；输入新值即替换" data-autosave data-key="netKey" data-secret data-validate="none">
                     <span class="hint">可替换，也可清除。</span>
                   </label>
                 </div>
@@ -1422,15 +1422,13 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
     var off = netMode.value === 'off';
     document.querySelectorAll('[data-net-only]').forEach(function (f) { f.hidden = off; });
     var state = document.getElementById('net-state');
-    if (state) state.textContent = off ? '已关闭联网' : '已保存';
+    if (state) state.textContent = off ? '已关闭联网' : '已在本机保存';
     syncEffective();
   }
   if (netMode) {
     netMode.value = (store && store.settings().online === false) ? 'off' : 'on';
-    netMode.addEventListener('change', function () {
-      syncNet();
-      if (store) store.setSetting('online', netMode.value === 'on');
-    });
+    /* 只做界面联动；落库交给下面按字段声明的自动保存，避免同一个值写两遍 */
+    netMode.addEventListener('change', function () { syncNet(); });
     syncNet();
   }
 
@@ -1476,9 +1474,19 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
     return !/^https?:\/\/\S+$/i.test(v.trim());
   }
   document.querySelectorAll('[data-autosave]').forEach(function (el) {
+    /* 每个字段真的读回已保存值。原来是「只泼一个已保存 toast」——界面说保存了，
+       数据层没动，刷新就回到默认值，等于虚假保存反馈。 */
+    var key = el.getAttribute('data-key');
+    if (key) {
+      var saved = store.settings()[key];
+      if (saved != null && !el._restored) { el.value = String(saved); el._restored = true; }
+    }
     el.addEventListener('change', function () {
       var raw = (el.value || '').trim();
-      if (badUrl(raw)) {
+      /* 只有标了 data-validate="url" 的字段才做地址校验。原来对所有字段一律校验，
+         模型名、供应商这类普通文本全被判成「保存失败」——真按那一套跑，
+         一个非 URL 值都存不进去。 */
+      if (el.getAttribute('data-validate') === 'url' && badUrl(raw)) {
         paintSave(el, 'bad');
         window.eeToast('保存失败：接口地址需要以 http:// 或 https:// 开头');
         return;
@@ -1486,6 +1494,12 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
       paintSave(el, 'busy');
       clearTimeout(el._saveTimer);
       el._saveTimer = setTimeout(function () {
+        /* 落库：写进共享 state 并广播，刷新与其它屏都能读到同一个值。
+           密码类字段（data-secret）只记录「已配置」，不回显原文。 */
+        if (key) {
+          var v = el.hasAttribute('data-secret') ? (raw ? '已配置' : '') : raw;
+          store.setSetting(key, v);
+        }
         paintSave(el, 'ok');
         window.eeToast('已保存');
         syncEffective();

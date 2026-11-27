@@ -47,8 +47,9 @@
 
 - 侧栏 `.sidebar`：品牌区（`.side-brand` → `.brand-mark`「易」+ `.brand-text`）+ 分组标签「学习」+ `.side-nav` 五项（今天/题库/复习/模考/资料，当前项 `aria-current="page"` 与 `.is-active`）+ `.side-study` 学习状态块 + `.side-foot`（设置）。≤1024 CSS 自动收成仅图标。
 - 顶栏 `.topbar`：`.crumb` 面包屑（父级/当前，父级为 `button.link`）+ spacer + 搜索/主题/语言 `.icon-btn` + `.user-mini` 头像按钮。
-- 移动顶 `.mobile-top`：返回 `.page-back` 或 `.brand-mark` + `.mt-title` + 搜索 + 头像。
-- 底部导 `.bottomnav`：6 项（今天/题库/复习/模考/资料/更多），当前项 `.is-active`。
+- 移动顶 `.mobile-top`：返回 `.page-back` 或 `.brand-mark` + `.mt-title` + 搜索 + `.user-mini` 头像按钮（`data-menu-trigger` + `.menu-anchor` 账户菜单，全产品同一形态：可点击、有可访问名称「账户菜单」）。
+- 底部导 `.bottomnav`：5 项（今天/题库/复习/模考/资料），当前项 `.is-active`。**没有第六格**——原「更多」是只开不动的死按钮，已删除。
+- **「设置」在手机端的唯一入口是账户菜单**（移动顶栏与桌面顶栏的头像按钮）：侧栏在 ≤768 整块隐藏，账户菜单里必须有「设置」项。桌面端侧栏 `.side-foot` 仍保留「设置」。
 - **面包屑必须表达真实层级**：`题库 / 题库名 / 第 12 题`；`题库 / 设置` 这种与页签重复的说明不要。
 - 全屏 runner（练习/模考）不用 `.app-shell`，用 `.focus-shell` 结构（见 ee.css §12）。
 

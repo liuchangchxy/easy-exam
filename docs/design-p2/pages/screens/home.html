@@ -155,7 +155,7 @@
     <header class="topbar">
       <div class="crumb"><span class="here">今天</span></div>
       <span class="spacer"></span>
-      <button type="button" class="icon-btn" title="搜索与跳转" data-ee-shell="search" aria-label="搜索与跳转">
+      <button type="button" class="icon-btn" title="快速跳转" data-ee-shell="search" aria-label="快速跳转">
         <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
       </button>
       <button data-ee-shell="theme" type="button" class="icon-btn" title="切换明暗" aria-label="切换明暗">
@@ -164,7 +164,7 @@
       <button type="button" class="icon-btn" title="切换语言" data-ee-shell="lang" aria-label="切换语言">
         <svg class="od-icon" aria-hidden="true"><use href="#i-globe"/></svg>
       </button>
-      <button type="button" class="user-mini" title="账户菜单" aria-label="账户菜单">A</button>
+      <button type="button" class="user-mini" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单" title="账户菜单">A</button>
     </header>
 
     <!-- ============ 移动顶栏 ============ -->
@@ -173,10 +173,10 @@
         <svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>
       </button>
       <span class="mt-title">今天</span>
-      <button type="button" class="icon-btn" title="搜索与跳转" data-ee-shell="search" aria-label="搜索与跳转">
+      <button type="button" class="icon-btn" title="快速跳转" data-ee-shell="search" aria-label="快速跳转">
         <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
       </button>
-      <button type="button" class="user-mini" title="账户菜单" aria-label="账户菜单">A</button>
+      <button type="button" class="user-mini" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单" title="账户菜单">A</button>
     </header>
 
     <!-- ============ 主体 ============ -->
@@ -434,9 +434,6 @@
   </button>
   <button type="button" class="bn-item">
     <svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg><span data-i18n="shell.nav.notes">资料</span>
-  </button>
-  <button type="button" class="bn-item">
-    <svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg><span data-i18n="shell.nav.more">更多</span>
   </button>
 </nav>
 
@@ -697,7 +694,10 @@ window.EEHome = (function () {
   function practiceCount(bankId) { return Math.max(0, contentCount(bankId) - killedInBank(bankId)); }
   function studiedInBank(bankId) { return S.reviewQueue().filter(function (r) { return r.bankId === bankId; }).length; }
   function bankName(id) { var b = S.bank(id); return b ? b.name : '未知题库'; }
-  function dueRows() { return S.reviewQueue().filter(function (r) { return r.reasons.indexOf('due') > -1 && r.reasons.indexOf('killed') < 0; }); }
+  /* 到期只看 due_at，不看 reasons 里有没有 'due'：答完一次评级后 due_at 会被推到未来，
+     而 'due' 标签还留在原处——按标签算，今天页会一直显示一批其实已经排到期外的题。
+     这里直接调 store 的单一判定函数，和侧栏角标、复习页、题库页是同一个集合。 */
+  function dueRows() { return S.executableReview(); }
   function mistakeRows() { return S.reviewQueue().filter(function (r) { return r.reasons.indexOf('mistakes') > -1 && r.reasons.indexOf('killed') < 0; }); }
   function weakRows() { return S.reviewQueue().filter(function (r) { return r.reasons.indexOf('weak') > -1 && r.reasons.indexOf('killed') < 0; }); }
   function killedRows() { return S.reviewQueue().filter(function (r) { return r.reasons.indexOf('killed') > -1; }); }

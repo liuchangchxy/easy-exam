@@ -13,6 +13,8 @@
    }
 .ee-toolbar .select{  flex: none; width: 132px;  }
 .ee-toolbar .search-box{  flex: 1 1 auto; max-width: 320px; min-width: 150px;  }
+/* 学习记录：工具条下方的计数与「加载更多」落在同一行 */
+  .lr-foot{  margin-top: var(--sp-4);  }
 .ee-sub{  margin-top: var(--sp-7);  }
 .ee-list{  display: flex; flex-direction: column;  }
 .ee-list > .list-row:first-child{  border-top: 1px solid var(--ink);  }
@@ -126,17 +128,17 @@
         <span class="here">学习档案</span>
       </div>
       <span class="spacer"></span>
-      <button class="icon-btn" type="button" title="搜索与跳转" data-ee-shell="search" aria-label="搜索与跳转"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></button>
+      <button class="icon-btn" type="button" title="快速跳转" data-ee-shell="search" aria-label="快速跳转"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></button>
       <button data-ee-shell="theme" class="icon-btn" type="button" title="切换明暗" aria-label="切换明暗"><svg class="od-icon" aria-hidden="true"><use href="#i-moon"/></svg></button>
       <button class="icon-btn" type="button" title="切换语言" data-ee-shell="lang" aria-label="切换语言"><svg class="od-icon" aria-hidden="true"><use href="#i-globe"/></svg></button>
-      <button class="user-mini" type="button" title="账户菜单" aria-label="账户菜单">A</button>
+      <button type="button" class="user-mini" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单" title="账户菜单">A</button>
     </header>
 
     <header class="mobile-top">
       <a class="page-back" href="review.html"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>返回</a>
       <span class="mt-title">学习档案</span>
-      <button class="icon-btn" type="button" title="搜索与跳转" data-ee-shell="search" aria-label="搜索与跳转"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></button>
-      <button class="user-mini" type="button" title="账户菜单" aria-label="账户菜单">A</button>
+      <button class="icon-btn" type="button" title="快速跳转" data-ee-shell="search" aria-label="快速跳转"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></button>
+      <button type="button" class="user-mini" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单" title="账户菜单">A</button>
     </header>
 
     <main class="content has-bottomnav" id="main-content">
@@ -294,11 +296,21 @@
           <h2 class="section-title" id="lr-title">学习记录</h2>
           <span class="section-note">报告落库后永久不可变，按时间倒序回看</span>
         </div>
+
+        <!-- 定位手段：日期 / 题库 / 学习模式，与「提分推荐」同一套工具条 -->
+        <div class="ee-toolbar" role="group" aria-label="学习记录筛选">
+          <select class="select" aria-label="日期" id="lr-date"></select>
+          <select class="select" aria-label="题库" id="lr-bank"></select>
+          <select class="select" aria-label="学习模式" id="lr-mode"></select>
+          <span class="od-spacer"></span>
+          <span class="panel-sub" id="lr-count" role="status" tabindex="-1">已显示 0 / 共 0 条</span>
+        </div>
+
         <div class="dtable-wrap" id="lr-table-wrap">
           <table class="dtable">
             <thead>
               <tr>
-                <th>时间</th><th>模式</th><th>题库</th><th>题数</th><th>得分</th><th>正确率</th><th class="col-actions">报告</th>
+                <th>时间</th><th>模式</th><th>题库</th><th>题数</th><th>得分</th><th>得分率</th><th>已答正确率</th><th class="col-actions">报告</th>
               </tr>
             </thead>
             <tbody id="lr-body"></tbody>
@@ -306,7 +318,20 @@
         </div>
         <!-- 手机：一场一条的专用列表 -->
         <div class="ee-list" id="lr-mobile"></div>
+        <div class="od-cluster lr-foot" id="lr-foot" hidden>
+          <button class="btn btn-sm btn-quiet" type="button" id="lr-more">加载更多</button>
+          <span class="hint" id="lr-foot-note"></span>
+        </div>
         <p class="ee-note">报告按交卷时的题目版本判分，永久不可变；逐题明细里能看到当时的题目与我的作答，也可以用「查看该题当前版本」看题目现在长什么样。</p>
+        <details class="rep-help ee-mt-4">
+          <summary>
+            <svg class="od-icon rep-help-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 9.5 12 15l5.5-5.5"/></svg>
+            得分率与已答正确率的分母不一样，点此看口径
+          </summary>
+          <div class="rep-help-body">
+            <p>得分率的分母是全场客观题满分：未答的客观题按 0 分计入得分，但仍占满分。已答正确率只统计你实际答过的客观题。两者分母不同，数值不同是正常结果。</p>
+          </div>
+        </details>
       </section>
 
       <!-- ============ 状态格（规格） ============ -->
@@ -429,7 +454,6 @@
   <button class="bn-item is-active" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg>复习</button>
   <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>模考</button>
   <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>资料</button>
-  <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg>更多</button>
 </nav>
 
 <!-- ============ 浮层：调整计划参数 ============ -->
@@ -530,10 +554,23 @@
    · 可执行复习集合与复习页、侧栏角标同一口径：到期 ∧ 未斩杀 ∧ 未归档 ∧ 有访问权
    · 覆盖率不含斩杀与归档；没有数据时显示「暂无数据」，不用 0% / 100% 填充
    · 推荐是纯确定性规则，不依赖 AI；排除斩杀与归档题
+   · 学习记录按日期 / 题库 / 学习模式收窄定位，一屏先给一页，剩下「加载更多」；
+     筛选变化回到第一屏（条件收窄时不翻页）；「回看」直达那一份报告，不停在列表页
    ========================================================================== */
 window.EEdiag = (function () {
   var S = window.eeStore;
   var state = { window: 14, ratio: 50, type: '', tag: '', limit: 10, diff: '不限难度', onNew: true, onWeak: true, onDue: true };
+  /* 学习记录：一屏先给 LR_PAGE 条，剩下的靠「加载更多」；筛选变化不翻页（见 renderRecords） */
+  var LR_PAGE = 6;
+  var LR_RANGES = [
+    { v: 'all', t: '全部时间' }, { v: '7', t: '近 7 天' },
+    { v: '30', t: '近 30 天' }, { v: '90', t: '近 90 天' }, { v: 'older', t: '更早' }
+  ];
+  var LR_MODES = [
+    { v: 'all', t: '全部模式' }, { v: 'exam', t: '模考' },
+    { v: 'practice', t: '练习' }, { v: 'review', t: '复习' }, { v: 'live', t: '进行中' }
+  ];
+  state.lrDate = 'all'; state.lrBank = 'all'; state.lrMode = 'all'; state.lrShown = LR_PAGE;
 
   /* ---- 样本载荷：与复习 / 练习同一批软考真题，档案只额外带统计字段 ---- */
   var QUESTIONS = [
@@ -565,27 +602,16 @@ window.EEdiag = (function () {
     return null;
   }
 
-  /* ---- 到期与集合口径（与复习页同一把尺子） ---- */
-  function dueTime(row) {
-    var d = new Date(String(row.due_at || '').replace(' ', 'T'));
-    return isNaN(d.getTime()) ? null : d.getTime();
-  }
-  function isDueNow(row) { var t = dueTime(row); return t != null && t <= Date.now(); }
-  function bankReachable(bankId) { var b = S.bank(bankId); return !!b && !b.archived; }
-  function executableRows() {
-    return S.reviewQueue().filter(function (r) {
-      if (r.killed_at || r.reasons.indexOf('killed') > -1) return false;
-      if (!isDueNow(r)) return false;
-      return bankReachable(r.bankId);
-    });
-  }
-  function scheduledRows() {
-    return S.reviewQueue().filter(function (r) {
-      if (r.killed_at || r.reasons.indexOf('killed') > -1) return false;
-      if (isDueNow(r)) return false;
-      return bankReachable(r.bankId) && dueTime(r) != null;
-    });
-  }
+  /* ---- 到期与集合口径：不在这里重写，直接调 store 的单一判定（CR-05） ----
+     本页原来自写了一遍 dueTime / isDueNow / bankReachable / executableRows，
+     注释写着「与复习页同一把尺子」，实际却是第二把尺子：store 改了这里不会跟着改。
+     侧栏角标、复习页待复习视图、题库页计数都走 S.executableReview()，本页必须同源。 */
+  function dueTime(row) { return S.reviewDueAt(row); }
+  function isDueNow(row) { return S.reviewDue(row); }
+  function executableRows() { return S.executableReview(); }
+  function scheduledRows() { return S.scheduledReview(); }
+  /* 题库可达：判据在 store（题库存在且未归档），本页不再各写一份 */
+  function bankReachable(bankId) { return S.reviewReachable(bankId); }
   function mistakeRows() { return S.reviewQueue().filter(function (r) { return r.reasons.indexOf('mistakes') > -1 && r.reasons.indexOf('killed') < 0; }); }
   function weakRows() { return S.reviewQueue().filter(function (r) { return r.reasons.indexOf('weak') > -1 && r.reasons.indexOf('killed') < 0; }); }
   function killedRows() { return S.reviewQueue().filter(function (r) { return r.reasons.indexOf('killed') > -1; }); }
@@ -874,61 +900,129 @@ window.EEdiag = (function () {
   }
 
   /* ---------- 学习记录：桌面表格 + 手机专用列表 ---------- */
+  var MODE_NAMES = { exam: '模考', practice: '练习', review: '复习' };
+  /* 两个率与报告页同一把尺子（CR-06）：得分率分母是全场客观题满分（含未作答），
+     已答正确率分母只含已答客观题。缺分母时显示「暂无数据」，不用 0% / 100% 填充。 */
+  function rateOf(r) {
+    if (r.rate != null) return r.rate + '%';                 /* 模考报告：落库时已算好得分率 */
+    if (r.score != null) return Math.round(r.score) + '%';   /* 练习报告：score 本身就是得分率 */
+    return '—';
+  }
+  function accOf(r) {
+    if (r.accObj != null) return r.accObj + '%';
+    if (r.answeredObj) return Math.round(r.answeredObjCorrect / r.answeredObj * 100) + '%';
+    return '暂无数据';
+  }
+  function scoreOf(r) {
+    var got = r.objectiveScore != null ? r.objectiveScore : r.score;
+    var full = r.objectiveFull != null ? r.objectiveFull : r.full;
+    if (got == null || full == null) return '—';
+    return (Math.round(got * 10) / 10) + ' / ' + full;
+  }
   function recordRows() {
     var rows = [];
     S.reports().forEach(function (r) {
       rows.push({
-        at: r.at, mode: r.kind === 'exam' ? '模考' : '练习', bank: bankName(r.bankId), total: r.total,
-        score: r.score, acc: r.total ? Math.round(r.correct / r.total * 100) + '%' : '—',
-        id: r.id, kind: r.kind || 'practice'
+        at: r.at, kind: r.kind || 'practice', bank: bankName(r.bankId), bankId: r.bankId, total: r.total,
+        score: scoreOf(r), rate: rateOf(r), acc: accOf(r), id: r.id, live: false
       });
     });
     S.sessions().forEach(function (s) {
       rows.push({
-        at: s.updatedAt || s.startedAt, mode: '进行中 · ' + (s.mode || '顺序练习'), bank: bankName(s.bankId),
-        total: s.total, score: '—', acc: '—', id: s.id, kind: s.kind
+        at: s.updatedAt || s.startedAt, kind: s.kind, mode: '进行中 · ' + (s.mode || '顺序练习'),
+        bank: bankName(s.bankId), bankId: s.bankId,
+        total: s.total, score: '—', rate: '—', acc: '—', id: s.id, live: true
       });
     });
+    rows.forEach(function (r) { if (!r.mode) r.mode = MODE_NAMES[r.kind] || '练习'; });
     rows.sort(function (a, b) { return String(b.at).localeCompare(String(a.at)); });
     return rows;
   }
+  /* 定位手段：日期范围 + 题库 + 学习模式，与模考成绩报告同一套筛选语义 */
+  function inRecordRange(r) {
+    if (state.lrDate === 'all') return true;
+    var t = new Date(String(r.at || '').replace(' ', 'T')).getTime();
+    if (isNaN(t)) return false;
+    var days = (Date.now() - t) / 86400000;
+    if (state.lrDate === 'older') return days > 90;
+    return days <= parseInt(state.lrDate, 10);
+  }
+  function inRecordMode(r) {
+    if (state.lrMode === 'all') return true;
+    if (state.lrMode === 'live') return !!r.live;
+    return !r.live && r.kind === state.lrMode;
+  }
+  function filteredRecords() {
+    return recordRows().filter(function (r) {
+      if (!inRecordRange(r)) return false;
+      if (state.lrBank !== 'all' && r.bankId !== state.lrBank) return false;
+      if (!inRecordMode(r)) return false;
+      return true;
+    });
+  }
   function recordHref(r) {
-    var live = r.mode.indexOf('进行中') === 0;
-    if (live) return (r.kind === 'exam' ? 'exam.html' : 'practice.html') + '?sid=' + encodeURIComponent(r.id);
+    if (r.live) return (r.kind === 'exam' ? 'exam.html' : 'practice.html') + '?sid=' + encodeURIComponent(r.id);
     return r.kind === 'exam'
       ? 'exams.html?report=' + encodeURIComponent(r.id)
       : 'practice.html?rid=' + encodeURIComponent(r.id);
   }
   function renderRecords() {
-    var rows = recordRows();
-    var empty = '<div class="dtable-empty">还没有已交卷的记录。做一组练习或一场模考，报告会落库并在这里按时间倒序回看。</div>';
+    var all = recordRows();
+    var list = filteredRecords();
+    /* 条件收窄时不翻页：筛选一变就回到第一屏，不保留上一次加载出来的页 */
+    var shown = Math.min(state.lrShown, list.length);
+    var rows = list.slice(0, shown);
+    var emptyText = all.length
+      ? '没有符合当前筛选的学习记录。放宽日期、换一个题库，或把模式切回「全部模式」。'
+      : '还没有已交卷的记录。做一组练习或一场模考，报告会落库并在这里按时间倒序回看。';
+
     document.getElementById('lr-body').innerHTML = rows.length ? rows.map(function (r) {
-      var live = r.mode.indexOf('进行中') === 0;
       return '<tr>' +
         '<td data-label="时间" class="mono">' + esc(r.at) + '</td>' +
         '<td data-label="模式">' + esc(r.mode) + '</td>' +
         '<td data-label="题库">' + esc(r.bank) + '</td>' +
         '<td data-label="题数" class="num">' + r.total + '</td>' +
         '<td data-label="得分" class="num">' + esc(r.score) + '</td>' +
-        '<td data-label="正确率" class="num">' + esc(r.acc) + '</td>' +
-        '<td class="col-actions" data-label="报告"><a class="btn btn-sm btn-quiet" href="' + recordHref(r) + '">' + (live ? '继续' : '回看') + '</a></td>' +
+        '<td data-label="得分率" class="num">' + esc(r.rate) + '</td>' +
+        '<td data-label="已答正确率" class="num">' + esc(r.acc) + '</td>' +
+        '<td class="col-actions" data-label="报告"><a class="btn btn-sm btn-quiet" href="' + recordHref(r) + '">' + (r.live ? '继续' : '回看') + '</a></td>' +
         '</tr>';
-    }).join('') : '<tr><td colspan="7">' + empty + '</td></tr>';
+    }).join('') : '<tr><td colspan="8"><div class="dtable-empty">' + esc(emptyText) + '</div></td></tr>';
 
     document.getElementById('lr-mobile').innerHTML = rows.length ? rows.map(function (r) {
-      var live = r.mode.indexOf('进行中') === 0;
       return '<div class="list-row ee-row-top">' +
         '<span class="list-main"><span class="list-title">' + esc(r.mode) + '</span>' +
         '<span class="list-meta"><span class="mono">' + esc(r.at) + '</span><span>' + esc(r.bank) + '</span></span>' +
         '<span class="list-meta"><span>' + r.total + ' 题</span>' +
-        (live ? '<span>得分待交卷</span>' : '<span>得分 ' + esc(r.score) + '</span><span>正确率 ' + esc(r.acc) + '</span>') +
+        (r.live ? '<span>得分待交卷</span>' : '<span>得分 ' + esc(r.score) + '</span><span>得分率 ' + esc(r.rate) + '</span><span>已答正确率 ' + esc(r.acc) + '</span>') +
         '</span></span>' +
-        '<span class="list-side"><a class="btn btn-sm btn-quiet" href="' + recordHref(r) + '">' + (live ? '继续' : '回看') + '</a></span>' +
+        '<span class="list-side"><a class="btn btn-sm btn-quiet" href="' + recordHref(r) + '">' + (r.live ? '继续' : '回看') + '</a></span>' +
         '</div>';
     }).join('') : '<div class="empty"><div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-chart"/></svg></div>' +
-      '<div class="empty-title">还没有已交卷的记录</div>' +
-      '<div class="empty-desc">做一组练习或一场模考，报告会落库并在这里按时间倒序回看。</div>' +
-      '<div class="empty-actions"><a class="btn btn-sm btn-primary" href="home.html">去今天页开始练习</a></div></div>';
+      '<div class="empty-title">' + (all.length ? '没有符合条件的学习记录' : '还没有已交卷的记录') + '</div>' +
+      '<div class="empty-desc">' + esc(emptyText) + '</div>' +
+      (all.length
+        ? '<div class="empty-actions"><button class="btn btn-sm btn-primary" type="button" onclick="EEdiag.resetRecords()">重置筛选</button></div>'
+        : '<div class="empty-actions"><a class="btn btn-sm btn-primary" href="home.html">去今天页开始练习</a></div>') + '</div>';
+
+    document.getElementById('lr-count').textContent = '已显示 ' + shown + ' / 共 ' + list.length + ' 条';
+    var foot = document.getElementById('lr-foot');
+    var more = document.getElementById('lr-more');
+    var note = document.getElementById('lr-foot-note');
+    var rest = list.length - shown;
+    foot.hidden = !list.length;
+    more.hidden = rest <= 0;
+    note.textContent = rest > 0
+      ? '还有 ' + rest + ' 条未显示'
+      : (list.length < all.length ? '已显示全部 ' + list.length + ' 条命中记录' : '');
+  }
+  /* 空态里的「重置筛选」与三个下拉是同一组条件，不引入第二份筛选状态 */
+  function resetRecords() {
+    state.lrDate = 'all'; state.lrBank = 'all'; state.lrMode = 'all'; state.lrShown = LR_PAGE;
+    document.getElementById('lr-date').value = 'all';
+    document.getElementById('lr-bank').value = 'all';
+    document.getElementById('lr-mode').value = 'all';
+    renderRecords();
   }
 
   /* ---------- 详情抽屉 ---------- */
@@ -1107,6 +1201,19 @@ window.EEdiag = (function () {
     bankSel.innerHTML = '<option>全部可访问题库</option>' + S.banks({ archived: false }).map(function (b) {
       return '<option>' + esc(b.name) + '</option>';
     }).join('');
+    fillRecordSelects();
+  }
+  /* 学习记录三组筛选：日期 / 题库 / 学习模式，选项来自真实记录，不写死 */
+  function fillRecordSelects() {
+    document.getElementById('lr-date').innerHTML = LR_RANGES.map(function (r) {
+      return '<option value="' + r.v + '">' + r.t + '</option>';
+    }).join('');
+    document.getElementById('lr-bank').innerHTML = '<option value="all">全部题库</option>' + S.banks().map(function (b) {
+      return '<option value="' + esc(b.id) + '">' + esc(b.name) + '</option>';
+    }).join('');
+    document.getElementById('lr-mode').innerHTML = LR_MODES.map(function (m) {
+      return '<option value="' + m.v + '">' + m.t + '</option>';
+    }).join('');
   }
   document.getElementById('window-seg').addEventListener('click', function (e) {
     var b = e.target.closest ? e.target.closest('[data-window]') : null;
@@ -1142,6 +1249,20 @@ window.EEdiag = (function () {
   ['plan-days', 'plan-minutes', 'plan-banks'].forEach(function (id) {
     document.getElementById(id).addEventListener('change', renderPlan);
   });
+  /* 学习记录：筛选一变就回到第一屏（条件收窄时不翻页），「加载更多」只往后追加 */
+  ['lr-date', 'lr-bank', 'lr-mode'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', function (e) {
+      state[id === 'lr-date' ? 'lrDate' : id === 'lr-bank' ? 'lrBank' : 'lrMode'] = e.target.value;
+      state.lrShown = LR_PAGE;
+      renderRecords();
+    });
+  });
+  document.getElementById('lr-more').addEventListener('click', function () {
+    state.lrShown += LR_PAGE;
+    renderRecords();
+    /* 追加后按钮可能消失：焦点移回计数，不停在一个已不存在的控件上 */
+    if (document.getElementById('lr-more').hidden) document.getElementById('lr-count').focus();
+  });
 
   function renderAll() {
     fillSelects();
@@ -1162,7 +1283,7 @@ window.EEdiag = (function () {
   return {
     openDetail: openDetail, closeDetail: closeDetail, startPlan: startPlan, startReco: startReco,
     startOne: startOne, jumpReco: jumpReco, applyPlan: applyPlan, resetReco: resetReco,
-    retry: retry, renderAll: renderAll
+    resetRecords: resetRecords, retry: retry, renderAll: renderAll
   };
 })();
 </script>

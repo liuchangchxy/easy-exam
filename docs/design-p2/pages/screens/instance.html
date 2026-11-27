@@ -164,7 +164,7 @@
         <span class="here">实例管理</span>
       </nav>
       <span class="spacer"></span>
-      <button class="icon-btn" type="button" aria-label="搜索与跳转" title="搜索与跳转" data-ee-shell="search">
+      <button class="icon-btn" type="button" aria-label="快速跳转" title="快速跳转" data-ee-shell="search">
         <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
       </button>
       <button data-ee-shell="theme" class="icon-btn" type="button" aria-label="切换明暗" title="切换明暗">
@@ -176,11 +176,11 @@
       <div class="menu-anchor">
         <button class="user-mini" type="button" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单">A</button>
         <div class="menu" role="menu" hidden>
-          <a class="menu-item" role="menuitem" href="settings.html#account">
-            <svg class="od-icon" aria-hidden="true"><use href="#i-user"/></svg>账户资料
-          </a>
           <a class="menu-item" role="menuitem" href="settings.html">
             <svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>设置
+          </a>
+          <a class="menu-item" role="menuitem" href="settings.html#account">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-user"/></svg>账户资料
           </a>
           <div class="menu-sep" role="separator"></div>
           <button class="menu-item is-danger" type="button" role="menuitem" onclick="eeDialog.open('dlg-logout', this)">
@@ -196,10 +196,10 @@
         <svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>设置
       </a>
       <span class="mt-title">实例管理</span>
-      <button class="icon-btn" type="button" aria-label="搜索与跳转" data-ee-shell="search">
+      <button class="icon-btn" type="button" aria-label="快速跳转" data-ee-shell="search">
         <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
       </button>
-      <span class="user-mini" aria-hidden="true">A</span>
+      <button class="user-mini" type="button" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单">A</button>
     </header>
 
     <!-- ================= 主体 ================= -->
@@ -437,7 +437,7 @@
         <section data-tab-panel="settings" hidden>
           <p class="section-note mb-4">这些设置影响整个实例，不只当前账号。</p>
 
-          <div class="setting-row">
+          <div class="setting-row" id="settings-switch">
             <div class="setting-label">
               <div class="setting-name">允许注册</div>
               <div class="setting-desc">关闭后，新用户无法自行注册；已有用户不受影响。空实例的第一个账号始终放行。</div>
@@ -634,7 +634,7 @@
                   <div class="notice-body">
                     <span class="notice-title">注册开关还没有保存过</span><br>
                     当前按默认值「开放」运行。保存一次后，登录页才会跟着这个值变化。
-                    <span class="notice-actions"><a class="btn btn-sm btn-primary" href="settings.html#instance">去配置</a></span>
+                    <span class="notice-actions"><a class="btn btn-sm btn-primary" href="instance.html#settings-switch">去配置</a></span>
                   </div>
                 </div>
               </div>
@@ -741,9 +741,6 @@
   </button>
   <button class="bn-item" type="button">
     <svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>资料
-  </button>
-  <button class="bn-item" type="button">
-    <svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg>更多
   </button>
 </nav>
 
@@ -1209,6 +1206,15 @@
         goSource(new URLSearchParams(location.search).get('from'));
       });
     });
+    /* 深链 #settings-switch：注册开关在「实例设置」页签里，不在设置页。
+       带锚点进来时直接切到那个页签，否则用户会落在「用户」视图，
+       到处找不到「去配置」要配的那一颗开关。 */
+    (function () {
+      if (location.hash !== '#settings-switch') return;
+      switchTo('settings');
+      var row = document.getElementById('settings-switch');
+      if (row) { row.scrollIntoView({ block: 'center' }); }
+    })();
 
     /* ---------- 权限门：实例角色只由 instanceRole 决定，与题库角色无关（CR-11）----------
        普通用户在设置页看不到实例管理入口（relevant('instance.manage') 为假，入口不渲染）；

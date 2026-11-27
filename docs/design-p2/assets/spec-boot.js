@@ -11,7 +11,7 @@
   if (density === 'compact' || density === 'cozy') document.documentElement.setAttribute('data-density', density);
 
   /* 产品模式：页面作为最终产品被独立打开时（无 ?spec=1），只呈现最终用户内容——
-     设计规格区、状态格、浮层演示与规格工具条由 ee.css §15 隐藏。
+     设计规格区、状态格、浮层演示与规格工具条由 ee.css §18 隐藏。
      规范浏览器 index.html 以 ?spec=1 打开同一批页面，保留规格内容。 */
   if (!q.get('spec')) document.documentElement.setAttribute('data-ee-product', '');
 
@@ -455,7 +455,7 @@
     host.hidden = true;
     host.innerHTML =
       '<div class="cmd-scrim" data-cmd-close></div>' +
-      '<div class="cmd-panel" role="dialog" aria-modal="true" aria-label="' + (t('shell.cmd.title') || '搜索与跳转') + '">' +
+      '<div class="cmd-panel" role="dialog" aria-modal="true" aria-label="' + (t('shell.cmd.title') || '快速跳转') + '">' +
       '<div class="cmd-input-row">' + ico('search', '15px') +
       '<input class="cmd-input" type="text" placeholder="' + (t('shell.cmd.placeholder') || '') + '" aria-label="' + (t('shell.cmd.title') || '') + '">' +
       '<kbd class="cmd-kbd">Esc</kbd></div>' +
@@ -544,6 +544,7 @@
       var instItem = (window.eeStore && !window.eeStore.relevant('instance.manage')) ? '' :
         '<a class="menu-item" role="menuitem" href="instance.html" data-ee-instance-item data-i18n="shell.menu.instance">' + ico('users') + (t('shell.menu.instance') || '实例管理') + '</a>';
       menu.innerHTML =
+        '<a class="menu-item" role="menuitem" href="settings.html" data-i18n="shell.menu.settings">' + ico('settings') + (t('shell.menu.settings') || '设置') + '</a>' +
         '<a class="menu-item" role="menuitem" href="settings.html#account" data-i18n="shell.menu.profile">' + ico('user') + (t('shell.menu.profile') || '账户资料') + '</a>' +
         instItem +
         '<div class="menu-sep" role="separator"></div>' +

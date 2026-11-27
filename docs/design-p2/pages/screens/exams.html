@@ -134,17 +134,17 @@
         <span class="here">模考</span>
       </div>
       <span class="spacer"></span>
-      <button class="icon-btn" type="button" title="搜索与跳转" data-ee-shell="search" aria-label="搜索与跳转"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></button>
+      <button class="icon-btn" type="button" title="快速跳转" data-ee-shell="search" aria-label="快速跳转"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></button>
       <button data-ee-shell="theme" class="icon-btn" type="button" title="切换明暗" aria-label="切换明暗"><svg class="od-icon" aria-hidden="true"><use href="#i-moon"/></svg></button>
       <button class="icon-btn" type="button" title="切换语言" data-ee-shell="lang" aria-label="切换语言"><svg class="od-icon" aria-hidden="true"><use href="#i-globe"/></svg></button>
-      <button class="user-mini" type="button" title="账户菜单" aria-label="账户菜单">A</button>
+      <button type="button" class="user-mini" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单" title="账户菜单">A</button>
     </header>
 
     <header class="mobile-top">
       <button class="page-back" type="button" aria-label="返回"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>返回</button>
       <span class="mt-title">模考</span>
-      <button class="icon-btn" type="button" title="搜索与跳转" data-ee-shell="search" aria-label="搜索与跳转"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></button>
-      <button class="user-mini" type="button" title="账户菜单" aria-label="账户菜单">A</button>
+      <button class="icon-btn" type="button" title="快速跳转" data-ee-shell="search" aria-label="快速跳转"><svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg></button>
+      <button type="button" class="user-mini" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单" title="账户菜单">A</button>
     </header>
 
     <main class="content has-bottomnav" id="main-content">
@@ -205,7 +205,7 @@
           <section class="section ee-sub">
             <div class="section-head">
               <h2 class="section-title">成绩报告</h2>
-              <span class="section-note">报告在交卷时一次性生成，落库后不可变、不重算</span>
+              <span class="section-note">报告按交卷当时的题目与答案保存，之后不会变</span>
             </div>
 
             <!-- 定位手段：时间范围 / 考试档案 / 交卷来源。记录多的时候靠条件收窄，不靠翻页 -->
@@ -244,9 +244,17 @@
             <!-- 手机：一场一张的专用列表，不把 8 列塞进横向滚动 -->
             <div class="ee-list" id="reports-mobile"></div>
 
-            <p class="hint ee-mt-4">
-              考试得分率 = 客观题得分 ÷ 客观题满分（分母含未作答）；已答客观题正确率 = 答对的已答客观题 ÷ 已答客观题（分母只含已作答）。两个率分母不同，不得混用。
-            </p>
+            <!-- 两个率的分母口径：列头已经各写各的分母，完整说明收进按需帮助，
+                 不默认铺开一段演算。 -->
+            <details class="rep-help ee-mt-4">
+              <summary>
+                <svg class="od-icon rep-help-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 9.5 12 15l5.5-5.5"/></svg>
+                两个率的分母不一样，点此看口径
+              </summary>
+              <div class="rep-help-body">
+                <p>考试得分率的分母含未作答：未答的客观题按 0 分计入得分，但仍占满分。已答客观题正确率只统计你实际答过的客观题。两者分母不同，数值不同是正常结果。</p>
+              </div>
+            </details>
           </section>
         </div>
 
@@ -448,7 +456,6 @@
   <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg>复习</button>
   <button class="bn-item is-active" type="button" aria-current="page"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>模考</button>
   <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>资料</button>
-  <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg>更多</button>
 </nav>
 
 <!-- ============ 抽屉：蓝图可视化编辑与版本绑定（FN-303） ============ -->
@@ -1242,7 +1249,7 @@ window.EEexams = (function () {
     /* 与报告详情同一把尺子：早期报告没有已答客观题分母，两边都显示「—」，
        不允许列表行用「答对数 ÷ 客观题总数」凑一个看起来像正确率的数。 */
     var acc = legacy ? '—' : (r.accObj == null ? '暂无数据' : r.accObj + '%');
-    var changed = (r.items || []).filter(function (it) { return it.cur; }).length;
+    var changed = (r.items || []).filter(function (it) { return it.cur && it.cur !== it.ver; }).length;
     return '<tr data-report="' + esc(r.id) + '">' +
       '<td data-label="交卷时间" class="mono">' + esc(r.at || '—') + '</td>' +
       '<td data-label="考试档案">' + esc(r.title) +
@@ -1260,7 +1267,7 @@ window.EEexams = (function () {
      不把 8 列塞进横向滚动里。 */
   function reportCardHtml(r) {
     var legacy = !!r.legacy;
-    var changed = (r.items || []).filter(function (it) { return it.cur; }).length;
+    var changed = (r.items || []).filter(function (it) { return it.cur && it.cur !== it.ver; }).length;
     return '<div class="list-row ee-row-top" data-report="' + esc(r.id) + '">' +
       '<span class="list-main"><span class="list-title ee-paper-title">' + esc(r.title) + '</span>' +
       '<span class="list-meta"><span class="mono">' + esc(r.at || '—') + '</span>' +
@@ -1502,7 +1509,7 @@ window.EEexams = (function () {
     var p = profile(id);
     var n = p.refs.active + p.refs.reports;
     eeToast(n > 0
-      ? '已删除档案；' + p.refs.active + ' 场进行中的考试与 ' + p.refs.reports + ' 份历史报告仍按快照进行、仍可回看'
+      ? '已删除档案；' + p.refs.active + ' 场进行中的考试与 ' + p.refs.reports + ' 份历史报告仍按开考时的题目进行、仍可回看'
       : '已删除档案');
     for (var i = 0; i < PROFILES.length; i++) if (PROFILES[i].id === id) PROFILES.splice(i, 1);
     renderProfiles();
@@ -1738,23 +1745,26 @@ window.EEexams = (function () {
     if (!r) { eeToast('这份报告已经不在了'); return; }
     var legacy = !!r.legacy;
     var items = r.items || [];
-    var changed = items.filter(function (it) { return it.cur; }).length;
+    var changed = items.filter(function (it) { return it.cur && it.cur !== it.ver; }).length;
     document.getElementById('dlg-report-when').textContent = '成绩报告 · ' + (r.at || '本场') + ' 交卷 · ' + viaLabel(r.via);
     document.getElementById('dlg-report-title').textContent = r.title;
     var rate = legacy ? '—' : (r.rate + '%');
     /* 已答客观题正确率的分母是「已答客观题」。早期报告落库时既没记客观题满分，
        也没记已答客观题数，按 CR-25 不重算：列表行与详情都显示「—」，不得一边算一边不算。 */
     var acc = legacy ? '—' : (r.accObj == null ? '暂无数据' : r.accObj + '%');
+    /* 口径说明收进按需帮助：列头 / 统计卡下方已各写各的分母标签，
+       完整口径不再默认铺开，也不做 100 道题的演算。 */
+    var rateHelp = '<details class="rep-help">' +
+      '<summary><svg class="od-icon rep-help-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 9.5 12 15l5.5-5.5"/></svg>两个率的分母不一样，点此看口径</summary>' +
+      '<div class="rep-help-body"><p>考试得分率的分母含未作答：未答的客观题按 0 分计入得分，但仍占满分。已答客观题正确率只统计你实际答过的客观题。两者分母不同，数值不同是正常结果。</p></div>' +
+      '</details>';
     document.getElementById('dlg-report-body').innerHTML =
       '<div class="stat-row">' +
       '<div class="stat"><div class="stat-num">' + (r.score == null ? '待判分' : r.score) + '</div><div class="stat-cap">客观题得分</div></div>' +
-      '<div class="stat"><div class="stat-num">' + (legacy ? '—' : r.full) + '</div><div class="stat-cap">客观题满分（含未作答）</div></div>' +
+      '<div class="stat"><div class="stat-num">' + (legacy ? '—' : r.full) + '</div><div class="stat-cap">客观题满分 · 分母含未作答</div></div>' +
       '<div class="stat"><div class="stat-num">' + rate + '</div><div class="stat-cap">考试得分率<br>得分 ÷ 客观题满分</div></div>' +
-      '<div class="stat"><div class="stat-num">' + acc + '</div><div class="stat-cap">已答客观题正确率<br>答对的已答 ÷ 已答</div></div>' +
-      '</div>' +
-      (legacy
-        ? '<div class="notice info"><svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg><div class="notice-body">这是一份早期交卷的报告：落库时未记录客观题满分口径。报告落库后不可变、不重算，因此满分与两个率显示「—」，这一场也没有逐题明细可回看。</div></div>'
-        : '<div class="notice info"><svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg><div class="notice-body"><span class="notice-title">两个率的分母不同，不得混用</span><br>考试得分率的分母是本场<strong>全部</strong>客观题（未作答按 0 分计入得分，但仍占满分）；已答客观题正确率的分母只是你实际作答过的客观题。例：100 道每题 1 分的客观题只答对 1 道、其余未答 → 得分 1 / 满分 100 / 得分率 1% / 已答客观题正确率 100%。</div></div>') +
+      '<div class="stat"><div class="stat-num">' + acc + '</div><div class="stat-cap">已答客观题正确率<br>仅统计已答</div></div>' +
+      '</div>' + rateHelp +
       '<div class="kv">' +
       /* 已答/未答都按客观题口径：未答客观题 = 客观题总数 − 已答客观题，
          与「已答客观题正确率」同一个分母，不把主观题混进来说不清的数 */
@@ -1763,14 +1773,18 @@ window.EEexams = (function () {
       '<span class="kv-key">未判分（主观题）</span><span class="kv-val mono">' + (r.ungraded == null ? '—' : r.ungraded) + '</span>' +
       '<span class="kv-key">用时（服务端在线 / 墙钟）</span><span class="kv-val mono">' + (r.minutes == null ? '—' : r.minutes + ' / ' + (r.wall == null ? '—' : r.wall) + ' 分钟') + '</span>' +
       '<span class="kv-key">交卷来源</span><span class="kv-val">' + esc(viaLabel(r.via)) + '</span>' +
-      '<span class="kv-key">判分依据</span><span class="kv-val">交卷时保存的题目版本快照，不随后续改题变化</span>' +
+      '<span class="kv-key">判分依据</span><span class="kv-val">交卷当时的题目版本与答案</span>' +
       '</div>' +
       (legacy
-        ? '<p class="hint">报告一经落库即永久不可变：不可修改、不可重新计算、不可覆盖。</p>'
-        : '<div class="notice plain"><svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg><div class="notice-body">下面每道题都按<strong>交卷时保存的题目版本</strong>判分。题目后来改过的，条目上会标「有新版」并说明改了什么；本报告的判定、答案与解析始终是当时的快照，不会变。</div></div>' +
+        /* 这一场交卷时没有记下客观题满分口径，也没有逐题快照。按 CR-25 不回溯计算：
+           满分与两个率显示「—」，明细区给一个说得过去的空状态，不摆破碎列表。 */
+        ? '<div class="notice info"><svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg><div class="notice-body">这是一份早期交卷的报告：交卷时没有记录客观题满分口径。报告按交卷当时的题目与答案保存，之后不会变，也不会回头重算，因此满分与两个率显示「—」。</div></div>' +
+          '<div class="section-head"><h2 class="section-title">逐题明细</h2><span class="section-note">这一场没有留下逐题记录</span></div>' +
+          '<div class="rep-empty"><p class="rep-empty-txt">这一场交卷时没有记录逐题明细，因此没有可回看的题目。上面的汇总计数是当时记下来的部分。</p></div>'
+        : '<div class="notice plain"><svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg><div class="notice-body">下面每道题都按<strong>交卷当时保存的题目与答案</strong>判分。题目后来改过的，条目上会标出并说明改了什么；本报告的判定、答案与解析始终是当时的，不会变。</div></div>' +
           '<div class="section-head"><h2 class="section-title">逐题明细</h2><span class="section-note">共 ' + items.length + ' 题 · 点开看作答、判定、解析与判分版本' + (changed ? ' · ' + changed + ' 题已有新版' : '') + '</span></div>' +
-          '<div class="rep-list" id="exam-archive-items">' + window.eeReport.itemsHtml(items, true, { scope: 'a', qPrefix: '', rPrefix: '' }) + '</div>' +
-          '<p class="hint">报告一经落库即永久不可变：不可修改、不可重新计算、不可覆盖。</p>');
+          '<div id="exam-archive-items">' + window.eeReport.blockHtml(items, true, { scope: 'a', qPrefix: '', rPrefix: '' }) + '</div>' +
+          '<p class="hint">报告按交卷当时的题目与答案保存，之后不会变。</p>');
     window.eeReport.bind(document.getElementById('exam-archive-items'));
     eeDialog.open('dlg-report', trigger || document.activeElement);
   }

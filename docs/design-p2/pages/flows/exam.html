@@ -733,7 +733,7 @@
       '<div class="panel"><div class="panel-body flow-stack">' +
       '  <div class="notice ok">' + ico('check', '15px') +
       '    <div class="notice-body"><span class="notice-title">服务端已完成交卷，成绩报告已生成</span><br>' +
-      '    收卷由服务端在宽限结束时完成，不依赖你是否保持页面打开。本场为<strong>到点自动交卷</strong>；报告落库后永久不可变、不重算、不覆盖。' +
+      '    收卷由服务端在宽限结束时完成，不依赖你是否保持页面打开。本场为<strong>到点自动交卷</strong>；报告按交卷当时的题目与答案保存，之后不会变。' +
       '      <span class="notice-actions"><button type="button" class="btn btn-sm btn-primary" data-act="to-report">查看成绩报告</button></span>' +
       '    </div>' +
       '  </div>' +
@@ -785,8 +785,10 @@
       '    <div><dt>考试得分率</dt><dd>' + rate + '%</dd><dd class="rate-cap">客观题得分 ' + score + ' ÷ 客观题满分 ' + full + '（分母含未作答）</dd></div>' +
       '    <div><dt>已答客观题正确率</dt><dd>' + (acc == null ? '暂无数据' : acc + '%') + '</dd><dd class="rate-cap">答对 ' + correctObj + ' ÷ 已答 ' + answeredObj + '（分母只含已作答）</dd></div>' +
       '  </dl>' +
-      '  <div class="notice info">' + ico('info', '15px') + '<div class="notice-body"><span class="notice-title">两个率的分母不同，不得混用</span><br>' +
-      '    考试得分率的分母是本场<strong>全部</strong>客观题（未作答按 0 分计入得分，但仍占满分）；已答客观题正确率的分母只是你实际作答过的客观题。例：100 道每题 1 分的客观题只答对 1 道、其余未答 → 得分 1 / 满分 100 / 得分率 1% / 已答客观题正确率 100%。两个率不同是正确结果。</div></div>' +
+      '  <details class="rep-help">' +
+      '    <summary>' + ico('info', '15px') + '<svg class="od-icon rep-help-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 9.5 12 15l5.5-5.5"/></svg>两个率的分母不一样，点此看口径</summary>' +
+      '    <div class="rep-help-body"><p>考试得分率的分母含未作答：未答的客观题按 0 分计入得分，但仍占满分。已答客观题正确率只统计你实际答过的客观题。两者分母不同，数值不同是正常结果。</p></div>' +
+      '  </details>' +
       '  <div class="count-grid">' +
       '    <div class="count-cell"><b>' + answeredCount() + '</b><span>已答（含 ' + ungradedCount() + ' 题已作答·未判分）</span></div>' +
       '    <div class="count-cell"><b>' + (p.length - answeredCount()) + '</b><span>未答（含未作答的主观题）</span></div>' +
@@ -796,8 +798,7 @@
       '  <div class="kv">' +
       '    <span class="kv-key">负分规则</span><span class="kv-val">答错扣 0.5 分；未设 0 分下限，总分可为负</span>' +
       '    <span class="kv-key">纳入学习记录</span><span class="kv-val">纳入：答错的题已进入错题，FSRS 已调度</span>' +
-      '    <span class="kv-key">本机未同步成功</span><span class="kv-val">0 题（有未同步答案时会在此列出，且不计入本场成绩）</span>' +
-      '    <span class="kv-key">判分依据</span><span class="kv-val">交卷时保存的题目版本 v3，不随后续改题变化</span>' +
+      '    <span class="kv-key">判分依据</span><span class="kv-val">交卷当时的题目版本与答案</span>' +
       '  </div>' +
       '  <div>' +
       '    <div class="section-head"><h2 class="section-title">按题型统计</h2><span class="section-note">主观题不自动判分，单独标注</span></div>' +
@@ -808,7 +809,7 @@
       '  </div>' +
       '  <div>' +
       '    <div class="section-head"><h2 class="section-title">逐题明细</h2><span class="section-note">共 ' + items.length + ' 题 · 答错与未答 ' + rows.length + ' 题 · 点开看作答、判定、解析与判分版本</span></div>' +
-      '    <div class="rep-list" id="exam-report-items">' + window.eeReport.itemsHtml(items, true, { scope: 'e', qPrefix: '../screens/', rPrefix: '../screens/' }) + '</div>' +
+      '    <div id="exam-report-items">' + window.eeReport.blockHtml(items, true, { scope: 'e', qPrefix: '../screens/', rPrefix: '../screens/' }) + '</div>' +
       '  </div>' +
       (state.setup.recordMistakes
         ? '  <div class="notice ok">' + ico('check', '15px') + '<div class="notice-body">答错的 ' + wrongCount() + ' 题已进入错题，FSRS 已按本场调度。</div></div>'
@@ -891,7 +892,7 @@
 
     var legacyNote = reports.some(function (r) { return r.legacy; })
       ? '<div class="notice info mt-4">' + ico('info', '15px') + '<div class="notice-body"><span class="notice-title">早期报告为什么不显示得分率</span><br>' +
-        '「客观题满分」口径是后来才落库的。早期报告只记了得分，没有记录客观题满分，因此<strong>得分率与已答客观题正确率不回溯计算</strong>——报告一经落库即永久不可变：不可修改、不可重新计算、不可覆盖。这一场的四个数字都在报告页顶部。</div></div>'
+        '早期报告只记了得分，没有记录客观题满分。报告按交卷当时的题目与答案保存，之后不会变，也不会回头重算，因此这两场只显示得分。这一场的四个数字都在报告页顶部。</div></div>'
       : '';
 
     var dlg = state.viewing == null ? '' : (function () {
@@ -899,8 +900,8 @@
       var legacy = !!r.legacy;
       var legacyNote = legacy
         ? '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body"><span class="notice-title">早期报告</span><br>' +
-          '落库时未记录客观题满分，得分率与已答客观题正确率不回溯计算；得分本身仍然有效。完整报告在考试会话页的报告态。</div></div>'
-        : '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body">报告一经落库即永久不可变：不可修改、不可重新计算、不可覆盖。完整报告在考试会话页的报告态。</div></div>';
+          '交卷时没有记录客观题满分，得分率与已答客观题正确率不再回溯计算；得分本身仍然有效。完整报告在考试会话页的报告态。</div></div>'
+        : '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body">报告按交卷当时的题目与答案保存，之后不会变。完整报告在考试会话页的报告态。</div></div>';
       return '' +
         '<dialog class="dlg wide" id="dlgReport" aria-labelledby="dlgReportTitle">' +
         '  <div class="dlg-head">' +
@@ -978,7 +979,7 @@
     { id: 'runner', name: '考试会话', render: renderRunner, nextLabel: '到点 · 宽限 60 秒', note: '倒计时常显；答题卡跳题；F 标记待复查；选项键只绑这道题拥有的选项，判断题用 T / F。点「交卷」打开交卷确认。' },
     { id: 'grace', name: '宽限 60 秒', render: renderGrace, nextLabel: '服务端收卷', note: '只同步截止前已经产生的答案，不能用来继续答题；这是正常状态，不是故障。' },
     { id: 'collected', name: '服务端收卷', render: renderCollected, nextLabel: '看成绩报告', note: '由服务端完成交卷并生成报告，不需要你一直开着这个页面。' },
-    { id: 'report', name: '成绩报告', render: renderReport, nextLabel: '看历史报告', note: '得分、客观题满分、得分率、已答客观题正确率分别标注，分母不同，不要混用。' },
+    { id: 'report', name: '成绩报告', render: renderReport, nextLabel: '看历史报告', note: '答错与未答的题在逐题明细里可直接筛出来；需要重来就重新考试。' },
     { id: 'history', name: '历史与重考', render: renderHistory, nextLabel: '重新开始', note: '历史成绩可回看；重新考试用档案当前最新蓝图版本开新会话。' }
   ];
 

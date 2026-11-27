@@ -114,7 +114,9 @@
     #run-live .focus-rail { display: none; }
     #run-live .keys-paper { display: block; margin-top: var(--sp-6); border-top: 1px solid var(--line); padding-top: var(--sp-4); }
     .sheet-trigger { display: inline-flex !important; }
-    .focus-foot { flex-wrap: wrap; row-gap: var(--sp-2); }
+    /* 底部操作条的单行宽度规划在 ee.css §12：主操作按剩余空间生长、最小 120px 保底，
+       次级操作 flex:0 0 auto 不让位；≤640 与软键盘弹起时次级操作整颗收起（.kb-hide）。
+       这里不再覆盖成 wrap——一 wrap，主操作就被挤到第二行，键盘弹起时直接看不见。 */
   }
 /* 手机顶栏放不下同步态徽章：它在离线态另有常驻条说明，这里不占位置 */
   @media (max-width: 640px){
@@ -164,7 +166,7 @@
       </main>
     </div>
 
-    <!-- ============ 已归档报告（?rid=）：落库可回看，只读 ============ -->
+    <!-- ============ 已归档报告（?rid=）：交卷当时的记录，只读 ============ -->
     <div class="focus-runner" id="run-report" hidden>
       <header class="focus-topbar">
         <div class="ft-left">
@@ -182,8 +184,8 @@
           <section class="report-block" aria-labelledby="rp-title">
             <div class="report-head">
               <div>
-                <p class="rule-label">练习报告 · 交卷当时的快照</p>
-                <h2 class="report-title" id="rp-title">报告已归档，不可变更</h2>
+                <p class="rule-label">练习报告 · 交卷当时</p>
+                <h2 class="report-title" id="rp-title">这份报告已归档</h2>
               </div>
               <span class="tag ok"><svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg>已交卷</span>
             </div>
@@ -207,8 +209,8 @@
           <div class="notice info ee-mt-5">
             <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
             <div class="notice-body">
-              <span class="notice-title">这是交卷当时的快照</span>
-              报告按交卷时的题目版本判分，落库后不可变更。下面每题的题干、标准答案、判定与解析都是当时的版本；题目后来被改过，报告不会跟着变。
+              <span class="notice-title">这是交卷当时的记录</span>
+              报告按交卷当时的题目与答案保存，之后不会变。下面每题的题干、标准答案、判定与解析都是当时的版本。
               想知道题目现在长什么样，展开任意一题，用「查看该题当前版本」自己对照。
             </div>
           </div>
@@ -218,7 +220,7 @@
               <h2 class="section-title" id="rp-detail-title">逐题明细</h2>
               <span class="section-note">题目 · 我的作答 · 判定 · 解析 · 评级 · 判分版本</span>
             </div>
-            <div class="rep-list" id="rp-items"></div>
+            <div id="rp-items"></div>
             <p class="ee-rule" data-spec>
               <b>逐题明细的落库点</b>：交卷时随报告一起写入题目快照（题干、我的作答、判定、官方解析、评级、<span class="mono">question_version_id</span>），
               所以历史报告永久不可变——题目之后被改，报告里的题干与判分依据都不变。字段与渲染逻辑和交卷当次报告（「已交卷报告」态）完全一致，只多出判分版本条与「查看该题当前版本」入口。
@@ -726,11 +728,13 @@
 
           <section class="ee-mt-5" aria-labelledby="rep-detail-title">
             <div class="section-head"><h2 class="section-title" id="rep-detail-title">逐题明细</h2><span class="section-note">展开看题目、我的作答、判定、解析与评级</span></div>
-            <div class="rep-list" id="report-items"></div>
-            <p class="ee-rule">
-              得分只看客观题：没作答的客观题按 0 分计分，但仍然占满分；主观题显示「已作答 · 未判分」，不计入总分，也不会被算成未作答。
-              两个比例的分母不一样：考试得分率按满分算，已答客观题正确率只按已经答过的客观题算。
-            </p>
+            <div id="report-items"></div>
+            <details class="rep-help">
+              <summary><svg class="od-icon rep-help-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 9.5 12 15l5.5-5.5"/></svg>计分与两个率的口径，点此看说明</summary>
+              <div class="rep-help-body">
+                <p>得分只看客观题：没作答的客观题按 0 分计分，但仍然占满分；主观题显示「已作答 · 未判分」，不计入总分，也不会被算成未作答。考试得分率的分母含未作答，已答客观题正确率只统计你实际答过的客观题，两者分母不同，数值不同是正常结果。</p>
+              </div>
+            </details>
             <p class="ee-rule" data-spec>
               <b>五项计数口径（全产品一致）</b>：已答（含未判分）/ 未答 / 未判分 / 客观题得分与客观题满分（本场全部客观题，未作答按 0 分计入得分但仍占满分）/ 卷面总分与满分（主观题标注「未判分，不计入」）。
               <b>两个率分母不同</b>：考试得分率 = 客观题得分 ÷ 客观题满分；已答客观题正确率 = 答对的已答客观题 ÷ 已答客观题。已答客观题为 0 时显示「暂无数据」，不用 0% 或 100% 填充。
@@ -797,7 +801,7 @@
                 </div>
                 <div class="life-item">
                   <div class="life-state">已完成</div>
-                  <p class="life-note">交卷后写报告，永久不可变、可回看；再次打开同一 URL 直接渲染报告，不重算。</p>
+                  <p class="life-note">交卷后生成报告，可随时回看；再次打开同一 URL 直接显示这份报告。</p>
                 </div>
                 <div class="life-item">
                   <div class="life-state">已放弃</div>
@@ -1325,10 +1329,9 @@ window.EErun = (function () {
   }
 
   /* ---------- 已归档报告（?rid=）：学习档案的「回看」落点 ----------
-     报告永久不可变：汇总计数与逐题明细都按落库当时的快照呈现，不做任何重算。
-     逐题明细与判分版本在交卷时随报告一起写入（rep.items / question_version_id 快照），
-     P3 改由统一数据源取快照，屏幕侧字段与呈现不变；老报告没有明细时明说没有，
-     不拿演示数据冒充用户的作答。 */
+     报告永久不可变：汇总计数与逐题明细都按交卷当时的快照呈现，不做任何重算。
+     逐题明细与判分版本在交卷时随报告一起写入，P3 改由统一数据源取快照，
+     屏幕侧字段与呈现不变；老报告没有明细时明说没有，不拿演示数据冒充用户的作答。 */
   function openPersistedReport() {
     var rid = new URLSearchParams(location.search).get('rid');
     if (!rid) return false;
@@ -1342,18 +1345,13 @@ window.EErun = (function () {
     /* 逐题明细必须是这一场自己的快照。落库时没记明细的老报告（CR-25：不可重算），
        与模考域的「早期报告」同一处理：明说没有明细，不拿演示数据冒充用户的作答。 */
     var hasItems = !!(rep.items && rep.items.length);
-    var host = document.getElementById('rp-items');
     fillReport({
       p: 'rp', rep: rep,
-      items: [],
+      items: rep.items || [],
       bank: bankName(rep.bankId), bankId: rep.bankId,
-      at: rep.at, withVer: true, sheet: false
+      at: rep.at, withVer: true, sheet: false,
+      emptyItems: !hasItems
     });
-    /* fillReport 会按 cfg.items 重写列表容器，所以明细放在它之后渲染 */
-    host.innerHTML = hasItems
-      ? window.eeReport.itemsHtml(rep.items, true, { scope: 'rp', qPrefix: '', rPrefix: '' })
-      : '<div class="notice info"><svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg><div class="notice-body">这是一份早期交卷的练习报告：落库时没有记录逐题快照。报告一经落库即永久不可变、不重算，因此这一场没有逐题明细可回看；上面的汇总计数是当时记录下来的部分。</div></div>';
-    window.eeReport.bind(host);
     var title = document.getElementById('rp-title');
     if (title) title.textContent = rep.title || '练习报告';
     syncToastInset();
@@ -1880,11 +1878,22 @@ window.EErun = (function () {
       '<span class="tag bad">错误 ' + num(rep.wrong) + '</span>' +
       '<span class="tag">未答 ' + num(rep.unanswered) + '</span>' +
       '<span class="tag plain">未判分 ' + num(rep.ungraded) + '</span>';
-    el('note').textContent = '答错的题已进入错题；标记为薄弱的题出现在复习队列。报告按交卷时的题目版本判分，永久不可变。';
+    el('note').textContent = '答错的题已进入错题；标记为薄弱的题出现在复习队列。报告按交卷当时的题目与答案保存，之后不会变。';
     el('progress-num').textContent = num(rep.answered) + ' / ' + num(rep.total);
     el('progress-fill').style.width = (num(rep.total) ? Math.round(num(rep.answered) / num(rep.total) * 100) : 0) + '%';
     el('bank-note').textContent = '本次练习 · ' + cfg.bank;
-    el('items').innerHTML = cfg.items.map(function (it, i) { return repItemHtml(it, i, cfg.withVer, cfg.bankId); }).join('');
+    /* 逐题明细整块（工具栏 + 列表 + 空状态）交给共享组件：与模考交卷态、
+       模考归档报告是同一套字段顺序、同一套展开交互、同一套版本提示与回看入口。 */
+    el('items').innerHTML = window.eeReport.blockHtml(cfg.items, cfg.withVer, { scope: cfg.p, bankId: cfg.bankId, qPrefix: '', rPrefix: '' });
+    if (cfg.emptyItems) {
+      var block = el('items').querySelector('.rep-block');
+      if (block) {
+        block.querySelector('.rep-tool').hidden = true;
+        block.querySelector('.rep-list').hidden = true;
+        block.querySelector('.rep-empty').hidden = false;
+        block.querySelector('.rep-empty-txt').textContent = '这一场交卷时没有记录逐题明细，因此没有可回看的题目。上面的汇总计数是当时记下来的部分。';
+      }
+    }
     var sheet = el('sheet');
     if (cfg.sheet && sheet) {
       var cells = '';
@@ -1893,15 +1902,16 @@ window.EErun = (function () {
       });
       sheet.innerHTML = cells;
     }
+    bindRepLists();
     syncToastInset();
   }
-  /* 逐题明细项：交卷当次报告与历史归档报告共用 assets/report.js 的同一套渲染 */
-  function repItemHtml(it, i, withVer, bankId) {
-    return window.eeReport.itemHtml(it, i, withVer, { scope: 'p', bankId: bankId, qPrefix: '', rPrefix: '' });
-  }
-  /* 逐题明细展开 / 收起：两份报告列表共用 assets/report.js 的同一套交互 */
+  /* 逐题明细展开 / 收起 / 筛选：两份报告列表共用 assets/report.js 的同一套交互。
+     绑的是每次渲染新生成的 .rep-block，所以 fillReport 重复调用不会重复绑定。 */
   function bindRepLists() {
-    window.eeReport.bind(['rp-items', 'report-items'].map(function (id) { return document.getElementById(id); }));
+    window.eeReport.bind(['rp-items', 'report-items'].map(function (id) {
+      var host = document.getElementById(id);
+      return host ? host.querySelector('.rep-block') : null;
+    }));
   }
   function itemFromRunner(q, i) {
     var ans = R.answers[i];

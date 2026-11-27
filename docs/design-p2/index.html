@@ -146,7 +146,7 @@
           <ul>
             <li><span class="ia-node">题干 / 选项 / 答案 / 解析 / 知识点 / 资料引用</span></li>
             <li><span class="ia-node">编辑与版本生成 · 版本历史 · 冲突处理（抽屉）</span></li>
-            <li><span class="ia-node">报告按判分时的题目版本解释，永久不可变；给「查看该题当前版本」入口</span></li>
+            <li><span class="ia-node">报告按判分时的题目版本解释；给「查看该题当前版本」入口</span></li>
           </ul>
         </li>
         <li class="ia-l1">
@@ -159,7 +159,7 @@
         <li class="ia-l1">
           <span class="ia-node"><a href="pages/screens/review.html">复习</a><span class="ia-route">/review</span><span class="ia-fn">FN-207 208 209 210</span></span>
           <ul>
-            <li><span class="ia-node">待复习 <span class="ia-dim">当前可执行复习集合 CR-05 + 原因标签</span></span></li>
+            <li><span class="ia-node">待复习 <span class="ia-dim">到期 · 未斩杀 · 题库未归档 · 仍有访问权（CR-05）+ 原因标签</span></span></li>
             <li><span class="ia-node">错题 <span class="ia-dim">错题与错因</span></span></li>
             <li><span class="ia-node">薄弱 <span class="ia-dim">mark_weak</span></span></li>
             <li><span class="ia-node">斩杀 <span class="ia-dim">斩杀题库</span></span></li>
@@ -265,7 +265,7 @@
 
     <h3 class="doc-h3">关键流程</h3>
     <div class="idx-grid">
-      <a class="idx-card" href="pages/flows/practice.html"><span class="idx-domain">流程</span><span class="idx-name">练习流程</span><span class="idx-desc">从今天页开始学习到练习报告落库的完整路径。</span><span class="idx-fn">FN-203 204 206 214 215</span></a>
+      <a class="idx-card" href="pages/flows/practice.html"><span class="idx-domain">流程</span><span class="idx-name">练习流程</span><span class="idx-desc">从今天页开始学习到练习报告的完整路径。</span><span class="idx-fn">FN-203 204 206 214 215</span></a>
       <a class="idx-card" href="pages/flows/exam.html"><span class="idx-domain">流程</span><span class="idx-name">模考流程</span><span class="idx-desc">组卷确认到收卷与成绩报告，含宽限期与多设备续考。</span><span class="idx-fn">FN-305…309</span></a>
       <a class="idx-card" href="pages/flows/review.html"><span class="idx-domain">流程</span><span class="idx-name">复习流程</span><span class="idx-desc">复习队列的判定、执行、结果回写四视图。</span><span class="idx-fn">FN-208 209 210</span></a>
       <a class="idx-card" href="pages/flows/import.html"><span class="idx-domain">流程</span><span class="idx-name">导入流程</span><span class="idx-desc">来源选择到后台作业与草稿续做。</span><span class="idx-fn">FN-124…129</span></a>
@@ -398,13 +398,14 @@
         <thead><tr><th scope="col">档位</th><th scope="col">导航</th><th scope="col">布局与交互</th></tr></thead>
         <tbody>
           <tr><td data-label="档位">&gt;1024 桌面</td><td data-label="导航">完整侧栏 236px + 顶栏</td><td data-label="布局与交互">统一纸面居中 1120px（全产品同一张纸，无宽变体）；鼠标 + 快捷键；hover 有反馈</td></tr>
-          <tr><td data-label="档位">769–1024 平板</td><td data-label="导航">侧栏收成 64px 图标轨</td><td data-label="布局与交互">纸面通栏；触屏；hover 失效的状态必须有 active/selected 兜底</td></tr>
-          <tr><td data-label="档位">641–768 小平板</td><td data-label="导航">图标轨 + 底栏同时可用</td><td data-label="布局与交互">单列；表格转卡片；底部固定操作区</td></tr>
-          <tr><td data-label="档位">≤640 手机</td><td data-label="导航">侧栏隐藏，底部导航 6 项</td><td data-label="布局与交互">单列；单手拇指可达；触摸目标 ≥44px；答题卡改底部抽屉；长文限宽 68ch；表单不被软键盘遮</td></tr>
+          <tr><td data-label="档位">769–1024 平板</td><td data-label="导航">侧栏收成 64px 图标轨 + 顶栏</td><td data-label="布局与交互">纸面通栏；触屏；hover 失效的状态必须有 active/selected 兜底</td></tr>
+          <tr><td data-label="档位">641–768 小平板</td><td data-label="导航">侧栏隐藏，底部导航 5 项</td><td data-label="布局与交互">单列；宽表留可发现滚动或页面显式转卡片；底部固定操作区</td></tr>
+          <tr><td data-label="档位">≤640 手机</td><td data-label="导航">侧栏隐藏，底部导航 5 项</td><td data-label="布局与交互">单列；单手拇指可达；触摸目标 ≥44px；答题卡改底部抽屉；长文限宽 68ch；表单不被软键盘遮</td></tr>
         </tbody>
       </table>
     </div>
     <p class="doc-note"><b>移动端不是桌面的缩小版。</b>答题卡从右侧常驻栏改为底部抽屉（常驻栏会把题干挤到一行三个字）；固定操作区只放当前步骤的主操作；软键盘弹出时页面滚到当前输入框，提交按钮随键盘上浮。</p>
+    <p class="doc-note"><b>断点取 768，这是唯一判据。</b>&gt;768 侧栏可见（&gt;1024 完整 / 769–768 图标轨），≤768 侧栏隐藏、由底部导航接管——侧栏与底部导航永不并存。跨端行为表与实现均以 <code class="mono">ee.css</code> 为准。</p>
   </section>
 
   <!-- ==================== 06 变更记录 ==================== -->
@@ -438,7 +439,7 @@
           <tr><td data-label="#">23</td><td data-label="修正">细分隔线治理：删面板外框、表格外框、统计带下边线、通知四边框、报告列表上沿线五类重复线；面板标题改无衬线 600、新增 `.sub-title` 三级标题，层级不再只靠加粗</td><td data-label="依据">成品级打磨</td></tr>
           <tr><td data-label="#">24</td><td data-label="修正">新增八种纸内布局模式（`.lay-stack` / `.lay-main-side` / `.lay-side-main` / `.lay-two` / `.lay-three` / `.lay-four` / `.lay-read` / `.lay-toolbar`）与 `.lay-toolbar` 手机端主操作独占一行</td><td data-label="依据">成品级打磨</td></tr>
           <tr><td data-label="#">25</td><td data-label="修正">表格 ≤640 不再机械逐字段转卡片（改由页面显式选 `.dtable-cards`）；底部操作条手机端不再折成多行；`--kb-inset` 改由 visualViewport 实时写入，软键盘不再压住主操作；菜单按可用空间翻转/限高不再被容器裁切</td><td data-label="依据">成品级打磨</td></tr>
-          <tr><td data-label="#">26</td><td data-label="修正">顶栏搜索明确定位为「页面间快速跳转」，占位与页脚不再暗示能检索题目内容；底部导航收敛为五个主入口 + 「更多」，设置下沉次级入口</td><td data-label="依据">成品级打磨</td></tr>
+          <tr><td data-label="#">26</td><td data-label="修正">顶栏搜索明确定位为「页面间快速跳转」，占位与页脚不再暗示能检索题目内容；底部导航保持五个主入口，设置进账户菜单（第六轮曾把设置移入「更多」浮层，第七轮确认「更多」是死按钮且在手机端仍不可达，已推翻并改为账户菜单第一项）</td><td data-label="依据">成品级打磨 / 第七轮修正</td></tr>
           <tr><td data-label="#">27</td><td data-label="修正">`product.html` 演示脚手架（角色切换、覆盖范围清单、重置数据、规范入口）改用 `data-spec` 包裹，产品模式只见产品；文案从「原型 / 演示」框架改写为产品语言</td><td data-label="依据">成品级打磨</td></tr>
         </tbody>
       </table>
@@ -457,7 +458,7 @@
         <p>没有实现完整业务交互（不模拟网络请求、不做真实数据流转）、没有写生产代码、没有为了凑数量添加页面。P2 的验证标准是「设计是否完整、统一、可实现」，不是「能不能跑通一个业务流程」。</p>
       </div>
     </div>
-    <p class="doc-rule mt-5">在线 Chat 发现的 15 项源码问题已逐项归属：14 项本轮处理（与 P1 冲突、界面必须表达的状态），1 项整体归 P3；另有草稿恢复的幂等实现归 P3。逐项裁定见 <a class="link-btn" href="review/P3-HANDOFF.md">P3 归属清单</a>。</p>
+    <p class="doc-rule mt-5">在线 Chat 发现的 15 项源码问题已逐项归属，按三类归档：A 已完成并验证 13 行（其中 11 行完整，#5 留一条访问权残留、#14 留幂等实现），B 设计已完成待 P3 接线 2 项（#7 滚动恢复、#14 的幂等实现），C 尚未解决的设计缺陷 2 项（C-1 CR-05 的访问权判定只有注释没有实现；C-3 切换账户后学习数据不隔离），均给出代码位置与 P3 开工前的待裁定额。逐项裁定见 <a class="link-btn" href="review/P3-HANDOFF.md">P3 归属清单</a>。</p>
   </section>
 
 </main>

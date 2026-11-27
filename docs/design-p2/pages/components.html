@@ -1261,7 +1261,7 @@
     <p class="doc-rule">实现分工在 <code class="mono">assets/store.js</code>：<code class="mono">can(action)</code> 答「能不能做」，<code class="mono">relevant(action)</code> 答「跟这个用户有没有关系」。渲染判据：<code class="mono">relevant &amp;&amp; !can</code> → 禁用 + 原因；<code class="mono">!relevant</code> → 不渲染。</p>
 
     <h3 class="doc-h3">报告逐题明细（<code class="mono">.rep-*</code>，交卷当次与历史归档共用）</h3>
-    <p class="doc-rule">练习/模考报告的逐题明细只有这一套组件，定义在 <code class="mono">ee.css §15</code>。<b>历史归档报告不得只给汇总计数</b>——汇总只是头部，逐题明细、作答结果、解析、评级、判分版本与「查看该题当前版本」入口都必须在场。历史报告比当次报告只多一件东西：判分版本快照标注。</p>
+    <p class="doc-rule">练习/模考报告的逐题明细只有这一套组件，定义在 <code class="mono">ee.css §15</code>。<b>历史归档报告不得只给汇总计数</b>——汇总只是头部，逐题明细、作答结果、解析、评级、判分版本与「查看该题当前版本」入口都必须在场。历史报告比当次报告只多一件东西：判分版本标注。</p>
     <p class="doc-rule">渲染与展开交互集中在 <code class="mono">assets/report.js</code> 的 <code class="mono">window.eeReport</code>（<code class="mono">itemsHtml(items, withVer, opts)</code> + <code class="mono">bind(el)</code>）。三个调用方都不各自实现：<code class="mono">pages/screens/practice.html</code>（练习交卷态 + 归档回看）、<code class="mono">pages/flows/exam.html</code>（模考交卷态）、<code class="mono">pages/screens/exams.html</code>（模考归档成绩报告）。同一场考试在三处的字段顺序、版本提示、回看入口完全一致。<b>交卷时要把 <code class="mono">total</code> 与 <code class="mono">items</code> 一并写进报告</b>，归档回看才有东西可展开。</p>
     <p class="doc-rule">反过来也成立：报告里没有逐题快照时（老数据，CR-25 不可重算），<b>不得用演示数据冒充用户的作答</b>——明说这一场没有逐题明细可回看，汇总计数给当时记录下来的部分。练习与模考两条路径对老数据是同一句处理。</p>
     <div class="demo">
@@ -1286,8 +1286,8 @@
               <p class="rep-parse">TLS 工作在两台通信机器之间，提供保密性、完整性与端点鉴别，是传输层安全的代表实现。</p>
               <div class="rep-ver">
                 <span class="tag plain">判分版本 v2</span>
-                <p class="rep-ver-note">报告按判分时的题目版本解释，永久不可变；题目之后被修改不会重算这份报告。</p>
-                <a class="btn btn-sm btn-quiet" href="question.html">查看该题当前版本</a>
+                <p class="rep-ver-note">报告按判分时的题目版本解释；题目之后被修改，这份报告仍按当时的版本判分。</p>
+                <a class="btn btn-sm btn-quiet" href="screens/question.html">查看该题当前版本</a>
               </div>
             </div>
           </div>
@@ -1302,7 +1302,7 @@
             </button>
           </div>
         </div>
-        <p class="state-note">行首点击展开/收起，目标区 ≥44px，键盘可用；≤640 自动转单列。历史报告在此结构外额外说明「这是当时的快照，题目现在可能已经不同」。</p>
+        <p class="state-note">行首点击展开/收起，目标区 ≥44px，键盘可用；≤640 自动转单列。历史报告在此结构外额外说明「这是当时的记录，题目现在可能已经不同」。</p>
       </div>
     </div>
 

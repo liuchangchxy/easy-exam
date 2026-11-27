@@ -382,7 +382,7 @@
         '    <a class="btn btn-sm btn-quiet" href="' + qhref + '">查看</a>' +
         '  </span>' +
         '</div>';
-    }).join('') : '<div class="empty"><div class="empty-mark">' + ico('layers', '26px') + '</div>' +
+    }).join('') : '<div class="empty"><div class="empty-mark">' + ico('library', '26px') + '</div>' +
       '<h3 class="empty-title">还没有题目</h3>' +
       '<p class="empty-desc">这个题库刚创建，先导入一批题目，或让成员协作校对。</p>' +
       '<div class="empty-actions">' +
@@ -523,7 +523,7 @@
           '  <button type="button" class="btn btn-sm btn-quiet" data-act="take-theirs">使用对方版本</button>' +
           '  <button type="button" class="btn btn-sm btn-quiet" data-act="reload">刷新后重试</button>' +
           '</div></div></div>'
-        : '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body">点「保存」体验并发保存的结果：后保存者会拿到 409 与本地草稿保留，不会被静默覆盖。</div></div>') +
+        : '<div class="notice info">' + ico('info', '15px') + '<div class="notice-body">点「保存」看并发保存的结果：后保存的人会被告知题库已被他人修改，本机的修改保留，不会被静默覆盖。</div></div>') +
       '  <div class="flow-actions">' +
       '    <button type="button" class="btn btn-primary" data-act="save-question">' + (conflict ? '重新保存' : '保存') + '</button>' +
       '    <button type="button" class="btn btn-quiet" data-act="to-banks">取消</button>' +
@@ -536,20 +536,20 @@
       '    <button type="button" class="btn btn-sm" data-act="bulk-chapter">设置章节</button>' +
       '    <button type="button" class="btn btn-sm" data-act="bulk-archive">归档</button>' +
       '  </div>' +
-      '  <p class="hint">批量设置章节/标签是元数据修改，不产生新版本；遇到并发冲突时整批拒绝并提示「题库已被其他成员修改，请刷新后重试」，不静默互相覆盖。</p>' +
+      '  <p class="hint">批量设置章节/标签不生成新版本；遇到并发冲突时整批拒绝并提示「题库已被其他成员修改，请刷新后重试」，不静默互相覆盖。</p>' +
       '  <div class="notice ok" role="status">' + ico('check', '15px') + '<div class="notice-body">批量结果：成功 3 · 无须变更 1（已归档题执行恢复属于无须变更；不存在「跳过」这一项）。</div></div>' +
       '  <div class="notice bad" role="alert">' + ico('alert-triangle', '15px') + '<div class="notice-body">整批拒绝：其中 1 题不属于当前题库。零写入，可读原因已给出，请修正后重试。</div></div>' +
       '</div></div>' +
 
       '<div class="notice warn mt-5" role="note">' + ico('alert-triangle', '15px') +
       '<div class="notice-body"><div class="notice-title">题库内容编辑在任何情况下都不因「有未交卷模考」被拒绝</div>' +
-      '<p>隔离靠会话快照与题目版本，不靠锁定题库：别人的模考照常进行，你照常改题。</p></div></div>';
+      '<p>改题不影响进行中的考试：别人的模考照常进行，你照常改题。</p></div></div>';
   }
 
   /* ---------- 步骤 5：跨设备同步与冲突（FN-423） ---------- */
   function renderSync() {
     var devices = [
-      { id: 'desktop', name: '电脑 · Chrome', ok: true, note: '刚刚同步 · 事件序号 128' },
+      { id: 'desktop', name: '电脑 · Chrome', ok: true, note: '刚刚同步' },
       { id: 'phone', name: '手机 · 易考宝', ok: false, note: '有 1 条未同步的作答草稿' }
     ];
     var cols = devices.map(function (d) {
@@ -564,7 +564,7 @@
         '  <div class="device-body">' +
         '    <div class="sync-line' + (d.ok ? '' : ' is-bad') + '"><span class="dot" aria-hidden="true"></span>' + esc(d.note) + '</div>' +
         (d.id === 'desktop'
-          ? '<div class="list"><div class="list-row static"><span class="list-main"><span class="list-title">同步游标按设备维护</span><span class="list-meta"><span>本机记住自己消费到的事件序号</span></span></span><span class="list-side"><span class="tag ok">独立消费方</span></span></div></div>'
+          ? '<div class="list"><div class="list-row static"><span class="list-main"><span class="list-title">每台设备各自跟进同步进度</span><span class="list-meta"><span>只应用自己还没收到的那部分变更</span></span></span><span class="list-side"><span class="tag ok">互不干扰</span></span></div></div>'
           : '<div class="notice warn" role="status">' + ico('alert-triangle', '15px') + '<div class="notice-body">当前离线：1 条作答未同步，联网后自动补交。</div></div>') +
         '  </div>' +
         '</div>';
@@ -575,7 +575,7 @@
       '  <div>' +
       '    <p class="page-eyebrow">跨设备</p>' +
       '    <h1 class="page-title">同步与冲突</h1>' +
-      '    <p class="page-sub">同一账号的手机、电脑、平板按服务端事件顺序合并；无法自动合并时保留两个版本并提示你选择。</p>' +
+      '    <p class="page-sub">同一账号的手机、电脑、平板按时间先后合并；无法自动合并时保留两个版本并提示你选择。</p>' +
       '  </div>' +
       '</header>' +
       '<div class="od-grid" style="--od-cols: 2">' + cols + '</div>' +
@@ -585,11 +585,11 @@
       '  <div class="dtable-wrap"><table class="dtable">' +
       '    <thead><tr><th scope="col">类别</th><th scope="col">对象</th><th scope="col">策略</th></tr></thead>' +
       '    <tbody>' +
-      '      <tr><td data-label="类别"><span class="tag">学习记录类</span></td><td data-label="对象">已提交/已判分的作答、错题、FSRS 卡、掌握度、成绩报告</td><td data-label="策略">按服务端事件顺序合并；无法自动合并时保留两个版本并提示选择，禁止静默覆盖</td></tr>' +
+      '      <tr><td data-label="类别"><span class="tag">学习记录类</span></td><td data-label="对象">已提交/已判分的作答、错题、FSRS 卡、掌握度、成绩报告</td><td data-label="策略">按时间先后合并；无法自动合并时保留两个版本并提示选择，禁止静默覆盖</td></tr>' +
       '      <tr><td data-label="类别"><span class="tag">用户创作类</span></td><td data-label="对象">人工编辑过的导入草稿、AI 草稿、未提交的答案内容</td><td data-label="策略">同上：保留两个版本并提示选择，禁止静默覆盖</td></tr>' +
       '      <tr><td data-label="类别"><span class="tag">临时状态类</span></td><td data-label="对象">题目光标、旗标、展开/折叠、滚动位置、计时、尚未提交的中间输入</td><td data-label="策略">后写覆盖，但覆盖时必须明确告知「已被另一设备更新，已用较新版本替换」，不得静默</td></tr>' +
       '    </tbody></table></div>' +
-      '  <p class="hint">同一条草稿被人工改过，就从临时状态类升格为创作类——判据是「这份内容是不是用户花力气做出来的」，不是它存在哪张表里。</p>' +
+      '  <p class="hint">同一条草稿被人工改过，就从临时状态类升格为创作类——判据是「这份内容是不是你花力气做出来的」，不是它存在哪里。</p>' +
       '</div></div>' +
 
       '<div class="panel mt-4"><div class="panel-body flow-stack">' +
@@ -601,7 +601,7 @@
       '    <button type="button" class="btn btn-sm" onclick="eeToast(\'已保留手机上的版本\')">查看我的版本</button>' +
       '    <button type="button" class="btn btn-sm btn-quiet" onclick="eeToast(\'已采用电脑上的版本\')">使用对方版本</button>' +
       '  </div></div></div>' +
-      '  <div class="notice info" role="note">' + ico('info', '15px') + '<div class="notice-body">同一浏览器的多个标签页视为多个独立消费方：一个标签页推进游标，不会让另一个标签页漏收事件。</div></div>' +
+      '  <div class="notice info" role="note">' + ico('info', '15px') + '<div class="notice-body">同一浏览器的多个标签页各自独立同步：一个标签页看过的新内容，不会让另一个标签页漏掉。</div></div>' +
       '</div></div>';
   }
 
@@ -676,7 +676,7 @@
       '  <div class="dlg-body">' +
       '    <p class="dlg-p">退出 <b>' + esc(bankName()) + '</b>？</p>' +
       '    <div class="notice info" role="note">' + ico('info', '15px') +
-      '      <div class="notice-body">退出后你仍保留自己的作答、错题、FSRS 状态与成绩报告，并继续进你自己的统计；但你不能访问这个题库的内容。你进行中的练习/模考可以按快照答完并交卷。所有者可以随时把你加回来。</div></div>' +
+      '      <div class="notice-body">退出后你仍保留自己的作答、错题、FSRS 状态与成绩报告，并继续进你自己的统计；但你不能访问这个题库的内容。进行中的练习与模考可以答完再交卷。所有者可以随时把你加回来。</div></div>' +
       '  </div>' +
       '  <div class="dlg-foot">' +
       '    <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>取消</button>' +
@@ -778,13 +778,13 @@
       '</div></div>' +
 
       '<div class="panel mt-4"><div class="panel-body flow-stack">' +
-      '  <div class="panel-head sub-head"><h3 class="panel-title panel-title-md">进行中的会话按快照继续</h3><span class="panel-sub">不删除、不作废</span></div>' +
+      '  <div class="panel-head sub-head"><h3 class="panel-title panel-title-md">进行中的会话可以继续</h3><span class="panel-sub">不删除、不作废</span></div>' +
       '  <div class="list-row static">' +
       '    <span class="list-main"><span class="list-title">普通练习 · ' + esc(bankName()) + '</span>' +
-      '      <span class="list-meta"><span>已答 1 / 3</span><span>会话建立时持有题目与版本快照</span></span></span>' +
-      '    <span class="list-side"><button type="button" class="btn btn-sm btn-primary" onclick="eeToast(\'按快照继续答完并交卷\')">继续作答</button></span>' +
+      '      <span class="list-meta"><span>已答 1 / 3</span><span>开考时记录的题目</span></span></span>' +
+      '    <span class="list-side"><button type="button" class="btn btn-sm btn-primary" onclick="eeToast(\'继续答完并交卷\')">继续作答</button></span>' +
       '  </div>' +
-      '  <p class="hint">做题不依赖持续的成员权限：可以按会话快照答完并交卷，报告正常落库、永久可回看。但交卷后这些题不再进入新的可执行学习队列。</p>' +
+      '  <p class="hint">做题不依赖持续的成员权限：进行中的会话可以答完并交卷，报告照常可回看。但交卷后这些题不再进入新的可执行学习队列。</p>' +
       '</div></div>' +
 
       '<div class="notice warn mt-4" role="note">' + ico('alert-triangle', '15px') +
@@ -823,11 +823,11 @@
     { id: 'members', name: '添加成员', render: renderMembers, defaultTab: 'members', nextLabel: '进入工作区', note: '用户名搜索 + 角色选择；候选过滤掉已在库成员；重复添加给出可读提示，不静默改角色。' },
     { id: 'editor', name: '成员与角色', render: renderEditorView, defaultTab: 'questions', nextLabel: '看并发编辑', note: '角色只有三种：所有者/编辑者/成员。改角色要二次确认并说明权限差；不能把自己降级；编辑者看不到成员管理，只看到说明。' },
     { id: 'concurrent', name: '并发编辑', render: renderConcurrent, nextLabel: '看跨设备同步', note: '「正在被 X 编辑」是软提示不阻塞；保存冲突 409 保留本地草稿；批量遇冲突整批拒绝。' },
-    { id: 'sync', name: '跨设备冲突', render: renderSync, nextLabel: '去转移所有权', note: '三类数据两种策略；同步游标按设备维护，同浏览器多标签页是独立消费方。' },
+    { id: 'sync', name: '跨设备冲突', render: renderSync, nextLabel: '去转移所有权', note: '三类数据两种策略；每台设备各自跟进同步进度，同浏览器多标签页互不干扰。' },
     { id: 'transfer', name: '转移所有权', render: renderTransfer, nextLabel: '去退出题库', note: '危险动作：选目标 + 输入题库名称确认；不可撤销，不提供自助转回。' },
-    { id: 'leave', name: '自助退出', render: renderLeave, nextLabel: '模拟越权深链', note: '所有者看不到可用的退出按钮（须先转移）；非所有者的退出对话框明写学习记录保留与快照续答。' },
+    { id: 'leave', name: '自助退出', render: renderLeave, nextLabel: '模拟越权深链', note: '所有者看不到可用的退出按钮（须先转移）；非所有者的退出对话框明写学习记录保留、进行中的会话可以答完再交卷。' },
     { id: 'forbidden', name: '越权 403', render: renderForbidden, nextLabel: '返回来源页', note: '退出后深链进入：整页空态 + 403 语义 + 身份说明，前成员与陌生人同一套措辞。' },
-    { id: 'assets', name: '失去访问权后', render: renderAssets, nextLabel: '被加回后进入', note: '个人学习资产全部保留并标注来源与「已退出」；进行中会话按快照答完并交卷。' },
+    { id: 'assets', name: '失去访问权后', render: renderAssets, nextLabel: '被加回后进入', note: '个人学习资产全部保留并标注来源与「已退出」；进行中的会话可以答完再交卷。' },
     { id: 'member', name: '成员后进入', render: renderMemberView, defaultTab: 'members', nextLabel: '重新开始', note: function () {
         return state.addedName
           ? '设为成员后工作区正常渲染，成员列表含新成员 ' + state.addedName + '；学习记录私有性在这一屏明确表达。'

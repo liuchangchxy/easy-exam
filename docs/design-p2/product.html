@@ -18,7 +18,7 @@
       <p class="side-group-label">学习</p>
       <a class="nav-item" href="pages/screens/home.html"><svg class="od-icon" aria-hidden="true"><use href="#i-home"/></svg><span class="nav-label">今天</span></a>
       <a class="nav-item" href="pages/screens/banks.html"><svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg><span class="nav-label">题库</span><span class="nav-count" id="nav-bank-count">3</span></a>
-      <a class="nav-item" href="pages/screens/review.html"><svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg><span class="nav-label">复习</span><span class="nav-count">5</span></a>
+      <a class="nav-item" href="pages/screens/review.html"><svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg><span class="nav-label">复习</span><span class="nav-count" id="nav-review-count">5</span></a>
       <a class="nav-item" href="pages/screens/exams.html"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg><span class="nav-label">模考</span></a>
       <a class="nav-item" href="pages/screens/notes.html"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg><span class="nav-label">资料</span><span class="nav-count" id="nav-note-count">6</span></a>
       <p class="side-group-label">管理</p>
@@ -170,7 +170,6 @@
     <a class="bn-item" href="pages/screens/review.html"><svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>复习</a>
     <a class="bn-item" href="pages/screens/exams.html"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>模考</a>
     <a class="bn-item" href="pages/screens/notes.html"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>资料</a>
-    <a class="bn-item" href="pages/screens/settings.html"><svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg>更多</a>
   </nav>
   </div>
 </div>
@@ -189,6 +188,8 @@
     document.getElementById('state-instance-role').textContent = s.isInstanceAdmin() ? '实例管理员' : '普通用户';
     document.getElementById('nav-bank-count').textContent = String(s.banks({ archived: false }).length);
     document.getElementById('nav-note-count').textContent = String(s.notes().length);
+    /* 复习角标与侧栏、复习页同一个口径（CR-05 可执行复习集合），不写死 */
+    document.getElementById('nav-review-count').textContent = String(s.executableReview().length);
     document.getElementById('state-banks').textContent = s.banks({ archived: false }).length + ' 个可访问';
     document.getElementById('state-questions').textContent = s.questions().length + ' 题';
     document.getElementById('state-notes').textContent = s.notes().length + ' 条';

@@ -114,10 +114,10 @@
         <button type="button" class="user-mini" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单">A</button>
         <span class="menu" role="menu" hidden>
           <a class="menu-item" role="menuitem" href="settings.html">
-            <svg class="od-icon" aria-hidden="true"><use href="#i-user"/></svg>账户资料
+            <svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>设置
           </a>
           <a class="menu-item" role="menuitem" href="settings.html">
-            <svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>设置
+            <svg class="od-icon" aria-hidden="true"><use href="#i-user"/></svg>账户资料
           </a>
           <span class="menu-sep" role="separator"></span>
           <button class="menu-item is-danger" type="button" role="menuitem" id="tb-logout">
@@ -136,7 +136,21 @@
       <button type="button" class="icon-btn" id="tb-search-m" title="搜索题库" aria-label="搜索题库">
         <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
       </button>
-      <a class="user-mini" href="settings.html" title="账户菜单" aria-label="账户菜单">A</a>
+      <span class="menu-anchor">
+        <button type="button" class="user-mini" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单">A</button>
+        <span class="menu" role="menu" hidden>
+          <a class="menu-item" role="menuitem" href="settings.html">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg>设置
+          </a>
+          <a class="menu-item" role="menuitem" href="settings.html#account">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-user"/></svg>账户资料
+          </a>
+          <span class="menu-sep" role="separator"></span>
+          <button class="menu-item is-danger" type="button" role="menuitem" data-ee-signout>
+            <svg class="od-icon" aria-hidden="true"><use href="#i-logout"/></svg>退出登录
+          </button>
+        </span>
+      </span>
     </header>
 
     <!-- ============ 主体 ============ -->
@@ -454,9 +468,6 @@
   </button>
   <button type="button" class="bn-item">
     <svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg><span data-i18n="shell.nav.notes">资料</span>
-  </button>
-  <button type="button" class="bn-item">
-    <svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg><span data-i18n="shell.nav.more">更多</span>
   </button>
 </nav>
 
