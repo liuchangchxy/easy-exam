@@ -29,17 +29,33 @@
 .menu-wide{  min-width: 248px;  }
 .menu-group-label{  font-size: var(--text-xs); color: var(--ink-4); letter-spacing: .08em;
     padding: var(--sp-2) var(--sp-3) var(--sp-1); cursor: default;  }
-/* 左轨（粘性） */
+/* 主从布局：左轨固定；右侧只呈现当前分区，切换在窗格内部完成。
+   页面框架（顶栏 / 左轨 / 面包屑）在切换分区时位置完全不变（见 fitDetail）。 */
   .set-layout{  display: grid; grid-template-columns: var(--rail-settings) minmax(0, 1fr); gap: var(--sp-7); align-items: start;  }
 .set-rail{  position: sticky; top: calc(var(--topbar-h) + var(--sp-5)); display: flex; flex-direction: column; gap: var(--sp-1);  }
+.set-tabs{  display: flex; flex-direction: column; gap: 2px; max-width: 100%;  }
 .set-group{  font-size: var(--text-xs); color: var(--ink-4); letter-spacing: .08em; padding: var(--sp-3) var(--sp-3) var(--sp-1);  }
 .set-item{  display: flex; align-items: center; gap: var(--sp-3); width: 100%; min-height: 36px;
-    padding: var(--sp-2) var(--sp-3); background: none; border: none; border-radius: var(--r-sm);
+    padding: var(--sp-2) var(--sp-3); background: none; border: 1px solid transparent; border-radius: var(--r-sm);
     font: inherit; font-size: var(--text-sm); color: var(--ink-2); text-align: left; cursor: pointer; text-decoration: none;  }
 .set-item:hover{  background: var(--surface-2); color: var(--ink);  }
-.set-item.is-active{  background: var(--brand-soft); color: var(--brand-ink); font-weight: 500;  }
+.set-item[aria-selected="true"]{  background: var(--brand-soft); color: var(--brand-ink); font-weight: 500;  }
 .set-item .od-icon{  --od-icon-size: 15px; flex: none;  }
 .set-item .ext{  margin-left: auto; --od-icon-size: 13px; color: var(--ink-4);  }
+.set-ext{  margin-top: var(--sp-2);  }
+/* 右侧详情窗格：自己滚动（高度由 fitDetail 按视口算出），所以分区内容长短
+   不影响 document 高度，也就不会在切换时把页面框架推走。
+   窗格宽 = 纸面右栏，长文（AI 配置两列）在这里自然折行，不挤进窄栏。 */
+  .set-detail{  min-width: 0; overflow-y: auto; overscroll-behavior: contain;
+    padding-right: var(--sp-2); scrollbar-width: thin;  }
+.set-detail:focus{  outline: none;  }
+.set-detail:focus-visible{  outline: var(--focus-ring) solid var(--brand); outline-offset: 2px;  }
+.set-panel{  margin-bottom: 0;  }
+.set-panel:focus{  outline: none;  }
+/* 面包屑宽度固定：切换分区只换「here」的文字，不改变 rect（宽度随文字变会让
+   「切换前后几何完全一致」不成立）。320px 足够放下最长分区名。 */
+  .topbar .crumb{  flex: 0 0 320px; min-width: 0; white-space: nowrap;  }
+.crumb-static{  color: var(--ink-3);  }
 .set-rail-note{  font-size: var(--text-xs); color: var(--ink-3); padding: var(--sp-3); line-height: var(--text-xs-lh);  }
 /* 设置行：标签 + 控件 */
   .setting-row{  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4);
@@ -113,34 +129,56 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
   .field-err.is-off{  display: none;  }
 /* 规格段分隔线（英文规格段与状态格共用） */
   .spec-block{  border-top: 1px solid var(--line); padding-top: var(--sp-6);  }
+/* 英文规格段与状态格属于规格浏览（?spec=1）：不参与分区面板，按文档流接在
+   当前分区之后（产品模式下 ee.css §18 整体隐藏）。 */
+  .spec-aside{  margin-top: var(--sp-7);  }
 /* 状态格 */
   .state-grid{  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--sp-4); align-items: start;  }
 .ee-state-panel .panel-body{  padding: var(--sp-4);  }
-/* ============ 移动端：左轨收成两行网格（OP-510） ============
-   不用横向滚动长条：六个分区 + 两个分组标签在 375px 上会溢出到屏外，
-   激活项也看不见。改成 flex-wrap 两行网格，什么都不被藏起来；
-   仍保留溢出兜底（单项超宽时右侧渐隐 + 激活项滚入视野）。           */
+/* ============ 移动端：左轨收成横向分段条（≤768） ============
+   与产品其余部分同一做法（banks.html 的 .segmented）：一条横向可滚动的分段
+   导航，固定在内容上方（sticky 在移动顶栏之下），不占满首屏；选中项自动滚入
+   视野，分组标签收起（窄屏上两枚标签只会挤掉两个分区）。               */
   @media (max-width: 768px){
-    .set-layout { grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); }
+    .set-layout { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
     .set-rail {
-      display: flex; flex-direction: row; flex-wrap: wrap; align-items: center;
-      gap: var(--sp-2); position: static;
-      padding: 0 0 var(--sp-3); border-bottom: 1px solid var(--line);
+      position: sticky; top: var(--mobile-top-h); z-index: 30;
+      display: block; padding: var(--sp-2) 0; margin: 0 calc(-1 * var(--sp-4));
+      background: var(--surface); border-bottom: 1px solid var(--line);
     }
-    /* 每个分组独占一整行：分组标签永远和自己的条目在同一行，
-       不会出现「关于」孤零零挂在行尾、条目掉到下一行的情况。*/
-    .set-group {
-      display: flex; flex-direction: row; flex-wrap: wrap; align-items: center;
-      gap: var(--sp-2); flex: 1 1 100%; padding: 0; border-right: 0; white-space: nowrap;
+    .set-tabs{
+      display: flex; flex-direction: row; align-items: center; gap: 2px;
+      padding: 2px var(--sp-4); overflow-x: auto; overscroll-behavior-x: contain;
+      scrollbar-width: none; max-width: 100%;
     }
-    .set-group + .set-group { padding-top: var(--sp-3); border-top: 1px solid var(--line); }
-    .set-item { flex: none; width: auto; white-space: nowrap; }
-    .set-rail-note { display: none; }
-    /* 溢出兜底：右侧渐隐提示还有内容 */
-    .set-rail.is-clipped {
+    .set-tabs::-webkit-scrollbar { display: none; }
+    /* 分区条可横向滑动时给右侧渐隐，提示还有分区没露出来 */
+    .set-tabs.is-clipped {
       mask-image: linear-gradient(to right, #000 0, #000 calc(100% - var(--sp-6)), transparent 100%);
       -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - var(--sp-6)), transparent 100%);
     }
+    .set-group { display: none; }
+    .set-item {
+      flex: none; width: auto; white-space: nowrap; min-height: 32px;
+      padding: var(--sp-1) var(--sp-3); font-size: var(--text-sm);
+      color: var(--ink-3); border-radius: var(--r-xs);
+    }
+    .set-item .ext { display: none; }
+    .set-tabs .set-ext { margin-top: 0; }
+    .set-rail-note { display: none; }
+    /* 移动顶栏已经写着「设置」，页头只保留一行副题，给分区内容腾出首屏；
+       分区条贴在顶栏之下，从第一屏就可见。 */
+    .content .page-head { margin-bottom: var(--sp-3); }
+    .content .page-head .page-eyebrow,
+    .content .page-head .page-title { display: none; }
+    .content .page-head .page-sub { margin-top: 0; max-width: none; }
+    #ai-banner { margin-bottom: var(--sp-2); padding: var(--sp-3) var(--sp-4); }
+    #ai-banner .notice-title { font-size: var(--text-sm); }
+    /* 详情窗格在窄屏同样是固定高度的内部滚动区（高度由 fitDetail 算出）：
+       这样切换分区时文档高度与框架位置都不变；分区条与详情各自滚，
+       页面本身不需要在两段内容之间来回跳。 */
+    .set-detail { padding-right: 0; }
+    .topbar .crumb { flex: 0 1 auto; }
    }
 @media (max-width: 1024px) and (min-width: 769px){
     .set-layout { grid-template-columns: calc(var(--rail-settings) - var(--sp-5)) minmax(0, 1fr); gap: var(--sp-5); }
@@ -151,7 +189,7 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
     .setting-row { align-items: flex-start; }
   }</style>
 </head>
-<body>
+<body data-nav-domain="settings">
 <a class="skip-link" href="#main-content">跳到主内容</a>
 <div class="app-shell">
 
@@ -208,7 +246,7 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
     <!-- ================= 桌面顶栏 ================= -->
     <header class="topbar">
       <nav class="crumb" aria-label="面包屑">
-        <button class="link" type="button" id="crumb-parent">设置</button>
+        <span class="crumb-static">设置</span>
         <span class="sep" aria-hidden="true">/</span>
         <span class="here" id="crumb-here">账号与安全</span>
       </nav>
@@ -225,7 +263,7 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
       <div class="menu-anchor">
         <button class="user-mini" type="button" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单">A</button>
         <div class="menu" role="menu" hidden>
-          <a class="menu-item" role="menuitem" href="#account">
+          <a class="menu-item" role="menuitem" href="#account" data-act="settings-section" data-section="account">
             <svg class="od-icon" aria-hidden="true"><use href="#i-user"/></svg><span data-i18n="sec.account">账户与安全</span>
           </a>
           <a class="menu-item" role="menuitem" href="instance.html" id="menu-instance">
@@ -253,6 +291,9 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
         <div class="menu" role="menu" hidden>
           <a class="menu-item" role="menuitem" href="settings.html#account">
             <svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg><span>设置</span>
+          </a>
+          <a class="menu-item" role="menuitem" href="#ai" data-act="settings-section" data-section="ai">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-cpu"/></svg><span>AI 与联网检索</span>
           </a>
           <button class="menu-item is-danger" type="button" role="menuitem" onclick="eeDialog.open('dlg-logout', this)">
             <svg class="od-icon" aria-hidden="true"><use href="#i-logout"/></svg><span>退出登录</span>
@@ -288,7 +329,7 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
         <div class="notice-body">
           <span class="notice-title">AI 尚未配置；练习、模考、错题与复习仍可正常使用。</span>
           <span class="notice-actions">
-            <a class="btn btn-sm" href="#ai">去配置 AI</a>
+            <a class="btn btn-sm" href="#ai" data-act="settings-section" data-section="ai">去配置 AI</a>
             <a class="btn btn-sm btn-quiet" href="notes.html">先去看资料</a>
           </span>
           <span data-spec>配好模型后，「AI 解释」「联网核查」与「变式题草稿」自动可用，无需重启。</span>
@@ -297,40 +338,49 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
 
       <div class="set-layout">
 
-        <!-- ================= 左轨：两组（常用 / 高级），按使用频率与相关性分组 ================= -->
+        <!-- ================= 左轨：分组分区（可 / 高级），按使用频率与相关性分组 =================
+             每个分区是 role=tab + aria-selected 的分区按钮，右侧只有当前分区的
+             role=tabpanel 可见；切换在 .set-detail 内部完成，页面不滚动。 -->
         <nav class="set-rail" aria-label="设置分区">
-          <div class="set-group">常用</div>
-          <a class="set-item is-active" href="#account" aria-current="true">
-            <svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg><span data-i18n="sec.account">账号与安全</span>
-          </a>
-          <a class="set-item" href="#appearance">
-            <svg class="od-icon" aria-hidden="true"><use href="#i-sun"/></svg><span data-i18n="sec.appearance">外观</span>
-          </a>
-          <a class="set-item" href="#practice">
-            <svg class="od-icon" aria-hidden="true"><use href="#i-target"/></svg><span data-i18n="sec.practice">练习偏好</span>
-          </a>
+          <div class="set-tabs" role="tablist" aria-orientation="vertical" data-act="settings-tabs">
+            <div class="set-group" role="presentation">常用</div>
+            <button class="set-item" type="button" role="tab" id="tab-account" aria-selected="true"
+                    aria-controls="panel-account" data-act="settings-section" data-section="account">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-shield"/></svg><span data-i18n="sec.account">账号与安全</span>
+            </button>
+            <button class="set-item" type="button" role="tab" id="tab-appearance" aria-selected="false"
+                    aria-controls="panel-appearance" data-act="settings-section" data-section="appearance">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-sun"/></svg><span data-i18n="sec.appearance">外观</span>
+            </button>
+            <button class="set-item" type="button" role="tab" id="tab-practice" aria-selected="false"
+                    aria-controls="panel-practice" data-act="settings-section" data-section="practice">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-target"/></svg><span data-i18n="sec.practice">练习偏好</span>
+            </button>
 
-          <div class="set-group">高级</div>
-          <a class="set-item" href="#ai">
-            <svg class="od-icon" aria-hidden="true"><use href="#i-cpu"/></svg><span data-i18n="sec.ai">AI 与联网检索</span>
-          </a>
-          <a class="set-item" href="#about">
-            <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg><span data-i18n="sec.about">关于与数据</span>
-          </a>
-          <a class="set-item" href="instance.html" id="rail-instance">
-            <svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg><span>实例管理</span>
-            <svg class="od-icon ext" aria-hidden="true"><use href="#i-external"/></svg>
-          </a>
+            <div class="set-group" role="presentation">高级</div>
+            <button class="set-item" type="button" role="tab" id="tab-ai" aria-selected="false"
+                    aria-controls="panel-ai" data-act="settings-section" data-section="ai">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-cpu"/></svg><span data-i18n="sec.ai">AI 与联网检索</span>
+            </button>
+            <button class="set-item" type="button" role="tab" id="tab-about" aria-selected="false"
+                    aria-controls="panel-about" data-act="settings-section" data-section="about">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg><span data-i18n="sec.about">关于与数据</span>
+            </button>
+            <a class="set-item set-ext" href="instance.html" id="rail-instance" data-act="open-instance">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-users"/></svg><span>实例管理</span>
+              <svg class="od-icon ext" aria-hidden="true"><use href="#i-external"/></svg>
+            </a>
+          </div>
 
           <!-- 入口对非管理员整个不渲染，这条说明也随之消失，不留悬空指引 -->
           <p class="set-rail-note" id="rail-instance-note">「实例管理」是独立路由，只对实例管理员开放。</p>
         </nav>
 
-        <!-- ================= 右侧内容 ================= -->
-        <div>
+        <!-- ================= 右侧内容：只显示当前分区 ================= -->
+        <div class="set-detail" id="set-detail">
 
           <!-- ========== 账号与安全（FN-515 / FN-404） ========== -->
-          <section class="section" id="account">
+          <section class="section set-panel" id="panel-account" role="tabpanel" aria-labelledby="tab-account" tabindex="0">
             <div class="section-head">
               <h2 class="section-title" data-i18n="sec.account">账号与安全</h2>
               <span class="section-note">账号安全只影响你自己；学习记录只属于当前账号。</span>
@@ -407,7 +457,7 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
           </section>
 
           <!-- ========== 外观（FN-512 / FN-513 / FN-514） ========== -->
-          <section class="section" id="appearance">
+          <section class="section set-panel" id="panel-appearance" role="tabpanel" aria-labelledby="tab-appearance" tabindex="0" hidden>
             <div class="section-head">
               <h2 class="section-title" data-i18n="sec.appearance">外观</h2>
               <span class="section-note">主题、配色、密度与语言只对这台设备生效，改完立刻变化，不跟随账号到其他设备。</span>
@@ -522,7 +572,7 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
           </section>
 
           <!-- ========== 练习偏好（FN-516） ========== -->
-          <section class="section" id="practice">
+          <section class="section set-panel" id="panel-practice" role="tabpanel" aria-labelledby="tab-practice" tabindex="0" hidden>
             <div class="section-head">
               <h2 class="section-title" data-i18n="sec.practice">练习偏好</h2>
               <span class="section-note">两项偏好跟随账号，跨设备一致；练习与模考会读取。</span>
@@ -564,7 +614,7 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
           </section>
 
           <!-- ========== AI 与联网检索（FN-510） ========== -->
-          <section class="section" id="ai">
+          <section class="section set-panel" id="panel-ai" role="tabpanel" aria-labelledby="tab-ai" tabindex="0" hidden>
             <div class="section-head">
               <h2 class="section-title" data-i18n="sec.ai">AI 与联网检索</h2>
               <span class="section-note">AI 是可选能力。未配置时，练习、模考、错题与复习仍然完整可用。</span>
@@ -639,9 +689,9 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
                   <label class="field">
                     <span class="label">服务类型</span>
                     <select class="select" id="ai-provider" data-autosave data-key="aiProvider" data-validate="none">
-                      <option selected>兼容 OpenAI 接口</option>
-                      <option>本地 Ollama</option>
-                      <option>自建网关 / 内网推理</option>
+                      <option value="openai" selected>兼容 OpenAI 接口</option>
+                      <option value="ollama">本地 Ollama</option>
+                      <option value="gateway">自建网关 / 内网推理</option>
                     </select>
                     <span class="hint" id="ai-provider-hint">是否需要密钥由服务类型决定，不由地址是否 localhost 决定。</span>
                   </label>
@@ -702,7 +752,7 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
                 <div class="od-grid g2 gap-4">
                   <label class="field">
                     <span class="label">检索方式</span>
-                    <select class="select" id="net-mode" data-autosave data-key="netMode" data-validate="none">
+                    <select class="select" id="net-mode" data-autosave data-key="online" data-validate="none">
                       <option value="on" selected>联网检索</option>
                       <option value="off">关闭联网</option>
                     </select>
@@ -733,7 +783,7 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
           </section>
 
           <!-- ========== 关于与数据（FN-517） ========== -->
-          <section class="section" id="about">
+          <section class="section set-panel" id="panel-about" role="tabpanel" aria-labelledby="tab-about" tabindex="0" hidden>
             <div class="section-head">
               <h2 class="section-title" data-i18n="sec.about">关于与数据</h2>
               <span class="section-note">私有云 · 数据保存在你的实例</span>
@@ -774,8 +824,9 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
             </div>
           </section>
 
-          <!-- ========== 英文规格段 ============ -->
-          <section class="section spec-block" id="en-appearance" lang="en-US" data-spec>
+          <!-- ========== 英文规格段（只在 ?spec=1 规格浏览器里显示；
+               不参与分区切换，产品模式下由 ee.css §18 隐藏） ============ -->
+          <section class="section spec-block spec-aside" id="en-appearance" lang="en-US" data-spec>
             <div class="section-head">
               <h2 class="section-title">Appearance</h2>
               <span class="section-note">Light and dark apply immediately and are stored on this device.</span>
@@ -866,8 +917,8 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
             </details>
           </section>
 
-          <!-- ========== 状态格（规格演示：成品模式隐藏） ============ -->
-          <section class="section spec-block" id="states" data-spec>
+          <!-- ========== 状态格（规格演示：成品模式隐藏；不参与分区切换） ============ -->
+          <section class="section spec-block spec-aside" id="states" data-spec>
             <div class="section-head">
               <h2 class="section-title">状态</h2>
               <span class="section-note">八态在同一屏内并列呈现；设置是低频管理面，每个分区都要说清自己的状态</span>
@@ -967,7 +1018,7 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
                     <div class="notice-body">
                       <div class="notice-title">AI 尚未配置</div>
                       <div>页面顶部常驻这条状态条；练习、模考、错题与复习照常可用。配好模型后状态条变为「AI 已配置」。</div>
-                      <div class="notice-actions"><a class="btn btn-sm" href="#ai">去配置</a></div>
+                      <div class="notice-actions"><a class="btn btn-sm" href="#ai" data-act="settings-section" data-section="ai">去配置</a></div>
                     </div>
                   </div>
                   <p class="state-note">未配置是一等公民：notice.info + 去配置链接，不产生垃圾数据。</p>
@@ -1211,83 +1262,142 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
     document.documentElement.setAttribute('lang', lang === 'en' ? 'en' : 'zh-CN');
   }
 
-  /* ---------- 分区导航：?section= 与滚动侦测 ---------- */
-  var railItems = Array.prototype.slice.call(document.querySelectorAll('.set-rail .set-item[href^="#"]'));
-  var sections = railItems.map(function (a) { return document.getElementById(a.getAttribute('href').slice(1)); }).filter(Boolean);
-  var names = railItems.map(function (a) { return (a.textContent || '').trim(); });
-  var crumbHere = document.getElementById('crumb-here');
+  /* ---------- 分区导航：真·主从（tab / tabpanel），URL hash 同步 ----------
+     · 分区是稳定功能 ID（account / appearance / practice / ai / about），写进
+       data-section；选中态只落在 role=tab 的 aria-selected 上。
+     · URL 用 #account 这类 hash（沿用旧链接语义，settings.html#ai 直接落到 AI）。
+       旧的 ?section= 查询参数仍能读入，落地后统一改写成 hash。
+     · 切换只换 .set-detail 里哪一个 tabpanel 可见，不滚动页面、不改框架位置。
+     · 详情窗格在桌面是固定高度、自己滚动的窗格（fitDetail）；分区内容长短
+       因此不影响 document 高度。窄屏让文档流滚动，同样不位移框架。 */
   var ORDER = ['account', 'appearance', 'practice', 'ai', 'about'];
+  var railHost = document.querySelector('.set-tabs');
+  var tabBtns = Array.prototype.slice.call(document.querySelectorAll('.set-tabs .set-item[data-section]'));
+  var panels = {};
+  var names = {};
+  tabBtns.forEach(function (b) {
+    var id = b.getAttribute('data-section');
+    panels[id] = document.getElementById('panel-' + id);
+    names[id] = (b.textContent || '').trim();
+  });
+  var detail = document.getElementById('set-detail');
+  var crumbHere = document.getElementById('crumb-here');
+  var currentSection = null;
 
-  function setSection(id, scroll) {
-    var idx = ORDER.indexOf(id);
-    if (idx < 0) idx = 0;
-    railItems.forEach(function (a, i) {
-      var on = i === idx;
-      a.classList.toggle('is-active', on);
-      if (on) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current');
-    });
-    if (crumbHere) crumbHere.textContent = names[idx] || '设置';
-    try { history.replaceState(null, '', '?section=' + ORDER[idx]); } catch (e) {}
-    revealRailItem(railItems[idx]);
-    if (scroll) {
-      var el = sections[idx];
-      if (el) {
-        var top = el.getBoundingClientRect().top + window.scrollY - 80;
-        window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
-      }
-    }
+  function hashSection() {
+    var raw = (location.hash || '').replace(/^#/, '');
+    if (ORDER.indexOf(raw) >= 0) return raw;
+    /* 兼容旧链接 ?section=ai（例如资料页「去配置 AI」） */
+    var q = new URLSearchParams(location.search).get('section');
+    return ORDER.indexOf(q) >= 0 ? q : null;
   }
-  /* 激活项在左轨里必须看得见：横向溢出时才滚（窄屏两行网格下通常不触发） */
-  function revealRailItem(el) {
-    var c = el && el.parentElement;
-    if (!c || c.scrollWidth <= c.clientWidth + 1) { syncRailOverflow(); return; }
-    var left = el.offsetLeft - (c.clientWidth - el.offsetWidth) / 2;
-    c.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+  /* 详情窗格高度 = 视口剩给纸面的那一截；两侧都 set，切换分区时 document 高度不变。
+     窄屏同样走这条路：分区条固定在顶栏下，详情在剩余高度内自己滚——切换分区
+     不会把页面框架或文档高度推走（验收要求四档完全一致）。 */
+  function fitDetail() {
+    if (!detail) return;
+    var narrow = window.matchMedia('(max-width: 768px)').matches;
+    /* 分区条在桌面是竖排、窄屏是横排：aria-orientation 跟着布局走 */
+    if (railHost) railHost.setAttribute('aria-orientation', narrow ? 'horizontal' : 'vertical');
+    var top = detail.getBoundingClientRect().top + window.scrollY;
+    /* 桌面：纸面自身还有下内边距（sp-10）与下外边距（sp-8）要留在视口内；
+       窄屏：底导高度 + 纸面下留白。两个值都从布局实际常量来，不猜。 */
+    var bottom = narrow ? 88 : 140;
+    var avail = Math.max(window.innerHeight - top - bottom, 240);
+    detail.style.height = avail + 'px';
     syncRailOverflow();
   }
-  /* 右侧渐隐只在「还有内容没露出来」时出现 */
+  function revealTab(btn) {
+    if (!btn || !railHost) return;
+    syncRailOverflow();
+    if (railHost.scrollWidth <= railHost.clientWidth + 1) return;
+    var left = btn.offsetLeft - (railHost.clientWidth - btn.offsetWidth) / 2;
+    railHost.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+    setTimeout(syncRailOverflow, 350);
+  }
+  /* 右侧渐隐只在「还有分区没露出来」时出现 */
   function syncRailOverflow() {
-    var c = document.querySelector('.set-rail');
-    if (!c) return;
-    var clipped = c.scrollWidth > c.clientWidth + 1 && c.scrollLeft + c.clientWidth < c.scrollWidth - 1;
-    c.classList.toggle('is-clipped', clipped);
+    if (!railHost) return;
+    var clipped = railHost.scrollWidth > railHost.clientWidth + 1 &&
+      railHost.scrollLeft + railHost.clientWidth < railHost.scrollWidth - 1;
+    railHost.classList.toggle('is-clipped', clipped);
   }
-  var railEl = document.querySelector('.set-rail');
-  if (railEl) {
-    railEl.addEventListener('scroll', syncRailOverflow, { passive: true });
-    window.addEventListener('resize', syncRailOverflow);
+  function setSection(id, opts) {
+    if (ORDER.indexOf(id) < 0) id = ORDER[0];
+    var changed = currentSection !== id;
+    currentSection = id;
+    tabBtns.forEach(function (b) {
+      var on = b.getAttribute('data-section') === id;
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.setAttribute('tabindex', on ? '0' : '-1');
+    });
+    ORDER.forEach(function (k) {
+      if (panels[k]) panels[k].hidden = k !== id;
+    });
+    if (crumbHere) crumbHere.textContent = names[id] || '设置';
+    syncUrlHash(id);
+    /* 切换分区时详情窗格滚回自己的顶部（详情内定位，不动页面） */
+    if (detail && changed && opts !== 'keepScroll') detail.scrollTop = 0;
+    revealTab(tabBtns.filter(function (b) { return b.getAttribute('data-section') === id; })[0]);
   }
-  railItems.forEach(function (a) {
-    a.addEventListener('click', function (e) {
+  /* 分区进 URL：hash 是唯一写法；旧的 ?section= 在这里被吸收并移除，
+     之后的链接统一是 settings.html#ai 这类稳定深链。 */
+  function syncUrlHash(id) {
+    try {
+      var params = new URLSearchParams(location.search);
+      params.delete('section');
+      var qs = params.toString();
+      history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + '#' + id);
+    } catch (e) {}
+  }
+  window.EESettingsSection = setSection;
+
+  tabBtns.forEach(function (b) {
+    b.addEventListener('click', function (e) {
       e.preventDefault();
-      setSection(a.getAttribute('href').slice(1), true);
+      setSection(b.getAttribute('data-section'));
+      b.focus();
     });
   });
-  if (document.getElementById('crumb-parent')) {
-    document.getElementById('crumb-parent').addEventListener('click', function () {
-      setSection(ORDER[0], true);
+  /* 页面里任何「去配置 AI」这类分区链接：是当前页内的分区按钮/链接都能落到分区 */
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest ? e.target.closest('[data-act="settings-section"]') : null;
+    if (!a) return;
+    var id = a.getAttribute('data-section');
+    if (ORDER.indexOf(id) < 0) return;
+    e.preventDefault();
+    setSection(id);
+    /* 只在详情窗格内定位到分区顶部，不动页面 */
+    if (detail) detail.scrollTop = 0;
+  });
+  /* 键盘：← → ↑ ↓ 在 tablist 内切换（ARIA tab 约定） */
+  if (railHost) {
+    railHost.addEventListener('keydown', function (e) {
+      var on = tabBtns.filter(function (b) { return b.getAttribute('aria-selected') === 'true'; })[0];
+      if (!on) return;
+      var i = tabBtns.indexOf(on);
+      var vertical = railHost.getAttribute('aria-orientation') === 'vertical' && window.matchMedia('(min-width: 769px)').matches;
+      var next = null;
+      if (e.key === 'ArrowDown' || (e.key === 'ArrowRight' && !vertical)) next = (i + 1) % tabBtns.length;
+      else if (e.key === 'ArrowUp' || (e.key === 'ArrowLeft' && !vertical)) next = (i - 1 + tabBtns.length) % tabBtns.length;
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = tabBtns.length - 1;
+      if (next === null) return;
+      e.preventDefault();
+      setSection(tabBtns[next].getAttribute('data-section'));
+      tabBtns[next].focus();
     });
   }
-
-  var raf = null;
-  function spy() {
-    raf = null;
-    var y = window.scrollY + 140;
-    var idx = 0;
-    for (var i = 0; i < sections.length; i++) {
-      if (sections[i].offsetTop <= y) idx = i;
-    }
-    railItems.forEach(function (a, i) {
-      var on = i === idx;
-      a.classList.toggle('is-active', on);
-      if (on) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current');
-    });
-    if (crumbHere) crumbHere.textContent = names[idx] || '设置';
-    try { history.replaceState(null, '', '?section=' + ORDER[idx]); } catch (e) {}
-    revealRailItem(railItems[idx]);
-  }
-  window.addEventListener('scroll', function () { if (!raf) raf = requestAnimationFrame(spy); }, { passive: true });
-  window.addEventListener('resize', function () { if (!raf) raf = requestAnimationFrame(spy); });
+  window.addEventListener('hashchange', function () {
+    var h = hashSection();
+    if (h) setSection(h);
+  });
+  /* 分区条可横向滚动时，滚动与窗口变化都要更新右侧渐隐 */
+  if (railHost) railHost.addEventListener('scroll', syncRailOverflow, { passive: true });
+  window.addEventListener('resize', function () { fitDetail(); });
+  /* 详情窗格高度依赖顶栏/纸张布局：等外壳装配完再量一次 */
+  document.addEventListener('DOMContentLoaded', function () { setTimeout(fitDetail, 0); });
+  window.addEventListener('load', function () { fitDetail(); });
 
   /* ---------- 菜单开闭：由 spec-boot 外壳统一接线（Escape / 外点 / 方向键） ---------- */
 
@@ -1309,7 +1419,7 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
     if (use) use.setAttribute('href', t === 'dark' ? '#i-moon' : '#i-sun');
     var tb = document.getElementById('tb-theme');
     if (tb) {
-      tb.title = t === 'dark' ? '切换为浅色' : '切换为深色';
+      tb.title = t === 'dark' ? '切换到浅色' : '切换到深色';
       tb.setAttribute('aria-label', tb.title);
     }
   }
@@ -1368,14 +1478,21 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
       syncLangUI();
     });
   }
-  var JUDGE_KEY = 'eeSettings.judge';
+  /* 判定模式是账户偏好，必须真的落库：原来只读 localStorage['eeSettings.judge']，
+     点击时没有写入方，练习页也从没读过它——设了等于没设。 */
   function judgeMode() {
-    try { return localStorage.getItem(JUDGE_KEY) || 'submit'; } catch (e) { return 'submit'; }
+    return (store && store.settings().judgeMode) || 'submit';
   }
   var judgeSeg = document.querySelector('[data-seg="judge"]');
   if (judgeSeg) {
-    judgeSeg.addEventListener('click', function () {
-      setTimeout(function () { syncSeg('judge', judgeMode); }, 0);
+    judgeSeg.addEventListener('click', function (e) {
+      var btn = e.target.closest ? e.target.closest('[data-v]') : null;
+      if (!btn) return;
+      var v = btn.getAttribute('data-v');
+      if (v !== 'submit' && v !== 'instant') return;
+      if (store) store.setSetting('judgeMode', v);
+      syncSeg('judge', judgeMode);
+      window.eeToast(v === 'instant' ? '判定模式：点选即判（仅单选与判断题）' : '判定模式：明确提交');
     });
   }
 
@@ -1401,8 +1518,19 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
   var aiProvider = document.getElementById('ai-provider');
   var aiKeyHint = document.getElementById('ai-key-hint');
   var aiProviderHint = document.getElementById('ai-provider-hint');
+  /* 服务类型用稳定 id 落库（openai / ollama / gateway），界面文案只是显示层。
+     旧数据里可能存了中文或英文文案，读入时映射回 id——否则换语言后下拉会空白。 */
+  var PROVIDER_LABEL = { openai: '兼容 OpenAI 接口', ollama: '本地 Ollama', gateway: '自建网关 / 内网推理' };
+  function providerId(v) {
+    if (PROVIDER_LABEL[v]) return v;
+    for (var k in PROVIDER_LABEL) if (PROVIDER_LABEL[k] === v) return k;
+    if (v === 'Local Ollama') return 'ollama';
+    if (v === 'OpenAI-compatible' || v === '兼容 OpenAI 接口') return 'openai';
+    if (v === 'Self-hosted gateway / on-prem') return 'gateway';
+    return 'openai';
+  }
   function syncProvider() {
-    var self = aiProvider.value === '自建网关 / 内网推理';
+    var self = aiProvider.value === 'gateway';
     if (aiProviderHint) {
       aiProviderHint.textContent = self
         ? '自建网关 / 内网推理通常不需要密钥：留空密钥即合法配置，不会因为地址不是 localhost 被要求补密钥。'
@@ -1479,7 +1607,19 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
     var key = el.getAttribute('data-key');
     if (key) {
       var saved = store.settings()[key];
-      if (saved != null && !el._restored) { el.value = String(saved); el._restored = true; }
+      if (saved != null && !el._restored) {
+        /* 布尔与枚举字段有自己的存储表示，不能一律 String()：
+           联网存 true/false，服务类型存稳定 id——直接把 'true' 塞进 on/off
+           下拉会得到一个空白选项，刷新后看起来像设置丢了。 */
+        if (key === 'online') {
+          el.value = (saved === false || saved === 'false' || saved === 'off') ? 'off' : 'on';
+        } else if (key === 'aiProvider') {
+          el.value = providerId(String(saved));
+        } else {
+          el.value = String(saved);
+        }
+        el._restored = true;
+      }
     }
     el.addEventListener('change', function () {
       var raw = (el.value || '').trim();
@@ -1498,6 +1638,9 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
            密码类字段（data-secret）只记录「已配置」，不回显原文。 */
         if (key) {
           var v = el.hasAttribute('data-secret') ? (raw ? '已配置' : '') : raw;
+          /* 布尔字段按语义落库，不要存成 'on'/'off' 字符串——读取方判断的是 true/false，
+             两套表示并存就会出现「关掉联网，刷新又变回开」。 */
+          if (key === 'online') v = raw !== 'off';
           store.setSetting(key, v);
         }
         paintSave(el, 'ok');
@@ -1510,22 +1653,26 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
   /* ---------- 当前生效值：跟着字段实时重算 ---------- */
   function val(id) { var el = document.getElementById(id); return el ? (el.value || '').trim() : ''; }
   function syncEffective() {
+    /* 这些摘要是拼接出来的，不能依赖整句词条；逐段取当前语言再拼，
+       保证英文界面下不会残留「实例默认 · OpenAI-compatible · 实例默认地址」。 */
+    function L(zh) { return window.eeT ? window.eeT(zh) : zh; }
     var aiBase = val('ai-base');
     var aiKey = document.getElementById('ai-key');
     var aiVal = document.getElementById('ai-effective-val');
     if (aiVal) {
       var bits = [];
-      bits.push(val('ai-provider') || '兼容 OpenAI 接口');
-      bits.push(aiBase ? aiBase : '实例默认地址');
-      bits.push(aiKey && aiKey.value.trim() ? '个人密钥' : '实例默认密钥');
-      aiVal.textContent = (aiBase || (aiKey && aiKey.value.trim()) ? '个人配置' : '实例默认') + ' · ' + bits.join(' · ');
+      bits.push(L(PROVIDER_LABEL[providerId(val('ai-provider'))] || '兼容 OpenAI 接口'));
+      bits.push(aiBase ? aiBase : L('实例默认地址'));
+      bits.push(aiKey && aiKey.value.trim() ? L('个人密钥') : L('实例默认密钥'));
+      aiVal.textContent = L(aiBase || (aiKey && aiKey.value.trim()) ? '个人配置' : '实例默认') + ' · ' + bits.join(' · ');
     }
     var netMode = document.getElementById('net-mode');
     var netVal = document.getElementById('net-effective-val');
     if (netVal && netMode) {
+      var netInput = document.querySelector('[data-net-only] .input');
       netVal.textContent = netMode.value === 'off'
-        ? '已关闭联网 · 核查直接返回未取得外部证据'
-        : '联网检索 · ' + (document.querySelector('[data-net-only] .input') && document.querySelector('[data-net-only] .input').value.trim() ? '个人接口' : '实例默认接口');
+        ? L('已关闭联网 · 核查直接返回未取得外部证据')
+        : L('联网检索') + ' · ' + (netInput && netInput.value.trim() ? L('个人接口') : L('实例默认接口'));
     }
   }
   /* 清除密钥：独立按钮，清除后该字段回到「未配置」语义 */
@@ -1533,14 +1680,23 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
     var b = document.getElementById(id);
     if (!b) return;
     b.addEventListener('click', function () {
-      var input = id === 'ai-clear-key' ? document.getElementById('ai-key') : null;
+      var input = id === 'ai-clear-key' ? document.getElementById('ai-key') : document.getElementById('net-key');
       if (input) input.value = '';
+      if (store) store.setSetting(id === 'ai-clear-key' ? 'aiKey' : 'netKey', '');
       window.eeToast('已清除密钥，该字段回到未配置');
       syncEffective();
     });
   });
   var aiOff = document.getElementById('ai-off');
-  if (aiOff) aiOff.addEventListener('change', syncEffective);
+  if (aiOff) {
+    /* 关闭 AI 是账户偏好，必须落库；原来只重算展示，刷新后又变回「已配置」。 */
+    aiOff.checked = store ? store.settings().aiEnabled !== false : false;
+    aiOff.addEventListener('change', function () {
+      if (store) store.setSetting('aiEnabled', aiOff.checked);
+      syncEffective();
+      window.eeToast(aiOff.checked ? 'AI 解释已启用' : 'AI 解释已关闭');
+    });
+  }
   /* 测试连接：进行态禁用 + 结果反馈（只含状态码或异常类名） */
   document.querySelectorAll('[data-test-conn]').forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -1662,12 +1818,14 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
   /* ---------- 对外接口 ---------- */
   window.EESettings = {
     focusAi: function () {
-      setSection('ai', true);
+      setSection('ai');
+      if (detail) detail.scrollTop = 0;
       setTimeout(function () {
         var el = document.getElementById('ai-base');
-        if (el) el.focus();
-      }, 400);
-    }
+        if (el) el.focus({ preventScroll: true });
+      }, 60);
+    },
+    section: function () { return currentSection; }
   };
 
   /* ---------- 初始化与跨页同步 ---------- */
@@ -1681,13 +1839,12 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
   syncAccount();
   syncEffective();
   syncInstanceEntry();
-  var startSection = new URLSearchParams(location.search).get('section');
-  var deepLink = ORDER.indexOf(startSection) >= 0;
-  /* 深链（分享链接）进站时滚到该分区；刷新由浏览器自己恢复滚动位置 */
-  setSection(deepLink ? startSection : ORDER[0], deepLink && window.scrollY === 0);
-  syncRailOverflow();
-  /* 不在初始化时跑 scroll 侦测：深链分区已由 setSection 定好，
-     浏览器恢复的滚动位置可能还没到位，先按 URL 分区渲染，用户一滚动再跟随。 */
+  /* 分区初始值：hash 优先（settings.html#ai），其次兼容旧的 ?section=，
+     最后回默认 account。深链与刷新落在同一分区：hash 不依赖滚动位置。 */
+  var startSection = hashSection() || ORDER[0];
+  setSection(startSection, 'keepScroll');
+  /* 首屏不滚动：分区切换本来就不是滚动，进站按框架自然位置（页首）呈现 */
+  fitDetail();
 
   if (store) {
     store.subscribe(function () {

@@ -37,6 +37,7 @@
      toolbarHtml(items, opts)         筛选 / 展开工具栏 HTML
      blockHtml(items, withVer, opts)  工具栏 + 列表 + 空状态，一整块
      bind(node)                      委托展开、筛选、全部展开 / 收起
+     locate(node, index)             展开并滚到第 index 题（0 起），带高亮；返回是否命中
    ========================================================================== */
 window.eeReport = (function () {
   var VERDICT = {
@@ -96,7 +97,10 @@ window.eeReport = (function () {
     if (bank) qp.push('bank=' + encodeURIComponent(bank));
     var href = (opts.qPrefix || '') + 'question.html' + (qp.length ? '?' + qp.join('&') : '');
     /* 复习页定位：带上题目 id 与题库 id，让复习页能定位并高亮这一题，
-       而不是只把用户丢到错题列表页顶部。 */
+       而不是只把用户丢到错题列表页顶部。
+       bankId 写的是复习队列行所属题库（item 自带的 bankId，或 opts.bankId）；
+       报告的题库与当前题库不同（例如模考自 b_rk、复习行在 b_acc）时，
+       用错题库去 review.html 只会命中不了行——宁可不带 bank 也不带错 bank。 */
     var rq = [];
     if (it.qid) rq.push('qid=' + encodeURIComponent(it.qid));
     if (bank) rq.push('bank=' + encodeURIComponent(bank));
@@ -141,7 +145,7 @@ window.eeReport = (function () {
       (it.qid ? '<a class="btn btn-sm btn-quiet" href="' + href + '">查看该题当前版本</a>' : '') +
       ((v.tag === 'bad' || v.tag === 'warn') ? '<a class="btn btn-sm btn-quiet" href="' + rHref + '">在错题里打开</a>' : '') +
       '</div></div>';
-    return '<div class="rep-item" data-correctness="' + (it.correctness || 'BLANK') + '">' + head + body + '</div>';
+    return '<div class="rep-item" data-rep-index="' + i + '" data-correctness="' + (it.correctness || 'BLANK') + '">' + head + body + '</div>';
   }
   /* 行头版本指示：只有一个低权重元素。判分版本与当前版本真的不同时才提亮，
      否则一行小字说明「与交卷时一致」——版本信息不该是行头最抢眼的东西。 */
@@ -235,7 +239,7 @@ window.eeReport = (function () {
     if (head) head.setAttribute('aria-expanded', open ? 'true' : 'false');
     if (body) body.hidden = !open;
   }
-  /* 展开 / 收起 / 筛选：委托给容器，报告重渲染后重复调用即可。
+  /* 展开 / 收起 / 筛选 / 定位：委托给容器，报告重渲染后重复调用即可。
      接受单个选择器字符串、单个 Element、Element 数组或 NodeList。
      容器可以是 .rep-block（含工具栏），也可以是单个 .rep-list。 */
   function bind(selector) {
@@ -279,8 +283,37 @@ window.eeReport = (function () {
       })(nodes[n]);
     }
   }
+  /* 定位并展开某一题（报告答题卡格子 → 对应明细）。
+     契约：调用方给出容器与题号，本组件负责
+       ① 若该题被当前筛选挡住，先把筛选恢复为「全部」；
+       ② 展开该题的 .rep-item 并同步 aria-expanded / hidden；
+       ③ 用 scrollIntoView({block:'center'}) 滚到它，并加 .is-target 高亮。
+     返回 true 表示真的落到了某一题；找不到就返回 false，调用方据此给出准确反馈
+     （不静默停在列表顶部）。 */
+  function locate(box, index) {
+    var node = typeof box === 'string' ? document.querySelector(box) : box;
+    if (!node) return false;
+    var block = node.classList && node.classList.contains('rep-block') ? node : (node.querySelector ? node.querySelector('.rep-block') : null);
+    var host = block || node;
+    var items = host.querySelectorAll('.rep-item');
+    if (!items.length) return false;
+    var want = parseInt(index, 10);
+    if (isNaN(want) || want < 0 || want >= items.length) return false;
+    var item = items[want];
+    /* ① 被筛选挡住时先解除筛选，否则「定位」只会得到一个隐藏节点 */
+    if (item.hidden) applyFilter(block || host, 'all');
+    for (var i = 0; i < items.length; i++) items[i].classList.remove('is-target');
+    /* ② 展开并同步无障碍状态 */
+    setOpen(item, true);
+    /* ③ 滚动到行并高亮 */
+    item.classList.add('is-target');
+    if (item.scrollIntoView) item.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    var head = item.querySelector('.rep-item-head');
+    if (head && head.focus) { if (!head.hasAttribute('tabindex')) head.setAttribute('tabindex', '-1'); head.focus({ preventScroll: true }); }
+    return true;
+  }
   return {
     VERDICT: VERDICT, esc: esc, itemHtml: itemHtml, itemsHtml: itemsHtml,
-    toolbarHtml: toolbarHtml, blockHtml: blockHtml, bind: bind, FILTERS: FILTERS
+    toolbarHtml: toolbarHtml, blockHtml: blockHtml, bind: bind, locate: locate, FILTERS: FILTERS
   };
 })();

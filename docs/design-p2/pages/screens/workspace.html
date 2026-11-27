@@ -12,6 +12,13 @@
 
   /* 视觉隐藏（表格复选列的无障碍名称） */
   .vh{  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;  }
+/* 有默认动作的题目行：主体可点；行内控件由 JS 排除，不触发整行跳转（规则 §2） */
+  .dtable tbody tr[data-row-href]{  cursor: pointer;  }
+.qm-row[data-row-href]{  cursor: pointer;  }
+/* 纯展示行（空态、成员、导入记录等）不显示可点的 hover（规则 §2/§7） */
+  .dtable tbody tr:not([data-row-href]):hover{  background: transparent;  }
+/* 禁用态可见：aria-disabled 的链接也要看起来不可用 */
+  .btn[aria-disabled="true"]{  opacity: .5; cursor: not-allowed;  }
 /* ------------------------------------------------------------------
      纸内分区：原版的 .panel 是「上沿一条细线的编辑块」（透明底、无圆角、无边框），
      不是卡片。ee.css 的 .panel 是卡片形态，这里按原版同值覆写为编辑块，
@@ -182,7 +189,7 @@
     .audit-act, .name-col { width: auto; flex: none; }
   }</style>
 </head>
-<body>
+<body data-nav-domain="banks">
 <a class="skip-link" href="#main-content">跳到主内容</a>
 <div class="app-shell">
 
@@ -243,7 +250,7 @@
         <span class="here" id="ws-crumb-here">题库工作区</span>
       </nav>
       <span class="spacer"></span>
-      <button class="icon-btn" type="button" id="tb-search" aria-label="搜索题目" title="搜索题目">
+      <button class="icon-btn" type="button" id="tb-search" data-ee-shell="search" aria-label="全局搜索（全站）" title="全局搜索（全站）">
         <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
       </button>
       <button data-ee-shell="theme" class="icon-btn" type="button" id="tb-theme" aria-label="切换明暗" title="切换明暗">
@@ -275,7 +282,7 @@
         <svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>题库
       </a>
       <span class="mt-title" id="ws-m-title">题库工作区</span>
-      <button class="icon-btn" type="button" id="tb-search-m" aria-label="搜索题目">
+      <button class="icon-btn" type="button" id="tb-search-m" data-ee-shell="search" aria-label="全局搜索（全站）" title="全局搜索（全站）">
         <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
       </button>
       <button class="user-mini" type="button" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单">A</button>
@@ -357,7 +364,8 @@
           <div class="od-cluster q-toolbar">
             <div class="search-box q-search">
               <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
-              <input class="input" type="search" placeholder="搜索题干、题号或标签" aria-label="搜索题干、题号或标签" id="q-search">
+              <input class="input" type="search" placeholder="筛选题目题干、题号或标签" aria-label="筛选题目题干、题号或标签（仅筛选本题库，不搜全站）" aria-describedby="q-search-hint" id="q-search">
+              <span class="vh" id="q-search-hint">这里只筛选当前题库的题目列表；搜索全站请用顶栏的全局搜索。</span>
             </div>
             <select class="select q-select" aria-label="题型" id="q-type">
               <option selected>全部题型</option>
@@ -997,6 +1005,28 @@
   </button>
 </nav>
 
+<!-- ============ 对话框：开始练习前发现同模式会话 ============ -->
+<dialog class="dlg narrow" id="dlg-ws-practice-conflict" aria-labelledby="dlg-ws-practice-title" aria-describedby="dlg-ws-practice-desc">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">开始练习</p>
+      <h2 class="dlg-title" id="dlg-ws-practice-title">已有进行中的顺序练习</h2>
+    </div>
+    <button type="button" class="icon-btn sm" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <p class="dlg-p" id="dlg-ws-practice-desc"></p>
+    <p class="hint">同一个练习模式同时只保留一个进行中的会话；「结束并重新开始」会结束那次会话，已答记录不再计入本次。</p>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close>取消</button>
+    <button type="button" class="btn btn-quiet" id="wpc-continue">继续上次</button>
+    <button type="button" class="btn btn-primary" id="wpc-restart">结束并重新开始</button>
+  </div>
+</dialog>
+
 <!-- ================= 浮层：新建题目 ================= -->
 <dialog class="dlg wide" id="dlg-create" aria-labelledby="dlg-create-title">
   <div class="dlg-head">
@@ -1524,23 +1554,32 @@
   }
   $('#ws-body').hidden = false;
 
-  /* ---------- 视图状态 ---------- */
-  var VS = 'workspace';
+  /* ---------- 视图状态：按题库隔离（规则 §4） ----------
+     键 = workspace:<bankId>:<userId>。切换题库时各自恢复自己的筛选、排序、页签、
+     页码与选中项；选中项再按本题库题目 id 剪一遍，题库之间不会残留。 */
+  function userScope(base) { return base + ':' + (S.user ? S.user() : 'anon'); }
+  var VS = userScope('workspace:' + bankId);
   var sv = S.view.load(VS);
   var st = {
     tab: qp.get('tab') || sv.tab || 'questions',
-    q: sv.q || '',
+    /* ?q= 是深链筛选（导入结果「查看题目」用它定位刚导入的题），优先于上次记忆 */
+    q: qp.get('q') || sv.q || '',
     type: sv.type || '全部题型',
     chapter: sv.chapter || '全部章节',
     tag: sv.tag || '全部标签',
     diff: sv.diff || '全部难度',
     sort: sv.sort || '默认顺序',
     showArchived: !!sv.showArchived,
-    page: sv.page || 1,
+    page: qp.get('q') ? 1 : (sv.page || 1),
     pageSize: sv.pageSize || 25,
     selected: sv.selected || {},      /* 题目 id → true，显式选择集，跨筛选保留 */
     bulkChapter: '', bulkTarget: ''   /* 批量条的已选章节 / 目标题库（跨重渲染保留） */
   };
+  /* 防御：旧版本可能把别的题库的选中项留在同一个键里，读出来先剪掉 */
+  Object.keys(st.selected).forEach(function (id) {
+    var q = S.question(id);
+    if (!q || q.bankId !== bankId) delete st.selected[id];
+  });
   var TABS = ['questions', 'structure', 'members', 'imports', 'drafts', 'settings'];
   if (TABS.indexOf(st.tab) < 0) st.tab = 'questions';
   function saveView() {
@@ -1663,8 +1702,17 @@
     $('#ws-bank-name').textContent = bank.name;
     $('#ws-m-title').textContent = bank.name;
     $('#ws-crumb-here').textContent = bank.name;
-    $('#ws-bank-sub').textContent = (bank.category || '默认分类') + ' · 共 ' + qs.length + ' 题 · 我可练 ' + (qs.length - killed) + ' 题';
-    $('#ws-practice').setAttribute('href', 'practice.html?bank=' + encodeURIComponent(bankId));
+    $('#ws-bank-sub').textContent = (bank.category || '默认分类') + ' · 共 ' + qs.length + ' 题 · 我可练 ' + (qs.length - killed) + ' 题' + (readonly() ? ' · 只读共享' : '');
+    /* 开始练习：带完整参数（题库 / 模式 / 题量 / 题型 / 范围）跳到答题器。
+       会话创建与「同模式已有会话」的决策都在答题器侧（D 域），本页不另建一份。 */
+    var practiceTotal = Math.max(1, qs.length - killed);
+    $('#ws-practice').setAttribute('href',
+      'practice.html?bank=' + encodeURIComponent(bankId) +
+      '&kind=practice&mode=' + encodeURIComponent('顺序练习') +
+      '&total=' + practiceTotal +
+      '&type=' + encodeURIComponent('全部题型') +
+      '&scope=' + encodeURIComponent('全部题目') +
+      '&from=workspace');
     $('#ws-import').setAttribute('href', 'import.html?bank=' + encodeURIComponent(bankId));
     $('#stt-import').setAttribute('href', 'import.html?bank=' + encodeURIComponent(bankId));
     $('#tab-count-questions').textContent = String(qs.length);
@@ -1674,6 +1722,9 @@
     var ro = $('#ws-readonly');
     ro.hidden = !readonly();
     if (readonly()) $('#ws-readonly-role').textContent = ROLE_NAMES[myRole()] || '成员';
+    /* 只读是语义，不是「禁用样式」：区域显式标 aria-readonly，读屏与视觉都能分开 */
+    var bodyEl = $('#ws-body');
+    if (bodyEl) bodyEl.setAttribute('aria-readonly', readonly() ? 'true' : 'false');
 
     var live = S.banks({ archived: false });
     var badge = $('#nav-bank-count');
@@ -1699,13 +1750,16 @@
   function rowCheck(x, sel) {
     return '<label class="check"><input type="checkbox" aria-label="选择题目 ' + esc(x.id) + '"' + (sel ? ' checked' : '') + '><span class="vh">选择</span></label>';
   }
+  function qHref(x) {
+    return 'question.html?id=' + encodeURIComponent(x.id) + '&bank=' + encodeURIComponent(bankId) + '&from=workspace';
+  }
   function qRow(x) {
     var sel = !!st.selected[x.id];
     var arch = !!x.archived;
     /* CR-12 两向规则：编辑 / 归档题目对所有成员相关，成员与只读置灰 + 可读原因，不隐藏、不假装可点 */
     var canEdit = canEditContent();
     var canArch = S.can('question.archive') && !readonly();
-    return '<tr data-row-id="' + x.id + '"' + (arch ? ' data-archived="1"' : '') + (sel ? ' class="is-selected"' : '') + '>' +
+    return '<tr data-row-id="' + x.id + '" data-act="open-question" data-row-href="' + qHref(x) + '"' + (arch ? ' data-archived="1"' : '') + (sel ? ' class="is-selected"' : '') + '>' +
       '<td class="col-check" data-label="选择">' + rowCheck(x, sel) + '</td>' +
       '<td class="num" data-label="题号">' + esc(x.id) + '</td>' +
       '<td data-label="题干"><button class="link-btn q-stem" type="button" data-q-open="' + x.id + '">' + esc(x.stem) + '</button>' +
@@ -1722,7 +1776,7 @@
     var arch = !!x.archived;
     var canEdit = canEditContent();
     var canArch = S.can('question.archive') && !readonly();
-    return '<div class="list-row qm-row' + (sel ? ' is-selected' : '') + '" data-row-id="' + x.id + '"' + (arch ? ' data-archived="1"' : '') + '>' +
+    return '<div class="list-row qm-row' + (sel ? ' is-selected' : '') + '" data-row-id="' + x.id + '" data-act="open-question" data-row-href="' + qHref(x) + '"' + (arch ? ' data-archived="1"' : '') + '>' +
       rowCheck(x, sel) +
       '<span class="qm-main">' +
         '<button class="link-btn qm-stem" type="button" data-q-open="' + x.id + '">' + esc(x.stem) + '</button>' +
@@ -1805,6 +1859,14 @@
     });
     $$('#q-tbody [data-q-open], #q-mobile [data-q-open]').forEach(function (b) {
       b.onclick = function () { location.href = 'question.html?id=' + encodeURIComponent(b.getAttribute('data-q-open')) + '&bank=' + encodeURIComponent(bankId) + '&from=workspace'; };
+    });
+    /* 整行可点：默认动作 = 打开题目。行内按钮 / 链接 / 复选框不触发整行跳转（规则 §2）。 */
+    $$('#q-tbody tr[data-row-href], #q-mobile [data-row-href]').forEach(function (row) {
+      row.addEventListener('click', function (e) {
+        if (e.target.closest && e.target.closest('button, a, input, label, select, textarea, .col-check, .check')) return;
+        var href = row.getAttribute('data-row-href');
+        if (href) location.href = href;
+      });
     });
     $$('#q-tbody [data-q-edit], #q-mobile [data-q-edit]').forEach(function (b) {
       b.onclick = function () {
@@ -2639,6 +2701,21 @@
     if ($('#ws-create').disabled) $('#ws-create').title = blockReason() || S.denyReason('question.create');
     guardLink($('#ws-import'), 'bank.import');
     guardLink($('#stt-import'), 'bank.import');
+    /* 空题库 / 可练题被我全部斩杀：开始练习不可用，原因写进可见的 #ws-gate-reason */
+    var qsCount = S.questions(bankId, { archived: false }).length;
+    var practiceable = qsCount - killedCount();
+    var pWhy = qsCount === 0
+      ? '这个题库还没有可练习的题目：先新建或导入题目。'
+      : (practiceable <= 0 ? '未归档题目被我全部斩杀：去斩杀题库恢复后即可练习。' : '');
+    var pBtn = $('#ws-practice');
+    if (pWhy) {
+      pBtn.setAttribute('aria-disabled', 'true');
+      pBtn.setAttribute('data-disabled-reason', pWhy);
+      reasons.push(pWhy);
+    } else {
+      pBtn.removeAttribute('aria-disabled');
+      pBtn.removeAttribute('data-disabled-reason');
+    }
     var el = $('#ws-gate-reason');
     el.textContent = reasons.join('；');
     el.hidden = reasons.length === 0;
@@ -3036,15 +3113,49 @@
     $('#qc-export-archived').checked = false;
     updateExportSummary();
   });
-  function focusSearch() {
-    setTab('questions');
-    var box = $('#q-search');
-    if (box) { box.focus(); box.select(); }
-  }
-  $('#tb-search').addEventListener('click', focusSearch);
-  $('#tb-search-m').addEventListener('click', focusSearch);
+  /* 顶栏搜索是全局入口，由 spec-boot 的命令面板统一接管（data-ee-shell="search"）。
+     页内 #q-search 只是当前题库的筛选器，不再冒充全局搜索。 */
   $('#tb-logout').addEventListener('click', function () { S.logout(); location.href = 'login.html'; });
-  /* 主题 / 语言由 spec-boot 外壳统一接线（data-ee-shell），本页只保留页内搜索聚焦 */
+
+  /* ---------- 开始练习：参数 + 冲突提示 ----------
+     与 D 域分工：本页只决定「去哪个题库、用什么参数」以及冲突时用户的取舍；
+     会话由答题器按参数新建（D 域：带参数无 sid → 新建）。冲突先在这里提示，
+     用户选「结束并重新开始」后，本页结束同模式旧会话，再交给答题器新建。 */
+  var wsPracticeConflict = null;
+  function sameModeSessions() {
+    if (S.sessionConflicts) return S.sessionConflicts({ mode: '顺序练习' });
+    return S.sessions().filter(function (s) { return (s.mode || '顺序练习') === '顺序练习'; });
+  }
+  function openWsPracticeConflict(conflicts) {
+    var s = conflicts[conflicts.length - 1];
+    wsPracticeConflict = s;
+    var mode = s.mode || '顺序练习';
+    $('#dlg-ws-practice-title').textContent = '已有进行中的' + mode;
+    $('#dlg-ws-practice-desc').textContent =
+      '「' + S.bankName(s.bankId) + '」还有一次' + mode + '没有结束（已答 ' + (s.done || 0) + ' / ' + (s.total || 0) + '）。' +
+      (s.bankId === bankId ? '继续那次，或结束它并从本题库重新开始。'
+        : '继续那次会先回到「' + S.bankName(s.bankId) + '」；也可以结束它，从「' + bank.name + '」重新开始。');
+    $('#wpc-continue').textContent = s.bankId === bankId ? '继续上次' : '先继续另一个题库';
+    window.eeDialog.open('dlg-ws-practice-conflict', document.activeElement);
+  }
+  function startPractice(force) {
+    var conflicts = sameModeSessions();
+    if (conflicts.length && !force) { openWsPracticeConflict(conflicts); return; }
+    if (force) conflicts.forEach(function (s) { S.finishSession(s.id); });
+    /* 无 sid：答题器按参数新建会话（D 域） */
+    location.href = $('#ws-practice').getAttribute('href');
+  }
+  $('#ws-practice').addEventListener('click', function (e) { e.preventDefault(); startPractice(false); });
+  $('#wpc-continue').addEventListener('click', function () {
+    var s = wsPracticeConflict;
+    window.eeDialog.close($('#dlg-ws-practice-conflict'));
+    if (s) location.href = 'practice.html?sid=' + encodeURIComponent(s.id);
+  });
+  $('#wpc-restart').addEventListener('click', function () {
+    window.eeDialog.close($('#dlg-ws-practice-conflict'));
+    startPractice(true);
+  });
+  /* 主题 / 语言由 spec-boot 外壳统一接线（data-ee-shell）；页内搜索只是题库筛选器 */
   $('#stt-retry').addEventListener('click', function () { renderAll(); toast('已重新读取题库'); });
   $('#stt-retry-inline').addEventListener('click', function () { renderAll(); toast('已重试这次批量操作'); });
   $('#stt-conflict-mine').addEventListener('click', function () { toast('已打开你的版本（v2）副本，可另存为新题'); });

@@ -132,7 +132,7 @@
     .ver-side { margin-left: auto; }
   }</style>
 </head>
-<body>
+<body data-nav-domain="banks">
 <a class="skip-link" href="#main-content">跳到主内容</a>
 <div class="app-shell">
   <!-- ============ 侧栏（导航由 assets/nav.js 统一转换为真实链接） ============ -->
@@ -1041,27 +1041,50 @@
   }
   function refsOf(id) {
     var x = xOf(id);
-    if (x.refs === null) x.refs = (REF_SEED[id] || []).slice();
+    if (x.refs === null) {
+      /* 关联资料也走共享状态：题目页写 question.noteRefs，资料页（B 域）可反查同一字段 */
+      var q = S.question(id);
+      x.refs = (q && Array.isArray(q.noteRefs)) ? q.noteRefs.slice() : (REF_SEED[id] || []).slice();
+    }
     return x.refs;
+  }
+  function syncRefsToStore() {
+    if (!current) return;
+    S.updateQuestion(current.id, { noteRefs: refsOf(current.id).slice() });
   }
   function versionsOf(id) {
     var x = xOf(id);
     if (x.versions === null) x.versions = [];
     return x.versions;
   }
+  /* 题目内容以共享状态为准：题库工作区、题目页与答题器读到的是同一份。
+     X 只保存页面级补充（知识点 / 资料关联 / 版本历史）；题干、选项、答案、解析
+     一律先读 S.question(id)，读不到才回落到演示内容。 */
+  function storeOptions(id) {
+    var q = S.question(id);
+    if (!q || !Array.isArray(q.options) || !q.options.length) return null;
+    return q.options.map(function (o) { return [o[0], o[1]]; });
+  }
   function optsOf(id) {
     var x = xOf(id);
-    if (x.opts === null) x.opts = (DEMO[id] && DEMO[id].opts) ? DEMO[id].opts.slice() : [];
+    if (x.opts === null) x.opts = storeOptions(id) || ((DEMO[id] && DEMO[id].opts) ? DEMO[id].opts.slice() : []);
     return x.opts;
   }
   function answerOf(id) {
     var x = xOf(id);
-    if (x.answer === '' || x.answer == null) x.answer = (DEMO[id] && DEMO[id].answer) || '';
+    if (x.answer === '' || x.answer == null) {
+      var q = S.question(id);
+      var a = (q && q.answer != null && q.answer !== '') ? q.answer : (DEMO[id] && DEMO[id].answer);
+      x.answer = Array.isArray(a) ? a.join('') : (a || '');
+    }
     return x.answer;
   }
   function explainOf(id) {
     var x = xOf(id);
-    if (!x.explain) x.explain = (DEMO[id] && DEMO[id].explain) ? DEMO[id].explain.join('\n') : '';
+    if (!x.explain) {
+      var q = S.question(id);
+      x.explain = (q && q.explain) ? q.explain : ((DEMO[id] && DEMO[id].explain) ? DEMO[id].explain.join('\n') : '');
+    }
     return x.explain;
   }
 
@@ -1158,6 +1181,11 @@
       return;
     }
     current = res.q;
+    /* 资料关联写进共享状态：首次打开时把种子关联落到 question.noteRefs，
+       资料页（B 域）就能按同一字段反查「哪些题目引用了这条笔记」。 */
+    if (!Array.isArray(current.noteRefs)) {
+      S.updateQuestion(current.id, { noteRefs: refsOf(current.id).slice() });
+    }
     $('#q-body').hidden = false;
     $('#q-state').hidden = true;
 
@@ -1283,7 +1311,7 @@
     $('#q-archive-btn').querySelector('use').setAttribute('href', archived ? '#i-restore' : '#i-archive');
 
     /* 练习入口 */
-    $('#q-practice').setAttribute('href', 'practice.html?bank=' + encodeURIComponent(current.bankId));
+    $('#q-practice').setAttribute('href', practiceUrl(current.bankId, current.id));
 
     /* 侧栏计数 */
     var live = S.banks({ archived: false });
@@ -1299,6 +1327,8 @@
   /* ---------- 冲突渲染与处置 ---------- */
   function renderConflict() {
     var el = $('#q-conflict-notice');
+    /* 没有基线版本就不是一次真实冲突：宁可不出提示，也不显示「你打开的是 ，服务端现在已经是 v1」。 */
+    if (conflict && !conflict.base) conflict = null;
     el.hidden = !conflict;
     if (!conflict) return;
     $('#q-conflict-desc').textContent = '你打开的是 ' + conflict.base + '，服务端现在已经是 ' + conflict.theirs +
@@ -1361,7 +1391,7 @@
         var arr = refsOf(current.id);
         var i = arr.indexOf(rid);
         if (i >= 0) arr.splice(i, 1);
-        saveX(X); toast('已解除关联 · 资料内容保留'); render();
+        saveX(X); syncRefsToStore(); toast('已解除关联 · 资料内容保留'); render();
       };
     });
     $$('#ver-history [data-ver-open]').forEach(function (b) {
@@ -1401,7 +1431,7 @@
     if (!rid) { toast('没有可关联的资料', 'bad'); return false; }
     var arr = refsOf(current.id);
     if (arr.indexOf(rid) < 0) arr.push(rid);
-    saveX(X); toast('已关联资料'); render();
+    saveX(X); syncRefsToStore(); toast('已关联资料'); render();
     return false;
   };
 
@@ -1660,12 +1690,17 @@
       answer: answerOf(current.id), explain: explainOf(current.id), points: xOf(current.id).points || ''
     };
     var x = xOf(current.id);
-    x.opts = d.opts; x.answer = d.answer; x.explain = d.explain; x.points = d.points;
+    /* 多选答案在共享数据里存字母数组，答题器判分按集合比对；单选 / 判断 / 填空 / 主观存字符串。 */
+    var ans = d.answer;
+    if (d.type === '多选题') ans = Array.isArray(ans) ? ans.slice() : String(ans || '').split('');
+    x.opts = d.opts || []; x.answer = Array.isArray(ans) ? ans.join('') : ans; x.explain = d.explain; x.points = d.points;
     versionsOf(current.id).unshift({ v: prev, at: todayTime(), by: S.user(), note: '上一版内容', snap: snap });
     saveX(X);
+    /* 题干、选项、答案、解析一并写进共享状态：工作区列表、题目页与答题器读同一份。 */
     S.updateQuestion(current.id, {
       stem: d.stem, type: d.type, difficulty: d.difficulty, chapter: d.chapter,
-      tags: d.tags, version: next
+      tags: d.tags, version: next,
+      options: d.opts || [], answer: ans, explain: d.explain || '', points: d.points || ''
     });
     conflict = null; editDraft = null;
     editDirty = false;
@@ -1812,7 +1847,9 @@
     if (wasArchived) S.restoreQuestions([id]); else S.archiveQuestions([id]);
     toast(verb + ' 1 题 · 无须变更 0 项（已选 1，1 + 0 对账一致）');
     if (!wasArchived && from === 'workspace') {
-      S.view.save('workspace', { showArchived: true });
+      /* 视图状态按题库隔离：workspace:<bankId>:<userId>（规则 §4） */
+      var wsKey = 'workspace:' + current.bankId + ':' + (S.user ? S.user() : 'anon');
+      S.view.save(wsKey, { showArchived: true });
       location.href = 'workspace.html?bank=' + encodeURIComponent(bank ? bank.id : '') + '&tab=questions';
       return;
     }
@@ -1824,10 +1861,18 @@
     if (!current) return;
     var target = $('#copy-target').value;
     if (!target) { toast('没有可用的目标题库', 'bad'); return; }
-    S.addQuestion({
+    var q = S.addQuestion({
       bankId: target, stem: current.stem, type: current.type,
       difficulty: current.difficulty, chapter: current.chapter, tags: (current.tags || []).slice()
     });
+    /* addQuestion 只收基础字段；选项 / 答案 / 解析在复制后补写，副本才是可判分的完整题。 */
+    if (q) {
+      S.updateQuestion(q.id, {
+        options: optsOf(current.id).map(function (o) { return o.slice(); }),
+        answer: current.answer != null ? current.answer : answerOf(current.id),
+        explain: explainOf(current.id), points: xOf(current.id).points || ''
+      });
+    }
     toast('已复制到「' + S.bankName(target) + '」');
   });
 
@@ -1868,6 +1913,35 @@
         '<span class="list-meta"><span class="tag">' + esc(s.mode || s.kind) + '</span><span>' + (s.done || 0) + ' / ' + (s.total || 0) + '</span></span></span></div>';
     }).join('');
   }
+  /* ---------- 从题目页开始练习：只负责给出参数 ----------
+     会话创建与「同模式已有会话」的决策在答题器侧（D 域）：带参数无 sid 时，
+     没有冲突就直接新建，有冲突就进开始决策面板。本页不另建一份。 */
+  function practiceUrl(bid, qid) {
+    var total = Math.max(1, S.questions(bid, { archived: false }).length);
+    var back = 'question.html' + (qid ? '?id=' + encodeURIComponent(qid) + '&bank=' + encodeURIComponent(bid) : '');
+    return 'practice.html?bank=' + encodeURIComponent(bid) +
+      '&kind=practice&mode=' + encodeURIComponent('顺序练习') +
+      '&total=' + total +
+      '&type=' + encodeURIComponent('全部题型') +
+      '&scope=' + encodeURIComponent('本题') +
+      '&qid=' + encodeURIComponent(qid || '') +
+      '&from=question' +
+      '&fromHref=' + encodeURIComponent(back);
+  }
+
+  /* 开始练习：有同模式会话时先用本页既有的「未完成会话」对话框让用户取舍；
+     选定后以参数链接交给答题器新建（D 域：带参数无 sid → 新建）。 */
+  function sameModeSessions() {
+    if (S.sessionConflicts) return S.sessionConflicts({ mode: '顺序练习' });
+    return S.sessions().filter(function (s) { return (s.mode || '顺序练习') === '顺序练习'; });
+  }
+  $('#q-practice').addEventListener('click', function (e) {
+    e.preventDefault();
+    if (!current) return;
+    if (sameModeSessions().length) { fillSessions(); window.eeDialog.open('dlg-start-study', this); return; }
+    location.href = practiceUrl(current.bankId, current.id);
+  });
+
   $$('[data-q-open]').forEach(function (b) {
     b.addEventListener('click', function () {
       var k = b.getAttribute('data-q-open');
@@ -1885,13 +1959,14 @@
   $('#ss-continue').addEventListener('click', function () {
     var s = S.sessions().filter(function (x) { return x.bankId === (bank && bank.id); })[0] || S.sessions()[0];
     window.eeDialog.close($('#dlg-start-study'));
-    location.href = 'practice.html?bank=' + encodeURIComponent(s ? s.bankId : (bank && bank.id) || '');
+    if (s) location.href = 'practice.html?sid=' + encodeURIComponent(s.id);
+    else location.href = practiceUrl(bank ? bank.id : (current ? current.bankId : ''), current && current.id);
   });
   $('#ss-new').addEventListener('click', function () {
-    var s = S.sessions().filter(function (x) { return x.bankId === (bank && bank.id); })[0] || S.sessions()[0];
-    if (s) S.finishSession(s.id);
+    sameModeSessions().forEach(function (s) { S.finishSession(s.id); });
     window.eeDialog.close($('#dlg-start-study'));
-    location.href = 'practice.html?bank=' + encodeURIComponent(bank ? bank.id : '');
+    /* 带参数无 sid：答题器按参数新建会话 */
+    location.href = practiceUrl(bank ? bank.id : (current ? current.bankId : ''), current && current.id);
   });
 
   /* ---------- 状态格 ---------- */
@@ -1900,15 +1975,21 @@
   $('#st-conflict-theirs').addEventListener('click', function () { toast('已载入对方版本，你的改动另存为草稿'); });
 
   /* ---------- 跨端改动检测（file:// 下同源 storage 事件可用） ---------- */
-  var lastSeen = current ? (current.version || 'v1') : '';
+  var lastSeen = current ? (current.version || 'v1') : null;
   window.addEventListener('storage', function (e) {
     if (e.key !== 'eeStore.v3' || !current) return;
     var now = S.question(current.id);
     if (!now) return;
     var v = now.version || 'v1';
+    /* 首次事件只用来建立基线：页面打开时还没读到版本（或读到的快照尚未落定），
+       不能把它当成「我打开的是空版本」而报一次假冲突。 */
+    if (!lastSeen) { lastSeen = v; return; }
     if (v !== lastSeen) {
       conflict = { base: lastSeen, theirs: v };
       lastSeen = v;
+      /* 共享数据变了：清掉页面缓存的内容字段，让 optsOf/answerOf/explainOf 重新读 store */
+      var xx = xOf(current.id);
+      xx.opts = null; xx.answer = ''; xx.explain = ''; xx.points = '';
       render();
     }
   });

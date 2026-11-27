@@ -90,11 +90,76 @@
 .qpick-more{
     margin: 0; padding: var(--sp-2) var(--sp-3); border-top: 1px solid var(--line);
     background: var(--surface-2); font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh);  }
+/* ---- 列表 / 阅读区：稳定的双栏（桌面）与二选一（窄屏）----
+   左列固定宽度、列表独立滚动；右列阅读区独立滚动；两列同高（height 由 resize
+   时的 fitLayout 按视口算，不靠给内容加 padding 造出「看起来像两栏」）。
+   窄屏只剩一列：进阅读时阅读器整屏覆盖，头部有「返回列表」。               */
+  .notes-layout{
+    display: grid; grid-template-columns: clamp(260px, 34%, 420px) minmax(0, 1fr);
+    gap: var(--sp-5); align-items: stretch; min-width: 0;  }
+.notes-pane{  display: flex; flex-direction: column; min-width: 0; min-height: 0;  }
+.notes-list-pane{  border-right: 1px solid var(--line); padding-right: var(--sp-5);  }
+.notes-list-head{  display: flex; flex-direction: column; gap: var(--sp-3); padding-bottom: var(--sp-3);
+    border-bottom: 1px solid var(--ink); flex: none;  }
+.notes-list-head .search-box{  width: 100%;  }
+.notes-list-head .ee-filter{  align-self: flex-start; max-width: 100%;  }
+.notes-list-scroll{  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+    scrollbar-width: thin; padding-bottom: var(--sp-4);  }
+.notes-list-scroll .ee-list{  margin-top: 0; border-top: 0;  }
+.notes-list-scroll .list-row{  padding-left: var(--sp-3); padding-right: var(--sp-3);  }
+.notes-reader-pane{  min-height: 0;  }
+/* 桌面：阅读器是右列里的常驻窗格（不是覆盖列表的抽屉） */
+  .reader-pane{  position: static; inset: auto; width: 100%; height: 100%;
+    border: 1px solid var(--line); border-radius: var(--r-sm); box-shadow: none; animation: none;  }
+.reader-pane .drawer-head{  border-bottom: 1px solid var(--line);  }
+.reader-pane .drawer-body{  overflow-y: auto; overscroll-behavior: contain;  }
+.reader-back{  display: none;  }
+/* 资料行：整行是一个打开动作；收藏是行内独立控件（不吞掉整行点击） */
+  .note-row{  cursor: pointer;  }
+.note-row:focus-visible{  outline: var(--focus-ring) solid var(--brand); outline-offset: -2px;  }
+.note-row.is-active{  background: var(--brand-soft);  }
+.note-row .note-star{  position: relative; z-index: 1;  }
+.note-row .list-side .od-icon{  color: var(--ink-4); flex: none;  }
+/* 未选中资料时右列是空态：不摆一排灰掉的按钮（禁用要配可读原因，空态先
+   不给动作更清楚），只留说明。选中后整组动作一起出现。 */
+  .reader-pane.is-empty .drawer-foot,
+.reader-pane.is-empty #reader-star{  display: none;  }
 @media (min-width: 769px){
-    /* 阅读器为常开抽屉：桌面让出右侧 460px，列表不被遮盖 */
-    .content.ee-reader-open { padding-right: 476px; }
-    /* 常开抽屉自顶栏下缘起步，与产品阅读器几何一致 */
-    #reader, #ai-drawer { top: var(--topbar-h); }
+    /* 阅读区/编辑态同一宽度：正文按阅读度量排版，编辑 textarea 随窗格生长 */
+    .notes-layout .reader-pane { display: flex; flex-direction: column; }
+    .notes-layout .reader-pane .drawer-body { flex: 1 1 auto; min-height: 0; }
+    /* 桌面右列不是浮层：列表始终在左；关闭一条资料只发生在窄屏的「返回列表」 */
+  }
+@media (max-width: 768px){
+    /* 窄屏：列表与阅读二选一，阅读整屏 */
+    .notes-layout { display: block; }
+    .notes-list-pane { border-right: 0; padding-right: 0; }
+    .notes-list-scroll { overflow: visible; }
+    /* 窄屏列表打开的是「整屏阅读」：右列容器不参与列表排版；阅读器本身按需
+       整屏覆盖（隐藏在列表下面时不占位）。 */
+    .notes-reader-pane { display: contents; }
+    .reader-pane{
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 95;
+      width: 100%; height: 100dvh; max-height: none;
+      background: var(--surface); border: 0; border-radius: 0; box-shadow: var(--shadow-2);
+      animation: none;
+    }
+    /* 整屏阅读唯一出口是「返回列表」：头部不再叠一个 X */
+    .reader-pane #reader-back { display: inline-flex; }
+    .reader-pane .drawer-title {
+      font-size: var(--text-lg); line-height: var(--text-lg-lh);
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+    }
+    .reader-pane .drawer-head{  padding-top: calc(var(--sp-3) + env(safe-area-inset-top));  }
+    .reader-back{  display: inline-flex;  }
+    .reader-pane .drawer-body{  padding: var(--sp-5) var(--sp-4);  }
+    .reader-pane .drawer-foot{  flex-wrap: wrap;  }
+    /* 窄屏行尾只留收藏按钮；右箭头是桌面提示，窄屏去掉（整行本身已经可点）。
+       列表行保持「内容 + 收藏」一行，不把收藏折到第二行空占位置。 */
+    .notes-list-pane .note-row { flex-wrap: nowrap; align-items: flex-start; }
+    .notes-list-pane .note-row > .list-main { flex: 1 1 auto; min-width: 0; }
+    .notes-list-pane .note-row > .list-side { flex: 0 0 auto; }
+    .notes-list-pane .note-row .list-side > svg { display: none; }
   }
 @media (max-width: 640px){
     .ee-toolbar .search-box { flex: 1 1 100%; }
@@ -102,21 +167,13 @@
     .ee-reader-file-actions { margin-left: 0; }
     /* 窄屏分段允许横向滚动，不让四个类型挤出纸面 */
     .ee-filter { max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
-    /* 阅读态占满整屏（长篇阅读用页面）；编辑态收成底部弹层，单手可达 */
-    .drawer.ee-sheet { top: 0; bottom: 0; max-height: none; border-radius: 0; }
-    .drawer.ee-sheet.is-editing {
-      top: auto; bottom: 0; max-height: 88dvh;
-      border-radius: var(--r-lg) var(--r-lg) 0 0;
-    }
-    .drawer.ee-sheet .drawer-body { padding: var(--sp-5) var(--sp-4); }
-    .drawer.ee-sheet .drawer-foot { flex-wrap: wrap; }
-    /* 软键盘在境：抽屉坐在键盘之上，保存键不被遮 */
+    /* 软键盘在境：阅读器与编辑区坐在键盘之上，保存键不被遮 */
     [data-kb] .drawer { max-height: calc(100dvh - var(--kb-inset, 0px)); }
     [data-kb] .drawer-foot { padding-bottom: calc(var(--sp-4) + var(--kb-inset, 0px)); }
-    [data-kb] .drawer.ee-sheet { top: var(--kb-inset, 0px); }
+    [data-kb] .reader-pane { height: calc(100dvh - var(--kb-inset, 0px)); }
   }</style>
 </head>
-<body>
+<body data-nav-domain="notes">
 <a class="skip-link" href="#main-content">跳到主内容</a>
 <div class="app-shell">
   <aside class="sidebar">
@@ -179,36 +236,79 @@
         </div>
       </div>
 
-      <!-- 资料类型是过滤条件（IA §三：segmented + URL），不是视图页签 -->
-      <div data-filter-scope>
-        <div class="od-row ee-toolbar">
-          <label class="search-box">
-            <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
-            <input class="input" type="search" placeholder="搜索标题与正文" aria-label="搜索资料" id="note-search">
-          </label>
-          <div class="segmented ee-filter" role="radiogroup" aria-label="资料类型" id="type-seg">
-            <button class="segment" type="button" role="radio" aria-checked="true" data-panel="all">全部<span class="count" id="cnt-all">0</span></button>
-            <button class="segment" type="button" role="radio" aria-checked="false" data-panel="note">笔记<span class="count" id="cnt-note">0</span></button>
-            <button class="segment" type="button" role="radio" aria-checked="false" data-panel="summary">错题小结<span class="count" id="cnt-summary">0</span></button>
-            <button class="segment" type="button" role="radio" aria-checked="false" data-panel="knowledge">知识口诀<span class="count" id="cnt-knowledge">0</span></button>
+      <!-- 资料列表（左列）：固定宽度、独立滚动；工具条随列表一起，不随阅读区滚动 -->
+      <div class="notes-layout" id="notes-layout">
+        <div class="notes-pane notes-list-pane">
+          <div class="notes-list-head" data-filter-scope>
+            <label class="search-box">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+              <input class="input" type="search" placeholder="搜索标题与正文" aria-label="搜索资料" id="note-search">
+            </label>
+            <!-- 资料类型是过滤条件（IA §三：segmented + URL），不是视图页签 -->
+            <div class="segmented ee-filter" role="radiogroup" aria-label="资料类型" id="type-seg">
+              <button class="segment" type="button" role="radio" aria-checked="true" data-panel="all">全部<span class="count" id="cnt-all">0</span></button>
+              <button class="segment" type="button" role="radio" aria-checked="false" data-panel="note">笔记<span class="count" id="cnt-note">0</span></button>
+              <button class="segment" type="button" role="radio" aria-checked="false" data-panel="summary">错题小结<span class="count" id="cnt-summary">0</span></button>
+              <button class="segment" type="button" role="radio" aria-checked="false" data-panel="knowledge">知识口诀<span class="count" id="cnt-knowledge">0</span></button>
+            </div>
+            <span class="hint">上传的文件按所选类型归入筛选，行内带「文件」标记。</span>
           </div>
-          <span class="spacer"></span>
-          <span class="hint">上传的文件按所选类型归入筛选，行内带「文件」标记。</span>
+          <div class="notes-list-scroll" id="notes-list-scroll">
+            <!-- 四个筛选项共用同一份资料数据（eeStore.notes()），由脚本按类型过滤后渲染 -->
+            <section class="ee-list" data-filter-panel="all">
+              <div class="list" id="list-all"></div>
+            </section>
+            <section class="ee-list" data-filter-panel="note" hidden>
+              <div class="list" id="list-note"></div>
+            </section>
+            <section class="ee-list" data-filter-panel="summary" hidden>
+              <div class="list" id="list-summary"></div>
+            </section>
+            <section class="ee-list" data-filter-panel="knowledge" hidden>
+              <div class="list" id="list-knowledge"></div>
+            </section>
+          </div>
         </div>
 
-        <!-- 四个筛选项共用同一份资料数据（eeStore.notes()），由脚本按类型过滤后渲染 -->
-        <section class="ee-list" data-filter-panel="all">
-          <div class="list" id="list-all"></div>
-        </section>
-        <section class="ee-list" data-filter-panel="note" hidden>
-          <div class="list" id="list-note"></div>
-        </section>
-        <section class="ee-list" data-filter-panel="summary" hidden>
-          <div class="list" id="list-summary"></div>
-        </section>
-        <section class="ee-list" data-filter-panel="knowledge" hidden>
-          <div class="list" id="list-knowledge"></div>
-        </section>
+        <!-- 阅读区（右列）：独立滚动，列表位置与选中态不被阅读区操作影响 -->
+        <div class="notes-pane notes-reader-pane">
+          <div class="drawer-scrim" id="reader-scrim" hidden></div>
+          <aside class="drawer reader-pane" id="reader" hidden aria-label="资料阅读器">
+            <div class="drawer-head">
+              <button class="icon-btn reader-back" id="reader-back" type="button" aria-label="返回列表" onclick="eeNotes.requestClose()">
+                <svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>
+              </button>
+              <div class="ee-grow">
+                <h2 class="drawer-title" id="reader-title">资料</h2>
+                <p class="panel-sub" id="reader-meta">还没有选择资料</p>
+              </div>
+              <button class="icon-btn sm note-star" id="reader-star" type="button" aria-pressed="false" aria-label="收藏" title="收藏"><svg class="od-icon" aria-hidden="true"><use href="#i-star"/></svg></button>
+            </div>
+            <div class="drawer-body" id="reader-body-scroll">
+              <div class="ee-reader-body measure" id="reader-body" data-no-i18n></div>
+              <div id="reader-edit" hidden>
+                <textarea class="textarea ee-reader-area" id="reader-area" aria-label="正文" data-no-i18n></textarea>
+                <p class="hint" id="reader-dirty-hint">有未保存的修改。取消、关闭或切换资料前会先询问。</p>
+              </div>
+              <div id="reader-rel"></div>
+              <div class="ee-reader-file" id="reader-file-row" hidden>
+                <svg class="od-icon" aria-hidden="true"><use href="#i-file-text"/></svg>
+                <span class="mono" id="reader-file-name">—</span>
+                <span class="ee-reader-file-actions">
+                  <button class="btn btn-sm btn-quiet" type="button" id="reader-preview">预览文件</button>
+                  <button class="btn btn-sm btn-quiet" type="button" id="reader-download">下载文件</button>
+                </span>
+              </div>
+            </div>
+            <div class="drawer-foot">
+              <button class="btn btn-sm" id="reader-edit-btn" type="button">编辑</button>
+              <button class="btn btn-sm btn-primary" id="reader-save" type="button" onclick="eeNotes.save()" disabled>保存</button>
+              <span class="od-spacer"></span>
+              <button class="btn btn-sm" id="reader-ai" type="button" onclick="eeNotes.openAI()">AI 解释</button>
+              <button class="btn btn-sm btn-danger" type="button" id="reader-delete" onclick="eeDialog.open('dlg-delete', this)">删除</button>
+            </div>
+          </aside>
+        </div>
       </div>
 
       <!-- FN-509「AI 建议知识点标签 / AI 建议考试蓝图」本期不做，产品界面不出现占位
@@ -471,42 +571,6 @@
   <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg>模考</button>
   <button class="bn-item is-active" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>资料</button>
 </nav>
-
-<!-- ============ 资料阅读器抽屉（桌面常开右侧；移动整屏阅读，编辑转底部弹层） ============ -->
-<div class="drawer-scrim" id="reader-scrim" hidden></div>
-<aside class="drawer ee-sheet" id="reader" hidden aria-label="资料阅读器">
-  <div class="drawer-head">
-    <div class="ee-grow">
-      <h2 class="drawer-title" id="reader-title">资料</h2>
-      <p class="panel-sub" id="reader-meta">还没有选择资料</p>
-    </div>
-    <button class="icon-btn sm note-star" id="reader-star" type="button" aria-pressed="false" aria-label="收藏" title="收藏"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg></button>
-    <button class="icon-btn" id="reader-close" type="button" aria-label="关闭阅读器" onclick="eeNotes.requestClose()"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
-  </div>
-  <div class="drawer-body">
-    <div class="ee-reader-body measure" id="reader-body"></div>
-    <div id="reader-edit" hidden>
-      <textarea class="textarea ee-reader-area" id="reader-area" aria-label="正文"></textarea>
-      <p class="hint" id="reader-dirty-hint">有未保存的修改。取消、关闭或切换资料前会先询问。</p>
-    </div>
-    <div id="reader-rel"></div>
-    <div class="ee-reader-file" id="reader-file-row" hidden>
-      <svg class="od-icon" aria-hidden="true"><use href="#i-file-text"/></svg>
-      <span class="mono" id="reader-file-name">—</span>
-      <span class="ee-reader-file-actions">
-        <button class="btn btn-sm btn-quiet" type="button" id="reader-preview">预览文件</button>
-        <button class="btn btn-sm btn-quiet" type="button" id="reader-download">下载文件</button>
-      </span>
-    </div>
-  </div>
-  <div class="drawer-foot">
-    <button class="btn btn-sm" id="reader-edit-btn" type="button">编辑</button>
-    <button class="btn btn-sm btn-primary" id="reader-save" type="button" onclick="eeNotes.save()" disabled>保存</button>
-    <span class="od-spacer"></span>
-    <button class="btn btn-sm" id="reader-ai" type="button" onclick="eeNotes.openAI()">AI 解释</button>
-    <button class="btn btn-sm btn-danger" type="button" id="reader-delete" onclick="eeDialog.open('dlg-delete', this)">删除</button>
-  </div>
-</aside>
 
 <!-- ============ AI 解释抽屉（FN-505 / FN-506 / FN-507 / FN-504） ============ -->
 <div class="drawer-scrim" id="ai-scrim" hidden></div>
@@ -794,27 +858,42 @@
     function questionStem(qid) { var q = S.question(qid); return q ? q.stem : ''; }
     function bodyOf(n) { return BODY[n.id] || (n.body && n.body.trim() ? n.body : n.title); }
 
-    /* ---------- 视图状态（搜索词 / 页签 / 选中笔记） ---------- */
-    var saved = S.view.load('notes');
+    /* ---------- 视图状态（搜索词 / 类型筛选 / 选中资料） ----------
+       键按作用域写（规则 §4）：列表用 notes:list，单条资料用 notes:<noteId>。
+       列表的滚动位置记在 notes:list 的 y；单条资料的阅读位置记在它自己的键。
+       返回列表时恢复这两样，所以列表位置与选中态都留在原处。
+       深链 ?note=<id>：直接打开并高亮那一条，滚到它。 */
+    var SCOPE_LIST = 'notes:list';
+    var saved = S.view.load(SCOPE_LIST);
     var urlq = new URLSearchParams(location.search);
     var st = {
       q: urlq.get('q') != null ? urlq.get('q') : (saved.q || ''),
       tab: saved.tab || 'all',
-      selected: saved.selected || null
+      selected: urlq.get('note') || saved.selected || null,
+      listY: saved.y || 0
     };
+    /* ?note=<id> 是精确深链：以它为准，覆盖记忆里的选中 */
+    var deepNote = urlq.get('note');
     /* ?type= 的取值是四个 UI 键（OP-502）：ALL / NOTE / MISTAKE_SUMMARY / KNOWLEDGE */
     var URL_TYPE = { all: 'ALL', note: 'NOTE', summary: 'MISTAKE_SUMMARY', knowledge: 'KNOWLEDGE' };
     var URL_PANEL = { ALL: 'all', NOTE: 'note', MISTAKE_SUMMARY: 'summary', KNOWLEDGE: 'knowledge' };
     var urlType = urlq.get('type');
     if (urlType && URL_PANEL[urlType]) st.tab = URL_PANEL[urlType];
     else if (urlType) { try { urlq.delete('type'); } catch (e) {} }
-    function saveView() { S.view.save('notes', { q: st.q, tab: st.tab, selected: st.selected }); }
-    /* 筛选与搜索词进 URL：刷新 / 后退 / 分享链接恢复同一列表（CR-16 / OP-502） */
+    function saveView() {
+      S.view.save(SCOPE_LIST, { q: st.q, tab: st.tab, selected: st.selected, y: st.listY });
+    }
+    /* 筛选、搜索与选中都进 URL：刷新 / 后退 / 分享链接恢复同一视图（CR-16 / OP-502）。
+       ?note= 只在阅读一条资料时出现，关闭阅读或返回列表即移除。 */
     function syncUrl() {
       var params = new URLSearchParams(location.search);
       if (st.tab && st.tab !== 'all') params.set('type', URL_TYPE[st.tab]); else params.delete('type');
       if (st.q.trim()) params.set('q', st.q.trim()); else params.delete('q');
-      try { history.replaceState(null, '', '?' + params.toString()); } catch (e) {}
+      if (currentId && (isDesktop() || !reader.hidden)) params.set('note', currentId); else params.delete('note');
+      try {
+        var qs = params.toString();
+        history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+      } catch (e) {}
     }
 
     /* ---------- DOM ---------- */
@@ -833,7 +912,6 @@
     var readerScrim = document.getElementById('reader-scrim');
     var aiDrawer = document.getElementById('ai-drawer');
     var aiScrim = document.getElementById('ai-scrim');
-    var content = document.getElementById('main-content');
     var body = document.getElementById('reader-body');
     var edit = document.getElementById('reader-edit');
     var area = document.getElementById('reader-area');
@@ -853,24 +931,41 @@
     var original = '';
     var currentId = null;
     var aiQid = null;
+    var listScroll = document.getElementById('notes-list-scroll');
+    var readerScroll = document.getElementById('reader-body-scroll');
 
     function isDesktop() { return window.matchMedia('(min-width: 769px)').matches; }
+    /* 布局尺寸：桌面两列同高，高度 = 视口里纸面剩余的垂直空间；列表列与阅读列
+       各自独立滚动。窄屏阅读器整屏（CSS fixed），列表走文档流。 */
+    function fitLayout() {
+      var layoutEl = document.getElementById('notes-layout');
+      if (!layoutEl) return;
+      if (!isDesktop()) { layoutEl.style.height = ''; return; }
+      var top = layoutEl.getBoundingClientRect().top + window.scrollY;
+      var avail = Math.max(window.innerHeight - top - 28, 320);
+      layoutEl.style.height = avail + 'px';
+    }
     function syncChrome() {
-      /* 移动端：阅读态占满整屏，编辑态收成底部弹层（.ee-sheet / .is-editing 只在 ≤640 生效） */
       reader.classList.toggle('is-editing', editing());
-      if (reader.hidden) {
-        content.classList.remove('ee-reader-open');
-        readerScrim.hidden = true;
-        reader.removeAttribute('aria-modal');
-      } else if (isDesktop()) {
-        content.classList.add('ee-reader-open');
+      /* 桌面：阅读器是右列常驻窗格（始终可见，空态说如何开始）。
+         窄屏：阅读器整屏覆盖列表，遮罩与 aria-modal 一起出现。 */
+      if (isDesktop()) {
+        reader.hidden = false;
         readerScrim.hidden = true;
         reader.removeAttribute('aria-modal');
       } else {
-        content.classList.remove('ee-reader-open');
-        readerScrim.hidden = false;
-        reader.setAttribute('aria-modal', 'true');
+        readerScrim.hidden = reader.hidden;
+        if (!reader.hidden) {
+          reader.setAttribute('aria-modal', 'true');
+          reader.classList.add('is-open');
+        } else {
+          reader.removeAttribute('aria-modal');
+          reader.classList.remove('is-open');
+        }
       }
+      if (reader.hidden) reader.classList.remove('is-open');
+      /* 列表选中态：当前资料的高亮行 */
+      renderActiveRow();
       if (aiDrawer.hidden) {
         aiScrim.hidden = true;
         aiDrawer.removeAttribute('aria-modal');
@@ -881,6 +976,37 @@
         aiScrim.hidden = false;
         aiDrawer.setAttribute('aria-modal', 'true');
       }
+    }
+    /* 列表重绘后保留选中行的视觉态与「返回列表时仍在视野内」 */
+    function renderActiveRow() {
+      var rows = document.querySelectorAll('.note-row[data-note-id]');
+      Array.prototype.forEach.call(rows, function (row) {
+        var on = row.getAttribute('data-note-id') === st.selected;
+        row.classList.toggle('is-active', on);
+        row.setAttribute('aria-current', on ? 'true' : 'false');
+      });
+    }
+    /* 列表滚动位置：按作用域保存（notes:list 的 y），返回/刷新时恢复 */
+    if (listScroll) {
+      var saveScrollTimer = null;
+      listScroll.addEventListener('scroll', function () {
+        if (saveScrollTimer) return;
+        saveScrollTimer = setTimeout(function () {
+          saveScrollTimer = null;
+          st.listY = listScroll.scrollTop;
+          S.view.save(SCOPE_LIST, { y: st.listY });
+        }, 200);
+      }, { passive: true });
+    }
+    /* 单条资料的阅读位置：notes:<noteId>（滚动位置 + 是否在编辑） */
+    if (readerScroll) {
+      readerScroll.addEventListener('scroll', function () {
+        if (!currentId) return;
+        clearTimeout(readerScroll._t);
+        readerScroll._t = setTimeout(function () {
+          S.view.save('notes:' + currentId, { y: readerScroll.scrollTop });
+        }, 250);
+      }, { passive: true });
     }
     function editing() { return !edit.hidden; }
     function dirty() { return editing() && area.value !== original; }
@@ -948,33 +1074,75 @@
       guard(closeNow);
     }
     function closeNow() {
+      var wasEditing = editing();
       cancelEdit();
       /* 列表每次重绘都会换掉行元素，按资料 id 找回当前那一行再回焦（OP-503） */
       var backId = reader._triggerId;
       reader.hidden = true;
-      syncChrome();
+      /* 桌面阅读窗格是常驻的：关闭 = 收起当前资料、回到「选一条」空态，
+         不隐藏窗格本身，左右两栏的宽度与右列位置都不动。 */
+      if (isDesktop()) {
+        reader.hidden = false;
+        currentId = null;
+        st.selected = null;
+        renderReader();
+        syncChrome();
+      } else {
+        /* 窄屏：整屏阅读层收起，列表与它的滚动位置原样回来 */
+        syncChrome();
+      }
+      /* 阅读区/编辑态切换、关闭阅读器都不改列表列的位置：只把列表滚回原处，
+         并把当前行保持高亮。 */
+      restoreListScroll();
       if (backId) {
         var row = document.querySelector('[data-note-open="' + backId + '"]');
-        if (row && typeof row.focus === 'function') row.focus();
+        if (row && typeof row.focus === 'function') row.focus({ preventScroll: true });
       }
+      syncUrl();
+    }
+    function restoreListScroll() {
+      if (!listScroll) return;
+      if (Math.abs(listScroll.scrollTop - st.listY) > 1) listScroll.scrollTop = st.listY;
+    }
+    /* 把某条资料在列表内部滚到视野中央，且不改页面滚动位置 */
+    function scrollRowIntoList(id) {
+      if (!listScroll) return;
+      var row = document.querySelector('#list-all .note-row[data-note-id="' + id + '"]') ||
+                document.querySelector('.note-row[data-note-id="' + id + '"]');
+      if (!row) return;
+      var rowTop = row.offsetTop - listScroll.offsetTop;
+      var target = rowTop - (listScroll.clientHeight - row.offsetHeight) / 2;
+      listScroll.scrollTop = Math.max(0, target);
+      st.listY = listScroll.scrollTop;
+      S.view.save(SCOPE_LIST, { y: st.listY });
     }
     function openReader(trigger, id) {
       if (!aiDrawer.hidden) { aiDrawer.hidden = true; }
       reader._trigger = trigger || null;
       reader._triggerId = id || (trigger ? trigger.getAttribute('data-note-open') : null) || null;
-      reader.hidden = false;
-      syncChrome();
-      /* 展开后焦点移到关闭按钮（OP-503） */
-      var close = document.getElementById('reader-close');
-      if (close) close.focus();
+      if (isDesktop()) {
+        reader.hidden = false;
+        syncChrome();
+      } else {
+        reader.hidden = false;
+        syncChrome();
+        /* 窄屏：阅读器整屏打开，焦点移到返回按钮（OP-503） */
+        var back = document.getElementById('reader-back');
+        if (back) back.focus();
+        /* 进阅读从正文顶部开始（详情从头开始），返回列表时列表回到原位置 */
+        if (readerScroll) readerScroll.scrollTop = 0;
+      }
     }
 
     function renderReader() {
       var n = currentId ? S.note(currentId) : null;
+      reader.classList.toggle('is-empty', !n);
       if (!n) {
         titleEl.textContent = '资料';
         metaEl.textContent = S.notes().length ? '从列表选一条资料' : '还没有资料，先新建一条';
-        body.textContent = '';
+        body.textContent = S.notes().length
+          ? '左侧列表里选一条资料，正文会在这里打开。列表位置与选中项会保留。'
+          : '还没有任何资料。用页头的「新建笔记」或「上传文件」开始。';
         relEl.innerHTML = '';
         fileRow.hidden = true;
         editBtn.disabled = true;
@@ -982,6 +1150,9 @@
         delBtn.disabled = true;
         starBtn.disabled = true;
         aiBtn.disabled = true;
+        body.hidden = false;
+        editBtn.textContent = '编辑';
+        if (crumbHere && !currentId) crumbHere.textContent = '全部资料';
         return;
       }
       var km = KIND_META[kindOf(n)];
@@ -1028,8 +1199,28 @@
       saveView();
       cancelEdit();
       renderReader();
+      /* 恢复这条资料上次的阅读位置：深链 / 刷新也恢复，
+         否则「记住了阅读位置」在 ?note= 入口和 F5 后都不成立。 */
+      if (readerScroll) {
+        var savedRead = S.view.load('notes:' + id);
+        readerScroll.scrollTop = savedRead && savedRead.y ? savedRead.y : 0;
+      }
       if (id && !keepOpen) openReader(trigger, id);
       render();
+      /* 选中后保证那一行在列表视野内（返回列表时也仍可见），只动列表内部 */
+      if (id && listScroll) {
+        var rowEl = document.querySelector('.note-row[data-note-id="' + id + '"]');
+        if (!rowEl) {
+          /* 当前筛选下看不到这一条：切回「全部」，否则「选中但看不见」 */
+          if (st.tab !== 'all') { st.tab = 'all'; showPanel('all'); saveView(); render(); rowEl = document.querySelector('.note-row[data-note-id="' + id + '"]'); }
+        }
+        if (rowEl && rowEl.getBoundingClientRect) {
+          var box = rowEl.getBoundingClientRect();
+          var pane = listScroll.getBoundingClientRect();
+          if (box.top < pane.top + 2 || box.bottom > pane.bottom - 2) scrollRowIntoList(id);
+        }
+      }
+      syncUrl();
     }
 
     /* ---------- AI 解释抽屉（FN-505 / 506 / 507 + FN-504 引用） ---------- */
@@ -1314,8 +1505,12 @@
     function rowOf(n) {
       var km = KIND_META[kindOf(n)];
       var on = st.selected === n.id;
-      return '<div class="list-row ee-row-top' + (on ? ' is-active' : '') + '" data-note-id="' + esc(n.id) + '">' +
-        '<button type="button" class="list-main list-open" data-note-open="' + esc(n.id) + '">' +
+      /* 整行就是一个打开动作（data-act="open-note" + data-id）：键盘 Enter/Space
+         与鼠标点击走同一条路径。收藏是行内独立控件，放在行按钮之后，不吞掉
+         整行点击；右箭头是行的装饰，属于这个可点区域，不假装另一个链接。 */
+      return '<div class="list-row ee-row-top note-row' + (on ? ' is-active' : '') + '" data-note-id="' + esc(n.id) + '">' +
+        '<button type="button" class="list-main list-open" role="button" ' +
+          'data-act="open-note" data-id="' + esc(n.id) + '" data-note-open="' + esc(n.id) + '">' +
           '<span class="list-title ee-asset-title">' + esc(n.title) + '</span>' +
           '<span class="list-meta"><span class="tag ' + km.cls + '">' + km.label + '</span>' +
           (n.file ? '<span class="tag plain">文件</span>' : '') +
@@ -1325,9 +1520,9 @@
         '</button>' +
         '<span class="list-side">' +
           '<button type="button" class="icon-btn sm note-star' + (n.starred ? ' is-on' : '') + '" data-note-star="' + esc(n.id) + '" aria-pressed="' + (n.starred ? 'true' : 'false') + '" aria-label="' + (n.starred ? '取消收藏' : '收藏') + ' ' + esc(n.title) + '" title="' + (n.starred ? '取消收藏' : '收藏') + '">' +
-            '<svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>' +
+            '<svg class="od-icon" aria-hidden="true"><use href="#i-star"/></svg>' +
           '</button>' +
-          '<svg class="od-icon" aria-hidden="true"><use href="#i-chevron-right"/></svg>' +
+          '<svg class="od-icon" aria-hidden="true" role="presentation"><use href="#i-chevron-right"/></svg>' +
         '</span>' +
       '</div>';
     }
@@ -1386,6 +1581,8 @@
       });
 
       if (st.selected && !S.note(st.selected)) { st.selected = null; currentId = null; saveView(); }
+      /* 列表重绘后把当前选中行重新标上；不改变列表滚动位置 */
+      renderActiveRow();
       if (!currentId && crumbHere) crumbHere.textContent = '全部资料';
       else if (currentId && crumbHere) { var cn = S.note(currentId); if (cn) crumbHere.textContent = cn.title; }
     }
@@ -1423,6 +1620,16 @@
         e.preventDefault();
         if (!aiDrawer.hidden) aiDrawer.hidden = true;
         selectNote(open.getAttribute('data-note-open'), false, open);
+        return;
+      }
+      /* 整行可点：点在行尾的箭头/空白处同样打开这一条（收藏按钮除外）。
+         不允许「箭头看着能点、实际点不到」。 */
+      var row = e.target.closest ? e.target.closest('.note-row[data-note-id]') : null;
+      if (row && !(e.target.closest && e.target.closest('[data-note-star]'))) {
+        e.preventDefault();
+        if (!aiDrawer.hidden) aiDrawer.hidden = true;
+        var main = row.querySelector('[data-note-open]');
+        selectNote(row.getAttribute('data-note-id'), false, main || row);
       }
     });
 
@@ -1728,11 +1935,12 @@
       if (e.key !== 'Escape') return;
       if (document.querySelector('dialog[open]')) return;
       if (!aiDrawer.hidden) { e.preventDefault(); closeAI(); return; }
-      if (!reader.hidden) { e.preventDefault(); requestClose(); }
+      /* 窄屏阅读是整屏层：Escape 等价于「返回列表」；桌面右列始终在，Esc 不关 */
+      if (!isDesktop() && !reader.hidden) { e.preventDefault(); requestClose(); }
     });
     readerScrim.addEventListener('click', requestClose);
     aiScrim.addEventListener('click', closeAI);
-    window.addEventListener('resize', syncChrome);
+    window.addEventListener('resize', function () { syncChrome(); fitLayout(); });
 
     /* ---------- 对外接口（状态格按钮用） ---------- */
     function editCurrentNow() {
@@ -1776,20 +1984,37 @@
     };
 
     /* ---------- 初始化 ----------
-       桌面阅读器是常开抽屉（`.content.ee-reader-open` 让出右栏 476px）：进页面就选中
-       第一条并展开，面包屑说的就是眼前这一条。移动端阅读器是整屏页面：不预选、不自动展开，
-       面包屑保持「全部资料」；已保存的选中只用于高亮列表行，不改面包屑。 */
+       稳定的列表 + 阅读两栏：
+       · 桌面：右列阅读窗格常驻。进页面时若有 ?note=<id> 或记忆中的选中，
+         直接打开那一条并高亮 / 滚到对应列表行；否则停「选一条」空态。
+       · 窄屏：列表单屏呈现；阅读器整屏覆盖（头部有「返回列表」）。
+         不预选、不自动展开，面包屑保持「全部资料」——首次进入停在页首。 */
     fillBanks();
     loadQuestions();
     render();
     showPanel(st.tab || 'all');
-    syncUrl();
+    fitLayout();
     var first = S.notes()[0];
     if (isDesktop()) {
-      if (st.selected && S.note(st.selected)) selectNote(st.selected, false);
-      else if (first) selectNote(first.id, false);
+      if (deepNote && S.note(deepNote)) {
+        /* 精确深链：打开这一条；只把列表内部滚到它，页面框架仍停在页首 */
+        selectNote(deepNote, false);
+        scrollRowIntoList(deepNote);
+      } else if (st.selected && S.note(st.selected)) {
+        selectNote(st.selected, false);
+      } else if (first && !saved.selected) {
+        /* 首次进入（无历史、无深链）：不自动打开一条，右列给空态与入口 */
+      }
+    } else if (deepNote && S.note(deepNote)) {
+      /* 窄屏深链：直接进入这一条的整屏阅读 */
+      selectNote(deepNote, false);
     }
+    /* 列表滚动位置：有历史就恢复（深链刷新同样恢复，不把用户送回列表顶部） */
+    if (listScroll && st.listY) listScroll.scrollTop = st.listY;
+    renderReader();
     syncChrome();
+    syncUrl();
+    fitLayout();
 
     if (S.subscribe) S.subscribe(function (state, evt) {
       if (!evt || evt.type === 'external') { fillBanks(); loadQuestions(); render(); }

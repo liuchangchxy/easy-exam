@@ -21,6 +21,13 @@
 .bank-list .list-row{  padding-left: 0; padding-right: 0;  }
 .list-main{  text-align: left;  }
 .list-row{  cursor: default;  }
+/* 有默认动作的行：主体可点；纯展示行（.static）不显示手型也不 hover（规则 §2/§7） */
+.list-row[data-row-href]{  cursor: pointer;  }
+.list-row[data-row-href]:hover{  background: var(--surface-2);  }
+.list-side.has-why{  flex-wrap: wrap;  }
+/* 禁用态可见：aria-disabled 的链接也要看起来不可用（原因由行内文字与点击 toast 给出） */
+  .btn[aria-disabled="true"]{  opacity: .5; cursor: not-allowed;  }
+.practice-why{  flex: 1 1 100%; margin: 0; text-align: right; font-size: var(--text-xs); color: var(--warn); overflow-wrap: anywhere;  }
 .list-open{  background: none; border: 0; padding: 0; cursor: pointer;  }
 .list-title{  overflow-wrap: anywhere;  }
 .menu-wrap{  position: relative; display: inline-flex; flex: none;  }
@@ -47,7 +54,7 @@
     .list-side { flex: 1 1 100%; justify-content: flex-end; }
   }</style>
 </head>
-<body>
+<body data-nav-domain="banks">
 <a class="skip-link" href="#main-content">跳到主内容</a>
 <div class="app-shell">
   <!-- ============ 侧栏（导航由 assets/nav.js 统一转换为真实链接） ============ -->
@@ -101,7 +108,7 @@
     <header class="topbar">
       <div class="crumb"><span class="here">题库</span></div>
       <span class="spacer"></span>
-      <button type="button" class="icon-btn" id="tb-search" title="搜索题库" aria-label="搜索题库">
+      <button type="button" class="icon-btn" id="tb-search" data-ee-shell="search" title="全局搜索（全站）" aria-label="全局搜索（全站）">
         <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
       </button>
       <button data-ee-shell="theme" type="button" class="icon-btn" id="tb-theme" title="切换明暗" aria-label="切换明暗">
@@ -133,7 +140,7 @@
         <svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>
       </a>
       <span class="mt-title">题库</span>
-      <button type="button" class="icon-btn" id="tb-search-m" title="搜索题库" aria-label="搜索题库">
+      <button type="button" class="icon-btn" id="tb-search-m" data-ee-shell="search" title="全局搜索（全站）" aria-label="全局搜索（全站）">
         <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
       </button>
       <span class="menu-anchor">
@@ -176,7 +183,8 @@
       <div class="toolbar">
         <div class="search-box">
           <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
-          <input class="input" id="bank-search" type="search" placeholder="搜索题库名称或说明" aria-label="搜索题库名称或说明">
+          <input class="input" id="bank-search" type="search" placeholder="筛选题库名称或说明" aria-label="筛选题库名称或说明（仅筛选本页列表，不搜全站）" aria-describedby="bank-search-hint">
+          <span class="vh" id="bank-search-hint">这里只筛选题库列表；搜索全站请用顶栏的全局搜索。</span>
         </div>
         <label class="toolbar-field">
           <span class="toolbar-field-label">分类</span>
@@ -709,6 +717,28 @@
   </div>
 </dialog>
 
+<!-- ============ 对话框：开始练习前发现同模式会话 ============ -->
+<dialog class="dlg narrow" id="dlg-practice-conflict" aria-labelledby="dlg-practice-conflict-title" aria-describedby="dlg-practice-conflict-desc">
+  <div class="dlg-head">
+    <div class="dlg-head-text">
+      <p class="dlg-eyebrow">开始练习</p>
+      <h2 class="dlg-title" id="dlg-practice-conflict-title">已有进行中的顺序练习</h2>
+    </div>
+    <button type="button" class="icon-btn sm" data-dlg-close aria-label="关闭">
+      <svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg>
+    </button>
+  </div>
+  <div class="dlg-body">
+    <p class="dlg-p" id="dlg-practice-conflict-desc"></p>
+    <p class="hint">同一个练习模式同时只保留一个进行中的会话；「结束并重新开始」会结束那次会话，已答记录不再计入本次。</p>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-quiet" data-dlg-close>取消</button>
+    <button type="button" class="btn btn-quiet" id="pc-continue">继续上次</button>
+    <button type="button" class="btn btn-primary" id="pc-restart">结束并重新开始</button>
+  </div>
+</dialog>
+
 <!-- ============ 对话框：丢弃未保存修改确认 ============ -->
 <dialog class="dlg narrow" id="dlg-bank-discard" aria-labelledby="dlg-bank-discard-title">
   <div class="dlg-head">
@@ -779,18 +809,53 @@
   function icon(n) { return '<svg class="od-icon" aria-hidden="true"><use href="#i-' + n + '"/></svg>'; }
   function toast(m, k) { if (window.eeToast) window.eeToast(m, k); }
 
-  /* ---------- 视图状态 ---------- */
-  var VS = 'banks';
-  var saved = S.view.load(VS);
+  /* ---------- 视图状态 ----------
+     键按作用域拆分（规则 §4）：banks:<scope>:<userId>。
+     「我的」与「共享给我」各自保留筛选、分类、排序与归档开关，切换分段不会互相污染。
+     userId 段已接上，P3 做账户隔离时不用再改页面。 */
+  function userScope(base) { return base + ':' + (S.user ? S.user() : 'anon'); }
+  var SCOPE_KEY = userScope('banks:scope');
+  var savedScope = S.view.load(SCOPE_KEY).scope;
   var st = {
-    scope: saved.scope === 'shared' ? 'shared' : 'mine',
-    showArchived: !!saved.showArchived,
-    q: saved.q || '',
-    cat: saved.cat || '全部分类',
-    sort: saved.sort || 'recent',
+    scope: savedScope === 'shared' ? 'shared' : 'mine',
+    showArchived: false,
+    q: '',
+    cat: '全部分类',
+    sort: 'recent',
     selected: {}          /* 题库 id → true，显式选择集，与当前筛选解耦（CR-27） */
   };
-  function saveView() { S.view.save(VS, { scope: st.scope, showArchived: st.showArchived, q: st.q, cat: st.cat, sort: st.sort }); }
+  function scopeViewKey(sc) { return userScope('banks:' + (sc === 'shared' ? 'shared' : 'mine')); }
+  function loadScopeView(sc) {
+    var v = S.view.load(scopeViewKey(sc));
+    return {
+      showArchived: !!v.showArchived,
+      q: v.q || '',
+      cat: v.cat || '全部分类',
+      sort: v.sort || 'recent'
+    };
+  }
+  function applyScopeView(sc) {
+    var v = loadScopeView(sc);
+    st.showArchived = v.showArchived;
+    st.q = v.q;
+    st.cat = v.cat;
+    st.sort = v.sort;
+  }
+  applyScopeView(st.scope);
+  function saveView() {
+    S.view.save(scopeViewKey(st.scope), {
+      scope: st.scope, showArchived: st.showArchived, q: st.q, cat: st.cat, sort: st.sort
+    });
+    S.view.save(SCOPE_KEY, { scope: st.scope });
+  }
+  function switchScope(sc) {
+    sc = sc === 'shared' ? 'shared' : 'mine';
+    if (sc === st.scope) return;
+    st.scope = sc;
+    applyScopeView(sc);
+    saveView();
+    render();
+  }
 
   /* ---------- DOM ---------- */
   var el = {
@@ -883,20 +948,33 @@
     }
     return html + '</div></span>';
   }
+  /* 开始练习：带 bank / mode / 题量 / 题型 / 范围跳转。
+     答题器侧（D 域）按「带参数无 sid → 新建」建会话；这里的链接本身就能表达完整参数，
+     用户不用先点进一个旧会话再猜参数。冲突时由 bindRows 里的对话框先提示。 */
+  function practiceHref(b) {
+    return 'practice.html?bank=' + encodeURIComponent(b.id) +
+      '&kind=practice&mode=' + encodeURIComponent('顺序练习') +
+      '&total=' + encodeURIComponent(practiceCount(b)) +
+      '&type=' + encodeURIComponent('全部题型') +
+      '&scope=' + encodeURIComponent('全部题目') +
+      '&from=banks';
+  }
   function liveRow(b) {
     var why = practiceReason(b);
     var noPractice = !!why;
-    return '<div class="list-row" data-row-id="' + b.id + '">' +
+    var openHref = 'workspace.html?bank=' + encodeURIComponent(b.id) + '&tab=questions';
+    return '<div class="list-row" data-row-id="' + b.id + '" data-row-href="' + openHref + '">' +
       '<label class="check"><input type="checkbox" aria-label="选择题库 ' + esc(b.name) + '"' +
         (b.shared ? ' disabled title="共享题库只能由所有者归档，不参与批量操作"' : '') + '></label>' +
-      '<button type="button" class="list-main list-open" data-id="' + b.id + '" aria-label="打开 ' + esc(b.name) + '">' +
+      '<button type="button" class="list-main list-open" data-act="open-bank" data-row-href="' + openHref + '" data-id="' + b.id + '" aria-label="打开 ' + esc(b.name) + '">' +
         '<span class="list-title">' + esc(b.name) + '</span>' +
         '<span class="list-meta">' + metaOf(b) + '</span>' +
       '</button>' +
-      '<span class="list-side">' +
+      '<span class="list-side' + (noPractice ? ' has-why' : '') + '">' +
         countBlock(b) +
-        '<a class="btn btn-sm" href="practice.html?bank=' + encodeURIComponent(b.id) + '"' +
-          (noPractice ? ' aria-disabled="true" data-no-practice="' + b.id + '" title="' + esc(why) + '"' : '') + '>开始练习</a>' +
+        '<a class="btn btn-sm" href="' + practiceHref(b) + '" data-practice-start data-bank="' + b.id + '"' +
+          (noPractice ? ' aria-disabled="true" aria-describedby="practice-why-' + b.id + '" data-disabled-reason="' + esc(why) + '" data-no-practice="' + b.id + '" title="' + esc(why) + '"' : '') + '>开始练习</a>' +
+        (noPractice ? '<span class="practice-why" id="practice-why-' + b.id + '">' + esc(why) + '</span>' : '') +
         menuOf(b) +
       '</span></div>';
   }
@@ -984,11 +1062,11 @@
       el.sharedCount.textContent = String(sharedAll.length);
       el.ownedBody.innerHTML = ownedVis.length ? ownedVis.map(liveRow).join('')
         : (ownedAll.length
-          ? '<div class="empty"><span class="empty-mark">' + icon('search') + '</span><h4 class="empty-title">没有匹配的题库</h4><p class="empty-desc">调整搜索或分类后再试。</p><div class="empty-actions"><button type="button" class="btn" data-act="clear-filter">清除筛选</button></div></div>'
+          ? '<div class="empty"><span class="empty-mark">' + icon('search') + '</span><h4 class="empty-title">没有匹配的题库</h4><p class="empty-desc">调整筛选条件或分类后再试。</p><div class="empty-actions"><button type="button" class="btn" data-act="clear-filter">清除筛选</button></div></div>'
           : emptyBlock('还没有题库', '新建一个题库，或从文件导入题目。', true));
       el.sharedBody.innerHTML = sharedVis.length ? sharedVis.map(liveRow).join('')
         : (sharedAll.length
-          ? '<div class="empty"><span class="empty-mark">' + icon('search') + '</span><h4 class="empty-title">没有匹配的共享题库</h4><p class="empty-desc">调整搜索或分类后再试。</p></div>'
+          ? '<div class="empty"><span class="empty-mark">' + icon('search') + '</span><h4 class="empty-title">没有匹配的共享题库</h4><p class="empty-desc">调整筛选条件或分类后再试。</p></div>'
           : '<div class="empty"><span class="empty-mark">' + icon('users') + '</span><h4 class="empty-title">还没有共享给我的题库</h4><p class="empty-desc">别人把题库共享给你后，会出现在这里，并标注你在该库的角色。</p></div>');
       /* 分段只呈现当前集合：另一段不在视线内，避免出现「没有匹配的共享题库」这种误导空态 */
       el.shared.hidden = st.scope !== 'shared';
@@ -1048,11 +1126,12 @@
     $$('.list-open').forEach(function (b) {
       b.onclick = function () { location.href = 'workspace.html?bank=' + encodeURIComponent(b.getAttribute('data-id')) + '&tab=questions'; };
     });
-    $$('[data-no-practice]').forEach(function (a) {
+    /* 开始练习：先看同模式会话，冲突时在本页提示；用户选定后以参数链接交给答题器新建。 */
+    $$('[data-practice-start]').forEach(function (a) {
       a.addEventListener('click', function (e) {
         e.preventDefault();
-        var b = S.bank(a.getAttribute('data-no-practice'));
-        toast(b ? practiceReason(b) : '现在不能开始练习', 'bad');
+        var b = S.bank(a.getAttribute('data-bank'));
+        if (b) startPractice(b, false);
       });
     });
     $$('[data-act]').forEach(function (b) {
@@ -1075,6 +1154,50 @@
       };
     });
   }
+
+  /* ---------- 开始练习：参数 + 冲突提示 ----------
+     与 D 域分工：本页只决定「去哪个题库、用什么参数」以及冲突时用户的取舍；
+     会话本身由答题器按参数新建（D 域：带参数无 sid → 新建）。
+     冲突在这里先提示，避免静默收掉旧会话；用户选「结束并重新开始」后，
+     本页结束同模式旧会话，再以无 sid 的参数链接交给答题器新建。 */
+  var practiceTarget = null, practiceConflict = null;
+  function sameModeSessions() {
+    if (S.sessionConflicts) return S.sessionConflicts({ mode: '顺序练习' });
+    return S.sessions().filter(function (s) { return (s.mode || '顺序练习') === '顺序练习'; });
+  }
+  function openPracticeConflict(b, conflicts) {
+    var s = conflicts[conflicts.length - 1];
+    practiceTarget = b; practiceConflict = s;
+    var mode = s.mode || '顺序练习';
+    $('#dlg-practice-conflict-title').textContent = '已有进行中的' + mode;
+    var desc = '「' + S.bankName(s.bankId) + '」还有一次' + mode + '没有结束（已答 ' + (s.done || 0) + ' / ' + (s.total || 0) + '）。';
+    desc += s.bankId === b.id
+      ? '继续那次，或结束它并从「' + b.name + '」重新开始。'
+      : '继续那次会先回到「' + S.bankName(s.bankId) + '」；也可以结束它，从「' + b.name + '」重新开始。';
+    $('#dlg-practice-conflict-desc').textContent = desc;
+    $('#pc-continue').textContent = s.bankId === b.id ? '继续上次' : '先继续另一个题库';
+    window.eeDialog.open('dlg-practice-conflict', document.activeElement);
+  }
+  function startPractice(b, force) {
+    if (!b) return;
+    var why = practiceReason(b);
+    if (why) { toast(why, 'bad'); return; }
+    var conflicts = sameModeSessions();
+    if (conflicts.length && !force) { openPracticeConflict(b, conflicts); return; }
+    if (force) conflicts.forEach(function (s) { S.finishSession(s.id); });
+    /* 无 sid：答题器按 bank/mode/total/type/scope 新建会话（D 域） */
+    location.href = practiceHref(b);
+  }
+  $('#pc-continue').addEventListener('click', function () {
+    var s = practiceConflict;
+    window.eeDialog.close($('#dlg-practice-conflict'));
+    if (s) location.href = 'practice.html?sid=' + encodeURIComponent(s.id);
+  });
+  $('#pc-restart').addEventListener('click', function () {
+    var b = practiceTarget;
+    window.eeDialog.close($('#dlg-practice-conflict'));
+    if (b) startPractice(b, true);
+  });
 
   /* ---------- 通用确认 ---------- */
   var confirmDlg = $('#dlg-bank-bulk');
@@ -1107,6 +1230,11 @@
   }
   function act(kind, id, btn) {
     var b = S.bank(id);
+    if (kind === 'open-bank') {
+      var href = btn && btn.getAttribute('data-row-href');
+      if (href) location.href = href;
+      return;
+    }
     if (kind === 'edit') {
       if (!b) return;
       pendingEdit = id;
@@ -1233,7 +1361,7 @@
     st.showArchived = this.checked; st.selected = {}; hideResult(); saveView(); render();
   });
   $$('#bank-scope-seg .segment').forEach(function (s) {
-    s.addEventListener('click', function () { st.scope = s.getAttribute('data-scope'); saveView(); render(); });
+    s.addEventListener('click', function () { switchScope(s.getAttribute('data-scope')); });
   });
   $('#state-clear-filter').addEventListener('click', function () {
     st.q = ''; st.cat = '全部分类'; saveView(); render(); toast('已清除筛选');
@@ -1473,10 +1601,9 @@
     });
   })();
 
-  /* ---------- 顶栏 ---------- */
-  function focusSearch() { var box = $('#bank-search'); if (box) { box.focus(); box.select(); } }
-  $('#tb-search').addEventListener('click', focusSearch);
-  $('#tb-search-m').addEventListener('click', focusSearch);
+  /* ---------- 顶栏 ----------
+     顶栏搜索是全局入口，由 spec-boot 的命令面板统一接管（data-ee-shell="search"）。
+     页内的 #bank-search 只是列表筛选器，不再冒充全局搜索。 */
   $('#tb-logout').addEventListener('click', function () { S.logout(); location.href = 'login.html'; });
 
   /* ---------- 权限门槛 ---------- */

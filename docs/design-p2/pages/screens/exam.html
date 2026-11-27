@@ -121,9 +121,12 @@
     .sheet-trigger { display: inline-flex !important; }
     .report-score { font-size: var(--text-4xl); }
   }
-.sheet-trigger{  display: none;  }</style>
+.sheet-trigger{  display: none;  }
+/* 报告答题卡格子 → 逐题明细定位：命中的 .rep-item 高亮（与复习页 .is-target 同一语言） */
+.rep-item.is-target{  background: var(--brand-soft); outline: 2px solid var(--brand-line); outline-offset: -2px;  }
+.sheet-cell[data-locate]{  cursor: pointer;  }</style>
 </head>
-<body>
+<body data-nav-domain="exams">
 <a class="skip-link" href="#main-content">跳到主内容</a>
 
 <div data-tab-scope>
@@ -199,6 +202,9 @@
           <h1 class="q-stem" id="ex-stem" tabindex="-1"></h1>
 
           <div class="opt-list" id="ex-options" role="group" aria-label="选项"></div>
+          <!-- 组卷方式：蓝图组卷 / 默认组卷（无蓝图时按题库顺序取前 N 题）。
+               作答态必须可读，避免「开始前确认」里的蓝图配额读起来像已经生效。 -->
+          <p class="q-note" id="ex-build-note">按默认组卷</p>
           <p class="q-note">模考不判定对错：选项只有选中态，交卷后才会显示答案与解析。</p>
 
           <!-- 内容已变更提示（FN-312）：只在开考快照与当前题目版本真的不一致时出现，
@@ -216,7 +222,7 @@
           <div class="rail-block">
             <div class="rail-head">
               <span class="rule-label">答题卡</span>
-              <button type="button" class="btn btn-sm" onclick="EEexam.toggleFlag()"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>待复查</button>
+              <button type="button" class="btn btn-sm" onclick="EEexam.toggleFlag()"><svg class="od-icon" aria-hidden="true"><use href="#i-bookmark"/></svg>待复查</button>
             </div>
             <div class="stat-row" id="ex-stats"></div>
             <div class="progress"><div class="progress-fill" id="ex-progress-fill" style="width:0%"></div></div>
@@ -247,7 +253,7 @@
 
       <footer class="exam-foot" id="ex-foot">
         <button type="button" class="btn btn-sm sheet-trigger kb-hide" onclick="EEexam.openDrawer('ex-sheet')"><svg class="od-icon" aria-hidden="true"><use href="#i-grid"/></svg>移动作答卡</button>
-        <button type="button" class="btn kb-hide" id="ex-flag-btn" onclick="EEexam.toggleFlag()"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>待复查 <span class="kbd">F</span></button>
+        <button type="button" class="btn kb-hide" id="ex-flag-btn" onclick="EEexam.toggleFlag()"><svg class="od-icon" aria-hidden="true"><use href="#i-bookmark"/></svg>待复查 <span class="kbd">F</span></button>
         <span class="spacer"></span>
         <span class="mono kb-hide" id="ex-count">1 / 12</span>
         <span class="spacer"></span>
@@ -502,7 +508,7 @@
             </div>
 
             <div class="kv ee-mt-4">
-              <span class="kv-key">负分规则</span><span class="kv-val">答错扣 0.5 分；未设 0 分下限，总分可为负</span>
+              <span class="kv-key">负分规则</span><span class="kv-val" id="ex-neg-rule">答错扣 0.5 分；未设 0 分下限，总分可为负</span>
               <span class="kv-key">纳入学习记录</span><span class="kv-val">纳入：答错的题已进入错题，FSRS 已调度</span>
               <!-- 本机未同步成功的答案：真的有未同步答案时才出现，不计入本场成绩 -->
               <span class="kv-key" id="ex-unsynced" hidden>本机未同步成功</span><span class="kv-val" id="ex-unsynced-val" hidden></span>
@@ -517,7 +523,7 @@
             <div class="dtable-wrap">
               <table class="dtable">
                 <thead><tr><th>题型</th><th>题数</th><th>单题分值</th><th>已答</th><th>答对</th><th>得分</th><th>占满分</th></tr></thead>
-                <tbody>
+                <tbody id="ex-type-table">
                   <tr><td data-label="题型">单选题</td><td data-label="题数" class="num">8</td><td data-label="单题分值" class="num">2</td><td data-label="已答" class="num">8</td><td data-label="答对" class="num">4</td><td data-label="得分" class="num">8</td><td data-label="占满分" class="num">16</td></tr>
                   <tr><td data-label="题型">多选题</td><td data-label="题数" class="num">2</td><td data-label="单题分值" class="num">3</td><td data-label="已答" class="num">1</td><td data-label="答对" class="num">1</td><td data-label="得分" class="num">3</td><td data-label="占满分" class="num">6</td></tr>
                   <tr><td data-label="题型">判断题</td><td data-label="题数" class="num">1</td><td data-label="单题分值" class="num">2</td><td data-label="已答" class="num">0</td><td data-label="答对" class="num">0</td><td data-label="得分" class="num">0</td><td data-label="占满分" class="num">2</td></tr>
@@ -536,7 +542,7 @@
             <div class="dtable-wrap">
               <table class="dtable">
                 <thead><tr><th>维度</th><th>名称</th><th>题数</th><th>答对</th><th>得分</th><th>得分率</th></tr></thead>
-                <tbody>
+                <tbody id="ex-kp-table">
                   <tr><td data-label="维度">章节</td><td data-label="名称">项目管理基础</td><td data-label="题数" class="num">6</td><td data-label="答对" class="num">3</td><td data-label="得分" class="num">6</td><td data-label="得分率" class="num">50%</td></tr>
                   <tr><td data-label="维度">章节</td><td data-label="名称">沟通管理</td><td data-label="题数" class="num">4</td><td data-label="答对" class="num">1</td><td data-label="得分" class="num">2</td><td data-label="得分率" class="num">25%</td></tr>
                   <tr><td data-label="维度">标签</td><td data-label="名称">挣值</td><td data-label="题数" class="num">2</td><td data-label="答对" class="num">0</td><td data-label="得分" class="num">0</td><td data-label="得分率" class="num">0%</td></tr>
@@ -573,12 +579,12 @@
           <div class="rail-block">
             <div class="rule-label">判分依据</div>
             <p class="rail-note">本报告按交卷时保存的<strong>题目版本 v3</strong>判分。答案与解析不会因为重新组卷或后续改题而改变。</p>
-            <div class="notice info">
+            <div class="notice info" id="ex-version-notice">
               <svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>
               <div class="notice-body">
-                <span class="notice-title">第 12 题现在已是 v5</span><br>
-                这道题在考试期间被编辑过。本报告仍按 v3 判分，你可以查看当前版本自行判断差异。
-                <span class="notice-actions"><button type="button" class="btn btn-sm" onclick="eeToast('已打开该题的当前版本 v5（只读）')">查看当前版本</button></span>
+                <span class="notice-title" id="ex-version-title">第 12 题现在已是 v5</span><br>
+                <span id="ex-version-desc">这道题在考试期间被编辑过。本报告仍按 v3 判分，你可以查看当前版本自行判断差异。</span>
+                <span class="notice-actions"><button type="button" class="btn btn-sm" id="ex-version-btn" onclick="eeToast('已打开该题的当前版本 v5（只读）')">查看当前版本</button></span>
               </div>
             </div>
           </div>
@@ -978,7 +984,7 @@
     </div>
     <div class="rail-block">
       <button type="button" class="btn btn-sm btn-block" onclick="EEexam.jumpToBlank()"><svg class="od-icon" aria-hidden="true"><use href="#i-arrow-right"/></svg>跳到下一道未答题</button>
-      <button type="button" class="btn btn-sm btn-block btn-quiet" onclick="EEexam.toggleFlag()"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>标记本题待复查</button>
+      <button type="button" class="btn btn-sm btn-block btn-quiet" onclick="EEexam.toggleFlag()"><svg class="od-icon" aria-hidden="true"><use href="#i-bookmark"/></svg>标记本题待复查</button>
     </div>
   </div>
   <div class="drawer-foot">
@@ -1045,7 +1051,7 @@
   </div>
   <div class="dlg-foot">
     <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>继续作答</button>
-    <a class="btn btn-primary" href="exams.html">退出（暂存）</a>
+    <button type="button" class="btn btn-primary" onclick="EEexam.stash()">退出（暂存）</button>
   </div>
 </dialog>
 
@@ -1213,7 +1219,7 @@ window.EEexam = (function () {
   var DEMO_FLAGS = { 4: true, 11: true };
 
   /* 三段式：'answer' 作答窗口 / 'grace' 宽限 60 秒 / 'collected' 服务端已收卷 */
-  var R = { s: null, paper: [], index: 0, answers: {}, flags: {}, remaining: 120 * 60, phase: 'answer', graceLeft: GRACE, report: null, done: false, submittedVia: 'manual' };
+  var R = { s: null, paper: [], index: 0, answers: {}, selections: {}, flags: {}, remaining: 120 * 60, phase: 'answer', graceLeft: GRACE, report: null, done: false, submittedVia: 'manual', blueprintUsed: false };
   var timerId = null;
 
   function esc(s) {
@@ -1250,18 +1256,67 @@ window.EEexam = (function () {
     return s;
   }
   function buildPaper(s) {
-    var qs = S.questions(s.bankId);
+    var qs = S.questions(s.bankId, { archived: false });
     /* 题库里没有真实题目时用演示卷兜底。兜底卷的 id 是合成出来的（qb0…），
        store 里并不存在这些题——所以标记 synth，报告里据此不生成「查看该题当前版本」，
        否则每一题的入口都会跳到 question.html 的「这道题不存在」状态。
        以题干为身份判据仍有效：报告与复习队列之间的定位不依赖这里合成的 id。 */
     var synth = !qs.length;
     if (synth) qs = QBANK.map(function (q, i) { return { id: 'qb' + i, stem: q.stem, type: q.type, chapter: '未分章', version: 'v3' }; });
-    var total = s.total || qs.length;
-    return qs.slice(0, total).map(function (q, i) {
-      var p = paperFor(q.stem);
-      return { id: q.id, synth: synth, stem: q.stem, type: p.type || q.type || '单选题', chapter: q.chapter || '未分章', version: q.version || 'v3', options: p.options, answer: p.answer, explain: p.explain, score: SCORE[p.type || q.type] == null ? 2 : SCORE[p.type || q.type] };
+    /* 蓝图组卷：会话带上 blueprint（题量 / 题型 / 章节 / 时长）时，按蓝图配额段取题，
+       而不是只按 s.total 截断题库。蓝图与实际组卷参数从此是同一条链——
+       「开始前确认」里写的配额、题型配比与章节范围，就是答题器里真正的卷子。
+       没有蓝图（blueprint 为空或 blueprintMode==='basic'）→ 按题库顺序取前 N 题，
+       并在界面明确标「按默认组卷」（buildNote 由 render 显示）。 */
+    var bp = s.blueprint;
+    var out;
+    if (bp && bp.sections && bp.sections.length) {
+      out = composeFromBlueprint(qs, bp, synth);
+    } else {
+      var total = s.total || qs.length;
+      out = qs.slice(0, total).map(function (q) { return paperItem(q, synth); });
+    }
+    R.blueprintUsed = !!(bp && bp.sections && bp.sections.length);
+    return out;
+  }
+  /* 按配额段取题：每段按题型 + 章节 + 难度在题库里取 n 道，取不满时从剩余候选补入。
+     同一道题不重复进入多个段（unless 蓝图本身重复声明同一题型且题库不够）。 */
+  function composeFromBlueprint(qs, bp, synth) {
+    var used = {}, out = [];
+    bp.sections.forEach(function (sec) {
+      var picked = 0;
+      qs.forEach(function (q) {
+        if (picked >= sec.n || used[q.id]) return;
+        if (sec.type && sec.type !== '不限' && q.type !== sec.type) return;
+        if (sec.chapter && sec.chapter !== '不限' && q.chapter !== sec.chapter) return;
+        if (sec.diff && sec.diff !== '不限' && q.difficulty !== sec.diff) return;
+        used[q.id] = 1; picked++;
+        out.push(paperItem(q, synth));
+      });
     });
+    /* 降级补入：蓝图要的题量多于匹配到的题时，从剩余候选按顺序补齐到蓝图总题量 */
+    var want = bp.sections.reduce(function (a, x) { return a + (x.n || 0); }, 0);
+    qs.forEach(function (q) {
+      if (out.length >= want || used[q.id]) return;
+      used[q.id] = 1;
+      out.push(paperItem(q, synth));
+    });
+    return out.slice(0, want);
+  }
+  function paperItem(q, synth) {
+    var p = paperFor(q.stem);
+    var type = p.type || q.type || '单选题';
+    return { id: q.id, synth: synth, stem: q.stem, type: type, chapter: q.chapter || '未分章', version: q.version || 'v3', options: p.options, answer: p.answer, explain: p.explain, score: SCORE[type] == null ? 2 : SCORE[type] };
+  }
+  /* 组卷方式的可读说明：界面据此在作答态标明「按蓝图组卷 / 按默认组卷」，
+     不让用户以为两套参数是同一件事。 */
+  function buildNote() {
+    var s = R.s || {};
+    if (R.blueprintUsed) {
+      var bp = s.blueprint || {};
+      return '按蓝图组卷 · ' + (bp.sections || []).length + ' 个配额段 · ' + R.paper.length + ' 题';
+    }
+    return '按默认组卷 · 题库既有顺序前 ' + R.paper.length + ' 题（无蓝图）';
   }
   /* 开考快照：会话开始时记录的题目版本。之后题目被改过，才提示「内容已变更」。 */
   function snapshotVersion() { return (R.s && R.s.verSnap) || 'v3'; }
@@ -1274,8 +1329,12 @@ window.EEexam = (function () {
   }
   function persist(extra) {
     if (!R.s) return;
+    /* selections：未提交的「已选」也要落盘。模考交卷前没有 submitted 概念，
+       原来只存 answers，刷新或暂存回来后这一题的选中态就丢了。
+       作答器把 answers 当作唯一来源，所以 select/typeAnswer 会同时写 answers；
+       这里再显式带上 selections 作为同一份内容的镜像，供跨页面消费。 */
     S.updateSession(R.s.id, Object.assign({
-      answers: R.answers, flags: R.flags, index: R.index, done: answeredCount(),
+      answers: R.answers, selections: R.selections || {}, flags: R.flags, index: R.index, done: answeredCount(),
       remaining: R.s.unlimited ? null : Math.max(0, Math.round(R.remaining)), phase: R.phase
     }, extra || {}));
   }
@@ -1292,20 +1351,33 @@ window.EEexam = (function () {
         kind: 'exam', bankId: 'b_rk', mode: '模考',
         title: '系统集成项目管理工程师 · 综合卷',
         total: 12, minutes: 120, record: true, phase: 'answer',
-        index: 11, done: 10, answers: DEMO_ANSWERS, flags: DEMO_FLAGS, remaining: 58 * 60 + 12
+        blueprint: null, blueprintMode: 'basic', params: { count: 12, minutes: 120, mode: '模考' },
+        index: 11, done: 10, answers: DEMO_ANSWERS, flags: DEMO_FLAGS, remaining: 58 * 60 + 12,
+        origin: { page: 'exams.html', href: 'exams.html', label: '模考中心' },
+        replace: true
       });
     }
-    if (!s) { showNone(); return; }
+    if (!s || !s.id) { showNone(); return; }
     if (s.kind !== 'exam') { location.replace('practice.html?sid=' + encodeURIComponent(s.id)); return; }
     R.s = s;
     R.paper = buildPaper(s);
     if (!R.paper.length) { showNone(); return; }
-    R.answers = {}; R.flags = {};
+    /* 会话题量以真正组出的卷子为准：蓝图声明 30 题而题库实际只够 12 题时，
+       报告与「开始前确认」都必须看到同一个数，不能会话 30、卷子 12。 */
+    if (s.total !== R.paper.length || (s.params && s.params.count !== R.paper.length)) {
+      S.updateSession(s.id, { total: R.paper.length, params: Object.assign({}, s.params || {}, { count: R.paper.length }) });
+    }
+    R.answers = {}; R.flags = {}; R.selections = {};
     Object.keys(s.answers || {}).forEach(function (k) { R.answers[k] = s.answers[k]; });
     Object.keys(s.flags || {}).forEach(function (k) { R.flags[k] = s.flags[k]; });
     var idx = s.index != null ? parseInt(s.index, 10) : 0;
     if (isNaN(idx) || idx < 0 || idx >= R.paper.length) idx = 0;
     R.index = idx;
+    /* 未提交作答从会话恢复：answers 是唯一来源，selections 补上已选未提交的镜像 */
+    Object.keys(s.selections || {}).forEach(function (k) {
+      if (k in R.answers) return;
+      R.answers[k] = s.selections[k];
+    });
     R.phase = 'answer';
     var limit = Math.max(60, (s.minutes || 120) * 60);
     R.remaining = s.remaining != null ? Math.min(limit, parseInt(s.remaining, 10)) : limit;
@@ -1339,8 +1411,12 @@ window.EEexam = (function () {
     document.getElementById('ex-meta').innerHTML =
       '<span>第 ' + (R.index + 1) + ' 题 · 共 ' + total + ' 题</span><span>' + esc(q.type) + '</span>' +
       (OBJECTIVE[q.type] ? '<span>' + esc(q.chapter) + '</span>' : '<span class="tag plain">主观题 · 不判分</span>') +
-      (flagged ? '<span class="tag warn"><svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>待复查</span>' : '');
+      (flagged ? '<span class="tag warn"><svg class="od-icon" aria-hidden="true"><use href="#i-bookmark"/></svg>待复查</span>' : '');
     document.getElementById('ex-stem').textContent = q.stem;
+    /* 组卷方式：蓝图组卷 vs 默认组卷必须在作答态可见，
+       否则「开始前确认」里写的蓝图配额读起来像已经生效。 */
+    var bnote = document.getElementById('ex-build-note');
+    if (bnote) bnote.textContent = buildNote();
     /* 内容已变更：只在快照版本与当前版本不一致时提示，并说明本场仍按开考那一版作答 */
     var changed = changedQuestions();
     var box = document.getElementById('ex-content-changed');
@@ -1374,7 +1450,7 @@ window.EEexam = (function () {
           ? String(R.answers[R.index] || '').indexOf(o[0]) > -1
           : R.answers[R.index] === o[0];
         opts += '<button type="button" class="opt' + (on ? ' is-selected' : '') + '"' +
-          (locked ? ' disabled' : ' onclick="EEexam.select(\'' + o[0] + '\')') + ' aria-pressed="' + (on ? 'true' : 'false') + '">' +
+          (locked ? ' disabled' : ' onclick="EEexam.select(\'' + o[0] + '\')"') + ' aria-pressed="' + (on ? 'true' : 'false') + '">' +
           '<span class="opt-key">' + o[0] + '</span><span class="opt-text">' + esc(o[1]) + '</span></button>';
       });
       document.getElementById('ex-options').innerHTML = opts;
@@ -1404,7 +1480,7 @@ window.EEexam = (function () {
     document.getElementById('ex-flag-btn').disabled = locked;
     document.getElementById('ex-submit-btn').disabled = false; /* 超时禁止的只是继续作答，交卷始终放行 */
     var flagBtn = document.getElementById('ex-flag-btn');
-    flagBtn.innerHTML = '<svg class="od-icon" aria-hidden="true"><use href="#i-flag"/></svg>' + (flagged ? '已标记待复查' : '待复查') + ' <span class="kbd">F</span>';
+    flagBtn.innerHTML = '<svg class="od-icon" aria-hidden="true"><use href="#i-bookmark"/></svg>' + (flagged ? '已标记待复查' : '待复查') + ' <span class="kbd">F</span>';
     /* 已标记态只靠文字与题干区的标签表达，不再把按钮染成主色——一屏至多一颗主操作 */
     paintPhase();
     syncToastInset();
@@ -1493,12 +1569,16 @@ window.EEexam = (function () {
     } else {
       R.answers[R.index] = key;
     }
+    /* answers 就是这一场的「未提交作答」：同时镜像到 selections，跨页消费方（模考中心
+       未完成的模考预览）能看到同一份选择。 */
+    if (R.answers[R.index]) R.selections[R.index] = R.answers[R.index]; else delete R.selections[R.index];
     persist();
     render();
   }
   function typeAnswer(text) {
     if (R.phase !== 'answer') return;
     if (text && text.trim()) R.answers[R.index] = text.trim(); else delete R.answers[R.index];
+    if (R.answers[R.index]) R.selections[R.index] = R.answers[R.index]; else delete R.selections[R.index];
     persist();
     renderCounts();
   }
@@ -1527,6 +1607,12 @@ window.EEexam = (function () {
     eeToast(on ? '已标记这道题待复查' : '已取消待复查');
   }
   function exit() { eeDialog.open('ex-dlg-exit', document.activeElement); }
+  /* 暂存并离开：答案 / 光标 / 旗标 / 剩余时间已落会话，回到进入前的页面 */
+  function stash() {
+    persist();
+    eeDialog.close(document.getElementById('ex-dlg-exit'));
+    goOrigin();
+  }
   function abandon() {
     if (R.s) S.finishSession(R.s.id);   /* 不写报告：放弃不计入成绩 */
     stopTicker();
@@ -1595,6 +1681,7 @@ window.EEexam = (function () {
            指向「这道题不存在」的死链接。题干照旧带上，定位不依赖 id。 */
         qid: q.synth ? null : q.id, bankId: R.s.bankId, type: q.type, subjective: !isObj, answered: g.answered,
         ratio: g.ratio, correctness: g.correctness,
+        chapter: q.chapter || '未分章', score: q.score,
         stem: q.stem,
         mine: g.answered ? String(a) : '未作答',
         answer: isObj ? String(q.answer) : '主观题不自动判分',
@@ -1605,6 +1692,9 @@ window.EEexam = (function () {
   }
   function computeReport(via) {
     var objFull = 0, objScore = 0, answeredObj = 0, correctObj = 0, ungraded = 0, unanswered = 0, answered = 0;
+    var bp = (R.s && R.s.blueprint) || {};
+    var negative = bp.negative || 0;
+    var floor = !!bp.floor;
     R.paper.forEach(function (q, i) {
       var a = R.answers[i];
       var isObj = !!OBJECTIVE[q.type];
@@ -1617,10 +1707,15 @@ window.EEexam = (function () {
       var ans = String(q.answer).split('').sort().join('');
       if (sel === ans) { correctObj++; objScore += q.score; }
       else if (sel.length && ans.indexOf(sel[0]) > -1 && sel.length < ans.length) { objScore += q.score * 0.5; }
+      /* 负分规则：答错按蓝图声明的固定扣分扣；是否设 0 分下限也照蓝图。
+         原来只加正分，报告里却写着「答错扣 0.5 分」——规则形同虚设。 */
+      else if (negative) { objScore -= negative; }
     });
+    if (floor) objScore = Math.max(0, objScore);
     return {
       title: R.s.title || ('模考 · ' + bankName(R.s.bankId)), bankId: R.s.bankId,
       score: Math.round(objScore * 10) / 10, full: objFull,
+      negative: negative, floor: floor,
       rate: objFull ? Math.round(objScore / objFull * 100) : 0,
       accObj: answeredObj ? Math.round(correctObj / answeredObj * 100) : null,
       answered: answered, objTotal: R.paper.filter(function (q) { return OBJECTIVE[q.type]; }).length,
@@ -1702,20 +1797,111 @@ window.EEexam = (function () {
       unsyncedVal.textContent = rep.unsynced + ' 题（不计入本场成绩）';
     }
 
-    /* 答题卡（只读）：已答 / 错误 / 待复查 */
+    /* 答题卡（只读）：已答 / 错误 / 待复查。
+       格子点击 → 定位并展开对应逐题明细（不再只是静态色块）：
+       走 report.js 的 locate()，与报告深链是同一套定位实现。 */
     var cells = '';
     for (var i = 0; i < R.paper.length; i++) {
       var a = R.answers[i], cls = 'sheet-cell';
       if (a) cls += ' is-answered';
       if (a && R.paper[i].answer && String(a).split('').sort().join('') !== String(R.paper[i].answer).split('').sort().join('')) cls += ' is-wrong-cell';
       if (R.flags[i]) cls += ' is-flagged';
-      cells += '<button type="button" class="' + cls + '" disabled>' + (i + 1) + '</button>';
+      cells += '<button type="button" class="' + cls + '" data-locate="' + i + '" aria-label="第 ' + (i + 1) + ' 题，定位到逐题明细">' + (i + 1) + '</button>';
     }
     var host = document.getElementById('ex-report-sheet');
-    if (host) host.innerHTML = cells;
+    if (host) {
+      host.innerHTML = cells;
+      /* 每次渲染重绑：报告重算后格子是新节点 */
+      host.onclick = function (e) {
+        var b = e.target.closest ? e.target.closest('[data-locate]') : null;
+        if (!b) return;
+        locateItem(parseInt(b.getAttribute('data-locate'), 10), b);
+      };
+    }
 
     /* 逐题明细：与模考归档报告、练习报告共用 assets/report.js 的同一套组件 */
     var items = rep.items && rep.items.length ? rep.items : (R.paper.length ? reportItems() : []);
+    /* 统计表按本场逐题明细重算：模板里的数字只是空壳，真实交卷后必须换成这一场的。 */
+    var typeHost = document.getElementById('ex-type-table');
+    if (typeHost) {
+      var order = [], agg = {};
+      items.forEach(function (it) {
+        var t = it.type || '其他';
+        if (!agg[t]) { agg[t] = { n: 0, ans: 0, ok: 0, score: 0, full: 0, subj: false, unit: it.score == null ? 2 : it.score }; order.push(t); }
+        var g = agg[t]; g.n++;
+        if (it.subjective || it.correctness === 'UNGRADED') { g.subj = true; return; }
+        g.full += (it.score == null ? 2 : it.score);
+        if (it.correctness !== 'BLANK') g.ans++;
+        if (it.correctness === 'CORRECT') { g.ok++; g.score += (it.score == null ? 2 : it.score); }
+        else if (it.correctness === 'PARTIAL') { g.score += (it.score == null ? 2 : it.score) * 0.5; }
+      });
+      var sum = { n: 0, ans: 0, ok: 0, score: 0, full: 0 };
+      var rows = order.map(function (t) {
+        var g = agg[t];
+        sum.n += g.n; sum.ans += g.ans; sum.ok += g.ok; sum.score += g.score; sum.full += g.full;
+        return '<tr><td data-label="题型">' + esc(t) + '</td><td data-label="题数" class="num">' + g.n + '</td>' +
+          '<td data-label="单题分值" class="num">' + (g.subj && !g.full ? '—' : g.unit) + '</td>' +
+          '<td data-label="已答" class="num">' + g.ans + '</td>' +
+          '<td data-label="答对" class="num">' + (g.subj && !g.full ? '未判分' : g.ok) + '</td>' +
+          '<td data-label="得分" class="num">' + (g.subj && !g.full ? '不计入' : (Math.round(g.score * 10) / 10)) + '</td>' +
+          '<td data-label="占满分" class="num">' + (g.subj && !g.full ? '不计入' : g.full) + '</td></tr>';
+      }).join('');
+      rows += '<tr><td data-label="题型">合计</td><td data-label="题数" class="num">' + sum.n + '</td>' +
+        '<td data-label="单题分值" class="num">—</td><td data-label="已答" class="num">' + sum.ans + '</td>' +
+        '<td data-label="答对" class="num">' + sum.ok + '</td>' +
+        '<td data-label="得分" class="num">' + (Math.round(sum.score * 10) / 10) + '</td>' +
+        '<td data-label="占满分" class="num">' + sum.full + '</td></tr>';
+      typeHost.innerHTML = rows;
+    }
+    var kpHost = document.getElementById('ex-kp-table');
+    if (kpHost) {
+      var korder = [], kagg = {};
+      items.forEach(function (it) {
+        var k = it.chapter || '未分章';
+        if (!kagg[k]) { kagg[k] = { n: 0, ok: 0, score: 0, full: 0, subj: false }; korder.push(k); }
+        var g = kagg[k]; g.n++;
+        if (it.subjective || it.correctness === 'UNGRADED') { g.subj = true; return; }
+        var sc = it.score == null ? 2 : it.score;
+        g.full += sc;
+        if (it.correctness === 'CORRECT') { g.ok++; g.score += sc; }
+        else if (it.correctness === 'PARTIAL') { g.score += sc * 0.5; }
+      });
+      kpHost.innerHTML = korder.map(function (k) {
+        var g = kagg[k];
+        var rate = g.full ? Math.round(g.score / g.full * 100) + '%' : '暂无数据';
+        return '<tr><td data-label="维度">章节</td><td data-label="名称">' + esc(k) + '</td>' +
+          '<td data-label="题数" class="num">' + g.n + '</td><td data-label="答对" class="num">' + g.ok + '</td>' +
+          '<td data-label="得分" class="num">' + (Math.round(g.score * 10) / 10) + '</td>' +
+          '<td data-label="得分率" class="num">' + (g.subj && !g.full ? '暂无数据' : rate) + '</td></tr>';
+      }).join('');
+    }
+    /* 内容已变更提示：只有真的有题目版本变过才出现，不再是一段常驻的假告警。 */
+    var vNotice = document.getElementById('ex-version-notice');
+    if (vNotice) {
+      var changed = items.filter(function (it) { return it.cur; });
+      if (!changed.length) {
+        vNotice.hidden = true;
+      } else {
+        vNotice.hidden = false;
+        var c0 = changed[0];
+        var no = items.indexOf(c0) + 1;
+        document.getElementById('ex-version-title').textContent = '第 ' + no + ' 题现在已是 ' + c0.cur;
+        document.getElementById('ex-version-desc').textContent = '这道题在考试期间被编辑过。本报告仍按 ' + (c0.ver || 'v3') + ' 判分，你可以查看当前版本自行判断差异。';
+        var vb = document.getElementById('ex-version-btn');
+        if (vb) vb.onclick = function () { eeToast('已打开该题的当前版本 ' + c0.cur + '（只读）'); };
+      }
+    }
+    /* 负分规则：按本场蓝图真实规则显示。 */
+    var negEl = document.getElementById('ex-neg-rule');
+    if (negEl) {
+      var neg = rep.negative != null ? rep.negative : ((R.s && R.s.blueprint && R.s.blueprint.negative) || 0);
+      var fl = rep.floor != null ? rep.floor : !!(R.s && R.s.blueprint && R.s.blueprint.floor);
+      negEl.textContent = neg > 0
+        ? '答错扣 ' + neg + ' 分；' + (fl ? '设 0 分下限' : '未设 0 分下限，总分可为负')
+        : '答错不扣分';
+    }
+
+    /* 逐题明细列表 */
     var list = document.getElementById('ex-report-items');
     if (list) {
       list.innerHTML = window.eeReport.blockHtml(items, true, { scope: 'ex', bankId: rep.bankId, qPrefix: '', rPrefix: '' });
@@ -1727,6 +1913,22 @@ window.EEexam = (function () {
       wrongNote.textContent = '共 ' + items.length + ' 题 · 答错与未答 ' + bad + ' 题 · 点开看作答、判定、解析与判分版本';
     }
     syncToastInset();
+  }
+  /* 报告答题卡格子 → 对应逐题明细：展开 + 滚动到位 + 高亮。
+     定位实现复用 assets/report.js locate()（与报告深链、练习报告同一套）；
+     命中失败时给准确反馈，不静默停在列表顶部。 */
+  function locateItem(index, trigger) {
+    var list = document.getElementById('ex-report-items');
+    var ok = window.eeReport && window.eeReport.locate(list, index);
+    if (!ok) {
+      eeToast('这一题没有逐题明细可展开（可能是早期报告没有留逐题记录）', 'bad');
+      return;
+    }
+    /* 展开后焦点落到该题行头，键盘用户不会停在答题卡上 */
+    var item = list.querySelector('.rep-item[data-rep-index="' + index + '"]');
+    var head = item ? item.querySelector('.rep-item-head') : null;
+    if (head) head.focus({ preventScroll: true });
+    eeToast('已定位到第 ' + (index + 1) + ' 题');
   }
   function viaText(via) {
     return via === 'manual' ? '手动交卷' : (via === 'auto_deadline' ? '到点自动交卷' : (via === 'expired_server_answers' ? '超时后以服务器答案交卷' : '手动交卷'));
@@ -1761,13 +1963,23 @@ window.EEexam = (function () {
   function again() {
     var s = R.s || {};
     eeDialog.close(document.getElementById('ex-dlg-reexam'));
-    var ns = S.startSession({
+    var created = S.startSession({
       kind: 'exam', bankId: s.bankId || 'b_rk', mode: '模考',
       title: s.title || '系统集成项目管理工程师 · 综合卷',
       total: R.paper.length || 12, minutes: s.minutes || 120,
-      index: 0, done: 0, answers: {}, flags: {}, remaining: (s.minutes || 120) * 60
+      blueprint: s.blueprint || null, blueprintMode: s.blueprintMode || 'basic',
+      params: s.params || { count: R.paper.length || 12, minutes: s.minutes || 120, mode: '模考' },
+      index: 0, done: 0, answers: {}, selections: {}, flags: {}, remaining: (s.minutes || 120) * 60,
+      origin: s.origin || { page: 'exams.html', href: 'exams.html', label: '模考中心' },
+      replace: true
     });
-    location.href = 'exam.html?sid=' + encodeURIComponent(ns.id);
+    if (!created || !created.id) { eeToast('新的一场没能建立，稍后再试'); return; }
+    location.href = 'exam.html?sid=' + encodeURIComponent(created.id);
+  }
+  /* 返回来源：回到进入模考前的页面与位置（模考中心 / 今天页），不是一律回模考中心 */
+  function goOrigin() {
+    var o = (R.s && R.s.origin) || null;
+    location.href = (o && o.href) || 'exams.html';
   }
 
   /* ---------- 倒计时与三段式 ---------- */
@@ -1960,7 +2172,8 @@ window.EEexam = (function () {
     init: init, select: select, next: next, footNext: footNext, prev: prev, jumpTo: jumpTo, toggleFlag: toggleFlag,
     exit: exit, abandon: abandon, openSubmit: openSubmit, jumpToBlank: jumpToBlank,
     confirmSubmit: confirmSubmit, renderReport: renderReport, openPaper: openPaper, again: again,
-    openDrawer: openDrawer, closeDrawer: closeDrawer, switchPanel: switchPanel, typeAnswer: typeAnswer
+    openDrawer: openDrawer, closeDrawer: closeDrawer, switchPanel: switchPanel, typeAnswer: typeAnswer,
+    locateItem: locateItem, stash: stash, goOrigin: goOrigin
   };
 })();
 </script>

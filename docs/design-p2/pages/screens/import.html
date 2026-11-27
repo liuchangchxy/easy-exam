@@ -105,6 +105,9 @@
   .panel-head{ padding: var(--sp-4) 0 var(--sp-3); border-bottom: 0; }
   .panel-title{ font-size: var(--text-xs); font-weight: 600; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-3); font-family: var(--font-sans); }
   .panel-body{ padding: var(--sp-2) 0 var(--sp-3); }
+  /* 人工校对：解析结果在表格里直接可改，控件不撑破表格 */
+  .proof-edit{ width: 100%; min-width: 9em; }
+  .dtable td .proof-edit{ max-width: 34em; }
   @media (max-width: 1024px){
     .import-steps-row .progress { flex-basis: 100%; }
     .dup-cols{ grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
@@ -116,7 +119,7 @@
   }
 </style>
 </head>
-<body>
+<body data-nav-domain="banks">
 <a class="skip-link" href="#main-content">跳到主内容</a>
 <div class="app-shell">
   <aside class="sidebar" aria-label="主导航">
@@ -656,7 +659,7 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
               <button type="button" class="btn" data-step-prev="imp-6">回到进度</button>
               <span class="spacer"></span>
               <button type="button" class="btn btn-quiet" id="imp-again">再导入一批</button>
-              <a class="btn btn-primary" id="imp-view-bank" href="workspace.html?bank=b_acc&amp;tab=imports"><svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>查看题库</a>
+              <a class="btn btn-primary" id="imp-view-bank" href="workspace.html?bank=b_acc&amp;tab=questions"><svg class="od-icon" aria-hidden="true"><use href="#i-library"/></svg>查看题目并开始学习</a>
             </div>
           </section>
         </div>
@@ -916,6 +919,7 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
     mapping: { stem: '0', answer: '1', type: 'auto', explanation: '', difficulty: '', tags: '', options: '' },
     delimiter: 'prefix',
     proof: {},
+    edits: {},            /* 行号 → {stem, answer, type}：人工校对页对解析结果的修改 */
     dups: {},
     job: { status: 'idle', done: 0, total: 0, failed: [], job: null, rate: 0, eta: '' },
     timer: null,
@@ -985,7 +989,7 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
         answer = type === '多选题' ? 'AB' : 'BCD'[i % 3];
         opts = 4;
       }
-      out.push({
+      var row = {
         row: i + 1,
         stem: stem,
         type: type,
@@ -994,7 +998,15 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
         chapter: ['信息安全', '项目管理基础', '架构设计', '沟通管理'][i % 4],
         opts: opts,
         broken: broken
-      });
+      };
+      /* 人工校对页改过的解析结果优先于文件原值；改出题干后不再算「源文件缺题干」。 */
+      var ed = state.edits[i + 1];
+      if (ed) {
+        if (ed.stem != null) { row.stem = ed.stem; row.broken = !String(ed.stem).trim(); }
+        if (ed.answer != null) row.answer = ed.answer;
+        if (ed.type) row.type = ed.type;
+      }
+      out.push(row);
     }
     return out;
   }
@@ -1002,9 +1014,10 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
   function dupItems() {
     var existing = S.questions(state.bankId);
     var seen = {};
-    existing.forEach(function (x) { seen[x.stem] = x; });
-    return liveItems().filter(function (it) { return seen[it.stem]; }).map(function (it) {
-      return { item: it, existing: seen[it.stem] };
+    /* 同一性判据与报告 / 复习队列一致：题干归一化后比对（S.normStem） */
+    existing.forEach(function (x) { seen[S.normStem(x.stem)] = x; });
+    return liveItems().filter(function (it) { return it.stem && seen[S.normStem(it.stem)]; }).map(function (it) {
+      return { item: it, existing: seen[S.normStem(it.stem)] };
     });
   }
 
@@ -1211,11 +1224,12 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
       : (fileRows() === 0 ? '还没有读取到行。' : fileRows() + ' 行可写入，进入人工校对。');
   }
   function renderSample() {
-    var existing = S.questions(state.bankId).map(function (x) { return x.stem; });
+    var existing = {};
+    S.questions(state.bankId).forEach(function (x) { existing[S.normStem(x.stem)] = true; });
     var list = liveItems().slice(0, 6);
     $('#imp-sample-body').innerHTML = list.length
       ? list.map(function (it) {
-          var dup = existing.indexOf(it.stem) > -1;
+          var dup = !!it.stem && !!existing[S.normStem(it.stem)];
           return '<tr>' +
             '<td data-label="行号" class="num">' + it.row + '</td>' +
             '<td data-label="题干">' + esc(it.stem) + '</td>' +
@@ -1232,7 +1246,11 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
   function proofRows() {
     return liveItems().slice(0, 6).map(function (it) {
       var verdict = 'ok', why = '';
-      if (!it.stem || it.stem.replace(/[（(].*$/, '').trim().length < 6) {
+      /* 「题干不完整」看整句是否有可读内容；不能按第一个括号截断——
+         「OSI 的（ ）不适合…」「（ ）按照业务功能…」都是合法题干，
+         原判定会把它们误报成缺题干并默认排除。 */
+      var plain = String(it.stem || '').replace(/[\s（）()]/g, '');
+      if (!plain || plain.length < 4) {
         verdict = 'bad'; why = '题干不完整：映射后这一行没有可读的题干，写进去也是一道空题';
       } else if (it.type === '单选题' && it.answer.length > 1) {
         verdict = 'warn'; why = '答案是多选写法（' + it.answer + '），题型列写的是「单选题」';
@@ -1296,8 +1314,8 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
             : '');
       return '<tr>' +
         '<td data-label="行号" class="num">' + it.row + '</td>' +
-        '<td data-label="题干（映射后）">' + esc(it.stem) + '</td>' +
-        '<td data-label="答案" class="num">' + esc(it.answer) + '</td>' +
+        '<td data-label="题干（映射后）"><input class="input proof-edit" type="text" data-proof-stem="' + it.row + '" value="' + esc(it.stem) + '" aria-label="第 ' + it.row + ' 行题干，可直接修改"></td>' +
+        '<td data-label="答案"><input class="input proof-edit mono" type="text" data-proof-answer="' + it.row + '" value="' + esc(it.answer) + '" aria-label="第 ' + it.row + ' 行答案，可直接修改"></td>' +
         '<td data-label="选项数" class="num">' + it.opts + '</td>' +
         '<td data-label="判定">' + verdictTag + (r.why ? '<div class="hint">' + esc(r.why) + '</div>' : '') + '</td>' +
         '<td data-label="处置" class="col-actions">' + act + '</td>' +
@@ -1653,35 +1671,47 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
     var list = liveItems();
     var written = 0, skipped = 0, merged = 0;
     var failed = [];
+    var firstStem = '';
     var existing = {};
-    S.questions(state.bankId).forEach(function (x) { existing[x.stem] = x; });
+    S.questions(state.bankId).forEach(function (x) { existing[S.normStem(x.stem)] = x; });
     list.forEach(function (it) {
-      if (it.broken) {
+      /* 人工校对里选「排除这一行」的行不得写入：这是用户在导入前做的最终裁决。 */
+      var proof = state.proof && state.proof[it.row];
+      if (proof && proof.action === 'drop') { skipped++; return; }
+      if (it.broken || !String(it.stem || '').trim()) {
         failed.push({ row: it.row, reason: '源文件里这一行没有题干，读不出题目内容' });
         return;
       }
-      var ex = existing[it.stem];
+      var ex = existing[S.normStem(it.stem)];
       if (ex) {
         var d = state.dups[it.row] || 'skip';
         if (d === 'skip') { skipped++; return; }
         if (d === 'overwrite') {
-          S.updateQuestion(ex.id, { type: it.type, difficulty: it.difficulty, chapter: it.chapter });
+          S.updateQuestion(ex.id, {
+            stem: it.stem, type: it.type, difficulty: it.difficulty,
+            chapter: it.chapter, answer: it.answer
+          });
+          if (!firstStem) firstStem = it.stem;
           merged++;
           return;
         }
       }
-      S.addQuestion({
+      var q = S.addQuestion({
         bankId: state.bankId, stem: it.stem, type: it.type,
         difficulty: it.difficulty, chapter: it.chapter
       });
+      /* addQuestion 只收基础字段；解析出的答案在写入后补上，题目页与答题器能读到同一份。 */
+      if (q && it.answer) S.updateQuestion(q.id, { answer: it.type === '多选题' ? String(it.answer).split('') : it.answer });
+      if (!firstStem) firstStem = it.stem;
       written++;
     });
     var job = S.addImportJob({
       bankId: state.bankId, file: draftName(), status: 'done',
       strategy: dupStrategyLabel(), total: list.length, written: written,
-      skipped: skipped, merged: merged, failed: failed.length
+      skipped: skipped, merged: merged, failed: failed.length,
+      firstStem: firstStem
     });
-    return { job: job, failed: failed };
+    return { job: job, failed: failed, firstStem: firstStem };
   }
   function dupStrategyLabel() {
     var dups = dupItems();
@@ -1775,6 +1805,9 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
     var tab = e.target.closest ? e.target.closest('[data-tab-scope] [data-tab-panel]') : null;
     if (!tab) return;
     if (isRunning()) {
+      /* 中止入口本身必须可点：拦截层原来把「取消导入」也一起吞掉，
+         再提示用户「要中止只能取消导入」——等于把唯一出口锁上。 */
+      if (e.target.closest && e.target.closest('#imp-cancel-job-btn, [data-allow-running], [onclick*="dlg-cancel-job"]')) return;
       e.preventDefault(); e.stopPropagation();
       toast('写入期间不能改回去改字段映射或重复处置；要中止只能「取消导入」。', 'bad');
     }
@@ -1807,8 +1840,12 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
         state.sourceMode = 'file';
         state.file = normalizeFile(cat);
         state.bankId = resume.getAttribute('data-bank');
+        state.edits = {};
+        state.proof = {};
+        state.dups = {};
       } else if (fname === '粘贴的文本') {
         state.sourceMode = 'paste';
+        state.edits = {};
       }
       var step = resume.getAttribute('data-step');
       /* 草稿停在执行步：先看有没有已在跑的任务，不静默再起一份 */
@@ -1938,6 +1975,23 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
   /* ---------- 人工校对：处置与原因 ---------- */
   document.addEventListener('change', function (e) {
     var sel = e.target;
+    /* 人工校对页：解析结果可以直接改。改完立刻重算判定与重复题，不等到下一步。 */
+    var ps = sel.getAttribute('data-proof-stem');
+    if (ps != null) {
+      state.edits[+ps] = state.edits[+ps] || {};
+      state.edits[+ps].stem = sel.value;
+      renderProof(); renderSample(); renderDup(); renderPlan(); saveWizard();
+      toast('已更新第 ' + ps + ' 行的题干');
+      return;
+    }
+    var pa = sel.getAttribute('data-proof-answer');
+    if (pa != null) {
+      state.edits[+pa] = state.edits[+pa] || {};
+      state.edits[+pa].answer = sel.value;
+      renderProof(); renderSample(); renderDup(); renderPlan(); saveWizard();
+      toast('已更新第 ' + pa + ' 行的答案');
+      return;
+    }
     var row = sel.getAttribute('data-proof-act');
     if (row != null) {
       state.proof[+row] = state.proof[+row] || {};
@@ -1962,6 +2016,7 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
     state.bankId = this.value;
     state.dups = {};
     state.proof = {};
+    state.edits = {};
     renderBanks(); renderMap(); renderProof(); renderDup(); renderPlan(); renderHistory();
     saveWizard();
   });
@@ -1977,6 +2032,9 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
   });
   $('#imp-paste').addEventListener('input', function () {
     state.pasted = this.value;
+    state.edits = {};
+    state.proof = {};
+    state.dups = {};
     renderBanks(); renderMap(); renderProof(); renderDup(); renderPlan();
     saveWizard();
   });
@@ -2048,6 +2106,7 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
     state.sourceMode = 'file';
     state.file = normalizeFile(cat);
     state.proof = {};
+    state.edits = {};
     state.dups = {};
     $$('[data-src-mode]').forEach(function (s) {
       s.setAttribute('aria-checked', String(s.getAttribute('data-src-mode') === 'file'));
@@ -2153,6 +2212,8 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
     writeRun(null);
     state.job = { status: 'idle', done: 0, total: 0, failed: [], job: null };
     state.dups = {};
+    state.proof = {};
+    state.edits = {};
     goStep('imp-1');
     toast('已重置，可再导入一批');
   }
@@ -2176,7 +2237,11 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
     /* 与侧栏、复习页、题库页同一口径（CR-05 可执行复习集合），不用 reviewQueue().length */
     $('#side-due').textContent = String(S.executableReview().length);
     $('#side-sessions').textContent = String(S.sessions().length);
-    $('#imp-view-bank').setAttribute('href', 'workspace.html?bank=' + encodeURIComponent(state.bankId) + '&tab=imports');
+    /* 结果页落到刚导入的题库；有首批题干时带上筛选，直接定位到导入的题目 */
+    var landedStem = (state.job.job && state.job.job.firstStem) || '';
+    $('#imp-view-bank').setAttribute('href',
+      'workspace.html?bank=' + encodeURIComponent(state.bankId) + '&tab=questions' +
+      (landedStem ? '&q=' + encodeURIComponent(landedStem) : ''));
     /* 步骤流向随来源格式变化，按钮上的目标也如实更新，不只靠 JS 里判断 */
     $('#imp-next-1').setAttribute('data-step-next', mapPanel());
     $('#imp-prev-3').setAttribute('data-step-prev', isPdf() ? 'imp-1' : 'imp-2');

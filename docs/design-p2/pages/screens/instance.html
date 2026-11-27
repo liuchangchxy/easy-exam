@@ -102,7 +102,7 @@
     .admin-table td.col-actions { flex-direction: column; align-items: flex-end; row-gap: var(--sp-2); }
   }</style>
 </head>
-<body>
+<body data-nav-domain="settings">
 <a class="skip-link" href="#main-content">跳到主内容</a>
 <div class="app-shell">
 
@@ -795,7 +795,7 @@
 </dialog>
 
 <!-- ================= 浮层：设为 / 取消实例管理员 ================= -->
-<dialog class="dlg" id="dlg-admin" aria-labelledby="dlg-admin-title">
+<dialog class="dlg" id="dlg-admin" data-role-action="on" aria-labelledby="dlg-admin-title">
   <div class="dlg-head">
     <div class="dlg-head-text">
       <p class="dlg-eyebrow">用户</p>
@@ -1091,6 +1091,9 @@
           window.eeDialog.open('dlg-enable', btn);
         } else if (act === 'admin-on' || act === 'admin-off') {
           var on = act === 'admin-on';
+          var adminDlg = document.getElementById('dlg-admin');
+          /* 行为属性是唯一判据（规则 §2）；标题只负责显示，不参与业务判断。 */
+          adminDlg.setAttribute('data-role-action', on ? 'on' : 'off');
           document.getElementById('dlg-admin-title').textContent = on ? '设为实例管理员' : '取消实例管理员';
           document.getElementById('dlg-admin-user').textContent = (on ? '把 ' : '把 ') + user + (on ? ' 设为实例管理员？' : ' 取消实例管理员身份？');
           document.getElementById('dlg-admin-effect').textContent = on
@@ -1119,7 +1122,7 @@
       window.eeToast('已启用该用户');
     });
     document.getElementById('dlg-admin-go').addEventListener('click', function () {
-      var on = document.getElementById('dlg-admin-title').textContent === '设为实例管理员';
+      var on = document.getElementById('dlg-admin').getAttribute('data-role-action') === 'on';
       if (targetRow) setRowRole(targetRow, on);
       window.eeDialog.close(document.getElementById('dlg-admin'));
       flashUpdated();

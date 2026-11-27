@@ -100,7 +100,7 @@
     .masthead-actions > .btn { flex: 1 1 auto; }
   }</style>
 </head>
-<body>
+<body data-nav-domain="today">
 <a class="skip-link" href="#main-content">跳到主内容</a>
 <div class="app-shell">
   <!-- ============ 侧栏 ============ -->
@@ -604,7 +604,7 @@
     <div class="od-grid" style="--od-cols:2; --od-gap: var(--sp-4)">
       <label class="field">
         <span class="label">题数</span>
-        <select class="select">
+        <select class="select" id="exam-count">
           <option selected>10 题</option>
           <option>20 题</option>
           <option>50 题</option>
@@ -612,7 +612,7 @@
       </label>
       <label class="field">
         <span class="label">时长</span>
-        <select class="select">
+        <select class="select" id="exam-minutes">
           <option selected>60 分钟</option>
           <option>90 分钟</option>
           <option>120 分钟</option>
@@ -620,7 +620,7 @@
       </label>
     </div>
     <label class="check">
-      <input type="checkbox" checked>
+      <input type="checkbox" id="exam-record" checked>
       <span>本场纳入学习记录</span>
     </label>
     <p class="hint">关闭时本场不写错题、不写也不推进 FSRS、不计入任何学习统计与趋势，报告仍可回看。普通练习不暴露这个开关（默认记录学习过程）。</p>
@@ -721,16 +721,29 @@ window.EEHome = (function () {
   function runnerOf(s) { return s.kind === 'exam' ? 'exam.html' : 'practice.html'; }
   function rowIds(rows) { return rows.map(function (r) { return r.id; }); }
 
+  /* 统一 ctx 构造（三处 reviewCtx 同构：home / review / diagnosis）。
+     字段固定为 kind / mode / bankId / rowIds / total / title / scope：
+     mode 是冲突判定键（CR-14 只按 mode），rowIds 是指定题目集合（复习与指定范围练习共用），
+     title 是会话可读名，scope 是给界面看的来源描述。缺一个字段，页面间的冲突判定就会对不上。 */
   function reviewCtx(mode, rows, scope) {
+    var ids = rows.map(function (r) { return r.id; });
     return {
-      kind: 'review', bankId: rows.length ? rows[0].bankId : 'b_rk', mode: mode,
-      total: rows.length, rowIds: rowIds(rows),
-      scope: scope || (mode + ' · ' + rows.length + ' 题')
+      kind: mode === '薄弱练习' ? 'practice' : 'review',
+      mode: mode,
+      bankId: rows.length ? rows[0].bankId : 'b_rk',
+      rowIds: ids,
+      total: ids.length,
+      title: mode + ' · ' + ids.length + ' 题',
+      scope: scope || (mode + ' · ' + ids.length + ' 题')
     };
   }
   function practiceCtx(bank, n) {
     var total = n == null ? practiceCount(bank.id) : Math.min(n, practiceCount(bank.id));
-    return { kind: 'practice', bankId: bank.id, mode: '顺序练习', total: total, count: total, scope: '全部题目 · ' + bank.name };
+    return {
+      kind: 'practice', mode: '顺序练习', bankId: bank.id,
+      rowIds: [], total: total, count: total, title: '',
+      scope: '全部题目 · ' + bank.name
+    };
   }
   /* 主操作决策：四步固定顺序 */
   function defaultCtx() {
@@ -1065,12 +1078,12 @@ window.EEHome = (function () {
     eeDialog.open('dlg-sessions', btn);
   }
 
-  /* ---------- 开始决策：所有入口共用一个面板 ---------- */
+  /* ---------- 开始决策：所有入口共用一个面板 ----------
+     冲突判定走 store 的唯一实现（S.sessionConflicts，只按 mode）：
+     本页不再自己写一份 kind/bankId 版本的 conflictsFor，否则页面说「不冲突」、
+     store 说「冲突」，开始之后就会莫名少掉一个会话。 */
   function conflictsFor(ctx) {
-    var list = sessions();
-    if (ctx.kind === 'exam') return list.filter(function (s) { return s.kind === 'exam'; });
-    if (ctx.kind === 'review') return list.filter(function (s) { return s.kind === 'review' && s.mode === ctx.mode; });
-    return list.filter(function (s) { return s.kind === 'practice' && s.bankId === ctx.bankId; });
+    return S.sessionConflicts(ctx);
   }
 
   /* ---------- 本次学习参数（FN-203）----------
@@ -1176,7 +1189,42 @@ window.EEHome = (function () {
       hint.hidden = true;
     }
     if (!ok) setParamsOpen(true);
-    return { ok: ok, want: want, pool: startPool };
+    /* 模式一变，冲突就变：冲突口径是 mode，不是 kind/题库。
+       只改「练习模式」而不重算冲突，面板会继续按旧模式的结论显示「没有冲突 / 结束并新建」，
+       开始之后才发现 store 里还留着同模式会话——这正是要消除的错误冲突处理。
+       liveCtx 用「本次将要以此开始的模式」，而不是入口带来的旧模式。 */
+    var liveCtx = Object.assign({}, startCtx || {}, { mode: startParams.mode });
+    var liveConflicts = refreshConflict(liveCtx, want);
+    return { ok: ok, want: want, pool: startPool, ctx: liveCtx, conflicts: liveConflicts, conflictCount: liveConflicts.length };
+  }
+  /* 把冲突判定 + 面板提示收在一处：openStart 首次渲染与每次参数变化都调它 */
+  function refreshConflict(ctx, want) {
+    if (!ctx) return;
+    var conflicts = conflictsFor(ctx);
+    var sameMode = conflicts.length > 0;
+    document.getElementById('start-session').hidden = !sameMode;
+    document.getElementById('start-clean').hidden = sameMode;
+    document.getElementById('start-conflict-hint').hidden = !sameMode;
+    document.getElementById('start-session-list').innerHTML = sameMode ? conflicts.map(function (s) {
+      return '<div class="list-row static">' +
+        '<span class="list-main"><span class="list-title">' + esc(bankName(s.bankId)) + '</span>' +
+        '<span class="list-meta"><span>' + esc(s.mode || '顺序练习') + '</span><span class="mono">已答 ' + (s.done || 0) + ' / ' + (s.total || 0) + '</span></span></span>' +
+        '<span class="list-side"><span class="tag brand">' + esc(KIND_LABEL[s.kind] || '练习') + '</span></span></div>';
+    }).join('') : '';
+    var resumeBtn = document.getElementById('start-resume');
+    resumeBtn.hidden = !sameMode;
+    if (sameMode) {
+      resumeBtn.onclick = function () {
+        var last = conflicts[conflicts.length - 1];
+        eeDialog.close(document.getElementById('dlg-start'));
+        if (last) location.href = runnerOf(last) + '?sid=' + encodeURIComponent(last.id);
+      };
+    }
+    var newBtn = document.getElementById('start-new');
+    /* 参数不完整时「开始」本来就该禁用，模式切换不得把它重新点亮 */
+    newBtn.textContent = sameMode ? '结束并新建' : '开始';
+    document.getElementById('dlg-start-title').textContent = sameMode ? '有未完成的学习会话' : '开始这次学习';
+    return conflicts;
   }
   function bindParams() {
     ['p-scope', 'p-count', 'p-type', 'p-tag', 'p-mode'].forEach(function (id) {
@@ -1188,34 +1236,26 @@ window.EEHome = (function () {
   }
   /* 复习会话不走参数面板：队列与 FSRS 决定出题，范围/数量在这里没有意义 */
   function paramsUsable(ctx) { return ctx && (ctx.kind === 'practice' || ctx.kind === 'exam'); }
+  /* 来源页 + 返回位置：写进会话的 origin，答题器交卷后「返回来源」按它回去，
+     而不是一律回今天页。调用时记下进入前的页面与滚动位置。 */
+  function originOf(ctx) {
+    var page = (location.pathname.split('/').pop() || 'home.html');
+    return {
+      page: page,
+      href: page + location.search,
+      label: (ctx && ctx.originLabel) || '今天页',
+      y: window.scrollY || window.pageYOffset || 0
+    };
+  }
 
-  /* 调用约定：openStart(ctx, trigger)——所有入口都按这个次序传参 */
+  /* 调用约定：openStart(ctx, trigger)——所有入口都按这个次序传参。
+     冲突判定与面板提示统一走 refreshConflict（内部调 S.sessionConflicts，只按 mode）。 */
   function openStart(ctx, trigger) {
     startCtx = ctx || defaultCtx();
-    var conflicts = conflictsFor(startCtx);
     document.getElementById('start-scope').textContent = startCtx.scope || '全部题目';
     document.getElementById('start-count').textContent = startCtx.count != null ? startCtx.count + ' 题' : '按题库剩余';
     document.getElementById('start-mode').textContent = startCtx.mode || '顺序练习';
-    var sameMode = conflicts.length > 0;
-    document.getElementById('start-session').hidden = !sameMode;
-    document.getElementById('start-clean').hidden = sameMode;
-    document.getElementById('start-conflict-hint').hidden = !sameMode;
-    var resumeBtn = document.getElementById('start-resume');
-    resumeBtn.hidden = !sameMode;
     var newBtn = document.getElementById('start-new');
-    newBtn.textContent = sameMode ? '结束并新建' : '开始';
-    document.getElementById('dlg-start-title').textContent = sameMode ? '有未完成的学习会话' : '开始这次学习';
-    document.getElementById('start-session-list').innerHTML = conflicts.map(function (s) {
-      return '<div class="list-row static">' +
-        '<span class="list-main"><span class="list-title">' + esc(bankName(s.bankId)) + '</span>' +
-        '<span class="list-meta"><span>' + esc(s.mode || '顺序练习') + '</span><span class="mono">已答 ' + (s.done || 0) + ' / ' + (s.total || 0) + '</span></span></span>' +
-        '<span class="list-side"><span class="tag brand">' + esc(KIND_LABEL[s.kind] || '练习') + '</span></span></div>';
-    }).join('');
-    resumeBtn.onclick = function () {
-      var last = conflicts[conflicts.length - 1];
-      eeDialog.close(document.getElementById('dlg-start'));
-      if (last) location.href = runnerOf(last) + '?sid=' + encodeURIComponent(last.id);
-    };
 
     /* 参数区：只有普通练习与模考可调；模考额外暴露「纳入学习记录」，普通练习不显示 */
     var usable = paramsUsable(startCtx);
@@ -1233,10 +1273,14 @@ window.EEHome = (function () {
       document.getElementById('p-scope').value = startParams.scope;
       document.getElementById('p-count').value = startParams.count;
       document.getElementById('p-mode').value = startParams.mode;
+      /* syncParams 内部会按「本次将以哪个模式开始」重算冲突并刷新面板，
+         所以这里不再单独渲染一份冲突列表（两份口径迟早分叉） */
       var r = syncParams();
       setParamsOpen(!r.ok);           /* 完整 → 收起；不完整 → 展开 */
       newBtn.disabled = !r.ok;
+      newBtn.textContent = r.conflictCount ? '结束并新建' : '开始';
     } else {
+      refreshConflict(startCtx);
       newBtn.disabled = false;
     }
     newBtn.onclick = commitStart;
@@ -1245,26 +1289,75 @@ window.EEHome = (function () {
   function commitStart() {
     var ctx = startCtx;
     eeDialog.close(document.getElementById('dlg-start'));
-    conflictsFor(ctx).forEach(function (s) { S.finishSession(s.id); });
     if (paramsUsable(ctx)) {
       var r = syncParams();
       if (!r.ok) { eeToast('这个范围里没有可练的题，先调整参数'); return; }
       ctx = {
         kind: ctx.kind, bankId: ctx.bankId, mode: startParams.mode,
-        total: r.want, count: r.want,
+        total: r.want, count: r.want, rowIds: ctx.rowIds || [],
         scope: startParams.scope + (startParams.type !== '不限' ? ' · ' + startParams.type : '') + (startParams.tag !== '不限' ? ' · ' + startParams.tag : ''),
-        rowIds: [], record: ctx.kind === 'exam' ? document.getElementById('p-record').checked : undefined
+        record: ctx.kind === 'exam' ? document.getElementById('p-record').checked : undefined,
+        params: {
+          count: r.want, scope: startParams.scope, type: startParams.type,
+          tag: startParams.tag, mode: startParams.mode, order: startParams.mode
+        }
       };
     }
-    var s = S.startSession({
+    /* 先按最终 mode 判冲突（参数里的模式才是真正要开始的模式），再逐条结束同模式旧会话。
+       「结束并新建」只结束同模式会话，不连坐其他模式——与 store、复习页、学习档案同口径。 */
+    var conflicts = conflictsFor(ctx);
+    var created = S.startSession({
       kind: ctx.kind, bankId: ctx.bankId, mode: ctx.mode, title: ctx.title || '',
-      total: ctx.total || 0, rowIds: ctx.rowIds || [], index: 0, done: 0, answers: {}, flags: {}, elapsed: 0
+      total: ctx.total || 0, rowIds: ctx.rowIds || [],
+      params: ctx.params || { mode: ctx.mode },
+      index: 0, done: 0, answers: {}, selections: {}, ratings: {}, flags: {}, elapsed: 0,
+      record: ctx.record,
+      origin: originOf(ctx),
+      replace: true
     });
-    location.href = (ctx.kind === 'exam' ? 'exam.html' : 'practice.html') + '?sid=' + encodeURIComponent(s.id);
+    if (!created || !created.id) { eeToast('这次会话没能建立，稍后再试'); return; }
+    location.href = (ctx.kind === 'exam' ? 'exam.html' : 'practice.html') + '?sid=' + encodeURIComponent(created.id);
   }
+  /* 快速模考：基础题库模式（无蓝图）。必须真的建会话并跳转，
+     不能只弹一条 toast——「开始模考」按下去什么都没开始，是入口分裂的一种。 */
   function beginExam() {
+    var sel = document.getElementById('exam-bank');
+    var name = sel && sel.value ? sel.value : '';
+    var banks = ownBanks().filter(function (b) { return contentCount(b.id) > 0; });
+    var bank = null;
+    banks.forEach(function (b) { if (b.name === name) bank = b; });
+    if (!bank) bank = banks[0];
     eeDialog.close(document.getElementById('dlg-exam'));
-    eeToast('已按基础题库模式开始模考；交卷前不显示对错');
+    if (!bank) { eeToast('还没有可用的题库，先导入题目', 'bad'); return; }
+    var countSel = document.getElementById('exam-count');
+    var minSel = document.getElementById('exam-minutes');
+    var want = parseInt(String(countSel ? countSel.value : '10'), 10) || 10;
+    var minutes = parseInt(String(minSel ? minSel.value : '60'), 10) || 60;
+    var total = Math.min(want, canvasCount(bank.id));
+    var ctx = {
+      kind: 'exam', bankId: bank.id, mode: '模考', title: '模考 · ' + bank.name,
+      total: total, rowIds: [],
+      /* 无蓝图 → 基础题库模式：显式带上 blueprint:null 与 blueprintMode，
+         答题器据此在界面标明「按默认组卷」，不会把它说成蓝图组卷。 */
+      blueprint: null, blueprintMode: 'basic',
+      record: document.getElementById('exam-record') ? document.getElementById('exam-record').checked : true,
+      params: { count: total, minutes: minutes, mode: '模考' }
+    };
+    var created = S.startSession({
+      kind: 'exam', bankId: bank.id, mode: ctx.mode, title: ctx.title,
+      total: total, minutes: minutes, unlimited: false, record: ctx.record,
+      blueprint: null, blueprintMode: 'basic', params: ctx.params,
+      index: 0, done: 0, answers: {}, selections: {}, flags: {}, elapsed: 0, remaining: minutes * 60,
+      origin: originOf(ctx),
+      replace: true
+    });
+    if (!created || !created.id) { eeToast('模考没能建立，稍后再试'); return; }
+    location.href = 'exam.html?sid=' + encodeURIComponent(created.id);
+  }
+  /* 可组卷题量：未归档题目；题库只有计数没有题目记录时退回计数 */
+  function canvasCount(bankId) {
+    var listed = S.questions(bankId, { archived: false }).length;
+    return listed || contentCount(bankId);
   }
   function bankCtx(bankId) {
     var b = S.bank(bankId);

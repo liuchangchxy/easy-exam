@@ -16,7 +16,7 @@
    ========================================================================== */
 (function () {
   var KEY = 'eeStore.v3';
-  var VERSION = 4;
+  var VERSION = 5;
 
   /* ---------------- 种子数据（与第一/二轮屏幕内容一致，便于对照验收） ---------------- */
   function seed() {
@@ -29,6 +29,13 @@
         density: 'cozy',       // cozy | compact
         lang: 'zh',            // zh | en
         practiceTimer: false,  // 普通练习计时器默认隐藏（已定决策），模考常驻
+        /* 判定模式（账户偏好，P3 随账号同步）：submit = 明确提交后判；instant = 点选即判。
+           只影响单选与判断题，多选一律保持提交后判。 */
+        judgeMode: 'submit',
+        /* AI 解释开关与密钥：账户偏好，P3 随账号同步。密钥只存「已配置」，不回显原文。 */
+        aiEnabled: true,
+        aiKey: '',
+        netKey: '',
         autoSave: true,
         online: true
       },
@@ -65,9 +72,19 @@
         { id: 'd1', bankId: 'b_acc', file: '章节练习第二批.csv', step: 2, at: '2026-11-24 09:31' },
         { id: 'd2', bankId: 'b_rk', file: '案例分析整理.json', step: 1, at: '2026-11-22 16:40' }
       ],
-      /* 学习会话：practice / exam / review 三态共用一份，跨页面可恢复 */
+      /* 学习会话：practice / exam / review 三态共用一份，跨页面可恢复。
+         字段契约（D 域四页与 E 域入口共用，缺一不可）：
+           kind / mode / bankId / origin      身份与来源
+           answers / selections               已提交作答 / 已选未提交（刷新与暂存都不能丢）
+           index / flags / ratings / elapsed  光标、旗标、评级、用时
+           rowIds / params / blueprint       指定题目集合 / 本次参数 / 模考蓝图
+           origin                            来源页 + 返回位置（返回来源用，不固定回首页） */
       sessions: [
-        { id: 's1', kind: 'practice', bankId: 'b_acc', mode: '顺序练习', total: 3, done: 1, answers: { 0: 'A' }, startedAt: '2026-11-24 22:10', updatedAt: '2026-11-24 22:12' }
+        { id: 's1', kind: 'practice', bankId: 'b_acc', mode: '顺序练习', total: 3, done: 1,
+          answers: { 0: 'A' }, selections: {}, ratings: {}, flags: {}, index: 1, elapsed: 0,
+          rowIds: [], params: { count: 3, type: '不限', tag: '不限', scope: '全部题目', mode: '顺序练习' },
+          blueprint: null, origin: { page: 'home', href: 'home.html', label: '今天页' },
+          startedAt: '2026-11-24 22:10', updatedAt: '2026-11-24 22:12' }
       ],
       members: [
         { id: 'b_acc', list: [
@@ -280,6 +297,14 @@
       for (var i = 0; i < state.questions.length; i++) if (state.questions[i].id === id) return state.questions[i];
       return null;
     },
+    /* 按题干找题（复习队列行 / 报告快照与题库题目之间的桥）。归一化同 normStem。 */
+    questionByStem: function (stem) {
+      var k = api.normStem(stem);
+      for (var i = 0; i < state.questions.length; i++) {
+        if (api.normStem(state.questions[i].stem) === k) return state.questions[i];
+      }
+      return null;
+    },
     /* 题干归一化：报告与复习队列两端唯一的同一性判据。
        报告存的是交卷当时的题目快照，复习队列有自己的行 id，两套编号对不上时
        只能靠题干把两边架起来。归一化故意只做「去空白 + 忽略大小写」：
@@ -395,7 +420,10 @@
       commit({ type: 'draft:remove', id: id });
     },
 
-    /* ---- 学习会话（跨页面可恢复） ---- */
+    /* ---- 学习会话（跨页面可恢复） ----
+       冲突口径全产品唯一（CR-14）：同一 mode 同时只保留一个进行中会话；与 kind、题库无关。
+       不同 mode 互不牵连——一个 PRACTICE 与一个 FSRS 可以并存，互不提示、互不代管。
+       页面不再各写一份 conflictsFor，一律调 sessionConflicts(ctx)。 */
     sessions: function (kind) {
       return state.sessions.filter(function (s) { return !kind || s.kind === kind; });
     },
@@ -405,13 +433,39 @@
       });
       return list.length ? list[list.length - 1] : null;
     },
+    /* sessionConflicts(ctx) → 与该次开始请求同 mode 的进行中会话列表。
+       ctx 可以是字段对象 { kind, mode, bankId, rowIds … }，也可以是 URLSearchParams。
+       只按 mode 判定：mode 缺省视为「顺序练习」（与题库页 / 工作区入口的默认一致）。 */
+    sessionConflicts: function (ctx) {
+      var q = ctx || {};
+      var mode = (q.mode || (q.get && q.get('mode')) || '顺序练习').trim();
+      return state.sessions.filter(function (s) {
+        return (s.mode || '顺序练习') === mode;
+      });
+    },
+    /* startSession 不再静默覆盖同模式旧会话（CR-14 的「不悄悄收掉」）。
+       返回形状对老调用方向后兼容：成功时返回会话对象本身（带 ok:true），
+       `var s = S.startSession(...); s.id` 照旧可用；冲突时返回 {ok:false, conflicts}，
+       由页面决定「继续 / 结束并新建」。页面选定后传 replace:true 重建，或先逐条
+       finishSession 再调用——两条路径都不存在「页面以为结束了、store 却留着」的错位。 */
     startSession: function (data) {
-      /* CR-14：会话冲突只按 mode 判定——同一 mode 同时只保留一个进行中会话。
-         不同 mode（即使同 kind、同题库）互不牵连；同 mode 不同题库也算同一个模式。
-         页面层的开始决策早已按 mode 判冲突，这里必须同口径，否则 store 会悄悄留下
-         一个页面认为已经结束的会话。 */
-      state.sessions = state.sessions.filter(function (s) { return s.mode !== data.mode; });
-      var s = Object.assign({ id: uid('s'), done: 0, answers: {}, startedAt: nowTime(), updatedAt: nowTime() }, data);
+      var payload = Object.assign({}, data || {});
+      var conflicts = api.sessionConflicts(payload);
+      if (conflicts.length && !payload.replace) {
+        return { ok: false, conflicts: conflicts, reason: 'conflict' };
+      }
+      if (payload.replace) {
+        conflicts.forEach(function (s) { api.finishSession(s.id); });
+        delete payload.replace;
+      }
+      var s = Object.assign({
+        id: uid('s'), kind: 'practice', done: 0,
+        answers: {}, selections: {}, ratings: {}, flags: {}, index: 0, elapsed: 0,
+        rowIds: [], total: 0, params: {}, blueprint: null,
+        origin: { page: '', href: '', label: '' },
+        startedAt: nowTime(), updatedAt: nowTime()
+      }, payload);
+      s.ok = true;
       state.sessions.push(s);
       commit({ type: 'session:start', id: s.id });
       return s;
@@ -503,6 +557,44 @@
       commit({ type: 'review:update', id: id });
       return r;
     },
+    /* 题干 → 复习行。练习 / 模考没有 rowId，回流错题与薄弱时按题干找到同一行。 */
+    rowForStem: function (bankId, stem) {
+      var k = api.normStem(stem);
+      for (var i = 0; i < state.reviewQueue.length; i++) {
+        var r = state.reviewQueue[i];
+        if (bankId && r.bankId !== bankId) continue;
+        if (api.normStem(r.stem) === k) return r;
+      }
+      return null;
+    },
+    /* 普通练习 / 模考的回流入口：答错 → 错题，标记薄弱 → 薄弱。
+       同一道题复用它已有的复习行，不重复建卡；到期时间排到明天，
+       不把刚答错的题立刻塞进「今天待复习」把计数抬上去。 */
+    recordOutcome: function (bankId, stem, kind, questionId) {
+      if (!stem) return null;
+      var r = api.rowForStem(bankId, stem);
+      var created = false;
+      if (!r) {
+        r = {
+          id: uid('rq'), bankId: bankId, stem: stem, reasons: [],
+          due_at: datePlusDays(1) + ' 08:00',
+          stability: kind === 'mistake' ? 1.2 : 0.9,
+          mistake_count: 0, killed_at: null, questionId: questionId || null
+        };
+        state.reviewQueue.push(r);
+        created = true;
+      }
+      var reason = kind === 'mistake' ? 'mistakes' : 'weak';
+      if (!Array.isArray(r.reasons)) r.reasons = [];
+      if (r.reasons.indexOf(reason) < 0) r.reasons.push(reason);
+      if (kind === 'mistake') {
+        r.mistake_count = (r.mistake_count || 0) + 1;
+        r.stability = 1.2;
+      }
+      if (!r.due_at || api.reviewDue(r)) r.due_at = datePlusDays(1) + ' 08:00';
+      commit({ type: created ? 'review:create' : 'review:' + kind, id: r.id });
+      return r;
+    },
 
     /* ---- 成员 ---- */
     members: function (bankId) {
@@ -591,8 +683,25 @@
       return '当前角色没有该操作权限';
     },
 
-    /* ---- 视图状态：跨页面返回时恢复筛选/页签/滚动/选择 ---- */
+    /* ---- 视图状态：跨页面返回时恢复筛选/页签/滚动/选择 ----
+     key 一律带作用域（规则 §4）：`页面:作用域[:<userId>]`。
+       题库工作区 workspace:<bankId> / 题库列表 banks:<scope> / 资料 notes:<noteId 或 list>
+       复习 review:<tab>:<bankId> / 答题器 runner:<sid>。
+       userId 位现在就留在键里（`view.key('review', tab, bankId)` 第三段默认取当前用户），
+       P3 接账户隔离时不用再改页面。不同题库、题目、账户的视图状态不得互相污染。 */
     view: {
+      /* key(page, scope?, userId?)：scope 可以是字符串，也可以是数组（多段作用域，
+         例如复习页 view.key('review', ['mistakes', 'b_acc']) → review:mistakes:b_acc:<userId>）。
+         数组里的空段跳过（题库范围未选时 bankId 为空，键退成 review:<tab>:<userId>）。 */
+      key: function (page, scope, userId) {
+        var parts = [page || 'page'];
+        var segs = Array.isArray(scope) ? scope : [scope];
+        for (var i = 0; i < segs.length; i++) {
+          if (segs[i] != null && segs[i] !== '') parts.push(String(segs[i]));
+        }
+        parts.push(userId || state.session.user || 'anon');
+        return parts.join(':');
+      },
       save: function (page, patch) {
         state.views[page] = Object.assign({}, state.views[page], patch);
         persist();
@@ -646,7 +755,13 @@
   /* 主题跟随系统时，系统切换要即时生效 */
   if (window.matchMedia) {
     var mq = window.matchMedia('(prefers-color-scheme: dark)');
-    var onSys = function () { if (state.settings.theme === 'system') applySettings(); };
+    /* 系统明暗变化：既要换配色，也要通知订阅者——顶栏的太阳/月亮图标与
+       aria-label 由 spec-boot 的 syncThemeButtons 负责，不 notify 就会「配色变了、图标没变」。 */
+    var onSys = function () {
+      if (state.settings.theme !== 'system') return;
+      applySettings();
+      listeners.forEach(function (fn) { try { fn(state, { type: 'theme' }); } catch (err) {} });
+    };
     if (mq.addEventListener) mq.addEventListener('change', onSys);
     else if (mq.addListener) mq.addListener(onSys);
   }

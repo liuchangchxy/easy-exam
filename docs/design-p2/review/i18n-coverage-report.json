@@ -1,0 +1,447 @@
+{
+  "base": "http://127.0.0.1:8787/",
+  "pages": {
+    "pages/screens/home.html": {
+      "uiStrings": 154,
+      "translated": 154,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 16,
+      "contentSample": [
+        "2026年11月28日",
+        "验收题库 1794570360969",
+        "4 题可练 · 验收题库 1794570360969",
+        "默认分类",
+        "软考",
+        "英语"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/screens/review.html": {
+      "uiStrings": 131,
+      "translated": 131,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 14,
+      "contentSample": [
+        "验收题库 1794570360969",
+        "软考真题库 1794570360969",
+        "共享题库 网络技术",
+        "英语词汇 · 每日 50 词",
+        "单选题",
+        "范围"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/screens/banks.html": {
+      "uiStrings": 134,
+      "translated": 134,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 17,
+      "contentSample": [
+        "默认分类",
+        "软考",
+        "共享",
+        "英语",
+        "aria-label=选择题库 验收题库 1794570360969",
+        "aria-label=打开 验收题库 1794570360969"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/screens/workspace.html": {
+      "uiStrings": 268,
+      "translated": 268,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 5,
+      "contentSample": [
+        "单选题",
+        "多选题",
+        "基础",
+        "进阶",
+        "困难"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/screens/question.html": {
+      "uiStrings": 133,
+      "translated": 133,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 6,
+      "contentSample": [
+        "单选题",
+        "多选题",
+        "基础",
+        "进阶",
+        "困难",
+        "系统集成项目管理工程师"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/screens/practice.html": {
+      "uiStrings": 119,
+      "translated": 119,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 12,
+      "contentSample": [
+        "顺序练习",
+        "单选题",
+        "本次练习 · 验收题库 1794570360969",
+        "title=（ ）属于融合基础设施。",
+        "OSI 的（ ）不适合提供相应的安全服务。",
+        "传输层"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/screens/exam.html": {
+      "uiStrings": 117,
+      "translated": 117,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 17,
+      "contentSample": [
+        "模考",
+        "系统集成项目管理工程师 · 综合卷",
+        "继续作答",
+        "放弃这场考试",
+        "退出（暂存）",
+        "结合本项目，说明范围基准失控的主要原因，并给出纠正措施。"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/screens/exams.html": {
+      "uiStrings": 280,
+      "translated": 280,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 12,
+      "contentSample": [
+        "模考",
+        "案例分析 · 冲刺卷",
+        "模考 · 系统集成项目管理工程师",
+        "系统架构设计师 · 选择题专项",
+        "系统集成项目管理工程师 · 综合卷",
+        "「系统集成项目管理工程师 · 综合卷」还有 22 / 38 题未交卷。同一时间只保留一场进行中的模考。"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/screens/diagnosis.html": {
+      "uiStrings": 208,
+      "translated": 208,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 26,
+      "contentSample": [
+        "模考",
+        "信息安全",
+        "范围管理",
+        "单选题",
+        "多选题",
+        "验收题库 1794570360969"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/screens/settings.html": {
+      "uiStrings": 207,
+      "translated": 207,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 3,
+      "contentSample": [
+        "模考",
+        "软考真题库 1794570360969",
+        "共享题库 网络技术"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/screens/notes.html": {
+      "uiStrings": 100,
+      "translated": 100,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 23,
+      "contentSample": [
+        "模考",
+        "验收题库 1794570360969",
+        "软考真题库 1794570360969",
+        "验收题库 1794570360969 · 4 题",
+        "软考真题库 1794570360969 · 120 题",
+        "共享题库 网络技术 · 0 题"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/screens/import.html": {
+      "uiStrings": 205,
+      "translated": 205,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 17,
+      "contentSample": [
+        "模考",
+        "验收题库 1794570360969",
+        "导入到「验收题库 1794570360969」 · 表格字段映射后人工校对",
+        "验收题库 1794570360969 · 4 题",
+        "软考真题库 1794570360969 · 120 题",
+        "共享题库 网络技术（只读） · 0 题"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/screens/instance.html": {
+      "uiStrings": 134,
+      "translated": 134,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 1,
+      "contentSample": [
+        "模考"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/screens/login.html": {
+      "uiStrings": 55,
+      "translated": 55,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 0,
+      "contentSample": [],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/screens/forbidden.html": {
+      "uiStrings": 40,
+      "translated": 40,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 1,
+      "contentSample": [
+        "模考"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/screens/palette.html": {
+      "uiStrings": 77,
+      "translated": 77,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 8,
+      "contentSample": [
+        "模考",
+        "顺序练习 · 验收题库 1794570360969",
+        "模考 · 网络技术 · 综合卷",
+        "验收题库 1794570360969",
+        "软考中级 · 信息系统管理工程师",
+        "网络技术综合"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/flows/collab.html": {
+      "uiStrings": 50,
+      "translated": 50,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 6,
+      "contentSample": [
+        "默认分类",
+        "软考",
+        "英语",
+        "验收题库 1794570360969",
+        "软考真题库 1794570360969",
+        "英语词汇 · 每日 50 词"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/flows/exam.html": {
+      "uiStrings": 55,
+      "translated": 55,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 9,
+      "contentSample": [
+        "模考中心",
+        "模考",
+        "系统集成项目管理工程师 · 综合卷",
+        "系统架构设计师 · 选择题专项",
+        "案例分析 · 冲刺卷",
+        "验收题库 1794570360969"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/flows/import.html": {
+      "uiStrings": 43,
+      "translated": 43,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 4,
+      "contentSample": [
+        "验收题库 1794570360969 · 4 题",
+        "软考真题库 1794570360969 · 120 题",
+        "共享题库 网络技术（只读） · 0 题",
+        "英语词汇 · 每日 50 词 · 50 题"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/flows/practice.html": {
+      "uiStrings": 41,
+      "translated": 41,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 2,
+      "contentSample": [
+        "今天页",
+        "验收题库 1794570360969"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    },
+    "pages/flows/review.html": {
+      "uiStrings": 45,
+      "translated": 45,
+      "coverage": 100,
+      "missing": [],
+      "notRestored": [],
+      "contentKept": 8,
+      "contentSample": [
+        "OSI 的（ ）不适合提供相应的安全服务。",
+        "验收题库 1794570360969",
+        "当出现异常时软件需要有持续提供服务，属于（）。",
+        "软考真题库 1794570360969",
+        "沟通管理计划中应记录干系人的（）。",
+        "以下属于「临时性」的是（ ）。"
+      ],
+      "dynamic": {
+        "text": "Cancel",
+        "aria": "Close notification",
+        "toast": "Switched to dark"
+      },
+      "errors": []
+    }
+  },
+  "totals": {
+    "ui": 2596,
+    "miss": 0,
+    "content": 207,
+    "notRestored": 0,
+    "coverage": 100
+  }
+}

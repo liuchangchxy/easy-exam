@@ -30,6 +30,7 @@
   .mt-4 { margin-top: var(--sp-4); }
   .mt-5 { margin-top: var(--sp-5); }
   .mb-0 { margin-bottom: 0; }
+  .pad-0 { padding: 0; }
   @media (max-width: 640px) {
     .doc-page { padding: var(--sp-6) var(--sp-4); }
     .dtable caption { display: block; width: 100%; }
@@ -46,11 +47,11 @@
     <div>
       <p class="page-eyebrow">03 / EasyExam UI/UX 设计规范</p>
       <h1 class="page-title">状态与外壳</h1>
-      <p class="page-sub">八种状态是全产品统一契约：任何屏幕不得只设计「正常那一档」。命令面板、快捷键、同步态、URL 状态契约与跨端断点同属全局外壳，由本页定义，各屏直接引用。</p>
+      <p class="page-sub">八种状态是全产品统一契约：任何屏幕不得只设计「正常那一档」。搜索与跳转面板、快捷键、同步态、URL 状态契约与跨端断点同属全局外壳，由本页定义，各屏直接引用。</p>
     </div>
     <div class="page-actions">
-      <button class="btn btn-quiet" type="button" onclick="openCmd(this)">
-        <svg class="od-icon" aria-hidden="true"><use href="#i-command"/></svg>命令面板
+      <button class="btn btn-quiet" type="button" onclick="eeShell.openPalette()">
+        <svg class="od-icon" aria-hidden="true"><use href="#i-command"/></svg>搜索与跳转
         <span class="kbd">⌘K</span>
       </button>
       <a class="btn" href="components.html">查看控件库</a>
@@ -307,65 +308,71 @@
     <p class="doc-note-line"><b>为什么把八态做成契约：</b>P2 之后每个屏都自己决定空态怎么写，就会出现十种「暂无数据」。统一之后，P3 只需要实现一套状态组件，用户在任何页面看到的都是同一种语言。</p>
   </section>
 
-  <!-- ==================== 02 命令面板 ==================== -->
+  <!-- ==================== 02 搜索与跳转面板 ==================== -->
   <section class="section" aria-labelledby="h-cmd">
-    <h2 class="doc-h2" id="h-cmd"><span class="no">02</span>命令面板（FN-605）</h2>
-    <p class="doc-rule">命令面板是全产品唯一的「跨页直达」通道，用来缩短高频路径，不是又一个导航。它只做三件事：跳到某个页面、对当前对象执行一个动作、切换一个全局设置。与当前用户相关但无权限的命令<b>置灰并说明原因</b>；与当前用户完全无关的管理入口<b>不出现</b>。</p>
+    <h2 class="doc-h2" id="h-cmd"><span class="no">02</span>搜索与跳转面板</h2>
+    <p class="doc-rule">全产品唯一的「跨对象直达」通道，用来缩短高频路径，不是又一个导航。它同时搜索四类对象：<b>页面、题库、题目、资料</b>，按类型分组显示；题库 / 题目 / 资料用稳定 id 跳到对应对象，而不是只跳页面。与当前用户完全无关的管理入口<b>不出现</b>；相关但不可用的对象说明原因。</p>
 
     <div class="demo">
       <div class="demo-cell">
-        <span class="hint">打开方式：⌘K / Ctrl+K，或点这里</span>
-        <button class="btn cmd-demo-btn" type="button" onclick="openCmd(this)">
-          <svg class="od-icon" aria-hidden="true"><use href="#i-command"/></svg>搜索或执行命令
+        <span class="hint">打开方式：⌘K / Ctrl+K，或点这里（真实面板）</span>
+        <button class="btn cmd-demo-btn" type="button" onclick="eeShell.openPalette()">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-command"/></svg>搜索页面、题库、题目或资料
           <span class="kbd">⌘K</span>
         </button>
       </div>
       <div class="demo-cell">
-        <span class="hint">移动端：底部抽屉变体，同一份命令数据</span>
-        <button class="btn btn-quiet cmd-demo-btn" type="button" onclick="openCmd(this, true)">
+        <span class="hint">移动端：同一份数据，面板改为近全屏</span>
+        <button class="btn btn-quiet cmd-demo-btn" type="button" onclick="eeShell.openPalette()">
           <svg class="od-icon" aria-hidden="true"><use href="#i-command"/></svg>移动端形态
         </button>
       </div>
     </div>
 
-    <h3 class="doc-h3">命令的分组与权重</h3>
+    <h3 class="doc-h3">四类对象的分组与跳转</h3>
     <div class="dtable-wrap">
       <table class="dtable">
-        <caption>命令面板收录规则：高频学习动作优先，管理动作收在「转到」分组</caption>
+        <caption>搜索范围：页面来自唯一路由契约，其余来自共享状态</caption>
         <thead>
-          <tr><th scope="col">分组</th><th scope="col">示例</th><th scope="col">规则</th></tr>
+          <tr><th scope="col">分组</th><th scope="col">收录</th><th scope="col">跳转目标</th><th scope="col">排序</th></tr>
         </thead>
         <tbody>
           <tr>
-            <td data-label="分组">今天</td>
-            <td data-label="示例">继续上次练习 / 开始今日复习 / 查看今日计划</td>
-            <td data-label="规则">永远排在列表最上方，带当前上下文（如「还有 5 题到期」）</td>
+            <td data-label="分组"><span class="tag plain">页面</span></td>
+            <td data-label="收录">nav.js 的唯一路由契约（与侧栏同一份）</td>
+            <td data-label="跳转目标">对应页面文件</td>
+            <td data-label="排序">固定顺序</td>
           </tr>
           <tr>
-            <td data-label="分组">转到</td>
-            <td data-label="示例">题库工作区 / 学习档案 / 模考中心 / 资料库 / 设置</td>
-            <td data-label="规则">页面级跳转，无权限的目标不出现（用户根本看不到那个对象）</td>
+            <td data-label="分组"><span class="tag plain">题库</span></td>
+            <td data-label="收录">未归档题库</td>
+            <td data-label="跳转目标"><code class="mono">workspace.html?bank=&lt;id&gt;</code></td>
+            <td data-label="排序">标题前缀优先</td>
           </tr>
           <tr>
-            <td data-label="分组">对当前对象执行</td>
-            <td data-label="示例">归档本题 / 标为薄弱 / 加入斩杀 / 导出题库</td>
-            <td data-label="规则">只在对应页面出现；相关但无写权限时置灰 + 原因，完全无关的管理命令不出现</td>
+            <td data-label="分组"><span class="tag plain">题目</span></td>
+            <td data-label="收录">未归档题目</td>
+            <td data-label="跳转目标"><code class="mono">question.html?id=&lt;id&gt;</code></td>
+            <td data-label="排序">标题前缀优先</td>
           </tr>
           <tr>
-            <td data-label="分组">设置</td>
-            <td data-label="示例">切换暗色 / 切换配色 / 切换语言 / 切换密度</td>
-            <td data-label="规则">即时生效，执行后 toast 确认</td>
+            <td data-label="分组"><span class="tag plain">资料</span></td>
+            <td data-label="收录">全部资料</td>
+            <td data-label="跳转目标"><code class="mono">notes.html?note=&lt;id&gt;</code></td>
+            <td data-label="排序">标题前缀优先</td>
           </tr>
         </tbody>
       </table>
     </div>
-    <p class="doc-note-line"><b>空结果也是有意义的：</b>搜不到时说明「没有匹配的页面或命令」，并列出三个最可能的命令，不要让用户面对一个空列表。</p>
+    <p class="doc-note-line"><b>键盘</b>：<span class="kbd">↑</span> / <span class="kbd">↓</span> 跨分组连续移动，<span class="kbd">Enter</span> 打开，<span class="kbd">Esc</span> 关闭；打开时焦点在输入框，关闭后回到触发按钮。</p>
+    <p class="doc-note-line"><b>空结果也是有意义的：</b>有输入时写「没有匹配「关键词」的页面、题库、题目或资料」并提示「试试题库名、题干片段或资料标题」；没有任何可搜索数据时才写「这里还没有可搜索的页面、题库、题目或资料」。两种空态不混用，也不留一个空列表。</p>
+    <p class="doc-note-line"><b>唯一实现</b>：面板由 <code class="mono">assets/spec-boot.js</code> 创建；顶栏搜索按钮（<code class="mono">[data-ee-shell="search"]</code>）在所有页面打开同一个面板，Ctrl / ⌘ + K 同入口。页面不得再写一份。</p>
   </section>
 
   <!-- ==================== 03 全局快捷键 ==================== -->
   <section class="section" aria-labelledby="h-keys">
     <h2 class="doc-h2" id="h-keys"><span class="no">03</span>全局快捷键（FN-612）</h2>
-    <p class="doc-rule">快捷键只覆盖两类：跨页导航与 runner 内的作答操作。每个快捷键在命令面板里都能用文字搜到，不强迫记忆。</p>
+    <p class="doc-rule">快捷键只覆盖两类：跨页导航与 runner 内的作答操作。快捷键覆盖的页面入口都能在搜索与跳转面板里用文字搜到，不强迫记忆。</p>
     <p class="doc-rule"><b>快捷键不得拦截正常输入</b>：焦点在输入框 / 文本域 / 可编辑元素里时，字符类快捷键一律不触发（输入法组合输入同样不触发）；带 <span class="kbd">Ctrl</span>/<span class="kbd">⌘</span> 的组合键让给系统与浏览器。<b>快捷键按题型动态适配</b>——单选题按 <span class="kbd">A</span>–<span class="kbd">E</span> 选对应选项，多选题同键切换选中，判断题按 <span class="kbd">T</span>/<span class="kbd">F</span>，填空题聚焦输入框时不拦字符键，主观题不启用字符类快捷键。<b>不为了增加高级感堆砌低价值快捷键</b>：帮不上高频路径的一律不加。</p>
 
     <div class="demo">
@@ -373,7 +380,7 @@
         <span class="hint">全局</span>
         <div class="panel"><div class="panel-body">
           <div class="kbd-list">
-            <p class="kbd-row mb-0"><span class="kbd">⌘K</span><span>命令面板</span></p>
+            <p class="kbd-row mb-0"><span class="kbd">⌘K</span><span>搜索与跳转面板</span></p>
             <p class="kbd-row mb-0"><span class="kbd">G</span><span>然后 <span class="kbd">T</span> 去今天</span></p>
             <p class="kbd-row mb-0"><span class="kbd">G</span><span>然后 <span class="kbd">B</span> 去题库</span></p>
             <p class="kbd-row mb-0"><span class="kbd">G</span><span>然后 <span class="kbd">R</span> 去复习</span></p>
@@ -619,6 +626,167 @@
         <p class="hint">一级导航、面包屑跳转、设置入口、与当前题无关的推荐。它们全部收进退出后的正常外壳。</p>
       </div>
     </div>
+    <p class="doc-note-line"><b>实现约定</b>：runner 的退出按钮统一加 <code class="mono">data-act="exit-task"</code>；页面自己的确认对话框用 <code class="mono">data-exit-dialog="&lt;dlg-id&gt;"</code>，没有页面对话框时用 <code class="mono">data-exit-kind</code> + <code class="mono">data-exit-to</code> 走统一确认框。视觉上它仍是左箭头 +「退出」，但语义与「返回父页面」分开。</p>
+  </section>
+
+  <!-- ==================== 08 可供性与四态 ==================== -->
+  <section class="section" aria-labelledby="h-afford">
+    <h2 class="doc-h2" id="h-afford"><span class="no">08</span>可供性矩阵与四态</h2>
+    <p class="doc-rule">一个区域看起来能不能点，必须和它实际能不能点一致。全产品只有四种可供性：<b>可点、只读、禁用、纯展示</b>；视觉、DOM 语义与行为三者必须同时成立，不能只靠颜色或 hover 暗示。</p>
+
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <caption>可供性矩阵：四种区域各用什么表达</caption>
+        <thead>
+          <tr><th scope="col">可供性</th><th scope="col">视觉</th><th scope="col">DOM 约定</th><th scope="col">行为</th><th scope="col">禁止</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td data-label="可供性"><span class="tag brand">可点</span></td>
+            <td data-label="视觉">有 hover 背景、有焦点环；行尾可用箭头表示「有默认动作」</td>
+            <td data-label="DOM 约定"><code class="mono">&lt;button&gt;</code> / <code class="mono">&lt;a&gt;</code>；整行可点用 <code class="mono">data-row-href</code> + <code class="mono">role="link"</code> + <code class="mono">tabindex="0"</code></td>
+            <td data-label="行为">点击 / Enter / Space 执行默认动作</td>
+            <td data-label="禁止">用 <code class="mono">&lt;div onclick&gt;</code> 冒充按钮；箭头不在链接里</td>
+          </tr>
+          <tr>
+            <td data-label="可供性"><span class="tag plain">只读</span></td>
+            <td data-label="视觉">内容正常可读，无 hover 位移；旁边有「只读」文字标记</td>
+            <td data-label="DOM 约定"><code class="mono">aria-readonly="true"</code>；可聚焦但不可编辑</td>
+            <td data-label="行为">可选中、可复制、可展开查看；不写入</td>
+            <td data-label="禁止">用禁用样式（半透明 + not-allowed）冒充只读</td>
+          </tr>
+          <tr>
+            <td data-label="可供性"><span class="tag warn">禁用</span></td>
+            <td data-label="视觉">置灰；原因常驻可见（行内说明或 <code class="mono">aria-describedby</code> 指向的说明），不能只在 hover 里</td>
+            <td data-label="DOM 约定">原生 <code class="mono">disabled</code>，或 <code class="mono">aria-disabled="true"</code> + <code class="mono">data-disabled-reason</code> / <code class="mono">aria-describedby</code></td>
+            <td data-label="行为">不可执行；点击或聚焦时给出可读原因（toast）</td>
+            <td data-label="禁止">隐藏入口；禁用而不说为什么；只写 <code class="mono">title</code></td>
+          </tr>
+          <tr>
+            <td data-label="可供性"><span class="tag plain">纯展示</span></td>
+            <td data-label="视觉">无 hover 背景、无箭头、无焦点环、<code class="mono">cursor:default</code></td>
+            <td data-label="DOM 约定"><code class="mono">.list-row.static</code> 或普通文本容器；不加 <code class="mono">tabindex</code> / <code class="mono">role="button"</code></td>
+            <td data-label="行为">只读浏览，不响应点击</td>
+            <td data-label="禁止"><code class="mono">cursor:pointer</code>、hover 变色、误导性箭头、<code class="mono">onclick</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="demo-grid mt-4">
+      <div class="state-card">
+        <p class="rule-label">可点 · 整行有默认动作</p>
+        <div class="panel"><div class="panel-body pad-0"><div class="list">
+          <button class="list-row" type="button" onclick="eeToast('已打开题目')">
+            <span class="list-main"><span class="list-title">OSI 的（ ）不适合提供相应的安全服务。</span><span class="list-meta">单选题 · 验收题库</span></span>
+            <span class="list-side"><svg class="od-icon" aria-hidden="true"><use href="#i-chevron-right"/></svg></span>
+          </button>
+        </div></div></div>
+      </div>
+      <div class="state-card">
+        <p class="rule-label">只读 · 能看不能改</p>
+        <div class="panel"><div class="panel-body pad-0"><div class="list">
+          <div class="list-row static" aria-readonly="true">
+            <span class="list-main"><span class="list-title">共享题库 · 网络技术</span><span class="list-meta">他人共享，只读</span></span>
+            <span class="list-side"><span class="tag plain">只读</span></span>
+          </div>
+        </div></div></div>
+      </div>
+      <div class="state-card">
+        <p class="rule-label">禁用 · 原因常驻可见</p>
+        <div class="panel"><div class="panel-body pad-0"><div class="list">
+          <div class="list-row static" aria-disabled="true" tabindex="0" data-disabled-reason="模考进行中，编辑已锁定；交卷后可修改">
+            <span class="list-main"><span class="list-title">第 12 题 · 编辑题干</span><span class="list-meta">模考进行中，编辑已锁定；交卷后可修改</span></span>
+            <span class="list-side"><span class="tag warn">不可用</span></span>
+          </div>
+        </div></div></div>
+      </div>
+      <div class="state-card">
+        <p class="rule-label">纯展示 · 没有操作暗示</p>
+        <div class="panel"><div class="panel-body pad-0"><div class="list">
+          <div class="list-row static">
+            <span class="list-main"><span class="list-title">本周学习概览</span><span class="list-meta">完成 46 题 · 正确率 78%</span></span>
+            <span class="list-side"><span class="hint">仅供阅读</span></span>
+          </div>
+        </div></div></div>
+      </div>
+    </div>
+
+    <h3 class="doc-h3">四态：正常 / 选中 / 禁用 / 只读</h3>
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <caption>同一控件的四种状态，视觉与语义都必须可分</caption>
+        <thead><tr><th scope="col">状态</th><th scope="col">视觉</th><th scope="col">DOM</th><th scope="col">说明</th></tr></thead>
+        <tbody>
+          <tr><td data-label="状态">正常</td><td data-label="视觉">默认描边 / 底色</td><td data-label="DOM">无附加属性</td><td data-label="说明">可执行</td></tr>
+          <tr><td data-label="状态">选中</td><td data-label="视觉">品牌底 / 品牌描边 / 左侧 3px 品牌条</td><td data-label="DOM"><code class="mono">aria-selected="true"</code> / <code class="mono">aria-checked="true"</code> / <code class="mono">is-active</code> / <code class="mono">is-on</code></td><td data-label="说明">当前选择，不等于禁用</td></tr>
+          <tr><td data-label="状态">禁用</td><td data-label="视觉">置灰 + <code class="mono">not-allowed</code></td><td data-label="DOM"><code class="mono">disabled</code> 或 <code class="mono">aria-disabled="true"</code> + 可见原因</td><td data-label="说明">与当前用户相关但此刻不可执行</td></tr>
+          <tr><td data-label="状态">只读</td><td data-label="视觉">内容正常、无编辑暗示，带「只读」标记</td><td data-label="DOM"><code class="mono">aria-readonly="true"</code></td><td data-label="说明">能看不能改；不用禁用样式冒充</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="doc-note-line"><b>禁用原因</b>：不能只在 hover 里。<code class="mono">spec-boot.js</code> 对 <code class="mono">[aria-disabled="true"]</code> 统一接管点击：优先读 <code class="mono">aria-describedby</code> 指向的可见说明，其次读 <code class="mono">data-disabled-reason</code>，最后用通用文案 toast。原生 <code class="mono">disabled</code> 控件不可聚焦，因此原因必须常驻在控件旁边。</p>
+    <p class="doc-note-line"><b>纯展示</b>：不得有 <code class="mono">cursor:pointer</code>、hover 位移 / 变色、误导性箭头。列表里的右箭头只属于「整行可点」的行；如果行不是交互元素，就删掉箭头，而不是让它可点。</p>
+  </section>
+
+  <!-- ==================== 09 导航语义 ==================== -->
+  <section class="section" aria-labelledby="h-navsem">
+    <h2 class="doc-h2" id="h-navsem"><span class="no">09</span>导航语义：返回 / 切换 / 退出</h2>
+    <p class="doc-rule">三类动作在视觉、文案与 <code class="mono">aria-label</code> 上必须分开。用户看到「退出」时，预期是「结束当前任务并确认后果」，不是「回到上一页」；看到「返回」时，预期是「回到父页面」，不是「放弃当前作答」。</p>
+
+    <div class="dtable-wrap">
+      <table class="dtable">
+        <caption>三类导航动作的约定</caption>
+        <thead><tr><th scope="col">动作</th><th scope="col">含义</th><th scope="col">视觉</th><th scope="col">DOM</th><th scope="col">aria-label</th></tr></thead>
+        <tbody>
+          <tr>
+            <td data-label="动作"><span class="tag plain">返回父页面</span></td>
+            <td data-label="含义">沿层级回到上一级（面包屑 / 返回箭头）</td>
+            <td data-label="视觉">左箭头 + 父级名称；无危险色</td>
+            <td data-label="DOM"><code class="mono">&lt;a class="page-back" href="…"&gt;</code> + <code class="mono">data-nav-kind="back-parent"</code></td>
+            <td data-label="aria-label">返回题库列表 / 返回今天</td>
+          </tr>
+          <tr>
+            <td data-label="动作"><span class="tag brand">切换一级页面</span></td>
+            <td data-label="含义">在五个主入口之间切换（侧栏 / 底导）</td>
+            <td data-label="视觉">导航项；当前项 <code class="mono">is-active</code> + <code class="mono">aria-current="page"</code></td>
+            <td data-label="DOM"><code class="mono">data-act="nav"</code> + <code class="mono">data-route</code>；真实链接</td>
+            <td data-label="aria-label">沿用可见标签（今天 / 题库 / 复习 / 模考 / 资料）</td>
+          </tr>
+          <tr>
+            <td data-label="动作"><span class="tag bad">退出当前任务</span></td>
+            <td data-label="含义">结束练习 / 模考 / 导入，必须确认并说明后果</td>
+            <td data-label="视觉">左箭头 + 「退出」；不写「返回」；点击后先出确认对话框</td>
+            <td data-label="DOM"><code class="mono">data-act="exit-task"</code>；可带 <code class="mono">data-exit-dialog</code> 或 <code class="mono">data-exit-kind</code> + <code class="mono">data-exit-to</code></td>
+            <td data-label="aria-label">退出当前任务 / 退出练习 / 退出这场模考</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="demo mt-4">
+      <div class="demo-cell">
+        <span class="hint">返回父页面（真实链接）</span>
+        <a class="page-back" href="screens/banks.html" data-nav-kind="back-parent">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>返回题库列表
+        </a>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">切换一级页面（真实链接）</span>
+        <a class="nav-item" href="screens/review.html" data-act="nav" data-route="review.html" data-nav-kind="switch-page">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-review"/></svg><span class="nav-label">复习</span>
+        </a>
+      </div>
+      <div class="demo-cell">
+        <span class="hint">退出当前任务（先确认）</span>
+        <button class="page-back" type="button" data-act="exit-task" data-exit-kind="practice" data-exit-to="screens/home.html">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-arrow-left"/></svg>退出
+        </button>
+      </div>
+    </div>
+
+    <p class="doc-note-line"><b>退出必须确认</b>：练习写「暂存并退出 / 结束本次」，模考写「退出（暂存）/ 放弃」，导入写「稍后继续（存草稿离开）/ 放弃并离开」。确认按钮写清后果，不写「确定」。runner 内 <span class="kbd">Esc</span> 只打开退出确认，不直接退出。</p>
+    <p class="doc-note-line"><b>不混淆</b>：从列表进入详情再返回，用「返回」；离开当前任务用「退出」。同一个「退出」文案不得既表示返回父页面又表示结束任务；页面不得用 <code class="mono">&lt;a href&gt;</code> 直接离开 runner 而不确认。</p>
   </section>
 
   <!-- ==================== 页脚 ==================== -->
@@ -628,142 +796,8 @@
 
 </main>
 
-<!-- ==================== 命令面板 ==================== -->
-<div class="cmd-host" id="cmd-host" hidden>
-  <div class="cmd-scrim" data-cmd-close></div>
-  <div class="cmd-panel" role="dialog" aria-modal="true" aria-label="命令面板">
-    <div class="cmd-input-row">
-      <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
-      <input class="cmd-input" id="cmd-input" type="text" placeholder="搜索页面、命令或设置…" autocomplete="off" aria-controls="cmd-list">
-      <span class="cmd-kbd">Esc</span>
-    </div>
-    <ul class="cmd-list" id="cmd-list" role="listbox"></ul>
-    <div class="cmd-foot"><span class="kbd">↑</span><span class="kbd">↓</span> 移动 · <span class="kbd">Enter</span> 执行 · <span class="kbd">Esc</span> 关闭</div>
-  </div>
-</div>
-
 <script src="../assets/icons.js"></script>
+<script src="../assets/nav.js"></script>
 <script src="../assets/spec-boot.js"></script>
-<script>
-(function () {
-  var host = document.getElementById('cmd-host');
-  var input = document.getElementById('cmd-input');
-  var list = document.getElementById('cmd-list');
-  var lastTrigger = null;
-
-  var CMDS = [
-    { g: '今天', t: '继续上次练习', d: '还有 5 题到期 · 上次做到第 7 题', i: 'play', href: 'screens/practice.html' },
-    { g: '今天', t: '开始今日复习', d: '待复习 5 · 错题 12 · 薄弱 3', i: 'review', href: 'screens/review.html?view=due' },
-    { g: '今天', t: '查看今日计划', d: '已背 20 / 计划 40', i: 'calendar', href: 'screens/home.html' },
-    { g: '转到', t: '题库工作区', d: '验收题库 1794570360969', i: 'library', href: 'screens/workspace.html' },
-    { g: '转到', t: '学习档案与趋势', d: '最近 7 天正确率', i: 'chart', href: 'screens/diagnosis.html' },
-    { g: '转到', t: '模考中心', d: '2 个考试档案', i: 'exam', href: 'screens/exams.html' },
-    { g: '转到', t: '资料库', d: '18 条笔记 · 3 个上传文件', i: 'note', href: 'screens/notes.html' },
-    { g: '转到', t: '设置', d: '账户 / 偏好 / 外观 / AI', i: 'settings', href: 'screens/settings.html' },
-    { g: '对当前对象执行', t: '归档本题', d: '归档后不再进入复习集合', i: 'archive', href: null, off: '你是成员，不是管理员' },
-    { g: '对当前对象执行', t: '标为薄弱', d: '进入薄弱视图', i: 'flag', href: null },
-    { g: '对当前对象执行', t: '加入斩杀题库', d: '斩后不再出现', i: 'target', href: null },
-    { g: '对当前对象执行', t: '导出题库', d: '导出为 JSON', i: 'export', href: null },
-    { g: '设置', t: '切换暗色', d: '当前：亮色', i: 'moon', href: null },
-    { g: '设置', t: '切换配色', d: 'editorial / gruvbox / everforest / catppuccin', i: 'sun', href: null },
-    { g: '设置', t: '切换语言', d: '中文 / English', i: 'globe', href: null },
-    { g: '设置', t: '切换显示密度', d: '标准 / 紧凑', i: 'columns', href: null }
-  ];
-
-  var active = 0;
-  var filtered = CMDS.slice();
-
-  function render() {
-    list.innerHTML = '';
-    if (!filtered.length) {
-      var e = document.createElement('li');
-      e.className = 'cmd-empty';
-      e.textContent = '没有匹配的页面或命令';
-      list.appendChild(e);
-      var hint = document.createElement('li');
-      hint.className = 'cmd-empty';
-      hint.style.paddingTop = '0';
-      hint.innerHTML = '试试：<b>复习</b>、<b>导出题库</b>、<b>切换暗色</b>';
-      list.appendChild(hint);
-      return;
-    }
-    var lastG = null;
-    filtered.forEach(function (c, idx) {
-      if (c.g !== lastG) {
-        lastG = c.g;
-        var h = document.createElement('li');
-        h.className = 'rule-label';
-        h.style.padding = 'var(--sp-3) var(--sp-4) var(--sp-1)';
-        h.textContent = c.g;
-        list.appendChild(h);
-      }
-      var li = document.createElement('li');
-      li.className = 'cmd-item' + (idx === active ? ' is-on' : '') + (c.off ? ' is-off' : '');
-      li.setAttribute('role', 'option');
-      li.setAttribute('aria-selected', idx === active ? 'true' : 'false');
-      if (c.off) li.setAttribute('aria-disabled', 'true');
-      li.innerHTML =
-        '<svg class="od-icon" aria-hidden="true"><use href="#i-' + c.i + '"/></svg>' +
-        '<span style="flex:1 1 auto;min-width:0">' + c.t +
-        '<span class="hint" style="display:block;margin:0">' + c.d + '</span></span>' +
-        (c.off ? '<span class="tag plain" style="flex:none">' + c.off + '</span>' : '') +
-        (c.href ? '<span class="cmd-kbd" style="flex:none">↵</span>' : '');
-      if (c.off) li.style.opacity = '.55';
-      li.addEventListener('click', function () {
-        if (c.off) { eeToast('需要管理员角色：' + c.t); return; }
-        close();
-        if (c.href) { location.href = c.href; return; }
-        eeToast('已执行：' + c.t);
-      });
-      list.appendChild(li);
-    });
-  }
-
-  function filter(q) {
-    q = (q || '').trim().toLowerCase();
-    filtered = !q ? CMDS.slice() : CMDS.filter(function (c) {
-      return (c.t + ' ' + c.d + ' ' + c.g).toLowerCase().indexOf(q) >= 0;
-    });
-    active = 0;
-    render();
-  }
-
-  function open(trigger) {
-    lastTrigger = trigger || null;
-    host.hidden = false;
-    input.value = '';
-    filter('');
-    input.focus();
-  }
-  function close() {
-    host.hidden = true;
-    if (lastTrigger && lastTrigger.focus) lastTrigger.focus();
-  }
-  window.openCmd = open;
-
-  host.addEventListener('click', function (e) {
-    if (e.target.hasAttribute('data-cmd-close')) close();
-  });
-  input.addEventListener('input', function () { filter(input.value); });
-  document.addEventListener('keydown', function (e) {
-    if (host.hidden) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); open(document.activeElement); }
-      return;
-    }
-    if (e.key === 'Escape') { e.preventDefault(); close(); }
-    else if (e.key === 'ArrowDown') { e.preventDefault(); active = Math.min(active + 1, filtered.length - 1); render(); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, 0); render(); }
-    else if (e.key === 'Enter') {
-      e.preventDefault();
-      var c = filtered[active];
-      if (!c) return;
-      if (c.off) { eeToast('需要管理员角色：' + c.t); return; }
-      close();
-      if (c.href) { location.href = c.href; return; }
-      eeToast('已执行：' + c.t);
-    }
-  });
-})();
-</script>
 </body>
 </html>

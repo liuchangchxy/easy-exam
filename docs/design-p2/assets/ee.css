@@ -211,7 +211,7 @@ dialog:not([open]) { display: none !important; }
   --brand: #4e6b3f; --brand-hover: #3f5733; --brand-active: #33462a;
   --brand-ink: #33462a; --brand-soft: #e6ecdb; --brand-contrast: #fdf6e3;
   --ok: #467034; --ok-soft: #e7eedb; --ok-line: #b3c49e;
-  --bad: #b83f3f; --bad-soft: #f7e2dc; --bad-line: #d6aaa4; --on-bad: #fdf3f1;
+  --bad: #a83636; --bad-soft: #f7e2dc; --bad-line: #d6aaa4; --on-bad: #fdf3f1;
   --warn: #855a00; --warn-soft: #f5ecd2; --warn-line: #d3c390;
   --flag: #a06a00;
   --focus: #4e6b3f;
@@ -264,12 +264,26 @@ dialog:not([open]) { display: none !important; }
 
 /* ==========================================================================
    1.5 信息密度（设置项「信息密度」的唯一生效机制）
-   写在 <html data-density="compact"> 上；间距基阶整体收紧，
-   行/表格/面板内边距随之收敛。宽松（默认）不写属性。
+   写在 <html data-density="compact"> 上；控件高度、字号、行高与间距基阶
+   一起收紧——密度是「一屏能看多少」的密度，不是只换几个 padding。
+   宽松（默认）不写属性，保持 v4 的阅读档。
+
+   【偏好归属】主题 / 配色 / 密度 / 语言是**设备偏好**：只存本机，
+   不随账号同步（见 store.js settings 与设置页文案）。P3 接后端时按此归属，
+   不要把这些键写进账户档案。
    ========================================================================== */
 [data-density="compact"] {
   --sp-1: 3px;  --sp-2: 6px;  --sp-3: 9px;  --sp-4: 12px; --sp-5: 15px;
   --sp-6: 18px; --sp-7: 24px; --sp-8: 30px; --sp-9: 42px; --sp-10: 54px;
+  /* 控件高度：按钮 / 输入 / 菜单项 36 → 32，小控件 32 → 28，主操作 42 → 38 */
+  --ctl-h: 32px; --ctl-h-sm: 28px; --ctl-h-lg: 38px;
+  /* 字号与行高：辅助信息与正文各收一档，行距同步收紧 */
+  --text-xs: 12px;   --text-xs-lh: 1.4;
+  --text-sm: 13px;   --text-sm-lh: 1.45;
+  --text-base: 14px; --text-base-lh: 1.55;
+  --text-md: 15.5px; --text-md-lh: 1.6;
+  --text-lg: 17.5px; --text-lg-lh: 1.4;
+  --text-xl: 20px;   --text-xl-lh: 1.35;
 }
 [data-density="compact"] .list-row { padding-top: var(--sp-2); padding-bottom: var(--sp-2); }
 [data-density="compact"] .dtable th,
@@ -278,6 +292,15 @@ dialog:not([open]) { display: none !important; }
 [data-density="compact"] .panel-body { padding: var(--sp-4); }
 [data-density="compact"] .panel-foot { padding-top: var(--sp-3); padding-bottom: var(--sp-3); }
 [data-density="compact"] .content { padding-top: var(--sp-5); }
+/* 答题器与列表里高度写死的控件同步收敛，否则密度只改了外壳 */
+[data-density="compact"] .opt { min-height: 42px; padding: var(--sp-2) var(--sp-3); }
+[data-density="compact"] .segment { min-height: 26px; padding: var(--sp-1) var(--sp-3); }
+[data-density="compact"] .chip { min-height: 28px; }
+[data-density="compact"] .nav-item { min-height: 32px; }
+[data-density="compact"] .sheet-cell { font-size: var(--text-xs); }
+[data-density="compact"] .q-stem { font-size: var(--text-lg); line-height: 1.5; }
+[data-density="compact"] .menu-item { min-height: 32px; }
+[data-density="compact"] .toast { padding: var(--sp-2) var(--sp-3); }
 /* 触屏上不收缩点击目标：pointer:coarse 兜底规则在文件末尾，优先级相同时后者胜出 */
 
 /* ==========================================================================
@@ -1308,3 +1331,139 @@ html[data-ee-product] .spec-bar,
 html[data-ee-product] .drawer-demo-note {
   display: none !important;
 }
+
+/* ==========================================================================
+   19. 控件状态四态补齐（第五轮 · 域 C）
+   --------------------------------------------------------------------------
+   目标：hover / active / focus-visible / disabled / selected 在
+   明 × 暗 × 四套配色下都可分辨；只补状态规则与令牌，不改结构。
+
+   【偏好归属】
+     · 主题、配色、密度、语言 = 设备偏好（本机 localStorage，随浏览器走，
+       不随账号同步）。P3 接后端时不要写进账户档案。
+     · AI 配置、判定模式 = 账户偏好（跨设备一致），P3 接后端时随账号同步。
+   本文件只负责设备偏好的令牌与状态；账户偏好的读写见 store.js 与设置页。
+   ========================================================================== */
+
+/* ---- 按下态：此前只有 hover，鼠标按下时没有可见反馈 ---- */
+.btn-quiet:active:not(:disabled) { background: var(--surface-3); border-color: var(--line); }
+.btn-danger:active:not(:disabled) { background: var(--bad); color: var(--on-bad); }
+.btn-danger-solid:active:not(:disabled) { filter: brightness(.82); }
+.icon-btn:active:not(:disabled) { background: var(--surface-3); color: var(--ink); }
+.link-btn:active { color: var(--brand-ink); }
+.menu-item:active:not(:disabled) { background: var(--surface-3); }
+.chip:active:not(:disabled) { background: var(--surface-2); }
+.segment:active:not(:disabled) { background: var(--surface-3); }
+.tab:active:not(:disabled) { color: var(--ink); }
+.page-back:active { background: var(--surface-3); }
+.plan-row:active { background: var(--surface-2); }
+.sheet-cell:active { background: var(--surface-3); }
+.list-row[data-act]:active, .list-row[role="button"]:active { background: var(--surface-3); }
+.nav-item:active { background: var(--d-spine-hover); color: var(--d-spine-ink); }
+.bn-item:active { color: var(--brand); }
+
+/* ---- 选中态：补齐 aria-selected / aria-checked / aria-pressed 别名 ---- */
+.opt[aria-selected="true"], .opt[aria-checked="true"] {
+  border-color: var(--brand); background: var(--brand-soft);
+}
+.opt[aria-selected="true"] .opt-key, .opt[aria-checked="true"] .opt-key {
+  background: var(--brand); border-color: var(--brand); color: var(--brand-contrast);
+}
+.chip[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: var(--brand-contrast); }
+.nav-item[aria-current="page"] { background: var(--d-spine-hover); color: var(--d-spine-ink); font-weight: 500; }
+.nav-item[aria-current="page"] .nav-ico { color: var(--d-spine-accent); }
+.bn-item[aria-current="page"] { color: var(--brand-ink); font-weight: 500; }
+/* 分段选中在深色里只靠 1px 边不够：补一条品牌内描边 */
+.segment[aria-checked="true"], .segment.is-on {
+  box-shadow: var(--shadow-1), inset 0 0 0 1px var(--brand-line);
+}
+
+/* ---- 禁用态：视觉与光标一致，且不冒充「无权限」 ---- */
+.btn[aria-disabled="true"], a[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+.opt:disabled { cursor: not-allowed; }
+.opt:disabled:not(.is-correct):not(.is-wrong):not(.is-selected):not([aria-selected="true"]):not([aria-checked="true"]) {
+  background: var(--surface-2); color: var(--ink-3); border-color: var(--line);
+}
+.opt:disabled.is-selected, .opt:disabled[aria-selected="true"], .opt:disabled[aria-checked="true"] {
+  background: var(--brand-soft); border-color: var(--brand); color: var(--ink);
+}
+.check input:disabled + span { color: var(--ink-4); cursor: not-allowed; }
+.input:disabled, .textarea:disabled, .select:disabled { opacity: .8; }
+/* 只读不是禁用：保留正常文字色，用背景与光标区分 */
+.input[aria-readonly="true"], .textarea[aria-readonly="true"] { background: var(--surface-2); color: var(--ink-2); cursor: text; }
+
+/* ---- 焦点：深色侧脊上用暗色 --focus 看不见，换脊强调色 ---- */
+.sidebar :focus-visible, .side-foot :focus-visible { outline-color: var(--d-spine-accent); }
+.opt:focus-visible, .sheet-cell:focus-visible, .list-row:focus-visible,
+.menu-item:focus-visible, .plan-row:focus-visible, .step:focus-visible,
+.palette-card:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.opt.is-selected:focus-visible, .opt.is-correct:focus-visible, .opt.is-wrong:focus-visible {
+  outline-color: var(--brand);
+}
+/* 列表行/选项在深色下的选中描边也保持可见 */
+[data-theme="dark"] .opt.is-selected { border-color: var(--brand); }
+[data-theme="dark"] .sheet-cell.is-current { outline-color: var(--brand); }
+
+
+/* ==========================================================================
+   20. 窄屏英文文案兜底（第五轮 · 域 C）
+   --------------------------------------------------------------------------
+   英文比中文长约 30–50%。全屏 runner 在 ≤768 仍按「1fr + 232px 右轨」分栏，
+   页面虽把右轨 display:none，栅格仍保留第二列，左栏被压到 143px 后必然横向
+   溢出。这里把栅格收成单列，并给底栏与统计块允许换行——只改布局约束，
+   不改结构、不改信息。
+   ========================================================================== */
+@media (max-width: 768px) {
+  .focus-shell { grid-template-columns: minmax(0, 1fr); }
+  .focus-body { padding: var(--sp-5) var(--sp-4) var(--sp-8); }
+  .focus-rail { position: static; max-height: none; }
+}
+@media (max-width: 640px) {
+  .focus-foot { flex-wrap: wrap; row-gap: var(--sp-2); }
+  .focus-foot .foot-submit, .focus-foot .btn-hero { max-width: none; }
+  .masthead-figures { flex-wrap: wrap; }
+  .masthead-figures .mf { flex: 1 1 50%; border-left: 0; }
+  .q-meta { flex-wrap: wrap; row-gap: var(--sp-1); }
+  .od-cluster { row-gap: var(--sp-2); }
+}
+/* 长英文单词/标签在窄容器里断行，不撑破纸面 */
+.q-meta > *, .focus-foot > .btn, .masthead-figures .mf-c, .segmented .segment { min-width: 0; }
+
+/* ==========================================================================
+   21. 第五轮：跨域收敛的共享状态
+   --------------------------------------------------------------------------
+   域 A/B/D/E 各自在页面里补过一份的规则，收敛到这里，避免同类不同形。
+   ========================================================================== */
+
+/* 21.1 禁用按钮的可见形态：aria-disabled 的按钮仍可聚焦、可点击（用来解释原因），
+   所以不能靠 :disabled 的浏览器默认样式。视觉上必须与正常态可分。 */
+.btn[aria-disabled="true"],
+.btn[aria-disabled="true"]:hover {
+  opacity: .55;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+/* 21.2 报告里被定位到的那一条：与列表行的 is-target 同一套强调。
+   报告答题卡点击 → 展开并滚到这一条，必须一眼看出是哪一条。 */
+.rep-item.is-target {
+  background: var(--brand-soft);
+  outline: 2px solid var(--brand-line);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm, 6px);
+}
+.rep-item.is-target .rep-item-head {
+  outline: none;
+}
+
+/* 22 整行可点的列表行：整行（含行尾的计数 / 操作区）都是默认动作的一部分，
+   行 hover 与 cursor 必须同时覆盖整行——否则高亮到的地方点不动，
+   就是「悬停暗示可点、实际不可点」的假可供性。行内真正的控件自行覆盖 cursor。 */
+.list-row[data-row-href] { cursor: pointer; }
+.list-row[data-row-href] a,
+.list-row[data-row-href] button,
+.list-row[data-row-href] label,
+.list-row[data-row-href] input,
+.list-row[data-row-href] select { cursor: auto; }
+.list-row[data-row-href] .btn { cursor: pointer; }

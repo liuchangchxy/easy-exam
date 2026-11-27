@@ -92,7 +92,7 @@
     .chart-bar { max-width: 18px; }
   }</style>
 </head>
-<body>
+<body data-nav-domain="review">
 <a class="skip-link" href="#main-content">跳到主内容</a>
 <div class="app-shell">
   <aside class="sidebar" aria-label="主导航">
@@ -1082,16 +1082,42 @@ window.EEdiag = (function () {
   });
 
   /* ---------- 开始：统一走同一个开始决策门 ---------- */
+  /* 统一 ctx 构造（三处 reviewCtx 同构：home / review / diagnosis）。
+     字段固定为 kind / mode / bankId / rowIds / total / title / scope；
+     mode 是冲突判定键（CR-14 只按 mode）。原来这里缺 mode 字段，且 bankId 硬写成 b_rk
+     ——冲突判定拿不到 mode 就永远对不上，复习页发起的会话因此被判成「不冲突」。 */
   function reviewCtx(mode, ids, scope) {
-    return { kind: 'review', mode: mode, bankId: 'b_rk', rowIds: ids, total: ids.length, title: mode + ' · 学习档案', scope: scope };
+    return {
+      kind: mode === '薄弱练习' ? 'practice' : 'review',
+      mode: mode,
+      bankId: bankIdOfRows(ids) || 'b_rk',
+      rowIds: ids,
+      total: ids.length,
+      title: mode + ' · ' + ids.length + ' 题 · 学习档案',
+      scope: scope || (mode + ' · ' + ids.length + ' 题')
+    };
+  }
+  function bankIdOfRows(ids) {
+    for (var i = 0; i < (ids || []).length; i++) {
+      var row = S.reviewRow(ids[i]);
+      if (row) return row.bankId;
+    }
+    return null;
   }
   function openStart(ctx, trigger) {
-    var same = S.sessions('review').filter(function (s) { return s.mode === ctx.mode; });
+    /* 冲突判定走 store 的唯一实现（S.sessionConflicts，只按 mode），
+       与本页原来那句 「S.sessions('review') 里筛 mode」不再各写一份 */
+    var same = S.sessionConflicts(ctx);
     if (!same.length) {
       var s = S.startSession({
-        kind: 'review', bankId: ctx.bankId, mode: ctx.mode, title: ctx.title || '',
-        total: ctx.total, rowIds: ctx.rowIds, index: 0, done: 0, answers: {}, ratings: {}, flags: {}, elapsed: 0
+        kind: ctx.kind, bankId: ctx.bankId, mode: ctx.mode, title: ctx.title || '',
+        total: ctx.total, rowIds: ctx.rowIds, index: 0, done: 0,
+        answers: {}, selections: {}, ratings: {}, flags: {}, elapsed: 0,
+        params: { mode: ctx.mode, scope: ctx.scope },
+        origin: { page: 'diagnosis.html', href: 'diagnosis.html' + location.search, label: '学习档案' },
+        replace: true
       });
+      if (!s || !s.id) { eeToast('这次学习没能建立，稍后再试'); return; }
       location.href = 'practice.html?sid=' + encodeURIComponent(s.id);
       return;
     }
@@ -1110,11 +1136,15 @@ window.EEdiag = (function () {
     };
     document.getElementById('dg-start-new').onclick = function () {
       eeDialog.close(document.getElementById('dlg-start'));
-      same.forEach(function (s) { S.finishSession(s.id); });
       var ns = S.startSession({
-        kind: 'review', bankId: ctx.bankId, mode: ctx.mode, title: ctx.title || '',
-        total: ctx.total, rowIds: ctx.rowIds, index: 0, done: 0, answers: {}, ratings: {}, flags: {}, elapsed: 0
+        kind: ctx.kind, bankId: ctx.bankId, mode: ctx.mode, title: ctx.title || '',
+        total: ctx.total, rowIds: ctx.rowIds, index: 0, done: 0,
+        answers: {}, selections: {}, ratings: {}, flags: {}, elapsed: 0,
+        params: { mode: ctx.mode, scope: ctx.scope },
+        origin: { page: 'diagnosis.html', href: 'diagnosis.html' + location.search, label: '学习档案' },
+        replace: true
       });
+      if (!ns || !ns.id) { eeToast('这次学习没能建立，稍后再试'); return; }
       location.href = 'practice.html?sid=' + encodeURIComponent(ns.id);
     };
     eeDialog.open('dlg-start', trigger || document.activeElement);

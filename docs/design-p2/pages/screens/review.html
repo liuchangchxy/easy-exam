@@ -67,7 +67,7 @@
     .queue-row .list-side { flex: 1 1 100%; justify-content: flex-end; }
   }</style>
 </head>
-<body>
+<body data-nav-domain="review">
 <a class="skip-link" href="#main-content">跳到主内容</a>
 <div class="app-shell">
   <aside class="sidebar" aria-label="主导航">
@@ -845,9 +845,10 @@ window.EEreview = (function () {
   /* CR-05：薄弱练习是普通练习——不写 FSRS 卡片、也不产生新的到期时间；
      到期复习 / 错题重做 / 查漏补缺是复习专项，走 review 会话。 */
   function kindForMode(mode) { return mode === '薄弱练习' ? 'practice' : 'review'; }
-  /* CR-14：冲突只按 mode 判定，与 kind、题库无关 */
+  /* CR-14：冲突只按 mode 判定，与 kind、题库无关。
+     判定走 store 的唯一实现（S.sessionConflicts），本页不再自己写一份 filter。 */
   function conflictsFor(ctx) {
-    return S.sessions().filter(function (s) { return s.mode === ctx.mode; });
+    return S.sessionConflicts(ctx);
   }
   function openStart(ctx, trigger) {
     startCtx = ctx;
@@ -877,20 +878,30 @@ window.EEreview = (function () {
   function commitStart() {
     var ctx = startCtx;
     eeDialog.close(document.getElementById('dlg-start'));
-    conflictsFor(ctx).forEach(function (s) { S.finishSession(s.id); });
-    var s = S.startSession({
+    var created = S.startSession({
       kind: ctx.kind || 'review', bankId: ctx.bankId, mode: ctx.mode, title: ctx.title || '',
-      total: ctx.rowIds.length, rowIds: ctx.rowIds, index: 0, done: 0, answers: {}, ratings: {}, flags: {}, elapsed: 0
+      total: ctx.rowIds.length, rowIds: ctx.rowIds, index: 0, done: 0,
+      answers: {}, selections: {}, ratings: {}, flags: {}, elapsed: 0,
+      params: { mode: ctx.mode, scope: ctx.scope },
+      origin: { page: 'review.html', href: 'review.html' + location.search, label: '复习页' },
+      replace: true
     });
-    location.href = 'practice.html?sid=' + encodeURIComponent(s.id);
+    if (!created || !created.id) { eeToast('这次复习没能建立，稍后再试'); return; }
+    location.href = 'practice.html?sid=' + encodeURIComponent(created.id);
   }
+  /* 统一 ctx 构造（三处 reviewCtx 同构：home / review / diagnosis）。
+     字段固定为 kind / mode / bankId / rowIds / total / title / scope；
+     mode 是冲突判定键（CR-14 只按 mode），少一个字段就会让页面间的冲突判定对不上。 */
   function reviewCtx(mode, rowList, scope) {
+    var ids = rowList.map(function (r) { return r.id; });
     return {
       kind: kindForMode(mode),
+      mode: mode,
       bankId: rowList.length ? rowList[0].bankId : 'b_rk',
-      rowIds: rowList.map(function (r) { return r.id; }),
-      title: mode + ' · 复习',
-      scope: scope || (mode + ' · ' + rowList.length + ' 题 · 复习')
+      rowIds: ids,
+      total: ids.length,
+      title: mode + ' · ' + ids.length + ' 题 · 复习',
+      scope: scope || (mode + ' · ' + ids.length + ' 题 · 复习')
     };
   }
   function startDue(btn) {
@@ -1136,12 +1147,14 @@ window.EEreview = (function () {
   document.getElementById('queue-search').addEventListener('input', function (e) {
     state.query = e.target.value;
     renderQueue();
+    saveView();
   });
   document.getElementById('queue-scope').addEventListener('change', function (e) {
     state.bank = e.target.value;
     renderScope('queue-scope');
     renderChips();
     renderLists();
+    saveView();
   });
   document.getElementById('mistakes-cause').addEventListener('change', renderMistakes);
   document.getElementById('queue-chips').addEventListener('click', function (e) {
@@ -1150,6 +1163,7 @@ window.EEreview = (function () {
     state.reason = chip.getAttribute('data-reason');
     renderChips();
     renderQueue();
+    saveView();
   });
   document.querySelectorAll('[data-order]').forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -1158,6 +1172,7 @@ window.EEreview = (function () {
         b.setAttribute('aria-checked', b === btn ? 'true' : 'false');
       });
       renderQueue();
+      saveView();
     });
   });
   /* 当前视图跟着页签走：批量条只显示这个视图说得通的操作 */
@@ -1165,6 +1180,7 @@ window.EEreview = (function () {
     tab.addEventListener('click', function () {
       state.view = tab.getAttribute('data-panel');
       renderBulk();
+      saveView();
     });
   });
   function resetFilters() {
@@ -1177,10 +1193,43 @@ window.EEreview = (function () {
     /* 四个视图都按 state.bank 过滤，清空范围就必须四个一起重渲染——
        只重渲染待复习会让另外三个视图继续按旧题库过滤，范围条却显示「全部题库」。 */
     renderLists();
+    saveView();
   }
+  /* 切页签：本页自己做面板显隐与 aria-selected，不依赖外壳的页签委托。
+     原因：深链在本脚本执行时就要落到某个视图，而外壳的页签处理器在 DOMContentLoaded
+     才挂上——等它来接，?tab=mistakes 深链会停在「待复习」上，后面的定位就落进隐藏面板。 */
   function gotoTab(name) {
     var tab = document.querySelector('.tab[data-panel="' + name + '"]');
-    if (tab) tab.click();
+    if (!tab) return;
+    var scope = tab.closest('[data-tab-scope]') || document;
+    scope.querySelectorAll('.tab[data-panel]').forEach(function (t) {
+      t.setAttribute('aria-selected', t === tab ? 'true' : 'false');
+    });
+    scope.querySelectorAll('[data-tab-panel]').forEach(function (p) {
+      p.hidden = p.getAttribute('data-tab-panel') !== name;
+    });
+    state.view = name;
+    renderBulk();
+  }
+  /* 切到承载这一行的页签并定位展开它。答题卡 / 概览里的「去某某」按钮不能再只切页签
+     ——只切页签会把用户丢在那一页的顶部，和报告深链要消除的是同一种虚假定位。
+     rowId 给了就精确落到那一行；没有 rowId 才退回只切页签。 */
+  function gotoRow(tabName, rowId) {
+    gotoTab(tabName);
+    var row = rowId ? S.reviewRow(rowId) : null;
+    if (row) locateRowIn(tabName, row.id);
+  }
+  function locateRowIn(tabName, rowId) {
+    var hostId = { due: 'queue-host', mistakes: 'mistakes-host', weak: 'weak-host', killed: 'killed-host' }[tabName];
+    var host = hostId ? document.getElementById(hostId) : null;
+    if (!host) return false;
+    var el = host.querySelector('[data-row="' + rowId + '"]');
+    if (!el) return false;
+    el.classList.add('is-target');
+    el.setAttribute('tabindex', '-1');
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el.focus({ preventScroll: true });
+    return true;
   }
   function retryRead() { renderAll(); eeToast('已重新读取复习队列'); }
 
@@ -1232,9 +1281,9 @@ window.EEreview = (function () {
     var host = document.getElementById('mistakes-host');
     host.innerHTML = '<div class="notice info" role="status"><svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>' +
       '<div class="notice-body"><div class="notice-title">这道题现在不在错题里</div>' +
-      '<div>它在复习队列的「' + where.label + '」里。要从那边打开，请切到「' + where.label + '」页签。</div>' +
-      '<div class="notice-actions"><button class="btn btn-sm" type="button" onclick="EEreview.gotoTab(\'' +
-      where.tab + '\')">去「' + where.label + '」</button>' +
+      '<div>它在复习队列的「' + where.label + '」里。</div>' +
+      '<div class="notice-actions"><button class="btn btn-sm" type="button" onclick="EEreview.gotoRow(\'' +
+      where.tab + '\', \'' + esc(row.id) + '\')">去「' + where.label + '」并定位这道题</button>' +
       '<button class="btn btn-sm btn-quiet" type="button" onclick="EEreview.resetFilters()">清除筛选</button></div></div></div>';
   }
   function locateRow(qid, bank, stem) {
@@ -1266,6 +1315,36 @@ window.EEreview = (function () {
     openDetail(row.id, el);
   }
 
+  /* ---------- 视图状态（规则 §4：review:<tab>:<bankId>:<userId>） ----------
+     离开复习页、再通过「继续练习」或报告深链回来时，恢复的是当时看到的页签与题库范围，
+     不是固定回到「待复习 · 全部题库」。键里带 tab 与 bankId 两段作用域，
+     不同题库的视图互不污染；userId 段由 store.view.key 补上，P3 接账户隔离时不用改这里。
+     另存一个「上次停在哪个页签」的指针（review:last），否则重新进入时默认是待复习，
+     只按当时的 key 去读永远读不到错题页签存下的那份状态。 */
+  function viewKeyNow() { return S.view.key('review', [state.view, state.bank || 'all']); }
+  function saveView() {
+    try {
+      S.view.save(viewKeyNow(), { view: state.view, bank: state.bank, query: state.query, reason: state.reason, order: state.order });
+      S.view.save(S.view.key('review', ['last']), { view: state.view, bank: state.bank });
+    } catch (e) {}
+  }
+  function restoreView() {
+    var last = null, saved = null;
+    try { last = S.view.load(S.view.key('review', ['last'])); } catch (e) {}
+    if (!last || !last.view) return false;
+    try { saved = S.view.load(S.view.key('review', [last.view, (last.bank || 'all')])); } catch (e) { saved = null; }
+    saved = saved || last;
+    if (last.view !== state.view && document.querySelector('.tab[data-panel="' + last.view + '"]')) gotoTab(last.view);
+    if (saved.bank && !state.bank && S.bank(saved.bank)) {
+      state.bank = saved.bank;
+      var selscope = document.getElementById('queue-scope');
+      if (selscope) selscope.value = saved.bank;
+    }
+    if (saved.reason) state.reason = saved.reason;
+    if (saved.order) state.order = saved.order;
+    return true;
+  }
+
   S.subscribe(function () { renderAll(); });
   renderAll();
 
@@ -1273,24 +1352,27 @@ window.EEreview = (function () {
      ?tab=mistakes&qid=<qid>&bank=<bankId>&stem=<normStem> —— 从报告的「在错题里打开」
      点过来时，不停在列表顶部，而是定位、高亮并展开这道题（对象级定位）。
      stem 是第三重定位依据：qid 在两套编号之间对不上时，靠题干把报告快照和复习
-     队列行架起来。 */
+     队列行架起来。深链优先于记住的视图状态：显式带 ?tab / ?bank 时以链接为准。 */
   (function () {
     var q = new URLSearchParams(location.search);
     var bank = q.get('bank');
     var qid = q.get('qid');
     var stem = q.get('stem');
+    var tab = q.get('tab');
+    var hasDeep = !!(bank || qid || stem || tab);
+    if (!hasDeep) restoreView();
     if (bank && S.bank(bank)) {
       state.bank = bank;
       var sel = document.getElementById('queue-scope');
       if (sel) sel.value = bank;
     }
-    var tab = q.get('tab');
     if (tab && document.querySelector('.tab[data-panel="' + tab + '"]')) gotoTab(tab);
     else if (qid || stem) gotoTab('mistakes');
     renderScope('queue-scope');
     renderChips();
     renderLists();
     if (qid || stem) locateRow(qid, bank, stem);
+    saveView();
   })();
 
   return {
@@ -1300,7 +1382,8 @@ window.EEreview = (function () {
     askBatchCause: function (b) { askBatch('cause', b); },
     askBatchUnweak: function (b) { askBatch('unweak', b); },
     askBatchRestore: function (b) { askBatch('restore', b); },
-    gotoTab: gotoTab, resetFilters: resetFilters, retryRead: retryRead, renderAll: renderAll
+    gotoTab: gotoTab, gotoRow: gotoRow, locateRowIn: locateRowIn,
+    resetFilters: resetFilters, retryRead: retryRead, renderAll: renderAll
   };
 })();
 </script>

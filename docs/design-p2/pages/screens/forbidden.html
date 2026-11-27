@@ -37,7 +37,7 @@
     .forbidden-empty { min-height: calc(100dvh - var(--mobile-top-h) - var(--sp-10)); }
    }</style>
 </head>
-<body>
+<body data-nav-domain="banks">
 <a class="skip-link" href="#main-content">跳到主内容</a>
 <div class="app-shell">
   <aside class="sidebar">
@@ -420,12 +420,25 @@
        不留禁用主钮，也不留两个同义出口 */
   (function () {
     var SOURCE_MAP = {
-      banks: 'banks.html', settings: 'settings.html', instance: 'instance.html',
-      home: 'home.html', questions: 'question.html', notes: 'notes.html', import: 'import.html'
+      banks: 'banks.html', bank: 'banks.html', settings: 'settings.html', instance: 'instance.html',
+      home: 'home.html', question: 'question.html', questions: 'question.html',
+      workspace: 'workspace.html', notes: 'notes.html', note: 'notes.html',
+      import: 'import.html', review: 'review.html', exams: 'exams.html', exam: 'exam.html',
+      practice: 'practice.html', palette: 'palette.html', forbidden: 'forbidden.html'
     };
     function goSource(from) {
-      var m = from ? String(from).match(/^\/([a-z-]+)/) : null;
-      if (m && SOURCE_MAP[m[1]]) { location.href = SOURCE_MAP[m[1]]; return; }
+      /* from 可能是 /question、/pages/screens/question.html、question.html 或 ?from=workspace；
+         统一按「页面名」解析，解析不出来才退回 referrer，不把用户留在死页。 */
+      if (!from) {
+        if (document.referrer) { window.history.back(); return; }
+        window.eeToast('没有可返回的来源页面：这个地址是直接打开的。', 'bad');
+        return;
+      }
+      var s = String(from).trim();
+      var file = s.match(/([a-z0-9-]+)\.html(\?[^#]*)?/i);
+      if (file && SOURCE_MAP[file[1]]) { location.href = SOURCE_MAP[file[1]] + (file[2] || ''); return; }
+      var key = s.replace(/^\/+/, '').split(/[/?#]/)[0].replace(/\.html$/i, '');
+      if (SOURCE_MAP[key]) { location.href = SOURCE_MAP[key]; return; }
       if (document.referrer) { window.history.back(); return; }
       window.eeToast('没有可返回的来源页面：这个地址是直接打开的。', 'bad');
     }

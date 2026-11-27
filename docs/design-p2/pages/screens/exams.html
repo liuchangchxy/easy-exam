@@ -97,9 +97,12 @@
     .ee-bp-section { grid-template-columns: minmax(0, 1fr) 62px 68px auto; }
     .ee-bp-section > .input[type="text"] { grid-column: 1 / -1; }
     .ee-setup-grid { grid-template-columns: minmax(0, 1fr); }
-  }</style>
+  }
+/* 报告答题卡格子 → 逐题明细定位：命中的 .rep-item 高亮（与复习页 .is-target 同一语言） */
+  .rep-item.is-target{  background: var(--brand-soft); outline: 2px solid var(--brand-line); outline-offset: -2px;  }
+.sheet-cell[data-locate]{  cursor: pointer;  }</style>
 </head>
-<body>
+<body data-nav-domain="exams">
 <a class="skip-link" href="#main-content">跳到主内容</a>
 <div class="app-shell">
   <aside class="sidebar" aria-label="主导航">
@@ -614,16 +617,16 @@
     </div>
   </div>
   <div class="dlg-body">
-    <p class="dlg-p">「系统集成项目管理工程师 · 综合卷」还有 22 / 38 题未交卷。同一时间只保留一场进行中的模考。</p>
+    <p class="dlg-p" id="dlg-active-desc">「系统集成项目管理工程师 · 综合卷」还有 22 / 38 题未交卷。同一时间只保留一场进行中的模考。</p>
     <div class="kv">
-      <span class="kv-key">考试档案</span><span class="kv-val">系统集成项目管理工程师 · 综合卷</span>
-      <span class="kv-key">进度</span><span class="kv-val mono">已答 22 / 38</span>
-      <span class="kv-key">剩余</span><span class="kv-val mono">71 分钟</span>
+      <span class="kv-key">考试档案</span><span class="kv-val" id="dlg-active-paper">系统集成项目管理工程师 · 综合卷</span>
+      <span class="kv-key">进度</span><span class="kv-val mono" id="dlg-active-progress">已答 22 / 38</span>
+      <span class="kv-key">剩余</span><span class="kv-val mono" id="dlg-active-left">71 分钟</span>
     </div>
   </div>
   <div class="dlg-foot">
     <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>取消</button>
-    <a class="btn" href="exam.html">继续那场</a>
+    <a class="btn" id="dlg-active-continue" href="exam.html">继续那场</a>
     <button class="btn btn-primary" type="button" onclick="EEexams.confirmActive()">结束并新建</button>
   </div>
 </dialog>
@@ -709,12 +712,12 @@
     <button type="button" class="icon-btn" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
   </div>
   <div class="dlg-body">
-    <p class="dlg-p">用这份档案<strong>当前最新蓝图版本</strong>开一场新考试；旧会话与旧报告原样保留。</p>
+    <p class="dlg-p">用这份档案<strong>当前最新蓝图版本</strong>开一场新考试；正在进行的旧模考会先结束，未交卷的作答不会保留为报告，已生成的成绩报告不受影响。</p>
     <div class="kv" id="reexam-confirm"></div>
   </div>
   <div class="dlg-foot">
     <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>取消</button>
-    <a class="btn btn-primary" href="exam.html">开始新的一场</a>
+    <button class="btn btn-primary" type="button" onclick="EEexams.beginReExam()">开始新的一场</button>
   </div>
 </dialog>
 
@@ -1106,6 +1109,38 @@ window.EEexams = (function () {
     var b = S.bank(id);
     return n || (b ? b.count : 0);
   }
+  /* 真正能被组进卷子的题量：题库有真实题目就用它的条数；没有题目记录时，
+     答题器会退回 12 题演示池——这里必须用同一个数，否则「开始前确认」写 30 题、
+     卷子只有 12 题。 */
+  function capacity(id) {
+    var n = S.questions(id, { archived: false }).length;
+    return n || Math.min(12, qcount(id));
+  }
+  /* 蓝图配额在本题库的真实可满足结果（与答题器的 composeFromBlueprint 同口径）：
+     逐段按题型 / 章节 / 难度取题，取不满就少，绝不按声明数量虚报。 */
+  function planQuota(p, bankId, max) {
+    var qs = S.questions(bankId, { archived: false });
+    if (!qs.length) {
+      qs = [];
+      for (var i = 0; i < max; i++) qs.push({ id: 'demo' + i, type: '单选题', chapter: '未分章' });
+    }
+    var used = {}, parts = [], got = 0;
+    p.sections.forEach(function (sec) {
+      var picked = 0;
+      qs.forEach(function (q) {
+        if (picked >= sec.n || used[q.id]) return;
+        if (sec.type && sec.type !== '不限' && q.type !== sec.type) return;
+        if (sec.chapter && sec.chapter !== '不限' && q.chapter !== sec.chapter) return;
+        if (sec.diff && sec.diff !== '不限' && q.difficulty !== sec.diff) return;
+        used[q.id] = 1; picked++;
+      });
+      got += picked;
+      parts.push({ type: sec.type, want: sec.n, got: picked, score: sec.score });
+    });
+    var want = Math.min(totalQuestions(p), max);
+    var fill = Math.min(Math.max(0, want - got), qs.length - Object.keys(used).length);
+    return { parts: parts, total: got + fill, want: want };
+  }
   function banksWithQuestions() {
     return S.banks({ archived: false }).filter(function (b) { return qcount(b.id) > 0; });
   }
@@ -1164,18 +1199,23 @@ window.EEexams = (function () {
     var dis = g.can ? '' : ' disabled aria-describedby="new-profile-why"';    document.getElementById('profiles-note').textContent = '共 ' + PROFILES.length + ' 份';
     document.getElementById('profiles-host').innerHTML = PROFILES.map(function (p) {
       var noBp = !p.sections.length;
+      /* 进行中场次按 store 里真实会话数算（档案 id 记在会话 params.profileId 上），
+         不再用写死的 p.refs.active——否则重新考试开了新场，列表还显示「进行中 1 场」。 */
+      var liveCount = S.sessions('exam').filter(function (s) {
+        return (s.params && s.params.profileId) === p.id;
+      }).length;
       var meta = '<span>' + esc(bpSummary(p)) + '</span>';
       if (p.negative > 0) meta += '<span class="tag warn">答错扣 ' + p.negative + ' 分</span>';
       else meta += '<span class="tag plain">答错不扣分</span>';
       meta += p.record ? '<span class="tag plain">纳入学习记录</span>' : '<span class="tag plain">不纳入学习记录</span>';
-      meta += '<span>进行中 ' + p.refs.active + ' 场 · 历史报告 ' + p.refs.reports + ' 份</span>';
+      meta += '<span>进行中 ' + liveCount + ' 场 · 历史报告 ' + p.refs.reports + ' 份</span>';
       if (noBp) meta += '<span class="tag warn">未配置蓝图</span>';
       return '<div class="list-row ee-row-top static">' +
-        '<span class="list-main"><span class="list-title ee-paper-title">' + esc(p.name) + '</span>' +
-        '<span class="list-meta">' + meta + '</span>' +
-        (noBp ? '<span class="list-meta"><span class="hint">没有蓝图也能考：按题库既有顺序抽取前 N 题。</span></span>' : '') +
-        '</span>' +
-        '<span class="list-side">' +
+        '<div class="list-main"><div class="list-title ee-paper-title">' + esc(p.name) + '</div>' +
+        '<div class="list-meta">' + meta + '</div>' +
+        (noBp ? '<div class="list-meta"><span class="hint">没有蓝图也能考：按题库既有顺序抽取前 N 题。</span></div>' : '') +
+        '</div>' +
+        '<div class="list-side">' +
         '<button class="btn btn-sm btn-quiet" type="button"' + dis + ' onclick="EEexams.openBlueprint(\'' + p.id + '\', this)">蓝图编辑</button>' +
         '<button class="btn btn-sm" type="button" onclick="EEexams.openSetup(\'' + p.id + '\', this)">开始</button>' +
         '<button class="btn btn-sm btn-quiet" type="button" onclick="EEexams.askReExam(\'' + p.id + '\', this)">重新考试</button>' +
@@ -1187,7 +1227,7 @@ window.EEexams = (function () {
         '<span class="menu-sep"></span>' +
         '<button class="menu-item is-danger" type="button"' + (g.can ? '' : ' disabled title="' + esc(why) + '"') + ' onclick="EEexams.deleteProfile(\'' + p.id + '\', this)"><svg class="od-icon" aria-hidden="true"><use href="#i-trash"/></svg>删除档案</button>' +
         '</div></span>' +
-        '</span></div>';
+        '</div></div>';
     }).join('');
   }
 
@@ -1553,7 +1593,7 @@ window.EEexams = (function () {
       '<option value="">不使用蓝图（基础题库模式）</option>' + PROFILES.map(function (x) {
         return '<option value="' + esc(x.id) + '"' + (p && x.id === p.id ? ' selected' : '') + '>' + esc(x.name) + (x.version ? '（v' + x.version + '）' : '（未配置）') + '</option>';
       }).join('');
-    document.getElementById('setup-total').value = String(p && p.sections.length ? Math.min(totalQuestions(p), qcount(bank.id)) : Math.min(10, qcount(bank.id)));
+    document.getElementById('setup-total').value = String(p && p.sections.length ? Math.min(totalQuestions(p), capacity(bank.id)) : Math.min(10, capacity(bank.id)));
     document.getElementById('setup-minutes').value = p && p.id === 'p2' ? '30' : '120';
     document.getElementById('setup-unlimited').checked = false;
     document.getElementById('setup-record').checked = true;
@@ -1574,13 +1614,20 @@ window.EEexams = (function () {
     var bankId = document.getElementById('setup-bank').value;
     var pid = document.getElementById('setup-profile').value;
     var p = pid ? profile(pid) : null;
-    var max = qcount(bankId);
+    var max = capacity(bankId);
     var total = parseInt(document.getElementById('setup-total').value, 10);
     var minutes = parseInt(document.getElementById('setup-minutes').value, 10);
     var unlimited = document.getElementById('setup-unlimited').checked;
     var msg = document.getElementById('setup-total-msg');
     var totalEl = document.getElementById('setup-total');
 
+    /* 蓝图模式下题量由蓝图在本题库的可满足结果决定：输入框跟着它走，
+       避免「输入框写 10、确认块写 12、最后卷子 12」三套数。 */
+    var planPreview = (p && p.sections.length) ? planQuota(p, bankId, max) : null;
+    if (planPreview && planPreview.total !== total) {
+      total = planPreview.total;
+      totalEl.value = String(total);
+    }
     var invalid = !(total >= 1) || total > max;
     totalEl.max = String(max);
     totalEl.classList.toggle('is-error', invalid);
@@ -1607,21 +1654,30 @@ window.EEexams = (function () {
     if (invalid || timeInvalid) { refuseSetup(
       invalid ? '题目数量超出可组卷题量' : '时长取值不合法',
       invalid ? '这个题库只有 ' + max + ' 题，请把题目数量改到 1 到 ' + max + ' 之间。' : '时长必须是正整数分钟，或明确选择「不限时」。');
+      /* 非法输入时不能继续展示上一组已失效的题库 / 配额 / 时长。 */
+      var cf = document.getElementById('setup-confirm');
+      if (cf) cf.innerHTML = '<span class="kv-key">开始前确认</span><span class="kv-val">修正上面的取值后，这里会显示本次的题库、配额与时长。</span>';
+      var dg = document.getElementById('setup-degrade-note');
+      if (dg) dg.textContent = '';
       return;
     }
     allowSetup();
 
     /* 开始前确认七项 */
     var quota = [];
+    var plan = null;
     if (p && p.sections.length) {
-      p.sections.forEach(function (s) {
-        quota.push(s.type + ' ' + s.n + ' 题' + (s.diff !== '不限' ? '（' + s.diff + '）' : '') + (OBJECTIVE[s.type] ? ' × ' + s.score + ' 分' : '（不判分）'));
+      plan = planQuota(p, bankId, max);
+      p.sections.forEach(function (s, i) {
+        var got = plan.parts[i].got;
+        quota.push((got < s.n ? s.type + ' ' + got + ' 题（蓝图 ' + s.n + ' 题，题库不足）' : s.type + ' ' + got + ' 题') +
+          (s.diff !== '不限' ? '（' + s.diff + '）' : '') + (OBJECTIVE[s.type] ? ' × ' + s.score + ' 分' : '（不判分）'));
       });
     } else {
-      quota = ['基础题库模式：按题库既有顺序顺序抽取前 ' + total + ' 题'];
+      quota = ['基础题库模式：按题库既有顺序抽取前 ' + total + ' 题'];
     }
-    var degrade = p && p.sections.length && totalQuestions(p) > max
-      ? '蓝图要 ' + totalQuestions(p) + ' 题，这个题库只有 ' + max + ' 题：按降级补齐规则从剩余候选中补入，实际组出 ' + total + ' 题。'
+    var degrade = p && p.sections.length && (totalQuestions(p) > plan.total)
+      ? '蓝图要 ' + totalQuestions(p) + ' 题，这个题库只组得出 ' + plan.total + ' 题（可组卷上限 ' + max + '）；卷子与报告都会按 ' + plan.total + ' 题计。'
       : '实际组出题量与蓝图声明一致，没有降级补入。';
     document.getElementById('setup-degrade-note').textContent = degrade;
 
@@ -1629,7 +1685,9 @@ window.EEexams = (function () {
       '<span class="kv-key">题库与可组卷题量</span><span class="kv-val">' + esc(S.bank(bankId).name) + ' · ' + max + ' 题</span>' +
       '<span class="kv-key">蓝图版本</span><span class="kv-val">' + (p && p.version ? 'v' + p.version + '（本场绑定该版本）' : '不使用蓝图') + '</span>' +
       '<span class="kv-key">实际配额结果</span><span class="kv-val">' + esc(quota.join(' · ')) + '</span>' +
-      '<span class="kv-key">客观题总分</span><span class="kv-val">' + (p && p.sections.length ? objectiveFull(p) + ' 分；主观题 ' + subjectiveCount(p) + ' 题未判分，不计入' : '按每题 1 分计') + '</span>' +
+      '<span class="kv-key">客观题总分</span><span class="kv-val">' + (plan
+        ? plan.parts.reduce(function (a, x) { return a + (OBJECTIVE[x.type] ? x.got * x.score : 0); }, 0) + ' 分；主观题 ' + plan.parts.reduce(function (a, x) { return a + (OBJECTIVE[x.type] ? 0 : x.got); }, 0) + ' 题未判分，不计入'
+        : '按每题 1 分计') + '</span>' +
       '<span class="kv-key">负分规则</span><span class="kv-val">' + (p && p.negative > 0 ? '答错扣 ' + p.negative + ' 分；' + (p.floor ? '设 0 分下限' : '未设 0 分下限，总分可为负') : '答错不扣分') + '</span>' +
       '<span class="kv-key">时长</span><span class="kv-val">' + (unlimited
         ? '不限时（没有硬截止、没有宽限、没有自动交卷）'
@@ -1649,17 +1707,49 @@ window.EEexams = (function () {
     var minutes = parseInt(document.getElementById('setup-minutes').value, 10);
     var unlimited = document.getElementById('setup-unlimited').checked;
     if (S.sessions('exam').length) { askActive(document.activeElement); return; }
+    /* 蓝图随会话一起进答题器：题量 / 题型 / 章节 / 时长都从这里来，
+       不再只把 total 传过去让答题器自己截题库。p.sections 就是开考时绑定的那一版。 */
+    var blueprint = (p && p.sections && p.sections.length) ? {
+      id: p.id, name: p.name, version: p.version, negative: p.negative, floor: p.floor,
+      sections: p.sections.map(function (x) {
+        return { type: x.type, diff: x.diff, chapter: x.chapter, tags: x.tags, n: x.n, score: x.score };
+      })
+    } : null;
     var s = S.startSession({
       kind: 'exam', bankId: bankId, mode: '模考',
       title: p ? p.name : ('模考 · ' + bankName(bankId)),
       total: total, minutes: unlimited ? 0 : minutes, unlimited: unlimited,
       record: document.getElementById('setup-record').checked,
-      index: 0, done: 0, answers: {}, flags: {}, remaining: unlimited ? null : minutes * 60
+      blueprint: blueprint, blueprintMode: blueprint ? 'blueprint' : 'basic',
+      params: { count: total, minutes: unlimited ? 0 : minutes, unlimited: unlimited, mode: '模考', profileId: pid || '' },
+      index: 0, done: 0, answers: {}, selections: {}, flags: {}, elapsed: 0, remaining: unlimited ? null : minutes * 60,
+      origin: { page: 'exams.html', href: 'exams.html' + location.search, label: '模考中心' },
+      replace: true
     });
     eeDialog.close(document.getElementById('dlg-setup'));
+    if (!s || !s.id) { eeToast('这场模考没能建立，稍后再试', 'bad'); return; }
     location.href = 'exam.html?sid=' + encodeURIComponent(s.id);
   }
-  function askActive(trigger) { eeDialog.open('dlg-active', trigger || document.activeElement); }
+  function askActive(trigger) {
+    /* 对话框里的进度、剩余与「继续那场」都读这一场真实会话，不写死演示数字。 */
+    var s = S.sessions('exam')[S.sessions('exam').length - 1];
+    if (s) {
+      var paper = s.title || bankName(s.bankId);
+      var done = s.done || 0, total = s.total || 0;
+      var left = s.remaining != null ? Math.max(0, Math.round(s.remaining / 60)) : null;
+      var p1 = document.getElementById('dlg-active-desc');
+      if (p1) p1.textContent = '「' + paper + '」还有 ' + done + ' / ' + total + ' 题未交卷。同一时间只保留一场进行中的模考。';
+      var p2 = document.getElementById('dlg-active-paper');
+      if (p2) p2.textContent = paper;
+      var p3 = document.getElementById('dlg-active-progress');
+      if (p3) p3.textContent = '已答 ' + done + ' / ' + total;
+      var p4 = document.getElementById('dlg-active-left');
+      if (p4) p4.textContent = left == null ? '不限时' : left + ' 分钟';
+      var go = document.getElementById('dlg-active-continue');
+      if (go) go.setAttribute('href', 'exam.html?sid=' + encodeURIComponent(s.id));
+    }
+    eeDialog.open('dlg-active', trigger || document.activeElement);
+  }
   function confirmActive() {
     S.sessions('exam').forEach(function (x) { S.finishSession(x.id); });
     eeDialog.close(document.getElementById('dlg-active'));
@@ -1678,6 +1768,35 @@ window.EEexams = (function () {
       '<span class="kv-key">时长</span><span class="kv-val mono">' + (id === 'p2' ? '30 分钟' : '120 分钟') + '</span>' +
       '<span class="kv-key">纳入学习记录</span><span class="kv-val">' + (p.record ? '纳入' : '不纳入') + '</span>';
     eeDialog.open('dlg-reexam', trigger || document.activeElement);
+  }
+
+  /* 重新考试：真的用该档案例建一场新会话。原来按钮只是跳到 exam.html，
+     而 exam.html 在没有会话时会捡一个旧会话或造演示会话——「重新考试」按下去
+     并没有用这份档案例组一场新卷。 */
+  function beginReExam() {
+    var p = profile(reexamCtx) || PROFILES[0];
+    var bankId = (banksWithQuestions()[0] || {}).id;
+    if (!bankId) { eeToast('还没有可组卷的题库，先导入题目', 'bad'); return; }
+    var blueprint = p.sections.length ? {
+      id: p.id, name: p.name, version: p.version, negative: p.negative, floor: p.floor,
+      sections: p.sections.map(function (x) {
+        return { type: x.type, diff: x.diff, chapter: x.chapter, tags: x.tags, n: x.n, score: x.score };
+      })
+    } : null;
+    var total = blueprint ? Math.min(totalQuestions(p), qcount(bankId)) : Math.min(10, qcount(bankId));
+    var minutes = p.id === 'p2' ? 30 : 120;
+    eeDialog.close(document.getElementById('dlg-reexam'));
+    var s = S.startSession({
+      kind: 'exam', bankId: bankId, mode: '模考', title: p.name,
+      total: total, minutes: minutes,
+      record: p.record, blueprint: blueprint, blueprintMode: blueprint ? 'blueprint' : 'basic',
+      params: { count: total, minutes: minutes, mode: '模考', profileId: p.id },
+      index: 0, done: 0, answers: {}, selections: {}, flags: {}, remaining: minutes * 60,
+      origin: { page: 'exams.html', href: 'exams.html' + location.search, label: '模考中心' },
+      replace: true
+    });
+    if (!s || !s.id) { eeToast('这场模考没能建立，稍后再试', 'bad'); return; }
+    location.href = 'exam.html?sid=' + encodeURIComponent(s.id);
   }
 
   /* ---------- 放弃 ---------- */
@@ -1782,11 +1901,41 @@ window.EEexams = (function () {
           '<div class="section-head"><h2 class="section-title">逐题明细</h2><span class="section-note">这一场没有留下逐题记录</span></div>' +
           '<div class="rep-empty"><p class="rep-empty-txt">这一场交卷时没有记录逐题明细，因此没有可回看的题目。上面的汇总计数是当时记下来的部分。</p></div>'
         : '<div class="notice plain"><svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg><div class="notice-body">下面每道题都按<strong>交卷当时保存的题目与答案</strong>判分。题目后来改过的，条目上会标出并说明改了什么；本报告的判定、答案与解析始终是当时的，不会变。</div></div>' +
-          '<div class="section-head"><h2 class="section-title">逐题明细</h2><span class="section-note">共 ' + items.length + ' 题 · 点开看作答、判定、解析与判分版本' + (changed ? ' · ' + changed + ' 题已有新版' : '') + '</span></div>' +
+          /* 报告答题卡：格子 → 定位并展开对应逐题明细。原来报告里没有答题卡（只有列表），
+             「定位错题」只能靠人眼在一长串明细里找。这里补一块可点格子，与练习/模考报告
+             交卷当次同一个交互。 */
+          '<div class="section-head"><h2 class="section-title">答题卡</h2><span class="section-note">点格子定位到对应题目</span></div>' +
+          '<div class="sheet-grid" id="archive-report-sheet"></div>' +
+          '<div class="sheet-legend"><span><i class="sheet-dot is-answered"></i>已答</span><span><i class="sheet-dot"></i>未答</span><span><i class="sheet-dot is-wrong-cell"></i>错误</span><span><i class="sheet-dot is-flagged"></i>待复查</span></div>' +
+          '<div class="section-head ee-mt-5"><h2 class="section-title">逐题明细</h2><span class="section-note">共 ' + items.length + ' 题 · 点开看作答、判定、解析与判分版本' + (changed ? ' · ' + changed + ' 题已有新版' : '') + '</span></div>' +
           '<div id="exam-archive-items">' + window.eeReport.blockHtml(items, true, { scope: 'a', qPrefix: '', rPrefix: '' }) + '</div>' +
           '<p class="hint">报告按交卷当时的题目与答案保存，之后不会变。</p>');
     window.eeReport.bind(document.getElementById('exam-archive-items'));
+    if (!legacy) renderArchiveSheet(items);
     eeDialog.open('dlg-report', trigger || document.activeElement);
+  }
+  /* 归档报告的答题卡：格子按 item 的判定着色，点击走 eeReport.locate 定位展开 */
+  function renderArchiveSheet(items) {
+    var host = document.getElementById('archive-report-sheet');
+    if (!host) return;
+    host.innerHTML = items.map(function (it, i) {
+      var cls = 'sheet-cell';
+      if (it.answered) cls += ' is-answered';
+      if (it.correctness === 'INCORRECT' || it.correctness === 'PARTIAL' || it.correctness === 'BLANK') cls += ' is-wrong-cell';
+      return '<button type="button" class="' + cls + '" data-locate="' + i + '" aria-label="第 ' + (i + 1) + ' 题，定位到逐题明细">' + (i + 1) + '</button>';
+    }).join('');
+    host.onclick = function (e) {
+      var b = e.target.closest ? e.target.closest('[data-locate]') : null;
+      if (!b) return;
+      var index = parseInt(b.getAttribute('data-locate'), 10);
+      var list = document.getElementById('exam-archive-items');
+      var ok = window.eeReport.locate(list, index);
+      if (!ok) { eeToast('这一题没有逐题明细可展开', 'bad'); return; }
+      var item = list.querySelector('.rep-item[data-rep-index="' + index + '"]');
+      var head = item ? item.querySelector('.rep-item-head') : null;
+      if (head) head.focus({ preventScroll: true });
+      eeToast('已定位到第 ' + (index + 1) + ' 题');
+    };
   }
 
   /* ---------- 渲染 ---------- */
@@ -1877,6 +2026,7 @@ window.EEexams = (function () {
     openBlueprint: openBlueprint, requestCloseBp: requestCloseBp, confirmDiscard: confirmDiscard,
     saveBlueprint: saveBlueprint, addSection: addSection, removeSection: removeSection,
     openSetup: openSetup, syncSetup: syncSetup, beginExam: beginExam,
+    beginReExam: beginReExam,
     askActive: askActive, confirmActive: confirmActive,
     openTemplate: openTemplate, pickTemplate: pickTemplate,
     askReExam: askReExam, askAbandon: askAbandon, confirmAbandon: confirmAbandon,
