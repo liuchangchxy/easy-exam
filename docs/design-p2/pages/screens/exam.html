@@ -286,10 +286,10 @@
 
           <div class="rail-block">
             <div class="rule-label">本场规则</div>
-            <div class="kv">
+            <div class="kv" id="ex-rules-kv">
               <span class="kv-key">时长</span><span class="kv-val mono">120 分钟</span>
-              <span class="kv-key">宽限</span><span class="kv-val mono">60 秒（只同步，不继续答题）</span>
-              <span class="kv-key">负分</span><span class="kv-val mono">答错扣 0.5 分，无 0 分下限</span>
+              <span class="kv-key">缓冲</span><span class="kv-val mono">60 秒（仅同步已作答，不继续答题）</span>
+              <span class="kv-key">扣分</span><span class="kv-val mono">答错扣 0.5 分，不设 0 分下限</span>
               <span class="kv-key">学习记录</span><span class="kv-val mono">纳入</span>
             </div>
             <p class="rail-note">快捷键随题型变化：选项键只绑这道题有的选项，判断题为 <span class="kbd">T</span>/<span class="kbd">F</span>；浮层打开时只保留 <span class="kbd">Esc</span>。</p>
@@ -790,11 +790,11 @@
 
           <div class="empty">
             <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg></div>
-            <p class="empty-title">这份档案组不出题目</p>
-            <p class="empty-desc">蓝图配额在这个题库里匹配不到题目，或选题范围被筛选空。回到模考中心调整蓝图或换一个题库；基础题库模式按题库既有顺序抽取前 N 题。</p>
+            <p class="empty-title">这份方案组不出题目</p>
+            <p class="empty-desc">方案配额在这个题库里匹配不到题目，或选题范围为空。回到模考中心调整方案，或直接使用快速模考随机抽题。</p>
             <div class="empty-actions">
               <a class="btn btn-quiet" href="exams.html">返回模考中心</a>
-              <a class="btn btn-primary" href="exams.html"><svg class="od-icon" aria-hidden="true"><use href="#i-edit"/></svg>去编辑蓝图</a>
+              <a class="btn btn-primary" href="exams.html"><svg class="od-icon" aria-hidden="true"><use href="#i-edit"/></svg>去编辑方案</a>
             </div>
           </div>
 
@@ -957,9 +957,9 @@
       <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
       <div class="notice-body" id="ex-submit-blank">还有 2 道客观题未作答，将按 0 分计入得分、仍占满分；另有 2 题标记了待复查。</div>
     </div>
-    <div class="kv">
-      <span class="kv-key">负分</span><span class="kv-val">答错扣 0.5 分；未设 0 分下限</span>
-      <span class="kv-key">纳入学习记录</span><span class="kv-val">纳入：错题、FSRS 与统计照常更新</span>
+    <div class="kv" id="ex-submit-rules">
+      <span class="kv-key">扣分规则</span><span class="kv-val">答错扣 0.5 分；不设 0 分下限</span>
+      <span class="kv-key">纳入学习记录</span><span class="kv-val">纳入：错题、复习计划与统计照常更新</span>
     </div>
     <p class="hint">交卷后不能再修改答案。关掉这个对话框可以回去继续改——打开交卷确认不冻结答案。</p>
   </div>
@@ -1121,18 +1121,18 @@ window.EEexam = (function () {
 
   /* 纸面数据：题干来自 store 的 questions，选项/答案/解析按题干匹配（真实软考真题） */
   var QBANK = [
-    { stem: '每周一学校开展直播课程，在直播中实时回复学生问题属于（  ）', type: '单选题', options: [['A', '互动沟通'], ['B', '推式沟通'], ['C', '拉式沟通'], ['D', '公众沟通']], answer: 'A', explain: '直播中实时回复学生问题，信息按需推送、学生自行获取，属于拉式沟通。' },
-    { stem: 'OSI的（  ）不适合提供相应的安全服务。', type: '单选题', options: [['A', '传输层'], ['B', '会话层'], ['C', '网络层'], ['D', '应用层']], answer: 'B', explain: '本题为反向选择题：传输层、网络层、应用层都可以提供相应安全服务，会话层不适合。' },
-    { stem: '以下不属于“临时性”的是（）', type: '单选题', options: [['A', '临时性并不一定意味着项目的持续时间短'], ['B', '临时性具有明确的开始时间和结束时间'], ['C', '项目可交付成果在结束项目或阶段依然存在'], ['D', '结束阶段']], answer: 'D', explain: '“结束阶段”是项目阶段名称，不属于临时性这一特征。' },
-    { stem: '关于范围基准，以下说法不正确的是（）。', type: '单选题', options: [['A', '范围基准包括项目范围说明书、WBS、WBS 字典'], ['B', '范围基准包含工作包、规划包与控制账户'], ['C', '范围基准是进度与成本估算的重要依据'], ['D', '范围基准是制定预算的输出']], answer: 'D', explain: '范围基准是创建 WBS 过程的输出，不是制定预算的输出。' },
-    { stem: '（   ）按照业务功能聚合性进行应用规划，建设与应用组件对应的应用系统，满足不同业务条线的需求，实现专业化发展。', type: '单选题', options: [['A', '功能专业化原则'], ['B', '业务协同化原则'], ['C', '架构服务化原则'], ['D', '数据集中化原则']], answer: 'A', explain: '按业务功能聚合性进行应用规划，体现的是功能专业化原则。' },
-    { stem: '监控各项续航参数是否保持在预期区间（   ）', type: '单选题', options: [['A', '控制图'], ['B', '散点图'], ['C', '因果图'], ['D', '流程图']], answer: 'A', explain: '控制图用于判断过程是否处于受控状态，即参数是否保持在预期区间。' },
-    { stem: '当出现异常时软件需要有持续提供服务，属于（）。', type: '单选题', options: [['A', '韧性'], ['B', '弹性'], ['C', '架构持续演进'], ['D', '服务化']], answer: 'A', explain: '韧性指系统在出现异常时仍能持续提供服务的能力。' },
-    { stem: '大型不适合用（）架构模型。', type: '单选题', options: [['A', '单机应用模式'], ['B', '客户端/服务器模式'], ['C', 'Web Service'], ['D', '模型-视图-控制器模式']], answer: 'A', explain: '大型系统不适合单机应用模式，需要分布式架构支撑。' },
-    { stem: '通过（  ）分析风险优势，劣势，机会，威胁。', type: '多选题', options: [['A', '根本原因'], ['B', '概率和影响'], ['C', 'SWOT'], ['D', '文件']], answer: 'C', explain: 'SWOT 分析用于评估优势、劣势、机会与威胁。' },
-    { stem: '以下（   ）不是定义活动的输出。', type: '多选题', options: [['A', '活动清单'], ['B', '活动属性'], ['C', '进度网络图'], ['D', '里程碑清单']], answer: 'C', explain: '进度网络图是排列活动顺序的输出，不是定义活动的输出。' },
-    { stem: '项目具有临时性，因此（  ）。', type: '判断题', options: [['A', '正确'], ['B', '错误']], answer: 'A', explain: '临时性是项目的基本特征之一：有明确的开始与结束。' },
-    { stem: '结合本项目，说明范围基准失控的主要原因，并给出纠正措施。', type: '问答题', options: [], answer: '', explain: '主观题保存作答与参考解析，不自动判分：作答状态是「已作答」，判分状态恒为「未判分」。' }
+    { stem: '每周一学校开展直播课程，在直播中实时回复学生问题属于（  ）', type: '单选题', difficulty: '基础', chapter: '沟通管理', tags: ['沟通'], options: [['A', '互动沟通'], ['B', '推式沟通'], ['C', '拉式沟通'], ['D', '公众沟通']], answer: 'A', explain: '直播中实时回复学生问题，信息按需推送、学生自行获取，属于拉式沟通。' },
+    { stem: 'OSI的（  ）不适合提供相应的安全服务。', type: '单选题', difficulty: '进阶', chapter: '信息安全', tags: ['OSI'], options: [['A', '传输层'], ['B', '会话层'], ['C', '网络层'], ['D', '应用层']], answer: 'B', explain: '本题为反向选择题：传输层、网络层、应用层都可以提供相应安全服务，会话层不适合。' },
+    { stem: '以下不属于“临时性”的是（）', type: '单选题', difficulty: '基础', chapter: '项目管理基础', tags: [], options: [['A', '临时性并不一定意味着项目的持续时间短'], ['B', '临时性具有明确的开始时间和结束时间'], ['C', '项目可交付成果在结束项目或阶段依然存在'], ['D', '结束阶段']], answer: 'D', explain: '“结束阶段”是项目阶段名称，不属于临时性这一特征。' },
+    { stem: '关于范围基准，以下说法不正确的是（）。', type: '单选题', difficulty: '进阶', chapter: '范围管理', tags: [], options: [['A', '范围基准包括项目范围说明书、WBS、WBS 字典'], ['B', '范围基准包含工作包、规划包与控制账户'], ['C', '范围基准是进度与成本估算的重要依据'], ['D', '范围基准是制定预算的输出']], answer: 'D', explain: '范围基准是创建 WBS 过程的输出，不是制定预算的输出。' },
+    { stem: '（   ）按照业务功能聚合性进行应用规划，建设与应用组件对应的应用系统，满足不同业务条线的需求，实现专业化发展。', type: '单选题', difficulty: '困难', chapter: '范围管理', tags: ['新题'], options: [['A', '功能专业化原则'], ['B', '业务协同化原则'], ['C', '架构服务化原则'], ['D', '数据集中化原则']], answer: 'A', explain: '按业务功能聚合性进行应用规划，体现的是功能专业化原则。' },
+    { stem: '监控各项续航参数是否保持在预期区间（   ）', type: '单选题', difficulty: '基础', chapter: '成本管理', tags: [], options: [['A', '控制图'], ['B', '散点图'], ['C', '因果图'], ['D', '流程图']], answer: 'A', explain: '控制图用于判断过程是否处于受控状态，即参数是否保持在预期区间。' },
+    { stem: '当出现异常时软件需要有持续提供服务，属于（）。', type: '单选题', difficulty: '基础', chapter: '项目管理基础', tags: [], options: [['A', '韧性'], ['B', '弹性'], ['C', '架构持续演进'], ['D', '服务化']], answer: 'A', explain: '韧性指系统在出现异常时仍能持续提供服务的能力。' },
+    { stem: '大型不适合用（）架构模型。', type: '单选题', difficulty: '进阶', chapter: '项目管理基础', tags: [], options: [['A', '单机应用模式'], ['B', '客户端/服务器模式'], ['C', 'Web Service'], ['D', '模型-视图-控制器模式']], answer: 'A', explain: '大型系统不适合单机应用模式，需要分布式架构支撑。' },
+    { stem: '通过（  ）分析风险优势，劣势，机会，威胁。', type: '多选题', difficulty: '进阶', chapter: '沟通管理', tags: [], options: [['A', '根本原因'], ['B', '概率和影响'], ['C', 'SWOT'], ['D', '文件']], answer: 'C', explain: 'SWOT 分析用于评估优势、劣势、机会与威胁。' },
+    { stem: '以下（   ）不是定义活动的输出。', type: '多选题', difficulty: '进阶', chapter: '成本管理', tags: [], options: [['A', '活动清单'], ['B', '活动属性'], ['C', '进度网络图'], ['D', '里程碑清单']], answer: 'C', explain: '进度网络图是排列活动顺序的输出，不是定义活动的输出。' },
+    { stem: '项目具有临时性，因此（  ）。', type: '判断题', difficulty: '基础', chapter: '项目管理基础', tags: [], options: [['A', '正确'], ['B', '错误']], answer: 'A', explain: '临时性是项目的基本特征之一：有明确的开始与结束。' },
+    { stem: '结合本项目，说明范围基准失控的主要原因，并给出纠正措施。', type: '问答题', difficulty: '困难', chapter: '案例分析', tags: ['案例'], options: [], answer: '', explain: '主观题保存作答与参考解析，不自动判分：作答状态是「已作答」，判分状态恒为「未判分」。' }
   ];
   function norm(s) { return String(s == null ? '' : s).replace(/\s+/g, ''); }
   var PAPER = {};
@@ -1163,7 +1163,7 @@ window.EEexam = (function () {
   var DEMO_FLAGS = { 4: true, 11: true };
 
   /* 三段式：'answer' 作答窗口 / 'grace' 宽限 60 秒 / 'collected' 服务端已收卷 */
-  var R = { s: null, paper: [], index: 0, answers: {}, selections: {}, flags: {}, remaining: 120 * 60, phase: 'answer', graceLeft: GRACE, report: null, done: false, submittedVia: 'manual', blueprintUsed: false };
+  var R = { s: null, paper: [], index: 0, answers: {}, selections: {}, flags: {}, remaining: 120 * 60, elapsed: 0, phase: 'answer', graceLeft: GRACE, report: null, done: false, submittedVia: 'manual', blueprintUsed: false };
   var timerId = null;
 
   function esc(s) {
@@ -1208,10 +1208,10 @@ window.EEexam = (function () {
       s.paperRefs.forEach(function (ref) {
         if (ref.t === 'd') {
           var d = QBANK[ref.i];
-          if (d) fixed.push(paperItem({ id: 'qb' + ref.i, stem: d.stem, type: d.type, chapter: '未分章', version: 'v3' }, true));
+          if (d) fixed.push(paperItem({ id: 'qb' + ref.i, stem: d.stem, type: d.type, difficulty: d.difficulty, chapter: d.chapter || '未分章', tags: d.tags || [], version: 'v3' }, true, ref.score));
         } else {
           var q = S.question(ref.id);
-          if (q) fixed.push(paperItem(q, false));
+          if (q) fixed.push(paperItem(q, false, ref.score));
         }
       });
       if (fixed.length) { R.blueprintUsed = !!(s.blueprint && s.blueprint.sections && s.blueprint.sections.length); return fixed; }
@@ -1220,7 +1220,7 @@ window.EEexam = (function () {
     /* 题库里没有真实题目时用演示卷兜底。兜底卷的 id 是合成出来的（qb0…），
        store 里并不存在这些题——所以标记 synth，报告里据此不生成「查看该题当前版本」。 */
     var synth = !qs.length;
-    if (synth) qs = QBANK.map(function (q, i) { return { id: 'qb' + i, stem: q.stem, type: q.type, chapter: '未分章', version: 'v3' }; });
+    if (synth) qs = QBANK.map(function (q, i) { return { id: 'qb' + i, stem: q.stem, type: q.type, difficulty: q.difficulty, chapter: q.chapter || '未分章', tags: q.tags || [], version: 'v3' }; });
     var bp = s.blueprint;
     var out;
     if (bp && bp.sections && bp.sections.length) {
@@ -1231,12 +1231,15 @@ window.EEexam = (function () {
       out = shuffle(qs).slice(0, total).map(function (q) { return paperItem(q, synth); });
     }
     R.blueprintUsed = !!(bp && bp.sections && bp.sections.length);
-    /* 立刻把这份卷子的题目顺序写回会话，作为之后刷新与重考的唯一依据。 */
+    /* 立刻把这份卷子的题目顺序与分值写回会话，作为之后刷新与重考的唯一依据。 */
     var refs = out.map(function (it) {
-      if (it.synth) return { t: 'd', i: parseInt(String(it.id).replace(/^qb/, ''), 10) };
-      return { t: 'q', id: it.id };
+      if (it.synth) return { t: 'd', i: parseInt(String(it.id).replace(/^qb/, ''), 10), score: it.score };
+      return { t: 'q', id: it.id, score: it.score };
     });
-    if (refs.length) S.updateSession(s.id, { paperRefs: refs });
+    if (refs.length) {
+      s.paperRefs = refs;
+      S.updateSession(s.id, { paperRefs: refs });
+    }
     return out;
   }
   function shuffle(a) {
@@ -1247,26 +1250,33 @@ window.EEexam = (function () {
     }
     return out;
   }
-  /* 按配额段取题：每段按题型 + 章节 + 难度在题库里取 n 道，取不满时从剩余候选补入。
-     同一道题不重复进入多个段（unless 蓝图本身重复声明同一题型且题库不够）。 */
+  function parseTags(str) {
+    return String(str || '').split(/[,，\s]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+  function matchTags(q, reqTags) {
+    if (!reqTags.length) return true;
+    var qt = q.tags || [];
+    return reqTags.some(function (t) { return qt.indexOf(t) > -1; });
+  }
+  /* 按配额段取题：每段按题型 + 章节 + 难度 + 标签在题库里随机取 n 道，取不满时从剩余候选随机补齐。 */
   function composeFromBlueprint(qs, bp, synth) {
     var used = {}, out = [];
-    /* 每个配额段内随机取题：先按段条件筛出候选，再洗牌取前 n 道，
-       所以题型 / 章节 / 难度配额仍严格满足，段内顺序与选题是随机的。 */
     bp.sections.forEach(function (sec) {
+      var reqTags = parseTags(sec.tags);
       var pool = shuffle(qs.filter(function (q) {
         if (used[q.id]) return false;
         if (sec.type && sec.type !== '不限' && q.type !== sec.type) return false;
         if (sec.chapter && sec.chapter !== '不限' && q.chapter !== sec.chapter) return false;
         if (sec.diff && sec.diff !== '不限' && q.difficulty !== sec.diff) return false;
+        if (!matchTags(q, reqTags)) return false;
         return true;
       }));
       pool.slice(0, sec.n || 0).forEach(function (q) {
         used[q.id] = 1;
-        out.push(paperItem(q, synth));
+        out.push(paperItem(q, synth, sec.score));
       });
     });
-    /* 降级补入：蓝图要的题量多于匹配到的题时，从剩余候选随机补齐到蓝图总题量 */
+    /* 补齐不足：方案要求题量多于匹配到的题时，从剩余候选随机补齐 */
     var want = bp.sections.reduce(function (a, x) { return a + (x.n || 0); }, 0);
     shuffle(qs).forEach(function (q) {
       if (out.length >= want || used[q.id]) return;
@@ -1275,22 +1285,25 @@ window.EEexam = (function () {
     });
     return out.slice(0, want);
   }
-  function paperItem(q, synth) {
+  function paperItem(q, synth, scoreOverride) {
     var p = paperFor(q.stem);
     var type = p.type || q.type || '单选题';
-    return { id: q.id, synth: synth, stem: q.stem, type: type, chapter: q.chapter || '未分章', version: q.version || 'v3', options: p.options, answer: p.answer, explain: p.explain, score: SCORE[type] == null ? 2 : SCORE[type] };
+    var defaultScore = SCORE[type] == null ? 2 : SCORE[type];
+    var score = OBJECTIVE[type]
+      ? (scoreOverride != null && !isNaN(scoreOverride) ? Number(scoreOverride) : defaultScore)
+      : 0;
+    return { id: q.id, synth: synth, stem: q.stem, type: type, chapter: q.chapter || '未分章', version: q.version || 'v3', options: p.options, answer: p.answer, explain: p.explain, score: score };
   }
-  /* 组卷方式的可读说明：界面据此在作答态标明「按蓝图组卷 / 按默认组卷」，
-     不让用户以为两套参数是同一件事。 */
+  /* 组卷方式的可读说明：界面据此在作答态标明「按方案组卷 / 快速模考」 */
   function buildNote() {
     var s = R.s || {};
     var planned = s.params && s.params.count;
     var short = planned && planned > R.paper.length ? ' · 题库可用 ' + R.paper.length + ' 题，少于计划的 ' + planned + ' 题' : '';
     if (R.blueprintUsed) {
       var bp = s.blueprint || {};
-      return '按蓝图组卷 · ' + (bp.sections || []).length + ' 个配额段 · 段内随机 · ' + R.paper.length + ' 题' + short;
+      return '按考试方案组卷 · ' + (bp.sections || []).length + ' 个配额段 · 段内随机抽题 · 共 ' + R.paper.length + ' 题' + short;
     }
-    return '按默认组卷 · 随机抽题 · 共 ' + R.paper.length + ' 题' + short;
+    return '快速模考 · 随机抽题 · 共 ' + R.paper.length + ' 题' + short;
   }
   /* 开考快照：会话开始时记录的题目版本。之后题目被改过，才提示「内容已变更」。 */
   function snapshotVersion() { return (R.s && R.s.verSnap) || 'v3'; }
@@ -1309,6 +1322,7 @@ window.EEexam = (function () {
        这里再显式带上 selections 作为同一份内容的镜像，供跨页面消费。 */
     S.updateSession(R.s.id, Object.assign({
       answers: R.answers, selections: R.selections || {}, flags: R.flags, index: R.index, done: answeredCount(),
+      elapsed: R.elapsed || 0,
       remaining: R.s.unlimited ? null : Math.max(0, Math.round(R.remaining)), phase: R.phase
     }, extra || {}));
   }
@@ -1325,7 +1339,7 @@ window.EEexam = (function () {
         kind: 'exam', bankId: 'b_rk', mode: '模考',
         title: '系统集成项目管理工程师 · 综合卷',
         total: 12, minutes: 120, record: true, phase: 'answer',
-        blueprint: null, blueprintMode: 'basic', params: { count: 12, minutes: 120, mode: '模考' },
+        blueprint: null, blueprintMode: 'quick', params: { count: 12, minutes: 120, mode: '模考' },
         index: 11, done: 10, answers: DEMO_ANSWERS, flags: DEMO_FLAGS, remaining: 58 * 60 + 12,
         origin: { page: 'exams.html', href: 'exams.html', label: '模考中心' },
         replace: true
@@ -1336,8 +1350,8 @@ window.EEexam = (function () {
     R.s = s;
     R.paper = buildPaper(s);
     if (!R.paper.length) { showNone(); return; }
-    /* 会话题量以真正组出的卷子为准：蓝图声明 30 题而题库实际只够 12 题时，
-       报告与「开始前确认」都必须看到同一个数，不能会话 30、卷子 12。 */
+    /* 会话题量以真正组出的卷子为准：方案声明 30 题而题库实际只够 12 题时，
+       报告与确认页保持一致。 */
     if (s.total !== R.paper.length || (s.params && s.params.count !== R.paper.length)) {
       S.updateSession(s.id, { total: R.paper.length, params: Object.assign({}, s.params || {}, { count: R.paper.length }) });
     }
@@ -1353,9 +1367,10 @@ window.EEexam = (function () {
       R.answers[k] = s.selections[k];
     });
     R.phase = 'answer';
+    R.elapsed = s.elapsed != null ? Math.max(0, parseInt(s.elapsed, 10) || 0) : 0;
     var limit = Math.max(60, (s.minutes || 120) * 60);
-    R.remaining = s.remaining != null ? Math.min(limit, parseInt(s.remaining, 10)) : limit;
-    if (isNaN(R.remaining) || R.remaining < 0) R.remaining = limit;
+    R.remaining = s.unlimited ? 0 : (s.remaining != null ? Math.min(limit, parseInt(s.remaining, 10)) : limit);
+    if (isNaN(R.remaining) || R.remaining < 0) R.remaining = s.unlimited ? 0 : limit;
     document.getElementById('ex-none').hidden = true;
     document.getElementById('ex-live').hidden = false;
     document.getElementById('ex-crumb-name').textContent = s.title || ('模考 · ' + bankName(s.bankId));
@@ -1471,8 +1486,25 @@ window.EEexam = (function () {
     flagBtn.classList.toggle('is-on', flagged);
     flagBtn.setAttribute('aria-pressed', flagged ? 'true' : 'false');
     /* 已标记态只靠文字与题干区的标签表达，不再把按钮染成主色——一屏至多一颗主操作 */
+    paintRules();
     paintPhase();
     syncToastInset();
+  }
+  function paintRules() {
+    var host = document.getElementById('ex-rules-kv');
+    if (!host || !R.s) return;
+    var bp = R.s.blueprint || {};
+    var neg = bp.negative || 0;
+    var fl = !!bp.floor;
+    var negText = neg > 0 ? ('答错扣 ' + neg + ' 分，' + (fl ? '设 0 分下限' : '不设 0 分下限')) : '答错不扣分';
+    var timeText = R.s.unlimited ? '不限时' : ((R.s.minutes || 120) + ' 分钟');
+    var graceText = R.s.unlimited ? '不适用' : (GRACE + ' 秒（仅提交截止前答案）');
+    var recText = R.s.record === false ? '不纳入' : '纳入';
+    host.innerHTML =
+      '<span class="kv-key">时长</span><span class="kv-val mono">' + esc(timeText) + '</span>' +
+      '<span class="kv-key">缓冲</span><span class="kv-val mono">' + esc(graceText) + '</span>' +
+      '<span class="kv-key">扣分</span><span class="kv-val mono">' + esc(negText) + '</span>' +
+      '<span class="kv-key">学习记录</span><span class="kv-val mono">' + esc(recText) + '</span>';
   }
   /* 只刷新计数与答题卡：主观题边写边调它，不重建题干与作答区（否则输入框失焦） */
   function renderCounts() {
@@ -1518,12 +1550,17 @@ window.EEexam = (function () {
     if (R.phase === 'answer') {
       chip.textContent = '作答窗口';
       chip.className = 'tag plain';
-      cap.textContent = '剩余';
-      timer.textContent = fmtTime(R.remaining);
-      timer.classList.toggle('low', R.remaining < 300);
-      document.getElementById('ex-deadline-note').textContent = R.s.unlimited
-        ? '不限时：没有硬截止、没有宽限、没有自动交卷'
-        : '服务端硬截止 ' + fmtClock(R.remaining) + ' · 宽限 ' + GRACE + ' 秒';
+      if (R.s && R.s.unlimited) {
+        cap.textContent = '已用时';
+        timer.textContent = fmtTime(R.elapsed || 0);
+        timer.classList.remove('low');
+        document.getElementById('ex-deadline-note').textContent = '不限时模考 · 可随时暂存或交卷';
+      } else {
+        cap.textContent = '剩余';
+        timer.textContent = fmtTime(R.remaining);
+        timer.classList.toggle('low', R.remaining < 300);
+        document.getElementById('ex-deadline-note').textContent = '截止时间 ' + fmtClock(R.remaining) + ' · 交卷缓冲 ' + GRACE + ' 秒';
+      }
     } else if (R.phase === 'grace') {
       chip.textContent = '宽限中 · 已收卷待同步';
       chip.className = 'tag brand';
@@ -1624,6 +1661,16 @@ window.EEexam = (function () {
       ? '还有 ' + blank + ' 道客观题未作答，将按 0 分计入得分、仍占满分；另有 ' + Object.keys(R.flags).length + ' 题标记了待复查。警告不阻断交卷。'
       : '';
     warn.hidden = !(blank > 0 || Object.keys(R.flags).length);
+    var rulesHost = document.getElementById('ex-submit-rules');
+    if (rulesHost && R.s) {
+      var bp = R.s.blueprint || {};
+      var neg = bp.negative || 0;
+      var negText = neg > 0 ? ('答错扣 ' + neg + ' 分；' + (bp.floor ? '设 0 分下限' : '不设 0 分下限')) : '答错不扣分';
+      var recText = R.s.record === false ? '不纳入：本场不写入错题与复习计划' : '纳入：错题、复习计划与统计照常更新';
+      rulesHost.innerHTML =
+        '<span class="kv-key">扣分规则</span><span class="kv-val">' + esc(negText) + '</span>' +
+        '<span class="kv-key">纳入学习记录</span><span class="kv-val">' + esc(recText) + '</span>';
+    }
     var jump = document.getElementById('ex-jump-blank');
     if (jump) {
       var f = firstUnanswered();
@@ -1713,20 +1760,27 @@ window.EEexam = (function () {
       else { wrongObj++; if (negative) objScore -= negative; }
     });
     if (floor) objScore = Math.max(0, objScore);
+    var usedMins = (R.s && R.s.unlimited)
+      ? Math.max(1, Math.round((R.elapsed || 60) / 60))
+      : Math.max(1, Math.round((Math.max(60, (R.s.minutes || 120) * 60) - R.remaining) / 60));
     return {
-      kind: 'exam', mode: '模考', order: (R.s && R.s.order) || '随机练习',
+      kind: 'exam', mode: '模考', order: (R.s && R.s.order) || '随机抽题',
       title: R.s.title || ('模考 · ' + bankName(R.s.bankId)), bankId: R.s.bankId,
       score: Math.round(objScore * 10) / 10, full: objFull,
       objectiveScore: Math.round(objScore * 10) / 10, objectiveFull: objFull,
       negative: negative, floor: floor,
+      record: R.s ? (R.s.record !== false) : true,
+      unlimited: !!(R.s && R.s.unlimited),
+      examMinutes: R.s ? (R.s.minutes || 0) : 120,
+      blueprint: R.s ? (R.s.blueprint || null) : null,
       rate: objFull ? Math.round(objScore / objFull * 100) : 0,
       accObj: answeredObj ? Math.round(correctObj / answeredObj * 100) : null,
       answered: answered, objTotal: R.paper.filter(function (q) { return OBJECTIVE[q.type]; }).length,
       correct: correctObj, partial: partialObj, wrong: wrongObj,
       answeredObj: answeredObj, answeredObjCorrect: correctObj,
       unanswered: unanswered, ungraded: ungraded,
-      minutes: Math.max(1, Math.round((Math.max(60, (R.s.minutes || 120) * 60) - R.remaining) / 60)),
-      wall: Math.max(1, Math.round((Math.max(60, (R.s.minutes || 120) * 60) - R.remaining) / 60) + 5),
+      minutes: usedMins,
+      wall: usedMins + 1,
       via: via, at: nowStamp(), version: snapshotVersion(), unsynced: 0,
       total: R.paper.length, items: reportItems(),
       paperRefs: (R.s.paperRefs || []).slice()
@@ -1763,13 +1817,16 @@ window.EEexam = (function () {
     var neg = rep.negative != null ? rep.negative : ((R.s && R.s.blueprint && R.s.blueprint.negative) || 0);
     var fl = rep.floor != null ? rep.floor : !!(R.s && R.s.blueprint && R.s.blueprint.floor);
     var negText = neg > 0
-      ? '答错扣 ' + neg + ' 分；' + (fl ? '设 0 分下限' : '未设 0 分下限，总分可为负')
+      ? '答错扣 ' + neg + ' 分；' + (fl ? '设 0 分下限' : '不设 0 分下限，总分可能为负')
       : '答错不扣分';
-    var extraFacts = [['负分规则', esc(negText)], ['纳入学习记录', '答错的题已进入错题，复习队列已排期']];
-    if (rep.deadline) extraFacts.unshift(['服务端截止', esc(rep.deadline)]);
+    var recOn = rep.record !== false;
+    var extraFacts = [
+      ['扣分规则', esc(negText)],
+      ['纳入学习记录', recOn ? '已纳入：错题与复习计划已更新' : '未纳入：本场未写入错题与复习计划']
+    ];
+    if (rep.deadline) extraFacts.unshift(['截止时间', esc(rep.deadline)]);
     if (rep.wall != null) {
-      extraFacts.push(['用时 · 服务端在线', num(rep.minutes) + ' 分钟']);
-      extraFacts.push(['用时 · 墙钟', num(rep.wall) + ' 分钟']);
+      extraFacts.push(['用时', num(rep.minutes) + ' 分钟']);
     }
     if (rep.unsynced > 0) extraFacts.push(['本机未同步成功', esc(rep.unsynced + ' 题（不计入本场成绩）')]);
 
@@ -1778,7 +1835,9 @@ window.EEexam = (function () {
       main.innerHTML = window.eeReport.reportHtml(rep, items, {
         scope: 'ex', bankId: rep.bankId, qPrefix: '', rPrefix: '', withVer: true,
         at: rep.at, viaText: viaText(rep.via), bank: bankName(rep.bankId),
-        note: '答错的题已进入错题；手动交卷、到点自动交卷与超时收卷都按交卷当时保存的答案判分。',
+        note: recOn
+          ? '答错的题已进入错题；交卷后题目、作答与判分结果永久保存，不会随后续改题变化。'
+          : '本场未纳入学习记录；交卷后题目、作答与判分结果永久保存，不会随后续改题变化。',
         extraFacts: extraFacts
       });
       var block = main.querySelector('.rep-block');
@@ -1825,20 +1884,25 @@ window.EEexam = (function () {
     if (R.paper.length) {
       host.innerHTML = R.paper.map(function (q, i) {
         var a = R.answers[i];
+        var selStr = String(a || '');
+        var ansStr = String(q.answer || '');
         var opts = q.options.length ? q.options.map(function (o) {
           var cls = 'opt';
-          if (a === o[0]) cls += ' is-selected';
-          if (o[0] === q.answer) cls += ' is-correct';
-          return '<button type="button" class="' + cls + '" disabled aria-pressed="' + (a === o[0]) + '">' +
+          var isSel = q.type === '多选题' ? selStr.indexOf(o[0]) > -1 : a === o[0];
+          var isCor = q.type === '多选题' ? ansStr.indexOf(o[0]) > -1 : o[0] === q.answer;
+          if (isSel) cls += ' is-selected';
+          if (isCor) cls += ' is-correct';
+          return '<button type="button" class="' + cls + '" disabled aria-pressed="' + isSel + '">' +
             '<span class="opt-key">' + o[0] + '</span><span class="opt-text">' + esc(o[1]) + '</span>' +
-            (o[0] === q.answer ? '<span class="opt-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg></span>' : '') + '</button>';
+            (isCor ? '<span class="opt-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg></span>' : '') + '</button>';
         }).join('') : '<p class="hint hint-flat">你的作答：' + esc(a || '未答') + '（文字作答）</p>';
+        var exactOk = q.answer ? (selStr.split('').sort().join('') === ansStr.split('').sort().join('')) : false;
         return '<div class="q-meta"><span>第 ' + (i + 1) + ' 题</span><span>' + esc(q.type) + '</span><span>' + esc(q.chapter) + '</span></div>' +
           '<h3 class="q-stem">' + esc(q.stem) + '</h3>' +
           '<div class="opt-list">' + opts + '</div>' +
           '<div class="wrong-answers"><span class="muted">你的作答 <span class="mono">' + esc(a || '未答') + '</span></span>' +
           (q.answer ? '<span>标准答案 <span class="mono">' + esc(q.answer) + '</span></span>' : '') +
-          (q.answer ? (a === q.answer ? '<span class="tag ok">正确</span>' : '<span class="tag bad">' + (a ? '错误' : '未答') + '</span>')
+          (q.answer ? (exactOk ? '<span class="tag ok">正确</span>' : '<span class="tag bad">' + (a ? '错误' : '未答') + '</span>')
             : '<span class="tag brand">已作答 · 未判分</span>') + '</div>' +
           '<p class="hint q-explain">解析：' + esc(q.explain) + '</p>';
       }).join('');
@@ -1857,18 +1921,21 @@ window.EEexam = (function () {
   function again() {
     var s = R.s || {};
     eeDialog.close(document.getElementById('ex-dlg-reexam'));
-    /* 重考复用原试卷快照：题目 id 顺序原样带进新会话，buildPaper 不再随机。 */
+    /* 重考复用原试卷快照：题目 id 顺序与分值原样带进新会话，buildPaper 不再随机。 */
     var refs = (s.paperRefs && s.paperRefs.length ? s.paperRefs : R.paper.map(function (it) {
-      return it.synth ? { t: 'd', i: parseInt(String(it.id).replace(/^qb/, ''), 10) } : { t: 'q', id: it.id };
+      return it.synth ? { t: 'd', i: parseInt(String(it.id).replace(/^qb/, ''), 10), score: it.score } : { t: 'q', id: it.id, score: it.score };
     })).slice();
+    var unlimited = !!s.unlimited;
+    var mins = unlimited ? 0 : (s.minutes || 120);
     var created = S.startSession({
-      kind: 'exam', bankId: s.bankId || 'b_rk', mode: '模考', order: s.order || '随机练习',
+      kind: 'exam', bankId: s.bankId || 'b_rk', mode: '模考', order: s.order || '随机抽题',
       title: s.title || '系统集成项目管理工程师 · 综合卷',
-      total: R.paper.length || 12, minutes: s.minutes || 120,
-      blueprint: s.blueprint || null, blueprintMode: s.blueprintMode || 'basic',
+      total: R.paper.length || refs.length || 12, minutes: mins, unlimited: unlimited,
+      record: s.record !== false,
+      blueprint: s.blueprint || null, blueprintMode: s.blueprintMode || 'quick',
       paperRefs: refs, verSnap: s.verSnap || null,
-      params: s.params || { count: R.paper.length || 12, minutes: s.minutes || 120, mode: '模考' },
-      index: 0, done: 0, answers: {}, selections: {}, flags: {}, remaining: (s.minutes || 120) * 60,
+      params: Object.assign({}, s.params || {}, { count: R.paper.length || refs.length || 12, minutes: mins, unlimited: unlimited, mode: '模考' }),
+      index: 0, done: 0, answers: {}, selections: {}, flags: {}, elapsed: 0, remaining: unlimited ? null : mins * 60,
       origin: s.origin || { page: 'exams.html', href: 'exams.html', label: '模考中心' },
       replace: true
     });
@@ -1887,7 +1954,12 @@ window.EEexam = (function () {
     if (R.done) return;
     timerId = setInterval(function () {
       if (R.done) { stopTicker(); return; }
-      if (R.s && R.s.unlimited) { paintPhase(); return; }
+      R.elapsed = (R.elapsed || 0) + 1;
+      if (R.s && R.s.unlimited) {
+        if (R.elapsed % 15 === 0) persist();
+        paintPhase();
+        return;
+      }
       if (R.phase === 'answer') {
         R.remaining -= 1;
         if (R.remaining % 15 === 0) persist();
@@ -1915,6 +1987,7 @@ window.EEexam = (function () {
       }
     }, 1000);
   }
+  window.addEventListener('pagehide', function () { if (!R.done && R.s) persist(); });
   function stopTicker() { if (timerId) { clearInterval(timerId); timerId = null; } }
 
   /* ---------- 抽屉 ---------- */

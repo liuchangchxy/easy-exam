@@ -6,101 +6,119 @@
 <title>模考 · 易考宝</title>
 <link rel="stylesheet" href="../../assets/ee.css">
 <style>/* 本屏特有布局微调（令牌与控件一律复用 ee.css） */
-  .ee-list{  display: flex; flex-direction: column;  }
-.ee-list > .list-row{  padding-left: 0; padding-right: 0;  }
-.ee-list > .list-row:first-child{  border-top: 1px solid var(--ink);  }
-.ee-sub{  margin-top: var(--sp-7);  }
-.ee-exam-layout{  display: grid; grid-template-columns: minmax(0, 1fr) 288px; gap: var(--sp-9); margin-top: var(--sp-6); align-items: start;  }
-.ee-exam-main{  min-width: 0;  }
-.ee-exam-rail{  border-left: 1px solid var(--line); padding-left: var(--sp-5); min-width: 0;  }
-.rail-title{  font-size: var(--text-xs); font-weight: 600; letter-spacing: .1em; color: var(--ink-3); margin: 0 0 var(--sp-2);  }
-.rail-note{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); margin: var(--sp-3) 0 0;  }
-.ee-rail-list{  display: flex; flex-direction: column; margin-top: var(--sp-3);  }
-.rail-link{  display: flex; align-items: center; gap: var(--sp-3); width: 100%; background: none; border: none; border-top: 1px solid var(--line); font: inherit; text-align: left; padding: var(--sp-3) 0; cursor: pointer; color: inherit;  }
-.rail-link:first-child{  border-top: 0;  }
-.rail-link:hover .list-title{  color: var(--brand-ink);  }
-.rail-link-n{  margin-left: auto; font-size: var(--text-xs); color: var(--ink-4); flex: none;  }
-/* CR-12：禁用的轨内入口必须看得见是禁用的（否则「禁用并解释」只剩解释）。
-   沿用 ee.css 对 .btn:disabled 的同一约定：整条淡出 + not-allowed。 */
-.rail-link:disabled{  opacity: .55; cursor: not-allowed;  }
-.rail-link:disabled:hover .list-title{  color: var(--ink);  }
-.ee-paper-title{  font-family: var(--font-serif); font-size: var(--text-md);  }
-.ee-row-top{  align-items: flex-start;  }
-.ee-grow{  flex: 1 1 auto; min-width: 0;  }
-.ee-mt-3{  margin-top: var(--sp-3);  }
-.ee-mt-4{  margin-top: var(--sp-4);  }
-.ee-grid-2{  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-5);  }
-.ee-state-panel .panel-body{  padding: var(--sp-4);  }
-.ee-state-note{  margin-top: var(--sp-3);  }
-.ee-bp-total{  align-items: flex-end; justify-content: space-between; gap: var(--sp-5); flex-wrap: wrap;  }
-.ee-bp-negative{  width: 168px;  }
-.ee-bp-sections{  display: flex; flex-direction: column;  }
-/* 配额段：一行放 题型 / 难度 / 章节 / 题数 / 单题分值 / 移除，标签单独占一行（窄抽屉里不挤压） */
-  .ee-bp-section{  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) 66px 72px auto; gap: var(--sp-2) var(--sp-3); align-items: center; padding: var(--sp-2) 0; border-bottom: 1px solid var(--line);  }
-.ee-bp-section > .input[type="text"]{  grid-column: 1 / -1;  }
-.ee-bp-section:last-child{  border-bottom: none;  }
-.ee-bp-count{  text-align: right;  }
-.ee-dlg-form{  display: flex; flex-direction: column; gap: var(--sp-4);  }
-.ee-setup-grid{  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4);  }
-.ee-confirm{  border-top: 1px solid var(--line-strong); padding-top: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3);  }
-.ee-kv-note{  font-size: var(--text-xs); color: var(--ink-3);  }
-.ee-section{  margin-top: var(--sp-8);  }
-/* 成绩报告：桌面宽表自滚并明示可滚；≤640 换一场一张的专用列表 */
-  #reports-mobile{  display: none;  }
-.ee-rep-group-row td{  padding: var(--sp-5) var(--sp-4) var(--sp-2); border-bottom: none; background: var(--surface);  }
-.ee-rep-group-date{  font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink); margin-right: var(--sp-3);  }
-.ee-rep-group-n{  font-size: var(--text-xs); color: var(--ink-3);  }
-.ee-rep-group{  display: flex; align-items: baseline; gap: var(--sp-3); padding: var(--sp-4) 0 var(--sp-2); border-bottom: 1px solid var(--line);  }
-.ee-rep-group:first-child{  border-top: 1px solid var(--ink);  }
-@media (max-width: 640px){
-  #reports-table, #reports-scroll-hint { display: none; }
-  #reports-mobile { display: flex; flex-direction: column; }
-  #reports-mobile > .list-row { padding-left: 0; padding-right: 0; }
-  #reports-mobile > .list-row:first-child { border-top: 1px solid var(--ink); }
- }
-.ee-tpl-grid{  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3);  }
-.ee-tpl{  display: flex; flex-direction: column; gap: var(--sp-1); text-align: left; padding: var(--sp-3) var(--sp-4); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); cursor: pointer; font: inherit; color: inherit;  }
-.ee-tpl:hover{  border-color: var(--ink-3);  }
-.ee-tpl.is-on{  border-color: var(--brand); background: var(--brand-soft);  }
-.ee-tpl-name{  font-size: var(--text-sm); font-weight: 500;  }
-.ee-tpl-meta{  font-size: var(--text-xs); color: var(--ink-3);  }
-/* 行内「更多」菜单：挂在本行右侧，不占布局 */
-  .ft-more{  position: relative;  }
-.ft-menu{  position: absolute; right: 0; top: calc(100% + var(--sp-2));  }
-.conflict-list{  margin: var(--sp-2) 0 0; padding-left: var(--sp-5); font-size: var(--text-sm);  }
-.conflict-list li{  margin-bottom: var(--sp-1);  }
-/* 报告表：窄屏表头可折行，数字列不折行，避免宽表把纸面撑破 */
-  @media (max-width: 1024px){
-    .dtable th { white-space: normal; }
-    .dtable td.num, .dtable td[data-label="用时"] { white-space: nowrap; }
-   }
-/* 骨架与提示的少量间距变体（替代一次性内联样式） */
-  .sk-42{ width: 42%; }
+.ee-list{ display: flex; flex-direction: column; }
+.ee-list > .list-row{ padding-left: 0; padding-right: 0; }
+.ee-list > .list-row:first-child{ border-top: 1px solid var(--ink); }
+.ee-sub{ margin-top: var(--sp-7); }
+.ee-paper-title{ font-family: var(--font-serif); font-size: var(--text-md); }
+.ee-row-top{ align-items: flex-start; }
+.ee-grow{ flex: 1 1 auto; min-width: 0; }
+.ee-mt-2{ margin-top: var(--sp-2); }
+.ee-mt-3{ margin-top: var(--sp-3); }
+.ee-mt-4{ margin-top: var(--sp-4); }
+.ee-section{ margin-top: var(--sp-8); }
+.ee-grid-2{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-5); }
+.ee-state-panel .panel-body{ padding: var(--sp-4); }
+.ee-state-note{ margin-top: var(--sp-3); }
+.sk-42{ width: 42%; }
 .hint-flat{ margin: 0; }
 .hint-block{ padding: var(--sp-3) 0; }
-/* 窄屏列表：元信息首段独占一行，标签与按钮按需换行，避免文字被 flex 压成窄列 */
-  @media (max-width: 640px){
-    .list-meta > :first-child { flex: 1 1 100%; }
-    .list-side { flex-wrap: wrap; }
-   }
+
+/* 任务一：快速模考面板 */
+.ee-quick-panel .panel-body{ display: flex; flex-direction: column; gap: var(--sp-5); }
+.ee-quick-grid{ display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-4) var(--sp-5); align-items: start; }
+.ee-preset-row{ display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-top: var(--sp-1); }
+.ee-preset-row .chip{ min-height: 26px; padding: 0 var(--sp-2); font-size: var(--text-xs); }
+.ee-quick-foot{
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); flex-wrap: wrap;
+  padding-top: var(--sp-4); border-top: 1px solid var(--line);
+}
+.ee-quick-foot-left{ display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; flex: 1 1 260px; }
+.ee-quick-summary{ margin: 0; font-size: var(--text-sm); color: var(--ink-2); }
+.ee-quick-summary b{ color: var(--ink); font-weight: 500; }
+
+/* 任务二：考试方案工作区抽屉 */
 @media (min-width: 769px){
-    /* 蓝图编辑是按需打开的浮层抽屉：不占据纸张宽度，纸张保持两栏构图 */
-    #bp-drawer { top: var(--topbar-h); width: min(620px, 100vw); }
-  }
+  #profile-drawer{ top: var(--topbar-h); width: min(680px, 100vw); }
+}
+.ee-drawer-head-main{ display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.ee-drawer-badge-row{ display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.ee-bp-block{ display: flex; flex-direction: column; gap: var(--sp-3); padding-top: var(--sp-4); border-top: 1px solid var(--line); }
+.ee-bp-block:first-child{ padding-top: 0; border-top: 0; }
+.ee-bp-meta-grid{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-3) var(--sp-4); }
+.ee-bp-meta-grid .span-2{ grid-column: 1 / -1; }
+.ee-bp-rules-row{ display: flex; align-items: flex-end; gap: var(--sp-4) var(--sp-5); flex-wrap: wrap; }
+.ee-bp-negative{ width: 168px; flex: none; }
+.ee-bp-preset-bar{ display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; margin-left: auto; }
+.ee-bp-preset-bar .select{ width: auto; min-width: 180px; min-height: var(--ctl-h-sm); padding-top: 2px; padding-bottom: 2px; font-size: var(--text-xs); }
+.ee-bp-sec-head{ display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; }
+.ee-bp-sections{ display: flex; flex-direction: column; }
+.ee-bp-section{
+  display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr) minmax(0, 1.1fr) 74px 78px auto;
+  gap: var(--sp-2) var(--sp-3); align-items: center; padding: var(--sp-3) 0; border-bottom: 1px solid var(--line);
+}
+.ee-bp-section > .ee-bp-tags{ grid-column: 1 / -1; }
+.ee-bp-section:last-child{ border-bottom: none; }
+.ee-bp-count{ text-align: right; }
+
+/* 对话框：按方案开考确认 */
+.ee-dlg-form{ display: flex; flex-direction: column; gap: var(--sp-4); }
+.ee-setup-grid{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); }
+.ee-confirm{ border-top: 1px solid var(--line-strong); padding-top: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3); }
+.ee-kv-note{ font-size: var(--text-xs); color: var(--ink-3); margin: 0; }
+
+/* 任务三：考试记录（精简列表 + 分页） */
+.ee-rep-group{ display: flex; align-items: baseline; gap: var(--sp-3); padding: var(--sp-4) 0 var(--sp-2); border-bottom: 1px solid var(--line); }
+.ee-rep-group:first-child{ border-top: 1px solid var(--ink); }
+.ee-rep-group-date{ font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink); }
+.ee-rep-group-n{ font-size: var(--text-xs); color: var(--ink-3); }
+.ee-rep-row{ cursor: pointer; }
+.ee-rep-score{ font-size: var(--text-sm); color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ee-rep-score b{ font-family: var(--font-mono); font-weight: 500; color: var(--ink); }
+.ee-pager{
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap;
+  padding-top: var(--sp-4); margin-top: var(--sp-2); border-top: 1px solid var(--line);
+}
+.ee-pager-pages{ display: flex; align-items: center; gap: var(--sp-1); flex-wrap: wrap; }
+.ee-pager-ellipsis{ padding: 0 var(--sp-1); color: var(--ink-4); font-size: var(--text-xs); }
+.ee-pager-info{ font-size: var(--text-xs); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+/* 历史报告弹窗：复用 eeReport 三级结构 + 答题卡侧栏，对齐 exam.html 即时报告 */
+#dlg-report.dlg.wide{ max-width: min(960px, calc(100vw - 32px)); }
+#dlg-report .dlg-body{ max-height: min(76vh, 760px); }
+.ee-rep-dlg-layout{ display: grid; grid-template-columns: minmax(0, 1fr) 236px; gap: var(--sp-6); align-items: start; }
+.ee-rep-dlg-main{ min-width: 0; }
+.ee-rep-dlg-rail{
+  position: sticky; top: 0; border-left: 1px solid var(--line); padding-left: var(--sp-5);
+  display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0;
+}
+.ee-rep-dlg-rail .sheet-grid{ grid-template-columns: repeat(auto-fill, 36px); }
+.rep-item.is-target{ background: var(--brand-soft); outline: 2px solid var(--brand-line); outline-offset: -2px; }
+.sheet-cell[data-locate]{ cursor: pointer; }
+
 @media (max-width: 1024px){
-    .ee-exam-layout { grid-template-columns: minmax(0, 1fr); gap: var(--sp-6); }
-    .ee-exam-rail { border-left: none; padding-left: 0; }
-    .ee-grid-2 { grid-template-columns: minmax(0, 1fr); }
-    .ee-tpl-grid { grid-template-columns: minmax(0, 1fr); }
+  .ee-quick-grid{ grid-template-columns: minmax(0, 1fr); }
+  .ee-grid-2{ grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 860px){
+  .ee-rep-dlg-layout{ grid-template-columns: minmax(0, 1fr); }
+  .ee-rep-dlg-rail{
+    position: static; order: -1; border-left: 0; padding-left: 0;
+    border-bottom: 1px solid var(--line); padding-bottom: var(--sp-4);
   }
+}
 @media (max-width: 640px){
-    .ee-bp-section { grid-template-columns: minmax(0, 1fr) 62px 68px auto; }
-    .ee-bp-section > .input[type="text"] { grid-column: 1 / -1; }
-    .ee-setup-grid { grid-template-columns: minmax(0, 1fr); }
-  }
-/* 报告答题卡格子 → 逐题明细定位：命中的 .rep-item 高亮（与复习页 .is-target 同一语言） */
-  .rep-item.is-target{  background: var(--brand-soft); outline: 2px solid var(--brand-line); outline-offset: -2px;  }
-.sheet-cell[data-locate]{  cursor: pointer;  }</style>
+  .list-meta > :first-child{ flex: 1 1 100%; }
+  .list-side{ flex-wrap: wrap; }
+  .ee-quick-foot-cta{ width: 100%; }
+  .ee-quick-foot-cta .btn-hero{ width: 100%; }
+  .ee-bp-meta-grid{ grid-template-columns: minmax(0, 1fr); }
+  .ee-bp-meta-grid .span-2{ grid-column: span 1; }
+  .ee-bp-section{ grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .ee-bp-section > .ee-bp-chapter{ grid-column: 1 / -1; }
+  .ee-setup-grid{ grid-template-columns: minmax(0, 1fr); }
+}
+</style>
 </head>
 <body data-nav-domain="exams">
 <a class="skip-link" href="#main-content">跳到主内容</a>
@@ -154,295 +172,174 @@
       <div class="page-head">
         <div>
           <h1 class="page-title">模考</h1>
-          <p class="page-sub">考试档案与蓝图 · 组卷开考 · 成绩报告（交卷前不显示对错）</p>
-        </div>
-        <div class="page-actions">
-          <button class="btn" type="button" id="new-profile-btn" aria-describedby="new-profile-why" onclick="EEexams.openProfile(this)">新建考试档案</button>
-          <button class="btn btn-primary" type="button" onclick="EEexams.openSetup(null, this)">
-            <svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>开始模考
-          </button>
+          <p class="page-sub">快速随机开考 · 管理考试方案 · 查看历史成绩报告</p>
         </div>
       </div>
-      <p class="hint" id="new-profile-why" hidden></p>
 
-      <!-- ============ 未完成的模考（OP-301） ============ -->
-      <section class="section" id="exam-sessions" hidden>
-        <div class="section-head">
-          <h2 class="section-title">未完成的模考</h2>
-          <span class="section-note">会话保存在实例上，刷新、换设备都能从当前题继续；不限时的会话不会自动收卷，连续 30 天无活动会标记为失效并通知你。</span>
-        </div>
-        <div class="ee-list" id="exam-sessions-host"></div>
-      </section>
-
-      <div class="ee-exam-layout">
-        <div class="ee-exam-main">
-          <!-- ============ 考试档案（FN-302） ============ -->
-          <section class="section">
-            <div class="section-head">
-              <h2 class="section-title">考试档案</h2>
-              <span class="section-note" id="profiles-note">共 3 份</span>
-            </div>
-            <div class="ee-list" id="profiles-host"></div>
-          </section>
-
-          <!-- ============ 从题库开始（FN-311 基础题库模式） ============ -->
-          <section class="section ee-sub">
-            <div class="section-head">
-              <h2 class="section-title">从题库开始</h2>
-              <span class="section-note">不使用蓝图，按题库既有顺序抽取前 N 题</span>
-            </div>
-            <div class="ee-list" id="exam-banks-host"></div>
-            <div class="notice info ee-mt-4" id="banks-fallback-note">
-              <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
-              <div class="notice-body">
-                <span class="notice-title">无蓝图时的降级：基础题库模式</span><br>
-                不使用蓝图时按题库既有顺序<strong>顺序</strong>抽取前 N 题，不承诺随机；报告仍完整，只是没有配比约束。
-                <span class="notice-actions">
-                  <button class="btn btn-sm" type="button" onclick="EEexams.openProfile(this)">去配置蓝图</button>
-                </span>
-              </div>
-            </div>
-          </section>
-
-          <!-- ============ 历史报告（FN-308） ============ -->
-          <section class="section ee-sub">
-            <div class="section-head">
-              <h2 class="section-title">成绩报告</h2>
-              <span class="section-note">报告按交卷当时的题目与答案保存，之后不会变</span>
-            </div>
-
-            <!-- 定位手段：时间范围 / 考试档案 / 交卷来源。记录多的时候靠条件收窄，不靠翻页 -->
-            <div class="lay-toolbar" role="group" aria-label="报告筛选">
-              <div class="segmented" role="radiogroup" aria-label="时间范围" id="report-range">
-                <button type="button" class="segment" role="radio" aria-checked="true" data-range="all">全部</button>
-                <button type="button" class="segment" role="radio" aria-checked="false" data-range="30">近 30 天</button>
-                <button type="button" class="segment" role="radio" aria-checked="false" data-range="90">近 90 天</button>
-                <button type="button" class="segment" role="radio" aria-checked="false" data-range="older">更早</button>
-              </div>
-              <select class="select" aria-label="考试档案" id="report-profile"></select>
-              <select class="select" aria-label="交卷来源" id="report-via"></select>
-              <span class="grow"></span>
-              <span class="panel-sub" id="reports-count"></span>
-            </div>
-
-            <!-- 桌面：宽表自滚，放不下时明确提示 -->
-            <div class="dtable-wrap" id="reports-table">
-              <table class="dtable">
-                <thead>
-                  <tr>
-                    <th>交卷时间</th>
-                    <th>考试档案</th>
-                    <th>得分 / 客观题满分</th>
-                    <th>考试得分率</th>
-                    <th>已答客观题正确率</th>
-                    <th>用时</th>
-                    <th>交卷来源</th>
-                    <th class="col-actions">回看</th>
-                  </tr>                </thead>
-                <tbody id="exam-reports-host"></tbody>
-              </table>
-            </div>
-            <p class="hint ee-mt-3" id="reports-scroll-hint" hidden></p>
-
-            <!-- 手机：一场一张的专用列表，不把 8 列塞进横向滚动 -->
-            <div class="ee-list" id="reports-mobile"></div>
-
-            <!-- 两个率的分母口径：列头已经各写各的分母，完整说明收进按需帮助，
-                 不默认铺开一段演算。 -->
-            <details class="rep-help ee-mt-4">
-              <summary>
-                <svg class="od-icon rep-help-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 9.5 12 15l5.5-5.5"/></svg>
-                两个率的分母不一样，点此看口径
-              </summary>
-              <div class="rep-help-body">
-                <p>考试得分率的分母含未作答：未答的客观题按 0 分计入得分，但仍占满分。已答客观题正确率只统计你实际答过的客观题。两者分母不同，数值不同是正常结果。</p>
-              </div>
-            </details>
-          </section>
-        </div>
-
-        <!-- ============ 右栏：蓝图 ============ -->
-        <aside class="ee-exam-rail" aria-label="蓝图">
-          <div class="rail-block">
-            <h2 class="rail-title">蓝图</h2>
-            <p class="rail-note">蓝图是组卷的唯一规则来源；档案可有多版本，会话绑定开考时那一版。</p>
-            <div class="ee-rail-list" id="blueprint-rail-host"></div>
+      <div class="lay-stack">
+        <!-- ============ 未完成的模考 ============ -->
+        <section class="section" id="exam-sessions" hidden>
+          <div class="section-head">
+            <h2 class="section-title">未完成的模考</h2>
+            <span class="section-note">刷新或换设备可继续作答；不限时模考连续 30 天无操作将标记失效。</span>
           </div>
-          <div class="rail-block ee-mt-4">
-            <h2 class="rail-title">模板</h2>
-            <p class="rail-note">从常见考试结构或自己上传的 JSON 模板开始改，不必从零配额段配起。</p>
-            <div class="ee-rail-list">
-              <button type="button" class="rail-link" id="rail-tpl" onclick="EEexams.openTemplate(this)">                <span class="list-main"><span class="list-title">蓝图导入模板</span></span>
-                <span class="rail-link-n">导入</span>
-              </button>
+          <div class="ee-list" id="exam-sessions-host"></div>
+        </section>
+
+        <!-- ============ 任务一：开始考试（快速模考） ============ -->
+        <section class="section" id="quick-exam-section" aria-labelledby="quick-exam-heading">
+          <div class="section-head">
+            <h2 class="section-title" id="quick-exam-heading">开始考试</h2>
+            <span class="section-note">默认随机抽题，交卷前不显示对错</span>
+          </div>
+
+          <div class="panel ee-quick-panel" id="quick-exam-panel">
+            <div class="panel-body">
+              <div class="notice warn" id="quick-empty-notice" hidden>
+                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
+                <div class="notice-body">
+                  <div class="notice-title">暂无可用于模考的题库</div>
+                  <div>请先到题库导入题目后再开始模考。</div>
+                  <div class="notice-actions"><a class="btn btn-sm" href="import.html">去导入题目</a></div>
+                </div>
+              </div>
+
+              <div class="ee-quick-grid" id="quick-form-grid">
+                <label class="field">
+                  <span class="label">选择题库<span class="req">*</span></span>
+                  <select class="select" id="quick-bank"></select>
+                  <span class="hint" id="quick-bank-hint">选择要抽取题目的题库</span>
+                </label>
+
+                <div class="field">
+                  <label class="label" for="quick-total">题目数量<span class="req">*</span></label>
+                  <input class="input" id="quick-total" type="number" min="1" value="10" aria-describedby="quick-total-msg">
+                  <div class="ee-preset-row" id="quick-total-presets" role="group" aria-label="快捷题量">
+                    <button type="button" class="chip" data-qcount="10">10 题</button>
+                    <button type="button" class="chip" data-qcount="20">20 题</button>
+                    <button type="button" class="chip" data-qcount="50">50 题</button>
+                    <button type="button" class="chip" data-qcount="all">全部</button>
+                  </div>
+                  <span class="hint" id="quick-total-msg">随机抽题，上限为当前题库可用题量</span>
+                </div>
+
+                <div class="field">
+                  <label class="label" for="quick-minutes">考试时长（分钟）<span class="req">*</span></label>
+                  <input class="input" id="quick-minutes" type="number" min="1" max="600" value="120" aria-describedby="quick-minutes-msg">
+                  <div class="ee-preset-row" id="quick-time-presets" role="group" aria-label="快捷时长">
+                    <button type="button" class="chip" data-qmin="30">30 分钟</button>
+                    <button type="button" class="chip" data-qmin="60">60 分钟</button>
+                    <button type="button" class="chip is-on" data-qmin="120">120 分钟</button>
+                    <button type="button" class="chip" data-qmin="0">不限时</button>
+                  </div>
+                  <span class="hint" id="quick-minutes-msg">1 到 600 分钟，或选择「不限时」</span>
+                </div>
+              </div>
+
+              <div class="ee-quick-foot">
+                <div class="ee-quick-foot-left">
+                  <p class="ee-quick-summary" id="quick-summary"></p>
+                  <label class="check"><input type="checkbox" id="quick-record" checked><span>纳入学习记录（交卷后错题进入复习计划）</span></label>
+                </div>
+                <div class="ee-quick-foot-cta">
+                  <button type="button" class="btn btn-primary btn-hero" id="quick-start-btn">
+                    <svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>开始考试
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        </aside>
+        </section>
+
+        <!-- ============ 任务二：管理考试方案（高级） ============ -->
+        <section class="section" id="profiles-section" aria-labelledby="profiles-heading">
+          <div class="section-head">
+            <h2 class="section-title" id="profiles-heading">考试方案</h2>
+            <span class="section-note" id="profiles-note">按题型、难度、章节与分值配比组卷（高级）</span>
+            <span class="od-spacer"></span>
+            <button class="btn btn-sm" type="button" id="new-profile-btn" aria-describedby="new-profile-why" onclick="EEexams.openProfileEditor(null, this)">
+              <svg class="od-icon" aria-hidden="true"><use href="#i-plus"/></svg>新建考试方案
+            </button>
+          </div>
+          <p class="hint" id="new-profile-why" hidden></p>
+          <div class="ee-list" id="profiles-host"></div>
+        </section>
+
+        <!-- ============ 任务三：查看考试记录 ============ -->
+        <section class="section" id="reports-section" aria-labelledby="reports-heading">
+          <div class="section-head">
+            <h2 class="section-title" id="reports-heading">考试记录</h2>
+            <span class="section-note">点击任意记录查看完整成绩报告；交卷后题目与判定永久保存</span>
+          </div>
+
+          <div class="lay-toolbar" role="group" aria-label="考试记录筛选">
+            <div class="segmented" role="radiogroup" aria-label="时间范围" id="report-range">
+              <button type="button" class="segment" role="radio" aria-checked="true" data-range="all">全部</button>
+              <button type="button" class="segment" role="radio" aria-checked="false" data-range="30">近 30 天</button>
+              <button type="button" class="segment" role="radio" aria-checked="false" data-range="90">近 90 天</button>
+              <button type="button" class="segment" role="radio" aria-checked="false" data-range="older">更早</button>
+            </div>
+            <select class="select" aria-label="按考试方案筛选" id="report-profile"></select>
+            <select class="select" aria-label="按交卷方式筛选" id="report-via"></select>
+            <span class="grow"></span>
+            <span class="panel-sub tnum" id="reports-count"></span>
+          </div>
+
+          <div class="ee-list" id="reports-list-host"></div>
+          <div class="ee-pager" id="reports-pager" hidden></div>
+
+          <details class="rep-help ee-mt-4">
+            <summary>
+              <svg class="od-icon rep-help-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 9.5 12 15l5.5-5.5"/></svg>
+              得分率与正确率有什么区别？
+            </summary>
+            <div class="rep-help-body">
+              <p>得分率的分母包含未作答的客观题（未答按 0 分计入得分，但仍占满分）；正确率只统计实际作答过的客观题。详细题型分布与逐题解析可在每场完整报告中查看。</p>
+            </div>
+          </details>
+        </section>
       </div>
 
-      <!-- ============ 状态格（规格） ============ -->
+      <!-- ============ 规格与状态格（仅 ?spec=1 模式可见） ============ -->
       <section class="ee-section" data-spec>
         <div class="section-head">
-          <h2 class="section-title">状态</h2>
-          <span class="section-note">四个区块各自独立加载：档案 / 题库 / 进行中 / 历史报告，任一失败只替换自己那一块</span>
+          <h2 class="section-title">状态与浮层演示</h2>
+          <span class="section-note">仅规格浏览模式可见，产品模式下隐藏</span>
         </div>
 
         <div class="ee-grid-2">
           <div class="panel ee-state-panel">
-            <div class="panel-head"><span class="panel-title">空 · 还没有考试档案</span></div>
+            <div class="panel-head"><span class="panel-title">空 · 还没有考试方案</span></div>
             <div class="panel-body">
               <div class="empty">
                 <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg></div>
-                <p class="empty-title">还没有考试档案</p>
-                <p class="empty-desc">考试档案把「我要考的那场试」固化成可复用模板。没有档案也能模考——从下面的题库直接开始，走基础题库模式。</p>
+                <p class="empty-title">还没有考试方案</p>
+                <p class="empty-desc">需要固定题型配比和分值规则时，可以新建考试方案；平时可直接用上方的快速模考随机抽题。</p>
                 <div class="empty-actions">
-                  <button class="btn btn-sm" type="button" onclick="EEexams.openProfile(this)">新建考试档案</button>
-                  <button class="btn btn-sm btn-primary" type="button" onclick="EEexams.openSetup(null, this)">从题库开始</button>
+                  <button class="btn btn-sm" type="button" onclick="EEexams.openProfileEditor(null, this)">新建考试方案</button>
                 </div>
               </div>
             </div>
           </div>
 
           <div class="panel ee-state-panel">
-            <div class="panel-head"><span class="panel-title">加载 · 档案读取中</span></div>
+            <div class="panel-head"><span class="panel-title">加载 · 列表读取中</span></div>
             <div class="panel-body">
               <div class="skeleton sk-line sk-42"></div>
               <div class="skeleton sk-block"></div>
               <div class="skeleton sk-block"></div>
-              <p class="hint ee-state-note">档案、题库、进行中、历史报告四块并行读取；未返回的区块用骨架占位，统计显示「—」，不虚构数字。</p>
+              <p class="hint ee-state-note">各分区独立加载，未返回时用骨架占位。</p>
             </div>
           </div>
 
           <div class="panel ee-state-panel">
-            <div class="panel-head"><span class="panel-title">错误 · 局部降级</span></div>
-            <div class="panel-body">
-              <div class="notice bad" role="alert">
-                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
-                <div class="notice-body">
-                  <div class="notice-title">考试档案读取失败</div>
-                  <div>题库列表、进行中模考与历史报告仍可查看与操作；重试只重新读取这一块。</div>
-                  <div class="notice-actions"><button class="btn btn-sm" type="button" onclick="eeToast('已重新读取考试档案')">重试</button></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel ee-state-panel">
-            <div class="panel-head"><span class="panel-title">禁用 · 题库没有题目</span></div>
-            <div class="panel-body">
-              <div class="list-row dense static">
-                <span class="list-main">
-                  <span class="list-title">共享题库 网络技术</span>
-                  <span class="list-meta"><span>0 题</span><span class="tag plain">成员 · 只读</span></span>
-                </span>
-                <span class="list-side"><button class="btn btn-sm" type="button" disabled aria-describedby="ee-disabled-reason">开始模考</button></span>
-              </div>
-              <p class="hint ee-state-note" id="ee-disabled-reason">题库没有题目，先导入题目后才能组卷。入口保留为禁用态，不隐藏。</p>
-            </div>
-          </div>
-
-          <div class="panel ee-state-panel">
-            <div class="panel-head"><span class="panel-title">无权限 · 403 两变体</span></div>
-            <div class="panel-body">
-              <div class="notice warn">
-                <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
-                <div class="notice-body">
-                  <div class="notice-title">看不到</div>
-                  <div>不是这个题库的成员时，模考会话不会开始，直接进入 403 页（见 <code>forbidden.html</code>）。</div>
-                </div>
-              </div>
-              <div class="notice warn ee-mt-3">
-                <svg class="od-icon" aria-hidden="true"><use href="#i-lock"/></svg>
-                <div class="notice-body">
-                  <div class="notice-title">看得到但不能操作</div>
-                  <div>你是这个题库的成员：可以浏览题目、开始模考，不能编辑蓝图。</div>
-                  <div class="notice-actions"><button class="btn btn-sm" type="button" disabled aria-describedby="ee-403-hint">编辑蓝图</button></div>
-                </div>
-              </div>
-              <p class="hint ee-state-note" id="ee-403-hint">只有所有者与编辑者可以改蓝图；禁用控件旁给出原因，入口不隐藏。</p>
-            </div>
-          </div>
-
-          <div class="panel ee-state-panel">
-            <div class="panel-head"><span class="panel-title">冲突 · 蓝图版本与多设备</span></div>
-            <div class="panel-body">
-              <div class="notice warn">
-                <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
-                <div class="notice-body">
-                  <div class="notice-title">蓝图已被其他设备改成 v4</div>
-                  <div>你编辑的是 v3。保存会生成 v5；进行中的考试仍按各自绑定的版本判分，互不影响。</div>
-                  <div class="notice-actions">
-                    <button class="btn btn-sm" type="button" onclick="eeToast('已载入 v4 作为基线')">查看我的版本</button>
-                    <button class="btn btn-sm btn-quiet" type="button" onclick="eeToast('已切换到 v4')">使用对方版本</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel ee-state-panel">
-            <div class="panel-head"><span class="panel-title">未配置 · 无蓝图</span></div>
-            <div class="panel-body">
-              <div class="notice info">
-                <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
-                <div class="notice-body">
-                  <span class="notice-title">这份档案还没有蓝图</span><br>
-                  现在开考走基础题库模式：按题库既有顺序抽取前 N 题。配好蓝图后可按题型、难度、章节与分值配比组卷。
-                  <span class="notice-actions">
-                    <button class="btn btn-sm btn-primary" type="button" onclick="EEexams.openProfile(this)">去配置蓝图</button>
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel ee-state-panel">
-            <div class="panel-head"><span class="panel-title">失效 · 不限时会话连续无活动</span><span class="panel-sub">闲置达到阈值后的明确结局</span></div>
-            <div class="panel-body">
-              <div class="notice warn" role="status">
-                <svg class="od-icon" aria-hidden="true"><use href="#i-clock"/></svg>
-                <div class="notice-body">
-                  <span class="notice-title">「系统集成项目管理工程师 · 综合卷」已失效</span><br>
-                  这场不限时模考连续 30 天没有活动，已标记为失效并通知你：答案停止收录，不能再作答、不能改答案。失效<strong>不判成绩、不自动交卷</strong>，仍然要你显式选一个。
-                  <div class="notice-actions">
-                    <a class="btn btn-sm btn-primary" href="exam.html?sid=s-demo">去交卷</a>
-                    <button class="btn btn-sm btn-quiet" type="button" onclick="EEexams.askAbandon('s-demo', this)">放弃这场考试</button>
-                  </div>
-                </div>
-              </div>
-              <div class="kv ee-mt-4">
-                <span class="kv-key">判定</span><span class="kv-val">连续 30 天无活动（默认 30 天，可配）</span>
-                <span class="kv-key">通知在哪出现</span><span class="kv-val">「未完成的模考」里这条记录标注「已失效」，同时给一条站内通知，点通知直接进本会话</span>
-                <span class="kv-key">失效后能做什么</span><span class="kv-val">只能显式交卷（按已产生的答案判分）或放弃（不计成绩、不生成报告）</span>
-                <span class="kv-key">不会发生</span><span class="kv-val">不静默结束、不自动判成绩、不自动交卷</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel ee-state-panel">
-            <div class="panel-head"><span class="panel-title">离线 · 作答队列</span></div>
-            <div class="panel-body">
-              <div class="notice warn">
-                <svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>
-                <div class="notice-body">
-                  <div class="notice-title">当前离线 · 3 条作答待同步</div>
-                  <div>已答内容暂存在本机，联网后自动同步；倒计时不暂停。会话页可见同一提示。</div>
-                  <div class="notice-actions"><button class="btn btn-sm" type="button" onclick="eeToast('正在重试同步')">重试同步</button></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel ee-state-panel">
-            <div class="panel-head"><span class="panel-title">浮层</span><span class="panel-sub">本屏全部对话框与抽屉</span></div>
+            <div class="panel-head"><span class="panel-title">浮层入口</span></div>
             <div class="panel-body">
               <div class="od-cluster">
-                <button class="btn btn-sm" type="button" onclick="EEexams.openProfile(this)">新建考试档案</button>
-                <button class="btn btn-sm" type="button" onclick="EEexams.openSetup(null, this)">组卷与开始前确认</button>
-                <button class="btn btn-sm" type="button" onclick="EEexams.openTemplate(this)">蓝图导入模板</button>
-                <button class="btn btn-sm" type="button" onclick="EEexams.openBlueprint('p1', this)">蓝图编辑抽屉</button>
-                <button class="btn btn-sm" type="button" onclick="EEexams.askReExam('p1', this)">重新考试</button>
-                <button class="btn btn-sm" type="button" onclick="EEexams.askActive(this)">已有同模式会话</button>
+                <button class="btn btn-sm" type="button" onclick="EEexams.openProfileEditor(null, this)">新建考试方案</button>
+                <button class="btn btn-sm" type="button" onclick="EEexams.openProfileEditor('p1', this)">编辑考试方案</button>
+                <button class="btn btn-sm" type="button" onclick="EEexams.openSetup('p1', this)">按方案开考确认</button>
+                <button class="btn btn-sm" type="button" onclick="EEexams.askActive(this)">已有进行中模考</button>
                 <button class="btn btn-sm btn-quiet" type="button" onclick="EEexams.askAbandon('s_demo', this)">放弃模考</button>
               </div>
             </div>
@@ -461,98 +358,98 @@
   <button class="bn-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg>资料</button>
 </nav>
 
-<!-- ============ 抽屉：蓝图可视化编辑与版本绑定（FN-303） ============ -->
-<div class="drawer-scrim" id="bp-scrim" hidden></div>
-<aside class="drawer" id="bp-drawer" hidden role="dialog" aria-modal="true" aria-labelledby="bp-drawer-title">
+<!-- ============ 统一编辑工作区抽屉：考试方案（基本信息 + 计分规则 + 配额段） ============ -->
+<div class="drawer-scrim" id="profile-scrim" hidden></div>
+<aside class="drawer" id="profile-drawer" hidden role="dialog" aria-modal="true" aria-labelledby="pf-drawer-title">
   <div class="drawer-head">
-    <div class="ee-grow">
-      <h2 class="drawer-title" id="bp-drawer-title">蓝图</h2>
-      <p class="panel-sub" id="bp-drawer-sub">考试档案 · v3</p>
+    <div class="ee-drawer-head-main">
+      <div class="ee-drawer-badge-row">
+        <span class="tag brand" id="pf-mode-tag">编辑方案</span>
+        <span class="panel-sub" id="pf-version-sub"></span>
+      </div>
+      <h2 class="drawer-title" id="pf-drawer-title">编辑考试方案</h2>
     </div>
-    <button class="icon-btn" type="button" aria-label="关闭蓝图编辑" onclick="EEexams.requestCloseBp()"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+    <button class="icon-btn" type="button" aria-label="关闭方案编辑器" onclick="EEexams.requestCloseEditor()"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
   </div>
-  <div class="drawer-body">
-    <div class="stat-row" id="bp-summary"></div>
 
-    <div class="notice info" id="bp-version-note">
-      <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
-      <div class="notice-body">
-        <span class="notice-title">保存会生成新版本，永不覆盖旧版本</span><br>
-        已有 <b id="bp-bound-count">1</b> 场进行中的模考使用 v3；保存生成 v4 后，那些考试仍按 v3 判分，互不影响。
+  <div class="drawer-body">
+    <div class="ee-bp-block">
+      <div class="rule-label">基本信息</div>
+      <div class="ee-bp-meta-grid">
+        <label class="field span-2">
+          <span class="label">方案名称<span class="req">*</span></span>
+          <input class="input" id="pf-name" type="text" placeholder="例如：系统集成项目管理工程师 · 综合卷" aria-describedby="pf-name-err">
+          <span class="field-err" id="pf-name-err" hidden>请填写方案名称。</span>
+        </label>
+        <label class="field span-2">
+          <span class="label">方案说明</span>
+          <input class="input" id="pf-desc" type="text" placeholder="例如：按考试大纲配比组卷，考前集中模拟">
+        </label>
+        <label class="field">
+          <span class="label">默认考试时长（分钟）</span>
+          <input class="input" id="pf-minutes" type="number" min="1" max="600" value="120" aria-describedby="pf-minutes-err">
+          <span class="field-err" id="pf-minutes-err" hidden>时长需为 1 到 600 分钟，或勾选「默认不限时」。</span>
+        </label>
+        <div class="field">
+          <span class="label">限时设置</span>
+          <label class="check ee-mt-2"><input type="checkbox" id="pf-unlimited"><span>默认不限时</span></label>
+        </div>
       </div>
     </div>
 
-    <div class="field ee-bp-negative">
-      <span class="label">答错扣分（负分）</span>
-      <input class="input" id="bp-negative" type="number" min="0" max="5" step="0.5" value="0.5" aria-label="答错扣分">
-      <span class="hint">只罚答错的客观题；未答与主观题不计负分。</span>
+    <div class="ee-bp-block">
+      <div class="rule-label">计分与学习记录</div>
+      <div class="ee-bp-rules-row">
+        <label class="field ee-bp-negative">
+          <span class="label">答错扣分</span>
+          <input class="input" id="pf-negative" type="number" min="0" max="5" step="0.5" value="0">
+          <span class="hint">仅针对答错的客观题，未答与主观题不扣分。</span>
+        </label>
+        <div class="od-stack">
+          <label class="check"><input type="checkbox" id="pf-floor"><span>设 0 分下限（关闭时总分可能为负）</span></label>
+          <label class="check"><input type="checkbox" id="pf-record" checked><span>默认纳入学习记录（错题与复习计划）</span></label>
+        </div>
+      </div>
     </div>
 
-    <div class="od-stack">
-      <label class="check"><input type="checkbox" id="bp-floor"><span>设 0 分下限（关闭时总分可为负）</span></label>
-      <label class="check"><input type="checkbox" id="bp-record" checked><span>纳入学习记录（默认开；会话级可覆盖）</span></label>
-    </div>
+    <div class="ee-bp-block">
+      <div class="ee-bp-sec-head">
+        <div class="rule-label">抽题配额段（段内随机抽题）</div>
+        <div class="ee-bp-preset-bar">
+          <select class="select" id="pf-preset-select" aria-label="从预设模板填充配额">
+            <option value="">套用预设配额…</option>
+          </select>
+          <button type="button" class="btn btn-sm" id="pf-apply-preset">套用</button>
+        </div>
+      </div>
 
-    <div>
-      <div class="rule-label">配额段 · 题型 / 难度 / 章节 / 标签 / 题数 / 单题分值</div>
-      <div class="ee-bp-sections ee-mt-3" id="bp-sections"></div>
-      <button class="btn btn-sm ee-mt-3" type="button" onclick="EEexams.addSection()">
-        <svg class="od-icon" aria-hidden="true"><use href="#i-plus"/></svg>添加配额段
-      </button>
-    </div>
+      <div class="stat-row" id="pf-summary"></div>
+      <div class="ee-bp-sections" id="pf-sections"></div>
+      <span class="field-err" id="pf-sec-err" hidden>请至少保留 1 个有效配额段，且总题数大于 0。</span>
 
-    <div class="notice info">
-      <svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg>
-      <div class="notice-body">总题数必须大于 0，各段分值之和必须大于 0。筛选匹配不足时按降级补入补齐，补入题数在开始前确认里可见。</div>
+      <div>
+        <button class="btn btn-sm" type="button" onclick="EEexams.addSection()">
+          <svg class="od-icon" aria-hidden="true"><use href="#i-plus"/></svg>添加配额段
+        </button>
+      </div>
+
+      <p class="hint hint-flat" id="pf-live-note" hidden></p>
     </div>
   </div>
+
   <div class="drawer-foot">
-    <button class="btn btn-primary" type="button" onclick="EEexams.saveBlueprint()">保存蓝图</button>
+    <button class="btn btn-primary" type="button" id="pf-save-btn" onclick="EEexams.saveProfileEditor()">保存修改</button>
     <span class="od-spacer"></span>
-    <button class="btn btn-quiet" type="button" onclick="EEexams.requestCloseBp()">取消</button>
+    <button class="btn btn-quiet" type="button" onclick="EEexams.requestCloseEditor()">取消</button>
   </div>
 </aside>
 
-<!-- ============ 对话框：新建 / 重命名考试档案（FN-302） ============ -->
-<dialog class="dlg narrow" id="dlg-profile" aria-labelledby="dlg-profile-title">
-  <div class="dlg-head">
-    <div class="dlg-head-text">
-      <p class="dlg-eyebrow">模考</p>
-      <h2 class="dlg-title" id="dlg-profile-title">新建考试档案</h2>
-    </div>
-    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
-  </div>
-  <div class="dlg-body">
-    <form class="ee-dlg-form" onsubmit="return false">
-      <label class="field">
-        <span class="label">档案名称<span class="req">*</span></span>
-        <input class="input" id="profile-name" type="text" placeholder="例如：系统集成项目管理工程师 · 综合卷" data-autofocus aria-describedby="profile-name-err">
-        <span class="field-err" id="profile-name-err" hidden>请填写档案名称。</span>
-      </label>
-      <label class="field">
-        <span class="label">说明</span>
-        <input class="input" id="profile-desc" type="text" placeholder="例如：按考试大纲配比组卷，考前两周刷">
-        <span class="hint">选填。档案本身不承载规则，规则在蓝图里配。</span>
-      </label>
-      <div class="field">
-        <span class="label">适用考试体系 / 科目</span>
-        <input class="input" type="text" value="系统集成项目管理工程师 · 2026 年上半年">
-        <span class="hint">用于模考中心按体系分组，可留空。</span>
-      </label>
-    </form>
-  </div>
-  <div class="dlg-foot">
-    <button class="btn btn-quiet" type="button" data-dlg-close>取消</button>
-    <button class="btn btn-primary" type="button" onclick="EEexams.createProfile()">创建考试档案</button>
-  </div>
-</dialog>
-
-<!-- ============ 对话框：组卷与开始前确认（FN-305） ============ -->
+<!-- ============ 对话框：按考试方案开考确认 ============ -->
 <dialog class="dlg wide" id="dlg-setup" aria-labelledby="dlg-setup-title">
   <div class="dlg-head">
     <div class="dlg-head-text">
-      <p class="dlg-eyebrow">模考</p>
-      <h2 class="dlg-title" id="dlg-setup-title">组卷与开始前确认</h2>
+      <p class="dlg-eyebrow">按考试方案开考</p>
+      <h2 class="dlg-title" id="dlg-setup-title">核对题库与配额</h2>
     </div>
     <button type="button" class="icon-btn" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
   </div>
@@ -560,55 +457,51 @@
     <form class="ee-dlg-form" onsubmit="return false">
       <div class="ee-setup-grid">
         <label class="field">
-          <span class="label">题库</span>
+          <span class="label">选择题库</span>
           <select class="select" id="setup-bank" data-autofocus></select>
-          <span class="hint" id="setup-bank-msg">只列题量大于 0 的可访问题库</span>
+          <span class="hint" id="setup-bank-msg">只列出有题目的可用题库</span>
         </label>
         <label class="field">
-          <span class="label">蓝图</span>
+          <span class="label">考试方案</span>
           <select class="select" id="setup-profile"></select>
-          <span class="hint" id="setup-profile-msg">不使用蓝图时按题库既有顺序顺序抽取前 N 题</span>
+          <span class="hint" id="setup-profile-msg"></span>
         </label>
         <label class="field">
-          <span class="label">题目数量</span>
-          <input class="input" id="setup-total" type="number" min="1" value="38" aria-describedby="setup-total-msg">
-          <span class="hint" id="setup-total-msg">上限为题库题量</span>
-        </label>
-        <label class="field">
-          <span class="label">时长</span>
+          <span class="label">考试时长（分钟）</span>
           <input class="input" id="setup-minutes" type="number" min="1" max="600" value="120" aria-describedby="setup-minutes-msg">
-          <span class="hint" id="setup-minutes-msg">正整数分钟；不接受 0</span>
+          <span class="hint" id="setup-minutes-msg">1 到 600 分钟</span>
         </label>
+        <div class="field">
+          <span class="label">选项</span>
+          <div class="od-stack ee-mt-2">
+            <label class="check"><input type="checkbox" id="setup-unlimited"><span>本场不限时</span></label>
+            <label class="check"><input type="checkbox" id="setup-record" checked><span>纳入学习记录</span></label>
+          </div>
+        </div>
       </div>
-      <label class="check"><input type="checkbox" id="setup-unlimited"><span>不限时（没有硬截止、没有宽限、没有自动交卷；连续 30 天无活动会标记为失效并通知你，之后仍需你显式交卷或放弃，不会自动判成绩）</span></label>
-      <label class="check"><input type="checkbox" id="setup-record" checked><span>纳入学习记录（关闭时本场不写错题、不写 FSRS、不计入统计）</span></label>
     </form>
 
     <div class="notice bad" id="setup-refuse" role="alert" hidden>
       <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
       <div class="notice-body">
-        <span class="notice-title" id="setup-refuse-title">无法组卷</span><br>
+        <span class="notice-title" id="setup-refuse-title">无法开始考试</span><br>
         <span id="setup-refuse-desc"></span>
-        <span class="notice-actions">
-          <button class="btn btn-sm" type="button" onclick="eeDialog.close(document.getElementById('dlg-setup'))">返回调整</button>
-          <a class="btn btn-sm btn-quiet" href="import.html">去导入题目</a>
-        </span>
       </div>
     </div>
 
     <div class="ee-confirm">
-      <div class="rule-label">开始前确认</div>
+      <div class="rule-label">组卷结果预览</div>
       <div class="kv" id="setup-confirm"></div>
       <p class="ee-kv-note" id="setup-degrade-note"></p>
     </div>
   </div>
   <div class="dlg-foot">
     <button class="btn btn-quiet" type="button" data-dlg-close>取消</button>
-    <button class="btn btn-primary" type="button" id="setup-begin">开始模考</button>
+    <button class="btn btn-primary" type="button" id="setup-begin">开始考试</button>
   </div>
 </dialog>
 
-<!-- ============ 对话框：已有同模式活跃会话（CR-14） ============ -->
+<!-- ============ 对话框：已有进行中的模考 ============ -->
 <dialog class="dlg narrow" id="dlg-active" aria-labelledby="dlg-active-title">
   <div class="dlg-head">
     <div class="dlg-head-text">
@@ -617,107 +510,17 @@
     </div>
   </div>
   <div class="dlg-body">
-    <p class="dlg-p" id="dlg-active-desc">「系统集成项目管理工程师 · 综合卷」还有 22 / 38 题未交卷。同一时间只保留一场进行中的模考。</p>
+    <p class="dlg-p" id="dlg-active-desc">同一时间只保留一场进行中的模考。</p>
     <div class="kv">
-      <span class="kv-key">考试档案</span><span class="kv-val" id="dlg-active-paper">系统集成项目管理工程师 · 综合卷</span>
-      <span class="kv-key">进度</span><span class="kv-val mono" id="dlg-active-progress">已答 22 / 38</span>
-      <span class="kv-key">剩余</span><span class="kv-val mono" id="dlg-active-left">71 分钟</span>
+      <span class="kv-key">场次</span><span class="kv-val" id="dlg-active-paper">—</span>
+      <span class="kv-key">进度</span><span class="kv-val mono" id="dlg-active-progress">—</span>
+      <span class="kv-key">剩余</span><span class="kv-val mono" id="dlg-active-left">—</span>
     </div>
   </div>
   <div class="dlg-foot">
     <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>取消</button>
     <a class="btn" id="dlg-active-continue" href="exam.html">继续那场</a>
     <button class="btn btn-primary" type="button" onclick="EEexams.confirmActive()">结束并新建</button>
-  </div>
-</dialog>
-
-<!-- ============ 对话框：蓝图导入模板（FN-304，低频） ============ -->
-<dialog class="dlg wide" id="dlg-template" aria-labelledby="dlg-template-title">
-  <div class="dlg-head">
-    <div class="dlg-head-text">
-      <p class="dlg-eyebrow">蓝图</p>
-      <h2 class="dlg-title" id="dlg-template-title">蓝图导入模板</h2>
-    </div>
-    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
-  </div>
-  <div class="dlg-body">
-    <div class="steps" id="tpl-steps">
-      <button class="step is-active" type="button" data-tpl-step="0"><span class="step-n">1</span>选择模板</button>
-      <span class="step-line"></span>
-      <button class="step" type="button" data-tpl-step="1"><span class="step-n">2</span>预览与校验</button>
-      <span class="step-line"></span>
-      <button class="step" type="button" data-tpl-step="2"><span class="step-n">3</span>导入结果</button>
-    </div>
-
-    <div data-tpl-panel="0">
-      <div class="rule-label">内置模板</div>
-      <div class="ee-tpl-grid ee-mt-3" id="tpl-list"></div>
-      <label class="field ee-mt-4">
-        <span class="label">或上传 JSON 模板</span>
-        <input class="input" type="text" value="soft-exam-blueprint.json" aria-label="JSON 模板文件名">
-        <span class="hint">只接受内置模板或你自己上传的 JSON；蓝图始终由你确认后生效。</span>
-      </label>
-    </div>
-
-    <div data-tpl-panel="1" hidden>
-      <div class="rule-label">将创建 v4 · 预览</div>
-      <div class="dtable-wrap ee-mt-3">
-        <table class="dtable">
-          <thead><tr><th>配额段</th><th>题型</th><th>难度</th><th>题数</th><th>单题分值</th></tr></thead>
-          <tbody id="tpl-preview"></tbody>
-        </table>
-      </div>
-      <div class="notice bad ee-mt-4" id="tpl-error" hidden>
-        <svg class="od-icon" aria-hidden="true"><use href="#i-alert-triangle"/></svg>
-        <div class="notice-body">
-          <div class="notice-title">模板校验未通过，未写入任何版本</div>
-          <ul class="conflict-list">
-            <li>第 2 个配额段的 count 必须是正数（当前为 0）</li>
-            <li>题型「填空」不在支持范围（单选 / 多选 / 判断 / 主观）</li>
-          </ul>
-        </div>
-      </div>
-      <div class="notice ok ee-mt-4" id="tpl-ok" hidden>
-        <svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg>
-        <div class="notice-body">校验通过：4 个配额段 · 总题数 80 · 负分 0.5 · 客观题满分 152 分。</div>
-      </div>
-    </div>
-
-    <div data-tpl-panel="2" hidden>
-      <div class="notice ok">
-        <svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg>
-        <div class="notice-body">
-          <div class="notice-title">已导入为蓝图 v4</div>
-          <div>导入不直接开考；可以继续在蓝图编辑里手工修改，或用这份档案开始模考。</div>
-        </div>
-      </div>
-      <p class="hint ee-mt-3">导入只新增一个版本，不覆盖 v3；已绑定 v3 的进行中考试不受影响。</p>
-    </div>
-  </div>
-  <div class="dlg-foot">
-    <button class="btn btn-quiet" type="button" data-dlg-close>取消</button>
-    <span class="spacer"></span>
-    <button class="btn" type="button" id="tpl-prev" disabled>上一步</button>
-    <button class="btn btn-primary" type="button" id="tpl-next">下一步</button>
-  </div>
-</dialog>
-
-<!-- ============ 对话框：重新考试（FN-310，低频） ============ -->
-<dialog class="dlg" id="dlg-reexam" aria-labelledby="dlg-reexam-title">
-  <div class="dlg-head">
-    <div class="dlg-head-text">
-      <p class="dlg-eyebrow">模考</p>
-      <h2 class="dlg-title" id="dlg-reexam-title">重新考试</h2>
-    </div>
-    <button type="button" class="icon-btn" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
-  </div>
-  <div class="dlg-body">
-    <p class="dlg-p">用这份档案<strong>当前最新蓝图版本</strong>开一场新考试；正在进行的旧模考会先结束，未交卷的作答不会保留为报告，已生成的成绩报告不受影响。</p>
-    <div class="kv" id="reexam-confirm"></div>
-  </div>
-  <div class="dlg-foot">
-    <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>取消</button>
-    <button class="btn btn-primary" type="button" onclick="EEexams.beginReExam()">开始新的一场</button>
   </div>
 </dialog>
 
@@ -730,13 +533,13 @@
     </div>
   </div>
   <div class="dlg-body">
-    <p class="dlg-p">放弃是终态：不计成绩、不生成报告，已答内容随本场作废，且不能恢复。</p>
+    <p class="dlg-p">放弃后不计成绩、不生成报告，已作答内容不会保留。</p>
     <div class="kv">
-      <span class="kv-key">考试档案</span><span class="kv-val" id="abandon-paper">系统集成项目管理工程师 · 综合卷</span>
-      <span class="kv-key">进度</span><span class="kv-val mono" id="abandon-progress">已答 22 / 38</span>
-      <span class="kv-key">剩余</span><span class="kv-val mono">71 分钟</span>
+      <span class="kv-key">场次</span><span class="kv-val" id="abandon-paper">—</span>
+      <span class="kv-key">进度</span><span class="kv-val mono" id="abandon-progress">—</span>
+      <span class="kv-key">剩余</span><span class="kv-val mono" id="abandon-left">—</span>
     </div>
-    <p class="hint">只是想离开页面的话，用会话里的「退出（暂存）」——草稿会保留，可以稍后继续。</p>
+    <p class="hint">如果只是想稍后再做，请进入考试后点「退出（暂存）」。</p>
   </div>
   <div class="dlg-foot">
     <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>取消</button>
@@ -744,35 +547,39 @@
   </div>
 </dialog>
 
-<!-- ============ 对话框：蓝图有未保存的修改 ============ -->
+<!-- ============ 对话框：放弃未保存的方案修改 ============ -->
 <dialog class="dlg narrow" id="dlg-bp-discard" aria-labelledby="dlg-bp-discard-title">
   <div class="dlg-head">
     <div class="dlg-head-text">
-      <p class="dlg-eyebrow">蓝图</p>
+      <p class="dlg-eyebrow">考试方案</p>
       <h2 class="dlg-title" id="dlg-bp-discard-title">有未保存的修改</h2>
     </div>
   </div>
   <div class="dlg-body">
-    <p class="dlg-p">关闭后未保存的修改会丢失。保存会生成一个新版本，不影响进行中的考试。</p>
+    <p class="dlg-p">关闭后未保存的修改会丢失；已开始的考试不受后续修改影响。</p>
   </div>
   <div class="dlg-foot">
     <button class="btn btn-quiet" type="button" data-dlg-close data-autofocus>继续编辑</button>
     <button class="btn btn-danger-solid" type="button" onclick="EEexams.confirmDiscard()">放弃修改</button>
-    <button class="btn btn-primary" type="button" onclick="EEexams.saveBlueprint()">保存</button>
+    <button class="btn btn-primary" type="button" onclick="EEexams.saveProfileEditor()">保存</button>
   </div>
 </dialog>
 
-<!-- ============ 对话框：成绩报告回看（FN-308，口径按 CR-06） ============ -->
+<!-- ============ 对话框：历史成绩报告（与 exam.html 即时报告同构） ============ -->
 <dialog class="dlg wide" id="dlg-report" aria-labelledby="dlg-report-title">
   <div class="dlg-head">
     <div class="dlg-head-text">
       <p class="dlg-eyebrow" id="dlg-report-when">成绩报告</p>
-      <h2 class="dlg-title" id="dlg-report-title">考试档案</h2>
+      <h2 class="dlg-title" id="dlg-report-title">考试报告</h2>
     </div>
     <button type="button" class="icon-btn" data-dlg-close aria-label="关闭"><svg class="od-icon" aria-hidden="true"><use href="#i-x"/></svg></button>
   </div>
   <div class="dlg-body" id="dlg-report-body"></div>
   <div class="dlg-foot">
+    <button type="button" class="btn btn-primary" id="dlg-report-reexam" hidden>
+      <svg class="od-icon" aria-hidden="true"><use href="#i-refresh"/></svg>重考原卷
+    </button>
+    <span class="spacer"></span>
     <button type="button" class="btn btn-quiet" data-dlg-close data-autofocus>关闭</button>
   </div>
 </dialog>
@@ -785,45 +592,137 @@
 <script src="../../assets/report.js"></script>
 <script>
 /* ==========================================================================
-   模考中心 · P2
-   · 档案（FN-302）/ 蓝图（FN-303）/ 模板导入（FN-304）/ 组卷确认（FN-305）
-   · 重新考试（FN-310）/ 无蓝图降级（FN-311）/ 历史报告回看（FN-308）
-   · 会话与报告来自 eeStore：与考试会话 runner 同一份数据
+   模考中心 · 围绕「开始考试 / 管理考试方案 / 查看考试记录」三项任务收口
+   · 考试方案持久化于 localStorage（eeExams.profiles.v1），并在 store reset 时复位
+   · 快速模考：选题库 / 选题量 / 选时长，默认随机抽题，无顺序抽题/降级概念
+   · 方案组卷：统一工作区编辑名称、说明、扣分与配额，与 exam.html 共用同一题池与配额规则
+   · 考试记录：精简列表 + 筛选 + 分页 + 复用 eeReport 三级完整历史报告 + 原卷重考
    ========================================================================== */
 window.EEexams = (function () {
   var S = window.eeStore;
+  var PROFILE_KEY = 'eeExams.profiles.v1';
+  var PAGE_SIZE = 15;
+  var OBJECTIVE = { '单选题': 1, '多选题': 1, '判断题': 1 };
 
-  /* ---------- CR-12 两向规则：考试档案与蓝图是题库级管理面 ----------
-     判据只有一句：这个入口说的事，对这个用户有意义吗。
-     蓝图 / 档案编辑按 bank.edit 判定：成员与只读成员同样要按这张蓝图开考，
-     说得通但不能做 → 禁用 + 可读原因（入口不隐藏）。
-     实例管理入口与本人无关 → 根本不渲染（见下方 syncShellEntries）。 */
+  /* 与 exam.html QBANK 对齐的演示题池元数据（当题库尚无真实题目记录时使用） */
+  var DEMO_QBANK_META = [
+    { id: 'qb0', type: '单选题', difficulty: '基础', chapter: '沟通管理', tags: ['沟通'] },
+    { id: 'qb1', type: '单选题', difficulty: '进阶', chapter: '信息安全', tags: ['OSI'] },
+    { id: 'qb2', type: '单选题', difficulty: '基础', chapter: '项目管理基础', tags: [] },
+    { id: 'qb3', type: '单选题', difficulty: '进阶', chapter: '范围管理', tags: [] },
+    { id: 'qb4', type: '单选题', difficulty: '困难', chapter: '范围管理', tags: ['新题'] },
+    { id: 'qb5', type: '单选题', difficulty: '基础', chapter: '成本管理', tags: [] },
+    { id: 'qb6', type: '单选题', difficulty: '基础', chapter: '项目管理基础', tags: [] },
+    { id: 'qb7', type: '单选题', difficulty: '进阶', chapter: '项目管理基础', tags: [] },
+    { id: 'qb8', type: '多选题', difficulty: '进阶', chapter: '沟通管理', tags: [] },
+    { id: 'qb9', type: '多选题', difficulty: '进阶', chapter: '成本管理', tags: [] },
+    { id: 'qb10', type: '判断题', difficulty: '基础', chapter: '项目管理基础', tags: [] },
+    { id: 'qb11', type: '问答题', difficulty: '困难', chapter: '案例分析', tags: ['案例'] }
+  ];
+
+  var SEED_PROFILES = [
+    {
+      id: 'p1', name: '系统集成项目管理工程师 · 综合卷',
+      desc: '按考试大纲配比抽题，适合考前综合模拟', version: 3,
+      minutes: 120, unlimited: false, negative: 0.5, floor: false, record: true,
+      sections: [
+        { type: '单选题', diff: '不限', chapter: '不限', tags: '', n: 8, score: 2 },
+        { type: '多选题', diff: '进阶', chapter: '不限', tags: '', n: 2, score: 3 },
+        { type: '判断题', diff: '不限', chapter: '不限', tags: '', n: 1, score: 2 },
+        { type: '问答题', diff: '不限', chapter: '案例分析', tags: '案例', n: 1, score: 0 }
+      ],
+      updatedAt: '2026-11-22 21:40'
+    },
+    {
+      id: 'p2', name: '系统架构设计师 · 选择题专项',
+      desc: '只考客观题，30 分钟快速自测', version: 1,
+      minutes: 30, unlimited: false, negative: 0, floor: true, record: true,
+      sections: [
+        { type: '单选题', diff: '不限', chapter: '不限', tags: '', n: 8, score: 2 },
+        { type: '多选题', diff: '不限', chapter: '不限', tags: '', n: 2, score: 3 }
+      ],
+      updatedAt: '2026-11-18 10:12'
+    },
+    {
+      id: 'p3', name: '案例分析 · 冲刺卷',
+      desc: '尚未添加配额段，可点击编辑方案补充', version: 0,
+      minutes: 90, unlimited: false, negative: 0, floor: false, record: true,
+      sections: [],
+      updatedAt: '2026-11-12 09:03'
+    }
+  ];
+
+  var PRESETS = [
+    {
+      id: 't1', name: '综合标准卷（单选 + 多选 + 判断 + 问答）',
+      negative: 0.5, floor: false, minutes: 120,
+      sections: [
+        { type: '单选题', diff: '不限', chapter: '不限', tags: '', n: 8, score: 2 },
+        { type: '多选题', diff: '进阶', chapter: '不限', tags: '', n: 2, score: 3 },
+        { type: '判断题', diff: '不限', chapter: '不限', tags: '', n: 1, score: 2 },
+        { type: '问答题', diff: '不限', chapter: '案例分析', tags: '案例', n: 1, score: 0 }
+      ]
+    },
+    {
+      id: 't2', name: '选择题专项（单选 + 多选）',
+      negative: 0, floor: true, minutes: 30,
+      sections: [
+        { type: '单选题', diff: '不限', chapter: '不限', tags: '', n: 8, score: 2 },
+        { type: '多选题', diff: '不限', chapter: '不限', tags: '', n: 2, score: 3 }
+      ]
+    },
+    {
+      id: 't3', name: '判断题强化',
+      negative: 1, floor: true, minutes: 20,
+      sections: [
+        { type: '判断题', diff: '不限', chapter: '不限', tags: '', n: 10, score: 1 }
+      ]
+    },
+    {
+      id: 't4', name: '案例分析主观专项',
+      negative: 0, floor: false, minutes: 60,
+      sections: [
+        { type: '问答题', diff: '不限', chapter: '案例分析', tags: '案例', n: 3, score: 0 }
+      ]
+    }
+  ];
+
+  function clone(v) { return JSON.parse(JSON.stringify(v)); }
+  function loadProfiles() {
+    try {
+      var raw = localStorage.getItem(PROFILE_KEY);
+      if (!raw) return clone(SEED_PROFILES);
+      var parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length) return parsed;
+    } catch (e) {}
+    return clone(SEED_PROFILES);
+  }
+  function saveProfiles() {
+    try { localStorage.setItem(PROFILE_KEY, JSON.stringify(PROFILES)); } catch (e) {}
+  }
+
+  var PROFILES = loadProfiles();
+
+  /* ---------- 权限与实例菜单同步 ---------- */
   function editGate(action) {
     var can = S.can(action);
     var rel = S.relevant ? S.relevant(action) : true;
     var why = '';
     if (!can) {
-      /* 原因按当前身份说准：成员与只读成员都能开考，只是改不了档案与蓝图 */
       var r = S.role ? S.role() : '';
-      why = r === 'VIEWER' ? '你是只读成员，可以浏览和开考，不能改考试档案与蓝图'
-        : r === 'MEMBER' ? '你是成员，可以浏览和开考，不能改考试档案与蓝图'
+      why = r === 'VIEWER' ? '你是只读成员，可以浏览和开考，不能修改考试方案'
+        : r === 'MEMBER' ? '你是成员，可以浏览和开考，不能修改考试方案'
         : (S.denyReason ? S.denyReason(action) : '');
     }
     return { relevant: rel, can: can, why: why };
   }
-  /* ---------- CR-12 两向规则：实例管理入口只对实例管理员渲染 ----------
-     本页没有自有账户菜单，外壳（spec-boot）会补一个标准菜单；⌘K 命令面板的页面
-     清单来自 nav.js 的唯一导航契约。两处都可能带出「实例管理」——它只与实例管理员
-     有关系：普通用户不是「禁用」，是这一项根本不出现。 */
   function syncInstanceEntries() {
     if (!S || !S.relevant || S.relevant('instance.manage')) return;
-    /* 1) 外壳补的标准账户菜单 */
     document.querySelectorAll('.menu a[href$="instance.html"], .menu [data-i18n="shell.menu.instance"]').forEach(function (el) {
       el.hidden = true;
       var sep = el.nextElementSibling;
       if (sep && sep.classList.contains('menu-sep')) sep.hidden = true;
     });
-    /* 2) ⌘K 命令面板的页面清单（spec-boot 每次打开都从 eeNav.routes 重建） */
     var nav = window.eeNav;
     if (!nav || !nav.routes) return;
     var out = {};
@@ -835,39 +734,7 @@ window.EEexams = (function () {
   }
   document.addEventListener('DOMContentLoaded', syncInstanceEntries);
 
-  /* 题型口径：客观题计入得分与满分；主观题不自动判分，不计入 */
-  var OBJECTIVE = { '单选题': 1, '多选题': 1, '判断题': 1 };
-
-  var PROFILES = [
-    {
-      id: 'p1', name: '系统集成项目管理工程师 · 综合卷', system: '系统集成项目管理工程师 · 2026 年上半年',
-      desc: '按考试大纲配比组卷，考前两周刷', version: 3, negative: 0.5, floor: false, record: true,
-      sections: [
-        { type: '单选题', diff: '不限', chapter: '不限', tags: '', n: 8, score: 2 },
-        { type: '多选题', diff: '进阶', chapter: '不限', tags: '', n: 2, score: 3 },
-        { type: '判断题', diff: '不限', chapter: '不限', tags: '', n: 1, score: 2 },
-        { type: '问答题', diff: '不限', chapter: '案例分析', tags: '案例', n: 1, score: 0 }
-      ],
-      refs: { active: 1, reports: 2 }, updatedAt: '2026-11-22 21:40'
-    },
-    {
-      id: 'p2', name: '系统架构设计师 · 选择题专项', system: '系统架构设计师 · 2026 年上半年',
-      desc: '只考客观题，30 分钟一套', version: 1, negative: 0, floor: true, record: true,
-      sections: [
-        { type: '单选题', diff: '不限', chapter: '不限', tags: '', n: 20, score: 2 },
-        { type: '多选题', diff: '不限', chapter: '不限', tags: '', n: 10, score: 3 }
-      ],
-      refs: { active: 0, reports: 1 }, updatedAt: '2026-11-18 10:12'
-    },
-    {
-      id: 'p3', name: '案例分析 · 冲刺卷', system: '', desc: '', version: 0, negative: 0, floor: false, record: true,
-      sections: [], refs: { active: 0, reports: 0 }, updatedAt: '2026-11-12 09:03'
-    }
-  ];
-
-  /* 演示用历史报告：与考试会话 runner 的成绩报告同一套 CR-06 口径。
-     items 是逐题明细——归档报告与交卷当次的报告内容一致（BR-109 / CR-25），
-     判分版本快照随作答记录落库，不随后续改题变化。 */
+  /* ---------- 演示与归档历史报告（汇总由逐题明细或快照确定） ---------- */
   var DEMO_REPORTS = [
     { id: 'rd1', at: '2026-11-24 22:05', title: '系统集成项目管理工程师 · 综合卷', bankId: 'b_rk',
       score: 11, full: 24, rate: 46, accObj: 56, answered: 9, objTotal: 11, total: 12, correct: 5, ungraded: 1,
@@ -916,7 +783,7 @@ window.EEexams = (function () {
         { qid: 'q_rk_10', bankId: 'b_rk', type: '多选题', answered: false, ratio: null, correctness: 'BLANK', multi: true,
           stem: '关于项目沟通管理，下列说法正确的有（ ）。',
           mine: '未作答', answer: 'A · B · D',
-          explain: '沟通管理计划描述干系人的信息需求与分发方式；会议管理属于执行沟通；沟通需求分析是规划沟通的输入。C 项把交互式、推式、拉式多种沟通模型说成一种，错误。',
+          explain: '沟通管理计划描述干系人的信息需求与分发方式；会议管理属于执行沟通；沟通需求分析是规划沟通的输入。',
           rating: null, ver: 'v3', verAt: '2026-11-18 09:24' },
         { qid: 'q_rk_11', bankId: 'b_rk', type: '判断题', answered: false, ratio: null, correctness: 'BLANK',
           stem: 'WBS 与 WBS 字典都是范围基准的组成部分。',
@@ -926,7 +793,7 @@ window.EEexams = (function () {
           stem: '结合本项目，说明范围基准失控的主要原因，并给出纠正措施。',
           mine: '范围基准失控主要因为变更未经整体变更控制就进入了执行：客户口头追加需求，直接由开发修改，没有更新 WBS 与 WBS 字典，也没有走变更流程。纠正措施：把口头需求转为正式变更请求，评估对范围、进度与成本的影响后由 CCB 审批；通过后同步更新范围说明书、WBS 与 WBS 字典，并重新确定基准。',
           answer: '主观题不自动判分',
-          explain: '范围基准失控的根因通常是变更绕过整体变更控制；纠正要落在「变更请求 → 影响评估 → CCB 审批 → 更新基准」这条闭环上，并且基准更新后要通知所有干系人。',
+          explain: '范围基准失控的根因通常是变更绕过整体变更控制；纠正要落在「变更请求 → 影响评估 → CCB 审批 → 更新基准」这条闭环上。',
           rating: null, ver: 'v2', verAt: '2026-11-15 19:02' }
       ] },
     { id: 'rd2', at: '2026-11-19 20:41', title: '系统架构设计师 · 选择题专项', bankId: 'b_rk',
@@ -957,7 +824,7 @@ window.EEexams = (function () {
           stem: '领域事件与集成事件的区别主要是（ ）。',
           mine: 'A', answer: 'A', explain: '领域事件在限界上下文内表达已发生的事实；集成事件跨上下文传播，需要显式契约与版本。',
           rating: '良好', ratingDue: '12 月 3 日', ver: 'v1', verAt: '2026-11-02 09:10' },
-        { qid: 'q_rk_27', bankId: 'b_rk', type: '单选题', answered: true, ratio: 1, correctness: 'CORRECT',
+        { qid: 'q_rk_27', bankId: 'b_rk', type: '单选题', answered: true, ratio: 0, correctness: 'INCORRECT',
           stem: '关于幂等设计，下列说法错误的是（ ）。',
           mine: 'C', answer: 'D', explain: '幂等键应由调用方生成并全局唯一；仅依赖时间戳或随机数无法保证重复请求命中同一记录。',
           rating: '重来', ratingDue: '11 月 27 日', ver: 'v1', verAt: '2026-11-02 09:10' },
@@ -988,17 +855,6 @@ window.EEexams = (function () {
       ] }
   ];
 
-  var TEMPLATES = [
-    { id: 't1', name: '软考 · 综合标准卷', meta: '4 个配额段 · 80 题 · 负分 0.5', rows: [['单项选择', '不限', 50, 2], ['多项选择', '进阶', 20, 3], ['判断', '不限', 8, 1.5], ['问答', '不限', 2, 0]] },
-    { id: 't2', name: '期中 · 选择题专项', meta: '2 个配额段 · 40 题 · 答错不扣分', rows: [['单项选择', '不限', 30, 2], ['多项选择', '基础', 10, 3]] },
-    { id: 't3', name: '科目一 · 判断题强化', meta: '1 个配额段 · 30 题 · 负分 1', rows: [['判断', '不限', 30, 1]] },
-    { id: 't4', name: '案例分析 · 主观专项', meta: '1 个配额段 · 6 题 · 不自动判分', rows: [['问答', '不限', 6, 0]] }
-  ];
-
-  /* ---- 历史归档报告的逐题明细池 ----
-     汇总数一律由 items 反算，不手写：得分率、已答客观题正确率、已答/未答
-     三个分母口径（客观题满分含未作答 / 已答客观题 / 客观题总数）必须自洽，
-     列表行与详情对话框读同一份对象，不可能给出两个值。 */
   var ARCHIVE_ITEMS = [
     { type: '单选题', stem: '每周一学校开展直播课程，在直播中实时回复学生问题属于（ ）', answer: 'A', explain: '直播中实时回复学生问题，信息按需推送、学生自行获取，属于拉式沟通。' },
     { type: '单选题', stem: 'OSI 的（ ）不适合提供相应的安全服务。', answer: 'B', explain: '传输层、网络层、应用层都可以提供相应安全服务，会话层不适合。' },
@@ -1008,18 +864,22 @@ window.EEexams = (function () {
     { type: '单选题', stem: '以下不属于“临时性”的是（ ）', answer: 'D', explain: '“结束阶段”是项目阶段名称，不属于临时性这一特征。' },
     { type: '单选题', stem: '监控各项续航参数是否保持在预期区间（ ）', answer: 'A', explain: '控制图用于判断过程是否处于受控状态，即参数是否保持在预期区间。' },
     { type: '单选题', stem: '大型不适合用（ ）架构模型。', answer: 'A', explain: '大型系统不适合单机应用模式，需要分布式架构支撑。' },
-    { type: '多选题', stem: '以下属于项目临时性特征的有（ ）。', answer: 'A · B · D', explain: '临时性的特征是：有明确的开始时间和结束时间、可交付成果在项目结束后依然存在、独特性；「结束阶段」是阶段名称，不属于特征。' },
-    { type: '多选题', stem: '关于项目沟通管理，下列说法正确的有（ ）。', answer: 'A · B · D', explain: '沟通管理计划描述干系人的信息需求与分发方式；会议管理属于执行沟通；沟通需求分析是规划沟通的输入。' },
+    { type: '多选题', stem: '以下属于项目临时性特征的有（ ）。', answer: 'A · B · D', explain: '临时性的特征是：有明确的开始时间和结束时间、可交付成果在项目结束后依然存在、独特性。' },
+    { type: '多选题', stem: '关于项目沟通管理，下列说法正确的有（ ）。', answer: 'A · B · D', explain: '沟通管理计划描述干系人的信息需求与分发方式；会议管理属于执行沟通。' },
     { type: '多选题', stem: '以下属于可观测性三支柱的有（ ）。', answer: 'A · C · D', explain: '指标、日志、追踪构成三支柱；告警是消费侧能力，不属于被观测信号本身。' },
-    { type: '多选题', stem: '以下属于分布式事务方案的有（ ）。', answer: 'B · C · D', explain: '2PC、TCC、Saga 与本地消息表都是常见方案；隔离级别属于单库并发控制，不是分布式事务方案。' },
-    { type: '问答题', stem: '结合本项目，说明范围基准失控的主要原因，并给出纠正措施。', answer: '主观题不自动判分', explain: '范围基准失控的根因通常是变更绕过整体变更控制；纠正要落在「变更请求 → 影响评估 → CCB 审批 → 更新基准」这条闭环上，并且基准更新后要通知所有干系人。' }
+    { type: '多选题', stem: '以下属于分布式事务方案的有（ ）。', answer: 'B · C · D', explain: '2PC、TCC、Saga 与本地消息表都是常见方案。' },
+    { type: '问答题', stem: '结合本项目，说明范围基准失控的主要原因，并给出纠正措施。', answer: '主观题不自动判分', explain: '范围基准失控的根因通常是变更绕过整体变更控制；纠正要落在「变更请求 → 影响评估 → CCB 审批 → 更新基准」闭环上。' }
   ];
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
   function ymd(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  function nowStamp() {
+    var d = new Date();
+    return ymd(d) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
   function archiveReport(i) {
-    var profile = PROFILES[i % PROFILES.length];
+    var profile = SEED_PROFILES[i % SEED_PROFILES.length];
     var bankId = ['b_rk', 'b_acc', 'b_en'][i % 3];
-    var objN = 8 + (i % 5);                       /* 客观题 8–12 道 */
+    var objN = 8 + (i % 5);
     var single = Math.max(1, objN - 2);
     var items = [];
     for (var k = 0; k < objN; k++) {
@@ -1039,7 +899,6 @@ window.EEexams = (function () {
         ratingDue: blank ? null : '12 月 ' + (2 + ((i + k) % 20)) + ' 日',
         ver: 'v' + (1 + ((i + k) % 3)), verAt: '2026-11-' + pad2(2 + ((i + k) % 25)) + ' 09:10'
       };
-      /* 一部分题的判分版本之后被改过：报告仍按当时的版本，条目上标「有新版」 */
       if ((i + k) % 7 === 0) {
         it.cur = 'v' + (2 + ((i + k) % 3));
         it.curAt = '2026-11-' + pad2(10 + ((i + k) % 15)) + ' 14:20';
@@ -1052,7 +911,7 @@ window.EEexams = (function () {
       items.push({
         qid: 'q_ar_' + i + '_s', bankId: bankId, type: '问答题', subjective: true, answered: true,
         ratio: null, correctness: 'UNGRADED', stem: sub.stem,
-        mine: '范围基准失控主要因为变更未经整体变更控制就进入了执行：客户口头追加需求，直接由开发修改，没有更新 WBS 与 WBS 字典，也没有走变更流程。',
+        mine: '范围基准失控主要因为变更未经整体变更控制就进入了执行，没有走变更流程。',
         answer: sub.answer, explain: sub.explain, rating: null,
         ver: 'v2', verAt: '2026-11-15 19:02'
       });
@@ -1078,82 +937,113 @@ window.EEexams = (function () {
   var ARCHIVE_REPORTS = [];
   for (var ai = 0; ai < 47; ai++) ARCHIVE_REPORTS.push(archiveReport(ai));
 
-  var bpCtx = { profileId: 'p1', baseline: '' };
-  var setupCtx = { profileId: 'p1', bankId: 'b_rk' };
-  var reexamCtx = 'p1';
-  var tplCtx = { step: 0, tpl: TEMPLATES[0] };
+  /* ---------- 状态上下文 ---------- */
+  var quickState = { bankId: '', unlimited: false };
+  var editorCtx = { mode: 'edit', profileId: null, draft: null, baseline: '' };
+  var setupCtx = { profileId: '', bankId: '' };
+  var pendingStart = null;
+  var reportFilter = { range: 'all', profile: '', via: '' };
+  var reportPage = 1;
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
-  function profile(id) {
+  function num(v, d) { var n = parseFloat(v); return isNaN(n) ? (d == null ? 0 : d) : n; }
+  function findProfile(id) {
     for (var i = 0; i < PROFILES.length; i++) if (PROFILES[i].id === id) return PROFILES[i];
     return null;
   }
   function objectiveFull(p) {
     var n = 0;
-    p.sections.forEach(function (s) { if (OBJECTIVE[s.type]) n += s.n * s.score; });
-    return n;
+    (p.sections || []).forEach(function (s) { if (OBJECTIVE[s.type]) n += (s.n || 0) * (s.score || 0); });
+    return Math.round(n * 10) / 10;
   }
   function totalQuestions(p) {
-    return p.sections.reduce(function (a, s) { return a + s.n; }, 0);
+    return (p.sections || []).reduce(function (a, s) { return a + (s.n || 0); }, 0);
   }
   function subjectiveCount(p) {
-    return p.sections.reduce(function (a, s) { return OBJECTIVE[s.type] ? a : a + s.n; }, 0);
+    return (p.sections || []).reduce(function (a, s) { return OBJECTIVE[s.type] ? a : a + (s.n || 0); }, 0);
   }
   function bankName(id) { return S.bankName(id); }
   function qcount(id) {
-    var n = S.questions(id).length;
+    var n = S.questions(id, { archived: false }).length;
     var b = S.bank(id);
     return n || (b ? b.count : 0);
   }
-  /* 真正能被组进卷子的题量：题库有真实题目就用它的条数；没有题目记录时，
-     答题器会退回 12 题演示池——这里必须用同一个数，否则「开始前确认」写 30 题、
-     卷子只有 12 题。 */
   function capacity(id) {
     var n = S.questions(id, { archived: false }).length;
-    return n || Math.min(12, qcount(id));
-  }
-  /* 蓝图配额在本题库的真实可满足结果（与答题器的 composeFromBlueprint 同口径）：
-     逐段按题型 / 章节 / 难度取题，取不满就少，绝不按声明数量虚报。 */
-  function planQuota(p, bankId, max) {
-    var qs = S.questions(bankId, { archived: false });
-    if (!qs.length) {
-      qs = [];
-      for (var i = 0; i < max; i++) qs.push({ id: 'demo' + i, type: '单选题', chapter: '未分章' });
-    }
-    var used = {}, parts = [], got = 0;
-    p.sections.forEach(function (sec) {
-      var picked = 0;
-      qs.forEach(function (q) {
-        if (picked >= sec.n || used[q.id]) return;
-        if (sec.type && sec.type !== '不限' && q.type !== sec.type) return;
-        if (sec.chapter && sec.chapter !== '不限' && q.chapter !== sec.chapter) return;
-        if (sec.diff && sec.diff !== '不限' && q.difficulty !== sec.diff) return;
-        used[q.id] = 1; picked++;
-      });
-      got += picked;
-      parts.push({ type: sec.type, want: sec.n, got: picked, score: sec.score });
-    });
-    var want = Math.min(totalQuestions(p), max);
-    var fill = Math.min(Math.max(0, want - got), qs.length - Object.keys(used).length);
-    return { parts: parts, total: got + fill, want: want };
+    return n || Math.min(DEMO_QBANK_META.length, qcount(id));
   }
   function banksWithQuestions() {
     return S.banks({ archived: false }).filter(function (b) { return qcount(b.id) > 0; });
   }
-  function bpSummary(p) {
-    if (!p.sections.length) return '不使用蓝图 · 基础题库模式';
-    return '蓝图 v' + p.version + ' · ' + p.sections.length + ' 个配额段 · ' + totalQuestions(p) + ' 题 · 客观题满分 ' + objectiveFull(p) + ' 分';
+  function parseTags(str) {
+    return String(str || '').split(/[,，\s]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+  function matchTags(q, reqTags) {
+    if (!reqTags.length) return true;
+    var qt = q.tags || [];
+    return reqTags.some(function (t) { return qt.indexOf(t) > -1; });
+  }
+  function poolForBank(bankId) {
+    var qs = S.questions(bankId, { archived: false });
+    if (qs.length) return qs;
+    var cap = capacity(bankId);
+    return DEMO_QBANK_META.slice(0, cap);
+  }
+  /* 与 exam.html composeFromBlueprint 完全同口径的配额预演 */
+  function planQuota(p, bankId) {
+    var qs = poolForBank(bankId);
+    var used = {}, parts = [], got = 0, objFull = 0, subjGot = 0;
+    (p.sections || []).forEach(function (sec) {
+      var reqTags = parseTags(sec.tags);
+      var picked = 0;
+      qs.forEach(function (q) {
+        if (picked >= (sec.n || 0) || used[q.id]) return;
+        if (sec.type && sec.type !== '不限' && q.type !== sec.type) return;
+        if (sec.chapter && sec.chapter !== '不限' && q.chapter !== sec.chapter) return;
+        if (sec.diff && sec.diff !== '不限' && q.difficulty !== sec.diff) return;
+        if (!matchTags(q, reqTags)) return;
+        used[q.id] = 1; picked++;
+        if (OBJECTIVE[q.type]) objFull += (sec.score != null ? Number(sec.score) : 2);
+        else subjGot++;
+      });
+      got += picked;
+      parts.push({ type: sec.type, diff: sec.diff, chapter: sec.chapter, want: sec.n || 0, got: picked, score: sec.score || 0 });
+    });
+    var want = totalQuestions(p);
+    var fill = 0;
+    var DEFAULT_SCORE = { '单选题': 2, '多选题': 3, '判断题': 2, '问答题': 0 };
+    qs.forEach(function (q) {
+      if (got + fill >= want || used[q.id]) return;
+      used[q.id] = 1; fill++;
+      if (OBJECTIVE[q.type]) objFull += (DEFAULT_SCORE[q.type] || 2);
+      else subjGot++;
+    });
+    return {
+      parts: parts,
+      matched: got,
+      fill: fill,
+      total: got + fill,
+      want: want,
+      objFull: Math.round(objFull * 10) / 10,
+      subjGot: subjGot
+    };
+  }
+  function profileSummary(p) {
+    if (!p.sections || !p.sections.length) return '暂未配置配额段';
+    var base = 'v' + (p.version || 1) + ' · ' + p.sections.length + ' 个配额段 · 共 ' + totalQuestions(p) + ' 题 · 客观题满分 ' + objectiveFull(p) + ' 分';
+    base += p.unlimited ? ' · 不限时' : ' · ' + (p.minutes || 120) + ' 分钟';
+    return base;
   }
   function viaLabel(v) {
     return v === 'auto_deadline' ? '到点自动交卷' : (v === 'expired_server_answers' ? '超时后以服务器答案交卷' : '手动交卷');
   }
 
   /* ---------- 未完成的模考 ---------- */
-  var IDLE_DAYS = 30; /* 不限时会话的闲置失效阈值：默认 30 天，可配 */
+  var IDLE_DAYS = 30;
   function isExpired(s) {
     if (s.expired) return true;
     if (!s.updatedAt) return false;
@@ -1163,14 +1053,16 @@ window.EEexams = (function () {
   }
   function renderSessions() {
     var list = S.sessions('exam');
+    var sec = document.getElementById('exam-sessions');
     var host = document.getElementById('exam-sessions-host');
-    document.getElementById('exam-sessions').hidden = list.length === 0;
+    sec.hidden = list.length === 0;
     if (!list.length) { host.innerHTML = ''; return; }
     host.innerHTML = list.map(function (s) {
       var done = s.done || 0, total = s.total || 0;
       var pct = total ? Math.round(done / total * 100) : 0;
       var expired = isExpired(s);
-      var left = s.unlimited ? '不限时 · 已用 ' + (s.used || 0) + ' 分钟'
+      var left = s.unlimited
+        ? '不限时 · 已用 ' + Math.max(0, Math.round((s.elapsed || 0) / 60)) + ' 分钟'
         : (s.remaining != null ? '剩余 ' + Math.max(0, Math.round(s.remaining / 60)) + ' 分钟' : '计时中');
       return '<div class="list-row ee-row-top static">' +
         '<span class="list-main"><span class="list-title ee-paper-title">' + esc(s.title || ('模考 · ' + bankName(s.bankId))) + '</span>' +
@@ -1179,424 +1071,542 @@ window.EEexams = (function () {
         (s.record === false ? '<span class="tag plain">不纳入学习记录</span>' : '<span class="tag plain">纳入学习记录</span>') + '</span></span>' +
         '<span class="list-side">' +
         (expired
-          ? '<button class="btn btn-sm btn-primary" type="button" onclick="eeToast(\'失效后仍需你显式交卷或放弃；不会自动判成绩\')">去交卷</button>'
+          ? '<a class="btn btn-sm btn-primary" href="exam.html?sid=' + encodeURIComponent(s.id) + '">去交卷</a>'
           : '<a class="btn btn-sm btn-primary" href="exam.html?sid=' + encodeURIComponent(s.id) + '">继续答题</a>') +
         '<button class="btn btn-sm btn-quiet" type="button" onclick="EEexams.askAbandon(\'' + esc(s.id) + '\', this)">放弃考试</button>' +
         '</span></div>' +
-        (expired
-          ? '<p class="hint hint-flat">连续 ' + IDLE_DAYS + ' 天无活动，本场已标记为失效并通知你：答案停止收录，不能再作答。失效不判成绩、不自动交卷——你仍然要显式选交卷或放弃。</p>'
-          : '') +
+        (expired ? '<p class="hint hint-flat">连续 ' + IDLE_DAYS + ' 天无操作已标记失效，可手动交卷或放弃。</p>' : '') +
         '<div class="progress ee-mt-3"><div class="progress-fill" style="width:' + pct + '%"></div></div>';
     }).join('');
   }
 
-  /* ---------- 考试档案 ---------- */
+  /* ---------- 任务一：快速模考 ---------- */
+  function initQuickBanks() {
+    var banks = banksWithQuestions();
+    var sel = document.getElementById('quick-bank');
+    var emptyNotice = document.getElementById('quick-empty-notice');
+    var grid = document.getElementById('quick-form-grid');
+    var startBtn = document.getElementById('quick-start-btn');
+    if (!banks.length) {
+      emptyNotice.hidden = false;
+      grid.hidden = true;
+      startBtn.disabled = true;
+      document.getElementById('quick-summary').textContent = '请先导入题目到题库';
+      return;
+    }
+    emptyNotice.hidden = true;
+    grid.hidden = false;
+    var sorted = banks.slice().sort(function (a, b) { return capacity(b.id) - capacity(a.id); });
+    if (!quickState.bankId || !S.bank(quickState.bankId) || qcount(quickState.bankId) === 0) {
+      quickState.bankId = sorted[0].id;
+    }
+    sel.innerHTML = banks.map(function (b) {
+      return '<option value="' + esc(b.id) + '"' + (b.id === quickState.bankId ? ' selected' : '') + '>' +
+        esc(b.name) + '（可抽 ' + capacity(b.id) + ' 题）</option>';
+    }).join('');
+    syncQuickExam(true);
+  }
+  function syncQuickExam(clampTotal) {
+    var banks = banksWithQuestions();
+    if (!banks.length) return;
+    var bankId = document.getElementById('quick-bank').value || banks[0].id;
+    quickState.bankId = bankId;
+    var max = capacity(bankId);
+    var totalEl = document.getElementById('quick-total');
+    var totalMsg = document.getElementById('quick-total-msg');
+    var minEl = document.getElementById('quick-minutes');
+    var minMsg = document.getElementById('quick-minutes-msg');
+
+    totalEl.max = String(max);
+    var total = parseInt(totalEl.value, 10);
+    if (clampTotal) {
+      if (isNaN(total) || total < 1) total = Math.min(10, max);
+      if (total > max) total = max;
+      totalEl.value = String(total);
+    }
+
+    var countInvalid = isNaN(total) || total < 1 || total > max;
+    totalEl.classList.toggle('is-error', countInvalid);
+    if (countInvalid) {
+      totalMsg.textContent = '请输入 1 到 ' + max + ' 之间的题量。';
+      totalMsg.className = 'field-err';
+    } else {
+      totalMsg.textContent = '本库共 ' + max + ' 题可抽，开考后随机抽取';
+      totalMsg.className = 'hint';
+    }
+
+    document.querySelectorAll('#quick-total-presets [data-qcount]').forEach(function (btn) {
+      var v = btn.getAttribute('data-qcount');
+      var target = v === 'all' ? max : parseInt(v, 10);
+      var dis = v !== 'all' && target > max;
+      btn.disabled = dis;
+      var active = !countInvalid && !dis && total === target && (v !== 'all' || (max !== 10 && max !== 20 && max !== 50));
+      btn.classList.toggle('is-on', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+
+    minEl.disabled = quickState.unlimited;
+    var mins = parseInt(minEl.value, 10);
+    var timeInvalid = !quickState.unlimited && (isNaN(mins) || mins < 1 || mins > 600);
+    minEl.classList.toggle('is-error', timeInvalid);
+    if (timeInvalid) {
+      minMsg.textContent = '时长需在 1 到 600 分钟之间，或选择「不限时」。';
+      minMsg.className = 'field-err';
+    } else if (quickState.unlimited) {
+      minMsg.textContent = '不设倒计时，可随时暂存或手动交卷';
+      minMsg.className = 'hint';
+    } else {
+      minMsg.textContent = '1 到 600 分钟，到点后有 60 秒缓冲提交已选答案';
+      minMsg.className = 'hint';
+    }
+
+    document.querySelectorAll('#quick-time-presets [data-qmin]').forEach(function (btn) {
+      var v = parseInt(btn.getAttribute('data-qmin'), 10);
+      var active = (v === 0 && quickState.unlimited) || (!quickState.unlimited && !timeInvalid && mins === v);
+      btn.classList.toggle('is-on', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+
+    var startBtn = document.getElementById('quick-start-btn');
+    var sum = document.getElementById('quick-summary');
+    if (countInvalid || timeInvalid) {
+      startBtn.disabled = true;
+      sum.textContent = '请先修正上面的题量或时长设置。';
+    } else {
+      startBtn.disabled = false;
+      var bName = bankName(bankId);
+      sum.innerHTML = '将从 <b>' + esc(bName) + '</b> 随机抽取 <b>' + total + ' 题</b> · ' +
+        (quickState.unlimited ? '<b>不限时</b>' : ('限时 <b>' + mins + ' 分钟</b>'));
+    }
+  }
+  function startQuickExam() {
+    syncQuickExam(false);
+    var bankId = quickState.bankId;
+    var max = capacity(bankId);
+    var total = parseInt(document.getElementById('quick-total').value, 10);
+    var mins = parseInt(document.getElementById('quick-minutes').value, 10);
+    var unlimited = quickState.unlimited;
+    if (!(total >= 1 && total <= max)) return;
+    if (!unlimited && !(mins >= 1 && mins <= 600)) return;
+    var payload = {
+      kind: 'exam',
+      bankId: bankId,
+      mode: '模考',
+      order: '随机抽题',
+      title: '快速模考 · ' + bankName(bankId),
+      total: total,
+      minutes: unlimited ? 0 : mins,
+      unlimited: unlimited,
+      record: document.getElementById('quick-record').checked,
+      blueprint: null,
+      blueprintMode: 'quick',
+      params: { count: total, minutes: unlimited ? 0 : mins, unlimited: unlimited, mode: '模考', kind: 'quick' },
+      index: 0, done: 0, answers: {}, selections: {}, flags: {}, elapsed: 0,
+      remaining: unlimited ? null : mins * 60,
+      origin: { page: 'exams.html', href: 'exams.html' + location.search, label: '模考中心' }
+    };
+    launchOrConfirmActive(payload, document.getElementById('quick-start-btn'));
+  }
+
+  /* ---------- 统一发起/冲突处理 ---------- */
+  function launchOrConfirmActive(payload, trigger) {
+    if (S.sessions('exam').length) {
+      pendingStart = payload;
+      askActive(trigger);
+      return;
+    }
+    var s = S.startSession(Object.assign({}, payload, { replace: true }));
+    if (!s || !s.id) { eeToast('模考未能创建，请稍后再试', 'bad'); return; }
+    location.href = 'exam.html?sid=' + encodeURIComponent(s.id);
+  }
+  function askActive(trigger) {
+    var list = S.sessions('exam');
+    var s = list[list.length - 1];
+    if (s) {
+      var paper = s.title || bankName(s.bankId);
+      var done = s.done || 0, total = s.total || 0;
+      var left = s.unlimited ? '不限时' : (s.remaining != null ? Math.max(0, Math.round(s.remaining / 60)) + ' 分钟' : '计时中');
+      document.getElementById('dlg-active-desc').textContent = '「' + paper + '」还有 ' + done + ' / ' + total + ' 题未交卷。同一时间只保留一场进行中的模考。';
+      document.getElementById('dlg-active-paper').textContent = paper;
+      document.getElementById('dlg-active-progress').textContent = '已答 ' + done + ' / ' + total;
+      document.getElementById('dlg-active-left').textContent = left;
+      document.getElementById('dlg-active-continue').setAttribute('href', 'exam.html?sid=' + encodeURIComponent(s.id));
+    }
+    eeDialog.open('dlg-active', trigger || document.activeElement);
+  }
+  function confirmActive() {
+    S.sessions('exam').forEach(function (x) { S.finishSession(x.id); });
+    eeDialog.close(document.getElementById('dlg-active'));
+    if (!pendingStart) { eeToast('已结束进行中的模考'); renderAll(); return; }
+    var payload = pendingStart;
+    pendingStart = null;
+    var s = S.startSession(Object.assign({}, payload, { replace: true }));
+    if (!s || !s.id) { eeToast('模考未能创建，请稍后再试', 'bad'); return; }
+    location.href = 'exam.html?sid=' + encodeURIComponent(s.id);
+  }
+
+  /* ---------- 任务二：考试方案列表 ---------- */
   function renderProfiles() {
     var g = editGate('bank.edit');
-    /* 一条可读原因，供页头「新建考试档案」与每一行的「蓝图编辑」共同引用：
-       不重复铺同一句话，也不把入口藏掉。 */
-    var why = g.why || '只有所有者与编辑者可以改考试档案与蓝图';
-    var dis = g.can ? '' : ' disabled aria-describedby="new-profile-why"';    document.getElementById('profiles-note').textContent = '共 ' + PROFILES.length + ' 份';
+    var disEdit = g.can ? '' : ' disabled aria-describedby="new-profile-why"';
+    document.getElementById('profiles-note').textContent = '共 ' + PROFILES.length + ' 份 · 按题型、难度、章节与分值配比抽题';
+    if (!PROFILES.length) {
+      document.getElementById('profiles-host').innerHTML =
+        '<div class="empty"><div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg></div>' +
+        '<p class="empty-title">还没有考试方案</p>' +
+        '<p class="empty-desc">新建一个考试方案，保存题型配额与扣分规则，下次直接按方案开考。</p></div>';
+      return;
+    }
     document.getElementById('profiles-host').innerHTML = PROFILES.map(function (p) {
-      var noBp = !p.sections.length;
-      /* 进行中场次按 store 里真实会话数算（档案 id 记在会话 params.profileId 上），
-         不再用写死的 p.refs.active——否则重新考试开了新场，列表还显示「进行中 1 场」。 */
+      var noBp = !p.sections || !p.sections.length;
       var liveCount = S.sessions('exam').filter(function (s) {
         return (s.params && s.params.profileId) === p.id;
       }).length;
-      var meta = '<span>' + esc(bpSummary(p)) + '</span>';
+      var meta = '<span>' + esc(profileSummary(p)) + '</span>';
       if (p.negative > 0) meta += '<span class="tag warn">答错扣 ' + p.negative + ' 分</span>';
       else meta += '<span class="tag plain">答错不扣分</span>';
-      meta += p.record ? '<span class="tag plain">纳入学习记录</span>' : '<span class="tag plain">不纳入学习记录</span>';
-      meta += '<span>进行中 ' + liveCount + ' 场 · 历史报告 ' + p.refs.reports + ' 份</span>';
-      if (noBp) meta += '<span class="tag warn">未配置蓝图</span>';
-      return '<div class="list-row ee-row-top static">' +
-        '<div class="list-main"><div class="list-title ee-paper-title">' + esc(p.name) + '</div>' +
+      meta += p.record !== false ? '<span class="tag plain">纳入学习记录</span>' : '<span class="tag plain">不纳入学习记录</span>';
+      if (liveCount > 0) meta += '<span class="tag brand">进行中 ' + liveCount + ' 场</span>';
+      if (noBp) meta += '<span class="tag warn">未配置配额</span>';
+      return '<div class="list-row ee-row-top static" data-profile-id="' + esc(p.id) + '">' +
+        '<div class="list-main">' +
+        '<div class="list-title ee-paper-title">' + esc(p.name) + '</div>' +
+        (p.desc ? '<div class="list-meta"><span>' + esc(p.desc) + '</span></div>' : '') +
         '<div class="list-meta">' + meta + '</div>' +
-        (noBp ? '<div class="list-meta"><span class="hint">没有蓝图也能考：按题库既有顺序抽取前 N 题。</span></div>' : '') +
         '</div>' +
         '<div class="list-side">' +
-        '<button class="btn btn-sm btn-quiet" type="button"' + dis + ' onclick="EEexams.openBlueprint(\'' + p.id + '\', this)">蓝图编辑</button>' +
-        '<button class="btn btn-sm" type="button" onclick="EEexams.openSetup(\'' + p.id + '\', this)">开始</button>' +
-        '<button class="btn btn-sm btn-quiet" type="button" onclick="EEexams.askReExam(\'' + p.id + '\', this)">重新考试</button>' +
-        '<span class="ft-more">' +
-        '<button class="icon-btn sm" type="button" data-menu-trigger aria-haspopup="true" aria-expanded="false" aria-label="档案更多操作" onclick="EEexams.toggleProfileMenu(this)"><svg class="od-icon" aria-hidden="true"><use href="#i-more"/></svg></button>' +
-        '<div class="menu ft-menu" hidden>' +
-        '<button class="menu-item" type="button"' + (g.can ? '' : ' disabled title="' + esc(why) + '"') + ' onclick="EEexams.renameProfile(\'' + p.id + '\', this)"><svg class="od-icon" aria-hidden="true"><use href="#i-edit"/></svg>重命名</button>' +
-        '<button class="menu-item" type="button"' + (g.can ? '' : ' disabled title="' + esc(why) + '"') + ' onclick="EEexams.copyProfile(\'' + p.id + '\', this)"><svg class="od-icon" aria-hidden="true"><use href="#i-copy"/></svg>复制（连带最新蓝图）</button>' +
-        '<span class="menu-sep"></span>' +
-        '<button class="menu-item is-danger" type="button"' + (g.can ? '' : ' disabled title="' + esc(why) + '"') + ' onclick="EEexams.deleteProfile(\'' + p.id + '\', this)"><svg class="od-icon" aria-hidden="true"><use href="#i-trash"/></svg>删除档案</button>' +
-        '</div></span>' +
+        '<button class="btn btn-sm" type="button"' + disEdit + ' onclick="EEexams.openProfileEditor(\'' + esc(p.id) + '\', this)">编辑方案</button>' +
+        '<button class="btn btn-sm btn-primary" type="button"' + (noBp ? ' disabled title="请先编辑方案并添加配额段"' : '') + ' onclick="EEexams.openSetup(\'' + esc(p.id) + '\', this)">按方案开考</button>' +
         '</div></div>';
     }).join('');
   }
 
-  /* ---------- 从题库开始 ---------- */
-  function renderBanks() {
-    var list = S.banks({ archived: false });
-    var host = document.getElementById('exam-banks-host');
-    host.innerHTML = list.map(function (b) {
-      var n = qcount(b.id);
-      if (!n) {
-        return '<div class="list-row static"><span class="list-main"><span class="list-title">' + esc(b.name) + '</span>' +
-          '<span class="list-meta"><span>0 题</span>' + (b.shared ? '<span class="tag plain">共享 · 只读</span>' : '') + '</span></span>' +
-          '<span class="list-side"><button class="btn btn-sm" type="button" disabled aria-describedby="ee-bank-' + esc(b.id) + '-why">开始模考</button></span></div>' +
-          '<p class="hint hint-flat" id="ee-bank-' + esc(b.id) + '-why">题库没有题目，先导入题目后才能组卷。</p>';
-      }
-      return '<div class="list-row static"><span class="list-main"><span class="list-title">' + esc(b.name) + '</span>' +
-        '<span class="list-meta"><span>' + n + ' 题可组卷</span>' + (b.shared ? '<span class="tag plain">共享 · 只读</span>' : '') + '</span></span>' +
-        '<span class="list-side"><button class="btn btn-sm" type="button" onclick="EEexams.openSetup(null, this, \'' + esc(b.id) + '\')">开始模考</button></span></div>';
+  /* ---------- 统一工作区抽屉：新建 / 编辑考试方案 ---------- */
+  function chapterOptions(cur) {
+    var base = ['不限', '项目管理基础', '沟通管理', '范围管理', '成本管理', '信息安全', '案例分析'];
+    S.questions(null, { archived: false }).forEach(function (q) {
+      if (q.chapter && base.indexOf(q.chapter) < 0) base.push(q.chapter);
+    });
+    if (cur && base.indexOf(cur) < 0) base.push(cur);
+    return base;
+  }
+  function renderPresetOptions() {
+    var sel = document.getElementById('pf-preset-select');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">套用预设配额…</option>' + PRESETS.map(function (t) {
+      return '<option value="' + esc(t.id) + '">' + esc(t.name) + '</option>';
     }).join('');
   }
-
-  /* ---------- 历史报告 ---------- */
-  function allReports() {
-    var store = S.reports('exam').map(function (r) {
-      return {
-        id: r.id, at: r.at, title: r.title || ('模考 · ' + bankName(r.bankId)), bankId: r.bankId,
-        score: r.score, full: r.full, rate: r.rate, accObj: r.accObj,
-        answered: r.answered, objTotal: r.objTotal != null ? r.objTotal : r.total, total: r.total, correct: r.correct,
-        ungraded: r.ungraded, minutes: r.minutes, wall: r.wall, via: r.via || 'manual',
-        items: r.items || []
-      };
-    });
-    /* 旧版报告（落库时未记录分值口径）：不重算，满分与两个率显示「—」 */
-    store.forEach(function (r) { if (r.full == null) r.legacy = true; });
-    var demo = store.length < 3 ? DEMO_REPORTS.slice(0, 3 - store.length) : [];
-    return store.concat(demo, ARCHIVE_REPORTS);
+  function syncDraftFromDom() {
+    if (!editorCtx.draft) return;
+    var d = editorCtx.draft;
+    d.name = document.getElementById('pf-name').value;
+    d.desc = document.getElementById('pf-desc').value;
+    d.unlimited = document.getElementById('pf-unlimited').checked;
+    var m = parseInt(document.getElementById('pf-minutes').value, 10);
+    d.minutes = isNaN(m) ? 120 : m;
+    var neg = parseFloat(document.getElementById('pf-negative').value);
+    d.negative = isNaN(neg) ? 0 : Math.max(0, Math.min(5, neg));
+    d.floor = document.getElementById('pf-floor').checked;
+    d.record = document.getElementById('pf-record').checked;
+    var rows = document.querySelectorAll('#pf-sections .ee-bp-section');
+    var secs = [];
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var type = r.querySelector('[data-field="type"]').value;
+      var diff = r.querySelector('[data-field="diff"]').value;
+      var chapter = r.querySelector('[data-field="chapter"]').value;
+      var n = parseInt(r.querySelector('[data-field="n"]').value, 10);
+      var sc = parseFloat(r.querySelector('[data-field="score"]').value);
+      var tags = r.querySelector('[data-field="tags"]').value;
+      secs.push({
+        type: type,
+        diff: diff,
+        chapter: chapter,
+        tags: tags,
+        n: isNaN(n) ? 0 : Math.max(0, n),
+        score: OBJECTIVE[type] ? (isNaN(sc) ? 0 : Math.max(0, sc)) : 0
+      });
+    }
+    d.sections = secs;
   }
-  /* 定位手段：时间范围 + 考试档案 + 交卷来源。50+ 场不靠翻页，靠这三个条件收窄。 */
-  var reportFilter = { range: 'all', profile: '', via: '' };
-  function inRange(r) {
-    if (reportFilter.range === 'all') return true;
-    var days = (Date.now() - new Date(String(r.at || '').replace(' ', 'T')).getTime()) / 86400000;
-    if (isNaN(days)) return false;
-    if (reportFilter.range === 'older') return days > 90;
-    return days <= parseInt(reportFilter.range, 10);
+  function renderEditorSummary() {
+    var d = editorCtx.draft;
+    if (!d) return;
+    document.getElementById('pf-summary').innerHTML =
+      '<div class="stat"><div class="stat-num">' + totalQuestions(d) + '</div><div class="stat-cap">总题数</div></div>' +
+      '<div class="stat"><div class="stat-num">' + objectiveFull(d) + '</div><div class="stat-cap">客观题满分</div></div>' +
+      '<div class="stat"><div class="stat-num">' + subjectiveCount(d) + '</div><div class="stat-cap">主观题</div></div>' +
+      '<div class="stat"><div class="stat-num">' + (d.negative || 0) + '</div><div class="stat-cap">答错扣分</div></div>';
   }
-  function filteredReports() {
-    return allReports().filter(function (r) {
-      if (!inRange(r)) return false;
-      if (reportFilter.profile && r.title !== reportFilter.profile) return false;
-      if (reportFilter.via && (r.via || 'manual') !== reportFilter.via) return false;
-      return true;
-    }).sort(function (a, b) { return String(b.at).localeCompare(String(a.at)); });
-  }
-  function reportRowHtml(r) {
-    var legacy = !!r.legacy;
-    var full = legacy ? '—' : (r.full + ' 分');
-    var rate = legacy ? '—' : (r.rate + '%');
-    /* 与报告详情同一把尺子：早期报告没有已答客观题分母，两边都显示「—」，
-       不允许列表行用「答对数 ÷ 客观题总数」凑一个看起来像正确率的数。 */
-    var acc = legacy ? '—' : (r.accObj == null ? '暂无数据' : r.accObj + '%');
-    var changed = (r.items || []).filter(function (it) { return it.cur && it.cur !== it.ver; }).length;
-    return '<tr data-report="' + esc(r.id) + '">' +
-      '<td data-label="交卷时间" class="mono">' + esc(r.at || '—') + '</td>' +
-      '<td data-label="考试档案">' + esc(r.title) +
-      (changed ? ' <span class="tag warn">' + changed + ' 题有新版</span>' : '') +
-      (legacy ? ' <span class="tag plain">早期报告</span>' : '') + '</td>' +
-      '<td data-label="得分 / 客观题满分" class="num">' + (r.score == null ? '待判分' : r.score + ' / ' + full) + '</td>' +
-      '<td data-label="考试得分率" class="num">' + rate + '</td>' +
-      '<td data-label="已答客观题正确率" class="num">' + acc + '</td>' +
-      '<td data-label="用时" class="num">' + (r.minutes == null ? '—' : r.minutes + ' 分钟') + '</td>' +
-      '<td data-label="交卷来源">' + (r.via === 'manual' ? '<span class="tag plain">手动交卷</span>' : '<span class="tag warn">' + esc(viaLabel(r.via)) + '</span>') + '</td>' +
-      '<td data-label="回看" class="col-actions"><button class="link-btn" type="button" onclick="EEexams.openReport(\'' + esc(r.id) + '\', this)">回看</button></td>' +
-      '</tr>';
-  }
-  /* 手机专用列表：一场一张，标题 / 时间 / 得分与两个率 / 题数 / 版本提示，
-     不把 8 列塞进横向滚动里。 */
-  function reportCardHtml(r) {
-    var legacy = !!r.legacy;
-    var changed = (r.items || []).filter(function (it) { return it.cur && it.cur !== it.ver; }).length;
-    return '<div class="list-row ee-row-top" data-report="' + esc(r.id) + '">' +
-      '<span class="list-main"><span class="list-title ee-paper-title">' + esc(r.title) + '</span>' +
-      '<span class="list-meta"><span class="mono">' + esc(r.at || '—') + '</span>' +
-      (changed ? '<span class="tag warn">' + changed + ' 题有新版</span>' : '') +
-      (legacy ? '<span class="tag plain">早期报告</span>' : '') +
-      '<span>' + (r.via === 'manual' ? '手动交卷' : esc(viaLabel(r.via))) + '</span></span>' +
-      '<span class="list-meta"><span>得分 ' + (r.score == null ? '待判分' : r.score + ' / ' + (legacy ? '—' : r.full + ' 分')) + '</span>' +
-      '<span>得分率 ' + (legacy ? '—' : r.rate + '%') + '</span>' +
-      '<span>已答正确率 ' + (legacy ? '—' : (r.accObj == null ? '暂无数据' : r.accObj + '%')) + '</span>' +
-      '<span>' + r.total + ' 题</span></span></span>' +
-      '<span class="list-side"><button class="btn btn-sm btn-quiet" type="button" onclick="EEexams.openReport(\'' + esc(r.id) + '\', this)">回看</button></span>' +
-      '</div>';
-  }
-  function monthKey(r) { return String(r.at || '').slice(0, 7); }
-  function monthLabel(k) {
-    var p = k.split('-');
-    return p.length === 2 ? (p[0] + ' 年 ' + parseInt(p[1], 10) + ' 月') : '时间不详';
-  }
-  function groupByMonth(list) {
-    var groups = {};
-    list.forEach(function (r) { (groups[monthKey(r)] = groups[monthKey(r)] || []).push(r); });
-    return Object.keys(groups).sort().reverse().map(function (k) {
-      return { key: k, label: monthLabel(k), rows: groups[k] };
-    });
-  }
-  function reportsEmpty(cols) {
-    return '<tr><td data-label="交卷时间" colspan="' + cols + '">' +
-      '没有符合条件的报告。放宽时间范围或换一个考试档案；已放弃的考试不生成报告。</td></tr>';
-  }
-  function renderReports() {
-    var list = filteredReports();
-    var total = allReports().length;
-    document.getElementById('reports-count').textContent = list.length + ' / ' + total + ' 场';
-    var table = document.getElementById('exam-reports-host');
-    var mobile = document.getElementById('reports-mobile');
-    if (!list.length) {
-      table.innerHTML = reportsEmpty(8);
-      mobile.innerHTML = '<div class="empty"><div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg></div>' +
-        '<div class="empty-title">没有符合条件的报告</div>' +
-        '<div class="empty-desc">放宽时间范围或换一个考试档案；已放弃的考试不生成报告。</div></div>';
+  function renderEditorSections() {
+    var d = editorCtx.draft;
+    var host = document.getElementById('pf-sections');
+    if (!d.sections.length) {
+      host.innerHTML = '<p class="hint hint-block">还没有配额段。请点击下方「添加配额段」或套用预设配额。</p>';
+      renderEditorSummary();
       return;
     }
-    var groups = groupByMonth(list);
-    table.innerHTML = groups.map(function (g) {
-      return '<tr class="ee-rep-group-row"><td colspan="8"><span class="ee-rep-group-date">' + esc(g.label) + '</span>' +
-        '<span class="ee-rep-group-n">' + g.rows.length + ' 场</span></td></tr>' +
-        g.rows.map(reportRowHtml).join('');
-    }).join('');
-    mobile.innerHTML = groups.map(function (g) {
-      return '<div class="ee-rep-group"><span class="ee-rep-group-date">' + esc(g.label) + '</span>' +
-        '<span class="ee-rep-group-n">' + g.rows.length + ' 场</span></div>' +
-        g.rows.map(reportCardHtml).join('');
-    }).join('');
-    syncTableScrollHint();
-  }
-  /* 表格列多于纸面放得下时，明确告诉用户可以横向滚，不静默裁掉 */
-  function syncTableScrollHint() {
-    var wrap = document.getElementById('reports-table');
-    var hint = document.getElementById('reports-scroll-hint');
-    if (!wrap || !hint) return;
-    var over = wrap.scrollWidth > wrap.clientWidth + 1;
-    hint.hidden = !over;
-    if (over) hint.textContent = '这一屏放不下全部 ' + wrap.querySelectorAll('thead th').length + ' 列，左右滑动查看其余列。';
-  }
-  function renderReportFilters() {
-    var sel = document.getElementById('report-profile');
-    var names = {};
-    allReports().forEach(function (r) { names[r.title] = 1; });
-    var keep = sel.value;
-    sel.innerHTML = '<option value="">全部考试档案</option>' + Object.keys(names).sort().map(function (n) {
-      return '<option' + (n === keep ? ' selected' : '') + '>' + esc(n) + '</option>';
-    }).join('');
-    var via = document.getElementById('report-via');
-    var keepVia = via.value;
-    via.innerHTML = '<option value="">全部交卷来源</option>' +
-      '<option value="manual">手动交卷</option>' +
-      '<option value="auto_deadline">到点自动交卷</option>' +
-      '<option value="expired_server_answers">超时后以服务器答案交卷</option>';
-    via.value = keepVia;
-  }
-
-  /* ---------- 右栏蓝图 ---------- */
-  function renderRail() {
-    /* 蓝图轨是同一个编辑器的次要入口，与行内「蓝图编辑」同一把尺子：
-       相关但不能做 → 禁用 + 可读原因（title），不隐藏。 */
-    var g = editGate('bank.edit');
-    var why = g.why || '只有所有者与编辑者可以改考试档案与蓝图';
-    document.getElementById('blueprint-rail-host').innerHTML = PROFILES.map(function (p) {
-      var noBp = !p.sections.length;
-      return '<button type="button" class="rail-link"' + (g.can ? '' : ' disabled aria-describedby="new-profile-why" title="' + esc(why) + '"') + ' onclick="EEexams.openBlueprint(\'' + p.id + '\', this)">' +
-        '<span class="list-main"><span class="list-title">' + esc(p.name) + '</span>' +
-        '<span class="list-meta">' + (noBp ? '未配置 · 基础题库模式' : 'v' + p.version + ' · ' + totalQuestions(p) + ' 题 · 客观题满分 ' + objectiveFull(p) + ' 分') + '</span></span>' +
-        '<span class="rail-link-n">' + (noBp ? '去配置' : '编辑') + '</span></button>';
-    }).join('');
-  }
-
-  /* ---------- 蓝图抽屉 ---------- */
-  function renderBlueprintDrawer() {
-    var p = profile(bpCtx.profileId) || PROFILES[0];
-    document.getElementById('bp-drawer-sub').textContent = esc(p.name) + (p.version ? ' · v' + p.version : ' · 尚无蓝图');
-    document.getElementById('bp-summary').innerHTML =
-      '<div class="stat"><div class="stat-num">' + totalQuestions(p) + '</div><div class="stat-cap">总题数</div></div>' +
-      '<div class="stat"><div class="stat-num">' + objectiveFull(p) + '</div><div class="stat-cap">客观题满分</div></div>' +
-      '<div class="stat"><div class="stat-num">' + subjectiveCount(p) + '</div><div class="stat-cap">主观题（不判分）</div></div>' +
-      '<div class="stat"><div class="stat-num">' + p.negative + '</div><div class="stat-cap">答错扣分</div></div>';
-    document.getElementById('bp-bound-count').textContent = String(p.refs.active);
-    document.getElementById('bp-negative').value = String(p.negative);
-    document.getElementById('bp-floor').checked = !!p.floor;
-    document.getElementById('bp-record').checked = !!p.record;
-    renderSections(p);
-    bpCtx.baseline = bpSnapshot();
-  }
-  function renderSections(p) {
-    var host = document.getElementById('bp-sections');
-    if (!p.sections.length) {
-      host.innerHTML = '<p class="hint hint-block">这份档案还没有蓝图。从模板导入，或直接添加配额段。</p>';
-      return;
-    }
-    host.innerHTML = p.sections.map(function (s, i) {
+    host.innerHTML = d.sections.map(function (s, i) {
       function opts(list, cur) {
-        return list.map(function (o) { return '<option' + (o === cur ? ' selected' : '') + '>' + o + '</option>'; }).join('');
+        return list.map(function (o) { return '<option value="' + esc(o) + '"' + (o === cur ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('');
       }
+      var isSubj = !OBJECTIVE[s.type];
       return '<div class="ee-bp-section" data-sec="' + i + '">' +
-        '<select class="select" aria-label="题型">' + opts(['单选题', '多选题', '判断题', '问答题'], s.type) + '</select>' +
-        '<select class="select" aria-label="难度">' + opts(['不限', '入门', '基础', '进阶', '困难'], s.diff) + '</select>' +
-        '<select class="select" aria-label="章节">' + opts(['不限', '项目管理基础', '沟通管理', '范围管理', '成本管理', '案例分析'], s.chapter) + '</select>' +
-        '<input class="input" type="text" value="' + esc(s.tags) + '" placeholder="标签，逗号分隔" aria-label="知识点标签">' +
-        '<input class="input ee-bp-count" type="number" min="0" value="' + s.n + '" aria-label="题数">' +
-        '<input class="input ee-bp-count" type="number" min="0" step="0.5" value="' + s.score + '" aria-label="单题分值">' +
-        '<button class="btn btn-sm btn-quiet" type="button" aria-label="移除配额" onclick="EEexams.removeSection(' + i + ')"><svg class="od-icon" aria-hidden="true"><use href="#i-trash"/></svg></button>' +
+        '<select class="select" data-field="type" aria-label="题型">' + opts(['单选题', '多选题', '判断题', '问答题'], s.type) + '</select>' +
+        '<select class="select" data-field="diff" aria-label="难度">' + opts(['不限', '入门', '基础', '进阶', '困难'], s.diff || '不限') + '</select>' +
+        '<select class="select ee-bp-chapter" data-field="chapter" aria-label="章节">' + opts(chapterOptions(s.chapter), s.chapter || '不限') + '</select>' +
+        '<input class="input ee-bp-count" data-field="n" type="number" min="1" value="' + (s.n || 0) + '" aria-label="题数" title="题数">' +
+        '<input class="input ee-bp-count" data-field="score" type="number" min="0" step="0.5" value="' + (isSubj ? 0 : (s.score != null ? s.score : 2)) + '"' + (isSubj ? ' disabled title="主观题不自动计分"' : ' title="单题分值"') + ' aria-label="单题分值">' +
+        '<button class="btn btn-sm btn-quiet" type="button" aria-label="移除配额段" onclick="EEexams.removeSection(' + i + ')"><svg class="od-icon" aria-hidden="true"><use href="#i-trash"/></svg></button>' +
+        '<input class="input ee-bp-tags" data-field="tags" type="text" value="' + esc(s.tags || '') + '" placeholder="标签筛选（选填，逗号分隔）" aria-label="知识点标签">' +
         '</div>';
     }).join('');
+    renderEditorSummary();
   }
-  function bpSnapshot() {
-    var rows = document.querySelectorAll('#bp-sections .ee-bp-section');
-    var out = [];
-    for (var i = 0; i < rows.length; i++) {
-      var f = rows[i].querySelectorAll('select, input');
-      out.push(Array.prototype.map.call(f, function (x) { return x.value; }).join('|'));
-    }
-    return out.join(';') + '#' + document.getElementById('bp-negative').value +
-      '#' + document.getElementById('bp-floor').checked +
-      '#' + document.getElementById('bp-record').checked;
+  function editorSnapshot() {
+    syncDraftFromDom();
+    return JSON.stringify(editorCtx.draft);
   }
-  function bpDirty() { return Boolean(bpCtx.baseline) && bpSnapshot() !== bpCtx.baseline; }
+  function editorDirty() {
+    return Boolean(editorCtx.baseline) && editorSnapshot() !== editorCtx.baseline;
+  }
+  function openProfileEditor(id, trigger) {
+    var g = editGate('bank.edit');
+    if (!g.can) { eeToast(g.why || '当前身份不能修改考试方案', 'bad'); return; }
+    var isCreate = !id;
+    var existing = isCreate ? null : findProfile(id);
+    if (!isCreate && !existing) { eeToast('未找到该考试方案', 'bad'); return; }
 
-  function openBlueprint(id, trigger) {
-    bpCtx.profileId = id;
-    renderBlueprintDrawer();
-    document.getElementById('bp-scrim').hidden = false;
-    document.getElementById('bp-drawer').hidden = false;
-    if (trigger) trigger.setAttribute('aria-expanded', 'true');
+    editorCtx.mode = isCreate ? 'create' : 'edit';
+    editorCtx.profileId = isCreate ? null : existing.id;
+    editorCtx.draft = isCreate ? {
+      name: '',
+      desc: '',
+      minutes: 120,
+      unlimited: false,
+      negative: 0,
+      floor: false,
+      record: true,
+      sections: [{ type: '单选题', diff: '不限', chapter: '不限', tags: '', n: 10, score: 2 }]
+    } : clone({
+      name: existing.name || '',
+      desc: existing.desc || '',
+      minutes: existing.minutes != null ? existing.minutes : 120,
+      unlimited: !!existing.unlimited,
+      negative: existing.negative || 0,
+      floor: !!existing.floor,
+      record: existing.record !== false,
+      sections: existing.sections || []
+    });
+
+    document.getElementById('pf-mode-tag').textContent = isCreate ? '新建方案' : '编辑方案';
+    document.getElementById('pf-version-sub').textContent = isCreate
+      ? '创建后即可按配额组卷开考'
+      : ('当前版本 v' + (existing.version || 1) + ' · 保存将更新方案');
+    document.getElementById('pf-drawer-title').textContent = isCreate ? '新建考试方案' : '编辑考试方案';
+    document.getElementById('pf-save-btn').textContent = isCreate ? '创建考试方案' : '保存修改';
+
+    var d = editorCtx.draft;
+    document.getElementById('pf-name').value = d.name;
+    document.getElementById('pf-name').removeAttribute('aria-invalid');
+    document.getElementById('pf-name-err').hidden = true;
+    document.getElementById('pf-desc').value = d.desc;
+    document.getElementById('pf-minutes').value = String(d.minutes);
+    document.getElementById('pf-minutes').disabled = !!d.unlimited;
+    document.getElementById('pf-minutes-err').hidden = true;
+    document.getElementById('pf-unlimited').checked = !!d.unlimited;
+    document.getElementById('pf-negative').value = String(d.negative);
+    document.getElementById('pf-floor').checked = !!d.floor;
+    document.getElementById('pf-record').checked = !!d.record;
+    document.getElementById('pf-sec-err').hidden = true;
+    renderPresetOptions();
+    renderEditorSections();
+
+    var liveCount = isCreate ? 0 : S.sessions('exam').filter(function (s) {
+      return (s.params && s.params.profileId) === existing.id;
+    }).length;
+    var liveNote = document.getElementById('pf-live-note');
+    liveNote.hidden = liveCount === 0;
+    if (liveCount > 0) liveNote.textContent = '当前有 ' + liveCount + ' 场进行中的考试使用此方案；保存修改不会影响正在作答的场次。';
+
+    editorCtx.baseline = editorSnapshot();
+    var drawer = document.getElementById('profile-drawer');
+    drawer._trigger = trigger || document.activeElement;
+    document.getElementById('profile-scrim').hidden = false;
+    drawer.hidden = false;
+    setTimeout(function () {
+      var nameEl = document.getElementById('pf-name');
+      if (nameEl) nameEl.focus();
+    }, 20);
   }
-  function closeBlueprint() {
-    document.getElementById('bp-scrim').hidden = true;
-    document.getElementById('bp-drawer').hidden = true;
+  function closeEditorDrawer() {
+    document.getElementById('profile-scrim').hidden = true;
+    var drawer = document.getElementById('profile-drawer');
+    drawer.hidden = true;
+    var t = drawer._trigger;
+    if (t && t.isConnected) t.focus();
   }
-  function requestCloseBp() {
-    if (bpDirty()) { eeDialog.open('dlg-bp-discard', document.activeElement); return; }
-    closeBlueprint();
+  function requestCloseEditor() {
+    if (editorDirty()) {
+      eeDialog.open('dlg-bp-discard', document.activeElement);
+      return;
+    }
+    closeEditorDrawer();
   }
   function confirmDiscard() {
     eeDialog.close(document.getElementById('dlg-bp-discard'));
-    renderBlueprintDrawer();
-    closeBlueprint();
-    eeToast('已放弃未保存的蓝图修改');
+    editorCtx.baseline = '';
+    closeEditorDrawer();
+    eeToast('已放弃未保存的方案修改');
   }
   function addSection() {
-    var p = profile(bpCtx.profileId);
-    p.sections.push({ type: '单选题', diff: '不限', chapter: '不限', tags: '', n: 10, score: 2 });
-    renderSections(p);
+    syncDraftFromDom();
+    editorCtx.draft.sections.push({ type: '单选题', diff: '不限', chapter: '不限', tags: '', n: 5, score: 2 });
+    document.getElementById('pf-sec-err').hidden = true;
+    renderEditorSections();
   }
   function removeSection(i) {
-    var p = profile(bpCtx.profileId);
-    p.sections.splice(i, 1);
-    renderSections(p);
+    syncDraftFromDom();
+    editorCtx.draft.sections.splice(i, 1);
+    renderEditorSections();
   }
-  function saveBlueprint() {
-    var p = profile(bpCtx.profileId);
-    p.version = (p.version || 0) + 1;
-    p.updatedAt = '2026-11-26 09:20';
-    bpCtx.baseline = bpSnapshot();
-    eeDialog.close(document.getElementById('dlg-bp-discard'));
-    closeBlueprint();
-    renderProfiles();
-    renderRail();
-    eeToast('已保存为蓝图 v' + p.version + '，进行中的考试不受影响');
+  function applyPreset() {
+    var pid = document.getElementById('pf-preset-select').value;
+    if (!pid) return;
+    var tpl = null;
+    PRESETS.forEach(function (t) { if (t.id === pid) tpl = t; });
+    if (!tpl) return;
+    syncDraftFromDom();
+    editorCtx.draft.sections = clone(tpl.sections);
+    editorCtx.draft.negative = tpl.negative;
+    editorCtx.draft.floor = tpl.floor;
+    editorCtx.draft.minutes = tpl.minutes;
+    editorCtx.draft.unlimited = false;
+    document.getElementById('pf-negative').value = String(tpl.negative);
+    document.getElementById('pf-floor').checked = !!tpl.floor;
+    document.getElementById('pf-minutes').value = String(tpl.minutes);
+    document.getElementById('pf-minutes').disabled = false;
+    document.getElementById('pf-unlimited').checked = false;
+    document.getElementById('pf-sec-err').hidden = true;
+    renderEditorSections();
+    eeToast('已套用「' + tpl.name + '」配额');
   }
+  function saveProfileEditor() {
+    syncDraftFromDom();
+    var d = editorCtx.draft;
+    var nameEl = document.getElementById('pf-name');
+    var nameErr = document.getElementById('pf-name-err');
+    var minEl = document.getElementById('pf-minutes');
+    var minErr = document.getElementById('pf-minutes-err');
+    var secErr = document.getElementById('pf-sec-err');
 
-  /* ---------- 档案动作 ---------- */
-  function openProfile(trigger) {
-    document.getElementById('dlg-profile-title').textContent = '新建考试档案';
-    document.getElementById('profile-name').value = '';
-    document.getElementById('profile-desc').value = '';
-    document.getElementById('profile-name-err').hidden = true;
-    eeDialog.open('dlg-profile', trigger || document.activeElement);
-  }
-  function createProfile() {
-    var name = document.getElementById('profile-name');
-    var err = document.getElementById('profile-name-err');
-    if (!name.value.trim()) {
-      err.hidden = false;
-      name.setAttribute('aria-invalid', 'true');
-      name.focus();
+    var cleanName = String(d.name || '').trim();
+    if (!cleanName) {
+      nameErr.hidden = false;
+      nameEl.setAttribute('aria-invalid', 'true');
+      eeDialog.close(document.getElementById('dlg-bp-discard'));
+      nameEl.focus();
       return;
     }
-    err.hidden = true;
-    name.removeAttribute('aria-invalid');
-    PROFILES.unshift({
-      id: 'p_' + Date.now().toString(36), name: name.value.trim(),
-      system: '', desc: document.getElementById('profile-desc').value.trim(),
-      version: 0, negative: 0, floor: false, record: true, sections: [], refs: { active: 0, reports: 0 }, updatedAt: '2026-11-26 09:20'
-    });
-    eeDialog.close(document.getElementById('dlg-profile'));
+    nameErr.hidden = true;
+    nameEl.removeAttribute('aria-invalid');
+
+    if (!d.unlimited && !(d.minutes >= 1 && d.minutes <= 600)) {
+      minErr.hidden = false;
+      minEl.classList.add('is-error');
+      eeDialog.close(document.getElementById('dlg-bp-discard'));
+      minEl.focus();
+      return;
+    }
+    minErr.hidden = true;
+    minEl.classList.remove('is-error');
+
+    var validSections = (d.sections || []).filter(function (s) { return s.n > 0; });
+    if (!validSections.length || totalQuestions({ sections: validSections }) <= 0) {
+      secErr.hidden = false;
+      eeDialog.close(document.getElementById('dlg-bp-discard'));
+      return;
+    }
+    secErr.hidden = true;
+
+    if (editorCtx.mode === 'create') {
+      var created = {
+        id: 'p_' + Date.now().toString(36),
+        name: cleanName,
+        desc: String(d.desc || '').trim(),
+        version: 1,
+        minutes: d.unlimited ? 0 : d.minutes,
+        unlimited: !!d.unlimited,
+        negative: d.negative || 0,
+        floor: !!d.floor,
+        record: d.record !== false,
+        sections: clone(validSections),
+        updatedAt: nowStamp()
+      };
+      PROFILES.unshift(created);
+      saveProfiles();
+      eeDialog.close(document.getElementById('dlg-bp-discard'));
+      editorCtx.baseline = '';
+      closeEditorDrawer();
+      renderProfiles();
+      renderReportFilters();
+      eeToast('已创建考试方案「' + created.name + '」');
+      return;
+    }
+
+    var target = findProfile(editorCtx.profileId);
+    if (!target) { eeToast('未找到要更新的方案', 'bad'); return; }
+    target.name = cleanName;
+    target.desc = String(d.desc || '').trim();
+    target.minutes = d.unlimited ? 0 : d.minutes;
+    target.unlimited = !!d.unlimited;
+    target.negative = d.negative || 0;
+    target.floor = !!d.floor;
+    target.record = d.record !== false;
+    target.sections = clone(validSections);
+    target.version = (target.version || 0) + 1;
+    target.updatedAt = nowStamp();
+    saveProfiles();
+
+    eeDialog.close(document.getElementById('dlg-bp-discard'));
+    editorCtx.baseline = '';
+    closeEditorDrawer();
     renderProfiles();
-    renderRail();
-    openBlueprint(PROFILES[0].id, document.activeElement);
-    eeToast('档案已创建，接着配置蓝图');
-  }
-  function renameProfile(id, trigger) {
-    var p = profile(id);
-    document.getElementById('dlg-profile-title').textContent = '重命名考试档案';
-    document.getElementById('profile-name').value = p.name;
-    document.getElementById('profile-desc').value = p.desc || '';
-    document.getElementById('profile-name-err').hidden = true;
-    eeDialog.open('dlg-profile', trigger || document.activeElement);
-  }
-  function copyProfile(id, trigger) {
-    var p = profile(id);
-    PROFILES.unshift(JSON.parse(JSON.stringify(p)));
-    PROFILES[0].id = 'p_' + Date.now().toString(36);
-    PROFILES[0].name = p.name + '（副本）';
-    PROFILES[0].refs = { active: 0, reports: 0 };
-    renderProfiles();
-    renderRail();
-    eeToast('已复制档案，并连带最新蓝图版本');
-  }
-  function deleteProfile(id, trigger) {
-    var p = profile(id);
-    var n = p.refs.active + p.refs.reports;
-    eeToast(n > 0
-      ? '已删除档案；' + p.refs.active + ' 场进行中的考试与 ' + p.refs.reports + ' 份历史报告仍按开考时的题目进行、仍可回看'
-      : '已删除档案');
-    for (var i = 0; i < PROFILES.length; i++) if (PROFILES[i].id === id) PROFILES.splice(i, 1);
-    renderProfiles();
-    renderRail();
-  }
-  function toggleProfileMenu(btn) {
-    var menu = btn.parentElement.querySelector('.menu');
-    if (!menu) return;
-    var willOpen = menu.hidden;
-    document.querySelectorAll('.menu').forEach(function (m) {
-      if (m !== menu && !m.hidden) {
-        m.hidden = true;
-        var b = m.parentElement.querySelector('[data-menu-trigger]');
-        if (b) b.setAttribute('aria-expanded', 'false');
-      }
-    });
-    menu.hidden = !willOpen;
-    btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    renderReportFilters();
+    eeToast('已保存「' + target.name + '」（v' + target.version + '）');
   }
 
-  /* ---------- 组卷与开始前确认（FN-305） ---------- */
+  /* ---------- 按考试方案开考（#dlg-setup） ---------- */
   function openSetup(profileId, trigger, bankId) {
     var banks = banksWithQuestions();
+    var validProfiles = PROFILES.filter(function (x) { return x.sections && x.sections.length; });
     if (!banks.length) {
       eeDialog.open('dlg-setup', trigger || document.activeElement);
-      refuseSetup('没有可组卷的题库', '当前实例里没有题量大于 0 的题库。先导入题目，或从模板创建一份蓝图。');
+      refuseSetup('没有可用的题库', '当前没有包含题目的题库，请先导入题目。');
       return;
     }
-    var p = profileId ? profile(profileId) : null;
+    if (!validProfiles.length) {
+      eeToast('请先在考试方案中添加至少一个配额段', 'bad');
+      return;
+    }
+    var p = (profileId && findProfile(profileId)) || validProfiles[0];
+    if (!p.sections || !p.sections.length) p = validProfiles[0];
     var bank = bankId ? S.bank(bankId) : null;
     if (!bank || qcount(bank.id) === 0) {
-      /* 默认选题量最大的题库：蓝图题量才有可能被满足 */
-      bank = banks.slice().sort(function (a, b) { return qcount(b.id) - qcount(a.id); })[0];
+      bank = banks.slice().sort(function (a, b) { return capacity(b.id) - capacity(a.id); })[0];
     }
-    setupCtx = { profileId: p ? p.id : '', bankId: bank.id };
+    setupCtx = { profileId: p.id, bankId: bank.id };
 
     document.getElementById('setup-bank').innerHTML = banks.map(function (b) {
-      return '<option value="' + esc(b.id) + '"' + (b.id === bank.id ? ' selected' : '') + '>' + esc(b.name) + ' · ' + qcount(b.id) + ' 题</option>';
+      return '<option value="' + esc(b.id) + '"' + (b.id === bank.id ? ' selected' : '') + '>' + esc(b.name) + ' · ' + capacity(b.id) + ' 题</option>';
     }).join('');
-    document.getElementById('setup-profile').innerHTML =
-      '<option value="">不使用蓝图（基础题库模式）</option>' + PROFILES.map(function (x) {
-        return '<option value="' + esc(x.id) + '"' + (p && x.id === p.id ? ' selected' : '') + '>' + esc(x.name) + (x.version ? '（v' + x.version + '）' : '（未配置）') + '</option>';
-      }).join('');
-    document.getElementById('setup-total').value = String(p && p.sections.length ? Math.min(totalQuestions(p), capacity(bank.id)) : Math.min(10, capacity(bank.id)));
-    document.getElementById('setup-minutes').value = p && p.id === 'p2' ? '30' : '120';
-    document.getElementById('setup-unlimited').checked = false;
-    document.getElementById('setup-record').checked = true;
+    document.getElementById('setup-profile').innerHTML = validProfiles.map(function (x) {
+      return '<option value="' + esc(x.id) + '"' + (x.id === p.id ? ' selected' : '') + '>' + esc(x.name) + '（v' + (x.version || 1) + '）</option>';
+    }).join('');
+    document.getElementById('setup-minutes').value = String(p.unlimited ? 120 : (p.minutes || 120));
+    document.getElementById('setup-unlimited').checked = !!p.unlimited;
+    document.getElementById('setup-record').checked = p.record !== false;
     syncSetup();
     eeDialog.open('dlg-setup', trigger || document.activeElement);
   }
@@ -1613,353 +1623,435 @@ window.EEexams = (function () {
   function syncSetup() {
     var bankId = document.getElementById('setup-bank').value;
     var pid = document.getElementById('setup-profile').value;
-    var p = pid ? profile(pid) : null;
-    var max = capacity(bankId);
-    var total = parseInt(document.getElementById('setup-total').value, 10);
-    var minutes = parseInt(document.getElementById('setup-minutes').value, 10);
+    var p = findProfile(pid);
+    var minEl = document.getElementById('setup-minutes');
     var unlimited = document.getElementById('setup-unlimited').checked;
-    var msg = document.getElementById('setup-total-msg');
-    var totalEl = document.getElementById('setup-total');
-
-    /* 蓝图模式下题量由蓝图在本题库的可满足结果决定：输入框跟着它走，
-       避免「输入框写 10、确认块写 12、最后卷子 12」三套数。 */
-    var planPreview = (p && p.sections.length) ? planQuota(p, bankId, max) : null;
-    if (planPreview && planPreview.total !== total) {
-      total = planPreview.total;
-      totalEl.value = String(total);
-    }
-    var invalid = !(total >= 1) || total > max;
-    totalEl.max = String(max);
-    totalEl.classList.toggle('is-error', invalid);
-    if (invalid) {
-      msg.textContent = '这个题库只有 ' + max + ' 题，请把题目数量改到 1 到 ' + max + ' 之间。';
-      msg.className = 'field-err';
-    } else {
-      msg.textContent = '上限为题库题量 ' + max + (p && p.sections.length ? '；蓝图总题数 ' + totalQuestions(p) : '');
-      msg.className = 'hint';
-    }
-
+    minEl.disabled = unlimited;
+    var minutes = parseInt(minEl.value, 10);
     var timeInvalid = !unlimited && !(minutes >= 1 && minutes <= 600);
-    document.getElementById('setup-minutes').classList.toggle('is-error', timeInvalid);
+    minEl.classList.toggle('is-error', timeInvalid);
     document.getElementById('setup-minutes-msg').textContent = timeInvalid
-      ? '时长必须是 1 到 600 的整数，或勾选「不限时」；不接受 0。'
-      : (unlimited ? '本场不限时：没有硬截止、没有宽限、没有自动交卷；连续 30 天无活动会标记为失效并通知你。' : '正整数分钟；不接受 0');
+      ? '时长必须是 1 到 600 的整数，或勾选「本场不限时」。'
+      : (unlimited ? '不设倒计时，可随时暂存或交卷' : '1 到 600 分钟');
     document.getElementById('setup-minutes-msg').className = timeInvalid ? 'field-err' : 'hint';
 
-    document.getElementById('setup-bank-msg').textContent = '可组卷题量 ' + max + '（未归档）';
-    document.getElementById('setup-profile-msg').textContent = p && p.sections.length
-      ? '蓝图 v' + p.version + ' · ' + totalQuestions(p) + ' 题 · 客观题满分 ' + objectiveFull(p) + ' 分'
-      : '不使用蓝图：按题库既有顺序顺序抽取前 N 题';
+    if (!p || !p.sections || !p.sections.length) {
+      refuseSetup('方案尚未配置配额段', '请先编辑该方案并添加至少一个配额段。');
+      return;
+    }
+    var max = capacity(bankId);
+    var plan = planQuota(p, bankId);
+    document.getElementById('setup-bank-msg').textContent = '当前题库可用 ' + max + ' 题';
+    document.getElementById('setup-profile-msg').textContent = '方案 v' + (p.version || 1) + ' · 声明 ' + plan.want + ' 题';
 
-    if (invalid || timeInvalid) { refuseSetup(
-      invalid ? '题目数量超出可组卷题量' : '时长取值不合法',
-      invalid ? '这个题库只有 ' + max + ' 题，请把题目数量改到 1 到 ' + max + ' 之间。' : '时长必须是正整数分钟，或明确选择「不限时」。');
-      /* 非法输入时不能继续展示上一组已失效的题库 / 配额 / 时长。 */
-      var cf = document.getElementById('setup-confirm');
-      if (cf) cf.innerHTML = '<span class="kv-key">开始前确认</span><span class="kv-val">修正上面的取值后，这里会显示本次的题库、配额与时长。</span>';
-      var dg = document.getElementById('setup-degrade-note');
-      if (dg) dg.textContent = '';
+    if (timeInvalid || plan.total <= 0) {
+      refuseSetup(plan.total <= 0 ? '该题库无法抽取题目' : '时长取值不合法',
+        plan.total <= 0 ? '请选择其他包含题目的题库。' : '请填写 1 到 600 分钟，或勾选不限时。');
       return;
     }
     allowSetup();
 
-    /* 开始前确认七项 */
-    var quota = [];
-    var plan = null;
-    if (p && p.sections.length) {
-      plan = planQuota(p, bankId, max);
-      p.sections.forEach(function (s, i) {
-        var got = plan.parts[i].got;
-        quota.push((got < s.n ? s.type + ' ' + got + ' 题（蓝图 ' + s.n + ' 题，题库不足）' : s.type + ' ' + got + ' 题') +
-          (s.diff !== '不限' ? '（' + s.diff + '）' : '') + (OBJECTIVE[s.type] ? ' × ' + s.score + ' 分' : '（不判分）'));
-      });
+    var quotaDesc = p.sections.map(function (s, i) {
+      var got = plan.parts[i].got;
+      var suffix = got < s.n ? '（方案要求 ' + s.n + ' 题，匹配到 ' + got + ' 题）' : '';
+      return s.type + ' ' + got + ' 题' + suffix + (OBJECTIVE[s.type] ? ' × ' + s.score + ' 分' : '（主观题不判分）');
+    });
+    if (plan.fill > 0) quotaDesc.push('同库其他题目随机补足 ' + plan.fill + ' 题');
+
+    var note = '';
+    if (plan.total < plan.want) {
+      note = '当前题库共 ' + max + ' 题，实际将抽取 ' + plan.total + ' 题并按实际题量计分。';
+    } else if (plan.fill > 0) {
+      note = '部分条件匹配题目不足，已自动用同库其他题目随机补足至 ' + plan.total + ' 题。';
     } else {
-      quota = ['基础题库模式：按题库既有顺序抽取前 ' + total + ' 题'];
+      note = '所有配额段均可从当前题库随机抽满，共 ' + plan.total + ' 题。';
     }
-    var degrade = p && p.sections.length && (totalQuestions(p) > plan.total)
-      ? '蓝图要 ' + totalQuestions(p) + ' 题，这个题库只组得出 ' + plan.total + ' 题（可组卷上限 ' + max + '）；卷子与报告都会按 ' + plan.total + ' 题计。'
-      : '实际组出题量与蓝图声明一致，没有降级补入。';
-    document.getElementById('setup-degrade-note').textContent = degrade;
+    document.getElementById('setup-degrade-note').textContent = note;
 
     document.getElementById('setup-confirm').innerHTML =
-      '<span class="kv-key">题库与可组卷题量</span><span class="kv-val">' + esc(S.bank(bankId).name) + ' · ' + max + ' 题</span>' +
-      '<span class="kv-key">蓝图版本</span><span class="kv-val">' + (p && p.version ? 'v' + p.version + '（本场绑定该版本）' : '不使用蓝图') + '</span>' +
-      '<span class="kv-key">实际配额结果</span><span class="kv-val">' + esc(quota.join(' · ')) + '</span>' +
-      '<span class="kv-key">客观题总分</span><span class="kv-val">' + (plan
-        ? plan.parts.reduce(function (a, x) { return a + (OBJECTIVE[x.type] ? x.got * x.score : 0); }, 0) + ' 分；主观题 ' + plan.parts.reduce(function (a, x) { return a + (OBJECTIVE[x.type] ? 0 : x.got); }, 0) + ' 题未判分，不计入'
-        : '按每题 1 分计') + '</span>' +
-      '<span class="kv-key">负分规则</span><span class="kv-val">' + (p && p.negative > 0 ? '答错扣 ' + p.negative + ' 分；' + (p.floor ? '设 0 分下限' : '未设 0 分下限，总分可为负') : '答错不扣分') + '</span>' +
-      '<span class="kv-key">时长</span><span class="kv-val">' + (unlimited
-        ? '不限时（没有硬截止、没有宽限、没有自动交卷）'
-        : minutes + ' 分钟；到点后还有 ' + 60 + ' 秒宽限，只同步不继续答题') + '</span>' +
-      '<span class="kv-key">闲置失效</span><span class="kv-val">' + (unlimited
-        ? '连续 30 天无活动将标记为失效并通知你，之后仍需你显式交卷或放弃，不会自动判成绩。'
-        : '限时考试到点即走宽限与服务端收卷，不适用闲置失效。') + '</span>' +
-      '<span class="kv-key">是否纳入学习记录</span><span class="kv-val">' + (document.getElementById('setup-record').checked
-        ? '纳入：错题、FSRS 与统计照常更新'
-        : '不纳入：本场不写错题、不写 FSRS、不计入任何统计与趋势') + '</span>';
+      '<span class="kv-key">目标题库</span><span class="kv-val">' + esc(bankName(bankId)) + '（可用 ' + max + ' 题）</span>' +
+      '<span class="kv-key">考试方案</span><span class="kv-val">' + esc(p.name) + ' · v' + (p.version || 1) + '</span>' +
+      '<span class="kv-key">实际组卷题量</span><span class="kv-val mono">' + plan.total + ' 题</span>' +
+      '<span class="kv-key">配额明细</span><span class="kv-val">' + esc(quotaDesc.join(' · ')) + '</span>' +
+      '<span class="kv-key">客观题满分</span><span class="kv-val mono">' + plan.objFull + ' 分' + (plan.subjGot ? '（另有主观题 ' + plan.subjGot + ' 题不自动判分）' : '') + '</span>' +
+      '<span class="kv-key">扣分规则</span><span class="kv-val">' + (p.negative > 0 ? '答错扣 ' + p.negative + ' 分；' + (p.floor ? '设 0 分下限' : '不设 0 分下限') : '答错不扣分') + '</span>' +
+      '<span class="kv-key">时长</span><span class="kv-val">' + (unlimited ? '不限时' : minutes + ' 分钟') + '</span>' +
+      '<span class="kv-key">学习记录</span><span class="kv-val">' + (document.getElementById('setup-record').checked ? '纳入错题与复习计划' : '不纳入') + '</span>';
   }
-  function beginExam() {
+  function beginSetupExam() {
     var bankId = document.getElementById('setup-bank').value;
     var pid = document.getElementById('setup-profile').value;
-    var p = pid ? profile(pid) : null;
-    var total = parseInt(document.getElementById('setup-total').value, 10);
-    var minutes = parseInt(document.getElementById('setup-minutes').value, 10);
+    var p = findProfile(pid);
+    if (!p || !p.sections || !p.sections.length) return;
     var unlimited = document.getElementById('setup-unlimited').checked;
-    if (S.sessions('exam').length) { askActive(document.activeElement); return; }
-    /* 蓝图随会话一起进答题器：题量 / 题型 / 章节 / 时长都从这里来，
-       不再只把 total 传过去让答题器自己截题库。p.sections 就是开考时绑定的那一版。 */
-    var blueprint = (p && p.sections && p.sections.length) ? {
-      id: p.id, name: p.name, version: p.version, negative: p.negative, floor: p.floor,
+    var mins = parseInt(document.getElementById('setup-minutes').value, 10);
+    if (!unlimited && !(mins >= 1 && mins <= 600)) return;
+
+    var plan = planQuota(p, bankId);
+    var blueprint = {
+      id: p.id, name: p.name, version: p.version || 1,
+      negative: p.negative || 0, floor: !!p.floor,
       sections: p.sections.map(function (x) {
         return { type: x.type, diff: x.diff, chapter: x.chapter, tags: x.tags, n: x.n, score: x.score };
       })
-    } : null;
-    var s = S.startSession({
-      kind: 'exam', bankId: bankId, mode: '模考',
-      title: p ? p.name : ('模考 · ' + bankName(bankId)),
-      total: total, minutes: unlimited ? 0 : minutes, unlimited: unlimited,
+    };
+    var payload = {
+      kind: 'exam', bankId: bankId, mode: '模考', order: '方案随机抽题',
+      title: p.name,
+      total: plan.total, minutes: unlimited ? 0 : mins, unlimited: unlimited,
       record: document.getElementById('setup-record').checked,
-      blueprint: blueprint, blueprintMode: blueprint ? 'blueprint' : 'basic',
-      params: { count: total, minutes: unlimited ? 0 : minutes, unlimited: unlimited, mode: '模考', profileId: pid || '' },
-      index: 0, done: 0, answers: {}, selections: {}, flags: {}, elapsed: 0, remaining: unlimited ? null : minutes * 60,
-      origin: { page: 'exams.html', href: 'exams.html' + location.search, label: '模考中心' },
-      replace: true
-    });
+      blueprint: blueprint, blueprintMode: 'blueprint',
+      params: { count: plan.total, minutes: unlimited ? 0 : mins, unlimited: unlimited, mode: '模考', profileId: p.id },
+      index: 0, done: 0, answers: {}, selections: {}, flags: {}, elapsed: 0,
+      remaining: unlimited ? null : mins * 60,
+      origin: { page: 'exams.html', href: 'exams.html' + location.search, label: '模考中心' }
+    };
     eeDialog.close(document.getElementById('dlg-setup'));
-    if (!s || !s.id) { eeToast('这场模考没能建立，稍后再试', 'bad'); return; }
-    location.href = 'exam.html?sid=' + encodeURIComponent(s.id);
-  }
-  function askActive(trigger) {
-    /* 对话框里的进度、剩余与「继续那场」都读这一场真实会话，不写死演示数字。 */
-    var s = S.sessions('exam')[S.sessions('exam').length - 1];
-    if (s) {
-      var paper = s.title || bankName(s.bankId);
-      var done = s.done || 0, total = s.total || 0;
-      var left = s.remaining != null ? Math.max(0, Math.round(s.remaining / 60)) : null;
-      var p1 = document.getElementById('dlg-active-desc');
-      if (p1) p1.textContent = '「' + paper + '」还有 ' + done + ' / ' + total + ' 题未交卷。同一时间只保留一场进行中的模考。';
-      var p2 = document.getElementById('dlg-active-paper');
-      if (p2) p2.textContent = paper;
-      var p3 = document.getElementById('dlg-active-progress');
-      if (p3) p3.textContent = '已答 ' + done + ' / ' + total;
-      var p4 = document.getElementById('dlg-active-left');
-      if (p4) p4.textContent = left == null ? '不限时' : left + ' 分钟';
-      var go = document.getElementById('dlg-active-continue');
-      if (go) go.setAttribute('href', 'exam.html?sid=' + encodeURIComponent(s.id));
-    }
-    eeDialog.open('dlg-active', trigger || document.activeElement);
-  }
-  function confirmActive() {
-    S.sessions('exam').forEach(function (x) { S.finishSession(x.id); });
-    eeDialog.close(document.getElementById('dlg-active'));
-    eeToast('已结束旧会话，正在新建');
-    beginExam();
+    launchOrConfirmActive(payload, document.activeElement);
   }
 
-  /* ---------- 重新考试（FN-310） ---------- */
-  function askReExam(id, trigger) {
-    var p = profile(id);
-    reexamCtx = id;
-    document.getElementById('reexam-confirm').innerHTML =
-      '<span class="kv-key">考试档案</span><span class="kv-val">' + esc(p.name) + '</span>' +
-      '<span class="kv-key">蓝图版本</span><span class="kv-val">' + (p.version ? '当前最新 v' + p.version : '不使用蓝图') + '</span>' +
-      '<span class="kv-key">题量</span><span class="kv-val mono">' + (p.sections.length ? totalQuestions(p) : '按题库顺序取前 N 题') + '</span>' +
-      '<span class="kv-key">时长</span><span class="kv-val mono">' + (id === 'p2' ? '30 分钟' : '120 分钟') + '</span>' +
-      '<span class="kv-key">纳入学习记录</span><span class="kv-val">' + (p.record ? '纳入' : '不纳入') + '</span>';
-    eeDialog.open('dlg-reexam', trigger || document.activeElement);
-  }
-
-  /* 重新考试：真的用该档案例建一场新会话。原来按钮只是跳到 exam.html，
-     而 exam.html 在没有会话时会捡一个旧会话或造演示会话——「重新考试」按下去
-     并没有用这份档案例组一场新卷。 */
-  function beginReExam() {
-    var p = profile(reexamCtx) || PROFILES[0];
-    var bankId = (banksWithQuestions()[0] || {}).id;
-    if (!bankId) { eeToast('还没有可组卷的题库，先导入题目', 'bad'); return; }
-    var blueprint = p.sections.length ? {
-      id: p.id, name: p.name, version: p.version, negative: p.negative, floor: p.floor,
-      sections: p.sections.map(function (x) {
-        return { type: x.type, diff: x.diff, chapter: x.chapter, tags: x.tags, n: x.n, score: x.score };
-      })
-    } : null;
-    var total = blueprint ? Math.min(totalQuestions(p), qcount(bankId)) : Math.min(10, qcount(bankId));
-    var minutes = p.id === 'p2' ? 30 : 120;
-    eeDialog.close(document.getElementById('dlg-reexam'));
-    var s = S.startSession({
-      kind: 'exam', bankId: bankId, mode: '模考', title: p.name,
-      total: total, minutes: minutes,
-      record: p.record, blueprint: blueprint, blueprintMode: blueprint ? 'blueprint' : 'basic',
-      params: { count: total, minutes: minutes, mode: '模考', profileId: p.id },
-      index: 0, done: 0, answers: {}, selections: {}, flags: {}, remaining: minutes * 60,
-      origin: { page: 'exams.html', href: 'exams.html' + location.search, label: '模考中心' },
-      replace: true
-    });
-    if (!s || !s.id) { eeToast('这场模考没能建立，稍后再试', 'bad'); return; }
-    location.href = 'exam.html?sid=' + encodeURIComponent(s.id);
-  }
-
-  /* ---------- 放弃 ---------- */
+  /* ---------- 放弃进行中模考 ---------- */
+  var abandonTargetId = null;
   function askAbandon(sid, trigger) {
     var s = null;
     S.sessions('exam').forEach(function (x) { if (x.id === sid) s = x; });
-    document.getElementById('abandon-paper').textContent = s ? (s.title || bankName(s.bankId)) : '系统集成项目管理工程师 · 综合卷';
-    document.getElementById('abandon-progress').textContent = '已答 ' + (s ? (s.done || 0) : 22) + ' / ' + (s ? (s.total || 0) : 38);
+    abandonTargetId = s ? s.id : null;
+    document.getElementById('abandon-paper').textContent = s ? (s.title || bankName(s.bankId)) : '演示场次';
+    document.getElementById('abandon-progress').textContent = '已答 ' + (s ? (s.done || 0) : 0) + ' / ' + (s ? (s.total || 0) : 0);
+    document.getElementById('abandon-left').textContent = s
+      ? (s.unlimited ? '不限时' : (s.remaining != null ? Math.max(0, Math.round(s.remaining / 60)) + ' 分钟' : '计时中'))
+      : '—';
     eeDialog.open('dlg-abandon', trigger || document.activeElement);
   }
   function confirmAbandon() {
-    S.sessions('exam').forEach(function (x) { S.finishSession(x.id); });
+    if (abandonTargetId) S.finishSession(abandonTargetId);
+    else S.sessions('exam').forEach(function (x) { S.finishSession(x.id); });
+    abandonTargetId = null;
     eeDialog.close(document.getElementById('dlg-abandon'));
-    eeToast('已放弃本场模考，本次作答不计入成绩');
+    eeToast('已放弃本场模考');
     renderAll();
   }
 
-  /* ---------- 蓝图导入模板（FN-304） ---------- */
-  function openTemplate(trigger) {
-    tplCtx = { step: 0, tpl: TEMPLATES[0] };
-    renderTemplate();
-    eeDialog.open('dlg-template', trigger || document.activeElement);
+  /* ---------- 任务三：考试记录列表与分页 ---------- */
+  function allReports() {
+    var store = S.reports('exam').map(function (r) {
+      return Object.assign({}, r, {
+        title: r.title || ('模考 · ' + bankName(r.bankId)),
+        objTotal: r.objTotal != null ? r.objTotal : r.total,
+        via: r.via || 'manual',
+        items: r.items || []
+      });
+    });
+    store.forEach(function (r) { if (r.full == null) r.legacy = true; });
+    var demo = store.length < 3 ? DEMO_REPORTS.slice(0, 3 - store.length) : [];
+    return store.concat(demo, ARCHIVE_REPORTS);
   }
-  function renderTemplate() {
-    document.getElementById('tpl-list').innerHTML = TEMPLATES.map(function (t) {
-      return '<button type="button" class="ee-tpl' + (tplCtx.tpl.id === t.id ? ' is-on' : '') + '" onclick="EEexams.pickTemplate(\'' + t.id + '\')">' +
-        '<span class="ee-tpl-name">' + esc(t.name) + '</span><span class="ee-tpl-meta">' + esc(t.meta) + '</span></button>';
-    }).join('');
-    document.getElementById('tpl-preview').innerHTML = tplCtx.tpl.rows.map(function (r) {
-      return '<tr><td data-label="配额段">' + esc(tplCtx.tpl.name) + '</td><td data-label="题型">' + esc(r[0]) + '</td>' +
-        '<td data-label="难度">' + esc(r[1]) + '</td><td data-label="题数" class="num">' + r[2] + '</td><td data-label="单题分值" class="num">' + r[3] + '</td></tr>';
-    }).join('');
-    var steps = document.querySelectorAll('#tpl-steps .step');
-    for (var i = 0; i < steps.length; i++) {
-      steps[i].classList.toggle('is-active', i === tplCtx.step);
-      steps[i].classList.toggle('is-done', i < tplCtx.step);
+  function inRange(r) {
+    if (reportFilter.range === 'all') return true;
+    var days = (Date.now() - new Date(String(r.at || '').replace(' ', 'T')).getTime()) / 86400000;
+    if (isNaN(days)) return false;
+    if (reportFilter.range === 'older') return days > 90;
+    return days <= parseInt(reportFilter.range, 10);
+  }
+  function filteredReports() {
+    return allReports().filter(function (r) {
+      if (!inRange(r)) return false;
+      if (reportFilter.profile && r.title !== reportFilter.profile) return false;
+      if (reportFilter.via && (r.via || 'manual') !== reportFilter.via) return false;
+      return true;
+    }).sort(function (a, b) { return String(b.at).localeCompare(String(a.at)); });
+  }
+  function monthKey(r) { return String(r.at || '').slice(0, 7); }
+  function monthLabel(k) {
+    var p = k.split('-');
+    return p.length === 2 ? (p[0] + ' 年 ' + parseInt(p[1], 10) + ' 月') : '其他时间';
+  }
+  function groupByMonth(list) {
+    var groups = {};
+    list.forEach(function (r) { (groups[monthKey(r)] = groups[monthKey(r)] || []).push(r); });
+    return Object.keys(groups).sort().reverse().map(function (k) {
+      return { key: k, label: monthLabel(k), rows: groups[k] };
+    });
+  }
+  function reportRowHtml(r) {
+    var legacy = !!r.legacy;
+    var scoreStr = r.score == null
+      ? '待判分'
+      : (r.score + ' / ' + (legacy ? '—' : r.full) + ' 分');
+    var rateStr = legacy ? '—' : (r.rate != null ? r.rate + '%' : '—');
+    var changed = (r.items || []).filter(function (it) { return it.cur && it.cur !== it.ver; }).length;
+    var metaBits = [
+      '<span class="mono">' + esc(r.at || '—') + '</span>',
+      '<span>用时 ' + (r.minutes == null ? '—' : r.minutes + ' 分钟') + '</span>'
+    ];
+    if (r.total != null) metaBits.push('<span>共 ' + r.total + ' 题</span>');
+    if (r.via && r.via !== 'manual') metaBits.push('<span class="tag warn">' + esc(viaLabel(r.via)) + '</span>');
+    if (changed) metaBits.push('<span class="tag warn">' + changed + ' 题有新版</span>');
+    if (legacy) metaBits.push('<span class="tag plain">早期记录</span>');
+
+    return '<div class="list-row ee-rep-row" data-report-id="' + esc(r.id) + '" tabindex="0" role="button" aria-label="查看 ' + esc(r.title) + ' 成绩报告">' +
+      '<div class="list-main">' +
+      '<div class="list-title ee-paper-title">' + esc(r.title) + '</div>' +
+      '<div class="list-meta">' + metaBits.join('') + '</div>' +
+      '</div>' +
+      '<div class="list-side">' +
+      '<span class="ee-rep-score"><b>' + esc(scoreStr) + '</b> · ' + esc(rateStr) + '</span>' +
+      '<button class="btn btn-sm btn-quiet" type="button" data-open-report="' + esc(r.id) + '">查看报告</button>' +
+      '</div></div>';
+  }
+  function pageNumbers(cur, total) {
+    if (total <= 7) {
+      var all = [];
+      for (var i = 1; i <= total; i++) all.push(i);
+      return all;
     }
-    var panels = document.querySelectorAll('[data-tpl-panel]');
-    for (var j = 0; j < panels.length; j++) panels[j].hidden = j !== tplCtx.step;
-    document.getElementById('tpl-prev').disabled = tplCtx.step === 0;
-    document.getElementById('tpl-next').textContent = tplCtx.step === 2 ? '完成' : '下一步';
-    document.getElementById('tpl-error').hidden = true;
-    document.getElementById('tpl-ok').hidden = tplCtx.step !== 1;
+    var out = [1];
+    if (cur > 3) out.push('...');
+    var start = Math.max(2, cur - 1);
+    var end = Math.min(total - 1, cur + 1);
+    for (var j = start; j <= end; j++) out.push(j);
+    if (cur < total - 2) out.push('...');
+    out.push(total);
+    return out;
   }
-  function pickTemplate(id) {
-    TEMPLATES.forEach(function (t) { if (t.id === id) tplCtx.tpl = t; });
-    renderTemplate();
-  }
-  function tplPrev() { if (tplCtx.step > 0) { tplCtx.step--; renderTemplate(); } }
-  function tplNext() {
-    if (tplCtx.step === 1) {
-      /* 演示校验失败：缺 count 非正数 / 题型非法 → 逐条列出且不写库 */
-      document.getElementById('tpl-error').hidden = false;
-      document.getElementById('tpl-ok').hidden = true;
+  function renderPager(totalCount, totalPages) {
+    var host = document.getElementById('reports-pager');
+    if (totalCount <= PAGE_SIZE) {
+      host.hidden = true;
+      host.innerHTML = '';
       return;
     }
-    if (tplCtx.step < 2) { tplCtx.step++; renderTemplate(); }
-    else { eeDialog.close(document.getElementById('dlg-template')); eeToast('模板已导入为新的蓝图版本'); }
+    host.hidden = false;
+    var nums = pageNumbers(reportPage, totalPages).map(function (p) {
+      if (p === '...') return '<span class="ee-pager-ellipsis">…</span>';
+      var on = p === reportPage;
+      return '<button type="button" class="btn btn-sm' + (on ? ' btn-primary' : ' btn-quiet') + '" data-page="' + p + '"' +
+        (on ? ' aria-current="page"' : '') + '>' + p + '</button>';
+    }).join('');
+    host.innerHTML =
+      '<div class="ee-pager-pages">' +
+      '<button type="button" class="btn btn-sm btn-quiet" data-page="' + (reportPage - 1) + '"' + (reportPage <= 1 ? ' disabled' : '') + '>上一页</button>' +
+      nums +
+      '<button type="button" class="btn btn-sm btn-quiet" data-page="' + (reportPage + 1) + '"' + (reportPage >= totalPages ? ' disabled' : '') + '>下一页</button>' +
+      '</div>' +
+      '<span class="ee-pager-info">第 ' + reportPage + ' / ' + totalPages + ' 页 · 共 ' + totalCount + ' 场</span>';
+  }
+  function renderReports() {
+    var list = filteredReports();
+    var total = allReports().length;
+    document.getElementById('reports-count').textContent = list.length === total
+      ? ('共 ' + total + ' 场')
+      : ('筛选出 ' + list.length + ' / ' + total + ' 场');
+    var host = document.getElementById('reports-list-host');
+    if (!list.length) {
+      host.innerHTML = '<div class="empty"><div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-exam"/></svg></div>' +
+        '<p class="empty-title">没有符合条件的考试记录</p>' +
+        '<p class="empty-desc">放宽时间范围或清除方案筛选即可查看全部记录；已放弃的模考不会生成记录。</p></div>';
+      renderPager(0, 1);
+      return;
+    }
+    var totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+    if (reportPage > totalPages) reportPage = totalPages;
+    if (reportPage < 1) reportPage = 1;
+    var slice = list.slice((reportPage - 1) * PAGE_SIZE, reportPage * PAGE_SIZE);
+    var groups = groupByMonth(slice);
+    host.innerHTML = groups.map(function (g) {
+      return '<div class="ee-rep-group"><span class="ee-rep-group-date">' + esc(g.label) + '</span>' +
+        '<span class="ee-rep-group-n">' + g.rows.length + ' 场</span></div>' +
+        g.rows.map(reportRowHtml).join('');
+    }).join('');
+    renderPager(list.length, totalPages);
+  }
+  function renderReportFilters() {
+    var sel = document.getElementById('report-profile');
+    var names = {};
+    allReports().forEach(function (r) { if (r.title) names[r.title] = 1; });
+    var keep = sel.value;
+    sel.innerHTML = '<option value="">全部考试</option>' + Object.keys(names).sort().map(function (n) {
+      return '<option value="' + esc(n) + '"' + (n === keep ? ' selected' : '') + '>' + esc(n) + '</option>';
+    }).join('');
+    var via = document.getElementById('report-via');
+    var keepVia = via.value;
+    via.innerHTML = '<option value="">全部交卷方式</option>' +
+      '<option value="manual">手动交卷</option>' +
+      '<option value="auto_deadline">到点自动交卷</option>' +
+      '<option value="expired_server_answers">超时后以服务器答案交卷</option>';
+    via.value = keepVia;
   }
 
-  /* ---------- 报告回看（CR-06 口径） ---------- */
+  /* ---------- 历史报告弹窗（复用 eeReport 三级结构，与 exam.html 一致） ---------- */
   function openReport(id, trigger) {
     var r = null;
     allReports().forEach(function (x) { if (x.id === id) r = x; });
-    if (!r) { eeToast('这份报告已经不在了'); return; }
-    var legacy = !!r.legacy;
+    if (!r) { eeToast('这份考试记录已经不在了'); return; }
     var items = r.items || [];
-    var changed = items.filter(function (it) { return it.cur && it.cur !== it.ver; }).length;
-    document.getElementById('dlg-report-when').textContent = '成绩报告 · ' + (r.at || '本场') + ' 交卷 · ' + viaLabel(r.via);
+    document.getElementById('dlg-report-when').textContent = '成绩报告 · ' + (r.at || '本场') + ' · ' + viaLabel(r.via);
     document.getElementById('dlg-report-title').textContent = r.title;
-    var rate = legacy ? '—' : (r.rate + '%');
-    /* 已答客观题正确率的分母是「已答客观题」。早期报告落库时既没记客观题满分，
-       也没记已答客观题数，按 CR-25 不重算：列表行与详情都显示「—」，不得一边算一边不算。 */
-    var acc = legacy ? '—' : (r.accObj == null ? '暂无数据' : r.accObj + '%');
-    /* 口径说明收进按需帮助：列头 / 统计卡下方已各写各的分母标签，
-       完整口径不再默认铺开，也不做 100 道题的演算。 */
-    var rateHelp = '<details class="rep-help">' +
-      '<summary><svg class="od-icon rep-help-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 9.5 12 15l5.5-5.5"/></svg>两个率的分母不一样，点此看口径</summary>' +
-      '<div class="rep-help-body"><p>考试得分率的分母含未作答：未答的客观题按 0 分计入得分，但仍占满分。已答客观题正确率只统计你实际答过的客观题。两者分母不同，数值不同是正常结果。</p></div>' +
-      '</details>';
-    document.getElementById('dlg-report-body').innerHTML =
-      '<div class="stat-row">' +
-      '<div class="stat"><div class="stat-num">' + (r.score == null ? '待判分' : r.score) + '</div><div class="stat-cap">客观题得分</div></div>' +
-      '<div class="stat"><div class="stat-num">' + (legacy ? '—' : r.full) + '</div><div class="stat-cap">客观题满分 · 分母含未作答</div></div>' +
-      '<div class="stat"><div class="stat-num">' + rate + '</div><div class="stat-cap">考试得分率<br>得分 ÷ 客观题满分</div></div>' +
-      '<div class="stat"><div class="stat-num">' + acc + '</div><div class="stat-cap">已答客观题正确率<br>仅统计已答</div></div>' +
-      '</div>' + rateHelp +
-      '<div class="kv">' +
-      /* 已答/未答都按客观题口径：未答客观题 = 客观题总数 − 已答客观题，
-         与「已答客观题正确率」同一个分母，不把主观题混进来说不清的数 */
-      '<span class="kv-key">已答 / 未答客观题</span><span class="kv-val mono">' +
-      (r.answered == null || r.objTotal == null ? '—' : r.answered + ' / ' + (r.objTotal - r.answered)) + '</span>' +
-      '<span class="kv-key">未判分（主观题）</span><span class="kv-val mono">' + (r.ungraded == null ? '—' : r.ungraded) + '</span>' +
-      '<span class="kv-key">用时（服务端在线 / 墙钟）</span><span class="kv-val mono">' + (r.minutes == null ? '—' : r.minutes + ' / ' + (r.wall == null ? '—' : r.wall) + ' 分钟') + '</span>' +
-      '<span class="kv-key">交卷来源</span><span class="kv-val">' + esc(viaLabel(r.via)) + '</span>' +
-      '<span class="kv-key">判分依据</span><span class="kv-val">交卷当时的题目版本与答案</span>' +
-      '</div>' +
-      (legacy
-        /* 这一场交卷时没有记下客观题满分口径，也没有逐题快照。按 CR-25 不回溯计算：
-           满分与两个率显示「—」，明细区给一个说得过去的空状态，不摆破碎列表。 */
-        ? '<div class="notice info"><svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg><div class="notice-body">这是一份早期交卷的报告：交卷时没有记录客观题满分口径。报告按交卷当时的题目与答案保存，之后不会变，也不会回头重算，因此满分与两个率显示「—」。</div></div>' +
-          '<div class="section-head"><h2 class="section-title">逐题明细</h2><span class="section-note">这一场没有留下逐题记录</span></div>' +
-          '<div class="rep-empty"><p class="rep-empty-txt">这一场交卷时没有记录逐题明细，因此没有可回看的题目。上面的汇总计数是当时记下来的部分。</p></div>'
-        : '<div class="notice plain"><svg class="od-icon" aria-hidden="true"><use href="#i-info"/></svg><div class="notice-body">下面每道题都按<strong>交卷当时保存的题目与答案</strong>判分。题目后来改过的，条目上会标出并说明改了什么；本报告的判定、答案与解析始终是当时的，不会变。</div></div>' +
-          /* 报告答题卡：格子 → 定位并展开对应逐题明细。原来报告里没有答题卡（只有列表），
-             「定位错题」只能靠人眼在一长串明细里找。这里补一块可点格子，与练习/模考报告
-             交卷当次同一个交互。 */
-          '<div class="section-head"><h2 class="section-title">答题卡</h2><span class="section-note">点格子定位到对应题目</span></div>' +
-          '<div class="sheet-grid" id="archive-report-sheet"></div>' +
-          '<div class="sheet-legend"><span><i class="sheet-dot is-answered"></i>已答</span><span><i class="sheet-dot"></i>未答</span><span><i class="sheet-dot is-wrong-cell"></i>错误</span><span><i class="sheet-dot is-flagged"></i>待复查</span></div>' +
-          '<div class="section-head ee-mt-5"><h2 class="section-title">逐题明细</h2><span class="section-note">共 ' + items.length + ' 题 · 点开看作答、判定、解析与判分版本' + (changed ? ' · ' + changed + ' 题已有新版' : '') + '</span></div>' +
-          '<div id="exam-archive-items">' + window.eeReport.blockHtml(items, true, { scope: 'a', qPrefix: '', rPrefix: '' }) + '</div>' +
-          '<p class="hint">报告按交卷当时的题目与答案保存，之后不会变。</p>');
-    window.eeReport.bind(document.getElementById('exam-archive-items'));
-    if (!legacy) renderArchiveSheet(items);
+
+    var neg = r.negative != null ? r.negative : 0;
+    var fl = !!r.floor;
+    var negText = neg > 0
+      ? '答错扣 ' + neg + ' 分；' + (fl ? '设 0 分下限' : '不设 0 分下限，总分可能为负')
+      : '答错不扣分';
+    var recOn = r.record !== false;
+    var extraFacts = [
+      ['扣分规则', esc(negText)],
+      ['纳入学习记录', recOn ? '已纳入：错题与复习计划已更新' : '未纳入：本场未写入错题与复习计划']
+    ];
+    if (r.minutes != null) extraFacts.push(['用时', num(r.minutes) + ' 分钟']);
+
+    var reportBodyHtml = window.eeReport.reportHtml(r, items, {
+      scope: 'arch_' + esc(r.id),
+      bankId: r.bankId,
+      qPrefix: '',
+      rPrefix: '',
+      withVer: true,
+      at: r.at,
+      viaText: viaLabel(r.via),
+      bank: r.bankId ? bankName(r.bankId) : '',
+      note: '交卷后题目、作答与判分结果永久保存，不会随后续改题变化。',
+      emptyItemsText: '这是一场早期记录，当时未保存逐题明细；以上汇总成绩保持交卷时的记录。',
+      extraFacts: extraFacts
+    });
+
+    var hasSheet = items.length > 0;
+    var hostBody = document.getElementById('dlg-report-body');
+    if (hasSheet) {
+      hostBody.innerHTML =
+        '<div class="ee-rep-dlg-layout">' +
+        '<div class="ee-rep-dlg-main" id="dlg-report-main">' + reportBodyHtml + '</div>' +
+        '<aside class="ee-rep-dlg-rail" aria-label="答题卡">' +
+        '<div class="rail-head"><span class="rule-label">答题卡</span><span class="q-note">点击定位题目</span></div>' +
+        '<div class="sheet-grid" id="dlg-report-sheet"></div>' +
+        '<div class="rpt-sheet-legend" id="dlg-report-legend"></div>' +
+        '</aside></div>';
+    } else {
+      hostBody.innerHTML = '<div id="dlg-report-main">' + reportBodyHtml + '</div>';
+    }
+
+    var mainEl = document.getElementById('dlg-report-main');
+    var block = mainEl ? mainEl.querySelector('.rep-block') : null;
+    if (block) window.eeReport.bind(block);
+    if (hasSheet) {
+      var sheetHost = document.getElementById('dlg-report-sheet');
+      var legendHost = document.getElementById('dlg-report-legend');
+      sheetHost.innerHTML = window.eeReport.sheetHtml(items);
+      legendHost.innerHTML = window.eeReport.sheetLegendHtml();
+      window.eeReport.bindSheet(sheetHost, mainEl, function () {
+        eeToast('这一题没有逐题明细可展开', 'bad');
+      });
+    }
+
+    var reexamBtn = document.getElementById('dlg-report-reexam');
+    var canReexam = !!(r.paperRefs && r.paperRefs.length);
+    reexamBtn.hidden = !canReexam;
+    reexamBtn.onclick = canReexam ? function () { reexamFromReport(r); } : null;
+
     eeDialog.open('dlg-report', trigger || document.activeElement);
   }
-  /* 归档报告的答题卡：格子按 item 的判定着色，点击走 eeReport.locate 定位展开 */
-  function renderArchiveSheet(items) {
-    var host = document.getElementById('archive-report-sheet');
-    if (!host) return;
-    host.innerHTML = items.map(function (it, i) {
-      var cls = 'sheet-cell';
-      if (it.answered) cls += ' is-answered';
-      if (it.correctness === 'INCORRECT' || it.correctness === 'PARTIAL' || it.correctness === 'BLANK') cls += ' is-wrong-cell';
-      return '<button type="button" class="' + cls + '" data-locate="' + i + '" aria-label="第 ' + (i + 1) + ' 题，定位到逐题明细">' + (i + 1) + '</button>';
-    }).join('');
-    host.onclick = function (e) {
-      var b = e.target.closest ? e.target.closest('[data-locate]') : null;
-      if (!b) return;
-      var index = parseInt(b.getAttribute('data-locate'), 10);
-      var list = document.getElementById('exam-archive-items');
-      var ok = window.eeReport.locate(list, index);
-      if (!ok) { eeToast('这一题没有逐题明细可展开', 'bad'); return; }
-      var item = list.querySelector('.rep-item[data-rep-index="' + index + '"]');
-      var head = item ? item.querySelector('.rep-item-head') : null;
-      if (head) head.focus({ preventScroll: true });
-      eeToast('已定位到第 ' + (index + 1) + ' 题');
+  function reexamFromReport(r) {
+    if (!r || !r.paperRefs || !r.paperRefs.length) return;
+    var unlimited = !!r.unlimited;
+    var mins = unlimited ? 0 : (r.examMinutes || r.minutes || 120);
+    var payload = {
+      kind: 'exam',
+      bankId: r.bankId || 'b_rk',
+      mode: '模考',
+      order: '原卷重考',
+      title: r.title,
+      total: r.paperRefs.length,
+      minutes: mins,
+      unlimited: unlimited,
+      record: r.record !== false,
+      blueprint: r.blueprint || null,
+      blueprintMode: r.blueprint ? 'blueprint' : 'quick',
+      paperRefs: r.paperRefs.slice(),
+      params: { count: r.paperRefs.length, minutes: mins, unlimited: unlimited, mode: '模考' },
+      index: 0, done: 0, answers: {}, selections: {}, flags: {}, elapsed: 0,
+      remaining: unlimited ? null : mins * 60,
+      origin: { page: 'exams.html', href: 'exams.html' + location.search, label: '模考中心' }
     };
+    eeDialog.close(document.getElementById('dlg-report'));
+    launchOrConfirmActive(payload, document.activeElement);
   }
 
-  /* ---------- 渲染 ---------- */
+  /* ---------- 全局渲染与事件绑定 ---------- */
   function renderAll() {
-    /* 「新建考试档案」与蓝图编辑同一把尺子：相关但不能做 → 禁用 + 可读原因 */
     var g = editGate('bank.edit');
     var np = document.getElementById('new-profile-btn');
     var nw = document.getElementById('new-profile-why');
-    var tpl = document.getElementById('rail-tpl');
     if (np) np.disabled = !g.can;
-    if (tpl) {
-      tpl.disabled = !g.can;
-      if (!g.can) { tpl.title = g.why || '只有所有者与编辑者可以改考试档案与蓝图'; tpl.setAttribute('aria-describedby', 'new-profile-why'); }
-    }
-    if (nw) { nw.hidden = g.can; nw.textContent = g.why || '只有所有者与编辑者可以改考试档案与蓝图'; }
+    if (nw) { nw.hidden = g.can; nw.textContent = g.why || '只有所有者与编辑者可以修改考试方案'; }
     renderSessions();
+    initQuickBanks();
     renderProfiles();
-    renderBanks();
-    renderReports();
-    renderRail();
     renderReportFilters();
+    renderReports();
   }
 
-  /* ---------- 报告筛选 ---------- */
+  /* 快速模考交互 */
+  document.getElementById('quick-bank').addEventListener('change', function () { syncQuickExam(true); });
+  document.getElementById('quick-total').addEventListener('input', function () { syncQuickExam(false); });
+  document.getElementById('quick-minutes').addEventListener('input', function () {
+    quickState.unlimited = false;
+    syncQuickExam(false);
+  });
+  document.getElementById('quick-total-presets').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-qcount]') : null;
+    if (!b || b.disabled) return;
+    var max = capacity(quickState.bankId);
+    var v = b.getAttribute('data-qcount');
+    document.getElementById('quick-total').value = String(v === 'all' ? max : Math.min(parseInt(v, 10), max));
+    syncQuickExam(false);
+  });
+  document.getElementById('quick-time-presets').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-qmin]') : null;
+    if (!b) return;
+    var v = parseInt(b.getAttribute('data-qmin'), 10);
+    if (v === 0) {
+      quickState.unlimited = true;
+    } else {
+      quickState.unlimited = false;
+      document.getElementById('quick-minutes').value = String(v);
+    }
+    syncQuickExam(false);
+  });
+  document.getElementById('quick-start-btn').addEventListener('click', startQuickExam);
+
+  /* 方案编辑器表单实时联动 */
+  document.getElementById('pf-unlimited').addEventListener('change', function (e) {
+    document.getElementById('pf-minutes').disabled = e.target.checked;
+  });
+  document.getElementById('pf-apply-preset').addEventListener('click', applyPreset);
+  document.getElementById('profile-drawer').addEventListener('input', function (e) {
+    if (e.target && (e.target.id === 'pf-negative' || e.target.closest('#pf-sections'))) {
+      syncDraftFromDom();
+      renderEditorSummary();
+    }
+  });
+  document.getElementById('profile-drawer').addEventListener('change', function (e) {
+    if (e.target && e.target.getAttribute('data-field') === 'type') {
+      syncDraftFromDom();
+      renderEditorSections();
+    }
+  });
+  document.getElementById('profile-scrim').addEventListener('click', requestCloseEditor);
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (document.querySelector('dialog[open]')) return;
+    var drawer = document.getElementById('profile-drawer');
+    if (drawer && !drawer.hidden) { e.preventDefault(); requestCloseEditor(); }
+  });
+
+  /* 按方案开考弹窗 */
+  document.getElementById('setup-bank').addEventListener('change', syncSetup);
+  document.getElementById('setup-profile').addEventListener('change', syncSetup);
+  document.getElementById('setup-minutes').addEventListener('input', syncSetup);
+  document.getElementById('setup-unlimited').addEventListener('change', syncSetup);
+  document.getElementById('setup-record').addEventListener('change', syncSetup);
+  document.getElementById('setup-begin').addEventListener('click', beginSetupExam);
+
+  /* 考试记录筛选、分页与打开报告 */
   document.getElementById('report-range').addEventListener('click', function (e) {
     var b = e.target.closest ? e.target.closest('[data-range]') : null;
     if (!b) return;
@@ -1967,70 +2059,79 @@ window.EEexams = (function () {
     document.querySelectorAll('#report-range [data-range]').forEach(function (x) {
       x.setAttribute('aria-checked', x === b ? 'true' : 'false');
     });
+    reportPage = 1;
     renderReports();
   });
   document.getElementById('report-profile').addEventListener('change', function (e) {
     reportFilter.profile = e.target.value;
+    reportPage = 1;
     renderReports();
   });
   document.getElementById('report-via').addEventListener('change', function (e) {
     reportFilter.via = e.target.value;
+    reportPage = 1;
     renderReports();
   });
-  window.addEventListener('resize', syncTableScrollHint);
+  document.getElementById('reports-list-host').addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('[data-open-report]') : null;
+    if (btn) { openReport(btn.getAttribute('data-open-report'), btn); return; }
+    var row = e.target.closest ? e.target.closest('[data-report-id]') : null;
+    if (row) openReport(row.getAttribute('data-report-id'), row);
+  });
+  document.getElementById('reports-list-host').addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    var row = e.target.closest ? e.target.closest('[data-report-id]') : null;
+    if (!row || e.target.tagName === 'BUTTON') return;
+    e.preventDefault();
+    openReport(row.getAttribute('data-report-id'), row);
+  });
+  document.getElementById('reports-pager').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-page]') : null;
+    if (!b || b.disabled) return;
+    reportPage = parseInt(b.getAttribute('data-page'), 10) || 1;
+    renderReports();
+    var sec = document.getElementById('reports-section');
+    if (sec && sec.scrollIntoView) sec.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
 
-  document.getElementById('setup-bank').addEventListener('change', syncSetup);
-  document.getElementById('setup-profile').addEventListener('change', syncSetup);
-  document.getElementById('setup-total').addEventListener('input', syncSetup);
-  document.getElementById('setup-minutes').addEventListener('input', syncSetup);
-  document.getElementById('setup-unlimited').addEventListener('change', syncSetup);
-  document.getElementById('setup-record').addEventListener('change', syncSetup);
-  document.getElementById('setup-begin').addEventListener('click', beginExam);
-  document.getElementById('tpl-prev').addEventListener('click', tplPrev);
-  document.getElementById('tpl-next').addEventListener('click', tplNext);
-  document.querySelectorAll('#tpl-steps .step').forEach(function (b) {
-    b.addEventListener('click', function () { tplCtx.step = parseInt(b.getAttribute('data-tpl-step'), 10); renderTemplate(); });
-  });
-  document.getElementById('bp-scrim').addEventListener('click', requestCloseBp);
-  document.addEventListener('keydown', function (e) {
-    if (e.key !== 'Escape') return;
-    if (document.querySelector('dialog[open]')) return;
-    if (!document.getElementById('bp-drawer').hidden) { e.preventDefault(); requestCloseBp(); }
-  });
-  document.addEventListener('click', function (e) {
-    var t = e.target.closest ? e.target.closest('[data-menu-trigger]') : null;
-    if (!t) {
-      document.querySelectorAll('.menu').forEach(function (m) {
-        if (!m.hidden) { m.hidden = true; var b = m.parentElement.querySelector('[data-menu-trigger]'); if (b) b.setAttribute('aria-expanded', 'false'); }
-      });
+  S.subscribe(function (st, evt) {
+    if (evt && evt.type === 'reset') {
+      PROFILES = clone(SEED_PROFILES);
+      saveProfiles();
     }
+    renderAll();
   });
-
-  S.subscribe(function () { renderAll(); });
   renderAll();
 
-  /* 深链：?report=ar12 —— 从学习档案的「回看」点具体某一场时直接打开那份报告，
-     不停在列表页让用户自己找。 */
+  /* 深链：?report=<id> 直接打开对应历史报告 */
   (function () {
     var rid = new URLSearchParams(location.search).get('report');
     if (rid) {
       var hit = allReports().filter(function (r) { return r.id === rid; })[0];
       if (hit) openReport(rid, document.activeElement);
-      else eeToast('这份报告已经不在了');
+      else eeToast('这份考试记录已经不在了');
     }
   })();
 
   return {
-    openProfile: openProfile, createProfile: createProfile, renameProfile: renameProfile,
-    copyProfile: copyProfile, deleteProfile: deleteProfile, toggleProfileMenu: toggleProfileMenu,
-    openBlueprint: openBlueprint, requestCloseBp: requestCloseBp, confirmDiscard: confirmDiscard,
-    saveBlueprint: saveBlueprint, addSection: addSection, removeSection: removeSection,
-    openSetup: openSetup, syncSetup: syncSetup, beginExam: beginExam,
-    beginReExam: beginReExam,
-    askActive: askActive, confirmActive: confirmActive,
-    openTemplate: openTemplate, pickTemplate: pickTemplate,
-    askReExam: askReExam, askAbandon: askAbandon, confirmAbandon: confirmAbandon,
-    openReport: openReport, renderAll: renderAll
+    openProfileEditor: openProfileEditor,
+    openProfile: function (trigger) { openProfileEditor(null, trigger); },
+    openBlueprint: function (id, trigger) { openProfileEditor(id, trigger); },
+    renameProfile: function (id, trigger) { openProfileEditor(id, trigger); },
+    requestCloseEditor: requestCloseEditor,
+    confirmDiscard: confirmDiscard,
+    saveProfileEditor: saveProfileEditor,
+    saveBlueprint: saveProfileEditor,
+    addSection: addSection,
+    removeSection: removeSection,
+    openSetup: openSetup,
+    syncSetup: syncSetup,
+    askActive: askActive,
+    confirmActive: confirmActive,
+    askAbandon: askAbandon,
+    confirmAbandon: confirmAbandon,
+    openReport: openReport,
+    renderAll: renderAll
   };
 })();
 </script>
