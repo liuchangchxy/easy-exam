@@ -1220,7 +1220,11 @@ window.EEexam = (function () {
     /* 题库里没有真实题目时用演示卷兜底。兜底卷的 id 是合成出来的（qb0…），
        store 里并不存在这些题——所以标记 synth，报告里据此不生成「查看该题当前版本」。 */
     var synth = !qs.length;
-    if (synth) qs = QBANK.map(function (q, i) { return { id: 'qb' + i, stem: q.stem, type: q.type, difficulty: q.difficulty, chapter: q.chapter || '未分章', tags: q.tags || [], version: 'v3' }; });
+    if (synth) {
+      var b = S.bank(s.bankId);
+      var cap = b && b.count > 0 ? Math.min(QBANK.length, b.count) : QBANK.length;
+      qs = QBANK.slice(0, cap).map(function (q, i) { return { id: 'qb' + i, stem: q.stem, type: q.type, difficulty: q.difficulty, chapter: q.chapter || '未分章', tags: q.tags || [], version: 'v3' }; });
+    }
     var bp = s.blueprint;
     var out;
     if (bp && bp.sections && bp.sections.length) {
@@ -1258,26 +1262,39 @@ window.EEexam = (function () {
     var qt = q.tags || [];
     return reqTags.some(function (t) { return qt.indexOf(t) > -1; });
   }
-  /* 按配额段取题：每段按题型 + 章节 + 难度 + 标签在题库里随机取 n 道，取不满时从剩余候选随机补齐。 */
+  /* 按配额段取题：与 exams.html composeQuotaPaper 完全同口径，优先抽取候选池更窄的配额段，按原段序输出，不足时从剩余候选随机补齐。 */
   function composeFromBlueprint(qs, bp, synth) {
-    var used = {}, out = [];
-    bp.sections.forEach(function (sec) {
+    var sections = bp.sections || [];
+    var candidates = sections.map(function (sec, idx) {
       var reqTags = parseTags(sec.tags);
-      var pool = shuffle(qs.filter(function (q) {
-        if (used[q.id]) return false;
+      var list = qs.filter(function (q) {
         if (sec.type && sec.type !== '不限' && q.type !== sec.type) return false;
         if (sec.chapter && sec.chapter !== '不限' && q.chapter !== sec.chapter) return false;
         if (sec.diff && sec.diff !== '不限' && q.difficulty !== sec.diff) return false;
         if (!matchTags(q, reqTags)) return false;
         return true;
-      }));
-      pool.slice(0, sec.n || 0).forEach(function (q) {
+      });
+      return { idx: idx, sec: sec, list: list };
+    });
+    var drawOrder = candidates.slice().sort(function (a, b) {
+      if (a.list.length !== b.list.length) return a.list.length - b.list.length;
+      return a.idx - b.idx;
+    });
+    var used = {};
+    var buckets = sections.map(function () { return []; });
+    drawOrder.forEach(function (entry) {
+      var avail = shuffle(entry.list.filter(function (q) { return !used[q.id]; }));
+      avail.slice(0, entry.sec.n || 0).forEach(function (q) {
         used[q.id] = 1;
-        out.push(paperItem(q, synth, sec.score));
+        buckets[entry.idx].push(q);
       });
     });
+    var out = [];
+    sections.forEach(function (sec, idx) {
+      buckets[idx].forEach(function (q) { out.push(paperItem(q, synth, sec.score)); });
+    });
     /* 补齐不足：方案要求题量多于匹配到的题时，从剩余候选随机补齐 */
-    var want = bp.sections.reduce(function (a, x) { return a + (x.n || 0); }, 0);
+    var want = sections.reduce(function (a, x) { return a + (x.n || 0); }, 0);
     shuffle(qs).forEach(function (q) {
       if (out.length >= want || used[q.id]) return;
       used[q.id] = 1;
@@ -1287,12 +1304,21 @@ window.EEexam = (function () {
   }
   function paperItem(q, synth, scoreOverride) {
     var p = paperFor(q.stem);
-    var type = p.type || q.type || '单选题';
+    var type = q.type || p.type || '单选题';
     var defaultScore = SCORE[type] == null ? 2 : SCORE[type];
+    var hasOverride = scoreOverride != null && scoreOverride !== '' && !isNaN(Number(scoreOverride));
     var score = OBJECTIVE[type]
-      ? (scoreOverride != null && !isNaN(scoreOverride) ? Number(scoreOverride) : defaultScore)
+      ? (hasOverride ? Number(scoreOverride) : defaultScore)
       : 0;
-    return { id: q.id, synth: synth, stem: q.stem, type: type, chapter: q.chapter || '未分章', version: q.version || 'v3', options: p.options, answer: p.answer, explain: p.explain, score: score };
+    var isObj = !!OBJECTIVE[type];
+    return {
+      id: q.id, synth: synth, stem: q.stem, type: type, chapter: q.chapter || '未分章',
+      version: q.version || 'v3',
+      options: isObj ? p.options : [],
+      answer: isObj ? p.answer : '',
+      explain: p.explain,
+      score: score
+    };
   }
   /* 组卷方式的可读说明：界面据此在作答态标明「按方案组卷 / 快速模考」 */
   function buildNote() {

@@ -940,7 +940,7 @@ window.EEexams = (function () {
   /* ---------- 状态上下文 ---------- */
   var quickState = { bankId: '', unlimited: false };
   var editorCtx = { mode: 'edit', profileId: null, draft: null, baseline: '' };
-  var setupCtx = { profileId: '', bankId: '' };
+  var setupCtx = { profileId: '', bankId: '', composed: null };
   var pendingStart = null;
   var reportFilter = { range: 'all', profile: '', via: '' };
   var reportPage = 1;
@@ -987,49 +987,105 @@ window.EEexams = (function () {
     var qt = q.tags || [];
     return reqTags.some(function (t) { return qt.indexOf(t) > -1; });
   }
+  function shuffle(a) {
+    var out = a.slice();
+    for (var i = out.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = out[i]; out[i] = out[j]; out[j] = t;
+    }
+    return out;
+  }
   function poolForBank(bankId) {
     var qs = S.questions(bankId, { archived: false });
-    if (qs.length) return qs;
+    if (qs.length) return { qs: qs, synth: false };
     var cap = capacity(bankId);
-    return DEMO_QBANK_META.slice(0, cap);
+    return {
+      qs: DEMO_QBANK_META.slice(0, cap).map(function (q, i) {
+        return { id: q.id, _idx: i, type: q.type, difficulty: q.difficulty, chapter: q.chapter, tags: q.tags || [] };
+      }),
+      synth: true
+    };
   }
-  /* 与 exam.html composeFromBlueprint 完全同口径的配额预演 */
-  function planQuota(p, bankId) {
-    var qs = poolForBank(bankId);
-    var used = {}, parts = [], got = 0, objFull = 0, subjGot = 0;
-    (p.sections || []).forEach(function (sec) {
+  /* 按配额生成确定试卷快照（paperRefs）并汇总真实配额与满分，开考后 exam.html 直接按此快照开卷 */
+  function composeQuotaPaper(p, bankId) {
+    var poolInfo = poolForBank(bankId);
+    var qs = poolInfo.qs;
+    var synth = poolInfo.synth;
+    var DEFAULT_SCORE = { '单选题': 2, '多选题': 3, '判断题': 2, '问答题': 0 };
+    var sections = p.sections || [];
+
+    /* 优先为候选池更窄（约束更强）的配额段抽题，避免宽泛段随机占走窄段所需题目；最终按原段序出卷 */
+    var candidates = sections.map(function (sec, idx) {
       var reqTags = parseTags(sec.tags);
-      var picked = 0;
-      qs.forEach(function (q) {
-        if (picked >= (sec.n || 0) || used[q.id]) return;
-        if (sec.type && sec.type !== '不限' && q.type !== sec.type) return;
-        if (sec.chapter && sec.chapter !== '不限' && q.chapter !== sec.chapter) return;
-        if (sec.diff && sec.diff !== '不限' && q.difficulty !== sec.diff) return;
-        if (!matchTags(q, reqTags)) return;
-        used[q.id] = 1; picked++;
-        if (OBJECTIVE[q.type]) objFull += (sec.score != null ? Number(sec.score) : 2);
-        else subjGot++;
+      var list = qs.filter(function (q) {
+        if (sec.type && sec.type !== '不限' && q.type !== sec.type) return false;
+        if (sec.chapter && sec.chapter !== '不限' && q.chapter !== sec.chapter) return false;
+        if (sec.diff && sec.diff !== '不限' && q.difficulty !== sec.diff) return false;
+        if (!matchTags(q, reqTags)) return false;
+        return true;
       });
-      got += picked;
-      parts.push({ type: sec.type, diff: sec.diff, chapter: sec.chapter, want: sec.n || 0, got: picked, score: sec.score || 0 });
+      return { idx: idx, sec: sec, list: list };
     });
+    var drawOrder = candidates.slice().sort(function (a, b) {
+      if (a.list.length !== b.list.length) return a.list.length - b.list.length;
+      return a.idx - b.idx;
+    });
+
+    var used = {};
+    var buckets = sections.map(function () { return []; });
+    drawOrder.forEach(function (entry) {
+      var need = entry.sec.n || 0;
+      var avail = shuffle(entry.list.filter(function (q) { return !used[q.id]; }));
+      avail.slice(0, need).forEach(function (q) {
+        used[q.id] = 1;
+        buckets[entry.idx].push(q);
+      });
+    });
+
+    var refs = [];
+    var parts = [];
+    var matched = 0, objFull = 0, subjGot = 0;
+
+    function pushItem(q, scoreOverride) {
+      var isObj = !!OBJECTIVE[q.type];
+      var defScore = DEFAULT_SCORE[q.type] == null ? 2 : DEFAULT_SCORE[q.type];
+      var hasOverride = scoreOverride != null && scoreOverride !== '' && !isNaN(Number(scoreOverride));
+      var score = isObj ? (hasOverride ? Number(scoreOverride) : defScore) : 0;
+      if (isObj) objFull += score;
+      else subjGot++;
+      if (synth) {
+        var qi = q._idx != null ? q._idx : parseInt(String(q.id).replace(/^qb/, ''), 10);
+        refs.push({ t: 'd', i: qi, score: score });
+      } else {
+        refs.push({ t: 'q', id: q.id, score: score });
+      }
+    }
+
+    sections.forEach(function (sec, idx) {
+      var picked = buckets[idx];
+      picked.forEach(function (q) { pushItem(q, sec.score); });
+      matched += picked.length;
+      parts.push({ type: sec.type, diff: sec.diff, chapter: sec.chapter, want: sec.n || 0, got: picked.length, score: sec.score || 0 });
+    });
+
     var want = totalQuestions(p);
     var fill = 0;
-    var DEFAULT_SCORE = { '单选题': 2, '多选题': 3, '判断题': 2, '问答题': 0 };
-    qs.forEach(function (q) {
-      if (got + fill >= want || used[q.id]) return;
-      used[q.id] = 1; fill++;
-      if (OBJECTIVE[q.type]) objFull += (DEFAULT_SCORE[q.type] || 2);
-      else subjGot++;
+    shuffle(qs).forEach(function (q) {
+      if (matched + fill >= want || used[q.id]) return;
+      used[q.id] = 1;
+      fill++;
+      pushItem(q, null);
     });
+
     return {
       parts: parts,
-      matched: got,
+      matched: matched,
       fill: fill,
-      total: got + fill,
+      total: refs.length,
       want: want,
       objFull: Math.round(objFull * 10) / 10,
-      subjGot: subjGot
+      subjGot: subjGot,
+      paperRefs: refs
     };
   }
   function profileSummary(p) {
@@ -1596,7 +1652,7 @@ window.EEexams = (function () {
     if (!bank || qcount(bank.id) === 0) {
       bank = banks.slice().sort(function (a, b) { return capacity(b.id) - capacity(a.id); })[0];
     }
-    setupCtx = { profileId: p.id, bankId: bank.id };
+    setupCtx = { profileId: p.id, bankId: bank.id, composed: null };
 
     document.getElementById('setup-bank').innerHTML = banks.map(function (b) {
       return '<option value="' + esc(b.id) + '"' + (b.id === bank.id ? ' selected' : '') + '>' + esc(b.name) + ' · ' + capacity(b.id) + ' 题</option>';
@@ -1640,7 +1696,11 @@ window.EEexams = (function () {
       return;
     }
     var max = capacity(bankId);
-    var plan = planQuota(p, bankId);
+    var compKey = bankId + '|' + p.id + '|' + (p.version || 1) + '|' + (p.updatedAt || '');
+    if (!setupCtx.composed || setupCtx.composed.key !== compKey) {
+      setupCtx.composed = { key: compKey, plan: composeQuotaPaper(p, bankId) };
+    }
+    var plan = setupCtx.composed.plan;
     document.getElementById('setup-bank-msg').textContent = '当前题库可用 ' + max + ' 题';
     document.getElementById('setup-profile-msg').textContent = '方案 v' + (p.version || 1) + ' · 声明 ' + plan.want + ' 题';
 
@@ -1660,11 +1720,11 @@ window.EEexams = (function () {
 
     var note = '';
     if (plan.total < plan.want) {
-      note = '当前题库共 ' + max + ' 题，实际将抽取 ' + plan.total + ' 题并按实际题量计分。';
+      note = '当前题库共 ' + max + ' 题，本场已抽定 ' + plan.total + ' 题并按实际题量计分，开考后将使用此试卷。';
     } else if (plan.fill > 0) {
-      note = '部分条件匹配题目不足，已自动用同库其他题目随机补足至 ' + plan.total + ' 题。';
+      note = '部分条件匹配题目不足，已用同库其他题目补足至 ' + plan.total + ' 题，开考后将使用此试卷。';
     } else {
-      note = '所有配额段均可从当前题库随机抽满，共 ' + plan.total + ' 题。';
+      note = '本场试卷已按配额随机抽定，共 ' + plan.total + ' 题，开考后题序与分值保持不变。';
     }
     document.getElementById('setup-degrade-note').textContent = note;
 
@@ -1687,7 +1747,11 @@ window.EEexams = (function () {
     var mins = parseInt(document.getElementById('setup-minutes').value, 10);
     if (!unlimited && !(mins >= 1 && mins <= 600)) return;
 
-    var plan = planQuota(p, bankId);
+    var compKey = bankId + '|' + p.id + '|' + (p.version || 1) + '|' + (p.updatedAt || '');
+    if (!setupCtx.composed || setupCtx.composed.key !== compKey) {
+      setupCtx.composed = { key: compKey, plan: composeQuotaPaper(p, bankId) };
+    }
+    var plan = setupCtx.composed.plan;
     var blueprint = {
       id: p.id, name: p.name, version: p.version || 1,
       negative: p.negative || 0, floor: !!p.floor,
@@ -1701,6 +1765,7 @@ window.EEexams = (function () {
       total: plan.total, minutes: unlimited ? 0 : mins, unlimited: unlimited,
       record: document.getElementById('setup-record').checked,
       blueprint: blueprint, blueprintMode: 'blueprint',
+      paperRefs: plan.paperRefs.slice(),
       params: { count: plan.total, minutes: unlimited ? 0 : mins, unlimited: unlimited, mode: '模考', profileId: p.id },
       index: 0, done: 0, answers: {}, selections: {}, flags: {}, elapsed: 0,
       remaining: unlimited ? null : mins * 60,
