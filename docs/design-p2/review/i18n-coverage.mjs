@@ -15,13 +15,44 @@
 
    退出码：有漏译或未还原时为 1。
    ========================================================================== */
-import { chromium } from 'file:///C:/Users/chang/Desktop/code/飞牛刷题软件/frontend/node_modules/playwright/index.mjs';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
+
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const PW_ENTRY = process.env.PLAYWRIGHT_MODULE || path.resolve(SCRIPT_DIR, '../../../frontend/node_modules/playwright/index.mjs');
+const { chromium } = await import(fs.existsSync(PW_ENTRY) ? pathToFileURL(PW_ENTRY).href : 'playwright');
+
+function resolveExecutable() {
+  const fromEnv = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || process.env.CHROME_PATH;
+  if (fromEnv && fs.existsSync(fromEnv)) return fromEnv;
+  const pwDefault = chromium.executablePath();
+  if (pwDefault && fs.existsSync(pwDefault)) return pwDefault;
+  const cacheDir = process.env.PLAYWRIGHT_BROWSERS_PATH || (
+    process.platform === 'win32'
+      ? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'ms-playwright')
+      : process.platform === 'darwin'
+        ? path.join(os.homedir(), 'Library', 'Caches', 'ms-playwright')
+        : path.join(os.homedir(), '.cache', 'ms-playwright')
+  );
+  if (fs.existsSync(cacheDir)) {
+    const dirs = fs.readdirSync(cacheDir).filter(d => /^chromium-\d+/.test(d)).sort().reverse();
+    for (const d of dirs) {
+      const candidates = [
+        path.join(cacheDir, d, 'chrome-win64', 'chrome.exe'),
+        path.join(cacheDir, d, 'chrome-linux', 'chrome'),
+        path.join(cacheDir, d, 'chrome-linux64', 'chrome')
+      ];
+      const hit = candidates.find(c => fs.existsSync(c));
+      if (hit) return hit;
+    }
+  }
+  return undefined;
+}
 
 const BASE = (process.argv[2] || 'http://127.0.0.1:8787/').replace(/\/?$/, '/');
-const EXE = 'C:/Users/chang/AppData/Local/ms-playwright/chromium-1254/chrome-win64/chrome.exe';
+const EXE = resolveExecutable();
 
 const PAGES = [
   'pages/screens/home.html', 'pages/screens/review.html', 'pages/screens/banks.html',
@@ -130,7 +161,7 @@ function translatedWithData(t) {
   return !/[一-鿿]/.test(rest);
 }
 
-const browser = await chromium.launch({ executablePath: EXE });
+const browser = await chromium.launch(EXE ? { executablePath: EXE } : {});
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 const report = { base: BASE, pages: {}, totals: { ui: 0, miss: 0, content: 0, notRestored: 0 } };
 let failed = false;
