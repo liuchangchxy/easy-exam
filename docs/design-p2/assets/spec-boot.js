@@ -1159,16 +1159,62 @@
     window.addEventListener('orientationchange', function () { setTimeout(apply, 250); });
     apply();
   })();
+  /* ---------- 侧栏学习状态：全产品唯一一份数字 ----------
+     之前 11 个页面各写一段同步，四个页面还留着写死的「到期 12 / 错题 8 / 本周新增 46」。
+     这里统一按 store 算，页面只负责渲染外壳片段的 HTML，不再各自维护口径。 */
+  function sideNumbers() {
+    var S = window.eeStore;
+    if (!S) return null;
+    var killed = function (r) { return S.reviewKilled ? S.reviewKilled(r) : !!r.killed_at; };
+    var alive = function (rows) { return rows.filter(function (r) { return !killed(r); }); };
+    var sessions = (S.sessions ? S.sessions() : []).filter(function (s) {
+      /* 题库被删的孤儿会话不算「未完成」：它在选择器里也打不开，只会在数字上虚高。 */
+      return !s.bankId || !!S.bank(s.bankId);
+    });
+    return {
+      due: S.executableReview ? S.executableReview().length : 0,
+      mistakes: alive(S.reviewQueue ? S.reviewQueue(null, 'mistakes') : []).length,
+      weak: alive(S.reviewQueue ? S.reviewQueue(null, 'weak') : []).length,
+      killedN: (S.reviewQueue ? S.reviewQueue() : []).filter(killed).length,
+      sessions: sessions.length
+    };
+  }
+  function syncSideStudy() {
+    var n = sideNumbers();
+    if (!n) return;
+    var map = { 'side-due': n.due, 'side-mistakes': n.mistakes, 'side-weak': n.weak, 'side-sessions': n.sessions };
+    Object.keys(map).forEach(function (id) {
+      Array.prototype.forEach.call(document.querySelectorAll('#' + id), function (el) {
+        el.textContent = String(map[id]);
+        var row = el.closest ? el.closest('.side-study-row') : null;
+        if (row) row.hidden = false;
+      });
+    });
+    /* 覆盖写死的演示数字：任何仍在侧栏里的纯文字行都从这份数据取值。
+       页面上还写着「本周新增」的，说明它没有被本轮改造覆盖到——直接移除，
+       不把一个无来源的数字继续摆在侧栏。 */
+    Array.prototype.forEach.call(document.querySelectorAll('.side-study-row'), function (row) {
+      var label = row.querySelector('span');
+      var txt = label ? label.textContent.trim() : '';
+      if (/本周新增/.test(txt)) row.remove();
+    });
+  }
+  window.eeSyncSideStudy = syncSideStudy;
+  syncSideStudy();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', syncSideStudy);
+  window.addEventListener('load', function () { setTimeout(syncSideStudy, 0); });
+
   /* 其他页改了设置（storage 事件）→ 同步外壳 */
   window.addEventListener('storage', function (e) {
     if (e.key && e.key.indexOf('eeStore') === 0) {
-      setTimeout(function () { applyI18n(); syncThemeButtons(); syncAccountMenus(); }, 30);
+      setTimeout(function () { applyI18n(); syncThemeButtons(); syncAccountMenus(); syncSideStudy(); }, 30);
     }
   });
   /* 本页改了角色 / 实例角色 → 账户菜单与命令面板的相关性要立刻重算 */
   if (window.eeStore && window.eeStore.subscribe) {
     window.eeStore.subscribe(function (state, evt) {
       syncAccountMenus();
+      syncSideStudy();
       /* 主题变化（含系统明暗跟随）要同步顶栏图标与 aria-label */
       if (!evt || evt.type === 'theme' || evt.type === 'external' || evt.type === 'settings') syncThemeButtons();
     });

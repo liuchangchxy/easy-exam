@@ -75,6 +75,19 @@
 .plan-date{  font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink);  }
 .plan-wd{  font-size: var(--text-xs); color: var(--ink-3);  }
 .plan-wk{  font-size: var(--text-xs); color: var(--ink-4);  }
+/* 覆盖率：一个分数 + 一条轨道，与趋势图同高对齐 */
+  .cov-card{  border-top: 1px solid var(--line-strong); padding-top: var(--sp-4); gap: var(--sp-3);  }
+.cov-figure{  display: flex; align-items: baseline; gap: var(--sp-2); font-family: var(--font-mono); font-variant-numeric: tabular-nums;  }
+.cov-figure b{  font-size: var(--text-3xl); font-weight: 500; line-height: 1.1; color: var(--ink);  }
+.cov-figure #cov-avail{  font-size: var(--text-lg); color: var(--ink-2);  }
+.cov-sep{  font-size: var(--text-lg); color: var(--ink-4);  }
+.cov-unit{  font-family: var(--font-sans); font-size: var(--text-sm); color: var(--ink-3);  }
+.cov-split{  display: flex; gap: var(--sp-4); font-size: var(--text-xs); color: var(--ink-3);  }
+.cov-split b{  font-family: var(--font-mono); color: var(--ink-2); font-weight: 500;  }
+/* 学习记录：关键字筛选与加载态 */
+  .lr-search{  flex: 1 1 180px; max-width: 260px; min-width: 140px;  }
+.lr-loading{  display: flex; align-items: center; justify-content: center; gap: var(--sp-2); padding: var(--sp-6); font-size: var(--text-sm); color: var(--ink-3);  }
+.bar-label .rpt-bar-sub{  font-size: var(--text-xs); color: var(--ink-3); margin-left: 4px; font-family: var(--font-mono);  }
 /* 学习记录：桌面表格，手机换专用列表 */
   #lr-mobile{  display: none;  }
 @media (max-width: 1024px){
@@ -110,8 +123,9 @@
     </nav>
     <div class="side-study">
       <span class="side-study-label">学习状态</span>
-      <div class="side-study-row"><span>今日待复习</span><b id="side-due">0</b></div>
-      <div class="side-study-row"><span>未完成会话</span><b id="side-sessions">0</b></div>
+      <a class="side-study-row side-study-link" href="review.html" title="去复习页处理今日到期"><span>今日待复习</span><b id="side-due">0</b></a>
+      <a class="side-study-row side-study-link" href="review.html?tab=mistakes" title="去复习页处理错题"><span>错题</span><b id="side-mistakes">0</b></a>
+      <a class="side-study-row side-study-link" href="home.html" title="今天页可以继续未完成的会话"><span>未完成会话</span><b id="side-sessions">0</b></a>
     </div>
     <div class="side-foot">
       <button class="nav-item" type="button"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg><span class="nav-label" data-i18n="shell.nav.settings">设置</span></button>
@@ -166,72 +180,115 @@
         </div>
         <div class="stat-row" id="ov-stats"></div>
         <p class="ee-rule">
-          覆盖率 = 已作答题数 ÷ 可用题数。可用题数不含你斩杀的题、也不含已归档的题——斩杀是你个人的状态，不该让公共覆盖率被动升高。
-          没有数据时不填 0% 或 100%，直接显示「暂无数据」。
-        </p>
-        <p class="ee-rule" data-spec>
-          <b>覆盖率口径</b>：已作答题数 ÷ 可用题数。可用题数不含已斩杀、不含已归档——斩杀是个人状态，不让公共覆盖率被动升高。
-          <b>可执行复习集合</b>：到期（FSRS 卡片 <span class="mono">due_at</span> 已到）∧ 未斩杀 ∧ 题库未归档 ∧ 仍有访问权；与复习页、侧栏角标同一把尺子。
+          正确率只统计真正作答过的客观题；未答不计入分母，也不计入累计作答。没有数据时显示「暂无数据」，不用 0% 或 100% 填充。
         </p>
       </section>
 
-      <!-- ============ 二、学习进步：两张图各回答一个问题 ============ -->
+      <!-- ============ 二、学习进步：正确率趋势 + 覆盖率 ============ -->
       <section class="section ee-sub" aria-labelledby="tr-title">
         <div class="section-head">
           <h2 class="section-title" id="tr-title">学习进步</h2>
-          <span class="section-note">两张图各回答一个问题：接下来每天复习多少、现在记住的有多牢</span>
+          <span class="section-note">按交卷时间归日 · 只统计已答客观题</span>
+        </div>
+        <div class="lay-main-side wide-rail">
+          <div class="lay-stack-sm">
+            <div class="chart" id="trend-chart">
+              <div>
+                <h3 class="chart-q">每次交卷的正确率，最近在升还是在降？</h3>
+                <p class="chart-note" id="trend-note"></p>
+              </div>
+              <div class="chart-plot" id="trend-plot" role="img" aria-label="按日期统计的已答客观题正确率"></div>
+              <div class="chart-legend">
+                <span class="chart-key"><span class="chart-swatch"></span>已答客观题正确率</span>
+              </div>
+            </div>
+            <div class="empty" id="trend-empty" hidden>
+              <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-chart"/></svg></div>
+              <div class="empty-title">这个窗口里还没有交卷报告</div>
+              <div class="empty-desc">交卷后，每一次的正确率会按日期画在这里；换个统计窗口也许能看到更早的记录。</div>
+            </div>
+          </div>
+          <div class="lay-stack-sm cov-card">
+            <div class="rule-label">覆盖率</div>
+            <div class="cov-figure">
+              <b id="cov-learned">0</b><span class="cov-sep" aria-hidden="true">/</span><span id="cov-avail">0</span>
+              <span class="cov-unit">题</span>
+            </div>
+            <div class="bar-track" aria-hidden="true"><span class="bar-fill" id="cov-fill" style="width:0%"></span></div>
+            <p class="ee-note" id="cov-note">已学 / 可练</p>
+            <div class="cov-split">
+              <span>已学 <b id="cov-learned-2">0</b></span>
+              <span>可练 <b id="cov-avail-2">0</b></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 三、未来复习负担 ============ -->
+      <section class="section ee-sub" aria-labelledby="load-title">
+        <div class="section-head">
+          <h2 class="section-title" id="load-title">未来复习负担</h2>
+          <span class="section-note" id="load-note">未来 7 天到期量</span>
         </div>
         <div class="lay-two">
           <div class="lay-stack-sm">
             <div class="chart">
               <div>
-                <h3 class="chart-q">接下来 14 天，每天有多少题到期？</h3>
-                <p class="chart-note" id="trend-note"></p>
+                <h3 class="chart-q">未来 7 天，每天有多少题到期？</h3>
+                <p class="chart-note" id="load-chart-note"></p>
               </div>
-              <div class="chart-plot" id="trend-plot" role="img" aria-label="未来 14 天每日到期题量"></div>
+              <div class="chart-plot" id="load-plot" role="img" aria-label="未来 7 天每日到期题量"></div>
               <div class="chart-legend">
                 <span class="chart-key"><span class="chart-swatch"></span>当天到期</span>
                 <span class="chart-key"><span class="chart-swatch soft"></span>更早逾期、顺延到今天</span>
               </div>
             </div>
-            <p class="ee-note">到期量来自 FSRS 调度，不是估算；今天柱子里深色部分是之前就该复习、一直没做的题。</p>
+            <div class="empty" id="load-empty" hidden>
+              <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg></div>
+              <div class="empty-title">未来 7 天没有到期题</div>
+              <div class="empty-desc">做完这一轮复习后到期量会重新排期；现在可以去提分推荐里做新题。</div>
+            </div>
           </div>
           <div class="lay-stack-sm">
-            <div class="chart">
-              <div>
-                <h3 class="chart-q">这些题现在记得有多牢？</h3>
-                <p class="chart-note" id="stab-note"></p>
-              </div>
-              <div class="hbars" id="stab-host"></div>
-            </div>
-            <p class="ee-note">稳定度越高，下次间隔越长。低于 1.5 的题随时可能忘，优先安排；还没调度的题一次都没复习过。</p>
+            <div class="section-head"><h3 class="sub-title">记忆稳定度</h3><span class="section-note" id="stab-note"></span></div>
+            <div class="hbars" id="stab-host"></div>
+            <p class="ee-note">稳定度越高，下次间隔越长。低于 1.5 的题随时可能忘，优先安排；同一稳定度数值只计一次，重复行不再累加。</p>
           </div>
         </div>
       </section>
 
-      <!-- ============ 三、薄弱点 ============ -->
+      <!-- ============ 四、薄弱知识点 ============ -->
       <section class="section ee-sub" aria-labelledby="wp-title">
         <div class="section-head">
-          <h2 class="section-title" id="wp-title">薄弱点</h2>
-          <span class="section-note">按知识点标签聚合，题型单独一栏；点一行跳到提分推荐的对应筛选</span>
+          <h2 class="section-title" id="wp-title">薄弱知识点</h2>
+          <span class="section-note">按交卷报告的章节与题目标签，得分率升序</span>
         </div>
         <div class="lay-two">
           <div class="lay-stack-sm">
-            <div class="section-head"><h3 class="sub-title">按知识点标签</h3><span class="section-note" id="wp-tag-note">0 个</span></div>
-            <div class="hbars" id="wp-tag-host"></div>
+            <div class="section-head"><h3 class="sub-title">按章节</h3><span class="section-note" id="wp-chap-note">0 个</span></div>
+            <div class="bar-group" id="wp-chap-host"></div>
+            <div class="empty" id="wp-chap-empty" hidden>
+              <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-chart"/></svg></div>
+              <div class="empty-title">还没有带章节的报告</div>
+              <div class="empty-desc">交卷报告会记下每道题的章节；有一两场带章节的报告后，这里按得分率从低到高排序。</div>
+            </div>
           </div>
           <div class="lay-stack-sm">
-            <div class="section-head"><h3 class="sub-title">按题型</h3><span class="section-note" id="wp-type-note">0 个</span></div>
-            <div class="hbars" id="wp-type-host"></div>
+            <div class="section-head"><h3 class="sub-title">按标签</h3><span class="section-note" id="wp-tag-note">0 个</span></div>
+            <div class="bar-group" id="wp-tag-host"></div>
+            <div class="empty" id="wp-tag-empty" hidden>
+              <div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-target"/></svg></div>
+              <div class="empty-title">题目还没有标签</div>
+              <div class="empty-desc">在题库里给题目加标签后，报告里的作答会按标签聚合成得分率。</div>
+            </div>
           </div>
         </div>
         <p class="ee-rule">
-          只统计<b>答错过</b>的知识点与题型；连续 2 次答对后该题的错题计数下降，标签随之从榜上消失。
-          题型单独一栏，是为了看清「是这块知识不会，还是这类题型总错」。
+          得分率 = 章节（标签）内客观题得分 ÷ 满分；未答按 0 分计入，仍占满分。只统计报告里有作答记录的题，不拿演示数据补位。
         </p>
       </section>
 
-      <!-- ============ 四、学习计划 ============ -->
+      <!-- ============ 五、学习计划 ============ -->
       <section class="section ee-sub" aria-labelledby="pl-title">
         <div class="section-head">
           <h2 class="section-title" id="pl-title">7 日计划</h2>
@@ -297,8 +354,12 @@
           <span class="section-note">报告落库后永久不可变，按时间倒序回看</span>
         </div>
 
-        <!-- 定位手段：日期 / 题库 / 学习模式，与「提分推荐」同一套工具条 -->
+        <!-- 定位手段：关键字 + 日期 / 题库 / 学习模式，与「提分推荐」同一套工具条 -->
         <div class="ee-toolbar" role="group" aria-label="学习记录筛选">
+          <label class="search-box lr-search" aria-label="搜索学习记录">
+            <svg class="od-icon" aria-hidden="true"><use href="#i-search"/></svg>
+            <input class="input" type="search" id="lr-q" placeholder="搜题库或模式…">
+          </label>
           <select class="select" aria-label="日期" id="lr-date"></select>
           <select class="select" aria-label="题库" id="lr-bank"></select>
           <select class="select" aria-label="学习模式" id="lr-mode"></select>
@@ -306,11 +367,13 @@
           <span class="panel-sub" id="lr-count" role="status" tabindex="-1">已显示 0 / 共 0 条</span>
         </div>
 
+        <div class="lr-loading" id="lr-loading" hidden aria-live="polite"><span class="spinner" aria-hidden="true"></span>正在整理学习记录…</div>
+
         <div class="dtable-wrap" id="lr-table-wrap">
           <table class="dtable">
             <thead>
               <tr>
-                <th>时间</th><th>模式</th><th>题库</th><th>题数</th><th>得分</th><th>得分率</th><th>已答正确率</th><th class="col-actions">报告</th>
+                <th class="col-date">时间</th><th class="col-status">模式</th><th class="col-name">题库</th><th class="col-num">客观 / 共</th><th class="col-num">得分</th><th class="col-num">得分率</th><th class="col-num">正确率</th><th class="col-actions">报告</th>
               </tr>
             </thead>
             <tbody id="lr-body"></tbody>
@@ -561,7 +624,7 @@ window.EEdiag = (function () {
   var S = window.eeStore;
   var state = { window: 14, ratio: 50, type: '', tag: '', limit: 10, diff: '不限难度', onNew: true, onWeak: true, onDue: true };
   /* 学习记录：一屏先给 LR_PAGE 条，剩下的靠「加载更多」；筛选变化不翻页（见 renderRecords） */
-  var LR_PAGE = 6;
+  var LR_PAGE = 20;
   var LR_RANGES = [
     { v: 'all', t: '全部时间' }, { v: '7', t: '近 7 天' },
     { v: '30', t: '近 30 天' }, { v: '90', t: '近 90 天' }, { v: 'older', t: '更早' }
@@ -570,7 +633,7 @@ window.EEdiag = (function () {
     { v: 'all', t: '全部模式' }, { v: 'exam', t: '模考' },
     { v: 'practice', t: '练习' }, { v: 'review', t: '复习' }, { v: 'live', t: '进行中' }
   ];
-  state.lrDate = 'all'; state.lrBank = 'all'; state.lrMode = 'all'; state.lrShown = LR_PAGE;
+  state.lrDate = 'all'; state.lrBank = 'all'; state.lrMode = 'all'; state.lrShown = LR_PAGE; state.lrQ = ''; state.lrTimer = null;
 
   /* ---- 样本载荷：与复习 / 练习同一批软考真题，档案只额外带统计字段 ---- */
   var QUESTIONS = [
@@ -638,63 +701,185 @@ window.EEdiag = (function () {
   }
   function windowSample() { return QUESTIONS.filter(function (q) { return inWindow(q.last); }); }
 
+  /* ---------- 报告数据：统计口径统一从这里取 ----------
+     历史报告只读：统计只聚合报告里存下的判定与字段，不重新判分。
+     未答（correctness = BLANK）不计入正确率分母，也不计入累计作答。 */
+  function reportsInWindow() {
+    return S.reports().filter(function (r) { return inWindow(r.at); });
+  }
+  function isObjItem(it) {
+    if (it.subjective != null) return !it.subjective;
+    var t = String(it.type || '');
+    return t !== '问答题' && t !== '简答题' && t !== '论述题' && t !== '案例分析题';
+  }
+  function isAnsweredItem(it) {
+    if (it.correctness) return it.correctness !== 'BLANK';
+    return !!it.answered;
+  }
+  function itemScore(it) { return it.score == null ? 1 : (Number(it.score) || 0); }
+  function itemRatio(it) {
+    if (it.ratio != null) return Number(it.ratio) || 0;
+    if (it.correctness === 'CORRECT') return 1;
+    if (it.correctness === 'PARTIAL') return 0.5;
+    return 0;
+  }
+  function windowAccuracy() {
+    var correct = 0, answered = 0;
+    reportsInWindow().forEach(function (r) {
+      (r.items || []).forEach(function (it) {
+        if (!isObjItem(it) || !isAnsweredItem(it)) return;
+        answered++;
+        if (it.correctness === 'CORRECT') correct++;
+      });
+    });
+    return answered ? Math.round(correct / answered * 100) : null;
+  }
+  /* 累计作答：只加真正作答过的题。没有逐题明细的老报告用交卷时记下的 answered（同样不含未答）。 */
+  function cumulativeAnswered() {
+    var n = 0;
+    S.reports().forEach(function (r) {
+      if (r.items && r.items.length) {
+        r.items.forEach(function (it) { if (isAnsweredItem(it)) n++; });
+      } else if (r.answered != null) {
+        n += Number(r.answered) || 0;
+      }
+    });
+    return n;
+  }
+  function coverageData() {
+    /* 覆盖率 = 已学 ÷ 可练。分母只含当前可练的题，分子也必须落在同一集合里：
+       报告里出现、但现在已归档 / 不在可访问题库的题，不算「已学」——
+       否则分子能超过分母，覆盖率会出现 300% 这种读不通的数。 */
+    var learned = {};
+    S.reports().forEach(function (r) {
+      (r.items || []).forEach(function (it) {
+        if (!isAnsweredItem(it)) return;
+        var q = S.questionByStem && S.questionByStem(it.stem);
+        if (!q || q.archived) return;
+        if (!bankReachable(q.bankId)) return;
+        learned['q:' + q.id] = 1;
+      });
+    });
+    return { learned: Object.keys(learned).length, avail: availableCount() };
+  }
+  function trendData() {
+    var groups = {};
+    reportsInWindow().forEach(function (r) {
+      var items = r.items || [];
+      if (!items.length) return;
+      var day = String(r.at || '').slice(0, 10);
+      if (!day) return;
+      var g = groups[day] || (groups[day] = { day: day, correct: 0, answered: 0 });
+      items.forEach(function (it) {
+        if (!isObjItem(it) || !isAnsweredItem(it)) return;
+        g.answered++;
+        if (it.correctness === 'CORRECT') g.correct++;
+      });
+    });
+    return Object.keys(groups).sort().slice(-14).map(function (k) {
+      var g = groups[k];
+      return { day: k, n: g.answered, rate: g.answered ? Math.round(g.correct / g.answered * 100) : null };
+    }).filter(function (g) { return g.rate != null; });
+  }
+
   /* ---------- 概览 ---------- */
   function renderOverview() {
-    var sample = windowSample();
-    var attempts = 0, correct = 0;
-    sample.forEach(function (q) { attempts += (q.correct || 0) + q.mistakes; correct += q.correct || 0; });
-    var recentRate = attempts ? Math.round(correct / attempts * 100) + '%' : '暂无数据';
-    var attempted = QUESTIONS.filter(function (q) { return q.last; }).length;
-    var coverage = attempted + ' / ' + availableCount();
-    var tags = {};
-    QUESTIONS.forEach(function (q) { if (q.mistakes > 0) tags[q.tag] = 1; });
+    var rate = windowAccuracy();
+    var cov = coverageData();
+    var covPct = cov.avail ? Math.round(cov.learned / cov.avail * 100) : null;
+    var weak = weakChapters().length;
     document.getElementById('ov-window-note').textContent =
-      '统计窗口：近 ' + state.window + ' 天 · 期内作答 ' + sample.length + ' 题';
+      '统计窗口：近 ' + state.window + ' 天 · 期内交卷 ' + reportsInWindow().length + ' 场';
     document.getElementById('ov-stats').innerHTML =
-      stat(recentRate, '近期正确率') +
-      stat(coverage, '覆盖率（已作答 / 可用）') +
-      stat(Object.keys(tags).length, '薄弱点数') +
+      stat(rate == null ? '暂无数据' : rate + '%', '近期正确率 · 只算已答客观题') +
+      stat(cumulativeAnswered(), '累计作答 · 不含未答') +
+      stat(covPct == null ? '暂无数据' : covPct + '%', '覆盖率 · 已学 / 可练') +
       stat(executableRows().length, '当前可执行复习');
   }
   function stat(num, cap) {
     return '<div class="stat"><div class="stat-num">' + num + '</div><div class="stat-cap">' + cap + '</div></div>';
   }
 
-  /* ---------- 图一：未来 14 天每日到期量 ---------- */
+  /* ---------- 学习进步：正确率趋势 ---------- */
   function renderTrend() {
+    var days = trendData();
+    var host = document.getElementById('trend-plot');
+    var empty = document.getElementById('trend-empty');
+    var chart = document.getElementById('trend-chart');
+    var has = days.length > 0;
+    if (chart) chart.hidden = !has;
+    if (empty) empty.hidden = has;
+    if (!has) {
+      document.getElementById('trend-note').textContent = '这个窗口里还没有交卷报告';
+      host.innerHTML = '';
+      return;
+    }
+    var plotH = 108;
+    host.innerHTML = days.map(function (d) {
+      var h = Math.max(4, Math.round(d.rate / 100 * plotH));
+      return '<div class="chart-col">' +
+        '<span class="chart-val">' + d.rate + '%</span>' +
+        '<div class="chart-bar" style="--v:' + h + 'px" title="' + esc(d.day) + ' 已答 ' + d.n + ' 题，正确率 ' + d.rate + '%"></div>' +
+        '<span class="chart-x">' + esc(d.day.slice(5)) + '</span></div>';
+    }).join('');
+    var sum = days.reduce(function (a, d) { return a + d.n; }, 0);
+    document.getElementById('trend-note').textContent =
+      '最近 ' + days.length + ' 个有作答的日子 · 共 ' + sum + ' 道已答客观题 · 柱顶为该日正确率';
+  }
+
+  /* ---------- 覆盖率 ---------- */
+  function renderCoverage() {
+    var cov = coverageData();
+    var pct = cov.avail ? Math.min(100, Math.round(cov.learned / cov.avail * 100)) : 0;
+    document.getElementById('cov-learned').textContent = cov.learned;
+    document.getElementById('cov-avail').textContent = cov.avail;
+    document.getElementById('cov-learned-2').textContent = cov.learned;
+    document.getElementById('cov-avail-2').textContent = cov.avail;
+    document.getElementById('cov-fill').style.width = pct + '%';
+    document.getElementById('cov-note').textContent = cov.avail
+      ? '覆盖率 ' + pct + '% · 可练题数不含已斩杀、已归档，也不含你还没有访问权的题库'
+      : '还没有可练的题：可练题数不含已斩杀、已归档的题库';
+  }
+
+  /* ---------- 未来复习负担：未来 7 天到期量 ---------- */
+  function renderLoad() {
     var rows = S.reviewQueue().filter(function (r) { return r.reasons.indexOf('killed') < 0 && bankReachable(r.bankId); });
     var today = new Date(); today.setHours(0, 0, 0, 0);
     var dayStart = today.getTime();
     var overdue = rows.filter(function (r) { var t = dueTime(r); return t != null && t < dayStart; }).length;
     var days = [];
-    for (var i = 0; i < 14; i++) {
+    for (var i = 0; i < 7; i++) {
       var d = new Date(today); d.setDate(d.getDate() + i);
       var key = ymd(d);
       var n = rows.filter(function (r) { var t = dueTime(r); return t != null && ymd(new Date(t)) === key; }).length;
       days.push({ d: d, n: n, over: i === 0 ? overdue : 0 });
     }
+    var total = days.reduce(function (a, x) { return a + x.n + x.over; }, 0);
+    var host = document.getElementById('load-plot');
+    var empty = document.getElementById('load-empty');
+    if (empty) empty.hidden = total > 0;
     var max = Math.max.apply(null, days.map(function (x) { return x.n + x.over; }).concat([1]));
     var plotH = 108;
-    document.getElementById('trend-plot').innerHTML = days.map(function (x) {
-      var total = x.n + x.over;
-      var h = total ? Math.max(6, Math.round(total / max * plotH)) : 0;
+    host.innerHTML = days.map(function (x) {
+      var t = x.n + x.over;
+      var h = t ? Math.max(6, Math.round(t / max * plotH)) : 0;
       var overH = x.over ? Math.round(x.over / max * plotH) : 0;
-      var cls = 'chart-col' + (x.d.getTime() === dayStart ? ' is-today' : '') + (total ? '' : ' is-empty');
+      var cls = 'chart-col' + (x.d.getTime() === dayStart ? ' is-today' : '') + (t ? '' : ' is-empty');
       return '<div class="' + cls + '">' +
-        (total ? '<span class="chart-val">' + total + '</span>' : '') +
+        (t ? '<span class="chart-val">' + t + '</span>' : '') +
         '<div class="chart-bar" style="--v:' + h + 'px">' +
         (overH ? '<span class="chart-bar-over" style="height:' + overH + 'px"></span>' : '') +
         '</div>' +
-        '<span class="chart-x">' + x.d.getDate() + '</span></div>';
+        '<span class="chart-x">' + (iDayLabel(x.d)) + '</span></div>';
     }).join('');
-    var dueToday = executableRows().length;
-    var scheduled = scheduledRows().length;
-    document.getElementById('trend-note').textContent =
-      '今天到期 ' + dueToday + ' 题' + (overdue ? '（含 ' + overdue + ' 题之前就该复习）' : '') +
-      ' · 未来 13 天还有 ' + scheduled + ' 题排期内 · 横轴为日期，' + md(today) + ' 起';
+    document.getElementById('load-chart-note').textContent =
+      '今天到期 ' + (days[0].n + days[0].over) + ' 题' + (overdue ? '（含 ' + overdue + ' 题之前就该复习）' : '') +
+      ' · 未来 7 天共 ' + total + ' 题 · 横轴为日期，' + md(today) + ' 起';
+    document.getElementById('load-note').textContent = '未来 7 天共 ' + total + ' 题到期';
   }
+  function iDayLabel(d) { return d.getDate(); }
 
-  /* ---------- 图二：记忆稳定度分布 ---------- */
+  /* ---------- 记忆稳定度：按数值去重，重复行不再累加 ---------- */
   function renderStability() {
     var bands = [
       { label: '还没调度', test: function (s) { return s == null; }, cls: '' },
@@ -703,18 +888,23 @@ window.EEdiag = (function () {
       { label: '2.4 – 3.1', test: function (s) { return s != null && s >= 2.4 && s < 3.1; }, cls: '' },
       { label: '3.1 以上', test: function (s) { return s != null && s >= 3.1; }, cls: '' }
     ];
-    var vals = [];
+    var vals = [], seen = {}, unscheduled = 0;
+    function add(v) {
+      if (v == null) { unscheduled++; return; }
+      var n = Number(v);
+      if (!isFinite(n)) { unscheduled++; return; }
+      if (seen[n]) return;          /* 同一稳定度数值只计一次，重复行不再累加 */
+      seen[n] = 1; vals.push(n);
+    }
     S.reviewQueue().forEach(function (r) {
       if (r.reasons.indexOf('killed') > -1 || !bankReachable(r.bankId)) return;
-      vals.push(r.stability == null ? null : Number(r.stability));
+      add(r.stability);
     });
-    QUESTIONS.forEach(function (q) {
-      if (q.stability == null) return;
-      if (vals.some(function (v) { return v === Number(q.stability); })) return;
-      vals.push(Number(q.stability));
-    });
+    QUESTIONS.forEach(function (q) { add(q.stability); });
+    var all = vals.slice();
+    for (var u = 0; u < unscheduled; u++) all.push(null);
     var counts = bands.map(function (b) {
-      return { label: b.label, cls: b.cls, n: vals.filter(function (v) { return b.test(v); }).length };
+      return { label: b.label, cls: b.cls, n: all.filter(function (v) { return b.test(v); }).length };
     });
     var max = Math.max.apply(null, counts.map(function (c) { return c.n; }).concat([1]));
     var shaky = counts[1].n + counts[2].n;
@@ -724,44 +914,51 @@ window.EEdiag = (function () {
         '<span class="hbar-n">' + c.n + ' 题</span></div>';
     }).join('');
     document.getElementById('stab-note').textContent =
-      '共 ' + vals.length + ' 道在调度 · 稳定度不足 2.4 的有 ' + shaky + ' 道，是这周最该先做的部分';
+      '共 ' + vals.length + ' 个稳定度数值' + (unscheduled ? ' · ' + unscheduled + ' 道还没调度' : '') +
+      ' · 不足 2.4 的 ' + shaky + ' 档';
   }
 
-  /* ---------- 薄弱点：按标签 + 按题型 ---------- */
-  function renderWeakPoints() {
-    var byTag = {}, byType = {};
-    QUESTIONS.forEach(function (q) {
-      if (q.mistakes > 0) {
-        byTag[q.tag] = byTag[q.tag] || { n: 0, m: 0 };
-        byTag[q.tag].n++; byTag[q.tag].m += q.mistakes;
-      }
-      if (q.last) {
-        byType[q.type] = byType[q.type] || { n: 0, m: 0 };
-        byType[q.type].n++; byType[q.type].m += q.mistakes;
-      }
+  /* ---------- 薄弱知识点：按章节 / 标签的得分率 ---------- */
+  function knowledgeData(dim) {
+    var map = {};
+    S.reports().forEach(function (r) {
+      (r.items || []).forEach(function (it) {
+        if (!isObjItem(it)) return;
+        var keys = [];
+        if (dim === 'chapter') keys = [it.chapter || '未分章'];
+        else {
+          var q = S.questionByStem && S.questionByStem(it.stem);
+          keys = (q && q.tags && q.tags.length) ? q.tags : [];
+        }
+        keys.forEach(function (k) {
+          var g = map[k] || (map[k] = { n: 0, full: 0, earned: 0 });
+          g.n++; g.full += itemScore(it); g.earned += itemRatio(it) * itemScore(it);
+        });
+      });
     });
-    renderBars('wp-tag-host', 'wp-tag-note', byTag, 'tag', '还没有薄弱点',
-      '答错的题会按知识点标签聚到这里；连续 2 次答对后该标签的计数下降。');
-    renderBars('wp-type-host', 'wp-type-note', byType, 'type', '还没有按题型的统计',
-      '做过题之后，这里按题型单独计数，不与知识点标签混在一个榜单里。');
+    return Object.keys(map).map(function (k) {
+      var g = map[k];
+      return { label: k, n: g.n, rate: g.full ? Math.round(g.earned / g.full * 100) : null };
+    }).filter(function (g) { return g.rate != null; })
+      .sort(function (a, b) { return a.rate - b.rate || a.label.localeCompare(b.label); });
   }
-  function renderBars(hostId, noteId, map, kind, emptyTitle, emptyDesc) {
-    var keys = Object.keys(map).sort(function (a, b) { return map[b].m - map[a].m; });
-    document.getElementById(noteId).textContent = keys.length + ' 个';
+  function weakChapters() { return knowledgeData('chapter'); }
+  function renderWeakPoints() {
+    renderWeakBars('wp-chap-host', 'wp-chap-note', 'wp-chap-empty', knowledgeData('chapter'));
+    renderWeakBars('wp-tag-host', 'wp-tag-note', 'wp-tag-empty', knowledgeData('tag'));
+  }
+  function renderWeakBars(hostId, noteId, emptyId, list) {
+    document.getElementById(noteId).textContent = list.length + ' 个';
     var host = document.getElementById(hostId);
-    if (!keys.length) {
-      host.innerHTML = '<div class="empty"><div class="empty-mark"><svg class="od-icon" aria-hidden="true"><use href="#i-check"/></svg></div>' +
-        '<div class="empty-title">' + esc(emptyTitle) + '</div><div class="empty-desc">' + esc(emptyDesc) + '</div></div>';
-      return;
-    }
-    var max = Math.max.apply(null, keys.map(function (k) { return map[k].m; }).concat([1]));
-    host.innerHTML = keys.map(function (k) {
-      var d = map[k];
-      var cls = d.m >= 3 ? 'is-bad' : (d.m >= 2 ? 'is-warn' : '');
-      return '<div class="hbar-row"><span class="hbar-label">' + esc(k) + '</span>' +
-        '<span class="hbar-track"><span class="hbar-fill ' + cls + '" style="width:' + Math.round(d.m / max * 100) + '%"></span></span>' +
-        '<button class="hbar-n link-btn" type="button" onclick="EEdiag.jumpReco(\'' + kind + '\', \'' + esc(k) + '\')" ' +
-        'title="在提分推荐里筛「' + esc(k) + '」">' + d.n + ' 题 · 错 ' + d.m + ' 次</button></div>';
+    var empty = document.getElementById(emptyId);
+    if (!list.length) { host.innerHTML = ''; host.hidden = true; if (empty) empty.hidden = false; return; }
+    host.hidden = false;
+    if (empty) empty.hidden = true;
+    host.innerHTML = list.slice(0, 6).map(function (g) {
+      var cls = g.rate < 50 ? 'bad' : (g.rate < 80 ? 'warn' : 'ok');
+      return '<div class="bar-row"><span class="bar-label">' + esc(g.label) + '<span class="rpt-bar-sub">' + g.n + ' 题</span></span>' +
+        '<span class="bar-track"><i class="bar-fill ' + cls + '" style="width:' + g.rate + '%"></i></span>' +
+        '<span class="bar-val">' + g.rate + '%</span></div>';
     }).join('');
   }
 
@@ -902,15 +1099,38 @@ window.EEdiag = (function () {
   /* ---------- 学习记录：桌面表格 + 手机专用列表 ---------- */
   var MODE_NAMES = { exam: '模考', practice: '练习', review: '复习' };
   /* 两个率与报告页同一把尺子（CR-06）：得分率分母是全场客观题满分（含未作答），
-     已答正确率分母只含已答客观题。缺分母时显示「暂无数据」，不用 0% / 100% 填充。 */
+     正确率分母只含已答客观题。缺分母时显示「暂无数据」，不用 0% / 100% 填充。 */
   function rateOf(r) {
-    if (r.rate != null) return r.rate + '%';                 /* 模考报告：落库时已算好得分率 */
-    if (r.score != null) return Math.round(r.score) + '%';   /* 练习报告：score 本身就是得分率 */
+    if (r.rate != null) return r.rate + '%';
+    if (r.full != null && r.score != null) return Math.round(r.score / r.full * 100) + '%';
+    /* 早期练习报告把 score 存成百分比、没有 full；仅在这种情况下沿用旧语义 */
+    if (r.full == null && r.score != null && r.total != null) return Math.round(r.score) + '%';
     return '—';
   }
+  /* 客观题数量不沿用旧字段：有逐题明细就按 items 重算，没有才退回 objTotal。 */
+  function objCountOf(r) {
+    var items = r.items || [];
+    if (items.length) return items.filter(function (it) { return isObjItem(it); }).length;
+    if (r.objTotal != null && (r.total == null || r.objTotal <= r.total)) return r.objTotal;
+    return null;
+  }
+  function totalCountOf(r) {
+    var items = r.items || [];
+    return items.length || r.total || 0;
+  }
   function accOf(r) {
+    var items = r.items || [];
+    if (items.length) {
+      var answered = 0, ok = 0;
+      items.forEach(function (it) {
+        if (!isObjItem(it) || !isAnsweredItem(it)) return;
+        answered++;
+        if (it.correctness === 'CORRECT') ok++;
+      });
+      return answered ? Math.round(ok / answered * 100) + '%' : '暂无数据';
+    }
     if (r.accObj != null) return r.accObj + '%';
-    if (r.answeredObj) return Math.round(r.answeredObjCorrect / r.answeredObj * 100) + '%';
+    if (r.answeredObj) return Math.round((Number(r.answeredObjCorrect) || 0) / Number(r.answeredObj) * 100) + '%';
     return '暂无数据';
   }
   function scoreOf(r) {
@@ -923,7 +1143,8 @@ window.EEdiag = (function () {
     var rows = [];
     S.reports().forEach(function (r) {
       rows.push({
-        at: r.at, kind: r.kind || 'practice', bank: bankName(r.bankId), bankId: r.bankId, total: r.total,
+        at: r.at, kind: r.kind || 'practice', bank: bankName(r.bankId), bankId: r.bankId,
+        objN: objCountOf(r), totalN: totalCountOf(r),
         score: scoreOf(r), rate: rateOf(r), acc: accOf(r), id: r.id, live: false
       });
     });
@@ -931,14 +1152,14 @@ window.EEdiag = (function () {
       rows.push({
         at: s.updatedAt || s.startedAt, kind: s.kind, mode: '进行中 · ' + (s.mode || '顺序练习'),
         bank: bankName(s.bankId), bankId: s.bankId,
-        total: s.total, score: '—', rate: '—', acc: '—', id: s.id, live: true
+        objN: null, totalN: s.total || 0, score: '—', rate: '—', acc: '—', id: s.id, live: true
       });
     });
     rows.forEach(function (r) { if (!r.mode) r.mode = MODE_NAMES[r.kind] || '练习'; });
     rows.sort(function (a, b) { return String(b.at).localeCompare(String(a.at)); });
     return rows;
   }
-  /* 定位手段：日期范围 + 题库 + 学习模式，与模考成绩报告同一套筛选语义 */
+  /* 定位手段：关键字 + 日期范围 + 题库 + 学习模式，与模考成绩报告同一套筛选语义 */
   function inRecordRange(r) {
     if (state.lrDate === 'all') return true;
     var t = new Date(String(r.at || '').replace(' ', 'T')).getTime();
@@ -953,10 +1174,12 @@ window.EEdiag = (function () {
     return !r.live && r.kind === state.lrMode;
   }
   function filteredRecords() {
+    var q = String(state.lrQ || '').trim().toLowerCase();
     return recordRows().filter(function (r) {
       if (!inRecordRange(r)) return false;
       if (state.lrBank !== 'all' && r.bankId !== state.lrBank) return false;
       if (!inRecordMode(r)) return false;
+      if (q && (r.bank + ' ' + r.mode + ' ' + r.at).toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
   }
@@ -966,25 +1189,44 @@ window.EEdiag = (function () {
       ? 'exams.html?report=' + encodeURIComponent(r.id)
       : 'practice.html?rid=' + encodeURIComponent(r.id);
   }
-  function renderRecords() {
+  function renderRecords(showLoading) {
+    var loading = document.getElementById('lr-loading');
+    var tableWrap = document.getElementById('lr-table-wrap');
+    var mobile = document.getElementById('lr-mobile');
+    /* 几百条记录时，筛一次要重排整张表：先给出明确的加载态，再在同一帧之后渲染 */
+    if (showLoading) {
+      if (loading) loading.hidden = false;
+      if (tableWrap) tableWrap.hidden = true;
+      if (mobile) mobile.hidden = true;
+      clearTimeout(state.lrTimer);
+      state.lrTimer = setTimeout(function () { renderRecords(false); }, 30);
+      return;
+    }
+    if (loading) loading.hidden = true;
+    if (tableWrap) tableWrap.hidden = false;
+    if (mobile) mobile.hidden = false;
+
     var all = recordRows();
     var list = filteredRecords();
     /* 条件收窄时不翻页：筛选一变就回到第一屏，不保留上一次加载出来的页 */
     var shown = Math.min(state.lrShown, list.length);
     var rows = list.slice(0, shown);
     var emptyText = all.length
-      ? '没有符合当前筛选的学习记录。放宽日期、换一个题库，或把模式切回「全部模式」。'
+      ? '没有符合当前筛选的学习记录。放宽日期、换一个题库、清空关键字，或把模式切回「全部模式」。'
       : '还没有已交卷的记录。做一组练习或一场模考，报告会落库并在这里按时间倒序回看。';
+    var countText = function (r) {
+      return r.objN == null ? '— / ' + r.totalN : r.objN + ' / ' + r.totalN;
+    };
 
     document.getElementById('lr-body').innerHTML = rows.length ? rows.map(function (r) {
       return '<tr>' +
-        '<td data-label="时间" class="mono">' + esc(r.at) + '</td>' +
-        '<td data-label="模式">' + esc(r.mode) + '</td>' +
-        '<td data-label="题库">' + esc(r.bank) + '</td>' +
-        '<td data-label="题数" class="num">' + r.total + '</td>' +
-        '<td data-label="得分" class="num">' + esc(r.score) + '</td>' +
-        '<td data-label="得分率" class="num">' + esc(r.rate) + '</td>' +
-        '<td data-label="已答正确率" class="num">' + esc(r.acc) + '</td>' +
+        '<td data-label="时间" class="mono col-date">' + esc(r.at) + '</td>' +
+        '<td data-label="模式" class="col-status">' + esc(r.mode) + '</td>' +
+        '<td data-label="题库" class="col-name">' + esc(r.bank) + '</td>' +
+        '<td data-label="题数（客观 / 共）" class="num col-num">' + countText(r) + '</td>' +
+        '<td data-label="得分" class="num col-num">' + esc(r.score) + '</td>' +
+        '<td data-label="得分率" class="num col-num">' + esc(r.rate) + '</td>' +
+        '<td data-label="正确率" class="num col-num">' + esc(r.acc) + '</td>' +
         '<td class="col-actions" data-label="报告"><a class="btn btn-sm btn-quiet" href="' + recordHref(r) + '">' + (r.live ? '继续' : '回看') + '</a></td>' +
         '</tr>';
     }).join('') : '<tr><td colspan="8"><div class="dtable-empty">' + esc(emptyText) + '</div></td></tr>';
@@ -993,8 +1235,8 @@ window.EEdiag = (function () {
       return '<div class="list-row ee-row-top">' +
         '<span class="list-main"><span class="list-title">' + esc(r.mode) + '</span>' +
         '<span class="list-meta"><span class="mono">' + esc(r.at) + '</span><span>' + esc(r.bank) + '</span></span>' +
-        '<span class="list-meta"><span>' + r.total + ' 题</span>' +
-        (r.live ? '<span>得分待交卷</span>' : '<span>得分 ' + esc(r.score) + '</span><span>得分率 ' + esc(r.rate) + '</span><span>已答正确率 ' + esc(r.acc) + '</span>') +
+        '<span class="list-meta"><span>' + countText(r) + '</span>' +
+        (r.live ? '<span>得分待交卷</span>' : '<span>得分 ' + esc(r.score) + '</span><span>得分率 ' + esc(r.rate) + '</span><span>正确率 ' + esc(r.acc) + '</span>') +
         '</span></span>' +
         '<span class="list-side"><a class="btn btn-sm btn-quiet" href="' + recordHref(r) + '">' + (r.live ? '继续' : '回看') + '</a></span>' +
         '</div>';
@@ -1016,13 +1258,14 @@ window.EEdiag = (function () {
       ? '还有 ' + rest + ' 条未显示'
       : (list.length < all.length ? '已显示全部 ' + list.length + ' 条命中记录' : '');
   }
-  /* 空态里的「重置筛选」与三个下拉是同一组条件，不引入第二份筛选状态 */
+  /* 空态里的「重置筛选」与三个下拉、关键字是同一组条件，不引入第二份筛选状态 */
   function resetRecords() {
-    state.lrDate = 'all'; state.lrBank = 'all'; state.lrMode = 'all'; state.lrShown = LR_PAGE;
+    state.lrDate = 'all'; state.lrBank = 'all'; state.lrMode = 'all'; state.lrQ = ''; state.lrShown = LR_PAGE;
     document.getElementById('lr-date').value = 'all';
     document.getElementById('lr-bank').value = 'all';
     document.getElementById('lr-mode').value = 'all';
-    renderRecords();
+    document.getElementById('lr-q').value = '';
+    renderRecords(false);
   }
 
   /* ---------- 详情抽屉 ---------- */
@@ -1253,6 +1496,8 @@ window.EEdiag = (function () {
       x.setAttribute('aria-checked', x === b ? 'true' : 'false');
     });
     renderOverview();
+    renderTrend();
+    renderCoverage();
   });
   document.querySelectorAll('[data-ratio]').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -1272,24 +1517,36 @@ window.EEdiag = (function () {
   });
   ['rc-on-new', 'rc-on-weak', 'rc-on-due'].forEach(function (id) {
     document.getElementById(id).addEventListener('change', function (e) {
-      state[id === 'rc-on-new' ? 'onNew' : id === 'rc-on-weak' ? 'onDue' : 'onWeak'] = e.target.checked;
+      state[id === 'rc-on-new' ? 'onNew' : id === 'rc-on-weak' ? 'onWeak' : 'onDue'] = e.target.checked;
       renderReco();
     });
   });
   ['plan-days', 'plan-minutes', 'plan-banks'].forEach(function (id) {
     document.getElementById(id).addEventListener('change', renderPlan);
   });
-  /* 学习记录：筛选一变就回到第一屏（条件收窄时不翻页），「加载更多」只往后追加 */
+  /* 学习记录：筛选一变就回到第一屏（条件收窄时不翻页），「加载更多」只往后追加。
+     记录多时先给加载态，再渲染；筛选与加载都不改变「回看」链接的精确落点。 */
+  function recordsAreLarge() { return (S.reports().length + S.sessions().length) > 40; }
   ['lr-date', 'lr-bank', 'lr-mode'].forEach(function (id) {
     document.getElementById(id).addEventListener('change', function (e) {
       state[id === 'lr-date' ? 'lrDate' : id === 'lr-bank' ? 'lrBank' : 'lrMode'] = e.target.value;
       state.lrShown = LR_PAGE;
-      renderRecords();
+      renderRecords(recordsAreLarge());
     });
+  });
+  var lrQTimer = null;
+  document.getElementById('lr-q').addEventListener('input', function (e) {
+    var v = e.target.value;
+    clearTimeout(lrQTimer);
+    lrQTimer = setTimeout(function () {
+      state.lrQ = v;
+      state.lrShown = LR_PAGE;
+      renderRecords(recordsAreLarge());
+    }, 180);
   });
   document.getElementById('lr-more').addEventListener('click', function () {
     state.lrShown += LR_PAGE;
-    renderRecords();
+    renderRecords(recordsAreLarge());
     /* 追加后按钮可能消失：焦点移回计数，不停在一个已不存在的控件上 */
     if (document.getElementById('lr-more').hidden) document.getElementById('lr-count').focus();
   });
@@ -1298,11 +1555,13 @@ window.EEdiag = (function () {
     fillSelects();
     renderOverview();
     renderTrend();
+    renderCoverage();
+    renderLoad();
     renderStability();
     renderWeakPoints();
     renderPlan();
     renderReco();
-    renderRecords();
+    renderRecords(false);
     document.getElementById('side-due').textContent = String(executableRows().length);
     document.getElementById('side-sessions').textContent = String(S.sessions().length);
   }

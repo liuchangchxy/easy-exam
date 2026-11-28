@@ -35,7 +35,7 @@
 .set-rail{  position: sticky; top: calc(var(--topbar-h) + var(--sp-5)); display: flex; flex-direction: column; gap: var(--sp-1);  }
 .set-tabs{  display: flex; flex-direction: column; gap: 2px; max-width: 100%;  }
 .set-group{  font-size: var(--text-xs); color: var(--ink-4); letter-spacing: .08em; padding: var(--sp-3) var(--sp-3) var(--sp-1);  }
-.set-item{  display: flex; align-items: center; gap: var(--sp-3); width: 100%; min-height: 36px;
+.set-item{  display: flex; align-items: center; gap: var(--sp-3); width: 100%; min-height: var(--ctl-h);
     padding: var(--sp-2) var(--sp-3); background: none; border: 1px solid transparent; border-radius: var(--r-sm);
     font: inherit; font-size: var(--text-sm); color: var(--ink-2); text-align: left; cursor: pointer; text-decoration: none;  }
 .set-item:hover{  background: var(--surface-2); color: var(--ink);  }
@@ -63,9 +63,18 @@
 .setting-row:last-child{  border-bottom: none;  }
 .setting-row.is-top{  align-items: flex-start;  }
 .setting-label{  display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 260px;  }
-.setting-name{  font-size: var(--text-sm); color: var(--ink); font-weight: 500;  }
-.setting-desc{  font-size: var(--text-xs); color: var(--ink-3);  }
-.setting-control{  flex: 0 1 auto; min-width: 0;  }
+.setting-name{  font-size: var(--text-sm); color: var(--ink); font-weight: 500; line-height: 1.5;  }
+.setting-desc{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh);  }
+.setting-control{  flex: 0 1 auto; min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-2); flex-wrap: wrap;  }
+/* 设置里的表格：日期不折行，设备名可折；放不下时表格内部横滚，不挤成竖列 */
+  .device-table .col-name{  min-width: 12em;  }
+.device-table .col-date{  white-space: nowrap; font-variant-numeric: tabular-nums;  }
+@media (max-width: 1024px){
+    /* 834 档的详情栏只剩 ~456px：把单元格左右留白收一档，三列正好放下，
+       不靠横向滚动藏掉「最近活动」。 */
+    .device-table th, .device-table td{  padding-left: var(--sp-3); padding-right: var(--sp-3);  }
+    .device-table .col-name{  min-width: 11em;  }
+  }
 /* 设置分区不包卡片：分区细线 + 行间细线已划分层级（规则 6，原版 setting-row 同值） */
   .section > .panel{  background: transparent; border: 0; border-radius: 0; box-shadow: none;  }
 .section > .panel > .panel-body{  padding: 0;  }
@@ -229,10 +238,10 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
       </button>
     </nav>
     <div class="side-study">
-      <div class="side-study-label">第 46 周 · 2026-11-24</div>
-      <div class="side-study-row"><span>到期复习</span><b>12</b></div>
-      <div class="side-study-row"><span>错题重做</span><b>8</b></div>
-      <div class="side-study-row"><span>本周新增</span><b>46</b></div>
+      <span class="side-study-label">学习状态</span>
+      <a class="side-study-row side-study-link" href="review.html" title="去复习页处理今日到期"><span>今日待复习</span><b id="side-due">0</b></a>
+      <a class="side-study-row side-study-link" href="review.html?tab=mistakes" title="去复习页处理错题"><span>错题</span><b id="side-mistakes">0</b></a>
+      <a class="side-study-row side-study-link" href="home.html" title="今天页可以继续未完成的会话"><span>未完成会话</span><b id="side-sessions">0</b></a>
     </div>
     <div class="side-foot">
       <span class="nav-item is-active" aria-current="page">
@@ -407,7 +416,7 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
             <div class="rule-label mt-6">设备与会话</div>
             <div class="setting-row is-top mt-3">
               <div class="setting-label">
-                <div class="setting-name">这些设备当前登录着你的账号。</div>
+                <div class="setting-name">登录的设备</div>
                 <div class="setting-desc">本机不能自助退出；退出其他设备不会影响当前设备。</div>
               </div>
               <div class="setting-control">
@@ -418,33 +427,33 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
             </div>
 
             <!-- 会话表（加载 / 失败 / 空 / 禁用四态见本屏状态格） -->
-            <div class="dtable-wrap mt-4">
-              <table class="dtable">
+            <div class="dtable-wrap dtable-cards mt-4">
+              <table class="dtable device-table">
                 <thead>
                   <tr>
-                    <th scope="col">设备</th>
-                    <th scope="col">登录于</th>
-                    <th scope="col">最近活动</th>
+                    <th scope="col" class="col-name">设备</th>
+                    <th scope="col" class="col-date">登录于</th>
+                    <th scope="col" class="col-date">最近活动</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td data-label="设备">
+                    <td data-label="设备" class="col-name">
                       <span>Chrome 131 · Windows</span>
                       <span class="tag brand">本机</span>
                     </td>
-                    <td class="num" data-label="登录于">2026-11-24 07:52</td>
-                    <td class="num" data-label="最近活动">2026-11-24 09:20</td>
+                    <td class="num col-date" data-label="登录于">2026-11-24 07:52</td>
+                    <td class="num col-date" data-label="最近活动">2026-11-24 09:20</td>
                   </tr>
                   <tr>
-                    <td data-label="设备"><span>Edge 130 · Windows</span></td>
-                    <td class="num" data-label="登录于">2026-11-22 22:14</td>
-                    <td class="num" data-label="最近活动">2026-11-23 23:41</td>
+                    <td data-label="设备" class="col-name"><span>Edge 130 · Windows</span></td>
+                    <td class="num col-date" data-label="登录于">2026-11-22 22:14</td>
+                    <td class="num col-date" data-label="最近活动">2026-11-23 23:41</td>
                   </tr>
                   <tr>
-                    <td data-label="设备"><span>Safari · iPhone</span></td>
-                    <td class="num" data-label="登录于">2026-11-20 12:03</td>
-                    <td class="num" data-label="最近活动">2026-11-21 08:15</td>
+                    <td data-label="设备" class="col-name"><span>Safari · iPhone</span></td>
+                    <td class="num col-date" data-label="登录于">2026-11-20 12:03</td>
+                    <td class="num col-date" data-label="最近活动">2026-11-21 08:15</td>
                   </tr>
                 </tbody>
               </table>
@@ -1862,6 +1871,26 @@ details.disc > .disc-body{  padding-bottom: var(--sp-4);  }
      那时再按当前实例角色收一次实例管理入口（左轨、账户菜单、⌘K 清单）。 */
   document.addEventListener('DOMContentLoaded', syncInstanceEntry);
   })();
+</script>
+<script>
+/* 侧栏学习状态：今日待复习 / 错题，数字从 eeStore 读，与复习页同一口径。
+   原来这里写死「第 46 周 / 到期复习 12 / 错题重做 8 / 本周新增 46」，
+   四个数字里三个与真实数据无关。 */
+(function () {
+  var S = window.eeStore;
+  if (!S) return;
+  function paint() {
+    var due = document.getElementById('side-due');
+    var mis = document.getElementById('side-mistakes');
+    if (due) due.textContent = String(S.executableReview().length);
+    if (mis) mis.textContent = String(S.reviewQueue().filter(function (r) {
+      if (S.reviewKilled && S.reviewKilled(r)) return false;
+      return (r.reasons || []).indexOf('mistakes') > -1;
+    }).length);
+  }
+  paint();
+  if (S.subscribe) S.subscribe(paint);
+})();
 </script>
 </body>
 </html>

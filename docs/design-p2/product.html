@@ -12,7 +12,7 @@
   <aside class="sidebar">
     <div class="side-brand">
       <span class="brand-mark">易</span>
-      <span class="brand-text">易考宝<small>私人学习档案</small></span>
+      <span class="brand-text"><span class="brand-name">易考宝</span><span class="brand-sub">私人学习档案</span></span>
     </div>
     <nav class="side-nav" aria-label="产品导航">
       <p class="side-group-label">学习</p>
@@ -36,22 +36,26 @@
   </aside>
 
   <div class="app-main">
-  <div class="topbar">
-    <div class="mobile-top">
-      <span class="mt-title">易考宝</span>
-    </div>
-    <span class="topbar-title" data-spec>产品总览</span>
+  <header class="topbar">
+    <div class="crumb"><span class="here">产品总览</span></div>
     <span class="od-spacer"></span>
-    <span class="tag plain" id="state-user">accept_admin_1794570360969</span>
-    <span class="tag brand" id="state-role">所有者</span>
-    <span class="tag plain" id="state-instance-role">实例管理员</span>
-  </div>
+    <!-- 演示身份与角色只属于规格浏览：产品模式下不出现 -->
+    <span class="tag plain" id="state-user" data-spec>accept_admin_1794570360969</span>
+    <span class="tag brand" id="state-role" data-spec>所有者</span>
+    <span class="tag plain" id="state-instance-role" data-spec>实例管理员</span>
+  </header>
+  <!-- 移动端顶栏：产品页在窄屏也要有页面标题，不能沿用桌面顶栏 -->
+  <header class="mobile-top">
+    <span class="mt-title">易考宝</span>
+  </header>
 
   <main class="content has-bottomnav" id="main-content">
     <header class="page-head">
-      <p class="page-eyebrow">易考宝</p>
-      <h1 class="page-title">今天学什么，从这儿开始</h1>
-      <p class="page-sub">题库、练习、复习、模考、资料都在同一份数据上：练过的题会进复习，错题会标薄弱，导入的题直接可练。左侧每一项都真实可达。</p>
+      <div>
+        <p class="page-eyebrow">易考宝</p>
+        <h1 class="page-title">今天学什么，从这儿开始</h1>
+        <p class="page-sub">题库、练习、复习、模考、资料都在同一份数据上：练过的题会进复习，错题会标薄弱，导入的题直接可练。左侧每一项都真实可达。</p>
+      </div>
     </header>
 
     <!-- ============ 入口 ============ -->
@@ -62,7 +66,7 @@
       </div>
       <div class="panel">
         <div class="panel-body">
-          <div class="flow-actions">
+          <div class="flow-actions btn-row-hero">
             <a class="btn btn-primary btn-hero" href="pages/screens/login.html?next=pages/screens/home.html" id="btn-enter">
               <svg class="od-icon" aria-hidden="true"><use href="#i-play"/></svg>进入产品
             </a>

@@ -9,9 +9,11 @@
      （ee.css 未覆盖的布局微调，全部走令牌，未重定义控件） */
   /* 步骤条：七步在 375 也放不下，自身横滚且保留可见滚动条；当前步名在页脚给出 */
   .import-steps-row{ display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; margin-bottom: var(--sp-5); }
-  .import-steps-row .steps{ flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: thin; overscroll-behavior-x: contain; padding-bottom: var(--sp-2); }
+  .import-steps-row .steps{ flex: 1 1 100%; min-width: 0; overflow-x: auto; scrollbar-width: thin; overscroll-behavior-x: contain; padding-bottom: var(--sp-2); }
   .import-steps-row .step{ flex: none; }
-  .import-steps-row .progress{ flex: 0 0 150px; }
+  /* 进度条独占一行、与步骤条同宽：此前是 150px 的短条挂在步骤条右侧，
+     宽屏时像一条无主的装饰线；独占一行后才读得出「向导整体走到哪」。 */
+  .import-steps-row .progress{ flex: 1 1 100%; height: 4px; }
   /* 不适用的步骤：来源格式用不到这一步时标「不适用」，与「已完成」区分 */
   .step.is-skip{ color: var(--ink-4); }
   .step.is-skip .step-n{ background: var(--surface-2); border-color: var(--line); color: var(--ink-4); }
@@ -97,6 +99,13 @@
   .pdf-merged{ font-size: var(--text-xs); color: var(--ink-3); margin: 0; }
   /* 向导步骤 = 编辑块：标题行 + 细线 + 底部操作条，不包卡片 */
   .step-block{ padding: var(--sp-5) 0 var(--sp-2); }
+  /* 步骤标题是「区块标题」，不是眉题：21px 衬线，压过下面的 18.5px 小节标题。
+     此前这里把 .panel-label 压成 12.5px 大写眉题，区块标题反而比小节标题小，
+     层级是倒的。 */
+  .step-block > .panel-head .panel-label{
+    font-size: var(--text-xl); font-family: var(--font-serif); font-weight: 500;
+    letter-spacing: 0; text-transform: none; color: var(--ink); line-height: 1.4;
+  }
   .step-block > .panel-head{ padding: 0 0 var(--sp-4); border-bottom: 1px solid var(--line); }
   .step-block > .panel-body{ padding: var(--sp-5) 0 0; }
   .step-block > .import-foot{ padding: var(--sp-4) 0; }
@@ -108,6 +117,18 @@
   /* 人工校对：解析结果在表格里直接可改，控件不撑破表格 */
   .proof-edit{ width: 100%; min-width: 9em; }
   .dtable td .proof-edit{ max-width: 34em; }
+  /* 表格列宽：窄屏下表格内部横滚，不让「题干」被挤成每行一两个字。
+     校对表里题干占主要宽度，答案/选项数/处置只放短值，判定留出原因文字。 */
+  .sample-table, .proof-table{ min-width: 40em; }
+  .history-table{ min-width: 46em; }
+  .proof-table .col-stem{ width: 40%; min-width: 16em; }
+  .proof-table .col-answer{ width: 8em; min-width: 6em; }
+  /* 答案列只放 A/B/AB 这类短值：不要继承题干输入框的 9em 下限，否则答案列
+     和题干列一样宽，题干反而被挤窄。 */
+  .proof-table .col-answer .proof-edit{ min-width: 0; }
+  .proof-table .col-verdict{ width: 16em; min-width: 12em; }
+  .proof-table .col-act{ width: 9em; min-width: 7em; }
+  .history-table .col-file{ min-width: 14em; }
   @media (max-width: 1024px){
     .import-steps-row .progress { flex-basis: 100%; }
     .dup-cols{ grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
@@ -139,9 +160,10 @@
       <button type="button" class="nav-item"><svg class="od-icon" aria-hidden="true"><use href="#i-note"/></svg><span class="nav-label" data-i18n="shell.nav.notes">资料</span></button>
     </nav>
     <div class="side-study">
-      <div class="side-study-label">学习状态</div>
-      <div class="side-study-row"><span>今日待复习</span><b id="side-due">0</b></div>
-      <div class="side-study-row"><span>未完成会话</span><b id="side-sessions">0</b></div>
+      <span class="side-study-label">学习状态</span>
+      <a class="side-study-row side-study-link" href="review.html" title="去复习页处理今日到期"><span>今日待复习</span><b id="side-due">0</b></a>
+      <a class="side-study-row side-study-link" href="review.html?tab=mistakes" title="去复习页处理错题"><span>错题</span><b id="side-mistakes">0</b></a>
+      <a class="side-study-row side-study-link" href="home.html" title="今天页可以继续未完成的会话"><span>未完成会话</span><b id="side-sessions">0</b></a>
     </div>
     <div class="side-foot">
       <button type="button" class="nav-item"><svg class="od-icon" aria-hidden="true"><use href="#i-settings"/></svg><span class="nav-label" data-i18n="shell.nav.settings">设置</span></button>
@@ -186,7 +208,7 @@
       </span>
     </header>
 
-    <main class="content wide" id="main-content">
+    <main class="content wide has-bottomnav" id="main-content">
       <div class="page-head">
         <div>
           <p class="page-eyebrow">导入题目</p>
@@ -363,9 +385,9 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
                   <span class="section-note" id="imp-sample-note">读取 0 行 · 预览前 6 行</span>
                 </div>
                 <div class="dtable-wrap mt-4">
-                  <table class="dtable">
+                  <table class="dtable sample-table">
                     <thead>
-                      <tr><th scope="col">行号</th><th scope="col">题干</th><th scope="col">答案</th><th scope="col">题型</th><th scope="col">解析</th><th scope="col">与题库重复</th></tr>
+                      <tr><th scope="col" class="col-num">行号</th><th scope="col" class="col-long">题干</th><th scope="col" class="col-num">答案</th><th scope="col" class="col-status">题型</th><th scope="col" class="col-long">解析</th><th scope="col" class="col-status">与题库重复</th></tr>
                     </thead>
                     <tbody id="imp-sample-body"></tbody>
                   </table>
@@ -441,9 +463,9 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
                 </div>
                 <p class="hint mt-2">列名对得上不代表每一行都对。抽检看的是映射<em>之后</em>的结果：答案是不是选项字母、题型和答案是否一致、题干是否完整。</p>
                 <div class="dtable-wrap mt-4">
-                  <table class="dtable">
+                  <table class="dtable proof-table">
                     <thead>
-                      <tr><th scope="col">行号</th><th scope="col">题干（映射后）</th><th scope="col">答案</th><th scope="col">选项数</th><th scope="col">判定</th><th scope="col">处置</th></tr>
+                      <tr><th scope="col" class="col-num">行号</th><th scope="col" class="col-stem">题干（映射后）</th><th scope="col" class="col-answer">答案</th><th scope="col" class="col-num">选项数</th><th scope="col" class="col-verdict">判定</th><th scope="col" class="col-act">处置</th></tr>
                     </thead>
                     <tbody id="imp-proof-body"></tbody>
                   </table>
@@ -577,7 +599,7 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
                 <p class="hint mt-3">草稿按「题库 + 文件」各自保存：继续其中一份，另一份仍留在列表里。中途离开不会丢字段映射与校对结果。</p>
               </div>
             </div>
-            <div class="import-foot">
+            <div class="import-foot btn-row-hero">
               <button type="button" class="btn" data-step-prev="imp-4">上一步</button>
               <span class="spacer"></span>
               <button type="button" class="btn btn-quiet" id="imp-save-draft">存为草稿稍后继续</button>
@@ -605,17 +627,18 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
                   <span class="section-note" id="imp-history-note">来自共享状态，跨页面一致</span>
                 </div>
                 <div class="dtable-wrap mt-4">
-                  <table class="dtable">
+                  <table class="dtable history-table">
                     <thead>
                       <tr>
-                        <th scope="col">文件</th><th scope="col">格式</th><th scope="col">重复处理</th>
-                        <th scope="col">读取</th><th scope="col">写入</th><th scope="col">重复跳过</th>
-                        <th scope="col">已更新</th><th scope="col">失败</th><th scope="col">时间</th>
+                        <th scope="col" class="col-file">文件</th><th scope="col" class="col-num">格式</th><th scope="col" class="col-status">重复处理</th>
+                        <th scope="col" class="col-num">读取</th><th scope="col" class="col-num">写入</th><th scope="col" class="col-num">重复跳过</th>
+                        <th scope="col" class="col-num">已更新</th><th scope="col" class="col-num">失败</th><th scope="col" class="col-date">时间</th>
                       </tr>
                     </thead>
                     <tbody id="imp-history-body"></tbody>
                   </table>
                 </div>
+                <div id="imp-history-more" hidden></div>
               </div>
 
               <div class="state-block" data-spec>
@@ -922,6 +945,7 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
     edits: {},            /* 行号 → {stem, answer, type}：人工校对页对解析结果的修改 */
     dups: {},
     job: { status: 'idle', done: 0, total: 0, failed: [], job: null, rate: 0, eta: '' },
+    historyLimit: 20,     /* 导入记录分批：先 20 条，其余「加载更多」 */
     timer: null,
     cands: PDF_CANDS.map(function (c) { return { id: c.id, state: c.state, reason: c.reason, dropped: false }; })
   };
@@ -1155,17 +1179,9 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
   function renderFileCard() {
     var host = $('#imp-file-card-host');
     if (state.sourceMode !== 'file') { host.innerHTML = ''; return; }
-    if (!state.file) {
-      host.innerHTML =
-        '<div class="file-card">' + icon('inbox') +
-        '<div class="file-main">' +
-          '<div class="file-name">还没有选择文件</div>' +
-          '<div class="file-meta"><span>从上面的「选择文件」里挑一个，或把文件拖进来</span></div>' +
-        '</div>' +
-        '<div class="file-side"><button type="button" class="btn btn-sm btn-primary" onclick="eeDialog.open(\'dlg-change-file\', this)">选择文件</button></div>' +
-        '</div>';
-      return;
-    }
+    /* 没选文件时不再渲染一张「还没有选择文件」的卡片：上面的拖放区已经有
+       同一个「选择文件」按钮，两个主操作并排只会让首屏多一个重复入口。 */
+    if (!state.file) { host.innerHTML = ''; return; }
     var f = state.file;
     var bad = f.error;
     host.innerHTML =
@@ -1231,12 +1247,12 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
       ? list.map(function (it) {
           var dup = !!it.stem && !!existing[S.normStem(it.stem)];
           return '<tr>' +
-            '<td data-label="行号" class="num">' + it.row + '</td>' +
-            '<td data-label="题干">' + esc(it.stem) + '</td>' +
-            '<td data-label="答案" class="num">' + esc(it.answer) + '</td>' +
-            '<td data-label="题型">' + esc(it.type) + '</td>' +
-            '<td data-label="解析">—</td>' +
-            '<td data-label="与题库重复">' + (dup ? '<span class="tag warn">重复</span>' : '<span class="tag ok">新题</span>') + '</td>' +
+            '<td data-label="行号" class="num col-num">' + it.row + '</td>' +
+            '<td data-label="题干" class="col-long">' + esc(it.stem) + '</td>' +
+            '<td data-label="答案" class="num col-num">' + esc(it.answer) + '</td>' +
+            '<td data-label="题型" class="col-status">' + esc(it.type) + '</td>' +
+            '<td data-label="解析" class="col-long">—</td>' +
+            '<td data-label="与题库重复" class="col-status">' + (dup ? '<span class="tag warn">重复</span>' : '<span class="tag ok">新题</span>') + '</td>' +
           '</tr>';
         }).join('')
       : '<tr><td data-label="预览" colspan="6">还没有读取到行。</td></tr>';
@@ -1313,12 +1329,12 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
               '</select>'
             : '');
       return '<tr>' +
-        '<td data-label="行号" class="num">' + it.row + '</td>' +
-        '<td data-label="题干（映射后）"><input class="input proof-edit" type="text" data-proof-stem="' + it.row + '" value="' + esc(it.stem) + '" aria-label="第 ' + it.row + ' 行题干，可直接修改"></td>' +
-        '<td data-label="答案"><input class="input proof-edit mono" type="text" data-proof-answer="' + it.row + '" value="' + esc(it.answer) + '" aria-label="第 ' + it.row + ' 行答案，可直接修改"></td>' +
-        '<td data-label="选项数" class="num">' + it.opts + '</td>' +
-        '<td data-label="判定">' + verdictTag + (r.why ? '<div class="hint">' + esc(r.why) + '</div>' : '') + '</td>' +
-        '<td data-label="处置" class="col-actions">' + act + '</td>' +
+        '<td data-label="行号" class="num col-num">' + it.row + '</td>' +
+        '<td data-label="题干（映射后）" class="col-stem"><input class="input proof-edit" type="text" data-proof-stem="' + it.row + '" value="' + esc(it.stem) + '" aria-label="第 ' + it.row + ' 行题干，可直接修改"></td>' +
+        '<td data-label="答案" class="col-answer"><input class="input proof-edit" type="text" data-proof-answer="' + it.row + '" value="' + esc(it.answer) + '" aria-label="第 ' + it.row + ' 行答案，可直接修改"></td>' +
+        '<td data-label="选项数" class="num col-num">' + it.opts + '</td>' +
+        '<td data-label="判定" class="col-verdict">' + verdictTag + (r.why ? '<div class="hint">' + esc(r.why) + '</div>' : '') + '</td>' +
+        '<td data-label="处置" class="col-actions col-act">' + act + '</td>' +
       '</tr>';
     }).join('');
     var dropped = proofRows().filter(function (r) { return state.proof[r.item.row] && state.proof[r.item.row].action === 'drop'; }).length;
@@ -1498,7 +1514,7 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
     $('#imp-plan-kv').innerHTML =
       '<span class="kv-key">目标题库</span><span class="kv-val">' + esc(bank().name) + '（现有 ' + S.questions(state.bankId).length + ' 题）</span>' +
       '<span class="kv-key">来源</span><span class="kv-val">' + esc(draftName()) + '</span>' +
-      '<span class="kv-key">读取行数</span><span class="kv-val mono">' + fileRows() + ' 行</span>' +
+      '<span class="kv-key">读取行数</span><span class="kv-val"><b class="tnum">' + fileRows() + '</b> 行</span>' +
       '<span class="kv-key">字段映射</span><span class="kv-val">题干 ← ' + esc(HEADERS[+state.mapping.stem] || '未对应') + '，答案 ← ' + esc(HEADERS[+state.mapping.answer] || '未对应') + '</span>' +
       '<span class="kv-key">人工校对</span><span class="kv-val">抽检 ' + proofRows().length + ' 行 · 对得上 ' + proofOk + ' · 可疑 ' + proofSus + '</span>' +
       '<span class="kv-key">重复题</span><span class="kv-val">' + (dups.length
@@ -1585,7 +1601,7 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
           ? '<div class="mt-5"><div class="section-head"><h3 class="section-title">失败的行</h3>' +
             '<span class="section-note">带行号与原因，可重试或排除</span></div>' +
             '<div class="mt-3">' + j.failed.map(function (f) {
-              return '<div class="fail-row"><span class="mono">第 ' + f.row + ' 行</span>' +
+              return '<div class="fail-row"><span class="tnum">第 ' + f.row + ' 行</span>' +
                 '<span>' + esc(f.reason) + '</span></div>';
             }).join('') + '</div>' +
             '<div class="notice-actions mt-4">' +
@@ -1602,22 +1618,34 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
 
   function renderHistory() {
     var jobs = S.importJobs(state.bankId);
-    $('#imp-history-note').textContent = '「' + bank().name + '」的 ' + jobs.length + ' 条记录';
+    var shown = jobs.slice(0, state.historyLimit);
+    var rest = jobs.length - shown.length;
+    $('#imp-history-note').textContent = jobs.length > shown.length
+      ? '「' + bank().name + '」的 ' + jobs.length + ' 条记录 · 已显示 ' + shown.length + ' 条'
+      : '「' + bank().name + '」的 ' + jobs.length + ' 条记录';
     $('#imp-history-body').innerHTML = jobs.length
-      ? jobs.map(function (j) {
+      ? shown.map(function (j) {
           return '<tr>' +
-            '<td data-label="文件">' + esc(j.file) + '</td>' +
-            '<td data-label="格式" class="num">' + esc(extOf(j.file) || '—') + '</td>' +
-            '<td data-label="重复处理">' + esc(DUP_LABEL[j.strategy] || '跳过重复') + '</td>' +
-            '<td class="num" data-label="读取">' + j.total + '</td>' +
-            '<td class="num" data-label="写入">' + j.written + '</td>' +
-            '<td class="num" data-label="重复跳过">' + (j.skipped || 0) + '</td>' +
-            '<td class="num" data-label="已更新">' + (j.merged || 0) + '</td>' +
-            '<td class="num" data-label="失败">' + (j.failed || 0) + '</td>' +
-            '<td class="num" data-label="时间">' + esc(j.at || '') + '</td>' +
+            '<td data-label="文件" class="col-file">' + esc(j.file) + '</td>' +
+            '<td data-label="格式" class="num col-num">' + esc(extOf(j.file) || '—') + '</td>' +
+            '<td data-label="重复处理" class="col-status">' + esc(DUP_LABEL[j.strategy] || '跳过重复') + '</td>' +
+            '<td class="num col-num" data-label="读取">' + j.total + '</td>' +
+            '<td class="num col-num" data-label="写入">' + j.written + '</td>' +
+            '<td class="num col-num" data-label="重复跳过">' + (j.skipped || 0) + '</td>' +
+            '<td class="num col-num" data-label="已更新">' + (j.merged || 0) + '</td>' +
+            '<td class="num col-num" data-label="失败">' + (j.failed || 0) + '</td>' +
+            '<td class="num col-date" data-label="时间">' + esc(j.at || '') + '</td>' +
           '</tr>';
         }).join('')
       : '<tr><td data-label="记录" colspan="9">这个题库还没有导入记录。</td></tr>';
+    var more = $('#imp-history-more');
+    if (more) {
+      more.hidden = rest <= 0;
+      more.innerHTML = rest > 0
+        ? '<div class="load-more"><button type="button" class="btn" data-history-more>加载更多</button>' +
+          '<span class="hint">还有 ' + rest + ' 条</span></div>'
+        : '';
+    }
   }
 
   /* ---------- 步骤 7：结果 ---------- */
@@ -1658,7 +1686,7 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
       (j.failed.length
         ? '<div class="mt-5"><div class="section-head"><h3 class="section-title">失败的行</h3><span class="section-note">回到执行进度可以重试或排除</span></div>' +
           '<div class="mt-3">' + j.failed.map(function (f) {
-            return '<div class="fail-row"><span class="mono">第 ' + f.row + ' 行</span><span>' + esc(f.reason) + '</span></div>';
+            return '<div class="fail-row"><span class="tnum">第 ' + f.row + ' 行</span><span>' + esc(f.reason) + '</span></div>';
           }).join('') + '</div></div>'
         : '') +
       '<div class="od-row mt-5 wrap">' +
@@ -1828,6 +1856,19 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
   document.addEventListener('click', function (e) {
     var g = e.target.closest ? e.target.closest('[data-goto-step]') : null;
     if (g) goStep(g.getAttribute('data-goto-step'));
+  });
+  /* 导入记录分批：只追加下一批，不改变筛选与题库；焦点落到第一条新增记录。 */
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-history-more]') : null;
+    if (!b) return;
+    var before = state.historyLimit;
+    state.historyLimit = before + 20;
+    renderHistory();
+    var rows = $('#imp-history-body') ? $('#imp-history-body').querySelectorAll('tr') : [];
+    var target = rows[before];
+    var focusable = target ? target.querySelector('button, a, input, select') : null;
+    if (focusable) focusable.focus();
+    else if (target) target.scrollIntoView({ block: 'nearest' });
   });
 
   /* ---------- 草稿：继续 / 删除 ---------- */
@@ -2017,6 +2058,7 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
     state.dups = {};
     state.proof = {};
     state.edits = {};
+    state.historyLimit = 20;
     renderBanks(); renderMap(); renderProof(); renderDup(); renderPlan(); renderHistory();
     saveWizard();
   });
@@ -2236,6 +2278,11 @@ A. 传输层  B. 会话层  C. 网络层  D. 应用层
     if (badge) { badge.textContent = String(live.length); badge.hidden = live.length === 0; }
     /* 与侧栏、复习页、题库页同一口径（CR-05 可执行复习集合），不用 reviewQueue().length */
     $('#side-due').textContent = String(S.executableReview().length);
+    var mis = $('#side-mistakes');
+    if (mis) mis.textContent = String(S.reviewQueue().filter(function (r) {
+      if (S.reviewKilled && S.reviewKilled(r)) return false;
+      return (r.reasons || []).indexOf('mistakes') > -1;
+    }).length);
     $('#side-sessions').textContent = String(S.sessions().length);
     /* 结果页落到刚导入的题库；有首批题干时带上筛选，直接定位到导入的题目 */
     var landedStem = (state.job.job && state.job.job.firstStem) || '';

@@ -34,10 +34,14 @@
 .menu{  right: 0; top: calc(100% + var(--sp-1));  }
 .section-count{  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-3);  }
 /* 「题库内容量」与「我的可练题量」是两个数（CR-04）：同一行内并排，可练量低于内容量时压亮 */
-  .bank-count{  display: inline-flex; align-items: baseline; gap: var(--sp-1); justify-content: flex-end; flex: none; font-family: var(--font-mono); font-size: var(--text-md); color: var(--ink);  }
+  .bank-count{  display: inline-flex; align-items: baseline; gap: var(--sp-1); justify-content: flex-end; flex: none; font-family: var(--font-mono); font-size: var(--text-md); color: var(--ink); font-variant-numeric: tabular-nums;  }
 .bank-count span{  font-family: var(--font-sans); font-size: var(--text-xs); color: var(--ink-3);  }
-.bank-count em{  display: block; font-style: normal; font-size: var(--text-xs); color: var(--ink-3); text-align: right;  }
+.bank-count em{  display: block; font-style: normal; font-family: var(--font-sans); font-size: var(--text-xs); color: var(--ink-3); text-align: right; font-variant-numeric: tabular-nums;  }
 .bank-count em.is-low{  color: var(--warn);  }
+/* 已应用条件与工具栏之间留一口气，但不另起一个卡片 */
+  .filter-chips{  margin: calc(-1 * var(--sp-3)) 0 var(--sp-5);  }
+.filter-chips .chip{  min-height: 28px;  }
+.filter-chips .chip .x{  font-size: var(--text-sm); line-height: 1; opacity: .65; margin-left: var(--sp-1);  }
 .overlay-grid{  display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--sp-4); align-items: start;  }
 .result-block{  margin-bottom: var(--sp-5);  }
 /* 离线标识：持久在境，不是 toast */
@@ -50,6 +54,10 @@
     .toolbar .segmented .segment { flex: 1 1 0; }
     .bank-count { margin-right: auto; }
     .list-row { flex-wrap: wrap; row-gap: var(--sp-2); }
+    /* 勾选框与标题同在第一行；共享行的勾选框也保持同样位置，
+       不再让勾选框独占一行、标题被推到下一行。 */
+    .bank-list .list-row > .check { flex: 0 0 auto; align-self: flex-start; padding-top: 2px; }
+    .bank-list .list-row > .list-main { flex: 1 1 0; min-width: 0; }
     .list-open { flex: 1 1 100%; }
     .list-side { flex: 1 1 100%; justify-content: flex-end; }
   }</style>
@@ -92,8 +100,9 @@
     </nav>
     <div class="side-study">
       <span class="side-study-label">学习状态</span>
-      <div class="side-study-row"><span>今日待复习</span><b id="side-due">0</b></div>
-      <div class="side-study-row"><span>未完成会话</span><b id="side-sessions">0</b></div>
+      <a class="side-study-row side-study-link" href="review.html" title="去复习页处理今日到期"><span>今日待复习</span><b id="side-due">0</b></a>
+      <a class="side-study-row side-study-link" href="review.html?tab=mistakes" title="去复习页处理错题"><span>错题</span><b id="side-mistakes">0</b></a>
+      <a class="side-study-row side-study-link" href="home.html" title="今天页可以继续未完成的会话"><span>未完成会话</span><b id="side-sessions">0</b></a>
     </div>
     <div class="side-foot">
       <button type="button" class="nav-item">
@@ -209,6 +218,10 @@
           <button type="button" class="segment" role="radio" aria-checked="false" data-scope="shared">共享给我</button>
         </div>
       </div>
+
+      <!-- 已应用条件：搜索 / 分类 / 归档是三种不同条件，逐项可见、可单独移除，
+           也可一键清除；条件变化后分页回到第一批。 -->
+      <div class="chip-row filter-chips" id="bank-filter-chips" role="group" aria-label="已应用的筛选条件" hidden></div>
 
       <!-- 批量条：勾选后才出现，空选中不占纸面高度 -->
       <div class="bulkbar" role="region" aria-label="批量操作" id="bank-bulk" hidden>
@@ -824,6 +837,18 @@
     sort: 'recent',
     selected: {}          /* 题库 id → true，显式选择集，与当前筛选解耦（CR-27） */
   };
+  /* 长列表分批：每段先渲染 50 个，用户主动「加载更多」再加 50。
+     数百个题库时不一次铺满 DOM，也不把首屏滚动条拉成一条细线。 */
+  var PAGE = 50;
+  var limits = { owned: PAGE, shared: PAGE, archived: PAGE };
+  function resetLimits() { limits = { owned: PAGE, shared: PAGE, archived: PAGE }; }
+  /* 错题口径与复习页「未清除错题」一致：带 mistakes 原因且未被斩杀。 */
+  function mistakeCount() {
+    return S.reviewQueue().filter(function (r) {
+      if (S.reviewKilled && S.reviewKilled(r)) return false;
+      return (r.reasons || []).indexOf('mistakes') > -1;
+    }).length;
+  }
   function scopeViewKey(sc) { return userScope('banks:' + (sc === 'shared' ? 'shared' : 'mine')); }
   function loadScopeView(sc) {
     var v = S.view.load(scopeViewKey(sc));
@@ -854,6 +879,7 @@
     st.scope = sc;
     applyScopeView(sc);
     saveView();
+    resetLimits();
     render();
   }
 
@@ -862,12 +888,12 @@
     sub: $('#bank-page-sub'), search: $('#bank-search'), cat: $('#bank-cat'), sort: $('#bank-sort'),
     tcount: $('#bank-toolbar-count'), archivedBox: $('#bank-archived'),
     bulkCount: $('#bank-bulk-count'), bulkReason: $('#bank-bulk-reason'), bulkCat: $('#bank-bulk-category'),
-    bulk: $('#bank-bulk'), result: $('#bank-result'),
+    bulk: $('#bank-bulk'), result: $('#bank-result'), fchips: $('#bank-filter-chips'),
     owned: $('#sec-owned'), ownedBody: $('#owned-body'), ownedCount: $('#owned-count'),
     shared: $('#sec-shared'), sharedBody: $('#shared-body'), sharedCount: $('#shared-count'),
     sharedNote: $('#shared-note'),
     archivedSec: $('#sec-archived'), archivedBody: $('#archived-body'), archivedCount: $('#archived-count'),
-    navBank: $('#nav-bank-count'), sideDue: $('#side-due'), sideSessions: $('#side-sessions')
+    navBank: $('#nav-bank-count'), sideDue: $('#side-due'), sideMistakes: $('#side-mistakes'), sideSessions: $('#side-sessions')
   };
 
   /* ---------- 数据助手 ---------- */
@@ -1007,6 +1033,68 @@
   }
   function hideResult() { el.result.hidden = true; el.result.innerHTML = ''; }
 
+  /* ---------- 已应用条件：可见、可逐项移除、可一键清除 ---------- */
+  function filterChipItems() {
+    var items = [];
+    if (st.q.trim()) items.push({ k: 'q', label: '搜索：' + st.q.trim() });
+    if (st.cat !== '全部分类') items.push({ k: 'cat', label: '分类：' + st.cat });
+    if (st.showArchived) items.push({ k: 'archived', label: '含已归档' });
+    return items;
+  }
+  function renderFilterChips() {
+    var host = el.fchips;
+    if (!host) return;
+    var items = filterChipItems();
+    if (!items.length) { host.hidden = true; host.innerHTML = ''; return; }
+    host.innerHTML = items.map(function (it) {
+      return '<button type="button" class="chip" data-clear="' + it.k + '" aria-label="移除筛选条件：' + esc(it.label) + '">' +
+        esc(it.label) + '<span class="x" aria-hidden="true">×</span></button>';
+    }).join('') +
+      '<button type="button" class="chip" data-clear="all">清除全部</button>';
+    host.hidden = false;
+  }
+  function clearFilter(k) {
+    if (k === 'q' || k === 'all') { st.q = ''; if (el.search) el.search.value = ''; }
+    if (k === 'cat' || k === 'all') st.cat = '全部分类';
+    if (k === 'archived' || k === 'all') st.showArchived = false;
+    resetLimits();
+    saveView();
+    render();
+  }
+  /* 筛选变化后：分页回到第一批，并把结果列表带回视野（用户可能在列表深处）。 */
+  function onFilterChange() {
+    resetLimits();
+    saveView();
+    render();
+    var sec = st.showArchived ? el.archivedSec : (st.scope === 'shared' ? el.shared : el.owned);
+    if (!sec) return;
+    var top = sec.getBoundingClientRect().top + window.scrollY - 72;
+    if (window.scrollY > top) window.scrollTo({ top: top, behavior: 'smooth' });
+  }
+
+  /* ---------- 分批渲染：同一套按钮，不新造分页组件 ---------- */
+  function chunk(rows, key, rowFn) {
+    var lim = limits[key] || PAGE;
+    var shown = rows.slice(0, lim);
+    var rest = rows.length - shown.length;
+    var html = shown.map(rowFn).join('');
+    if (rest > 0) {
+      html += '<div class="load-more"><button type="button" class="btn" data-more="' + key + '">加载更多</button>' +
+        '<span class="hint">还有 ' + rest + ' 个</span></div>';
+    }
+    return html;
+  }
+  function loadMore(key) {
+    var before = limits[key] || PAGE;
+    limits[key] = before + PAGE;
+    render();
+    var host = key === 'archived' ? el.archivedBody : (key === 'shared' ? el.sharedBody : el.ownedBody);
+    var rows = host ? host.querySelectorAll('.list-row') : [];
+    var target = rows[before];
+    var focusable = target ? target.querySelector('button, a, input') : null;
+    if (focusable) focusable.focus();
+  }
+
   /* ---------- 渲染 ---------- */
   function render() {
     var live = S.banks({ archived: false });
@@ -1019,6 +1107,7 @@
        原来这里用 reviewQueue().length 把已斩杀行也算进「今日待复习」，
        同一标签在题库页显示 8、在今天页显示 5。 */
     el.sideDue.textContent = String(S.executableReview().length);
+    if (el.sideMistakes) el.sideMistakes.textContent = String(mistakeCount());
     el.sideSessions.textContent = String(S.sessions().length);
     el.sub.textContent = live.length === 0 ? '还没有可访问的题库'
       : (live.length + ' 个在用题库' + (archived.length ? ' · 已归档 ' + archived.length + ' 个' : ''));
@@ -1044,12 +1133,13 @@
     var vis = filtered();
     var scopeTotal = inScope().filter(function (b) { return st.scope === 'shared' ? b.shared : !b.shared; }).length;
     el.tcount.textContent = '筛选 · ' + vis.length + ' / ' + scopeTotal;
+    renderFilterChips();
 
     if (st.showArchived) {
       el.owned.hidden = true; el.shared.hidden = true; el.archivedSec.hidden = false;
       $('#archived-title').textContent = st.scope === 'shared' ? '共享给我的已归档题库' : '我的已归档题库';
       el.archivedCount.textContent = String(vis.length);
-      el.archivedBody.innerHTML = vis.length ? vis.map(archivedRow).join('')
+      el.archivedBody.innerHTML = vis.length ? chunk(vis, 'archived', archivedRow)
         : '<div class="empty"><span class="empty-mark">' + icon('archive') + '</span><h4 class="empty-title">没有已归档的题库</h4>' +
           '<p class="empty-desc">归档的题库会留在这里，恢复后回到题库列表原位置。</p></div>';
     } else {
@@ -1060,11 +1150,11 @@
       var sharedVis = vis.filter(function (b) { return b.shared; });
       el.ownedCount.textContent = String(ownedAll.length);
       el.sharedCount.textContent = String(sharedAll.length);
-      el.ownedBody.innerHTML = ownedVis.length ? ownedVis.map(liveRow).join('')
+      el.ownedBody.innerHTML = ownedVis.length ? chunk(ownedVis, 'owned', liveRow)
         : (ownedAll.length
           ? '<div class="empty"><span class="empty-mark">' + icon('search') + '</span><h4 class="empty-title">没有匹配的题库</h4><p class="empty-desc">调整筛选条件或分类后再试。</p><div class="empty-actions"><button type="button" class="btn" data-act="clear-filter">清除筛选</button></div></div>'
           : emptyBlock('还没有题库', '新建一个题库，或从文件导入题目。', true));
-      el.sharedBody.innerHTML = sharedVis.length ? sharedVis.map(liveRow).join('')
+      el.sharedBody.innerHTML = sharedVis.length ? chunk(sharedVis, 'shared', liveRow)
         : (sharedAll.length
           ? '<div class="empty"><span class="empty-mark">' + icon('search') + '</span><h4 class="empty-title">没有匹配的共享题库</h4><p class="empty-desc">调整筛选条件或分类后再试。</p></div>'
           : '<div class="empty"><span class="empty-mark">' + icon('users') + '</span><h4 class="empty-title">还没有共享给我的题库</h4><p class="empty-desc">别人把题库共享给你后，会出现在这里，并标注你在该库的角色。</p></div>');
@@ -1152,6 +1242,12 @@
           if (first) first.focus();
         }
       };
+    });
+    $$('[data-more]').forEach(function (b) {
+      b.onclick = function () { loadMore(b.getAttribute('data-more')); };
+    });
+    $$('#bank-filter-chips [data-clear]').forEach(function (b) {
+      b.onclick = function () { clearFilter(b.getAttribute('data-clear')); };
     });
   }
 
@@ -1272,7 +1368,7 @@
       toast('已恢复「' + b.name + '」到题库列表');
       render();
     } else if (kind === 'clear-filter') {
-      st.q = ''; st.cat = '全部分类'; saveView(); render(); toast('已清除筛选');
+      st.q = ''; st.cat = '全部分类'; resetLimits(); saveView(); render(); toast('已清除筛选');
     }
   }
   $('#dlg-bank-archive-ok').addEventListener('click', function () {
@@ -1354,17 +1450,17 @@
   });
 
   /* ---------- 工具栏 / 视图切换 ---------- */
-  el.search.addEventListener('input', function () { st.q = el.search.value; saveView(); render(); });
-  el.cat.addEventListener('change', function () { st.cat = el.cat.value; saveView(); render(); });
+  el.search.addEventListener('input', function () { st.q = el.search.value; onFilterChange(); });
+  el.cat.addEventListener('change', function () { st.cat = el.cat.value; onFilterChange(); });
   el.sort.addEventListener('change', function () { st.sort = el.sort.value; saveView(); render(); });
   el.archivedBox.addEventListener('change', function () {
-    st.showArchived = this.checked; st.selected = {}; hideResult(); saveView(); render();
+    st.showArchived = this.checked; st.selected = {}; hideResult(); onFilterChange();
   });
   $$('#bank-scope-seg .segment').forEach(function (s) {
     s.addEventListener('click', function () { switchScope(s.getAttribute('data-scope')); });
   });
   $('#state-clear-filter').addEventListener('click', function () {
-    st.q = ''; st.cat = '全部分类'; saveView(); render(); toast('已清除筛选');
+    st.q = ''; st.cat = '全部分类'; resetLimits(); saveView(); render(); toast('已清除筛选');
   });
   $('#state-retry').addEventListener('click', function () { render(); toast('已重新读取题库列表'); });
   $('#state-retry-offline').addEventListener('click', function () { toast('已重试同步 · 2 项排队操作已提交'); });

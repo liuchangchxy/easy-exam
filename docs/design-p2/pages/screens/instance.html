@@ -22,8 +22,14 @@
   [data-tab-panel="users"] .dtable-wrap{  border: 0; border-radius: 0; background: transparent;  }
 [data-tab-panel="users"] .dtable th{  border-top: 1px solid var(--ink); background: transparent;  }
 [data-tab-panel="settings"] .setting-row{  border-top: 1px solid var(--line);  }
-.admin-table .col-actions{  width: 148px;  }
-.admin-username{  display: block;  }
+.admin-table .col-actions{  width: 148px; min-width: 148px;  }
+.admin-username{  display: block; overflow-wrap: anywhere; }
+/* 用户名列给一个下限：长 token 断成两行可以，断成三行、四行就成了竖排 */
+  .admin-table .col-user{  min-width: 9.5em;  }
+.admin-table .col-role{  min-width: 4em;  }
+.admin-table .col-status{  min-width: 5em;  }
+.admin-table .col-banks{  min-width: 2.75em;  }
+.admin-table .col-date{  min-width: 7em;  }
 /* 日期与计数不折行：窄屏时由 .dtable-wrap 自行横滚，不把「2026-10-28 09:11」拆成三行 */
   .admin-table td.num{  white-space: nowrap;  }
 /* ≤1024（侧栏收成图标档 / 转底导）：七列仍要在一屏内读完，不出横向滚动条。
@@ -33,7 +39,8 @@
     .admin-table th, .admin-table td{  padding-left: var(--sp-3); padding-right: var(--sp-3);  }
     .admin-table td.num .yr{  display: none;  }
     .admin-table th.col-banks .banks-all{  display: none;  }
-    .admin-table .col-actions{  width: 108px;  }
+    /* 三个 28px 图标 + 间隙 + 内边距 = 116px；108px 会把第三颗按钮挤到下一行 */
+    .admin-table .col-actions{  width: 132px; min-width: 132px;  }
   }
 /* 锁定原因：可见文本，不只靠 title（触屏可见，FN-421 / CR-12） */
   .lock-reason{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); max-width: 22em;  }
@@ -44,7 +51,7 @@
       font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh);
       margin-top: var(--sp-1); white-space: normal; text-align: left; }
   }
-/* ============ 手机端专用用户列表（≤768）============
+/* ============ 手机端专用用户列表（≤950）============
    7 列表格在 375 宽下要横滚 198px，读不了。这里按手机阅读顺序重排，
    不是把表格字段竖排成 label:value。卡片由 JS 从同一张表构建。 */
   .admin-mobile{  display: flex; flex-direction: column; gap: var(--sp-3);  }
@@ -61,17 +68,21 @@
 .admin-card-meta .num{  font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-3);  }
 .admin-card-acts{  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;  }
 /* 手机端图标按钮给文字标签：图标 alone 在触屏上不可辨，且这里空间够 */
-  .admin-card-acts .icon-btn{  width: auto; min-height: 36px; padding: 0 var(--sp-3);
+  .admin-card-acts .icon-btn{  display: inline-flex; align-items: center; justify-content: center;
+    width: auto; min-height: var(--ctl-h); padding: 0 var(--sp-3);
     gap: var(--sp-2); font-size: var(--text-sm); color: var(--ink-2);
     border-color: var(--line-strong); background: var(--surface);  }
 .admin-card-acts .icon-btn:disabled{  opacity: .5;  }
 .admin-card-acts .icon-btn .od-icon{  --od-icon-size: 15px;  }
 .admin-card-lock{  font-size: var(--text-xs); color: var(--ink-3); line-height: var(--text-xs-lh); margin: 0;  }
-@media (min-width: 769px){
+@media (min-width: 951px){
     .admin-mobile{  display: none !important;  }
   }
-@media (max-width: 768px){
+@media (max-width: 950px){
     #admin-table-wrap{  display: none;  }
+    /* 901–950 若仍用七列表格，操作列会被横向滚动切掉 31px（901 实测表格 746 /
+       容器 715），最后一颗图标按钮看不全；成员管理的主任务就是改角色 / 禁用 /
+       重置密码，操作必须先看见。所以卡片列表从 950 起接管。 */
     /* 手机端锁定原因只出现在卡片里一次。页面级那两段是桌面表格按钮的
        aria-describedby 目标，仍要留在 DOM 里供读屏，但不能视觉重复。 */
     #lock-self, #lock-self-reset{
@@ -142,10 +153,10 @@
       </button>
     </nav>
     <div class="side-study">
-      <div class="side-study-label">第 46 周 · 2026-11-13</div>
-      <div class="side-study-row"><span>到期复习</span><b>12</b></div>
-      <div class="side-study-row"><span>错题重做</span><b>8</b></div>
-      <div class="side-study-row"><span>本周新增</span><b>46</b></div>
+      <span class="side-study-label">学习状态</span>
+      <a class="side-study-row side-study-link" href="review.html" title="去复习页处理今日到期"><span>今日待复习</span><b id="side-due">0</b></a>
+      <a class="side-study-row side-study-link" href="review.html?tab=mistakes" title="去复习页处理错题"><span>错题</span><b id="side-mistakes">0</b></a>
+      <a class="side-study-row side-study-link" href="home.html" title="今天页可以继续未完成的会话"><span>未完成会话</span><b id="side-sessions">0</b></a>
     </div>
     <div class="side-foot">
       <a class="nav-item is-active" href="instance.html" aria-current="page">
@@ -272,15 +283,15 @@
               <tbody>
                 <!-- 本人：三项操作都预先禁用，并给可见原因（FN-421：禁用而非隐藏） -->
                 <tr data-status="active" data-pending="0">
-                  <td data-label="用户名">
+                  <td class="col-user" data-label="用户名">
                     <span class="admin-username">accept_admin_1794570360969</span>
                     <span class="tag brand">我</span>
                   </td>
-                  <td data-label="实例角色"><span class="tag brand">管理员</span></td>
-                  <td data-label="状态"><span class="tag ok">正常</span></td>
-                  <td class="num" data-label="注册时间"><span class="yr">2026-</span>10-28 09:11</td>
-                  <td class="num" data-label="题库数">3</td>
-                  <td class="num" data-label="最后活跃">3 分钟前</td>
+                  <td class="col-role" data-label="实例角色"><span class="tag brand">管理员</span></td>
+                  <td class="col-status" data-label="状态"><span class="tag ok">正常</span></td>
+                  <td class="num col-date" data-label="注册时间"><span class="yr">2026-</span>10-28 09:11</td>
+                  <td class="num col-num col-banks" data-label="题库数">3</td>
+                  <td class="num col-num col-date" data-label="最后活跃">3 分钟前</td>
                   <td class="col-actions" data-label="操作">
                     <span class="od-cluster cluster-tight">
                       <button class="icon-btn sm" type="button" disabled aria-label="取消管理员" aria-describedby="lock-self">
@@ -297,12 +308,12 @@
                   </td>
                 </tr>
                 <tr data-status="active" data-pending="0">
-                  <td data-label="用户名"><span class="admin-username">accept_owner_1794570360969</span></td>
-                  <td data-label="实例角色"><span class="tag brand">管理员</span></td>
-                  <td data-label="状态"><span class="tag ok">正常</span></td>
-                  <td class="num" data-label="注册时间"><span class="yr">2026-</span>10-29 08:02</td>
-                  <td class="num" data-label="题库数">1</td>
-                  <td class="num" data-label="最后活跃">2 小时前</td>
+                  <td class="col-user" data-label="用户名"><span class="admin-username">accept_owner_1794570360969</span></td>
+                  <td class="col-role" data-label="实例角色"><span class="tag brand">管理员</span></td>
+                  <td class="col-status" data-label="状态"><span class="tag ok">正常</span></td>
+                  <td class="num col-date" data-label="注册时间"><span class="yr">2026-</span>10-29 08:02</td>
+                  <td class="num col-num col-banks" data-label="题库数">1</td>
+                  <td class="num col-num col-date" data-label="最后活跃">2 小时前</td>
                   <td class="col-actions" data-label="操作">
                     <span class="od-cluster cluster-tight">
                       <button class="icon-btn sm" type="button" aria-label="取消管理员" title="取消管理员" data-act="admin-off">
@@ -318,12 +329,12 @@
                   </td>
                 </tr>
                 <tr data-status="active" data-pending="0">
-                  <td data-label="用户名"><span class="admin-username">accept_editor_1794570360969</span></td>
-                  <td data-label="实例角色"><span class="tag">普通用户</span></td>
-                  <td data-label="状态"><span class="tag ok">正常</span></td>
-                  <td class="num" data-label="注册时间"><span class="yr">2026-</span>11-02 14:22</td>
-                  <td class="num" data-label="题库数">2</td>
-                  <td class="num" data-label="最后活跃">昨天 21:40</td>
+                  <td class="col-user" data-label="用户名"><span class="admin-username">accept_editor_1794570360969</span></td>
+                  <td class="col-role" data-label="实例角色"><span class="tag">普通用户</span></td>
+                  <td class="col-status" data-label="状态"><span class="tag ok">正常</span></td>
+                  <td class="num col-date" data-label="注册时间"><span class="yr">2026-</span>11-02 14:22</td>
+                  <td class="num col-num col-banks" data-label="题库数">2</td>
+                  <td class="num col-num col-date" data-label="最后活跃">昨天 21:40</td>
                   <td class="col-actions" data-label="操作">
                     <span class="od-cluster cluster-tight">
                       <button class="icon-btn sm" type="button" aria-label="设为管理员" title="设为管理员" data-act="admin-on">
@@ -339,12 +350,12 @@
                   </td>
                 </tr>
                 <tr data-status="active" data-pending="0">
-                  <td data-label="用户名"><span class="admin-username">accept_member_1794570360969</span></td>
-                  <td data-label="实例角色"><span class="tag">普通用户</span></td>
-                  <td data-label="状态"><span class="tag ok">正常</span></td>
-                  <td class="num" data-label="注册时间"><span class="yr">2026-</span>11-05 08:47</td>
-                  <td class="num" data-label="题库数">1</td>
-                  <td class="num" data-label="最后活跃">11-24 19:12</td>
+                  <td class="col-user" data-label="用户名"><span class="admin-username">accept_member_1794570360969</span></td>
+                  <td class="col-role" data-label="实例角色"><span class="tag">普通用户</span></td>
+                  <td class="col-status" data-label="状态"><span class="tag ok">正常</span></td>
+                  <td class="num col-date" data-label="注册时间"><span class="yr">2026-</span>11-05 08:47</td>
+                  <td class="num col-num col-banks" data-label="题库数">1</td>
+                  <td class="num col-num col-date" data-label="最后活跃">11-24 19:12</td>
                   <td class="col-actions" data-label="操作">
                     <span class="od-cluster cluster-tight">
                       <button class="icon-btn sm" type="button" aria-label="设为管理员" title="设为管理员" data-act="admin-on">
@@ -360,12 +371,12 @@
                   </td>
                 </tr>
                 <tr data-status="disabled" data-pending="0">
-                  <td data-label="用户名"><span class="admin-username">accept_tester_1794570360969</span></td>
-                  <td data-label="实例角色"><span class="tag">普通用户</span></td>
-                  <td data-label="状态"><span class="tag bad">已禁用</span></td>
-                  <td class="num" data-label="注册时间"><span class="yr">2026-</span>11-07 16:30</td>
-                  <td class="num" data-label="题库数">0</td>
-                  <td class="num" data-label="最后活跃">11-20 10:05</td>
+                  <td class="col-user" data-label="用户名"><span class="admin-username">accept_tester_1794570360969</span></td>
+                  <td class="col-role" data-label="实例角色"><span class="tag">普通用户</span></td>
+                  <td class="col-status" data-label="状态"><span class="tag bad">已禁用</span></td>
+                  <td class="num col-date" data-label="注册时间"><span class="yr">2026-</span>11-07 16:30</td>
+                  <td class="num col-num col-banks" data-label="题库数">0</td>
+                  <td class="num col-num col-date" data-label="最后活跃">11-20 10:05</td>
                   <td class="col-actions" data-label="操作">
                     <span class="od-cluster cluster-tight">
                       <button class="icon-btn sm" type="button" aria-label="设为管理员" title="设为管理员" data-act="admin-on">
@@ -381,15 +392,15 @@
                   </td>
                 </tr>
                 <tr data-status="active" data-pending="1">
-                  <td data-label="用户名"><span class="admin-username">accept_reviewer_1794570360969</span></td>
-                  <td data-label="实例角色"><span class="tag">普通用户</span></td>
-                  <td data-label="状态">
+                  <td class="col-user" data-label="用户名"><span class="admin-username">accept_reviewer_1794570360969</span></td>
+                  <td class="col-role" data-label="实例角色"><span class="tag">普通用户</span></td>
+                  <td class="col-status" data-label="状态">
                     <span class="tag ok">正常</span>
                     <span class="tag warn">待改密</span>
                   </td>
-                  <td class="num" data-label="注册时间"><span class="yr">2026-</span>11-10 11:05</td>
-                  <td class="num" data-label="题库数">1</td>
-                  <td class="num" data-label="最后活跃">11-24 08:31</td>
+                  <td class="num col-date" data-label="注册时间"><span class="yr">2026-</span>11-10 11:05</td>
+                  <td class="num col-num col-banks" data-label="题库数">1</td>
+                  <td class="num col-num col-date" data-label="最后活跃">11-24 08:31</td>
                   <td class="col-actions" data-label="操作">
                     <span class="od-cluster cluster-tight">
                       <button class="icon-btn sm" type="button" aria-label="设为管理员" title="设为管理员" data-act="admin-on">
@@ -412,8 +423,10 @@
                这里不是把表格逐字段竖排成卡片（那比原表更难扫），而是按手机阅读顺序
                重排：用户名 → 角色/状态/元信息一行 → 操作 → 锁定原因。
                卡片由 JS 从同一张表构建（单一数据源，不会与表格分叉）；
-               表格在 ≤768 隐藏，桌面仍看表。 -->
+               表格在 ≤950 隐藏，桌面仍看表。 -->
           <div class="admin-mobile" id="admin-mobile" hidden></div>
+          <!-- 成员分批：桌面表格与手机卡片共用同一个「加载更多」入口 -->
+          <div class="load-more" id="admin-more" hidden></div>
 
           <!-- 控件旁的可读原因：与禁用按钮通过 aria-describedby 关联，触屏与读屏都看得到。
                按「禁用不隐藏 + 可读原因」，这些必须留在产品里。 -->
@@ -675,17 +688,17 @@
                 </thead>
                 <tbody>
                   <tr>
-                    <td data-label="用户名"><span class="admin-username">accept_admin_1794570360969</span><span class="tag brand">我</span></td>
-                    <td data-label="实例角色"><span class="tag brand">管理员</span></td>
-                    <td data-label="状态"><span class="tag ok">正常</span></td>
+                    <td class="col-user" data-label="用户名"><span class="admin-username">accept_admin_1794570360969</span><span class="tag brand">我</span></td>
+                    <td class="col-role" data-label="实例角色"><span class="tag brand">管理员</span></td>
+                    <td class="col-status" data-label="状态"><span class="tag ok">正常</span></td>
                     <td class="col-actions" data-label="操作">
                       <span class="hint" id="st-lock-me">自己的行不可改</span>
                     </td>
                   </tr>
                   <tr>
-                    <td data-label="用户名"><span class="admin-username">accept_owner_1794570360969</span></td>
-                    <td data-label="实例角色"><span class="tag brand">管理员</span></td>
-                    <td data-label="状态"><span class="tag ok">正常</span></td>
+                    <td class="col-user" data-label="用户名"><span class="admin-username">accept_owner_1794570360969</span></td>
+                    <td class="col-role" data-label="实例角色"><span class="tag brand">管理员</span></td>
+                    <td class="col-status" data-label="状态"><span class="tag ok">正常</span></td>
                     <td class="col-actions" data-label="操作">
                       <span class="od-cluster cluster-tight">
                         <button class="icon-btn sm" type="button" disabled aria-label="取消管理员" aria-describedby="st-lock-last">
@@ -699,9 +712,9 @@
                     </td>
                   </tr>
                   <tr>
-                    <td data-label="用户名"><span class="admin-username">accept_editor_1794570360969</span></td>
-                    <td data-label="实例角色"><span class="tag">普通用户</span></td>
-                    <td data-label="状态"><span class="tag ok">正常</span></td>
+                    <td class="col-user" data-label="用户名"><span class="admin-username">accept_editor_1794570360969</span></td>
+                    <td class="col-role" data-label="实例角色"><span class="tag">普通用户</span></td>
+                    <td class="col-status" data-label="状态"><span class="tag ok">正常</span></td>
                     <td class="col-actions" data-label="操作">
                       <span class="od-cluster cluster-tight">
                         <button class="icon-btn sm" type="button" aria-label="设为管理员" title="设为管理员">
@@ -940,20 +953,37 @@
       });
     });
 
-    /* ---------- 状态筛选（按状态筛选，不是视图页签） ---------- */
+    /* ---------- 状态筛选 + 成员分批（按状态筛选，不是视图页签） ----------
+       数百位成员时不一次铺满：表格与手机卡片共用同一个 shown 计数，
+       筛选先于分页（先得到匹配集合，再截取前 N 个），所以「正常 200」
+       不会因为前 20 行里只有 12 个正常而只显示 12 个。 */
     var chips = document.querySelectorAll('.chip-row .chip');
-    var rows = document.querySelectorAll('#admin-table tbody tr');
-
+    var PAGE = 20;
+    var shown = PAGE;
+    var filter = 'all';
+    function allRows() {
+      return Array.prototype.slice.call(document.querySelectorAll('#admin-table tbody tr'));
+    }
+    function matches(tr, f) {
+      return f === 'all'
+        || (f === 'active' && tr.getAttribute('data-status') === 'active')
+        || (f === 'disabled' && tr.getAttribute('data-status') === 'disabled')
+        || (f === 'pending' && tr.getAttribute('data-pending') === '1');
+    }
     /* ---------- 手机端专用列表：从同一张表构建，不与表格分叉 ----------
        7 列在 375 宽下横滚 198px 读不了。手机端按阅读顺序重排成卡片，
-       桌面仍看表。构建一次，筛选时与表格同步显隐。 */
-    (function buildMobileList() {
+       桌面仍看表。构建一次，筛选与分页时与表格同步显隐。 */
+    function buildMobileList() {
       var host = document.getElementById('admin-mobile');
       if (!host) return;
+      var rows = allRows();
       var html = [];
-      Array.prototype.forEach.call(rows, function (tr, i) {
+      rows.forEach(function (tr, i) {
         var td = tr.querySelectorAll('td');
-        var name = td[0] ? td[0].textContent.trim() : '';
+        var nameCell = td[0];
+        var nameEl = nameCell ? nameCell.querySelector('.admin-username') : null;
+        var name = nameEl ? nameEl.textContent.trim() : (nameCell ? nameCell.textContent.trim() : '');
+        var nameTags = nameCell ? Array.prototype.map.call(nameCell.querySelectorAll('.tag'), function (t) { return t.outerHTML; }).join('') : '';
         var role = td[1] ? td[1].innerHTML.trim() : '';
         var status = td[2] ? td[2].innerHTML.trim() : '';
         var banks = td[4] ? td[4].textContent.trim() : '';
@@ -968,7 +998,7 @@
           function (m, a, label, b) { return '<button' + a + 'aria-label="' + label + '"' + b + '>' + label; });
         html.push(
           '<div class="admin-card" data-mobile-row="' + i + '">' +
-            '<div class="admin-card-top"><span class="admin-card-name">' + name + '</span></div>' +
+            '<div class="admin-card-top"><span class="admin-card-name">' + name + '</span>' + nameTags + '</div>' +
             '<div class="admin-card-meta">' + role + status +
               '<span class="num">' + banks + ' 题库</span>' +
               '<span class="num">活跃 ' + last + '</span>' +
@@ -979,49 +1009,72 @@
       });
       host.innerHTML = html.join('');
       /* 去掉 hidden：全局 [hidden]{display:none!important} 会压过 .admin-mobile 的 display:flex，
-         桌面端的隐藏由 @media (min-width:769px) 那条负责，不依赖 hidden 属性。 */
+         桌面端的隐藏由 @media (min-width:951px) 那条负责，不依赖 hidden 属性。 */
       host.hidden = false;
-    })();
-    function syncMobile(filter) {
-      var host = document.getElementById('admin-mobile');
-      if (!host) return;
-      Array.prototype.forEach.call(rows, function (tr, i) {
-        var ok = filter === 'all'
-          || (filter === 'active' && tr.getAttribute('data-status') === 'active')
-          || (filter === 'disabled' && tr.getAttribute('data-status') === 'disabled')
-          || (filter === 'pending' && tr.getAttribute('data-pending') === '1');
-        var card = host.querySelector('[data-mobile-row="' + i + '"]');
-        if (card) card.classList.toggle('is-hidden', !ok);
+    }
+    function paintChipCounts(rows) {
+      chips.forEach(function (chip) {
+        var f = chip.getAttribute('data-filter');
+        var n = rows.filter(function (tr) { return matches(tr, f); }).length;
+        var c = chip.querySelector('.count');
+        if (c) c.textContent = String(n);
       });
     }
-    function countVisible(filter) {
-      var n = 0;
-      rows.forEach(function (tr) {
-        var ok = filter === 'all'
-          || (filter === 'active' && tr.getAttribute('data-status') === 'active')
-          || (filter === 'disabled' && tr.getAttribute('data-status') === 'disabled')
-          || (filter === 'pending' && tr.getAttribute('data-pending') === '1');
-        if (ok) n++;
-      });
-      return n;
+    function applyPaging(reset) {
+      var rows = allRows();
+      if (reset) shown = PAGE;
+      var matching = rows.filter(function (tr) { return matches(tr, filter); });
+      var visible = matching.slice(0, shown);
+      var vis = new Set(visible);
+      rows.forEach(function (tr) { tr.hidden = !vis.has(tr); });
+      var host = document.getElementById('admin-mobile');
+      if (host) {
+        rows.forEach(function (tr, i) {
+          var card = host.querySelector('[data-mobile-row="' + i + '"]');
+          if (card) card.classList.toggle('is-hidden', !vis.has(tr));
+        });
+      }
+      paintChipCounts(rows);
+      var more = document.getElementById('admin-more');
+      var rest = matching.length - visible.length;
+      if (more) {
+        more.hidden = rest <= 0;
+        more.innerHTML = rest > 0
+          ? '<button type="button" class="btn" data-admin-more>加载更多</button>' +
+            '<span class="hint">还有 ' + rest + ' 位用户</span>'
+          : '';
+      }
+    }
+    function rebuild() {
+      buildMobileList();
+      /* 行状态 / 角色变化不是筛选变化：保留当前分批位置，
+         否则管理员在第 80 行改一个角色，列表会跳回前 20 行。 */
+      applyPaging(false);
     }
     chips.forEach(function (chip) {
       chip.addEventListener('click', function () {
         chips.forEach(function (c) { c.classList.remove('is-on'); c.setAttribute('aria-pressed', 'false'); });
         chip.classList.add('is-on');
         chip.setAttribute('aria-pressed', 'true');
-        var f = chip.getAttribute('data-filter');
-        rows.forEach(function (tr) {
-          var ok = f === 'all'
-            || (f === 'active' && tr.getAttribute('data-status') === 'active')
-            || (f === 'disabled' && tr.getAttribute('data-status') === 'disabled')
-            || (f === 'pending' && tr.getAttribute('data-pending') === '1');
-          tr.hidden = !ok;
-        });
-        syncMobile(f);
+        filter = chip.getAttribute('data-filter');
+        applyPaging(true);
       });
     });
-    syncMobile('all');
+    /* 加载更多：只追加下一批；焦点落到第一位新增成员的可操作控件。 */
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('[data-admin-more]') : null;
+      if (!b) return;
+      var before = shown;
+      shown += PAGE;
+      applyPaging(false);
+      var visibleRows = allRows().filter(function (tr) { return !tr.hidden; });
+      var target = visibleRows[before];
+      var focusable = target ? target.querySelector('button, a, input, select') : null;
+      if (focusable) focusable.focus();
+    });
+    /* 供页面脚本与验证脚本在行数据变化后重建卡片 / 重新计数。 */
+    window.eeAdminPaging = { rebuild: rebuild, refresh: function () { applyPaging(false); } };
+    rebuild();
 
     /* ---------- 行内操作：对话框跟随所在行的用户 ---------- */
     var targetRow = null;
@@ -1055,6 +1108,7 @@
           lockBtn.querySelector('use').setAttribute('href', status === 'disabled' ? '#i-unlock' : '#i-lock');
         }
       }
+      if (window.eeAdminPaging) window.eeAdminPaging.rebuild();
     }
     function setRowRole(row, isAdmin) {
       var cell = row.querySelector('td[data-label="实例角色"]');
@@ -1070,6 +1124,7 @@
         btn.setAttribute('aria-label', isAdmin ? '取消管理员' : '设为管理员');
         btn.setAttribute('title', isAdmin ? '取消管理员' : '设为管理员');
       }
+      if (window.eeAdminPaging) window.eeAdminPaging.rebuild();
     }
     function flashUpdated() {
       var n = document.getElementById('admin-updated');
@@ -1107,6 +1162,20 @@
           window.eeDialog.open('dlg-reset', btn);
         }
       });
+    });
+
+    /* 手机卡片里的按钮是从表格行克隆出来的，克隆不会带事件监听。
+       用事件委托把卡片上的动作转给同一行表格里的真按钮，
+       保证桌面与手机走同一套对话框和状态变更，不出现「手机端点不动」。 */
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('#admin-mobile [data-act]') : null;
+      if (!b) return;
+      var card = b.closest('.admin-card');
+      var idx = card ? Number(card.getAttribute('data-mobile-row')) : -1;
+      var row = idx >= 0 ? allRows()[idx] : null;
+      if (!row) return;
+      var twin = row.querySelector('[data-act="' + b.getAttribute('data-act') + '"]');
+      if (twin) twin.click();
     });
 
     document.getElementById('dlg-disable-go').addEventListener('click', function () {
@@ -1259,6 +1328,24 @@
       });
     });
   })();
+</script>
+<script>
+/* 侧栏学习状态：数字从 eeStore 读，与复习页同一口径。 */
+(function () {
+  var S = window.eeStore;
+  if (!S) return;
+  function paint() {
+    var due = document.getElementById('side-due');
+    var mis = document.getElementById('side-mistakes');
+    if (due) due.textContent = String(S.executableReview().length);
+    if (mis) mis.textContent = String(S.reviewQueue().filter(function (r) {
+      if (S.reviewKilled && S.reviewKilled(r)) return false;
+      return (r.reasons || []).indexOf('mistakes') > -1;
+    }).length);
+  }
+  paint();
+  if (S.subscribe) S.subscribe(paint);
+})();
 </script>
 </body>
 </html>

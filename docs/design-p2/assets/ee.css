@@ -58,14 +58,14 @@ dialog:not([open]) { display: none !important; }
   --text-lg: 18.5px;  --text-lg-lh: 1.5;   /* 小节标题 */
   --text-xl: 21px;    --text-xl-lh: 1.45;  /* 题干、抽屉标题 */
   --text-2xl: 25px;   --text-2xl-lh: 1.3;  /* 区块标题 */
-  --text-3xl: 30px;   --text-3xl-lh: 1.22; /* 页面标题 */
-  --text-4xl: 36px;   --text-4xl-lh: 1.18; /* 首页大标题 */
-  --text-5xl: 44px;   --text-5xl-lh: 1.14; /* 首页大标题（宽屏）*/
+  --text-3xl: 30px;   --text-3xl-lh: 1.3;  /* 页面标题 */
+  --text-4xl: 36px;   --text-4xl-lh: 1.3;  /* 首页大标题 */
+  --text-5xl: 44px;   --text-5xl-lh: 1.3;  /* 首页大标题（宽屏）*/
 
-  /* ---- 控件高度（v4：可点击性上移一档；pointer:coarse 兜底仍为 44）---- */
-  --ctl-h: 36px;   /* 按钮 / 输入 / 菜单项 */
-  --ctl-h-sm: 32px;/* 紧凑按钮 / 小图标钮 */
-  --ctl-h-lg: 42px;/* 页面主操作 */
+  /* ---- 控件高度（v5：sm 28 / 默认 32 / hero 40；pointer:coarse 兜底仍为 44）---- */
+  --ctl-h: 32px;   /* 按钮 / 输入 / 菜单项 */
+  --ctl-h-sm: 28px;/* 紧凑按钮 / 小图标钮 */
+  --ctl-h-lg: 40px;/* 页面主操作 */
 
   /* ---- 间距（4px 基阶；v3 起全部消费，取代散落 px）---- */
   --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px; --sp-5: 20px;
@@ -275,8 +275,8 @@ dialog:not([open]) { display: none !important; }
 [data-density="compact"] {
   --sp-1: 3px;  --sp-2: 6px;  --sp-3: 9px;  --sp-4: 12px; --sp-5: 15px;
   --sp-6: 18px; --sp-7: 24px; --sp-8: 30px; --sp-9: 42px; --sp-10: 54px;
-  /* 控件高度：按钮 / 输入 / 菜单项 36 → 32，小控件 32 → 28，主操作 42 → 38 */
-  --ctl-h: 32px; --ctl-h-sm: 28px; --ctl-h-lg: 38px;
+  /* 控件高度：按钮 / 输入 / 菜单项 32 → 28，小控件 28 → 24，主操作 40 → 36 */
+  --ctl-h: 28px; --ctl-h-sm: 24px; --ctl-h-lg: 36px;
   /* 字号与行高：辅助信息与正文各收一档，行距同步收紧 */
   --text-xs: 12px;   --text-xs-lh: 1.4;
   --text-sm: 13px;   --text-sm-lh: 1.45;
@@ -294,7 +294,7 @@ dialog:not([open]) { display: none !important; }
 [data-density="compact"] .content { padding-top: var(--sp-5); }
 /* 答题器与列表里高度写死的控件同步收敛，否则密度只改了外壳 */
 [data-density="compact"] .opt { min-height: 42px; padding: var(--sp-2) var(--sp-3); }
-[data-density="compact"] .segment { min-height: 26px; padding: var(--sp-1) var(--sp-3); }
+[data-density="compact"] .segment { min-height: var(--ctl-h-sm); padding: 0 var(--sp-3); }
 [data-density="compact"] .chip { min-height: 28px; }
 [data-density="compact"] .nav-item { min-height: 32px; }
 [data-density="compact"] .sheet-cell { font-size: var(--text-xs); }
@@ -327,6 +327,15 @@ body {
 .skip-link:focus { top: var(--sp-2); }
 .serif { font-family: var(--font-serif); }
 .mono { font-family: var(--font-mono); }
+/* 数字等宽：只给数字/编号/时间，不套在整段中文上。
+   .mono 只用于代码、编号、密钥、文件名；中文正文一律用无衬线。 */
+.tnum { font-variant-numeric: tabular-nums; }
+.stat-num, .dtable .num, .nav-count, .side-study-row b, .tab .count,
+.chip .count, .step-n, .plan-index, .rep-item-n, .rep-item-ver, .timer,
+.flow-caption b, .bn-item .bn-count, .kbd, .sheet-cell, .qpick-opt-id,
+.pdf-idx, .file-meta .num, .job-nums b, .tmp-code, .section-count {
+  font-variant-numeric: tabular-nums;
+}
 .muted { color: var(--ink-3); }
 a { color: var(--brand-ink); }
 
@@ -365,8 +374,13 @@ a { color: var(--brand-ink); }
 .btn-block { width: 100%; }
 /* 页面唯一主操作：权重最高的一颗按钮，一屏至多一颗 */
 .btn-hero { min-height: var(--ctl-h-lg); padding: 0 var(--sp-6); font-size: var(--text-base); font-weight: 500; }
-.btn .od-icon { --od-icon-size: 15px; }
-.btn-sm .od-icon { --od-icon-size: 14px; }
+/* 同一操作区出现 hero 时，整行按 40 排：40 与 32 混排会让次按钮
+   上下各悬 4px，底边对不齐。没有 hero 的行仍用默认 32 / sm 28。 */
+.btn-row-hero { align-items: center; }
+.btn-row-hero .btn { min-height: var(--ctl-h-lg); }
+.btn .od-icon { --od-icon-size: 1.12em; }
+.btn-sm .od-icon { --od-icon-size: 1.1em; }
+.btn-hero .od-icon, .btn-lg .od-icon { --od-icon-size: 1.1em; }
 
 .icon-btn {
   display: inline-grid; place-items: center; flex: none;
@@ -377,9 +391,9 @@ a { color: var(--brand-ink); }
 }
 .icon-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
 .icon-btn:disabled { opacity: .45; cursor: not-allowed; }
-.icon-btn .od-icon { --od-icon-size: 17px; }
+.icon-btn .od-icon { --od-icon-size: 1.17em; }
 .icon-btn.sm { width: var(--ctl-h-sm); height: var(--ctl-h-sm); }
-.icon-btn.sm .od-icon { --od-icon-size: 15px; }
+.icon-btn.sm .od-icon { --od-icon-size: 1.03em; }
 .icon-btn.is-on { background: var(--brand-soft); color: var(--brand-ink); border-color: var(--brand-line); }
 
 .link-btn {
@@ -443,7 +457,7 @@ a { color: var(--brand-ink); }
 .tag .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
 
 .segmented {
-  display: inline-flex; padding: 2px; gap: 2px;
+  display: inline-flex; padding: 1px; gap: 2px;
   background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm);
   /* 段数多于容器放得下时（如四套配色名）整条可横向滚动，
      不许把分段撑破纸面——静默裁掉与顶出容器都是错的。 */
@@ -451,7 +465,8 @@ a { color: var(--brand-ink); }
 }
 .segment {
   appearance: none; border: none; background: transparent; font: inherit; font-size: var(--text-sm);
-  color: var(--ink-3); padding: var(--sp-2) var(--sp-4); min-height: 30px; border-radius: var(--r-xs);
+  color: var(--ink-3); padding: 0 var(--sp-4); min-height: var(--ctl-h-sm); border-radius: var(--r-xs);
+  display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer; white-space: nowrap;
   transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
@@ -459,7 +474,7 @@ a { color: var(--brand-ink); }
 .segment[aria-checked="true"], .segment.is-on {
   background: var(--surface); color: var(--ink); font-weight: 500;
   box-shadow: var(--shadow-1); border: 1px solid var(--line);
-  padding: calc(var(--sp-2) - 1px) calc(var(--sp-4) - 1px);
+  padding: 0 var(--sp-4);
 }
 .segment:disabled { opacity: .5; cursor: not-allowed; }
 
@@ -577,6 +592,14 @@ a { color: var(--brand-ink); }
 .empty-title { font-size: var(--text-lg); font-weight: 500; margin: 0; font-family: var(--font-serif); }
 .empty-desc { font-size: var(--text-sm); color: var(--ink-3); max-width: 44ch; margin: 0; line-height: var(--text-base-lh); }
 .empty-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-2); flex-wrap: wrap; justify-content: center; }
+
+/* 长列表分批：只给容器，不新造控件。页面用 .btn 做「加载更多」，
+   旁边用 .hint 报剩余量；筛选变化时页面应重置分页并回到列表顶部。 */
+.load-more {
+  display: flex; align-items: center; justify-content: center; gap: var(--sp-3);
+  flex-wrap: wrap; padding: var(--sp-4) var(--sp-2) var(--sp-2);
+}
+.load-more .hint { margin: 0; }
 
 .skeleton {
   position: relative; overflow: hidden; background: var(--surface-2); border-radius: var(--r-xs);
@@ -744,8 +767,19 @@ dialog.dlg.danger .dlg-title { color: var(--bad); }
 .dtable tbody tr:hover { background: var(--surface-2); }
 .dtable tbody tr.is-selected { background: var(--brand-soft); }
 .dtable .col-check { width: 36px; }
-.dtable .col-actions { width: 96px; text-align: right; white-space: nowrap; }
+.dtable .col-actions { width: 96px; min-width: 96px; text-align: right; white-space: nowrap; }
 .dtable .num { font-family: var(--font-mono); }
+/* ---- 表格列宽原语（P2 第六轮 · 域 D）------------------------------------
+   中文表头逐字换行会变成一列竖排字（「题/库/数」），比横向滚动更难读。
+   给常见列一个最小宽度，放不下时由 .dtable-wrap 横向滚动；数字列不折行。
+   页面只需在 <th>/<td> 上加类，不再各写一套 nth-child。 */
+.dtable .col-num { white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+.dtable .col-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dtable .col-id { white-space: nowrap; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.dtable .col-status, .dtable .col-role { white-space: nowrap; }
+.dtable .col-name { min-width: 9em; max-width: 26em; }
+.dtable .col-user { min-width: 10em; max-width: 22em; overflow-wrap: anywhere; }
+.dtable .col-long { min-width: 16em; max-width: 48em; }
 .dtable-empty { padding: var(--sp-6); text-align: center; color: var(--ink-3); font-size: var(--text-sm); }
 @media (max-width: 640px) {
   /* 需要卡片形态时才转：页面自己决定，不再全局机械转换 */
@@ -807,6 +841,15 @@ dialog.dlg.danger .dlg-title { color: var(--bad); }
 .side-study-label { font-size: var(--text-xs); color: var(--d-spine-ink-3); }
 .side-study-row { display: flex; justify-content: space-between; font-size: var(--text-xs); color: var(--d-spine-ink-2); }
 .side-study-row b { font-family: var(--font-mono); font-weight: 500; color: var(--d-spine-ink); }
+/* 侧栏学习状态里的真实入口：数字来自 eeStore，不是写死的「本周新增」。
+   整行可点，hover / focus-visible 必须看得出来。 */
+.side-study-row.side-study-link {
+  text-decoration: none; cursor: pointer; border-radius: var(--r-xs);
+  margin-inline: calc(-1 * var(--sp-1)); padding-inline: var(--sp-1);
+}
+.side-study-link:hover { color: var(--d-spine-ink); }
+.side-study-link:hover b { color: var(--d-spine-accent); }
+.side-study-link:focus-visible { outline: 2px solid var(--d-spine-accent); outline-offset: 2px; }
 .side-foot { border-top: 1px solid var(--d-spine-line); padding: var(--sp-3); }
 
 .topbar {
@@ -942,6 +985,18 @@ dialog.dlg.danger .dlg-title { color: var(--bad); }
   flex-wrap: nowrap;
 }
 .focus-foot > .btn { flex: 0 0 auto; }
+/* 同一操作区同高：底栏左（上一题 / 跳过）、中（答题卡）、右（主操作）
+   此前分别是 32 / 28 / 42，底边对不齐，主操作切三态时整条底栏会跳。
+   统一按 hero 40 排，主操作仍靠宽度与实心色承担权重，不靠多出的 10px。 */
+.focus-foot .btn, .exam-foot .btn { min-height: var(--ctl-h-lg); }
+.focus-foot .btn-sm, .exam-foot .btn-sm { font-size: var(--text-sm); }
+/* 主操作下方若挂一行原因（如「请先选择一个答案」），这一列会比别的按钮高，
+   center 对齐时主操作就被顶高一截。改为底边对齐 + 原因放到按钮上方：
+   所有按钮同一条底边，原因仍在主操作旁边。
+   页面里的 #run-live .focus-foot 用 ID 选择器写死了 center / column，
+   这里必须 !important 才能把根因收在共享层；页面不应再各写一份底栏对齐。 */
+.focus-foot { align-items: flex-end !important; }
+.focus-foot .foot-main { flex-direction: column-reverse !important; }
 .focus-foot .spacer { flex: 1 1 auto; min-width: var(--sp-2); }
 .focus-foot .foot-submit, .focus-foot .btn-hero { flex: 1 1 auto; min-width: 120px; max-width: 280px; }
 .focus-foot .ft-count, .focus-foot .mono { flex: 0 1 auto; min-width: 0; }
@@ -973,15 +1028,24 @@ dialog.dlg.danger .dlg-title { color: var(--bad); }
 .opt.is-correct .opt-mark { color: var(--ok); }
 .opt.is-wrong .opt-mark { color: var(--bad); }
 
-.sheet-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--sp-2); }
+.sheet-grid { display: grid; grid-template-columns: repeat(auto-fill, 36px); gap: var(--sp-2); }
 .sheet-cell {
-  aspect-ratio: 1; display: grid; place-items: center; font-family: var(--font-mono); font-size: var(--text-sm);
+  width: 36px; height: 36px;
+  display: grid; place-items: center; font-family: var(--font-mono); font-size: var(--text-sm);
   background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-xs); color: var(--ink-2); cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 640px) {
+  .sheet-grid { grid-template-columns: repeat(auto-fill, 32px); gap: 4px; }
+  .sheet-cell { width: 32px; height: 32px; font-size: var(--text-xs); }
 }
 .sheet-cell.is-answered { background: var(--brand); border-color: var(--brand); color: var(--brand-contrast); }
 .sheet-cell.is-current { outline: 2px solid var(--focus); outline-offset: 1px; }
-.sheet-cell.is-flagged::after { content: ""; position: absolute; }
 .sheet-cell.is-flagged { border-color: var(--flag); box-shadow: inset 0 -3px 0 var(--flag); }
+@media (max-width: 640px) {
+  .sheet-grid { grid-template-columns: repeat(auto-fill, 32px); gap: var(--sp-1); }
+  .sheet-cell { width: 32px; height: 32px; font-size: var(--text-xs); }
+}
 
 .timer { font-family: var(--font-mono); font-size: var(--text-lg); }
 .timer.low { color: var(--bad); }
@@ -1234,7 +1298,10 @@ dialog.dlg.danger .dlg-title { color: var(--bad); }
   .btn, .chip, .tab, .segment, .nav-item, .page-back, .bn-item { min-height: 44px; }
   .icon-btn { width: 44px; height: 44px; }
   .icon-btn.sm { width: 44px; height: 44px; position: relative; }
-  .opt, .sheet-cell { min-height: 44px; }
+  .opt { min-height: 44px; }
+  /* 答题卡格子按契约固定 36（≤640 为 32），不参与 44 的触屏放大；
+     它的可点击性由格子间的 8px 间距与整块答题卡宽度保证。 */
+  .sheet-cell { min-height: 0; }
   .menu-item { min-height: 44px; }
   .list-row { min-height: 44px; }
 }
@@ -1467,3 +1534,61 @@ html[data-ee-product] .drawer-demo-note {
 .list-row[data-row-href] input,
 .list-row[data-row-href] select { cursor: auto; }
 .list-row[data-row-href] .btn { cursor: pointer; }
+
+/* ==========================================================================
+   23 · 第六轮共享原语（报告 / 长列表 / 表格列 / 统计数字）
+   -------------------------------------------------------------------------- */
+
+/* 23.1 数字位：只给数字与编号加等宽数字特性。
+   中文正文、按钮文案、标题一律不进等宽字体——整段中文套 mono 会让字距与
+   字形都变差，且和产品其余部分不一致。 */
+.tnum { font-variant-numeric: tabular-nums; }
+.stat-num, .nav-count, .step-n, .timer, .sheet-cell, .side-study-row b,
+.tab-count, .chip-count { font-variant-numeric: tabular-nums; }
+
+/* 23.2 表格列角色。列宽由「这一列装什么」决定，不由页面各写一遍。
+   数字与日期 nowrap 且右对齐；长文本列给上下限并允许断词，避免中文
+   逐字换行形成竖排。 */
+.dtable .col-num { min-width: 4.5em; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dtable .col-date { min-width: 7.5em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dtable .col-id { min-width: 6em; white-space: nowrap; font-family: var(--font-mono); font-size: var(--text-xs); }
+.dtable .col-status, .dtable .col-role { min-width: 5.5em; white-space: nowrap; }
+.dtable .col-name { min-width: 9em; max-width: 26em; }
+.dtable .col-user { min-width: 10em; max-width: 22em; overflow-wrap: anywhere; }
+.dtable .col-long { min-width: 16em; max-width: 48em; }
+.dtable .col-actions { min-width: 96px; }
+
+/* 23.3 长列表分批加载：容器只负责对齐，按钮仍用 .btn，剩余量仍用 .hint。 */
+.load-more { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); padding: var(--sp-5) 0 var(--sp-2); }
+.load-more .hint { margin: 0; }
+
+/* 23.4 报告条形图：一组条形共享同一轨道网格，因此刻度天然对齐。
+   轨道宽度由容器决定，填充宽度由数值决定；颜色只用语义色，并且旁边
+   永远有文字或数字，不靠颜色单独表达状态。 */
+.bar-group { display: grid; grid-template-columns: minmax(5em, 11em) minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.bar-row { display: contents; }
+.bar-label { font-size: var(--text-sm); color: var(--ink-2); min-width: 0; overflow-wrap: anywhere; }
+.bar-track { position: relative; height: 8px; border-radius: var(--r-xs); background: var(--surface-3); overflow: hidden; }
+.bar-fill { display: block; height: 100%; border-radius: inherit; background: var(--brand); transition: width var(--dur-base) ease; }
+.bar-fill.ok { background: var(--ok); }
+.bar-fill.warn { background: var(--warn); }
+.bar-fill.bad { background: var(--bad); }
+.bar-fill.ink-3 { background: var(--ink-3); }
+.bar-fill.line { background: var(--line-strong); }
+.bar-val { font-size: var(--text-xs); color: var(--ink-3); font-variant-numeric: tabular-nums; text-align: right; min-width: 3.5em; white-space: nowrap; }
+
+/* 23.5 同一操作区内按钮同高同底边。出现 hero 主操作时，整行按 hero 高度排，
+   避免 40 与 32 混排；次级按钮不再靠垂直居中「看起来差不多」。 */
+.btn-row-hero { display: flex; align-items: stretch; flex-wrap: wrap; gap: var(--sp-2); }
+.btn-row-hero > .btn { min-height: var(--ctl-h-lg); }
+
+/* 23.6 顶栏/底栏占位与侧栏学习入口：按钮形态的入口要有完整的按钮复位，
+   否则在 Firefox/Safari 上会带上系统默认边框与灰色底。 */
+.side-study-link {
+  appearance: none; background: none; border: 0; font: inherit; color: inherit;
+  width: 100%; text-align: left; cursor: pointer; padding: var(--sp-1) 0;
+  border-radius: var(--r-xs); text-decoration: none;
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+}
+.side-study-link:hover { color: var(--brand-ink); }
+.side-study-link:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
